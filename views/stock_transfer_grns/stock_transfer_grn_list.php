@@ -279,8 +279,17 @@ if (!function_exists('grn_item_group_camel_case')) {
                                 <td class="px-4 py-3 text-gray-600 max-w-[14rem] truncate" title="<?php echo htmlspecialchars((string) ($grn['remarks'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($grn['remarks'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-600 whitespace-nowrap text-xs"><?php echo !empty($grn['created_at']) ? htmlspecialchars(date('j M Y H:i', strtotime($grn['created_at']))) : '—'; ?></td>
                                 <td class="px-4 py-3">
-                                    <a href="javascript:if(confirm('Delete this GRN?')) window.location='?page=stock_transfer_grns&action=delete&grn_id=<?php echo (int) $grn['id']; ?>&transfer_id=<?php echo urlencode((string) $transferId); ?>'"
-                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition">Delete</a>
+                                    <?php
+                                        $_delUrl = '?page=stock_transfer_grns&action=delete&grn_id=' . (int) $grn['id'] . '&transfer_id=' . urlencode((string) $transferId);
+                                        $_delSku = trim((string) ($grn['sku'] ?? ''));
+                                    ?>
+                                    <button type="button"
+                                        class="grn-delete-open inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition"
+                                        data-delete-url="<?php echo htmlspecialchars($_delUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-grn-id="<?php echo (int) $grn['id']; ?>"
+                                        data-grn-sku="<?php echo htmlspecialchars($_delSku, ENT_QUOTES, 'UTF-8'); ?>">
+                                        Delete
+                                    </button>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -290,6 +299,89 @@ if (!function_exists('grn_item_group_camel_case')) {
         </div>
     <?php endif; ?>
 </div>
+
+<div id="grnDeleteModal" class="fixed inset-0 z-[200] hidden" role="dialog" aria-modal="true" aria-labelledby="grnDeleteModalTitle">
+    <div class="absolute inset-0 bg-slate-900/55 backdrop-blur-[2px] transition-opacity" data-grn-delete-backdrop tabindex="-1"></div>
+    <div class="relative flex min-h-full items-center justify-center p-4 pointer-events-none">
+        <div class="pointer-events-auto w-full max-w-md rounded-2xl border border-gray-200/80 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-slate-900/5 overflow-hidden">
+            <div class="px-5 pt-5 pb-4 border-b border-gray-100 bg-gradient-to-br from-red-50/80 to-white">
+                <div class="flex items-start gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                        <i class="fas fa-triangle-exclamation text-lg" aria-hidden="true"></i>
+                    </span>
+                    <div class="min-w-0 pt-0.5">
+                        <h3 id="grnDeleteModalTitle" class="text-base font-semibold text-gray-900 leading-snug">Delete this GRN line?</h3>
+                        <p class="text-sm text-gray-600 mt-1.5 leading-relaxed">This removes the receipt line and related records cannot be recovered from this screen.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="px-5 py-4 bg-white">
+                <p id="grnDeleteModalMeta" class="text-xs font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2"></p>
+            </div>
+            <div class="px-5 py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 bg-gray-50/80 border-t border-gray-100">
+                <button type="button" data-grn-delete-cancel
+                    class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 transition">
+                    Cancel
+                </button>
+                <button type="button" data-grn-delete-confirm
+                    class="w-full sm:w-auto inline-flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-b from-red-600 to-red-700 text-white text-sm font-semibold shadow-md shadow-red-900/20 hover:from-red-700 hover:to-red-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition">
+                    <i class="fas fa-trash-can text-xs opacity-90" aria-hidden="true"></i>
+                    Delete GRN
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var modal = document.getElementById('grnDeleteModal');
+    var metaEl = document.getElementById('grnDeleteModalMeta');
+    var pendingUrl = '';
+
+    function openGrnDeleteModal(url, id, sku) {
+        pendingUrl = url || '';
+        if (metaEl) {
+            var bits = ['GRN #' + id];
+            if (sku) bits.push('SKU: ' + sku);
+            metaEl.textContent = bits.join(' · ');
+        }
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        var c = modal.querySelector('[data-grn-delete-confirm]');
+        if (c) c.focus();
+    }
+
+    function closeGrnDeleteModal() {
+        pendingUrl = '';
+        if (modal) modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    document.querySelectorAll('.grn-delete-open').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openGrnDeleteModal(
+                btn.getAttribute('data-delete-url') || '',
+                btn.getAttribute('data-grn-id') || '',
+                btn.getAttribute('data-grn-sku') || ''
+            );
+        });
+    });
+
+    if (modal) {
+        modal.querySelector('[data-grn-delete-cancel]') && modal.querySelector('[data-grn-delete-cancel]').addEventListener('click', closeGrnDeleteModal);
+        modal.querySelector('[data-grn-delete-backdrop]') && modal.querySelector('[data-grn-delete-backdrop]').addEventListener('click', closeGrnDeleteModal);
+        modal.querySelector('[data-grn-delete-confirm]') && modal.querySelector('[data-grn-delete-confirm]').addEventListener('click', function () {
+            if (pendingUrl) window.location.href = pendingUrl;
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+                closeGrnDeleteModal();
+            }
+        });
+    }
+})();
 
 <script>
 (function () {
