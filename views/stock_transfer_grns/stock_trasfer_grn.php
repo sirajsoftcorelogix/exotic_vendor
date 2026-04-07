@@ -131,17 +131,33 @@ $warehouses = $warehouses ?? [];
                     </button>
 
                     <div class="flex-1 min-w-0 space-y-4">
-                        <div>
-                            <h3 class="text-base font-semibold text-gray-900 leading-snug"><?php echo htmlspecialchars($title); ?></h3>
-                            <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-                                <span><span class="text-gray-400 font-medium">SKU</span> <?php echo htmlspecialchars($item['sku'] ?? '—'); ?></span>
-                                <span><span class="text-gray-400 font-medium">Item code</span> <?php echo htmlspecialchars($item['item_code'] ?? '—'); ?></span>
-                                <?php if ($material !== ''): ?>
-                                    <span><span class="text-gray-400 font-medium">Material</span> <?php echo htmlspecialchars($material); ?></span>
-                                <?php endif; ?>
-                                <?php if ($weight !== ''): ?>
-                                    <span><span class="text-gray-400 font-medium">Weight</span> <?php echo htmlspecialchars((string)$weight . ' ' . (string)$weightUnit); ?></span>
-                                <?php endif; ?>
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:gap-x-6">
+                            <div class="min-w-0 flex-1 sm:pr-2">
+                                <h3 class="text-base font-semibold text-gray-900 leading-snug"><?php echo htmlspecialchars($title); ?></h3>
+                                <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                                    <span><span class="text-gray-400 font-medium">SKU</span> <?php echo htmlspecialchars($item['sku'] ?? '—'); ?></span>
+                                    <span><span class="text-gray-400 font-medium">Item code</span> <?php echo htmlspecialchars($item['item_code'] ?? '—'); ?></span>
+                                    <?php if ($material !== ''): ?>
+                                        <span><span class="text-gray-400 font-medium">Material</span> <?php echo htmlspecialchars($material); ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($weight !== ''): ?>
+                                        <span><span class="text-gray-400 font-medium">Weight</span> <?php echo htmlspecialchars((string)$weight . ' ' . (string)$weightUnit); ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 shrink-0 w-full sm:w-auto sm:ml-auto">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <label class="text-xs font-semibold text-gray-600 shrink-0 whitespace-nowrap" for="st-grn-qty-<?php echo (int)$grnLineIdx; ?>">Qty received <span class="text-red-500">*</span></label>
+                                    <input id="st-grn-qty-<?php echo (int)$grnLineIdx; ?>" name="qty_received[]" type="number" min="0" max="<?php echo (int)$remaining; ?>"
+                                        placeholder="0"
+                                        value="<?php echo htmlspecialchars($mode === 'edit' ? (string)(int)($item['qty_received'] ?? 0) : ($remaining > 0 ? (string)$remaining : '0')); ?>"
+                                        class="st-grn-qty w-[4.5rem] sm:w-24 px-2.5 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 tabular-nums text-center shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
+                                </div>
+                                <label class="inline-flex items-center gap-2 cursor-pointer select-none rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 shrink-0">
+                                    <input type="checkbox" name="qty_acceptable[]" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500 shrink-0"
+                                        <?php echo ($mode === 'edit' ? ((int)($item['qty_acceptable'] ?? 0) > 0 ? 'checked' : '') : 'checked'); ?>>
+                                    <span class="text-xs sm:text-sm font-medium text-gray-800 whitespace-nowrap">Quality OK</span>
+                                </label>
                             </div>
                         </div>
 
@@ -158,21 +174,6 @@ $warehouses = $warehouses ?? [];
                                 <p class="text-[9px] font-bold uppercase tracking-wide text-amber-900/70 leading-tight">To receive</p>
                                 <p class="text-base sm:text-lg font-bold text-amber-950 tabular-nums leading-tight mt-0.5"><?php echo number_format($remaining); ?></p>
                             </div>
-                        </div>
-
-                        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-0.5">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <label class="text-xs font-semibold text-gray-600 shrink-0 whitespace-nowrap" for="st-grn-qty-<?php echo (int)$grnLineIdx; ?>">Qty received <span class="text-red-500">*</span></label>
-                                <input id="st-grn-qty-<?php echo (int)$grnLineIdx; ?>" name="qty_received[]" type="number" min="0" max="<?php echo (int)$remaining; ?>"
-                                    placeholder="0"
-                                    value="<?php echo htmlspecialchars($mode === 'edit' ? (string)(int)($item['qty_received'] ?? 0) : ($remaining > 0 ? (string)$remaining : '0')); ?>"
-                                    class="st-grn-qty w-[4.5rem] sm:w-24 px-2.5 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 tabular-nums text-center shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
-                            </div>
-                            <label class="inline-flex items-center gap-2 cursor-pointer select-none rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 shrink-0">
-                                <input type="checkbox" name="qty_acceptable[]" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500 shrink-0"
-                                    <?php echo ($mode === 'edit' ? ((int)($item['qty_acceptable'] ?? 0) > 0 ? 'checked' : '') : 'checked'); ?>>
-                                <span class="text-xs sm:text-sm font-medium text-gray-800 whitespace-nowrap">Quality OK</span>
-                            </label>
                         </div>
 
                         <div>
