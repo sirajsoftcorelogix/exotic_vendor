@@ -116,8 +116,8 @@ $gridRowCount = 40;
                         <thead class="bg-gray-100 sticky top-0 z-10">
                             <tr>
                                 <th class="px-2 py-2 text-center font-semibold text-gray-700 w-10 min-w-[2.5rem]" scope="col">#</th>
-                                <th class="px-1 py-2 text-center font-semibold text-gray-700 w-14 min-w-[3.5rem]" scope="col">Image</th>
-                                <th class="px-3 py-2 text-left font-semibold text-gray-700 min-w-[11rem]">SKU <span class="font-normal text-gray-500">(search)</span></th>
+                                <th class="px-1 py-2 text-center font-semibold text-gray-700 w-12 min-w-[3rem]" scope="col">Image</th>
+                                <th class="px-2 py-2 text-left font-semibold text-gray-700 w-36 max-w-[9.5rem]">SKU <span class="font-normal text-gray-500">(search)</span></th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-32">Size</th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-32">Color</th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-24">Qty</th>
@@ -126,23 +126,23 @@ $gridRowCount = 40;
                         <tbody id="bulk_grid_body">
                             <?php for ($i = 0; $i < $gridRowCount; $i++): ?>
                                 <tr class="bulk-grid-row border-b border-gray-100">
-                                    <td class="bulk-row-num px-2 py-2 text-center text-xs font-semibold text-gray-500 tabular-nums select-none bg-gray-50 align-middle border-r border-gray-100"><?php echo $i + 1; ?></td>
-                                    <td class="bulk-img-cell p-1 align-middle w-14 text-center bg-gray-50/80 border-r border-gray-100">
-                                        <div class="bulk-row-img-wrap relative flex min-h-[3.5rem] items-center justify-center">
-                                            <img alt="" class="bulk-row-img hidden max-h-14 w-full max-w-[3rem] object-contain rounded border border-gray-200 bg-white" width="48" height="56" decoding="async" loading="lazy">
-                                            <span class="bulk-row-img-ph pointer-events-none text-gray-300 text-xs select-none" aria-hidden="true">—</span>
+                                    <td class="bulk-row-num px-2 py-1.5 text-center text-xs font-semibold text-gray-500 tabular-nums select-none bg-gray-50 align-top border-r border-gray-100 pt-2"><?php echo $i + 1; ?></td>
+                                    <td class="bulk-img-cell w-12 min-w-[3rem] p-1 align-top bg-gray-50/80 border-r border-gray-100">
+                                        <div class="bulk-row-img-wrap relative flex min-h-[2.5rem] items-center justify-center pt-0.5">
+                                            <img alt="" title="Click to enlarge" class="bulk-row-img hidden max-h-11 max-w-[2.35rem] w-full cursor-pointer object-contain rounded border border-gray-200 bg-white" width="40" height="48" decoding="async" loading="lazy">
+                                            <span class="bulk-row-img-ph pointer-events-none text-gray-300 text-[10px] select-none leading-none py-1" aria-hidden="true">—</span>
                                         </div>
                                     </td>
-                                    <td class="p-1 align-top">
-                                        <div class="relative">
+                                    <td class="p-1 align-top w-36 max-w-[9.5rem]">
+                                        <div class="relative max-w-[9.5rem]">
                                             <input type="hidden" class="bulk-inp-item-code" value="" autocomplete="off">
-                                            <input type="text" class="bulk-inp-sku w-full px-2 py-1.5 border border-gray-200 rounded text-sm" placeholder="Type SKU…" autocomplete="off">
-                                            <div class="bulk-ac-menu hidden absolute left-0 right-0 mt-0.5 bg-white border border-gray-300 rounded-md shadow-lg max-h-52 overflow-y-auto z-30 text-xs" role="listbox"></div>
+                                            <input type="text" class="bulk-inp-sku w-full px-1.5 py-1 border border-gray-200 rounded text-xs" placeholder="SKU…" autocomplete="off">
+                                            <div class="bulk-ac-menu hidden absolute left-0 right-0 z-30 mt-0.5 max-h-52 overflow-y-auto rounded-md border border-gray-300 bg-white text-xs shadow-lg min-w-[12rem]" role="listbox"></div>
                                         </div>
                                     </td>
-                                    <td class="p-1"><input type="text" class="bulk-inp-size w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
-                                    <td class="p-1"><input type="text" class="bulk-inp-color w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
-                                    <td class="p-1"><input type="number" min="0" class="bulk-inp-qty w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
+                                    <td class="p-1 align-top"><input type="text" class="bulk-inp-size w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
+                                    <td class="p-1 align-top"><input type="text" class="bulk-inp-color w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
+                                    <td class="p-1 align-top"><input type="number" min="0" class="bulk-inp-qty w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
                                 </tr>
                             <?php endfor; ?>
                         </tbody>
@@ -192,6 +192,11 @@ $gridRowCount = 40;
 
         <textarea name="bulk_rows_json" id="bulk_rows_json" class="hidden" aria-hidden="true"></textarea>
     </form>
+</div>
+
+<div id="bulkImageLightbox" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 p-4 sm:p-8" role="dialog" aria-modal="true" aria-label="Enlarged product image">
+    <button type="button" id="bulkImageLightboxClose" class="absolute top-3 right-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl leading-none text-white hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Close">&times;</button>
+    <img id="bulkImageLightboxImg" alt="" class="max-h-[90vh] max-w-full object-contain rounded-lg shadow-2xl">
 </div>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -294,19 +299,19 @@ $gridRowCount = 40;
         for (let k = 0; k < 10; k++) {
             const tr = document.createElement('tr');
             tr.className = 'bulk-grid-row border-b border-gray-100';
-            tr.innerHTML = '<td class="bulk-row-num px-2 py-2 text-center text-xs font-semibold text-gray-500 tabular-nums select-none bg-gray-50 align-middle border-r border-gray-100"></td>' +
-                '<td class="bulk-img-cell p-1 align-middle w-14 text-center bg-gray-50/80 border-r border-gray-100">' +
-                '<div class="bulk-row-img-wrap relative flex min-h-[3.5rem] items-center justify-center">' +
-                '<img alt="" class="bulk-row-img hidden max-h-14 w-full max-w-[3rem] object-contain rounded border border-gray-200 bg-white" width="48" height="56" decoding="async" loading="lazy">' +
-                '<span class="bulk-row-img-ph pointer-events-none text-gray-300 text-xs select-none" aria-hidden="true">—</span></div></td>' +
-                '<td class="p-1 align-top"><div class="relative">' +
+            tr.innerHTML = '<td class="bulk-row-num px-2 py-1.5 text-center text-xs font-semibold text-gray-500 tabular-nums select-none bg-gray-50 align-top border-r border-gray-100 pt-2"></td>' +
+                '<td class="bulk-img-cell w-12 min-w-[3rem] p-1 align-top bg-gray-50/80 border-r border-gray-100">' +
+                '<div class="bulk-row-img-wrap relative flex min-h-[2.5rem] items-center justify-center pt-0.5">' +
+                '<img alt="" title="Click to enlarge" class="bulk-row-img hidden max-h-11 max-w-[2.35rem] w-full cursor-pointer object-contain rounded border border-gray-200 bg-white" width="40" height="48" decoding="async" loading="lazy">' +
+                '<span class="bulk-row-img-ph pointer-events-none text-gray-300 text-[10px] select-none leading-none py-1" aria-hidden="true">—</span></div></td>' +
+                '<td class="p-1 align-top w-36 max-w-[9.5rem]"><div class="relative max-w-[9.5rem]">' +
                 '<input type="hidden" class="bulk-inp-item-code" value="" autocomplete="off">' +
-                '<input type="text" class="bulk-inp-sku w-full px-2 py-1.5 border border-gray-200 rounded text-sm" placeholder="Type SKU…" autocomplete="off">' +
-                '<div class="bulk-ac-menu hidden absolute left-0 right-0 mt-0.5 bg-white border border-gray-300 rounded-md shadow-lg max-h-52 overflow-y-auto z-30 text-xs" role="listbox"></div>' +
+                '<input type="text" class="bulk-inp-sku w-full px-1.5 py-1 border border-gray-200 rounded text-xs" placeholder="SKU…" autocomplete="off">' +
+                '<div class="bulk-ac-menu hidden absolute left-0 right-0 z-30 mt-0.5 max-h-52 overflow-y-auto rounded-md border border-gray-300 bg-white text-xs shadow-lg min-w-[12rem]" role="listbox"></div>' +
                 '</div></td>' +
-                '<td class="p-1"><input type="text" class="bulk-inp-size w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>' +
-                '<td class="p-1"><input type="text" class="bulk-inp-color w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>' +
-                '<td class="p-1"><input type="number" min="0" class="bulk-inp-qty w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>';
+                '<td class="p-1 align-top"><input type="text" class="bulk-inp-size w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>' +
+                '<td class="p-1 align-top"><input type="text" class="bulk-inp-color w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>' +
+                '<td class="p-1 align-top"><input type="number" min="0" class="bulk-inp-qty w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>';
             tbody.appendChild(tr);
         }
         renumberBulkGrid();
@@ -329,6 +334,7 @@ $gridRowCount = 40;
         if (img) {
             img.removeAttribute('src');
             img.removeAttribute('alt');
+            img.title = 'Click to enlarge';
             img.classList.add('hidden');
             img.onerror = null;
         }
@@ -352,6 +358,7 @@ $gridRowCount = 40;
             if (ph) ph.classList.remove('hidden');
         };
         img.alt = altText || '';
+        img.title = 'Click to enlarge';
         img.src = url;
         img.classList.remove('hidden');
         if (ph) ph.classList.add('hidden');
@@ -389,7 +396,57 @@ $gridRowCount = 40;
             .catch(function () {});
     }
 
+    const bulkImageLightbox = document.getElementById('bulkImageLightbox');
+    const bulkImageLightboxImg = document.getElementById('bulkImageLightboxImg');
+    const bulkImageLightboxClose = document.getElementById('bulkImageLightboxClose');
+
+    function openBulkImageLightbox(src, alt) {
+        if (!src || !bulkImageLightbox || !bulkImageLightboxImg) return;
+        bulkImageLightboxImg.src = src;
+        bulkImageLightboxImg.alt = alt || '';
+        bulkImageLightbox.classList.remove('hidden');
+        bulkImageLightbox.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeBulkImageLightbox() {
+        if (!bulkImageLightbox || !bulkImageLightboxImg) return;
+        bulkImageLightbox.classList.add('hidden');
+        bulkImageLightbox.classList.remove('flex');
+        bulkImageLightboxImg.removeAttribute('src');
+        bulkImageLightboxImg.alt = '';
+        document.body.style.overflow = '';
+    }
+
+    if (bulkImageLightboxClose) {
+        bulkImageLightboxClose.addEventListener('click', function (e) {
+            e.stopPropagation();
+            closeBulkImageLightbox();
+        });
+    }
+    if (bulkImageLightbox) {
+        bulkImageLightbox.addEventListener('click', function (e) {
+            if (e.target === bulkImageLightbox) closeBulkImageLightbox();
+        });
+    }
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && bulkImageLightbox && !bulkImageLightbox.classList.contains('hidden')) {
+            closeBulkImageLightbox();
+        }
+    });
+
     const gridBody = document.getElementById('bulk_grid_body');
+    gridBody.addEventListener('click', function (e) {
+        const thumb = e.target.closest('.bulk-row-img');
+        if (!thumb || !gridBody.contains(thumb)) return;
+        if (thumb.classList.contains('hidden')) return;
+        const src = thumb.currentSrc || thumb.getAttribute('src');
+        if (!src) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openBulkImageLightbox(src, thumb.alt || '');
+    });
+
     gridBody.addEventListener('input', function (e) {
         const inp = e.target;
         if (!inp.classList || !inp.classList.contains('bulk-inp-sku')) return;
