@@ -1,9 +1,14 @@
 <?php
+$transfer = $transfer ?? [];
+$bulk_grid_prefill = $bulk_grid_prefill ?? [];
+$isBulkEdit = !empty($transfer['id']);
 $currentUserId = $_SESSION['user']['id'] ?? 0;
 $selectedRequestedBy = (int)($transfer['requested_by'] ?? $currentUserId);
 $selectedDispatchBy = (int)($transfer['dispatch_by'] ?? $currentUserId);
 $defaultDispatchDate = !empty($transfer['dispatch_date']) ? $transfer['dispatch_date'] : date('Y-m-d');
-$gridRowCount = 40;
+$gridRowCount = max(40, count($bulk_grid_prefill));
+$fromWhId = isset($transfer['from_warehouse']) ? (int)$transfer['from_warehouse'] : 0;
+$toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
 ?>
 <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-amber-50/25">
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -15,15 +20,17 @@ $gridRowCount = 40;
             <div class="min-w-0 max-w-3xl">
                 <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/80 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
                     <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
-                        <i class="fas fa-table text-[11px]" aria-hidden="true"></i>
+                        <i class="fas <?php echo $isBulkEdit ? 'fa-edit' : 'fa-table'; ?> text-[11px]" aria-hidden="true"></i>
                     </span>
-                    <span>Warehouse · New transfer</span>
+                    <span>Warehouse · <?php echo $isBulkEdit ? 'Edit transfer' : 'New transfer'; ?></span>
                 </div>
                 <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
-                    Bulk <span class="text-amber-800">stock transfer</span>
+                    <?php echo $isBulkEdit ? 'Edit' : 'Bulk'; ?> <span class="text-amber-800">stock transfer</span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-                    Set dispatch dates and route, add line items in the grid (or upload a file), then add transport details and submit.
+                    <?php echo $isBulkEdit
+                        ? 'Update dispatch schedule, route, line items, and transport details, then save.'
+                        : 'Set dispatch dates and route, add line items in the grid (or upload a file), then add transport details and submit.'; ?>
                 </p>
             </div>
             <div class="flex shrink-0 flex-col sm:flex-row gap-3 lg:pl-4 lg:self-center">
@@ -36,6 +43,9 @@ $gridRowCount = 40;
     </div>
 
     <form id="bulkTransferForm" class="space-y-8" method="POST" enctype="multipart/form-data" action="?page=products&action=process_transfer_stock_bulk">
+        <?php if ($isBulkEdit): ?>
+            <input type="hidden" name="transfer_id" id="bulk_transfer_id" value="<?php echo (int)$transfer['id']; ?>">
+        <?php endif; ?>
         <input type="hidden" name="bulk_mode" id="bulk_mode" value="grid">
 
         <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm ring-1 ring-gray-900/[0.03] overflow-hidden">
@@ -54,7 +64,7 @@ $gridRowCount = 40;
                 <div class="grid gap-5 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                     <div class="flex flex-col">
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Transfer order no.</label>
-                        <input type="text" name="transfer_order_no" id="bulk_transfer_order_no" readonly value="" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-gray-100 text-sm text-gray-700 cursor-not-allowed shadow-sm" title="Assigned when warehouses are selected">
+                        <input type="text" name="transfer_order_no" id="bulk_transfer_order_no" readonly value="<?php echo htmlspecialchars($isBulkEdit ? ($transfer['transfer_order_no'] ?? '') : ''); ?>" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-gray-100 text-sm text-gray-700 cursor-not-allowed shadow-sm" title="<?php echo $isBulkEdit ? 'Order number is fixed for this transfer' : 'Assigned when warehouses are selected'; ?>">
                     </div>
                     <div class="flex flex-col">
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Dispatch date <span class="text-red-500">*</span></label>
@@ -105,7 +115,7 @@ $gridRowCount = 40;
                         <select id="from_warehouse" name="from_warehouse" required class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                             <option value="">Select warehouse…</option>
                             <?php foreach ($warehouses as $warehouse): ?>
-                                <option value="<?php echo htmlspecialchars($warehouse['id']); ?>"><?php echo htmlspecialchars($warehouse['address_title']); ?></option>
+                                <option value="<?php echo htmlspecialchars($warehouse['id']); ?>"<?php echo ($fromWhId > 0 && (int)$warehouse['id'] === $fromWhId) ? ' selected' : ''; ?>><?php echo htmlspecialchars($warehouse['address_title']); ?></option>
                             <?php endforeach; ?>
                         </select>
                         <p class="text-xs text-gray-500 mt-2.5 leading-relaxed min-h-[2.5rem]" id="source_address">Select a warehouse to see the full address.</p>
@@ -118,7 +128,7 @@ $gridRowCount = 40;
                         <select id="to_warehouse" name="to_warehouse" required class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                             <option value="">Select warehouse…</option>
                             <?php foreach ($warehouses as $warehouse): ?>
-                                <option value="<?php echo htmlspecialchars($warehouse['id']); ?>"><?php echo htmlspecialchars($warehouse['address_title']); ?></option>
+                                <option value="<?php echo htmlspecialchars($warehouse['id']); ?>"<?php echo ($toWhId > 0 && (int)$warehouse['id'] === $toWhId) ? ' selected' : ''; ?>><?php echo htmlspecialchars($warehouse['address_title']); ?></option>
                             <?php endforeach; ?>
                         </select>
                         <p class="text-xs text-gray-500 mt-2.5 leading-relaxed min-h-[2.5rem]" id="dest_address">Select a warehouse to see the full address.</p>
@@ -169,25 +179,41 @@ $gridRowCount = 40;
                             </tr>
                         </thead>
                         <tbody id="bulk_grid_body">
-                            <?php for ($i = 0; $i < $gridRowCount; $i++): ?>
+                            <?php for ($i = 0; $i < $gridRowCount; $i++):
+                                $pf = $bulk_grid_prefill[$i] ?? null;
+                                $pf = is_array($pf) ? $pf : null;
+                                $pfIc = $pf !== null ? (string)($pf['item_code'] ?? '') : '';
+                                $pfSku = $pf !== null ? (string)($pf['sku'] ?? '') : '';
+                                $pfSize = $pf !== null ? (string)($pf['size'] ?? '') : '';
+                                $pfColor = $pf !== null ? (string)($pf['color'] ?? '') : '';
+                                $pfQty = ($pf !== null && array_key_exists('qty', $pf)) ? (int)$pf['qty'] : null;
+                                $pfImg = $pf !== null ? trim((string)($pf['image'] ?? '')) : '';
+                                $imgHas = $pfImg !== '';
+                                $imgAlt = htmlspecialchars($pfSku !== '' ? $pfSku : ($pfIc !== '' ? $pfIc : 'Product'), ENT_QUOTES, 'UTF-8');
+                                ?>
                                 <tr class="bulk-grid-row border-b border-gray-100">
                                     <td class="bulk-row-num px-2 py-1.5 text-center text-xs font-semibold text-gray-500 tabular-nums select-none bg-gray-50 align-top border-r border-gray-100 pt-2"><?php echo $i + 1; ?></td>
                                     <td class="bulk-img-cell w-12 min-w-[3rem] p-1 align-top bg-gray-50/80 border-r border-gray-100">
                                         <div class="bulk-row-img-wrap relative flex min-h-[2.5rem] items-center justify-center pt-0.5">
-                                            <img alt="" title="Click to enlarge" class="bulk-row-img hidden max-h-11 max-w-[2.35rem] w-full cursor-pointer object-contain rounded border border-gray-200 bg-white" width="40" height="48" decoding="async" loading="lazy">
-                                            <span class="bulk-row-img-ph pointer-events-none text-gray-300 text-[10px] select-none leading-none py-1" aria-hidden="true">—</span>
+                                            <?php if ($imgHas): ?>
+                                                <img alt="<?php echo $imgAlt; ?>" title="Click to enlarge" class="bulk-row-img max-h-11 max-w-[2.35rem] w-full cursor-pointer object-contain rounded border border-gray-200 bg-white" src="<?php echo htmlspecialchars($pfImg, ENT_QUOTES, 'UTF-8'); ?>" width="40" height="48" decoding="async" loading="lazy">
+                                                <span class="bulk-row-img-ph pointer-events-none text-gray-300 text-[10px] select-none leading-none py-1 hidden" aria-hidden="true">—</span>
+                                            <?php else: ?>
+                                                <img alt="" title="Click to enlarge" class="bulk-row-img hidden max-h-11 max-w-[2.35rem] w-full cursor-pointer object-contain rounded border border-gray-200 bg-white" width="40" height="48" decoding="async" loading="lazy">
+                                                <span class="bulk-row-img-ph pointer-events-none text-gray-300 text-[10px] select-none leading-none py-1" aria-hidden="true">—</span>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                     <td class="p-1 align-top w-32 min-w-0">
                                         <div class="relative w-full min-w-0">
-                                            <input type="hidden" class="bulk-inp-item-code" value="" autocomplete="off">
-                                            <input type="text" class="bulk-inp-sku w-full min-w-0 px-2 py-1.5 border border-gray-200 rounded text-sm" placeholder="Type SKU…" autocomplete="off">
+                                            <input type="hidden" class="bulk-inp-item-code" value="<?php echo htmlspecialchars($pfIc, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="off">
+                                            <input type="text" class="bulk-inp-sku w-full min-w-0 px-2 py-1.5 border border-gray-200 rounded text-sm" placeholder="Type SKU…" value="<?php echo htmlspecialchars($pfSku, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="off">
                                             <div class="bulk-ac-menu hidden absolute left-0 right-0 z-30 mt-0.5 max-h-52 min-w-[12rem] overflow-y-auto rounded-md border border-gray-300 bg-white text-xs shadow-lg" role="listbox"></div>
                                         </div>
                                     </td>
-                                    <td class="p-1 align-top w-32 min-w-0"><input type="text" class="bulk-inp-size w-full min-w-0 px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
-                                    <td class="p-1 align-top w-32 min-w-0"><input type="text" class="bulk-inp-color w-full min-w-0 px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
-                                    <td class="p-1 align-top"><input type="number" min="0" class="bulk-inp-qty w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
+                                    <td class="p-1 align-top w-32 min-w-0"><input type="text" class="bulk-inp-size w-full min-w-0 px-2 py-1.5 border border-gray-200 rounded text-sm" value="<?php echo htmlspecialchars($pfSize, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="off"></td>
+                                    <td class="p-1 align-top w-32 min-w-0"><input type="text" class="bulk-inp-color w-full min-w-0 px-2 py-1.5 border border-gray-200 rounded text-sm" value="<?php echo htmlspecialchars($pfColor, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="off"></td>
+                                    <td class="p-1 align-top"><input type="number" min="0" class="bulk-inp-qty w-full px-2 py-1.5 border border-gray-200 rounded text-sm" value="<?php echo $pfQty !== null ? (int)$pfQty : ''; ?>" autocomplete="off"></td>
                                 </tr>
                             <?php endfor; ?>
                         </tbody>
@@ -213,28 +239,28 @@ $gridRowCount = 40;
                 <div class="grid gap-5 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                     <div class="flex flex-col">
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Booking no.</label>
-                        <input type="text" name="booking_no" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <input type="text" name="booking_no" value="<?php echo htmlspecialchars($transfer['booking_no'] ?? ''); ?>" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                     </div>
                     <div class="flex flex-col">
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Vehicle no.</label>
-                        <input type="text" name="vehicle_no" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <input type="text" name="vehicle_no" value="<?php echo htmlspecialchars($transfer['vehicle_no'] ?? ''); ?>" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                     </div>
                     <div class="flex flex-col">
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Vehicle type</label>
-                        <input type="text" name="vehicle_type" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <input type="text" name="vehicle_type" value="<?php echo htmlspecialchars($transfer['vehicle_type'] ?? ''); ?>" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                     </div>
                     <div class="flex flex-col">
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Driver name</label>
-                        <input type="text" name="driver_name" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <input type="text" name="driver_name" value="<?php echo htmlspecialchars($transfer['driver_name'] ?? ''); ?>" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                     </div>
                     <div class="flex flex-col">
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Driver mobile</label>
-                        <input type="tel" name="driver_mobile" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <input type="tel" name="driver_mobile" value="<?php echo htmlspecialchars($transfer['driver_mobile'] ?? ''); ?>" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                     </div>
                     <div class="flex flex-col">
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">E-way bill</label>
                         <input type="file" name="eway_bill_file" accept="application/pdf,image/*" class="w-full px-3 py-2.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 bg-gray-50/50 transition hover:border-amber-300/60">
-                        <input type="hidden" name="existing_eway_bill_file" value="">
+                        <input type="hidden" name="existing_eway_bill_file" value="<?php echo htmlspecialchars($transfer['eway_bill_file'] ?? ''); ?>">
                         <input type="hidden" name="remove_eway_bill_file" value="0">
                         <p class="text-[11px] text-gray-400 mt-1.5">PDF or image</p>
                     </div>
@@ -243,10 +269,12 @@ $gridRowCount = 40;
         </div>
 
         <div class="rounded-2xl border border-amber-200/50 bg-gradient-to-r from-amber-50/40 via-white to-amber-50/30 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm ring-1 ring-amber-900/[0.04]">
-            <p class="text-sm text-gray-600 max-w-xl"><span class="font-semibold text-gray-800">Ready?</span> Check line items and warehouses, then create the transfer. You can review it later in transfer history.</p>
+            <p class="text-sm text-gray-600 max-w-xl"><span class="font-semibold text-gray-800">Ready?</span> <?php echo $isBulkEdit
+                ? 'Check line items and route, then save changes.'
+                : 'Check line items and warehouses, then create the transfer. You can review it later in transfer history.'; ?></p>
             <button type="submit" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap shrink-0">
                 <i class="fas fa-check text-xs opacity-95" aria-hidden="true"></i>
-                Create bulk transfer
+                <?php echo $isBulkEdit ? 'Save transfer' : 'Create bulk transfer'; ?>
             </button>
         </div>
 
@@ -292,33 +320,50 @@ $gridRowCount = 40;
     const fromSel = document.getElementById('from_warehouse');
     const toSel = document.getElementById('to_warehouse');
     const orderInput = document.getElementById('bulk_transfer_order_no');
+    const bulkTransferIdInput = document.getElementById('bulk_transfer_id');
+    const isBulkEdit = !!(bulkTransferIdInput && parseInt(String(bulkTransferIdInput.value || '').trim(), 10) > 0);
+
+    function updateWarehouseAddresses() {
+        const srcEl = document.getElementById('source_address');
+        const dstEl = document.getElementById('dest_address');
+        if (srcEl) {
+            srcEl.textContent = warehouseData[fromSel.value]?.address || 'Select a warehouse to see the full address.';
+        }
+        if (dstEl) {
+            dstEl.textContent = warehouseData[toSel.value]?.address || 'Select a warehouse to see the full address.';
+        }
+    }
 
     function refreshOrderNo() {
+        if (isBulkEdit) return;
         if (!orderInput || !fromSel.value || !toSel.value) return;
         fetchNextTransferOrderNo(fromSel.value, toSel.value).then(function (no) { orderInput.value = no; });
     }
 
     fromSel.addEventListener('change', function () {
-        document.getElementById('source_address').textContent = warehouseData[this.value]?.address || 'Select a warehouse to see the full address.';
+        updateWarehouseAddresses();
         refreshOrderNo();
     });
     toSel.addEventListener('change', function () {
-        document.getElementById('dest_address').textContent = warehouseData[this.value]?.address || 'Select a warehouse to see the full address.';
+        updateWarehouseAddresses();
         refreshOrderNo();
     });
 
     document.addEventListener('DOMContentLoaded', function () {
-        fetch(apiUrl('get_last_warehouse'), { credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.success && data.warehouse_id) {
-                    fromSel.value = data.warehouse_id;
-                    fromSel.dispatchEvent(new Event('change'));
-                }
-            })
-            .catch(function () {});
+        if (!isBulkEdit) {
+            fetch(apiUrl('get_last_warehouse'), { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success && data.warehouse_id) {
+                        fromSel.value = data.warehouse_id;
+                        fromSel.dispatchEvent(new Event('change'));
+                    }
+                })
+                .catch(function () {});
+        }
 
-        if (fromSel.value && toSel.value) refreshOrderNo();
+        updateWarehouseAddresses();
+        if (!isBulkEdit && fromSel.value && toSel.value) refreshOrderNo();
     });
 
     const tabUpload = document.getElementById('tab_upload');
@@ -682,7 +727,7 @@ $gridRowCount = 40;
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.success) {
-                    alert('Stock transfer created successfully.');
+                    alert(data.message || (isBulkEdit ? 'Stock transfer updated successfully.' : 'Stock transfer created successfully.'));
                     window.location.href = '?page=products&action=stock_transfer';
                 } else {
                     alert(data.message || 'Could not create transfer');

@@ -77,7 +77,7 @@ $receiptStatus = isset($transfer_receipt_status) ? (string) $transfer_receipt_st
                 </p>
             </div>
             <div class="flex flex-col gap-2 min-w-0 shrink-0 lg:self-center lg:pl-4">
-                <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transferId); ?>"
+                <a href="?page=products&action=transfer_stock_bulk&transfer_id=<?php echo urlencode($transferId); ?>"
                     class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
                     <i class="fas fa-edit text-xs opacity-95" aria-hidden="true"></i>
                     Edit transfer

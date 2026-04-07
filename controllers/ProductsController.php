@@ -3246,6 +3246,39 @@ class ProductsController {
         is_login();
         global $conn;
 
+        $transfer_id = isset($_GET['transfer_id']) ? (int)$_GET['transfer_id'] : 0;
+        $transfer = null;
+        $bulk_grid_prefill = [];
+
+        if ($transfer_id > 0) {
+            require_once 'models/product/StockTransfer.php';
+            $stockTransferModel = new StockTransfer($conn);
+            $transfer = $stockTransferModel->getTransferById($transfer_id);
+            if (!$transfer) {
+                header('Location: ?page=products&action=stock_transfer');
+                exit;
+            }
+            foreach ($transfer['items'] ?? [] as $item) {
+                $resolved = $stockTransferModel->resolveProductForTransferItem([
+                    'product_id' => (int)($item['product_id'] ?? 0),
+                    'sku' => trim((string)($item['sku'] ?? '')),
+                    'item_code' => trim((string)($item['item_code'] ?? '')),
+                ]);
+                $img = '';
+                if (!empty($item['product']['image'])) {
+                    $img = (string)$item['product']['image'];
+                }
+                $bulk_grid_prefill[] = [
+                    'item_code' => (string)($resolved['item_code'] ?? $item['item_code'] ?? ''),
+                    'sku' => (string)($resolved['sku'] ?? $item['sku'] ?? ''),
+                    'size' => (string)($resolved['size'] ?? ''),
+                    'color' => (string)($resolved['color'] ?? ''),
+                    'qty' => (int)($item['transfer_qty'] ?? 0),
+                    'image' => $img,
+                ];
+            }
+        }
+
         $warehouses = [];
         $warehouseQuery = "SELECT id, address_title, address FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
         $warehouseResult = mysqli_query($conn, $warehouseQuery);
@@ -3264,12 +3297,15 @@ class ProductsController {
             }
         }
 
+        $pageTitle = $transfer ? 'Edit stock transfer' : 'Bulk stock transfer';
+
         renderTemplate('views/products/transfer_stock_bulk_page.php', [
             'warehouses' => $warehouses,
             'users' => $users,
-            'transfer' => null,
+            'transfer' => $transfer,
+            'bulk_grid_prefill' => $bulk_grid_prefill,
             'product_ids' => '',
-        ], 'Bulk stock transfer');
+        ], $pageTitle);
     }
 
     public function transferBulkTemplate() {
@@ -3289,11 +3325,6 @@ class ProductsController {
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             echo json_encode(['success' => false, 'message' => 'Invalid request method']);
-            exit;
-        }
-
-        if (!empty($_POST['transfer_id'])) {
-            echo json_encode(['success' => false, 'message' => 'Bulk transfer is for new orders only. Use the standard transfer form to edit an existing order.']);
             exit;
         }
 

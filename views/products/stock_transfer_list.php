@@ -300,7 +300,7 @@ $formatStatusLabel = static function (string $status): string {
                                 </td>
                                 <td class="w-0 px-2 py-4 align-middle text-center whitespace-nowrap">
                                     <div class="flex items-center justify-center gap-1.5">
-                                        <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transfer['id']); ?>"
+                                        <a href="?page=products&action=transfer_stock_bulk&transfer_id=<?php echo urlencode($transfer['id']); ?>"
                                             class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-white text-blue-600 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                                             title="Edit transfer"
                                             aria-label="Edit transfer">
