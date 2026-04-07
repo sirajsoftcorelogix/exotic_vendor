@@ -1133,6 +1133,62 @@ class StockTransfer
     }
 
     /**
+     * True when this transfer has at least one line and every line has SUM(GRN qty_received) >= transfer_qty.
+     */
+    public function isTransferFullyReceived(int $transferId): bool
+    {
+        $transferId = max(0, $transferId);
+        if ($transferId <= 0) {
+            return false;
+        }
+
+        $hdr = $this->db->prepare('SELECT transfer_order_no FROM vp_stock_transfer WHERE id = ? LIMIT 1');
+        if (!$hdr) {
+            return false;
+        }
+        $hdr->bind_param('i', $transferId);
+        $hdr->execute();
+        $hres = $hdr->get_result();
+        $hrow = $hres ? $hres->fetch_assoc() : null;
+        $hdr->close();
+        if (!$hrow || empty($hrow['transfer_order_no'])) {
+            return false;
+        }
+        $orderNo = $hrow['transfer_order_no'];
+
+        $grnLineMatch = '( (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NOT NULL AND g.sku = i.sku)
+            OR (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NULL
+                AND NULLIF(TRIM(IFNULL(i.item_code, \'\')), \'\') IS NOT NULL
+                AND g.item_code = i.item_code) )';
+
+        $sql = "SELECT
+                    (SELECT COUNT(*) FROM vp_item_stock_transfer i0 WHERE i0.transfer_order_no = ?) AS total_lines,
+                    (SELECT COUNT(*) FROM vp_item_stock_transfer i
+                     WHERE i.transfer_order_no = ?
+                       AND COALESCE((
+                           SELECT SUM(g.qty_received)
+                           FROM vp_stock_transfer_grns g
+                           WHERE g.transfer_id = ?
+                             AND $grnLineMatch
+                       ), 0) < i.transfer_qty
+                    ) AS incomplete_lines";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ssi', $orderNo, $orderNo, $transferId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        $totalLines = (int) ($row['total_lines'] ?? 0);
+        $incomplete = (int) ($row['incomplete_lines'] ?? 0);
+
+        return $totalLines > 0 && $incomplete === 0;
+    }
+
+    /**
      * Get list of GRN rows for a specific stock transfer (or all if $transferId=0)
      *
      * @param int $transferId

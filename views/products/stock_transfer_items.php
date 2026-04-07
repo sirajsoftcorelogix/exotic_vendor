@@ -5,6 +5,7 @@ $limit = isset($limit) ? (int) $limit : 50;
 $totalRecords = isset($total_records) ? (int) $total_records : 0;
 $transfer = $transfer ?? [];
 $items = $items ?? [];
+$transferFullyReceived = !empty($transfer_fully_received);
 $transferId = isset($transfer_id) ? (int) $transfer_id : (int) ($transfer['id'] ?? 0);
 $totalPages = $limit > 0 ? (int) ceil($totalRecords / $limit) : 1;
 $pgBase = '?page=products&action=stock_transfer_items&transfer_id=' . $transferId . '&limit=' . $limit;
@@ -82,6 +83,13 @@ $statusRing = $statusClass($rawStatus);
                         <span class="text-gray-300">·</span>
                         <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset shadow-sm <?php echo $statusRing; ?>"><?php echo htmlspecialchars($statusLabel); ?></span>
                     <?php endif; ?>
+                    <?php if ($transferFullyReceived): ?>
+                        <span class="text-gray-300">·</span>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-600/20 shadow-sm" title="Every line on this transfer has received quantity at least equal to sent quantity.">
+                            <i class="fas fa-check-circle" aria-hidden="true"></i>
+                            Fully received
+                        </span>
+                    <?php endif; ?>
                 </p>
             </div>
             <div class="flex flex-col gap-2 min-w-0 shrink-0 lg:self-center lg:pl-4">
@@ -104,7 +112,6 @@ $statusRing = $statusClass($rawStatus);
         <div class="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-amber-50/40 via-gray-50/80 to-gray-50/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
                 <h2 class="text-sm font-semibold text-gray-900">Items</h2>
-                <p class="text-xs text-gray-500 mt-0.5">SKUs, codes, and quantities for this transfer.</p>
             </div>
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
                 <label class="sr-only" for="transferItemSearch">Search items</label>

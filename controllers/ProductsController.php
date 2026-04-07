@@ -152,6 +152,8 @@ class ProductsController {
             return;
         }
 
+        $transferFullyReceived = $stockTransferModel->isTransferFullyReceived($transferId);
+
         renderTemplate('views/products/stock_transfer_items.php', [
             'transfer' => $result['transfer'],
             'items' => $result['rows'],
@@ -159,6 +161,7 @@ class ProductsController {
             'page_no' => $pageNo,
             'limit' => $limit,
             'transfer_id' => $transferId,
+            'transfer_fully_received' => $transferFullyReceived,
         ], 'Transfer line items');
     }
 
