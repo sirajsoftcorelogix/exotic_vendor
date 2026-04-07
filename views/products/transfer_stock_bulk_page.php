@@ -116,6 +116,7 @@ $gridRowCount = 40;
                         <thead class="bg-gray-100 sticky top-0 z-10">
                             <tr>
                                 <th class="px-2 py-2 text-center font-semibold text-gray-700 w-10 min-w-[2.5rem]" scope="col">#</th>
+                                <th class="px-1 py-2 text-center font-semibold text-gray-700 w-14 min-w-[3.5rem]" scope="col">Image</th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 min-w-[11rem]">SKU <span class="font-normal text-gray-500">(search)</span></th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-32">Size</th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-32">Color</th>
@@ -126,6 +127,12 @@ $gridRowCount = 40;
                             <?php for ($i = 0; $i < $gridRowCount; $i++): ?>
                                 <tr class="bulk-grid-row border-b border-gray-100">
                                     <td class="bulk-row-num px-2 py-2 text-center text-xs font-semibold text-gray-500 tabular-nums select-none bg-gray-50 align-middle border-r border-gray-100"><?php echo $i + 1; ?></td>
+                                    <td class="bulk-img-cell p-1 align-middle w-14 text-center bg-gray-50/80 border-r border-gray-100">
+                                        <div class="bulk-row-img-wrap relative flex min-h-[3.5rem] items-center justify-center">
+                                            <img alt="" class="bulk-row-img hidden max-h-14 w-full max-w-[3rem] object-contain rounded border border-gray-200 bg-white" width="48" height="56" decoding="async" loading="lazy">
+                                            <span class="bulk-row-img-ph pointer-events-none text-gray-300 text-xs select-none" aria-hidden="true">—</span>
+                                        </div>
+                                    </td>
                                     <td class="p-1 align-top">
                                         <div class="relative">
                                             <input type="hidden" class="bulk-inp-item-code" value="" autocomplete="off">
@@ -288,6 +295,10 @@ $gridRowCount = 40;
             const tr = document.createElement('tr');
             tr.className = 'bulk-grid-row border-b border-gray-100';
             tr.innerHTML = '<td class="bulk-row-num px-2 py-2 text-center text-xs font-semibold text-gray-500 tabular-nums select-none bg-gray-50 align-middle border-r border-gray-100"></td>' +
+                '<td class="bulk-img-cell p-1 align-middle w-14 text-center bg-gray-50/80 border-r border-gray-100">' +
+                '<div class="bulk-row-img-wrap relative flex min-h-[3.5rem] items-center justify-center">' +
+                '<img alt="" class="bulk-row-img hidden max-h-14 w-full max-w-[3rem] object-contain rounded border border-gray-200 bg-white" width="48" height="56" decoding="async" loading="lazy">' +
+                '<span class="bulk-row-img-ph pointer-events-none text-gray-300 text-xs select-none" aria-hidden="true">—</span></div></td>' +
                 '<td class="p-1 align-top"><div class="relative">' +
                 '<input type="hidden" class="bulk-inp-item-code" value="" autocomplete="off">' +
                 '<input type="text" class="bulk-inp-sku w-full px-2 py-1.5 border border-gray-200 rounded text-sm" placeholder="Type SKU…" autocomplete="off">' +
@@ -311,6 +322,41 @@ $gridRowCount = 40;
         });
     }
 
+    function clearBulkRowImage(tr) {
+        if (!tr) return;
+        const img = tr.querySelector('.bulk-row-img');
+        const ph = tr.querySelector('.bulk-row-img-ph');
+        if (img) {
+            img.removeAttribute('src');
+            img.removeAttribute('alt');
+            img.classList.add('hidden');
+            img.onerror = null;
+        }
+        if (ph) ph.classList.remove('hidden');
+    }
+
+    function setBulkRowImage(tr, url, altText) {
+        if (!tr) return;
+        const img = tr.querySelector('.bulk-row-img');
+        const ph = tr.querySelector('.bulk-row-img-ph');
+        url = (url != null ? String(url).trim() : '');
+        if (!img) return;
+        if (!url) {
+            clearBulkRowImage(tr);
+            return;
+        }
+        img.onerror = function () {
+            img.onerror = null;
+            img.removeAttribute('src');
+            img.classList.add('hidden');
+            if (ph) ph.classList.remove('hidden');
+        };
+        img.alt = altText || '';
+        img.src = url;
+        img.classList.remove('hidden');
+        if (ph) ph.classList.add('hidden');
+    }
+
     function applyBulkSkuProduct(tr, product) {
         if (!tr || !product) return;
         const ic = tr.querySelector('.bulk-inp-item-code');
@@ -321,6 +367,8 @@ $gridRowCount = 40;
         if (skuIn) skuIn.value = product.sku || '';
         if (sizeIn) sizeIn.value = product.size != null ? String(product.size) : '';
         if (colorIn) colorIn.value = product.color != null ? String(product.color) : '';
+        const imgAlt = (product.sku || product.item_code || '').trim() || 'Product';
+        setBulkRowImage(tr, product.image || product.image_url || '', imgAlt);
         const menu = tr.querySelector('.bulk-ac-menu');
         if (menu) {
             menu.classList.add('hidden');
@@ -352,6 +400,7 @@ $gridRowCount = 40;
         if (inp._bulkTimer) clearTimeout(inp._bulkTimer);
         const ic = tr.querySelector('.bulk-inp-item-code');
         if (ic) ic.value = '';
+        clearBulkRowImage(tr);
 
         const q = inp.value.trim();
         if (q.length < 2) {
