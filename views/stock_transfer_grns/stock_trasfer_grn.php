@@ -292,8 +292,9 @@ $warehouses = $warehouses ?? [];
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <div class="flex flex-col">
                     <label class="block text-xs font-semibold text-gray-600 mb-1.5">Supporting files <span class="text-gray-400 font-normal">(optional)</span></label>
-                    <input type="file" name="grn_file[]" multiple accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp"
+                    <input type="file" id="grnSupportingFiles" name="grn_file[]" multiple accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp"
                         class="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-900 hover:file:bg-amber-100 border border-dashed border-gray-300 rounded-xl bg-gray-50/50 px-3 py-2">
+                    <div id="grnFileList" class="mt-2 space-y-1.5 hidden" aria-live="polite"></div>
                     <p class="text-[11px] text-gray-400 mt-1.5">PDF or images — delivery challan, photos, etc.</p>
                 </div>
                 <div class="flex flex-col">
@@ -387,6 +388,84 @@ $warehouses = $warehouses ?? [];
             if (src) openImagePopup(src, title);
         });
     });
+
+    var grnFileInput = document.getElementById('grnSupportingFiles');
+    var grnFileListEl = document.getElementById('grnFileList');
+    if (grnFileInput && grnFileListEl) {
+        var grnStagedFiles = [];
+
+        function grnFileKey(file) {
+            return file.name + '|' + file.size + '|' + file.lastModified;
+        }
+
+        function grnApplyStagedToInput() {
+            var dt = new DataTransfer();
+            grnStagedFiles.forEach(function (f) {
+                dt.items.add(f);
+            });
+            grnFileInput.files = dt.files;
+        }
+
+        function grnRenderFileList() {
+            grnFileListEl.innerHTML = '';
+            if (grnStagedFiles.length === 0) {
+                grnFileListEl.classList.add('hidden');
+                return;
+            }
+            grnFileListEl.classList.remove('hidden');
+            grnStagedFiles.forEach(function (file, idx) {
+                var row = document.createElement('div');
+                row.className = 'flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm';
+                var name = document.createElement('span');
+                name.className = 'min-w-0 truncate font-medium text-gray-800';
+                name.textContent = file.name;
+                name.title = file.name;
+                var meta = document.createElement('span');
+                meta.className = 'shrink-0 text-gray-400 tabular-nums';
+                if (file.size < 1024) {
+                    meta.textContent = file.size + ' B';
+                } else if (file.size < 1048576) {
+                    meta.textContent = (file.size / 1024).toFixed(1) + ' KB';
+                } else {
+                    meta.textContent = (file.size / 1048576).toFixed(1) + ' MB';
+                }
+                var left = document.createElement('div');
+                left.className = 'flex min-w-0 flex-1 items-center gap-2';
+                left.appendChild(name);
+                left.appendChild(meta);
+                var removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'shrink-0 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50';
+                removeBtn.setAttribute('aria-label', 'Remove ' + file.name);
+                removeBtn.innerHTML = '<i class="fas fa-times text-[10px]" aria-hidden="true"></i> Remove';
+                removeBtn.addEventListener('click', function () {
+                    grnStagedFiles.splice(idx, 1);
+                    grnApplyStagedToInput();
+                    grnRenderFileList();
+                });
+                row.appendChild(left);
+                row.appendChild(removeBtn);
+                grnFileListEl.appendChild(row);
+            });
+        }
+
+        grnFileInput.addEventListener('change', function () {
+            var seen = {};
+            grnStagedFiles.forEach(function (f) {
+                seen[grnFileKey(f)] = true;
+            });
+            Array.prototype.forEach.call(grnFileInput.files || [], function (f) {
+                var k = grnFileKey(f);
+                if (!seen[k]) {
+                    seen[k] = true;
+                    grnStagedFiles.push(f);
+                }
+            });
+            grnFileInput.value = '';
+            grnApplyStagedToInput();
+            grnRenderFileList();
+        });
+    }
 })();
 
 function saveStockTransferGrn(event) {
