@@ -3,10 +3,22 @@ $mode = $data['mode'] ?? 'create';
 $grn = $data['grn'] ?? [];
 $formAction = $mode === 'edit' ? '?page=stock_transfer_grns&action=update' : '#';
 $pageTitle = $mode === 'edit' ? 'Edit' : 'Create';
-$receivedDateValue = $mode === 'edit' ? ($grn['received_date'] ?? date('Y-m-d')) : date('Y-m-d');
 $grnRemarksValue = $mode === 'edit' ? htmlspecialchars($grn['remarks'] ?? '') : '';
-$transfer = $transfer ?? [];
+$transfer = $transfer ?? ($data['transfer'] ?? []);
 $transferId = (int)($transfer['id'] ?? 0);
+$dispatchDateMin = '';
+if (!empty($transfer['dispatch_date'])) {
+    $dTs = strtotime((string)$transfer['dispatch_date']);
+    if ($dTs !== false) {
+        $dispatchDateMin = date('Y-m-d', $dTs);
+    }
+}
+if ($mode === 'edit') {
+    $receivedDateValue = $grn['received_date'] ?? date('Y-m-d');
+} else {
+    $today = date('Y-m-d');
+    $receivedDateValue = ($dispatchDateMin !== '' && $today < $dispatchDateMin) ? $dispatchDateMin : $today;
+}
 $transferItems = $transfer['items'] ?? [];
 $defaultReceivedBy = (int)($default_received_by ?? ($_SESSION['user']['id'] ?? ($_SESSION['user_id'] ?? 0)));
 $defaultWarehouseId = (int)($default_warehouse_id ?? 0);
@@ -228,7 +240,7 @@ $warehouses = $warehouses ?? [];
             <div><strong>Qty transferred</strong>: <?php echo (int)($transferItems[0]['transfer_qty'] ?? 0); ?></div>
             <div><strong>Qty received</strong>: <input type="number" name="qty_received" min="0" value="<?php echo (int)($grn['qty_received'] ?? 0); ?>" class="w-24 border rounded-lg px-2 py-1"></div>
             <div><strong>Qty acceptable</strong>: <input type="number" name="qty_acceptable" min="0" value="<?php echo (int)($grn['qty_acceptable'] ?? 0); ?>" class="w-24 border rounded-lg px-2 py-1"></div>
-            <div><strong>Received date</strong>: <input type="date" name="received_date" value="<?php echo htmlspecialchars($receivedDateValue); ?>" class="border rounded-lg px-2 py-1"></div>
+            <div><strong>Received date</strong>: <input type="date" name="received_date" value="<?php echo htmlspecialchars($receivedDateValue); ?>"<?php echo $dispatchDateMin !== '' ? ' min="' . htmlspecialchars($dispatchDateMin) . '"' : ''; ?> class="border rounded-lg px-2 py-1"></div>
         </div>
         <div class="mt-4">
             <strong>Remarks</strong>
@@ -252,7 +264,7 @@ $warehouses = $warehouses ?? [];
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 <div class="flex flex-col">
                     <label class="block text-xs font-semibold text-gray-600 mb-1.5">Received date <span class="text-red-500">*</span></label>
-                    <input type="date" name="received_date" value="<?php echo htmlspecialchars($receivedDateValue); ?>"
+                    <input type="date" name="received_date" value="<?php echo htmlspecialchars($receivedDateValue); ?>"<?php echo $dispatchDateMin !== '' ? ' min="' . htmlspecialchars($dispatchDateMin) . '"' : ''; ?>
                         class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
                 </div>
                 <div class="flex flex-col">
@@ -266,8 +278,10 @@ $warehouses = $warehouses ?? [];
                 </div>
                 <div class="flex flex-col md:col-span-2 lg:col-span-1">
                     <label class="block text-xs font-semibold text-gray-600 mb-1.5">Receiving warehouse <span class="text-red-500">*</span></label>
-                    <select name="warehouse_id" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
+                    <select name="warehouse_id" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"<?php echo (count($warehouses) === 1) ? ' title="Transfer destination warehouse"' : ''; ?>>
+                        <?php if (count($warehouses) !== 1): ?>
                         <option value="">Select warehouse…</option>
+                        <?php endif; ?>
                         <?php foreach ($warehouses as $warehouse): ?>
                             <option value="<?php echo htmlspecialchars($warehouse['id']); ?>"<?php echo ((int)$warehouse['id'] === $defaultWarehouseId) ? ' selected' : ''; ?>><?php echo htmlspecialchars($warehouse['address_title']); ?></option>
                         <?php endforeach; ?>
@@ -290,24 +304,34 @@ $warehouses = $warehouses ?? [];
             </div>
 
             <p id="grnStatus" class="text-sm min-h-[1.25rem]" role="status"></p>
-
-            <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between pt-2 border-t border-gray-100">
-                <input type="hidden" name="transfer_id" value="<?php echo $transferId; ?>">
-                <input type="hidden" name="transfer_order_no" value="<?php echo htmlspecialchars($transfer['transfer_order_no'] ?? ''); ?>">
-                <p class="text-xs text-gray-500">Submitting creates GRN rows for every line with a received quantity greater than zero.</p>
-                <?php if ($mode === 'edit'): ?>
-                    <button type="submit" id="saveChanges" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
-                        <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
-                        Save changes
-                    </button>
-                <?php else: ?>
-                    <button type="button" onclick="saveStockTransferGrn(event)" id="saveChanges" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap shrink-0">
-                        <i class="fas fa-check text-xs opacity-95" aria-hidden="true"></i>
-                        Save GRN
-                    </button>
-                <?php endif; ?>
-            </div>
         </div>
+    </div>
+
+    <div class="rounded-2xl border border-amber-200/50 bg-gradient-to-r from-amber-50/40 via-white to-amber-50/30 px-5 py-5 sm:px-7 sm:py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6 shadow-sm ring-1 ring-amber-900/[0.04] mb-8">
+        <input type="hidden" id="transferDispatchDateMin" value="<?php echo htmlspecialchars($dispatchDateMin); ?>">
+        <?php if ($mode !== 'edit'): ?>
+        <input type="hidden" name="transfer_id" value="<?php echo $transferId; ?>">
+        <input type="hidden" name="transfer_order_no" value="<?php echo htmlspecialchars($transfer['transfer_order_no'] ?? ''); ?>">
+        <?php endif; ?>
+        <p class="text-sm text-gray-600 max-w-xl leading-relaxed order-2 sm:order-1">
+            <span class="font-semibold text-gray-800">Ready?</span>
+            <?php if ($mode === 'edit'): ?>
+                Check line items and receipt details, then save changes.
+            <?php else: ?>
+                Check line items, quantities, and receipt details. Saving creates a GRN for every line with a received quantity greater than zero. You can add more GRNs later until the transfer is fully received.
+            <?php endif; ?>
+        </p>
+        <?php if ($mode === 'edit'): ?>
+            <button type="submit" id="saveChanges" class="order-1 sm:order-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap shrink-0">
+                <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
+                Save changes
+            </button>
+        <?php else: ?>
+            <button type="button" onclick="saveStockTransferGrn(event)" id="saveChanges" class="order-1 sm:order-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap shrink-0">
+                <i class="fas fa-check text-xs opacity-95" aria-hidden="true"></i>
+                Save GRN
+            </button>
+        <?php endif; ?>
     </div>
 
     <?php if ($mode === 'edit'): ?>
@@ -389,6 +413,16 @@ function saveStockTransferGrn(event) {
 
     var transferId = document.querySelector('input[name="transfer_id"]').value;
     var receivedDate = document.querySelector('input[name="received_date"]').value;
+    var dispatchMinEl = document.getElementById('transferDispatchDateMin');
+    var dispatchMin = dispatchMinEl ? String(dispatchMinEl.value || '').trim() : '';
+    if (!receivedDate) {
+        alert('Please enter the received date.');
+        return;
+    }
+    if (dispatchMin && receivedDate < dispatchMin) {
+        alert('Received date cannot be before the transfer dispatch date.');
+        return;
+    }
     var remarks = document.getElementById('grnRemarks') ? document.getElementById('grnRemarks').value : '';
 
     var items = [];

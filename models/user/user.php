@@ -317,6 +317,47 @@ class User
         }
         return $users;
     }
+
+    /**
+     * Active users assigned to a specific warehouse (vp_users.warehouse_id).
+     *
+     * @return array<int, string> Map of user id => display name
+     */
+    public function getActiveUsersByWarehouseId($warehouseId)
+    {
+        $warehouseId = (int)$warehouseId;
+        if ($warehouseId <= 0) {
+            return [];
+        }
+        $sql = "SELECT id, name FROM vp_users WHERE warehouse_id = ? AND is_active = 1 AND is_deleted = 0 ORDER BY name ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $warehouseId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $users = [];
+        while ($row = $result->fetch_assoc()) {
+            $users[(int)$row['id']] = $row['name'];
+        }
+        $stmt->close();
+        return $users;
+    }
+
+    public function userIsActiveAtWarehouse($userId, $warehouseId)
+    {
+        $userId = (int)$userId;
+        $warehouseId = (int)$warehouseId;
+        if ($userId <= 0 || $warehouseId <= 0) {
+            return false;
+        }
+        $sql = "SELECT id FROM vp_users WHERE id = ? AND warehouse_id = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ii', $userId, $warehouseId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $ok = $result && $result->num_rows > 0;
+        $stmt->close();
+        return $ok;
+    }
     public function getAllUsersListing($page = 1, $limit = 10, $search = '', $role_filter = '', $status_filter = '')
     {
         // sanitize
