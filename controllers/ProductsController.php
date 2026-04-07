@@ -86,6 +86,16 @@ class ProductsController {
             'item_number' => trim($_GET['item_number'] ?? ''),
         ];
 
+        // Warehouse users only see transfers touching their assigned location (source or destination).
+        $isAdminRole = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+        if (!$isAdminRole) {
+            $userWh = (int)($_SESSION['warehouse_id'] ?? 0);
+            if ($userWh <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+                $userWh = (int)$_SESSION['user']['warehouse_id'];
+            }
+            $filters['user_warehouse_scope'] = $userWh;
+        }
+
         $transferData = $stockTransferModel->listTransfers($limit, $offset, $filters);
 
         $flash = $_SESSION['stock_transfer_list_flash'] ?? null;

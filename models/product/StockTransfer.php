@@ -1082,6 +1082,19 @@ class StockTransfer
             $whereClauses[] = $itemExistsClause;
         }
 
+        // Limit list to transfers where the viewer's warehouse is source or destination (see controller).
+        if (array_key_exists('user_warehouse_scope', $filters)) {
+            $uw = (int)$filters['user_warehouse_scope'];
+            if ($uw > 0) {
+                $whereClauses[] = '(t.from_warehouse = ? OR t.to_warehouse = ?)';
+                $params[] = $uw;
+                $params[] = $uw;
+                $types .= 'ii';
+            } else {
+                $whereClauses[] = '1 = 0';
+            }
+        }
+
         $where = '';
         if (!empty($whereClauses)) {
             $where = ' WHERE ' . implode(' AND ', $whereClauses);
