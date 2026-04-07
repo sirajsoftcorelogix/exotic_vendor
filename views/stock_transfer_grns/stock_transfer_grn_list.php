@@ -183,7 +183,6 @@ $grnTotal = count($grns);
                     <thead class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <tr>
                             <th class="px-4 py-3 whitespace-nowrap">GRN ID</th>
-                            <th class="px-4 py-3 whitespace-nowrap">Transfer order</th>
                             <th class="px-4 py-3 whitespace-nowrap">Item group</th>
                             <th class="px-4 py-3 whitespace-nowrap">SKU</th>
                             <th class="px-4 py-3 whitespace-nowrap">Item code</th>
@@ -238,7 +237,6 @@ $grnTotal = count($grns);
                                 data-sku="<?php echo htmlspecialchars($skuNorm, ENT_QUOTES, 'UTF-8'); ?>"
                                 data-item-code="<?php echo htmlspecialchars($codeNorm, ENT_QUOTES, 'UTF-8'); ?>">
                                 <td class="px-4 py-3 tabular-nums text-gray-700"><?php echo (int) $grn['id']; ?></td>
-                                <td class="px-4 py-3 font-mono text-xs font-medium text-gray-900"><?php echo htmlspecialchars($grn['transfer_order_no'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-700 max-w-[12rem] truncate" title="<?php echo htmlspecialchars($itemGroup, ENT_QUOTES, 'UTF-8'); ?>"><?php echo $itemGroup !== '' ? htmlspecialchars($itemGroup) : '—'; ?></td>
                                 <td class="px-4 py-3 text-gray-800"><?php echo htmlspecialchars($grn['sku'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-800"><?php echo htmlspecialchars($grn['item_code'] ?? ''); ?></td>
