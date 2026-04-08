@@ -211,8 +211,8 @@
         <div><i class="fas fa-weight mr-1 text-orange-600"></i>Weight: <b><?php echo htmlspecialchars($products['product_weight'] ?  $products['product_weight'] .' ' .$products['product_weight_unit'] : ''); ?></b></div>
       </div>
     </div>
-    
   </div>
+  <?php require __DIR__ . '/partials/jewelry_label_print_link.php'; ?>
   <!-- INVENTORY -->
   <!-- <div class="bg-white rounded-lg p-4 grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
     <div>
