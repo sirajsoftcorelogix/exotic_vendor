@@ -712,17 +712,23 @@
                                     <span class="net-total"><span class="font-semibold">Net Total:</span> ₹ 0</span>
                                 </div>
                             </div>
-                        </div>
-                        <div id="availableCourierCompanies" class="px-4 py-2 text-xs text-gray-700 border-t border-gray-200">
-                        </div>
+                        </div>                        
 
-                        <div class="mt-2 mb-4 flex flex-wrap items-center justify-between">
-                            <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2 add-box-btn">
-                                <span>+ Add Box</span>
-                            </button>
+                        <div class="mt-2 mb-4 flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2 add-box-btn">
+                                    <span>+ Add Box</span>
+                                </button>
+                                <button type="button" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded text-sm list-couriers-btn">
+                                    📋 List Couriers
+                                </button>
+                            </div>
+
                             <button type="button" class="remove-order-btn text-red-500 hover:text-red-700 text-sm font-semibold px-4 py-2 rounded">
                                 🗑 Remove Order
                             </button>
+                        </div>
+                        <div id="availableCourierCompanies" class="px-4 py-2 text-xs text-gray-700 border-t border-gray-200">
                         </div>
                     `;
                     container.appendChild(newOrderDiv);
@@ -1345,6 +1351,52 @@
             };
             setTimeout(() => document.addEventListener('click', closeDropdown), 10);
             return;
+        }
+    });
+
+    // Handle List Couriers button
+    document.addEventListener('click', function(e) {
+        if (e.target.matches('.list-couriers-btn') || e.target.closest('.list-couriers-btn')) {
+            e.preventDefault();
+            
+            // Find the closest order container
+            const orderContainer = e.target.closest('.px-4.pt-4.pb-2');
+            if (!orderContainer) return;
+            
+            // Get the first box in the order (the one with data-order-number)
+            const boxElement = orderContainer.querySelector('[data-order-number]');
+            if (!boxElement) return;
+            
+            // Get weight and box size inputs
+            const weightInput = boxElement.querySelector('.weight-input');
+            const boxSizeSelect = boxElement.querySelector('.BoxSize');
+            
+            if (!weightInput || !boxSizeSelect) {
+                showAlert('Weight and Box Size inputs not found', 'error');
+                return;
+            }
+            
+            // Validate weight
+            const weight = parseFloat(weightInput.value) || 0;
+            if (weight <= 0) {
+                showAlert('Please enter a valid weight (greater than 0 kg)', 'warning');
+                return;
+            }
+            
+            // Validate box size (should not be CUSTOM with empty values)
+            const boxSizeValue = boxSizeSelect.value;
+            const selectedOption = boxSizeSelect.options[boxSizeSelect.selectedIndex];
+            const length = parseFloat(selectedOption.getAttribute('data-length')) || 0;
+            const breadth = parseFloat(selectedOption.getAttribute('data-width')) || 0;
+            const height = parseFloat(selectedOption.getAttribute('data-height')) || 0;
+            
+            if (boxSizeValue === 'CUSTOM' || length <= 0 || breadth <= 0 || height <= 0) {
+                showAlert('Please select a valid box size', 'warning');
+                return;
+            }
+            
+            // All validations passed, fetch couriers
+            fetchCouriersForBox(boxElement);
         }
     });
 

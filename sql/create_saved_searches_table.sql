@@ -390,3 +390,5 @@ ALTER TABLE `vp_users` ADD COLUMN `is_deleted` TINYINT(1) NOT NULL DEFAULT 0 AFT
 
 --irn response related columns
 ALTER TABLE `vp_invoices_international` ADD `request_payload` TEXT NULL AFTER `qrcode_string`, ADD `response_payload` TEXT NULL AFTER `request_payload`;
+
+ALTER TABLE `firm_details` ADD `state_code` INT NULL AFTER `pin`, ADD `email` VARCHAR(100) NULL AFTER `state_code`;
