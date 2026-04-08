@@ -193,6 +193,13 @@ final class MgStoreLabel
                 . ' data-height-px="' . $e((string)$barcodeHeightPx) . '"'
                 . ' style="max-width:100%;height:auto;max-height:14mm;display:inline-block;vertical-align:top;"></svg>';
 
+        $blankRows = max(0, min(10, (int)($cfg['blank_top_rows'] ?? 2)));
+        $blankRowH = max(0.0, (float)($cfg['blank_top_row_height_mm'] ?? 2.6));
+        $blankRowsHtml = '';
+        for ($i = 0; $i < $blankRows; $i++) {
+            $blankRowsHtml .= '<div class="mgs-row mgs-row--blank" style="flex:0 0 auto;min-height:' . $e((string)$blankRowH) . 'mm;height:' . $e((string)$blankRowH) . 'mm;line-height:' . $e((string)$blankRowH) . 'mm;font-size:0;">&#8203;</div>';
+        }
+
         return '<div class="mgs-sheet" style="'
             . 'box-sizing:border-box;width:' . $e((string)$w) . 'mm;height:' . $e((string)$h) . 'mm;'
             . 'padding:' . $e((string)$pad) . 'mm;display:flex;flex-direction:column;align-items:stretch;'
@@ -200,6 +207,7 @@ final class MgStoreLabel
             . 'font-size:' . $e((string)$fsBody) . 'mm;line-height:' . $e((string)$lh) . ';color:#000;background:#fff;'
             . 'border:0.15mm solid #000;'
             . '">'
+            . $blankRowsHtml
             . '<div class="mgs-row mgs-row--barcode" style="flex:0 0 auto;text-align:center;">'
             . $barEl
             . $row1Extra

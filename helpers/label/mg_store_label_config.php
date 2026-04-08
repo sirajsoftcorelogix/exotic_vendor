@@ -21,4 +21,8 @@ return [
     /** Show human-readable SKU under bars in row 1. */
     'barcode_display_value' => true,
     'barcode_caption_font_mm' => 2.0,
+
+    /** Empty spacer rows above the barcode (print alignment). */
+    'blank_top_rows' => 2,
+    'blank_top_row_height_mm' => 2.6,
 ];
