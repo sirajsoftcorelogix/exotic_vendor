@@ -110,8 +110,10 @@
 
 <script>
 (function () {
+  var loginWarehouseId = <?php echo (int)($selectedWarehouseId ?? 0); ?>;
   var searchInput = document.getElementById('bulkLabelSearchInput');
   var searchBtn = document.getElementById('bulkLabelSearchBtn');
+  var warehouseSel = document.getElementById('bulkLabelWarehouse');
   var resultsTbody = document.getElementById('bulkLabelResultsTbody');
   var searchMeta = document.getElementById('bulkLabelSearchMeta');
   var queueEmpty = document.getElementById('bulkLabelQueueEmpty');
@@ -125,6 +127,11 @@
 
   var queueMap = {}; // key: product id -> {product, qty}
   var searchReqId = 0;
+
+  // Keep default warehouse aligned with login session.
+  if (warehouseSel && loginWarehouseId > 0) {
+    warehouseSel.value = String(loginWarehouseId);
+  }
 
   function esc(s) {
     var d = document.createElement('div');
