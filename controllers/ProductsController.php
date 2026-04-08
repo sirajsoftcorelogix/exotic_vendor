@@ -2800,6 +2800,35 @@ class ProductsController {
         exit;
     }
 
+    /** MG store large label (75×50 mm, CODE128). */
+    public function mgStoreLabelPrint() {
+        is_login();
+        global $productModel;
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        if ($id <= 0) {
+            echo '<p>Invalid product.</p>';
+            exit;
+        }
+        $product = $productModel->getProduct($id);
+        if (!$product) {
+            echo '<p>Product not found.</p>';
+            exit;
+        }
+        require_once dirname(__DIR__) . '/helpers/label/MgStoreLabel.php';
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+        }
+        $copies = isset($_GET['copies']) ? (int)$_GET['copies'] : 1;
+        $copies = max(1, min(99, $copies));
+        $row = MgStoreLabel::fromProductRow($product);
+        if ($copies === 1) {
+            echo MgStoreLabel::renderPrintDocument($row);
+        } else {
+            echo MgStoreLabel::renderPrintDocumentBatch(array_fill(0, $copies, $row));
+        }
+        exit;
+    }
+
     public function saveStockAdjustment() {
         is_login();
         global $productModel;

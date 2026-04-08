@@ -1,9 +1,10 @@
 <?php
-$jewelryLabelProductId = (int)($products['id'] ?? 0);
-if ($jewelryLabelProductId <= 0) {
+$labelProductId = (int)($products['id'] ?? 0);
+if ($labelProductId <= 0) {
     return;
 }
-$jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $jewelryLabelProductId);
+$jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $labelProductId);
+$mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelProductId);
 ?>
 <!-- Full-width panel below product + measures (separate card, matches product label UI pattern) -->
 <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
@@ -29,10 +30,10 @@ $jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $jewelry
     <div class="px-5 py-4 space-y-4">
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1" for="productLabelSizeSelect">Label size</label>
-        <select id="productLabelSizeSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-gray-50 text-gray-600" disabled>
-          <option selected>Jewelry — 100 × 12.9 mm</option>
+        <select id="productLabelSizeSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+          <option value="jewelry" selected>Jewelry — 100 × 12.9 mm</option>
+          <option value="mg_store">MG store (large) — 75 × 50 mm</option>
         </select>
-        <p class="text-xs text-gray-400 mt-1">More sizes can be added here later.</p>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1" for="productLabelCopiesInput">Number of labels</label>
@@ -51,9 +52,11 @@ $jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $jewelry
 
 <script>
 (function () {
-  var baseUrl = <?php echo json_encode($jewelryLabelUrl, JSON_UNESCAPED_SLASHES); ?>;
+  var jewelryBaseUrl = <?php echo json_encode($jewelryLabelUrl, JSON_UNESCAPED_SLASHES); ?>;
+  var mgStoreBaseUrl = <?php echo json_encode($mgStoreLabelUrl, JSON_UNESCAPED_SLASHES); ?>;
   var modal = document.getElementById('productLabelPrintModal');
   var openBtn = document.getElementById('productLabelPrintOpenBtn');
+  var sizeSelect = document.getElementById('productLabelSizeSelect');
   var copiesInput = document.getElementById('productLabelCopiesInput');
   var submitBtn = document.getElementById('productLabelPrintSubmitBtn');
   if (!modal || !openBtn) return;
@@ -80,8 +83,7 @@ $jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $jewelry
     } catch (e) {}
   }
 
-  /** Load print URL in a hidden iframe (same session, not blocked like window.open pop-ups). */
-  function printLabelsInHiddenFrame(url) {
+  function printLabelsInHiddenFrame(url, isLarge) {
     var prev = document.getElementById('product-label-print-iframe');
     if (prev) removePrintIframe(prev);
 
@@ -89,8 +91,9 @@ $jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $jewelry
     iframe.id = 'product-label-print-iframe';
     iframe.setAttribute('title', 'Label print');
     iframe.setAttribute('aria-hidden', 'true');
-    /* Non-zero size helps some engines render printable content; kept off-screen. */
-    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:120mm;height:30mm;border:0;margin:0;padding:0;opacity:0;pointer-events:none;z-index:-1;';
+    var w = isLarge ? '85mm' : '120mm';
+    var h = isLarge ? '55mm' : '30mm';
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + w + ';height:' + h + ';border:0;margin:0;padding:0;opacity:0;pointer-events:none;z-index:-1;';
 
     iframe.addEventListener('load', function onLoad() {
       iframe.removeEventListener('load', onLoad);
@@ -102,7 +105,6 @@ $jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $jewelry
           });
         }
       } catch (e) {}
-      /* Fallback: remove stray iframe if afterprint never fires */
       setTimeout(function () {
         if (document.getElementById('product-label-print-iframe') === iframe) {
           removePrintIframe(iframe);
@@ -114,13 +116,22 @@ $jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $jewelry
     iframe.src = url;
   }
 
+  function currentBaseUrl() {
+    if (sizeSelect && sizeSelect.value === 'mg_store') {
+      return mgStoreBaseUrl;
+    }
+    return jewelryBaseUrl;
+  }
+
   submitBtn && submitBtn.addEventListener('click', function () {
     var n = parseInt(copiesInput && copiesInput.value, 10);
     if (isNaN(n) || n < 1) n = 1;
     if (n > 99) n = 99;
+    var baseUrl = currentBaseUrl();
     var sep = baseUrl.indexOf('?') >= 0 ? '&' : '?';
     var url = baseUrl + sep + 'copies=' + encodeURIComponent(String(n));
-    printLabelsInHiddenFrame(url);
+    var isLarge = sizeSelect && sizeSelect.value === 'mg_store';
+    printLabelsInHiddenFrame(url, isLarge);
     closeModal();
   });
 })();
