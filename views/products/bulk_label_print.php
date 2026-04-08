@@ -127,6 +127,7 @@
 
   var queueMap = {}; // key: product id -> {product, qty}
   var searchReqId = 0;
+  var searchDebounce = null;
 
   // Keep default warehouse aligned with login session.
   if (warehouseSel && loginWarehouseId > 0) {
@@ -254,6 +255,18 @@
       e.preventDefault();
       doSearch(true);
     }
+  });
+  searchInput.addEventListener('input', function () {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    var q = (searchInput.value || '').trim();
+    if (q.length < 2) {
+      resultsTbody.innerHTML = '<tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">Type at least 2 characters to search.</td></tr>';
+      searchMeta.textContent = 'Type at least 2 characters.';
+      return;
+    }
+    searchDebounce = setTimeout(function () {
+      doSearch(false);
+    }, 220);
   });
 
   resultsTbody.addEventListener('click', function (e) {
