@@ -305,6 +305,16 @@
     try { searchInput.focus(); } catch (e) {}
   });
   searchInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Delete') {
+      e.preventDefault();
+      if (searchDebounce) clearTimeout(searchDebounce);
+      searchReqId += 1;
+      searchInput.value = '';
+      activeResultIndex = -1;
+      resultsTbody.innerHTML = '<tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">Search products to start selection.</td></tr>';
+      searchMeta.textContent = 'Search cleared (Delete key).';
+      return;
+    }
     if (e.key === 'ArrowDown') {
       var downRows = getResultRows();
       if (downRows.length) {
