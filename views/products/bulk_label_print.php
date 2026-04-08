@@ -232,7 +232,7 @@
     products.forEach(function (p, idx) {
       var img = imageUrlForProduct(p);
       var thumbHtml = img
-        ? '<img src="' + esc(img) + '" alt="" class="w-full h-full object-cover" loading="lazy" onerror="this.style.display=\\'none\\';this.parentNode.querySelector(\\'span\\').style.display=\\'flex\\';" /><span class="hidden items-center justify-center w-full h-full text-[10px] text-gray-400">No image</span>'
+        ? '<img src="' + esc(img) + '" alt="" class="w-full h-full object-cover" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.querySelector(\'span\').style.display=\'flex\';" /><span class="hidden items-center justify-center w-full h-full text-[10px] text-gray-400">No image</span>'
         : '<span class="flex items-center justify-center w-full h-full text-[10px] text-gray-400">No image</span>';
       var tr = document.createElement('tr');
       tr.className = 'border-t hover:bg-gray-50';
