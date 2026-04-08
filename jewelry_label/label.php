@@ -1,9 +1,8 @@
 <?php
-
-declare(strict_types=1);
-
 /**
- * @deprecated Use views/products/jewelry_label_preview.php or route via ProductsController.
- * Kept so old bookmarks to /jewelry_label/label.php still work.
+ * Legacy URL — product label preview was removed; rebuild from product detail when ready.
  */
-require dirname(__DIR__) . '/views/products/jewelry_label_preview.php';
+header('Content-Type: text/html; charset=utf-8', true, 410);
+?><!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Label preview removed</title></head>
+<body><p>Jewelry label preview has been removed. Use the product page when labels are re-implemented.</p></body></html>
