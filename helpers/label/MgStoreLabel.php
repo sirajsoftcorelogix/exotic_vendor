@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Picqer\Barcode\BarcodeGeneratorPNG;
 
 /**
- * MG store large label — 75 × 50 mm, CODE128 (SKU), title, material, price (Incl. GST), H×W×D.
+ * MG Road large label — 75 × 50 mm, CODE128 (SKU), title, material, price (Incl. GST), H×W×D.
  * Callable from controllers/models like {@see JewelryLabel}.
  */
 final class MgStoreLabel
@@ -232,7 +232,7 @@ final class MgStoreLabel
         $h = (float)($cfg['label_height_mm'] ?? 50);
         $inner = self::renderInnerHtml($data, $cfg);
 
-        $title = 'MG store label';
+        $title = 'MG Road label';
         return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
             . '<meta name="viewport" content="width=device-width, initial-scale=1">'
             . '<title>' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</title>'
@@ -271,7 +271,7 @@ final class MgStoreLabel
         foreach ($rows as $row) {
             $pages .= '<div class="mgs-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
         }
-        $title = 'MG store labels';
+        $title = 'MG Road labels';
         return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
             . '<title>' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</title>'
             . '<style>'

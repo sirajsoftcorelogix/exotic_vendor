@@ -34,7 +34,7 @@ $textileLabelUrl = base_url('?page=products&action=textile_label&id=' . $labelPr
         <select id="productLabelSizeSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
           <option value="jewelry" selected>Jewelry — 100 × 12.9 mm</option>
           <option value="textile">Textile — 64 × 34 mm</option>
-          <option value="mg_store">MG store (large) — 75 × 50 mm</option>
+          <option value="mg_store">MG Road (large) — 75 × 50 mm</option>
         </select>
       </div>
       <div>

@@ -1,6 +1,6 @@
 <?php
 /**
- * MG store large label — 75 × 50 mm.
+ * MG Road large label — 75 × 50 mm.
  * Override via MgStoreLabel::render*($data, $overrides).
  */
 return [

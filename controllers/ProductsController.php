@@ -2800,7 +2800,7 @@ class ProductsController {
         exit;
     }
 
-    /** MG store large label (75×50 mm, CODE128). */
+    /** MG Road large label (75×50 mm, CODE128). */
     public function mgStoreLabelPrint() {
         is_login();
         global $productModel;
