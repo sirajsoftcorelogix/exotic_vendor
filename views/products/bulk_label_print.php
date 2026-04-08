@@ -40,8 +40,12 @@
           <?php endif; ?>
         </div>
         <div class="md:col-span-2">
-          <button id="bulkLabelSearchBtn" type="button"
-            class="w-full px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold">Search</button>
+          <div class="flex items-center gap-1.5">
+            <button id="bulkLabelSearchBtn" type="button"
+              class="flex-1 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold">Search</button>
+            <button id="bulkLabelSearchClearBtn" type="button" title="Clear search"
+              class="h-8 px-2 rounded border border-gray-300 text-[11px] text-gray-600 hover:bg-gray-50">Clear</button>
+          </div>
         </div>
       </div>
 
@@ -113,6 +117,7 @@
   var loginWarehouseId = <?php echo (int)($selectedWarehouseId ?? 0); ?>;
   var searchInput = document.getElementById('bulkLabelSearchInput');
   var searchBtn = document.getElementById('bulkLabelSearchBtn');
+  var clearSearchBtn = document.getElementById('bulkLabelSearchClearBtn');
   var warehouseSel = document.getElementById('bulkLabelWarehouse');
   var resultsTbody = document.getElementById('bulkLabelResultsTbody');
   var searchMeta = document.getElementById('bulkLabelSearchMeta');
@@ -250,6 +255,14 @@
   }
 
   searchBtn.addEventListener('click', function () { doSearch(false); });
+  clearSearchBtn && clearSearchBtn.addEventListener('click', function () {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    searchReqId += 1; // invalidate in-flight responses
+    searchInput.value = '';
+    resultsTbody.innerHTML = '<tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">Search products to start selection.</td></tr>';
+    searchMeta.textContent = 'Search cleared.';
+    try { searchInput.focus(); } catch (e) {}
+  });
   searchInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
       e.preventDefault();
