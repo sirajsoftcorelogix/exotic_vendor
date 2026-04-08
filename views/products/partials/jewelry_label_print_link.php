@@ -5,6 +5,7 @@ if ($labelProductId <= 0) {
 }
 $jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $labelProductId);
 $mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelProductId);
+$textileLabelUrl = base_url('?page=products&action=textile_label&id=' . $labelProductId);
 ?>
 <!-- Full-width panel below product + measures (separate card, matches product label UI pattern) -->
 <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
@@ -32,6 +33,7 @@ $mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelP
         <label class="block text-sm font-medium text-gray-700 mb-1" for="productLabelSizeSelect">Label size</label>
         <select id="productLabelSizeSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
           <option value="jewelry" selected>Jewelry — 100 × 12.9 mm</option>
+          <option value="textile">Textile — 64 × 34 mm</option>
           <option value="mg_store">MG store (large) — 75 × 50 mm</option>
         </select>
       </div>
@@ -54,6 +56,7 @@ $mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelP
 (function () {
   var jewelryBaseUrl = <?php echo json_encode($jewelryLabelUrl, JSON_UNESCAPED_SLASHES); ?>;
   var mgStoreBaseUrl = <?php echo json_encode($mgStoreLabelUrl, JSON_UNESCAPED_SLASHES); ?>;
+  var textileBaseUrl = <?php echo json_encode($textileLabelUrl, JSON_UNESCAPED_SLASHES); ?>;
   var modal = document.getElementById('productLabelPrintModal');
   var openBtn = document.getElementById('productLabelPrintOpenBtn');
   var sizeSelect = document.getElementById('productLabelSizeSelect');
@@ -83,7 +86,7 @@ $mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelP
     } catch (e) {}
   }
 
-  function printLabelsInHiddenFrame(url, isLarge) {
+  function printLabelsInHiddenFrame(url, frameKind) {
     var prev = document.getElementById('product-label-print-iframe');
     if (prev) removePrintIframe(prev);
 
@@ -91,9 +94,15 @@ $mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelP
     iframe.id = 'product-label-print-iframe';
     iframe.setAttribute('title', 'Label print');
     iframe.setAttribute('aria-hidden', 'true');
-    /* MG 75×50 mm needs a larger off-screen frame so layout + print() work; jewelry stays compact. */
-    var w = isLarge ? '100mm' : '120mm';
-    var h = isLarge ? '62mm' : '30mm';
+    var w = '120mm';
+    var h = '30mm';
+    if (frameKind === 'mg') {
+      w = '100mm';
+      h = '62mm';
+    } else if (frameKind === 'textile') {
+      w = '72mm';
+      h = '40mm';
+    }
     iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + w + ';height:' + h + ';border:0;margin:0;padding:0;opacity:0;pointer-events:none;z-index:-1;';
 
     iframe.addEventListener('load', function onLoad() {
@@ -118,10 +127,17 @@ $mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelP
   }
 
   function currentBaseUrl() {
-    if (sizeSelect && sizeSelect.value === 'mg_store') {
-      return mgStoreBaseUrl;
-    }
+    if (!sizeSelect) return jewelryBaseUrl;
+    if (sizeSelect.value === 'mg_store') return mgStoreBaseUrl;
+    if (sizeSelect.value === 'textile') return textileBaseUrl;
     return jewelryBaseUrl;
+  }
+
+  function currentFrameKind() {
+    if (!sizeSelect) return 'jewelry';
+    if (sizeSelect.value === 'mg_store') return 'mg';
+    if (sizeSelect.value === 'textile') return 'textile';
+    return 'jewelry';
   }
 
   submitBtn && submitBtn.addEventListener('click', function () {
@@ -131,9 +147,8 @@ $mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelP
     var baseUrl = currentBaseUrl();
     var sep = baseUrl.indexOf('?') >= 0 ? '&' : '?';
     var url = baseUrl + sep + 'copies=' + encodeURIComponent(String(n));
-    var isLarge = sizeSelect && sizeSelect.value === 'mg_store';
     /* Always iframe: avoids replacing the product page with the label URL (and keeps session on same document). */
-    printLabelsInHiddenFrame(url, isLarge);
+    printLabelsInHiddenFrame(url, currentFrameKind());
     closeModal();
   });
 })();

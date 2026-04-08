@@ -540,6 +540,11 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->mgStoreLabelPrint();
                 break;
+            case 'textile_label':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->textileLabelPrint();
+                break;
             case 'save_stock_adjustment':
                 require_once 'controllers/ProductsController.php';
                 $controller = new ProductsController($conn);
