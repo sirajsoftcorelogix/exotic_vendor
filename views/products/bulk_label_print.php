@@ -50,7 +50,8 @@
       </div>
 
       <div class="mt-3 text-xs text-gray-500 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span>Tip: <kbd class="px-1 border rounded bg-gray-50">Enter</kbd> adds top result quickly.</span>
+        <span>Tip: <kbd class="px-1 border rounded bg-gray-50">Enter</kbd> adds highlighted result.</span>
+        <span>Use <kbd class="px-1 border rounded bg-gray-50">↑</kbd> / <kbd class="px-1 border rounded bg-gray-50">↓</kbd> to navigate search results.</span>
         <span id="bulkLabelSearchMeta">No search yet.</span>
       </div>
 
@@ -114,6 +115,7 @@
 
 <script>
 (function () {
+  var appBaseUrl = <?php echo json_encode(base_url(''), JSON_UNESCAPED_SLASHES); ?>;
   var loginWarehouseId = <?php echo (int)($selectedWarehouseId ?? 0); ?>;
   var searchInput = document.getElementById('bulkLabelSearchInput');
   var searchBtn = document.getElementById('bulkLabelSearchBtn');
@@ -146,6 +148,14 @@
     return d.innerHTML;
   }
 
+  function imageUrlForProduct(p) {
+    var src = (p && p.image != null) ? String(p.image).trim() : '';
+    if (!src) return '';
+    if (/^https?:\/\//i.test(src)) return src;
+    if (src.charAt(0) === '/') return src;
+    return String(appBaseUrl || '').replace(/\/+$/, '') + '/' + src.replace(/^\/+/, '');
+  }
+
   function totalLabels() {
     var sum = 0;
     Object.keys(queueMap).forEach(function (k) {
@@ -173,13 +183,20 @@
     keys.forEach(function (k) {
       var row = queueMap[k];
       var p = row.product || {};
+      var img = imageUrlForProduct(p);
+      var thumbHtml = img
+        ? '<img src="' + esc(img) + '" alt="" class="w-full h-full object-cover" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.querySelector(\'span\').style.display=\'flex\';" /><span class="hidden items-center justify-center w-full h-full text-[10px] text-gray-400">No image</span>'
+        : '<span class="flex items-center justify-center w-full h-full text-[10px] text-gray-400">No image</span>';
       var wrap = document.createElement('div');
       wrap.className = 'p-3';
       wrap.innerHTML =
         '<div class="flex items-start justify-between gap-2">' +
-          '<div class="min-w-0">' +
+          '<div class="min-w-0 flex items-start gap-2">' +
+            '<div class="w-10 h-10 rounded border border-gray-200 overflow-hidden bg-gray-50 shrink-0">' + thumbHtml + '</div>' +
+            '<div class="min-w-0">' +
             '<div class="text-sm font-semibold text-gray-800 truncate">' + esc(p.sku || '—') + '</div>' +
             '<div class="text-xs text-gray-500 truncate">' + esc(p.item_code || '') + ' · ' + esc(p.title || '') + '</div>' +
+            '</div>' +
           '</div>' +
           '<button type="button" data-rm="' + esc(k) + '" class="text-xs text-red-700 hover:text-red-900">Remove</button>' +
         '</div>' +
