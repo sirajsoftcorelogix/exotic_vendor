@@ -486,8 +486,8 @@ class POSRegisterController
         $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
         $discount = (float)($data['couponreduction'] ?? 0);
         $gst = (float)($data['gstamount'] ?? 0);
-        // $custom_discount = (float)($data['customreduction'] ?? 0);
-        $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
+        $custom_discount = (float)($data['customreduction'] ?? 0);
+        // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
         $total_discount = $discount + $custom_discount;
 
         $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
