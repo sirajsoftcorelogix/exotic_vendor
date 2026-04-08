@@ -107,7 +107,7 @@ final class MgStoreLabel
         $barH = max(8, (int)($cfg['barcode_height_px'] ?? 35));
 
         if (!$vendorOk || !class_exists(BarcodeGeneratorPNG::class)) {
-            return self::barcodeFallbackSvgDataUri($code);
+            return '';
         }
 
         $generator = new BarcodeGeneratorPNG();
@@ -118,18 +118,6 @@ final class MgStoreLabel
         }
 
         return 'data:image/png;base64,' . base64_encode($png);
-    }
-
-    private static function barcodeFallbackSvgDataUri(string $code): string
-    {
-        $safe = htmlspecialchars($code !== '' ? $code : '0', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="120" viewBox="0 0 640 120">'
-            . '<rect width="640" height="120" fill="#fff"/>'
-            . '<rect x="10" y="10" width="620" height="68" fill="#fff" stroke="#000" stroke-width="2"/>'
-            . '<text x="320" y="55" text-anchor="middle" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#000">Barcode unavailable</text>'
-            . '<text x="320" y="100" text-anchor="middle" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#000">' . $safe . '</text>'
-            . '</svg>';
-        return 'data:image/svg+xml;base64,' . base64_encode($svg);
     }
 
     /**
@@ -172,6 +160,8 @@ final class MgStoreLabel
         $mUnit = (string)($data['measure_unit'] ?? 'inch');
 
         $barUri = self::barcodeDataUri($data, $cfg);
+        $barcodeWidthFactor = max(1, (int)($cfg['barcode_width_factor'] ?? 1));
+        $barcodeHeightPx = max(8, (int)($cfg['barcode_height_px'] ?? 35));
 
         $dimParts = [];
         if ($height !== '') {
@@ -194,6 +184,15 @@ final class MgStoreLabel
             $row1Extra = '<div style="margin-top:0.35mm;text-align:center;font-size:' . $e((string)$fsCap) . 'mm;font-weight:600;">' . $cap . '</div>';
         }
 
+        $barCodeEsc = $e(self::barcodePayloadFromData($data));
+        $barEl = $barUri !== ''
+            ? '<img src="' . $e($barUri) . '" alt="" style="max-width:100%;height:auto;max-height:14mm;object-fit:contain;display:inline-block;vertical-align:top;" />'
+            : '<svg class="mgs-js-barcode"'
+                . ' data-barcode="' . $barCodeEsc . '"'
+                . ' data-width-factor="' . $e((string)$barcodeWidthFactor) . '"'
+                . ' data-height-px="' . $e((string)$barcodeHeightPx) . '"'
+                . ' style="max-width:100%;height:auto;max-height:14mm;display:inline-block;vertical-align:top;"></svg>';
+
         return '<div class="mgs-sheet" style="'
             . 'box-sizing:border-box;width:' . $e((string)$w) . 'mm;height:' . $e((string)$h) . 'mm;'
             . 'padding:' . $e((string)$pad) . 'mm;display:flex;flex-direction:column;align-items:stretch;'
@@ -202,7 +201,7 @@ final class MgStoreLabel
             . 'border:0.15mm solid #000;'
             . '">'
             . '<div class="mgs-row mgs-row--barcode" style="flex:0 0 auto;text-align:center;">'
-            . '<img src="' . $e($barUri) . '" alt="" style="max-width:100%;height:auto;max-height:14mm;object-fit:contain;display:inline-block;vertical-align:top;" />'
+            . $barEl
             . $row1Extra
             . '</div>'
             . '<div class="mgs-row" style="font-weight:800;font-size:' . $e((string)$fsBody) . 'mm;">SKU: <span style="font-weight:900;">' . ($sku !== '' ? $e($sku) : '—') . '</span></div>'
@@ -235,9 +234,19 @@ final class MgStoreLabel
             . 'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
             . '.mgs-page{width:' . $w . 'mm;height:' . $h . 'mm;margin:0;page-break-after:always;page-break-inside:avoid;}'
             . '.mgs-page:last-child{page-break-after:auto;}'
-            . '</style></head><body>'
+            . '</style>'
+            . '<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>'
+            . '</head><body>'
             . '<div class="mgs-page">' . $inner . '</div>'
-            . '<script>window.onload=function(){window.focus();window.print();};</script>'
+            . '<script>(function(){'
+            . 'function draw(){var els=document.querySelectorAll("svg.mgs-js-barcode");'
+            . 'for(var i=0;i<els.length;i++){var el=els[i];'
+            . 'try{JsBarcode(el,el.getAttribute("data-barcode")||"0",{format:"CODE128",displayValue:false,width:parseInt(el.getAttribute("data-width-factor")||"1",10)||1,height:parseInt(el.getAttribute("data-height-px")||"35",10)||35,margin:0,background:"#ffffff",lineColor:"#000000"});}catch(e){}}}'
+            . 'if(window.JsBarcode){draw();window.focus();window.print();return;}'
+            . 'var t0=Date.now();'
+            . '(function waitJs(){if(window.JsBarcode){draw();window.focus();window.print();return;}'
+            . 'if(Date.now()-t0>2500){window.focus();window.print();return;}setTimeout(waitJs,80);}());'
+            . '}());</script>'
             . '</body></html>';
     }
 
@@ -263,8 +272,18 @@ final class MgStoreLabel
             . 'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
             . '.mgs-page{width:' . $w . 'mm;height:' . $h . 'mm;margin:0;page-break-after:always;page-break-inside:avoid;}'
             . '.mgs-page:last-child{page-break-after:auto;}'
-            . '</style></head><body>' . $pages
-            . '<script>window.onload=function(){window.focus();window.print();};</script>'
+            . '</style>'
+            . '<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>'
+            . '</head><body>' . $pages
+            . '<script>(function(){'
+            . 'function draw(){var els=document.querySelectorAll("svg.mgs-js-barcode");'
+            . 'for(var i=0;i<els.length;i++){var el=els[i];'
+            . 'try{JsBarcode(el,el.getAttribute("data-barcode")||"0",{format:"CODE128",displayValue:false,width:parseInt(el.getAttribute("data-width-factor")||"1",10)||1,height:parseInt(el.getAttribute("data-height-px")||"35",10)||35,margin:0,background:"#ffffff",lineColor:"#000000"});}catch(e){}}}'
+            . 'if(window.JsBarcode){draw();window.focus();window.print();return;}'
+            . 'var t0=Date.now();'
+            . '(function waitJs(){if(window.JsBarcode){draw();window.focus();window.print();return;}'
+            . 'if(Date.now()-t0>2500){window.focus();window.print();return;}setTimeout(waitJs,80);}());'
+            . '}());</script>'
             . '</body></html>';
     }
 }
