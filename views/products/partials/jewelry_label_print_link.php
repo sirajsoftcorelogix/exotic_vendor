@@ -131,6 +131,13 @@ $mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelP
     var sep = baseUrl.indexOf('?') >= 0 ? '&' : '?';
     var url = baseUrl + sep + 'copies=' + encodeURIComponent(String(n));
     var isLarge = sizeSelect && sizeSelect.value === 'mg_store';
+    if (isLarge) {
+      /* Some browsers suppress window.print from hidden iframes for larger docs.
+         For MG store label use direct navigation so print always runs. */
+      window.location.href = url;
+      closeModal();
+      return;
+    }
     printLabelsInHiddenFrame(url, isLarge);
     closeModal();
   });
