@@ -112,6 +112,29 @@
       </div>
     </div>
   </div>
+
+  <div id="bulkLabelQtyAllModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/45" role="dialog" aria-modal="true" aria-labelledby="bulkLabelQtyAllModalTitle">
+    <div class="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden" role="document">
+      <div class="px-5 pt-5 pb-3 border-b border-gray-100">
+        <h3 id="bulkLabelQtyAllModalTitle" class="text-lg font-semibold text-gray-900">Set quantity for all</h3>
+        <p class="text-sm text-gray-500 mt-1.5 leading-relaxed">Choose how many labels to print for <strong>every</strong> product currently in the queue. Allowed range: 1–99.</p>
+      </div>
+      <div class="px-5 py-4">
+        <label for="bulkLabelQtyAllInput" class="block text-sm font-medium text-gray-700 mb-2">Labels per product</label>
+        <div class="flex items-center gap-3">
+          <button type="button" id="bulkLabelQtyAllDec" class="h-11 w-11 shrink-0 rounded-lg border border-gray-300 text-lg font-semibold text-gray-700 hover:bg-gray-50" aria-label="Decrease quantity">−</button>
+          <input type="number" id="bulkLabelQtyAllInput" min="1" max="99" value="1"
+            class="flex-1 min-w-0 border rounded-lg px-3 py-2.5 text-center text-lg font-semibold text-gray-900 tabular-nums focus:ring-2 focus:ring-amber-500 focus:border-amber-500" />
+          <button type="button" id="bulkLabelQtyAllInc" class="h-11 w-11 shrink-0 rounded-lg border border-gray-300 text-lg font-semibold text-gray-700 hover:bg-gray-50" aria-label="Increase quantity">+</button>
+        </div>
+        <p id="bulkLabelQtyAllHint" class="text-xs text-gray-400 mt-2"></p>
+      </div>
+      <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <button type="button" id="bulkLabelQtyAllCancel" class="w-full sm:w-auto px-4 py-2.5 text-sm rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 font-medium">Cancel</button>
+        <button type="button" id="bulkLabelQtyAllApply" class="w-full sm:w-auto px-4 py-2.5 text-sm rounded-lg bg-amber-600 text-white hover:bg-amber-700 font-semibold shadow-sm">Apply to all</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -132,8 +155,16 @@
   var setQtyAllBtn = document.getElementById('bulkLabelSetQtyAll');
   var generateBtn = document.getElementById('bulkLabelGenerateBtn');
   var templateSel = document.getElementById('bulkLabelTemplate');
+  var qtyAllModal = document.getElementById('bulkLabelQtyAllModal');
+  var qtyAllInput = document.getElementById('bulkLabelQtyAllInput');
+  var qtyAllApply = document.getElementById('bulkLabelQtyAllApply');
+  var qtyAllCancel = document.getElementById('bulkLabelQtyAllCancel');
+  var qtyAllInc = document.getElementById('bulkLabelQtyAllInc');
+  var qtyAllDec = document.getElementById('bulkLabelQtyAllDec');
+  var qtyAllHint = document.getElementById('bulkLabelQtyAllHint');
 
   var queueMap = {}; // key: product id -> {product, qty}
+  var qtyAllLastApplied = 1;
   var searchReqId = 0;
   var searchDebounce = null;
   var activeResultIndex = -1;
@@ -429,12 +460,78 @@
     renderQueue();
   });
 
-  setQtyAllBtn.addEventListener('click', function () {
-    var v = prompt('Set quantity for all selected products (1-99):', '1');
-    if (v == null) return;
-    var n = Math.max(1, Math.min(99, parseInt(v, 10) || 1));
-    Object.keys(queueMap).forEach(function (k) { queueMap[k].qty = n; });
+  function clampQtyAll(n) {
+    return Math.max(1, Math.min(99, n));
+  }
+
+  function getQtyAllInputValue() {
+    return clampQtyAll(parseInt(qtyAllInput.value, 10) || 1);
+  }
+
+  function setQtyAllInputValue(n) {
+    qtyAllInput.value = String(clampQtyAll(n));
+  }
+
+  function openQtyAllModal() {
+    var keys = Object.keys(queueMap);
+    if (!keys.length) {
+      alert('Add at least one product to the queue first.');
+      return;
+    }
+    qtyAllHint.textContent = keys.length + ' product(s) in queue.';
+    setQtyAllInputValue(qtyAllLastApplied);
+    qtyAllModal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+    try {
+      qtyAllInput.focus();
+      qtyAllInput.select();
+    } catch (e) {}
+  }
+
+  function closeQtyAllModal() {
+    qtyAllModal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    try { setQtyAllBtn.focus(); } catch (e) {}
+  }
+
+  function applyQtyAllFromModal() {
+    var keys = Object.keys(queueMap);
+    if (!keys.length) {
+      closeQtyAllModal();
+      return;
+    }
+    var n = getQtyAllInputValue();
+    qtyAllLastApplied = n;
+    keys.forEach(function (k) { queueMap[k].qty = n; });
     renderQueue();
+    closeQtyAllModal();
+  }
+
+  setQtyAllBtn.addEventListener('click', openQtyAllModal);
+
+  qtyAllCancel.addEventListener('click', closeQtyAllModal);
+  qtyAllApply.addEventListener('click', applyQtyAllFromModal);
+  qtyAllModal.addEventListener('click', function (e) {
+    if (e.target === qtyAllModal) closeQtyAllModal();
+  });
+  qtyAllInc.addEventListener('click', function () {
+    setQtyAllInputValue(getQtyAllInputValue() + 1);
+  });
+  qtyAllDec.addEventListener('click', function () {
+    setQtyAllInputValue(getQtyAllInputValue() - 1);
+  });
+  qtyAllInput.addEventListener('change', function () {
+    setQtyAllInputValue(getQtyAllInputValue());
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!qtyAllModal || qtyAllModal.classList.contains('hidden')) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeQtyAllModal();
+    } else if (e.key === 'Enter' && e.target === qtyAllInput) {
+      e.preventDefault();
+      applyQtyAllFromModal();
+    }
   });
 
   function openPrintHtmlInFrame(html) {
