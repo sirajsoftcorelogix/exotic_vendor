@@ -15,18 +15,19 @@ final class MgStoreLabel
         return dirname(__DIR__, 2);
     }
 
-    private static function loadVendor(): void
+    private static function loadVendor(): bool
     {
         static $done = false;
         if ($done) {
-            return;
+            return true;
         }
         $autoload = self::projectRoot() . '/vendor/autoload.php';
         if (!is_file($autoload)) {
-            throw new RuntimeException('Composer autoload missing; run composer install.');
+            return false;
         }
         require_once $autoload;
         $done = true;
+        return true;
     }
 
     /**
@@ -98,12 +99,16 @@ final class MgStoreLabel
      */
     public static function barcodeDataUri(array $data, ?array $config = null): string
     {
-        self::loadVendor();
+        $vendorOk = self::loadVendor();
         $cfg = self::config($config);
         $code = self::barcodePayloadFromData($data);
-        $type = (string)($cfg['barcode_type'] ?? BarcodeGeneratorPNG::TYPE_CODE_128);
+        $type = (string)($cfg['barcode_type'] ?? 'C128');
         $wFactor = max(1, (int)($cfg['barcode_width_factor'] ?? 1));
         $barH = max(8, (int)($cfg['barcode_height_px'] ?? 35));
+
+        if (!$vendorOk || !class_exists(BarcodeGeneratorPNG::class)) {
+            return self::barcodeFallbackSvgDataUri($code);
+        }
 
         $generator = new BarcodeGeneratorPNG();
         try {
@@ -113,6 +118,18 @@ final class MgStoreLabel
         }
 
         return 'data:image/png;base64,' . base64_encode($png);
+    }
+
+    private static function barcodeFallbackSvgDataUri(string $code): string
+    {
+        $safe = htmlspecialchars($code !== '' ? $code : '0', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="120" viewBox="0 0 640 120">'
+            . '<rect width="640" height="120" fill="#fff"/>'
+            . '<rect x="10" y="10" width="620" height="68" fill="#fff" stroke="#000" stroke-width="2"/>'
+            . '<text x="320" y="55" text-anchor="middle" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#000">Barcode unavailable</text>'
+            . '<text x="320" y="100" text-anchor="middle" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#000">' . $safe . '</text>'
+            . '</svg>';
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
     }
 
     /**
