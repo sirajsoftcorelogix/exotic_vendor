@@ -39,7 +39,7 @@ $jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $jewelry
         <input type="number" id="productLabelCopiesInput" min="1" max="99" value="1"
           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
       </div>
-      <p class="text-xs text-gray-500">Each copy prints on its own sheet. Allow pop-ups if the print tab does not open.</p>
+      <p class="text-xs text-gray-500">Each copy prints on its own sheet. The print dialog opens without a new tab.</p>
     </div>
     <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
       <button type="button" class="product-label-print-close px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100">Cancel</button>
@@ -74,17 +74,53 @@ $jewelryLabelUrl = base_url('?page=products&action=jewelry_label&id=' . $jewelry
     if (e.target === modal) closeModal();
   });
 
+  function removePrintIframe(iframe) {
+    try {
+      if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    } catch (e) {}
+  }
+
+  /** Load print URL in a hidden iframe (same session, not blocked like window.open pop-ups). */
+  function printLabelsInHiddenFrame(url) {
+    var prev = document.getElementById('product-label-print-iframe');
+    if (prev) removePrintIframe(prev);
+
+    var iframe = document.createElement('iframe');
+    iframe.id = 'product-label-print-iframe';
+    iframe.setAttribute('title', 'Label print');
+    iframe.setAttribute('aria-hidden', 'true');
+    /* Non-zero size helps some engines render printable content; kept off-screen. */
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:120mm;height:30mm;border:0;margin:0;padding:0;opacity:0;pointer-events:none;z-index:-1;';
+
+    iframe.addEventListener('load', function onLoad() {
+      iframe.removeEventListener('load', onLoad);
+      try {
+        var cw = iframe.contentWindow;
+        if (cw && cw.addEventListener) {
+          cw.addEventListener('afterprint', function () {
+            setTimeout(function () { removePrintIframe(iframe); }, 200);
+          });
+        }
+      } catch (e) {}
+      /* Fallback: remove stray iframe if afterprint never fires */
+      setTimeout(function () {
+        if (document.getElementById('product-label-print-iframe') === iframe) {
+          removePrintIframe(iframe);
+        }
+      }, 120000);
+    });
+
+    document.body.appendChild(iframe);
+    iframe.src = url;
+  }
+
   submitBtn && submitBtn.addEventListener('click', function () {
     var n = parseInt(copiesInput && copiesInput.value, 10);
     if (isNaN(n) || n < 1) n = 1;
     if (n > 99) n = 99;
     var sep = baseUrl.indexOf('?') >= 0 ? '&' : '?';
     var url = baseUrl + sep + 'copies=' + encodeURIComponent(String(n));
-    var w = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!w) {
-      alert('Please allow pop-ups for this site to print labels.');
-      return;
-    }
+    printLabelsInHiddenFrame(url);
     closeModal();
   });
 })();
