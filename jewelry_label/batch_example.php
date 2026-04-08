@@ -1,9 +1,8 @@
 <?php
-
-declare(strict_types=1);
-
 /**
- * @deprecated Use views/products/jewelry_label_batch_example.php.
- * Kept so old bookmarks to /jewelry_label/batch_example.php still work.
+ * Legacy URL — product label batch preview was removed; rebuild when ready.
  */
-require dirname(__DIR__) . '/views/products/jewelry_label_batch_example.php';
+header('Content-Type: text/html; charset=utf-8', true, 410);
+?><!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Label batch removed</title></head>
+<body><p>Jewelry label batch preview has been removed. Use the product page when labels are re-implemented.</p></body></html>
