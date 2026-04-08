@@ -91,8 +91,9 @@ $mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelP
     iframe.id = 'product-label-print-iframe';
     iframe.setAttribute('title', 'Label print');
     iframe.setAttribute('aria-hidden', 'true');
-    var w = isLarge ? '85mm' : '120mm';
-    var h = isLarge ? '55mm' : '30mm';
+    /* MG 75×50 mm needs a larger off-screen frame so layout + print() work; jewelry stays compact. */
+    var w = isLarge ? '100mm' : '120mm';
+    var h = isLarge ? '62mm' : '30mm';
     iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + w + ';height:' + h + ';border:0;margin:0;padding:0;opacity:0;pointer-events:none;z-index:-1;';
 
     iframe.addEventListener('load', function onLoad() {
@@ -131,13 +132,7 @@ $mgStoreLabelUrl = base_url('?page=products&action=mg_store_label&id=' . $labelP
     var sep = baseUrl.indexOf('?') >= 0 ? '&' : '?';
     var url = baseUrl + sep + 'copies=' + encodeURIComponent(String(n));
     var isLarge = sizeSelect && sizeSelect.value === 'mg_store';
-    if (isLarge) {
-      /* Some browsers suppress window.print from hidden iframes for larger docs.
-         For MG store label use direct navigation so print always runs. */
-      window.location.href = url;
-      closeModal();
-      return;
-    }
+    /* Always iframe: avoids replacing the product page with the label URL (and keeps session on same document). */
     printLabelsInHiddenFrame(url, isLarge);
     closeModal();
   });
