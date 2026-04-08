@@ -750,6 +750,87 @@ class ProductsController {
         ], 'Bulk Label Print');
     }
 
+    /** Generate printable HTML for bulk label queue (JSON in, HTML out via JSON). */
+    public function bulkLabelPrintGenerate() {
+        is_login();
+        global $productModel;
+        header('Content-Type: application/json');
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid request payload.']);
+            exit;
+        }
+
+        $template = trim((string)($payload['template'] ?? ''));
+        $items = $payload['products'] ?? [];
+        if (!in_array($template, ['jewelry', 'textile', 'mg_store'], true)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid label template selected.']);
+            exit;
+        }
+        if (!is_array($items) || count($items) === 0) {
+            echo json_encode(['success' => false, 'message' => 'Please select at least one product.']);
+            exit;
+        }
+
+        $rows = [];
+        $missing = [];
+        foreach ($items as $it) {
+            $pid = isset($it['id']) ? (int)$it['id'] : 0;
+            $qty = isset($it['qty']) ? (int)$it['qty'] : 1;
+            $qty = max(1, min(99, $qty));
+            if ($pid <= 0) {
+                continue;
+            }
+            $p = $productModel->getProduct($pid);
+            if (!$p || !is_array($p)) {
+                $missing[] = $pid;
+                continue;
+            }
+
+            if ($template === 'jewelry') {
+                require_once dirname(__DIR__) . '/helpers/label/JewelryLabel.php';
+                $labelRow = JewelryLabel::fromProductRow($p);
+            } elseif ($template === 'textile') {
+                require_once dirname(__DIR__) . '/helpers/label/TextileLabel.php';
+                $labelRow = TextileLabel::fromProductRow($p);
+            } else {
+                require_once dirname(__DIR__) . '/helpers/label/MgStoreLabel.php';
+                $labelRow = MgStoreLabel::fromProductRow($p);
+            }
+
+            for ($i = 0; $i < $qty; $i++) {
+                $rows[] = $labelRow;
+            }
+        }
+
+        if ($rows === []) {
+            $msg = 'No valid products found to print.';
+            if ($missing !== []) {
+                $msg .= ' Missing product IDs: ' . implode(', ', $missing);
+            }
+            echo json_encode(['success' => false, 'message' => $msg]);
+            exit;
+        }
+
+        if ($template === 'jewelry') {
+            $html = JewelryLabel::renderPrintDocumentBatch($rows);
+        } elseif ($template === 'textile') {
+            $html = TextileLabel::renderPrintDocumentBatch($rows);
+        } else {
+            $html = MgStoreLabel::renderPrintDocumentBatch($rows);
+        }
+
+        echo json_encode([
+            'success' => true,
+            'html' => $html,
+            'total_labels' => count($rows),
+            'missing_product_ids' => $missing,
+        ]);
+        exit;
+    }
+
     public function bulkImportSampleCsv() {
         is_login();
         $filename = 'bulk_product_import_sample.csv';

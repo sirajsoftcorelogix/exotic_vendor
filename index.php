@@ -441,6 +441,9 @@ switch ($page) {
             case 'bulk_label_print':
                 $controller->bulkLabelPrintUi();
                 break;
+            case 'bulk_label_print_generate':
+                $controller->bulkLabelPrintGenerate();
+                break;
             case 'bulk_import_sample_csv':
                 $controller->bulkImportSampleCsv();
                 break;

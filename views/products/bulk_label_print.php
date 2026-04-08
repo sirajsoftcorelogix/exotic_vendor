@@ -95,9 +95,9 @@
 
         <button id="bulkLabelGenerateBtn" type="button"
           class="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold">
-          Generate print batch (UI)
+          Print labels
         </button>
-        <p class="text-xs text-gray-500">UI-only for now. Next step will connect this queue to existing print helpers.</p>
+        <p class="text-xs text-gray-500">Uses existing label templates to generate a bulk print job.</p>
       </div>
     </div>
   </div>
@@ -299,7 +299,21 @@
     renderQueue();
   });
 
-  generateBtn.addEventListener('click', function () {
+  function openPrintHtmlInFrame(html) {
+    var old = document.getElementById('bulk-label-print-frame');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var frame = document.createElement('iframe');
+    frame.id = 'bulk-label-print-frame';
+    frame.setAttribute('title', 'Bulk label print');
+    frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:120mm;height:80mm;border:0;opacity:0;pointer-events:none;z-index:-1;';
+    document.body.appendChild(frame);
+    var d = frame.contentWindow.document;
+    d.open();
+    d.write(html || '');
+    d.close();
+  }
+
+  generateBtn.addEventListener('click', async function () {
     var pc = Object.keys(queueMap).length;
     if (pc < 1) {
       alert('Select at least one product.');
@@ -311,7 +325,29 @@
         return { id: parseInt(k, 10), qty: queueMap[k].qty };
       })
     };
-    alert('UI-only module.\n\nTemplate: ' + payload.template + '\nProducts: ' + payload.products.length + '\nLabels: ' + totalLabels() + '\n\nNext step: connect this payload to server print endpoint.');
+
+    var prevLabel = generateBtn.textContent;
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Preparing...';
+    try {
+      var res = await fetch('?page=products&action=bulk_label_print_generate', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      var data = await res.json();
+      if (!data || !data.success || !data.html) {
+        alert((data && data.message) ? data.message : 'Could not generate labels.');
+        return;
+      }
+      openPrintHtmlInFrame(data.html);
+    } catch (e) {
+      alert('Could not generate labels. Please try again.');
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.textContent = prevLabel;
+    }
   });
 
   updateCounters();
