@@ -194,74 +194,74 @@ class POSRegisterController
         echo json_encode($response);
         exit;
     }
-   public function productsAjax()
-{
-    $pageNo  = $_GET['page_no'] ?? 1;
-    $perPage = $_GET['per_page'] ?? 12;
+    public function productsAjax()
+    {
+        $pageNo  = $_GET['page_no'] ?? 1;
+        $perPage = $_GET['per_page'] ?? 12;
 
-    $start  = ($pageNo - 1) * $perPage;
-    $length = $perPage;
+        $start  = ($pageNo - 1) * $perPage;
+        $length = $perPage;
 
-    $searchValue = $_GET['search']['value'] ?? '';
+        $searchValue = $_GET['search']['value'] ?? '';
 
-    $category    = $_GET['category'] ?? '';
-    $productName = $_GET['product_name'] ?? '';
-    $productCode = $_GET['product_code'] ?? '';
+        $category    = $_GET['category'] ?? '';
+        $productName = $_GET['product_name'] ?? '';
+        $productCode = $_GET['product_code'] ?? '';
 
-    $minPrice = $_GET['min_price'] ?? '';
-    $maxPrice = $_GET['max_price'] ?? '';
+        $minPrice = $_GET['min_price'] ?? '';
+        $maxPrice = $_GET['max_price'] ?? '';
 
-    // SORT
-    $sortBy = $_GET['sort_by'] ?? '';
+        // SORT
+        $sortBy = $_GET['sort_by'] ?? '';
 
-    switch ($sortBy) {
-        case 'price_low_high':
-            $orderColumn = 'itemprice';
-            $orderDir = 'asc';
-            break;
+        switch ($sortBy) {
+            case 'price_low_high':
+                $orderColumn = 'itemprice';
+                $orderDir = 'asc';
+                break;
 
-        case 'price_high_low':
-            $orderColumn = 'itemprice';
-            $orderDir = 'desc';
-            break;
+            case 'price_high_low':
+                $orderColumn = 'itemprice';
+                $orderDir = 'desc';
+                break;
 
-        case 'name_asc':
-            $orderColumn = 'title';
-            $orderDir = 'asc';
-            break;
+            case 'name_asc':
+                $orderColumn = 'title';
+                $orderDir = 'asc';
+                break;
 
-        case 'name_desc':
-            $orderColumn = 'title';
-            $orderDir = 'desc';
-            break;
+            case 'name_desc':
+                $orderColumn = 'title';
+                $orderDir = 'desc';
+                break;
 
-        default:
-            $orderColumn = 'title';
-            $orderDir = 'asc';
+            default:
+                $orderColumn = 'title';
+                $orderDir = 'asc';
+        }
+
+        $result = $this->pos->getProductsDataTable(
+            $start,
+            $length,
+            $searchValue,
+            $productName,
+            $orderColumn,
+            $orderDir,
+            $category,
+            $productCode,
+            $minPrice,
+            $maxPrice
+        );
+
+        echo json_encode([
+            'data' => $result['data'],
+            'recordsTotal' => $result['recordsTotal'],
+            'recordsFiltered' => $result['recordsFiltered'],
+            'current_page' => $pageNo,
+            'total_pages' => ceil($result['recordsFiltered'] / $length)
+        ]);
+        exit;
     }
-
-    $result = $this->pos->getProductsDataTable(
-        $start,
-        $length,
-        $searchValue,
-        $productName,
-        $orderColumn,
-        $orderDir,
-        $category,
-        $productCode,
-        $minPrice,
-        $maxPrice
-    );
-
-    echo json_encode([
-        'data' => $result['data'],
-        'recordsTotal' => $result['recordsTotal'],
-        'recordsFiltered' => $result['recordsFiltered'],
-        'current_page' => $pageNo,
-        'total_pages' => ceil($result['recordsFiltered'] / $length)
-    ]);
-    exit;
-}
     /**
      * Proxy: Add to cart (Exotic India API)
      */
@@ -486,7 +486,8 @@ class POSRegisterController
         $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
         $discount = (float)($data['couponreduction'] ?? 0);
         $gst = (float)($data['gstamount'] ?? 0);
-        $custom_discount = (float)($data['customreduction'] ?? 0);
+        // $custom_discount = (float)($data['customreduction'] ?? 0);
+        $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
         $total_discount = $discount + $custom_discount;
 
         $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
