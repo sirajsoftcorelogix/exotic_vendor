@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Picqer\Barcode\BarcodeGeneratorPNG;
 
 /**
- * Textile label — 64 × 34 mm: location — print date, CODE128 (SKU), SKU row.
+ * Textile label — 64 × 34 mm: location — print date, CODE128 (bars only), centered SKU row.
  */
 final class TextileLabel
 {
@@ -105,11 +105,8 @@ final class TextileLabel
         $pad = (float)($cfg['padding_mm'] ?? 1.2);
         $ff = (string)($cfg['font_family'] ?? 'Arial, Helvetica, sans-serif');
         $fsTop = (float)($cfg['font_size_top_mm'] ?? 2.35);
-        $fsBarLbl = (float)($cfg['font_size_barcode_label_mm'] ?? 1.85);
         $fsSku = (float)($cfg['font_size_sku_mm'] ?? 2.45);
         $lh = (float)($cfg['line_height'] ?? 1.12);
-        $showBarText = !empty($cfg['barcode_display_value']);
-        $barFontPx = max(8, (int)($cfg['barcode_text_font_px'] ?? 11));
 
         $e = static function (string $s): string {
             return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -128,34 +125,27 @@ final class TextileLabel
 
         $barBlock = '';
         if ($barUri !== '') {
-            $cap = '';
-            if ($showBarText) {
-                $cap = '<div style="margin-top:0.2mm;text-align:center;font-size:' . $e((string)$fsBarLbl) . 'mm;font-weight:600;">' . ($sku !== '' ? $e($sku) : '—') . '</div>';
-            }
-            $barBlock = '<img src="' . $e($barUri) . '" alt="" style="max-width:100%;height:auto;max-height:16mm;object-fit:contain;display:block;margin:0 auto;" />' . $cap;
+            $barBlock = '<img src="' . $e($barUri) . '" alt="" style="max-width:100%;height:auto;max-height:16mm;object-fit:contain;display:block;margin:0 auto;" />';
         } else {
             $barBlock = '<svg class="tl-js-barcode" xmlns="http://www.w3.org/2000/svg"'
                 . ' data-barcode="' . $barCodeEsc . '"'
                 . ' data-width-factor="' . $e((string)$wFactor) . '"'
                 . ' data-height-px="' . $e((string)$barH) . '"'
-                . ' data-show-text="' . ($showBarText ? '1' : '0') . '"'
-                . ' data-font-px="' . $e((string)$barFontPx) . '"'
                 . ' style="max-width:100%;height:auto;max-height:18mm;display:block;margin:0 auto;"></svg>';
         }
 
         return '<div class="tl-sheet" style="'
             . 'box-sizing:border-box;width:' . $e((string)$w) . 'mm;height:' . $e((string)$h) . 'mm;'
-            . 'padding:' . $e((string)$pad) . 'mm;display:flex;flex-direction:column;align-items:stretch;'
+            . 'padding:' . $e((string)$pad) . 'mm;display:flex;flex-direction:column;align-items:center;'
             . 'justify-content:flex-start;gap:0.35mm;font-family:' . $e($ff) . ';'
             . 'font-size:' . $e((string)$fsTop) . 'mm;line-height:' . $e((string)$lh) . ';color:#000;background:#fff;'
             . 'border:0.12mm solid #000;'
             . '">'
-            . '<div class="tl-row tl-row--meta" style="flex:0 0 auto;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' . $row1 . '</div>'
-            . '<div class="tl-row tl-row--barcode" style="flex:0 0 auto;">'
-            . '<div style="font-size:' . $e((string)$fsBarLbl) . 'mm;font-weight:700;margin-bottom:0.15mm;">Barcode:</div>'
+            . '<div class="tl-row tl-row--meta" style="flex:0 0 auto;width:100%;font-weight:600;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' . $row1 . '</div>'
+            . '<div class="tl-row tl-row--barcode" style="flex:0 0 auto;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">'
             . $barBlock
             . '</div>'
-            . '<div class="tl-row tl-row--sku" style="flex:1 1 auto;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:900;font-size:' . $e((string)$fsSku) . 'mm;">'
+            . '<div class="tl-row tl-row--sku" style="flex:1 1 auto;width:100%;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:900;font-size:' . $e((string)$fsSku) . 'mm;">'
             . ($sku !== '' ? $e($sku) : '—')
             . '</div>'
             . '</div>';
@@ -166,9 +156,7 @@ final class TextileLabel
         return '<script>(function(){'
             . 'function draw(){var els=document.querySelectorAll("svg.tl-js-barcode");'
             . 'for(var i=0;i<els.length;i++){var el=els[i];'
-            . 'var show=el.getAttribute("data-show-text")==="1";'
-            . 'var fs=parseInt(el.getAttribute("data-font-px")||"11",10)||11;'
-            . 'try{JsBarcode(el,el.getAttribute("data-barcode")||"0",{format:"CODE128",displayValue:show,width:parseInt(el.getAttribute("data-width-factor")||"1",10)||1,height:parseInt(el.getAttribute("data-height-px")||"45",10)||45,margin:2,background:"#ffffff",lineColor:"#000000",fontSize:fs,textMargin:2});}catch(e){}}}'
+            . 'try{JsBarcode(el,el.getAttribute("data-barcode")||"0",{format:"CODE128",displayValue:false,width:parseInt(el.getAttribute("data-width-factor")||"1",10)||1,height:parseInt(el.getAttribute("data-height-px")||"45",10)||45,margin:2,background:"#ffffff",lineColor:"#000000"});}catch(e){}}}'
             . 'function finish(){window.focus();window.print();}'
             . 'draw();'
             . 'if(window.JsBarcode){finish();return;}'
