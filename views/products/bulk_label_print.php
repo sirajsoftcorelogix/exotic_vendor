@@ -21,18 +21,23 @@
         </div>
         <div class="md:col-span-3">
           <label for="bulkLabelWarehouse" class="block text-sm font-medium text-gray-700 mb-1">Warehouse</label>
-          <select id="bulkLabelWarehouse" class="w-full border rounded-lg px-3 py-2 text-sm">
-            <option value="">All</option>
+          <select id="bulkLabelWarehouse" class="w-full border rounded-lg px-3 py-2 text-sm" <?= empty($isAdminUser) ? 'disabled' : '' ?>>
+            <?php if (!empty($isAdminUser)): ?>
+              <option value="">All</option>
+            <?php endif; ?>
             <?php foreach (($warehouses ?? []) as $wh): ?>
               <?php
                 $wid = (int)($wh['id'] ?? 0);
-                $wname = (string)($wh['address_title'] ?? $wh['address'] ?? ('Warehouse #' . $wid));
+                $wname = (string)($wh['name'] ?? $wh['address_title'] ?? $wh['address'] ?? ('Warehouse #' . $wid));
               ?>
               <option value="<?= $wid ?>" <?= ((int)($selectedWarehouseId ?? 0) === $wid) ? 'selected' : '' ?>>
                 <?= htmlspecialchars($wname, ENT_QUOTES, 'UTF-8') ?>
               </option>
             <?php endforeach; ?>
           </select>
+          <?php if (empty($isAdminUser)): ?>
+            <p class="text-[11px] text-gray-500 mt-1">Warehouse is fixed to your login warehouse.</p>
+          <?php endif; ?>
         </div>
         <div class="md:col-span-2">
           <button id="bulkLabelSearchBtn" type="button"
