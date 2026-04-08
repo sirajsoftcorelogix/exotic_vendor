@@ -2789,7 +2789,14 @@ class ProductsController {
         if (!headers_sent()) {
             header('Content-Type: text/html; charset=utf-8');
         }
-        echo JewelryLabel::renderPrintDocument(JewelryLabel::fromProductRow($product));
+        $copies = isset($_GET['copies']) ? (int)$_GET['copies'] : 1;
+        $copies = max(1, min(99, $copies));
+        $row = JewelryLabel::fromProductRow($product);
+        if ($copies === 1) {
+            echo JewelryLabel::renderPrintDocument($row);
+        } else {
+            echo JewelryLabel::renderPrintDocumentBatch(array_fill(0, $copies, $row));
+        }
         exit;
     }
 
