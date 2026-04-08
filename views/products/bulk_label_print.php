@@ -133,6 +133,7 @@
   var queueMap = {}; // key: product id -> {product, qty}
   var searchReqId = 0;
   var searchDebounce = null;
+  var activeResultIndex = -1;
 
   // Keep default warehouse aligned with login session.
   if (warehouseSel && loginWarehouseId > 0) {
@@ -204,14 +205,16 @@
   }
 
   function renderResults(products) {
+    activeResultIndex = -1;
     resultsTbody.innerHTML = '';
     if (!products || !products.length) {
       resultsTbody.innerHTML = '<tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">No products found.</td></tr>';
       return;
     }
-    products.forEach(function (p) {
+    products.forEach(function (p, idx) {
       var tr = document.createElement('tr');
       tr.className = 'border-t hover:bg-gray-50';
+      tr.dataset.resultIndex = String(idx);
       tr.innerHTML =
         '<td class="px-3 py-2 font-semibold">' + esc(p.sku || '') + '</td>' +
         '<td class="px-3 py-2">' + esc(p.item_code || '') + '</td>' +
@@ -222,6 +225,45 @@
       tr._product = p;
       resultsTbody.appendChild(tr);
     });
+    setActiveResultIndex(0);
+  }
+
+  function getResultRows() {
+    return Array.prototype.slice.call(resultsTbody.querySelectorAll('tr[data-result-index]'));
+  }
+
+  function setActiveResultIndex(nextIdx) {
+    var rows = getResultRows();
+    if (!rows.length) {
+      activeResultIndex = -1;
+      return;
+    }
+    if (nextIdx < 0) nextIdx = 0;
+    if (nextIdx > rows.length - 1) nextIdx = rows.length - 1;
+    activeResultIndex = nextIdx;
+    rows.forEach(function (row, i) {
+      if (i === activeResultIndex) {
+        row.classList.add('bg-amber-50');
+      } else {
+        row.classList.remove('bg-amber-50');
+      }
+    });
+    try {
+      rows[activeResultIndex].scrollIntoView({ block: 'nearest' });
+    } catch (e) {}
+  }
+
+  function addActiveOrTopResult() {
+    var rows = getResultRows();
+    if (!rows.length) return false;
+    var idx = activeResultIndex >= 0 ? activeResultIndex : 0;
+    var row = rows[idx];
+    if (row && row._product) {
+      addProductToQueue(row._product);
+      searchMeta.textContent = 'Added: ' + (row._product.sku || '');
+      return true;
+    }
+    return false;
   }
 
   async function doSearch(addTopOnEnter) {
@@ -245,8 +287,7 @@
       renderResults(data.products);
       searchMeta.textContent = data.products.length + ' result(s)';
       if (addTopOnEnter && data.products.length > 0) {
-        addProductToQueue(data.products[0]);
-        searchMeta.textContent = 'Added top result: ' + (data.products[0].sku || '');
+        addActiveOrTopResult();
       }
     } catch (e) {
       renderResults([]);
@@ -264,9 +305,27 @@
     try { searchInput.focus(); } catch (e) {}
   });
   searchInput.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown') {
+      var downRows = getResultRows();
+      if (downRows.length) {
+        e.preventDefault();
+        setActiveResultIndex(activeResultIndex + 1);
+      }
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      var upRows = getResultRows();
+      if (upRows.length) {
+        e.preventDefault();
+        setActiveResultIndex(activeResultIndex - 1);
+      }
+      return;
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
-      doSearch(true);
+      if (!addActiveOrTopResult()) {
+        doSearch(true);
+      }
     }
   });
   searchInput.addEventListener('input', function () {
@@ -289,6 +348,14 @@
     var row = btn.closest('tr');
     if (row && row._product && String(row._product.id) === id) {
       addProductToQueue(row._product);
+    }
+  });
+  resultsTbody.addEventListener('mousemove', function (e) {
+    var row = e.target && e.target.closest('tr[data-result-index]');
+    if (!row) return;
+    var idx = parseInt(row.dataset.resultIndex || '-1', 10);
+    if (!isNaN(idx) && idx !== activeResultIndex) {
+      setActiveResultIndex(idx);
     }
   });
 
