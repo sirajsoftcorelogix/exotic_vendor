@@ -16,7 +16,10 @@
           <select name="warehouse_id" id="bulk_import_warehouse_id" class="block w-full max-w-lg border rounded px-3 py-2 text-sm" required>
             <option value="">— Select warehouse —</option>
             <?php foreach ($warehouses ?? [] as $w): ?>
-              <option value="<?= (int)($w['id'] ?? 0) ?>"><?= htmlspecialchars($w['address_title'] ?? '') ?></option>
+              <?php $wid = (int)($w['id'] ?? 0); ?>
+              <option value="<?= $wid ?>" <?= ((int)($selectedWarehouseId ?? 0) === $wid) ? 'selected' : '' ?>>
+                <?= htmlspecialchars($w['address_title'] ?? '') ?>
+              </option>
             <?php endforeach; ?>
           </select>
         </div>
