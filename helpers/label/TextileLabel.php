@@ -134,6 +134,13 @@ final class TextileLabel
                 . ' style="max-width:100%;height:auto;max-height:18mm;display:block;margin:0 auto;"></svg>';
         }
 
+        $blankRows = max(0, min(10, (int)($cfg['blank_top_rows'] ?? 1)));
+        $blankRowH = max(0.0, (float)($cfg['blank_top_row_height_mm'] ?? 2.2));
+        $blankRowsHtml = '';
+        for ($i = 0; $i < $blankRows; $i++) {
+            $blankRowsHtml .= '<div class="tl-row tl-row--blank" style="flex:0 0 auto;width:100%;min-height:' . $e((string)$blankRowH) . 'mm;height:' . $e((string)$blankRowH) . 'mm;line-height:' . $e((string)$blankRowH) . 'mm;font-size:0;">&#8203;</div>';
+        }
+
         return '<div class="tl-sheet" style="'
             . 'box-sizing:border-box;width:' . $e((string)$w) . 'mm;height:' . $e((string)$h) . 'mm;'
             . 'padding:' . $e((string)$pad) . 'mm;display:flex;flex-direction:column;align-items:center;'
@@ -141,6 +148,7 @@ final class TextileLabel
             . 'font-size:' . $e((string)$fsTop) . 'mm;line-height:' . $e((string)$lh) . ';color:#000;background:#fff;'
             . 'border:0.12mm solid #000;'
             . '">'
+            . $blankRowsHtml
             . '<div class="tl-row tl-row--meta" style="flex:0 0 auto;width:100%;font-weight:600;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' . $row1 . '</div>'
             . '<div class="tl-row tl-row--barcode" style="flex:0 0 auto;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">'
             . $barBlock

@@ -16,4 +16,8 @@ return [
     'barcode_height_px' => 45,
     /** PHP date() format for row 1. */
     'print_date_format' => 'd-m-Y',
+
+    /** Empty spacer row(s) above location — date (print alignment). */
+    'blank_top_rows' => 1,
+    'blank_top_row_height_mm' => 2.2,
 ];
