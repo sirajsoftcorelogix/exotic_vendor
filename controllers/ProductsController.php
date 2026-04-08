@@ -684,13 +684,151 @@ class ProductsController {
             }
         }
 
-        global $usersModel;
-        $warehouses = $usersModel->getAllWarehouses();
+        $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+        $loginWarehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($loginWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $loginWarehouseId = (int)$_SESSION['user']['warehouse_id'];
+        }
+
+        $warehouses = [];
+        if ($isAdminUser) {
+            $whSql = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
+            $whRes = mysqli_query($conn, $whSql);
+            if ($whRes) {
+                while ($wh = mysqli_fetch_assoc($whRes)) {
+                    $warehouses[] = $wh;
+                }
+            }
+        } elseif ($loginWarehouseId > 0) {
+            $whStmt = $conn->prepare("SELECT id, address_title FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1");
+            if ($whStmt) {
+                $whStmt->bind_param('i', $loginWarehouseId);
+                $whStmt->execute();
+                $whRes = $whStmt->get_result();
+                if ($whRes && ($wh = $whRes->fetch_assoc())) {
+                    $warehouses[] = $wh;
+                }
+                $whStmt->close();
+            }
+        }
 
         renderTemplate('views/products/bulk_import.php', [
             'jobs' => $jobs,
             'warehouses' => $warehouses,
+            'selectedWarehouseId' => $loginWarehouseId,
         ], 'Bulk Product Import');
+    }
+
+    /** UI-only module for fast bulk label selection and queueing. */
+    public function bulkLabelPrintUi() {
+        is_login();
+        global $productModel;
+
+        $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+        $loginWarehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($loginWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $loginWarehouseId = (int)$_SESSION['user']['warehouse_id'];
+        }
+
+        $allWarehouses = $productModel->getAllWarehouses();
+        $warehouses = [];
+        foreach ((array)$allWarehouses as $wh) {
+            $wid = (int)($wh['id'] ?? 0);
+            if ($wid <= 0) {
+                continue;
+            }
+            if (!$isAdminUser && $loginWarehouseId > 0 && $wid !== $loginWarehouseId) {
+                continue;
+            }
+            $warehouses[] = $wh;
+        }
+
+        renderTemplate('views/products/bulk_label_print.php', [
+            'warehouses' => $warehouses,
+            'isAdminUser' => $isAdminUser,
+            'selectedWarehouseId' => $loginWarehouseId,
+        ], 'Bulk Label Print');
+    }
+
+    /** Generate printable HTML for bulk label queue (JSON in, HTML out via JSON). */
+    public function bulkLabelPrintGenerate() {
+        is_login();
+        global $productModel;
+        header('Content-Type: application/json');
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid request payload.']);
+            exit;
+        }
+
+        $template = trim((string)($payload['template'] ?? ''));
+        $items = $payload['products'] ?? [];
+        if (!in_array($template, ['jewelry', 'textile', 'mg_store'], true)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid label template selected.']);
+            exit;
+        }
+        if (!is_array($items) || count($items) === 0) {
+            echo json_encode(['success' => false, 'message' => 'Please select at least one product.']);
+            exit;
+        }
+
+        $rows = [];
+        $missing = [];
+        foreach ($items as $it) {
+            $pid = isset($it['id']) ? (int)$it['id'] : 0;
+            $qty = isset($it['qty']) ? (int)$it['qty'] : 1;
+            $qty = max(1, min(99, $qty));
+            if ($pid <= 0) {
+                continue;
+            }
+            $p = $productModel->getProduct($pid);
+            if (!$p || !is_array($p)) {
+                $missing[] = $pid;
+                continue;
+            }
+
+            if ($template === 'jewelry') {
+                require_once dirname(__DIR__) . '/helpers/label/JewelryLabel.php';
+                $labelRow = JewelryLabel::fromProductRow($p);
+            } elseif ($template === 'textile') {
+                require_once dirname(__DIR__) . '/helpers/label/TextileLabel.php';
+                $labelRow = TextileLabel::fromProductRow($p);
+            } else {
+                require_once dirname(__DIR__) . '/helpers/label/MgStoreLabel.php';
+                $labelRow = MgStoreLabel::fromProductRow($p);
+            }
+
+            for ($i = 0; $i < $qty; $i++) {
+                $rows[] = $labelRow;
+            }
+        }
+
+        if ($rows === []) {
+            $msg = 'No valid products found to print.';
+            if ($missing !== []) {
+                $msg .= ' Missing product IDs: ' . implode(', ', $missing);
+            }
+            echo json_encode(['success' => false, 'message' => $msg]);
+            exit;
+        }
+
+        if ($template === 'jewelry') {
+            $html = JewelryLabel::renderPrintDocumentBatch($rows);
+        } elseif ($template === 'textile') {
+            $html = TextileLabel::renderPrintDocumentBatch($rows);
+        } else {
+            $html = MgStoreLabel::renderPrintDocumentBatch($rows);
+        }
+
+        echo json_encode([
+            'success' => true,
+            'html' => $html,
+            'total_labels' => count($rows),
+            'missing_product_ids' => $missing,
+        ]);
+        exit;
     }
 
     public function bulkImportSampleCsv() {
@@ -1566,6 +1704,15 @@ class ProductsController {
         $warehouseId = isset($_POST['warehouse_id']) ? (int)$_POST['warehouse_id'] : 0;
         if ($warehouseId <= 0) {
             echo json_encode(['success' => false, 'message' => 'Please select a warehouse.']);
+            exit;
+        }
+        $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+        $loginWarehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($loginWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $loginWarehouseId = (int)$_SESSION['user']['warehouse_id'];
+        }
+        if (!$isAdminUser && $loginWarehouseId > 0 && $warehouseId !== $loginWarehouseId) {
+            echo json_encode(['success' => false, 'message' => 'You can import only to your assigned warehouse.']);
             exit;
         }
         $whStmt = $conn->prepare('SELECT id FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1');
