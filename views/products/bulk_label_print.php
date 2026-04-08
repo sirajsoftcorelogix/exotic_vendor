@@ -79,9 +79,22 @@
       <h3 class="text-base font-semibold text-gray-800">Selection Queue</h3>
       <p class="text-xs text-gray-500 mt-1">Set label quantity per product before print.</p>
 
-      <div class="mt-3 grid grid-cols-2 gap-2">
-        <button id="bulkLabelSetQtyAll" type="button" class="px-3 py-2 text-xs rounded border border-gray-300 hover:bg-gray-50">Set qty for all</button>
-        <button id="bulkLabelClearAll" type="button" class="px-3 py-2 text-xs rounded border border-red-300 text-red-700 hover:bg-red-50">Clear all</button>
+      <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-stretch">
+        <button id="bulkLabelSetQtyAll" type="button"
+          class="group relative flex h-full min-h-[3.25rem] items-center gap-3 w-full rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-50/80 px-3.5 py-2.5 text-left shadow-sm transition-all hover:border-amber-300 hover:shadow-md hover:from-amber-100 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 shadow-inner ring-1 ring-amber-200/60 group-hover:bg-amber-200 group-hover:text-amber-900 transition-colors" aria-hidden="true">
+            <i class="fas fa-sliders-h text-base"></i>
+          </span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-semibold text-gray-900 leading-tight">Set qty for all</span>
+            <span class="block text-[11px] text-amber-800/70 mt-0.5 leading-snug">Apply one quantity to the whole queue</span>
+          </span>
+        </button>
+        <button id="bulkLabelClearAll" type="button"
+          class="inline-flex h-full min-h-[3.25rem] items-center justify-center gap-2 w-full rounded-xl border border-red-200 bg-white px-3.5 py-2.5 text-sm font-medium text-red-700 shadow-sm transition-all hover:bg-red-50 hover:border-red-300 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2">
+          <i class="fas fa-trash-alt text-red-500 text-sm" aria-hidden="true"></i>
+          Clear all
+        </button>
       </div>
 
       <div class="mt-3 border rounded-lg max-h-[280px] overflow-auto">
