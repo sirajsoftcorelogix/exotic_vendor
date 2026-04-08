@@ -86,7 +86,23 @@ class ProductsController {
             'item_number' => trim($_GET['item_number'] ?? ''),
         ];
 
+        // Warehouse users only see transfers touching their assigned location (source or destination).
+        // Admins see every transfer (matches helpers/html_helpers.php hasPermission(): role_id == 1 has full access).
+        $isAdminUser = isset($_SESSION['user']['role_id']) && $_SESSION['user']['role_id'] == 1;
+        if (!$isAdminUser) {
+            $userWh = (int)($_SESSION['warehouse_id'] ?? 0);
+            if ($userWh <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+                $userWh = (int)$_SESSION['user']['warehouse_id'];
+            }
+            $filters['user_warehouse_scope'] = $userWh;
+        }
+
         $transferData = $stockTransferModel->listTransfers($limit, $offset, $filters);
+
+        $flash = $_SESSION['stock_transfer_list_flash'] ?? null;
+        if (is_array($flash)) {
+            unset($_SESSION['stock_transfer_list_flash']);
+        }
 
         // Pull users for filters
         $users = [];
@@ -116,9 +132,103 @@ class ProductsController {
             'filters' => $filters,
             'users' => $users,
             'warehouses' => $warehouses,
+            'flash' => $flash,
         ];
 
         renderTemplate('views/products/stock_transfer_list.php', $data, 'Stock Transfer Log');
+    }
+
+    public function stock_transfer_delete() {
+        is_login();
+        global $conn;
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ?page=products&action=stock_transfer');
+            exit;
+        }
+
+        $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+        $result = $stockTransferModel->deleteStockTransfer($transferId);
+
+        $_SESSION['stock_transfer_list_flash'] = [
+            'type' => !empty($result['success']) ? 'success' : 'error',
+            'message' => (string)($result['message'] ?? ''),
+        ];
+
+        header('Location: ?page=products&action=stock_transfer');
+        exit;
+    }
+
+    public function stock_transfer_delete_line() {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json; charset=UTF-8');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $transferId = (int)($_POST['transfer_id'] ?? 0);
+        $lineItemId = (int)($_POST['line_item_id'] ?? 0);
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+        $result = $stockTransferModel->deleteTransferLineItem($transferId, $lineItemId);
+
+        echo json_encode([
+            'success' => !empty($result['success']),
+            'message' => (string)($result['message'] ?? ''),
+        ]);
+        exit;
+    }
+
+    /**
+     * Paginated line items for one transfer (Option A — list uses aggregates only).
+     */
+    public function stock_transfer_items() {
+        is_login();
+        global $conn;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $transferId = isset($_GET['transfer_id']) ? (int)$_GET['transfer_id'] : 0;
+        if ($transferId <= 0) {
+            header('Location: ?page=products&action=stock_transfer');
+            return;
+        }
+
+        $pageNo = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $pageNo = max(1, $pageNo);
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50;
+        $offset = ($pageNo - 1) * $limit;
+
+        $result = $stockTransferModel->getTransferItemsPaginated($transferId, $limit, $offset);
+
+        if ($result['transfer'] === null) {
+            renderTemplate('views/errors/error.php', [
+                'message' => ['type' => 'error', 'text' => 'Stock transfer not found'],
+            ], 'Error');
+            return;
+        }
+
+        $receiptStatus = $stockTransferModel->getTransferReceiptStatus($transferId);
+
+        renderTemplate('views/products/stock_transfer_items.php', [
+            'transfer' => $result['transfer'],
+            'items' => $result['rows'],
+            'total_records' => $result['total'],
+            'page_no' => $pageNo,
+            'limit' => $limit,
+            'transfer_id' => $transferId,
+            'transfer_receipt_status' => $receiptStatus,
+        ], 'Transfer line items');
     }
 
     public function stock_transfer_edit() {
@@ -2117,6 +2227,17 @@ class ProductsController {
             exit;
         }
 
+        $by = isset($_GET['by']) ? trim((string)$_GET['by']) : '';
+        if ($by === 'sku' && !$exact) {
+            $products = $productModel->searchProductsBySkuLike($q);
+            if (!$products || count($products) === 0) {
+                echo json_encode(['success' => false, 'message' => 'No products found for this SKU search']);
+                exit;
+            }
+            echo json_encode(['success' => true, 'products' => $products]);
+            exit;
+        }
+
         if ($exact) {
             $p = $productModel->getProductByskuExact($q);
             if ($p && !empty($p['id'])) {
@@ -2962,6 +3083,9 @@ class ProductsController {
             $data = $_POST;
         }
 
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
         // if item arrays are provided separately, build items array
         if (empty($data['items']) && !empty($data['item_code']) && is_array($data['item_code']) && is_array($data['sku'])) {
             $items = [];
@@ -2979,6 +3103,16 @@ class ProductsController {
             $data['items'] = $items;
         }
 
+        $this->validateAndSaveTransferRequest($data, $stockTransferModel, $wantsJson);
+    }
+
+    /**
+     * Shared validation + create/update for stock transfer payloads (standard or bulk).
+     *
+     * @param array $data
+     */
+    private function validateAndSaveTransferRequest(array $data, $stockTransferModel, bool $wantsJson): void
+    {
         // Validate input
         $transfer_order_no = isset($data['transfer_order_no']) ? trim($data['transfer_order_no']) : '';
         $product_ids = isset($data['product_ids']) ? trim($data['product_ids']) : '';
@@ -2986,9 +3120,9 @@ class ProductsController {
         // fallback transfer order from existing transfer when editing
         $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
         if (empty($transfer_order_no) && $transferId > 0) {
-            $existingTransfer = $stockTransferModel->getTransferById($transferId);
-            if (!empty($existingTransfer['transfer_order_no'])) {
-                $transfer_order_no = $existingTransfer['transfer_order_no'];
+            $existingTransferHdr = $stockTransferModel->getTransferById($transferId);
+            if (!empty($existingTransferHdr['transfer_order_no'])) {
+                $transfer_order_no = $existingTransferHdr['transfer_order_no'];
             }
         }
         $from_warehouse = isset($data['from_warehouse']) ? intval($data['from_warehouse']) : 0;
@@ -2997,34 +3131,61 @@ class ProductsController {
         $est_delivery_date = isset($data['est_delivery_date']) ? trim($data['est_delivery_date']) : '';
         $requested_by = isset($data['requested_by']) ? intval($data['requested_by']) : 0;
         $dispatch_by = isset($data['dispatch_by']) ? intval($data['dispatch_by']) : 0;
-        
+
         // Validation
         if (empty($transfer_order_no)) {
             echo json_encode(['success' => false, 'message' => 'Transfer order number is required']);
             exit;
         }
-        
-        if (empty($product_ids)) {
-            echo json_encode(['success' => false, 'message' => 'No products specified']);
-            exit;
+
+        if (empty($product_ids) && !empty($data['items'])) {
+            $derivedIds = [];
+            foreach ($data['items'] as $it) {
+                $p = (int)($it['product_id'] ?? 0);
+                if ($p > 0) {
+                    $derivedIds[] = $p;
+                }
+            }
+            if ($derivedIds !== []) {
+                $product_ids = implode(',', array_unique($derivedIds));
+            }
         }
-        
+
+        if (empty($product_ids)) {
+            $canResolve = false;
+            foreach ($data['items'] ?? [] as $it) {
+                if ((int)($it['transfer_qty'] ?? 0) <= 0) {
+                    continue;
+                }
+                if ((int)($it['product_id'] ?? 0) > 0
+                    || trim((string)($it['sku'] ?? '')) !== ''
+                    || trim((string)($it['item_code'] ?? '')) !== '') {
+                    $canResolve = true;
+                    break;
+                }
+            }
+            if (!$canResolve) {
+                echo json_encode(['success' => false, 'message' => 'No products specified']);
+                exit;
+            }
+        }
+
         if ($from_warehouse <= 0 || $to_warehouse <= 0) {
             echo json_encode(['success' => false, 'message' => 'Please select source and destination warehouses']);
             exit;
         }
-        
+
         if ($from_warehouse === $to_warehouse) {
             echo json_encode(['success' => false, 'message' => 'Source and destination warehouses must be different']);
             exit;
         }
-        
+
         // Validate items have transfer quantities
         if (!isset($data['items']) || empty($data['items'])) {
             echo json_encode(['success' => false, 'message' => 'No items found']);
             exit;
         }
-        
+
         $hasItems = false;
         foreach ($data['items'] as $item) {
             $transfer_qty = isset($item['transfer_qty']) ? (int)$item['transfer_qty'] : 0;
@@ -3042,10 +3203,6 @@ class ProductsController {
 
         // Determine transfer ID (if editing existing transfer) before validating items.
         $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
-
-        // Validate each item transfer quantity doesn't exceed available stock
-        require_once 'models/product/StockTransfer.php';
-        $stockTransferModel = new StockTransfer($conn);
 
         // When editing, we want to allow keeping the same qty even if stock was already deducted.
         $existingQtyBySku = [];
@@ -3069,8 +3226,15 @@ class ProductsController {
             }
 
             $sku = trim($item['sku'] ?? '');
-            if (empty($sku)) {
-                continue;
+            if ($sku === '') {
+                $resolvedLine = $stockTransferModel->resolveProductForTransferItem($item);
+                if ($resolvedLine && !empty($resolvedLine['sku'])) {
+                    $sku = $resolvedLine['sku'];
+                }
+            }
+            if ($sku === '') {
+                echo json_encode(['success' => false, 'message' => 'Could not resolve SKU for at least one item line']);
+                exit;
             }
 
             $existingQty = $existingQtyBySku[$sku] ?? 0;
@@ -3080,7 +3244,7 @@ class ProductsController {
                 exit;
             }
         }
-        
+
         // Handle E-Way Bill file upload/retain/remove
         $existingFile = isset($data['existing_eway_bill_file']) ? trim($data['existing_eway_bill_file']) : '';
         $ewayBillFile = $this->handleEwayBillFileUpload($existingFile);
@@ -3139,9 +3303,334 @@ class ProductsController {
             header('Location: ?page=products&action=stock_transfer');
             exit;
         }
-        
+
         echo json_encode($result);
         exit;
+    }
+
+    public function getTransferStockBulkForm() {
+        is_login();
+        global $conn;
+
+        $transfer_id = isset($_GET['transfer_id']) ? (int)$_GET['transfer_id'] : 0;
+        $transfer = null;
+        $bulk_grid_prefill = [];
+
+        if ($transfer_id > 0) {
+            require_once 'models/product/StockTransfer.php';
+            $stockTransferModel = new StockTransfer($conn);
+            $transfer = $stockTransferModel->getTransferById($transfer_id);
+            if (!$transfer) {
+                header('Location: ?page=products&action=stock_transfer');
+                exit;
+            }
+            foreach ($transfer['items'] ?? [] as $item) {
+                $resolved = $stockTransferModel->resolveProductForTransferItem([
+                    'product_id' => (int)($item['product_id'] ?? 0),
+                    'sku' => trim((string)($item['sku'] ?? '')),
+                    'item_code' => trim((string)($item['item_code'] ?? '')),
+                ]);
+                $img = '';
+                if (!empty($item['product']['image'])) {
+                    $img = (string)$item['product']['image'];
+                }
+                $lineSku = (string)($resolved['sku'] ?? $item['sku'] ?? '');
+                $lineIc = (string)($resolved['item_code'] ?? $item['item_code'] ?? '');
+                $bulk_grid_prefill[] = [
+                    'item_code' => $lineIc,
+                    'sku' => $lineSku,
+                    'size' => (string)($resolved['size'] ?? ''),
+                    'color' => (string)($resolved['color'] ?? ''),
+                    'qty' => (int)($item['transfer_qty'] ?? 0),
+                    'image' => $img,
+                    'transfer_line_id' => (int)($item['id'] ?? 0),
+                    'line_grn_locked' => $stockTransferModel->transferSkuHasGrn($transfer_id, $lineSku, $lineIc),
+                ];
+            }
+        }
+
+        $warehouses = [];
+        $warehouseQuery = "SELECT id, address_title, address FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
+        $warehouseResult = mysqli_query($conn, $warehouseQuery);
+        if ($warehouseResult) {
+            while ($row = mysqli_fetch_assoc($warehouseResult)) {
+                $warehouses[] = $row;
+            }
+        }
+
+        $users = [];
+        $userQuery = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
+        $userResult = mysqli_query($conn, $userQuery);
+        if ($userResult) {
+            while ($row = mysqli_fetch_assoc($userResult)) {
+                $users[] = $row;
+            }
+        }
+
+        $pageTitle = $transfer ? 'Edit stock transfer' : 'Bulk stock transfer';
+
+        $transferGrnCount = 0;
+        if ($transfer_id > 0 && $transfer) {
+            $transferGrnCount = $stockTransferModel->countGrnsForTransfer($transfer_id);
+        }
+
+        renderTemplate('views/products/transfer_stock_bulk_page.php', [
+            'warehouses' => $warehouses,
+            'users' => $users,
+            'transfer' => $transfer,
+            'bulk_grid_prefill' => $bulk_grid_prefill,
+            'product_ids' => '',
+            'transfer_grn_count' => $transferGrnCount,
+        ], $pageTitle);
+    }
+
+    public function transferBulkTemplate() {
+        is_login();
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="transfer_bulk_template.csv"');
+        echo "\xEF\xBB\xBF";
+        echo "ItemCode,Size,Color,Quantity\n";
+        exit;
+    }
+
+    public function processTransferStockBulk() {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $mode = isset($_POST['bulk_mode']) ? trim((string)$_POST['bulk_mode']) : 'upload';
+        $rows = [];
+
+        if ($mode === 'grid') {
+            $raw = $_POST['bulk_rows_json'] ?? '[]';
+            $decoded = json_decode($raw, true);
+            if (!is_array($decoded)) {
+                echo json_encode(['success' => false, 'message' => 'Invalid spreadsheet grid data']);
+                exit;
+            }
+            foreach ($decoded as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+                $rows[] = [
+                    'item_code' => trim((string)($r['item_code'] ?? '')),
+                    'size' => trim((string)($r['size'] ?? '')),
+                    'color' => trim((string)($r['color'] ?? '')),
+                    'quantity' => isset($r['quantity']) ? (int)$r['quantity'] : 0,
+                ];
+            }
+        } else {
+            if (empty($_FILES['bulk_file']['tmp_name']) || !is_uploaded_file($_FILES['bulk_file']['tmp_name'])) {
+                echo json_encode(['success' => false, 'message' => 'Please choose a file (.csv, .xlsx, or .xls) with columns ItemCode, Size, Color, Quantity']);
+                exit;
+            }
+            $parsed = $this->parseBulkTransferUpload($_FILES['bulk_file']);
+            if (!empty($parsed['error'])) {
+                echo json_encode(['success' => false, 'message' => $parsed['error']]);
+                exit;
+            }
+            $rows = $parsed['rows'];
+        }
+
+        $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
+        if (!empty($aggregated['errors'])) {
+            echo json_encode(['success' => false, 'message' => implode(' ', $aggregated['errors'])]);
+            exit;
+        }
+        if (empty($aggregated['items'])) {
+            echo json_encode(['success' => false, 'message' => 'No valid lines to transfer']);
+            exit;
+        }
+
+        $data = $_POST;
+        $data['items'] = $aggregated['items'];
+        $ids = [];
+        foreach ($aggregated['items'] as $it) {
+            if (!empty($it['product_id'])) {
+                $ids[] = (int)$it['product_id'];
+            }
+        }
+        $data['product_ids'] = implode(',', array_unique($ids));
+
+        $this->validateAndSaveTransferRequest($data, $stockTransferModel, true);
+    }
+
+    /**
+     * @param array $file $_FILES entry
+     * @return array{rows?: list<array<string,mixed>>, error?: string}
+     */
+    private function parseBulkTransferUpload(array $file): array
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return ['error' => 'File upload failed'];
+        }
+
+        $tmp = $file['tmp_name'];
+        $name = (string)($file['name'] ?? '');
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+        if ($ext === 'csv') {
+            $raw = @file_get_contents($tmp);
+            if ($raw === false || $raw === '') {
+                return ['error' => 'Could not read CSV file'];
+            }
+            if (strncmp($raw, "\xEF\xBB\xBF", 3) === 0) {
+                $raw = substr($raw, 3);
+            }
+            $lines = preg_split('/\R/u', trim($raw)) ?: [];
+            if ($lines === []) {
+                return ['error' => 'CSV file is empty'];
+            }
+            $headerLine = array_shift($lines);
+            $headers = str_getcsv($headerLine);
+            $map = $this->mapBulkSheetHeaders($headers);
+
+            if ($map['item_code'] === null || $map['quantity'] === null) {
+                return ['error' => 'CSV must include ItemCode (or Item Code) and Quantity column headers'];
+            }
+
+            $rows = [];
+            foreach ($lines as $line) {
+                if (trim($line) === '') {
+                    continue;
+                }
+                $cells = str_getcsv($line);
+                $row = $this->bulkRowFromCells($cells, $map);
+                if ($row !== null) {
+                    $rows[] = $row;
+                }
+            }
+
+            return ['rows' => $rows];
+        }
+
+        if (!in_array($ext, ['xlsx', 'xls'], true)) {
+            return ['error' => 'Unsupported file type. Use CSV, XLSX, or XLS'];
+        }
+
+        $autoload = dirname(__DIR__) . '/vendor/autoload.php';
+        if (!is_file($autoload)) {
+            return ['error' => 'Excel support is not installed (run composer install)'];
+        }
+        require_once $autoload;
+
+        try {
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($tmp);
+            $reader->setReadDataOnly(true);
+            $spreadsheet = $reader->load($tmp);
+            $sheet = $spreadsheet->getActiveSheet();
+            $highestRow = (int)$sheet->getHighestDataRow();
+            $highestCol = $sheet->getHighestDataColumn();
+            $colCount = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
+            if ($highestRow < 2) {
+                return ['error' => 'Spreadsheet has no data rows'];
+            }
+            $headerCells = [];
+            for ($ci = 1; $ci <= $colCount; $ci++) {
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
+                $headerCells[] = (string)$sheet->getCell($colLetter . '1')->getValue();
+            }
+            $map = $this->mapBulkSheetHeaders($headerCells);
+            if ($map['item_code'] === null || $map['quantity'] === null) {
+                return ['error' => 'First row must include ItemCode and Quantity columns (Size and Color optional)'];
+            }
+
+            $rows = [];
+            for ($r = 2; $r <= $highestRow; $r++) {
+                $cells = [];
+                for ($ci = 1; $ci <= $colCount; $ci++) {
+                    $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
+                    $cells[$ci - 1] = $sheet->getCell($colLetter . $r)->getValue();
+                }
+                $row = $this->bulkRowFromCells($cells, $map);
+                if ($row !== null) {
+                    $rows[] = $row;
+                }
+            }
+
+            return ['rows' => $rows];
+        } catch (Throwable $e) {
+            return ['error' => 'Could not read spreadsheet: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * @param list<string|null> $headers
+     * @return array{item_code: ?int, size: ?int, color: ?int, quantity: ?int}
+     */
+    private function mapBulkSheetHeaders(array $headers): array
+    {
+        $norm = static function ($h): string {
+            $s = strtolower(trim((string)$h));
+            $s = str_replace(['_', '-'], ' ', $s);
+            $s = preg_replace('/\s+/', ' ', $s) ?? $s;
+
+            return $s;
+        };
+
+        $map = ['item_code' => null, 'size' => null, 'color' => null, 'quantity' => null];
+        foreach ($headers as $idx => $h) {
+            $n = $norm($h);
+            if ($n === '') {
+                continue;
+            }
+            if (in_array($n, ['itemcode', 'item code'], true)) {
+                $map['item_code'] = $idx;
+            } elseif ($n === 'size') {
+                $map['size'] = $idx;
+            } elseif (in_array($n, ['color', 'colour'], true)) {
+                $map['color'] = $idx;
+            } elseif (in_array($n, ['quantity', 'qty', 'qty.', 'qnty'], true)) {
+                $map['quantity'] = $idx;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param array<int,mixed> $cells
+     * @param array{item_code: ?int, size: ?int, color: ?int, quantity: ?int} $map
+     * @return ?array{item_code: string, size: string, color: string, quantity: int}
+     */
+    private function bulkRowFromCells(array $cells, array $map): ?array
+    {
+        $get = static function ($i) use ($cells) {
+            if ($i === null) {
+                return '';
+            }
+
+            return isset($cells[$i]) ? trim((string)$cells[$i]) : '';
+        };
+
+        $ic = $get($map['item_code']);
+        $qtyRaw = $get($map['quantity']);
+        $qty = (int)preg_replace('/[^\d-]/', '', (string)$qtyRaw);
+        if ($ic === '' && $qty <= 0) {
+            return null;
+        }
+        if ($ic === '') {
+            return null;
+        }
+        if ($qty <= 0) {
+            return null;
+        }
+
+        return [
+            'item_code' => $ic,
+            'size' => $map['size'] !== null ? $get($map['size']) : '',
+            'color' => $map['color'] !== null ? $get($map['color']) : '',
+            'quantity' => $qty,
+        ];
     }
     
     private function handleEwayBillFileUpload($existingFile = '')

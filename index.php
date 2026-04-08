@@ -552,8 +552,17 @@ switch ($page) {
             case 'transfer_stock':
                 $controller->getTransferStockForm();
                 break;
+            case 'transfer_stock_bulk':
+                $controller->getTransferStockBulkForm();
+                break;
+            case 'transfer_bulk_template':
+                $controller->transferBulkTemplate();
+                break;
             case 'process_transfer_stock':
                 $controller->processTransferStock();
+                break;
+            case 'process_transfer_stock_bulk':
+                $controller->processTransferStockBulk();
                 break;
             case 'get_last_warehouse':
                 $controller->getLastWarehouse();
@@ -563,6 +572,15 @@ switch ($page) {
                 break;
             case 'stock_transfer':
                 $controller->stock_transfer_list();
+                break;
+            case 'stock_transfer_delete':
+                $controller->stock_transfer_delete();
+                break;
+            case 'stock_transfer_delete_line':
+                $controller->stock_transfer_delete_line();
+                break;
+            case 'stock_transfer_items':
+                $controller->stock_transfer_items();
                 break;
             case 'search_product':
                 $controller->searchProduct();
