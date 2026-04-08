@@ -59,6 +59,7 @@
         <table class="min-w-full text-sm">
           <thead class="bg-gray-50 text-gray-600">
             <tr>
+              <th class="px-3 py-2 text-left">Thumb</th>
               <th class="px-3 py-2 text-left">SKU</th>
               <th class="px-3 py-2 text-left">Item Code</th>
               <th class="px-3 py-2 text-left">Title</th>
@@ -68,7 +69,7 @@
             </tr>
           </thead>
           <tbody id="bulkLabelResultsTbody">
-            <tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">Search products to start selection.</td></tr>
+            <tr><td colspan="7" class="px-3 py-8 text-center text-gray-400">Search products to start selection.</td></tr>
           </tbody>
         </table>
       </div>
@@ -225,14 +226,19 @@
     activeResultIndex = -1;
     resultsTbody.innerHTML = '';
     if (!products || !products.length) {
-      resultsTbody.innerHTML = '<tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">No products found.</td></tr>';
+      resultsTbody.innerHTML = '<tr><td colspan="7" class="px-3 py-8 text-center text-gray-400">No products found.</td></tr>';
       return;
     }
     products.forEach(function (p, idx) {
+      var img = imageUrlForProduct(p);
+      var thumbHtml = img
+        ? '<img src="' + esc(img) + '" alt="" class="w-full h-full object-cover" loading="lazy" onerror="this.style.display=\\'none\\';this.parentNode.querySelector(\\'span\\').style.display=\\'flex\\';" /><span class="hidden items-center justify-center w-full h-full text-[10px] text-gray-400">No image</span>'
+        : '<span class="flex items-center justify-center w-full h-full text-[10px] text-gray-400">No image</span>';
       var tr = document.createElement('tr');
       tr.className = 'border-t hover:bg-gray-50';
       tr.dataset.resultIndex = String(idx);
       tr.innerHTML =
+        '<td class="px-3 py-2"><div class="w-10 h-10 rounded border border-gray-200 overflow-hidden bg-gray-50">' + thumbHtml + '</div></td>' +
         '<td class="px-3 py-2 font-semibold">' + esc(p.sku || '') + '</td>' +
         '<td class="px-3 py-2">' + esc(p.item_code || '') + '</td>' +
         '<td class="px-3 py-2">' + esc(p.title || '') + '</td>' +
@@ -317,7 +323,7 @@
     if (searchDebounce) clearTimeout(searchDebounce);
     searchReqId += 1; // invalidate in-flight responses
     searchInput.value = '';
-    resultsTbody.innerHTML = '<tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">Search products to start selection.</td></tr>';
+    resultsTbody.innerHTML = '<tr><td colspan="7" class="px-3 py-8 text-center text-gray-400">Search products to start selection.</td></tr>';
     searchMeta.textContent = 'Search cleared.';
     try { searchInput.focus(); } catch (e) {}
   });
@@ -328,7 +334,7 @@
       searchReqId += 1;
       searchInput.value = '';
       activeResultIndex = -1;
-      resultsTbody.innerHTML = '<tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">Search products to start selection.</td></tr>';
+      resultsTbody.innerHTML = '<tr><td colspan="7" class="px-3 py-8 text-center text-gray-400">Search products to start selection.</td></tr>';
       searchMeta.textContent = 'Search cleared (Delete key).';
       return;
     }
@@ -359,7 +365,7 @@
     if (searchDebounce) clearTimeout(searchDebounce);
     var q = (searchInput.value || '').trim();
     if (q.length < 2) {
-      resultsTbody.innerHTML = '<tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">Type at least 2 characters to search.</td></tr>';
+      resultsTbody.innerHTML = '<tr><td colspan="7" class="px-3 py-8 text-center text-gray-400">Type at least 2 characters to search.</td></tr>';
       searchMeta.textContent = 'Type at least 2 characters.';
       return;
     }
