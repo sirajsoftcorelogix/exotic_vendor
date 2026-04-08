@@ -2770,6 +2770,29 @@ class ProductsController {
         }
         exit;
     }
+
+    /** Printable jewelry label (100×12.9 mm). Opens in new tab; uses helpers/label/JewelryLabel.php. */
+    public function jewelryLabelPrint() {
+        is_login();
+        global $productModel;
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        if ($id <= 0) {
+            echo '<p>Invalid product.</p>';
+            exit;
+        }
+        $product = $productModel->getProduct($id);
+        if (!$product) {
+            echo '<p>Product not found.</p>';
+            exit;
+        }
+        require_once dirname(__DIR__) . '/helpers/label/JewelryLabel.php';
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+        }
+        echo JewelryLabel::renderPrintDocument(JewelryLabel::fromProductRow($product));
+        exit;
+    }
+
     public function saveStockAdjustment() {
         is_login();
         global $productModel;
