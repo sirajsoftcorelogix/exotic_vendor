@@ -178,8 +178,11 @@
       <!-- <div class="w-24 h-32 bg-white rounded-[10px] outline outline-2 outline-offset-[-2px] outline-amber-600 ">
         <img onclick="openImagePopup('<?php //echo $products['image']; ?>')" src="<?php //echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="w-full h-full px-3 py-3 cursor-pointer" />
       </div> -->
-      <div onclick="openImagePopup('<?php echo htmlspecialchars($products['image'] ?? '', ENT_QUOTES); ?>')" class="flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-white outline outline-2 outline-offset-[-2px] outline-amber-600 cursor-pointer">
-        <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" alt="" class="block h-full w-full max-h-full max-w-full object-contain cursor-pointer" />
+      <div>
+        <div onclick="openImagePopup('<?php echo htmlspecialchars($products['image'] ?? '', ENT_QUOTES); ?>')" class="flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-white outline outline-2 outline-offset-[-2px] outline-amber-600 cursor-pointer">
+          <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" alt="" class="block h-full w-full max-h-full max-w-full object-contain cursor-pointer" />
+        </div>
+        <p class="text-xs text-gray-600 mt-2">UPC: <span class="font-medium text-gray-800"><?php echo htmlspecialchars((string)($products['upc'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span></p>
       </div>
       <div>
         <span class="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded">
@@ -191,6 +194,17 @@
           <?php echo htmlspecialchars($products['title'] ?? 'Product Title'); ?>
         </h2>
         <p class="text-sm text-gray-500">SKU: <?php echo htmlspecialchars($products['sku'] ?? ''); ?></p>
+        <?php if ($isBookProduct): ?>
+          <?php if ($authorRaw !== ''): ?>
+            <p class="text-sm text-gray-600 mt-1">Author: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
+          <?php endif; ?>
+          <?php $publisherRaw = trim((string)($products['publisher'] ?? '')); ?>
+          <?php if ($publisherRaw !== ''): ?>
+            <p class="text-sm text-gray-600">Publisher: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($publisherRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
+          <?php endif; ?>
+        <?php elseif ($authorRaw !== ''): ?>
+          <p class="text-sm text-gray-600 mt-1">Artist: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
+        <?php endif; ?>
         <div class="flex flex-wrap gap-2 mt-2">
           <?php foreach ($products['variants'] as $variant): 
             if(isset($variant['sku']) && !empty($variant['sku'])): ?>
@@ -221,19 +235,8 @@
     $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
 
     $fieldInfo = [
-      ['label' => 'UPC', 'help' => 'Universal Product Code used for barcode and listing sync.', 'value' => (string)($products['upc'] ?? '')],
-      ['label' => 'Price (India)', 'help' => 'India-specific selling price (used for MRP in labels).', 'value' => (string)($products['price_india'] ?? '')],
       ['label' => 'USD Price', 'help' => 'USD selling price pulled from inbound data.', 'value' => (string)($products['usd_price_inbound'] ?? '')],
-      ['label' => 'Permanently Available', 'help' => 'Shows whether this product is always available for sale.', 'value' => $permanentlyAvailableText],
-      ['label' => 'Leadtime', 'help' => 'Approximate days needed when item is not ready stock.', 'value' => (string)($products['leadtime'] ?? '')],
-      ['label' => 'Instock Leadtime', 'help' => 'Approximate dispatch time when item is already in stock.', 'value' => (string)($products['instock_leadtime'] ?? '')],
     ];
-    if ($isBookProduct) {
-      $fieldInfo[] = ['label' => 'Author', 'help' => 'Book author name.', 'value' => $authorRaw];
-      $fieldInfo[] = ['label' => 'Publisher', 'help' => 'Book publisher name.', 'value' => (string)($products['publisher'] ?? '')];
-    } elseif ($authorRaw !== '') {
-      $fieldInfo[] = ['label' => 'Artist', 'help' => 'Artist name (shown for non-book products when available).', 'value' => $authorRaw];
-    }
   ?>
   <div class="bg-white rounded-lg p-4 shadow-sm">
     <div class="flex items-center justify-between gap-3 mb-3">
@@ -367,7 +370,35 @@
             </button>
           </div>
 
-          <div class="hidden md:block"></div>
+          <div class="flex items-center justify-between border rounded-lg p-4 bg-emerald-50">
+            <div>
+              <p class="text-sm text-gray-500">Permanently Available</p>
+              <p class="text-xl font-semibold text-emerald-700"><?php echo htmlspecialchars($permanentlyAvailableText); ?></p>
+            </div>
+            <div class="bg-emerald-100 p-2 rounded-lg">
+               ✅
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between border rounded-lg p-4 bg-indigo-50">
+            <div>
+              <p class="text-sm text-gray-500">Leadtime</p>
+              <p class="text-xl font-semibold text-indigo-700"><?php echo htmlspecialchars((string)($products['leadtime'] ?? '0')); ?></p>
+            </div>
+            <div class="bg-indigo-100 p-2 rounded-lg">
+               🕒
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between border rounded-lg p-4 bg-cyan-50">
+            <div>
+              <p class="text-sm text-gray-500">Instock Leadtime</p>
+              <p class="text-xl font-semibold text-cyan-700"><?php echo htmlspecialchars((string)($products['instock_leadtime'] ?? '0')); ?></p>
+            </div>
+            <div class="bg-cyan-100 p-2 rounded-lg">
+               🚚
+            </div>
+          </div>
         </div>
   </div>
 
