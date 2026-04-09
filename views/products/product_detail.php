@@ -191,6 +191,77 @@
     $priceIndiaWithGst = $priceIndiaBase * (1 + $gstPercentForIndia / 100);
     $priceIndiaWithGstFormatted = number_format($priceIndiaWithGst, 2, '.', ',');
     $usdPriceFormatted = number_format((float)($products['price'] ?? 0), 2, '.', ',');
+    $lengthUnitRaw = trim((string)($products['length_unit'] ?? ''));
+    $weightUnitRaw = trim((string)($products['product_weight_unit'] ?? ''));
+    $linearNum = static function ($v): ?string {
+        if ($v === null || $v === '') {
+            return null;
+        }
+        if (!is_numeric($v)) {
+            $t = trim((string)$v);
+            return $t === '' ? null : $t;
+        }
+        $f = (float)$v;
+        if (abs($f) < 1e-8) {
+            return null;
+        }
+        if (abs(fmod($f, 1.0)) < 1e-8) {
+            return (string)(int)round($f);
+        }
+        return rtrim(rtrim(number_format($f, 2, '.', ''), '0'), '.');
+    };
+    $hasLinearDim = $linearNum($products['prod_length'] ?? null) !== null
+        || $linearNum($products['prod_width'] ?? null) !== null
+        || $linearNum($products['prod_height'] ?? null) !== null;
+    $lengthUnitDisplay = $lengthUnitRaw !== '' ? $lengthUnitRaw : ($hasLinearDim ? 'inch' : '');
+    $formatLinearDim = static function ($value, string $unit) use ($linearNum): string {
+        $n = $linearNum($value);
+        if ($n === null) {
+            return '—';
+        }
+        return $unit !== '' ? ($n . ' ' . $unit) : $n;
+    };
+    $sizeDisplayRaw = trim((string)($products['size'] ?? ''));
+    if ($sizeDisplayRaw === '' && $hasLinearDim) {
+        $dimParts = [];
+        foreach (['prod_length', 'prod_width', 'prod_height'] as $dimField) {
+            $n = $linearNum($products[$dimField] ?? null);
+            if ($n !== null) {
+                $dimParts[] = $n;
+            }
+        }
+        $sizeDisplayOut = $dimParts !== [] ? (implode(' × ', $dimParts) . ($lengthUnitDisplay !== '' ? ' ' . $lengthUnitDisplay : '')) : '—';
+    } else {
+        $sizeDisplayOut = $sizeDisplayRaw;
+        if ($sizeDisplayOut !== '' && $lengthUnitDisplay !== '') {
+            $low = strtolower($sizeDisplayOut);
+            if (strpos($low, 'inch') === false && strpos($low, 'cm') === false && strpos($low, 'mm') === false && strpos($sizeDisplayOut, '"') === false) {
+                $sizeDisplayOut .= ' ' . $lengthUnitDisplay;
+            }
+        }
+        if ($sizeDisplayOut === '') {
+            $sizeDisplayOut = '—';
+        }
+    }
+    $formatWeightDim = static function ($value, string $unit) use ($linearNum): string {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+        if (is_numeric($value)) {
+            $f = (float)$value;
+            if (abs($f) < 1e-8) {
+                return '—';
+            }
+            $n = abs(fmod($f, 1.0)) < 1e-8 ? (string)(int)round($f) : rtrim(rtrim(number_format($f, 2, '.', ''), '0'), '.');
+            return $unit !== '' ? ($n . ' ' . $unit) : $n;
+        }
+        $t = trim((string)$value);
+        if ($t === '') {
+            return '—';
+        }
+        return $unit !== '' ? ($t . ' ' . $unit) : $t;
+    };
+    $weightDisplay = $formatWeightDim($products['product_weight'] ?? null, $weightUnitRaw);
   ?>
   <!-- PRODUCT HEADER -->
   <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -253,12 +324,12 @@
         <i class="fas fa-ruler-combined text-orange-600"></i>Measurements
       </h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars((string)($products['size'] ?? '—')); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($sizeDisplayOut, ENT_QUOTES, 'UTF-8'); ?></span></div>
         <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-palette mr-1 text-orange-600"></i>Color</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars((string)($products['color'] ?? '—')); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($products['prod_length'] ?  $products['prod_length'].' '.$products['length_unit'] : '—'); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-vertical mr-1 text-orange-600"></i>Height</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($products['prod_height'] ? $products['prod_height'].' '.$products['length_unit'] : '—'); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-arrows-alt-h mr-1 text-orange-600"></i>Width</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($products['prod_width'] ? $products['prod_width'].' '.$products['length_unit'] : '—'); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-weight mr-1 text-orange-600"></i>Weight</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($products['product_weight'] ?  $products['product_weight'] .' ' .$products['product_weight_unit'] : '—'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_length'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-vertical mr-1 text-orange-600"></i>Height</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_height'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-arrows-alt-h mr-1 text-orange-600"></i>Width</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_width'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-weight mr-1 text-orange-600"></i>Weight</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($weightDisplay, ENT_QUOTES, 'UTF-8'); ?></span></div>
       </div>
     </div>
   </div>
