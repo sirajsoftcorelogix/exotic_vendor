@@ -176,14 +176,6 @@
     $groupNameLower = strtolower(trim((string)($products['groupname'] ?? '')));
     $isBookProduct = strpos($groupNameLower, 'book') !== false;
     $authorRaw = trim((string)($products['author'] ?? ''));
-    $subcategoriesRaw = trim((string)($products['subcategories'] ?? ''));
-    $groupCategoryLine = trim((string)($products['groupname'] ?? ''));
-    if ($subcategoriesRaw !== '') {
-        $groupCategoryLine = $groupCategoryLine !== '' ? ($groupCategoryLine . ' / ' . $subcategoriesRaw) : $subcategoriesRaw;
-    }
-    if ($groupCategoryLine === '') {
-        $groupCategoryLine = '—';
-    }
     $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
     $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
   ?>
@@ -203,10 +195,11 @@
         </p>
       </div>
       <div>
-        <p class="text-[10px] font-semibold tracking-wide text-gray-500 mb-0.5 capitalize">Item Group / Category</p>
-        <p class="text-sm font-medium text-gray-800 capitalize mb-2"><?php echo htmlspecialchars($groupCategoryLine, ENT_QUOTES, 'UTF-8'); ?></p>
-        <span class="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium"><?php echo htmlspecialchars((string)($products['item_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
-
+        <span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-md font-medium">
+          <?php echo $products['groupname'] ?? 'Default Group'; ?>
+        </span> 
+        <span class="text-xs ml-2 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium"><?php echo $products['item_code'] ?? ''; ?></span>
+        
         <h2 class="font-semibold mt-2 text-lg">
           <?php echo htmlspecialchars($products['title'] ?? 'Product Title'); ?>
         </h2>
