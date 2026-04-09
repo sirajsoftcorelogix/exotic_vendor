@@ -186,6 +186,10 @@
     $authorRaw = trim((string)($products['author'] ?? ''));
     $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
     $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
+    $priceIndiaBase = (float)($products['price_india'] ?? 0);
+    $gstPercentForIndia = max(0.0, (float)($products['gst'] ?? 0));
+    $priceIndiaWithGst = $priceIndiaBase * (1 + $gstPercentForIndia / 100);
+    $priceIndiaWithGstFormatted = number_format($priceIndiaWithGst, 2, '.', ',');
   ?>
   <!-- PRODUCT HEADER -->
   <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -405,8 +409,12 @@
     <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
       <h3 class="font-semibold mb-3 flex items-center gap-2 text-gray-800"><i class="fas fa-receipt text-emerald-600"></i>Price</h3>
       <div class="space-y-2.5 text-sm">
-        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
-          <span class="text-gray-700"><i class="fas fa-tag mr-1 px-2 py-1 rounded text-xs text-green-600 bg-green-100"></i>Price India</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($products['price_india'] ?? '0'); ?></span>
+        <div class="flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-tag mr-1 px-2 py-1 rounded text-xs text-green-600 bg-green-100"></i>Price India</span>
+          <div class="text-right shrink-0">
+            <span class="font-semibold text-gray-900 block leading-tight">₹<?php echo htmlspecialchars($priceIndiaWithGstFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+            <span class="text-[10px] text-gray-500 leading-tight block mt-0.5">(GST Included)</span>
+          </div>
         </div>
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
           <span class="text-gray-700"><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span class="font-semibold text-gray-900">$<?php echo htmlspecialchars((string)($products['usd_price_inbound'] ?? '0')); ?></span>
