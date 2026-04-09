@@ -2890,28 +2890,34 @@ class ProductsController {
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
-            $order['stock_value'] = $order['local_stock'] * $order['cost_price'];
-            $order['committed_stock'] = $commanModel->getCommittedStockBySku($order['sku']);
-            $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
-            $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
-            $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
+            if (!$order || !is_array($order)) {
+                echo '<p>Product details not found.</p>';
+                exit;
+            }
+
+            $sku = trim((string)($order['sku'] ?? ''));
+            $itemCode = trim((string)($order['item_code'] ?? ''));
+            $localStock = (float)($order['local_stock'] ?? 0);
+            $costPrice = (float)($order['cost_price'] ?? 0);
+
+            $order['stock_value'] = $localStock * $costPrice;
+            $order['committed_stock'] = $sku !== '' ? (int)$commanModel->getCommittedStockBySku($sku) : 0;
+            $order['available_stock'] = $localStock - (float)$order['committed_stock'];
+            $order['in_purchase_list'] = $sku !== '' ? $commanModel->isInPurchaseList($sku) : [];
+            $order['vendors'] = $itemCode !== '' ? $productModel->getVendorByItemCode($itemCode) : [];
             $order['stock_history'] = $productModel->enrichStockHistoryRowsForLedger(
-                $productModel->stock_history($order['sku'], 100, 0, (int)$id)
+                $productModel->stock_history($sku, 100, 0, (int)$id)
             );
-            $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
-            $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
+            $order['stocks'] = $sku !== '' ? $productModel->getStockSummaryBySku($sku) : ['total_added' => 0, 'total_deducted' => 0];
+            $order['variants'] = $itemCode !== '' ? $productModel->getVariantsByItemCode($itemCode) : [];
             $order['warehouses'] = $productModel->getAllWarehouses();
             $order['stock_movements'] = $productModel->get_stock_movements($id);
-            if ($order) {
-                if (!headers_sent()) {
-                    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-                    header('Pragma: no-cache');
-                    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
-                }
-                renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
-            } else {
-              echo '<p>Product details not found.</p>';
+            if (!headers_sent()) {
+                header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+                header('Pragma: no-cache');
+                header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
             }
+            renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
         } else {
             echo '<p>Invalid Product Item Code.</p>';
         }
