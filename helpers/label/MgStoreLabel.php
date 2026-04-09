@@ -62,7 +62,7 @@ final class MgStoreLabel
     public static function fromProductRow(array $product): array
     {
         $sku = trim((string)($product['sku'] ?? ''));
-        $mrpRaw = $product['itemprice'] ?? $product['cost_price'] ?? '';
+        $mrpRaw = $product['price_india'] ?? '';
         $price = trim((string)$mrpRaw);
         if ($mrpRaw !== '' && $mrpRaw !== null && is_numeric($mrpRaw)) {
             $price = number_format((float)$mrpRaw, 0, '.', ',');

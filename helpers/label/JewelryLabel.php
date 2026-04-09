@@ -57,7 +57,7 @@ final class JewelryLabel
     public static function fromProductRow(array $product): array
     {
         $sku = trim((string)($product['sku'] ?? ''));
-        $mrpRaw = $product['itemprice'] ?? $product['cost_price'] ?? '';
+        $mrpRaw = $product['price_india'] ?? '';
         $mrp = $mrpRaw;
         if ($mrpRaw !== '' && $mrpRaw !== null && is_numeric($mrpRaw)) {
             $mrp = number_format((float)$mrpRaw, 0, '.', ',');
