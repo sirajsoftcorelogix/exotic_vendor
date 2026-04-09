@@ -213,6 +213,51 @@
     </div>
   </div>
   <?php require __DIR__ . '/partials/jewelry_label_print_link.php'; ?>
+  <?php
+    $fieldInfo = [
+      ['label' => 'SKU', 'help' => 'Unique code used to identify this product variant.', 'value' => (string)($products['sku'] ?? '')],
+      ['label' => 'Item Code', 'help' => 'Master code shared across variants of the same product.', 'value' => (string)($products['item_code'] ?? '')],
+      ['label' => 'Title', 'help' => 'Product name shown across listings and reports.', 'value' => (string)($products['title'] ?? '')],
+      ['label' => 'Group / Category', 'help' => 'Category bucket used for filtering and reporting.', 'value' => (string)($products['groupname'] ?? '')],
+      ['label' => 'Size', 'help' => 'Variant size value used for identification and labeling.', 'value' => (string)($products['size'] ?? '')],
+      ['label' => 'Color', 'help' => 'Variant color value used for identification and labeling.', 'value' => (string)($products['color'] ?? '')],
+      ['label' => 'Length / Width / Height', 'help' => 'Physical dimensions used for product specs and labels.', 'value' => trim((string)(($products['prod_length'] ?? '') . ' / ' . ($products['prod_width'] ?? '') . ' / ' . ($products['prod_height'] ?? '')))],
+      ['label' => 'Weight', 'help' => 'Physical product weight with selected unit.', 'value' => trim((string)(($products['product_weight'] ?? '') . ' ' . ($products['product_weight_unit'] ?? '')))],
+      ['label' => 'Cost Price', 'help' => 'Internal purchase or sourcing cost per unit.', 'value' => (string)($products['cost_price'] ?? '')],
+      ['label' => 'Item Price', 'help' => 'Primary selling price configured on the product.', 'value' => (string)($products['itemprice'] ?? '')],
+      ['label' => 'Price (India)', 'help' => 'India-specific selling price (used for MRP in labels).', 'value' => (string)($products['price_india'] ?? '')],
+      ['label' => 'Stock Value', 'help' => 'Current inventory value for this product.', 'value' => (string)($products['stock_value'] ?? '')],
+      ['label' => 'GST %', 'help' => 'Tax percentage applied to this product.', 'value' => (string)($products['gst'] ?? '')],
+      ['label' => 'HSN', 'help' => 'Tax classification code for invoicing and compliance.', 'value' => (string)($products['hsn'] ?? '')],
+      ['label' => 'Local Stock', 'help' => 'On-hand stock available in local inventory.', 'value' => (string)($products['local_stock'] ?? '')],
+      ['label' => 'Committed Stock', 'help' => 'Units already reserved for orders.', 'value' => (string)($products['committed_stock'] ?? '')],
+      ['label' => 'Available Stock', 'help' => 'Free stock after committed quantity is deducted.', 'value' => (string)($products['available_stock'] ?? '')],
+      ['label' => 'Min / Max Stock', 'help' => 'Thresholds used for low-stock and replenishment control.', 'value' => trim((string)(($products['min_stock'] ?? '') . ' / ' . ($products['max_stock'] ?? '')))],
+      ['label' => 'Location', 'help' => 'Default storage location of this product in warehouse.', 'value' => (string)($products['location'] ?? ($products['stock_movements']['location'] ?? ''))],
+      ['label' => 'Vendor', 'help' => 'Primary supplier or source partner for this product.', 'value' => (string)($products['vendor'] ?? '')],
+    ];
+  ?>
+  <div class="bg-white rounded-lg p-4 shadow-sm">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <h3 class="font-semibold text-gray-800">Field Info</h3>
+      <span class="text-xs text-gray-500">What each field means</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <?php foreach ($fieldInfo as $meta): ?>
+        <?php
+          $rawVal = trim((string)($meta['value'] ?? ''));
+          $displayVal = $rawVal !== '' ? $rawVal : '—';
+        ?>
+        <div class="rounded-lg border border-gray-200 p-3 bg-gray-50/50">
+          <div class="flex items-start justify-between gap-3">
+            <p class="text-sm font-semibold text-gray-800"><?php echo htmlspecialchars((string)$meta['label'], ENT_QUOTES, 'UTF-8'); ?></p>
+            <span class="text-xs text-gray-500 font-medium"><?php echo htmlspecialchars($displayVal, ENT_QUOTES, 'UTF-8'); ?></span>
+          </div>
+          <p class="text-xs text-gray-600 mt-1 leading-relaxed"><?php echo htmlspecialchars((string)$meta['help'], ENT_QUOTES, 'UTF-8'); ?></p>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
   <!-- INVENTORY -->
   <!-- <div class="bg-white rounded-lg p-4 grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
     <div>
