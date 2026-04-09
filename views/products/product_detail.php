@@ -362,7 +362,7 @@
           <span><i class="fas fa-dollar px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Cost Price</span><span>₹<?php echo htmlspecialchars($products['cost_price'] ?? '0'); ?></span>
         </div>
         <div class="flex justify-between bg-green-50 p-2 rounded">
-          <span><i class="fas fa-tag  mr-1 px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Item Price</span><span>₹<?php echo htmlspecialchars($products['itemprice'] ?? '0'); ?></span>
+          <span><i class="fas fa-tag  mr-1 px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Price India</span><span>₹<?php echo htmlspecialchars($products['price_india'] ?? '0'); ?></span>
         </div>
         <div class="flex justify-between bg-green-50 p-2 rounded">
           <span><i class="fas fa-rupee-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Stock Value</span><span>₹<?php echo htmlspecialchars($products['stock_value'] ?? '0'); ?></span>
