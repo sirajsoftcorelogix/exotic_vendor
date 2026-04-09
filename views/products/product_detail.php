@@ -203,7 +203,18 @@
         <h2 class="font-semibold mt-2 text-lg">
           <?php echo htmlspecialchars($products['title'] ?? 'Product Title'); ?>
         </h2>
-        <p class="text-sm text-gray-500">SKU: <?php echo htmlspecialchars($products['sku'] ?? ''); ?></p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-sm text-gray-500">SKU: <?php echo htmlspecialchars($products['sku'] ?? ''); ?></p>
+          <button
+            type="button"
+            id="refreshProductApiBtn"
+            data-item-code="<?php echo htmlspecialchars((string)($products['item_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+            onclick="updateProductProfileFromApi(this)">
+            <i class="fas fa-sync-alt text-[11px]" aria-hidden="true"></i>
+            Refresh from API
+          </button>
+        </div>
         <?php if ($isBookProduct): ?>
           <?php if ($authorRaw !== ''): ?>
             <p class="text-sm text-gray-600 mt-1">Author: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
@@ -694,6 +705,39 @@
 </div>
 <!--Stock Adjustment Card Ends -->
 <script>
+  async function updateProductProfileFromApi(btn) {
+    var itemCode = (btn && btn.dataset && btn.dataset.itemCode) ? String(btn.dataset.itemCode).trim() : '';
+    if (!itemCode) {
+      alert('Item code is missing for this product.');
+      return;
+    }
+
+    var oldHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('opacity-70', 'cursor-not-allowed');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin text-[11px]" aria-hidden="true"></i> Updating...';
+
+    try {
+      var res = await fetch('index.php?page=products&action=update_api_call&itemCode=' + encodeURIComponent(itemCode), {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' }
+      });
+      var data = await res.json();
+      if (data && data.success) {
+        alert('Product updated successfully from API.');
+        window.location.reload();
+        return;
+      }
+      alert('Update failed: ' + ((data && data.message) ? data.message : 'Unknown error'));
+    } catch (e) {
+      alert('An error occurred while updating this product.');
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('opacity-70', 'cursor-not-allowed');
+      btn.innerHTML = oldHtml;
+    }
+  }
+
   function openStockModal() {
     document.getElementById('stockModal').classList.remove('hidden');
   }
