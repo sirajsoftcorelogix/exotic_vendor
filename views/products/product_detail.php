@@ -329,7 +329,7 @@
       <p class="text-xl font-semibold"><?php //echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
     </div>
     <div>
-      <p class="text-gray-500 text-sm">Committed</p>
+      <p class="text-gray-500 text-sm">Pending Orders</p>
       <p class="text-xl font-semibold">0</p>
     </div>
     <div>
@@ -364,10 +364,10 @@
             <i class="fas fa-edit text-sm"></i>
           </button>
         </div>
-        <!-- Committed -->
+        <!-- Pending Orders -->
         <div class="flex items-center justify-between border border-purple-100 bg-purple-50/50 rounded-lg p-3">
           <div>
-            <p class="text-sm text-gray-500">Committed</p>
+            <p class="text-sm text-gray-500 leading-tight">Pending Orders</p>
             <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['committed_stock'] ?? '0'); ?></p>
           </div>
           <div class="bg-purple-100 text-purple-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
