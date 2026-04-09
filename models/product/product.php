@@ -29,6 +29,52 @@ class product
         return (int)$default;
     }
 
+    /**
+     * USD / global list price from vendor product/fetch API payload.
+     * Prefer explicit USD keys, then price, then itemprice.
+     */
+    public static function vendorApiUsdPrice(array $apiItem): float
+    {
+        foreach (['usd_price', 'price_usd', 'usdprice', 'usdPrice'] as $k) {
+            if (!array_key_exists($k, $apiItem)) {
+                continue;
+            }
+            $v = $apiItem[$k];
+            if ($v === null || $v === '') {
+                continue;
+            }
+            return (float)$v;
+        }
+        if (isset($apiItem['price']) && $apiItem['price'] !== '' && $apiItem['price'] !== null) {
+            return (float)$apiItem['price'];
+        }
+        if (isset($apiItem['itemprice']) && $apiItem['itemprice'] !== '' && $apiItem['itemprice'] !== null) {
+            return (float)$apiItem['itemprice'];
+        }
+        return 0.0;
+    }
+
+    /**
+     * Normalize vendor product/fetch JSON into a list of product rows.
+     * Handles: { "SKU": { ...row } }, [ { ...row } ], or a single { "itemcode": "...", ... } object.
+     */
+    public static function normalizeVendorProductFetchItems(array $data): array
+    {
+        if ($data === []) {
+            return [];
+        }
+        if (isset($data['itemcode']) && trim((string)$data['itemcode']) !== '') {
+            return [$data];
+        }
+        $rows = [];
+        foreach ($data as $row) {
+            if (is_array($row) && trim((string)($row['itemcode'] ?? '')) !== '') {
+                $rows[] = $row;
+            }
+        }
+        return $rows;
+    }
+
     public function __construct($db)
     {
         $this->db = $db;
@@ -240,6 +286,9 @@ class product
         // exit;
         if (isset($productData) && is_array($productData)) {
             foreach ($productData as $product) {
+                if (!is_array($product) || trim((string)($product['itemcode'] ?? '')) === '') {
+                    continue;
+                }
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                 if ($stmt) {
@@ -269,7 +318,7 @@ class product
                     $vendor = isset($product['vendor']) ? $product['vendor'] : '';
                     $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                     $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
-                    $price = isset($product['price']) ? (float)$product['price'] : 0.0;
+                    $price = self::vendorApiUsdPrice($product);
                     $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
                     $price_india_suggested = isset($product['price_india_suggested']) ? (float)$product['price_india_suggested'] : 0.0;
                     $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
@@ -348,7 +397,7 @@ class product
                             $vendor = isset($product['vendor']) ? $product['vendor'] : '';
                             $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                             $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
-                            $price = isset($product['price']) ? (float)$product['price'] : 0.0;
+                            $price = self::vendorApiUsdPrice(array_merge($product, $variation));
                             $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
                             $price_india_suggested = isset($product['price_india_suggested']) ? (float)$product['price_india_suggested'] : 0.0;
                             $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;

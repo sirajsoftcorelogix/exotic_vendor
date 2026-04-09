@@ -432,6 +432,9 @@ switch ($page) {
             case 'update_api_call':
                 $controller->updateApiCall();
                 break;
+            case 'vendor_product_fetch_payload':
+                $controller->vendorProductFetchPayload();
+                break;
             case 'import_api_call':
                 $controller->importApiCall();
                 break;

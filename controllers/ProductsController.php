@@ -337,12 +337,25 @@ class ProductsController {
     public function updateApiCall(){
         is_login();
         global $productModel;
-        //echo "Update API called"; exit;
-        if(empty($_GET['itemCode'])){
+        // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
+        $raw = isset($_GET['itemCode']) ? trim((string)$_GET['itemCode']) : '';
+        if ($raw === '') {
             echo json_encode(['success' => false, 'message' => 'itemcode invalid to update product.']);
             exit;
         }
-        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes='.$_GET['itemCode']; // Production API new endpoint
+        $codes = array_values(array_unique(array_map('trim', array_filter(explode(',', $raw), static function ($c) {
+            return trim((string)$c) !== '';
+        }))));
+        if (count($codes) === 0) {
+            echo json_encode(['success' => false, 'message' => 'itemcode invalid to update product.']);
+            exit;
+        }
+        if (count($codes) > 50) {
+            echo json_encode(['success' => false, 'message' => 'Maximum 50 item codes per request.']);
+            exit;
+        }
+        $itemcodesQuery = implode(',', $codes);
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemcodesQuery);
        
         // if (!empty($_GET['item_code'])) {
         //     $postData = [
@@ -376,22 +389,18 @@ class ProductsController {
             return;
         }
 
-        $product = json_decode($response, true);
-        if (!is_array($product)) {
-            //echo "Invalid API response format.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Invalid API response format.']], 'API Error');
             return;
         }
-        // print_array($product);
-        // exit;
-        if (empty($product)) {
-            //echo "No orders found in the API response.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
+        $productRows = product::normalizeVendorProductFetchItems($decoded);
+        if ($productRows === []) {
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No product rows in API response.']], 'No Products Found');
             return;
         }
-        // Process and save orders to the database
-        $updatedCount = $productModel->updateProductFromApi($product);
-        echo json_encode($updatedCount);
+        $updateResult = $productModel->updateProductFromApi($productRows);
+        echo json_encode($updateResult);
         exit;
         // if ($updatedCount['success']) {
         //     renderTemplateClean('views/success/success.php', ['message' => 'Product updated successfully. Total products updated: ' . $updatedCount['updated_count']], 'Update Successful');
@@ -399,6 +408,71 @@ class ProductsController {
         //     renderTemplateClean('views/errors/error.php', ['message' => $updatedCount['message']], 'Update Failed');
         // }
     }
+
+    /**
+     * Return the vendor product/fetch API JSON only (no DB updates).
+     * GET itemCode or itemcodes — comma-separated, same as update API (max 50).
+     * Example: ?page=products&action=vendor_product_fetch_payload&itemCode=AC88
+     */
+    public function vendorProductFetchPayload(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=UTF-8');
+        $raw = isset($_GET['itemcodes']) ? trim((string)$_GET['itemcodes']) : (isset($_GET['itemCode']) ? trim((string)$_GET['itemCode']) : '');
+        if ($raw === '') {
+            echo json_encode(['success' => false, 'message' => 'Provide itemCode or itemcodes (comma-separated).'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        $codes = array_values(array_unique(array_map('trim', array_filter(explode(',', $raw), static function ($c) {
+            return trim((string)$c) !== '';
+        }))));
+        if ($codes === []) {
+            echo json_encode(['success' => false, 'message' => 'No valid item codes.'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        if (count($codes) > 50) {
+            echo json_encode(['success' => false, 'message' => 'Maximum 50 item codes per request.'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        $itemcodesQuery = implode(',', $codes);
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemcodesQuery);
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+        if ($response === false) {
+            echo json_encode(['success' => false, 'message' => 'API request failed.', 'curl_error' => $curlErr, 'url' => $url], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'API response was not valid JSON.',
+                'url' => $url,
+                'itemcodes_requested' => $codes,
+                'raw_body' => $response,
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        echo json_encode([
+            'success' => true,
+            'url' => $url,
+            'itemcodes_requested' => $codes,
+            'payload' => $decoded,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function importApiCall($manualCodes = null) {
         global $productModel;
         $t0 = microtime(true);
@@ -457,7 +531,7 @@ class ProductsController {
         $updated = 0;
         $failed = [];
         $createdIdsByCode = [];
-        // prepare comma separated itemcodes (no spaces)
+        // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
         $itm = implode(',', $codes);
         $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itm);
 
@@ -526,7 +600,10 @@ class ProductsController {
                 : '';
             $item['groupname'] = $apiItem['groupname'] ?? '';
             $item['local_stock'] = isset($apiItem['local_stock']) ? (int)$apiItem['local_stock'] : (isset($apiItem['stock']) ? (int)$apiItem['stock'] : 0);
-            $item['itemprice'] = isset($apiItem['price']) ? floatval($apiItem['price']) : (isset($apiItem['itemprice']) ? floatval($apiItem['itemprice']) : 0.0);
+            $usdList = product::vendorApiUsdPrice($apiItem);
+            $item['itemprice'] = isset($apiItem['itemprice']) && $apiItem['itemprice'] !== '' && $apiItem['itemprice'] !== null
+                ? floatval($apiItem['itemprice'])
+                : (isset($apiItem['price']) && $apiItem['price'] !== '' && $apiItem['price'] !== null ? floatval($apiItem['price']) : $usdList);
             $item['finalprice'] = isset($apiItem['finalprice']) ? floatval($apiItem['finalprice']) : $item['itemprice'];
             $item['color'] = $apiItem['color'] ?? '';
             $item['size'] =  isset($apiItem['size']) ? $apiItem['size'] : '';
@@ -550,7 +627,7 @@ class ProductsController {
             $item['vendor'] = isset($apiItem['vendor']) ? $apiItem['vendor'] : '';
             $item['shippingfee'] = isset($apiItem['shippingfee']) ? (float)$apiItem['shippingfee'] : 0.0;
             $item['sourcingfee'] = isset($apiItem['sourcingfee']) ? (float)$apiItem['sourcingfee'] : 0.0;
-            $item['price'] = isset($apiItem['price']) ? (float)$apiItem['price'] : 0.0;
+            $item['price'] = $usdList;
             $item['price_india'] = isset($apiItem['price_india']) ? (float)$apiItem['price_india'] : 0.0;
             $item['price_india_suggested'] = isset($apiItem['price_india_suggested']) ? (float)$apiItem['price_india_suggested'] : 0.0;
             $item['mrp_india'] = isset($apiItem['mrp_india']) ? (float)$apiItem['mrp_india'] : 0.0;
@@ -599,7 +676,11 @@ class ProductsController {
                     $variantItem['color'] = $variant['color'] ?? '';
                     $variantItem['title'] = $variant['title'] ?? $item['title'];                    
                     $variantItem['local_stock'] = isset($variant['local_stock']) ? (int)$variant['local_stock'] : 0;
-                    $variantItem['itemprice'] = isset($variant['price']) ? floatval($variant['price']) : 0.0;
+                    $mergedVariant = array_merge($apiItem, $variant);
+                    $usdVar = product::vendorApiUsdPrice($mergedVariant);
+                    $variantItem['itemprice'] = isset($variant['itemprice']) && $variant['itemprice'] !== '' && $variant['itemprice'] !== null
+                        ? floatval($variant['itemprice'])
+                        : (isset($variant['price']) && $variant['price'] !== '' && $variant['price'] !== null ? floatval($variant['price']) : $usdVar);
                     $variantItem['finalprice'] = isset($variant['finalprice']) ? floatval($variant['finalprice']) : $variantItem['itemprice'];
                     $variantItem['cost_price'] = isset($variant['cp']) ? (float)$variant['cp'] : 0.0;
                     $variantItem['gst'] = isset($variant['gst']) ? (float)$variant['gst'] : 0.0;
@@ -621,7 +702,7 @@ class ProductsController {
                     $variantItem['vendor'] = isset($variant['vendor']) ? $variant['vendor'] : '';
                     $variantItem['shippingfee'] = isset($variant['shippingfee']) ? (float)$variant['shippingfee'] : 0.0;
                     $variantItem['sourcingfee'] = isset($variant['sourcingfee']) ? (float)$variant['sourcingfee'] : 0.0;
-                    $variantItem['price'] = isset($variant['price']) ? (float)$variant['price'] : 0.0;
+                    $variantItem['price'] = $usdVar;
                     $variantItem['price_india'] = isset($variant['price_india']) ? (float)$variant['price_india'] : 0.0;
                     $variantItem['price_india_suggested'] = isset($variant['price_india_suggested']) ? (float)$variant['price_india_suggested'] : 0.0;
                     $variantItem['mrp_india'] = isset($variant['mrp_india']) ? (float)$variant['mrp_india'] : 0.0;
@@ -2887,7 +2968,6 @@ class ProductsController {
         is_login();
         global $productModel;
         global $commanModel;
-        global $conn;
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
@@ -2913,25 +2993,6 @@ class ProductsController {
             $order['variants'] = $itemCode !== '' ? $productModel->getVariantsByItemCode($itemCode) : [];
             $order['warehouses'] = $productModel->getAllWarehouses();
             $order['stock_movements'] = $productModel->get_stock_movements($id);
-            $order['usd_price_inbound'] = null;
-            if ($conn && ($sku !== '' || $itemCode !== '')) {
-                $inboundSql = "SELECT usd_price
-                               FROM vp_inbound
-                               WHERE (? <> '' AND sku = ?)
-                                  OR (? <> '' AND Item_code = ?)
-                               ORDER BY id DESC
-                               LIMIT 1";
-                $inboundStmt = $conn->prepare($inboundSql);
-                if ($inboundStmt) {
-                    $inboundStmt->bind_param('ssss', $sku, $sku, $itemCode, $itemCode);
-                    $inboundStmt->execute();
-                    $inboundRes = $inboundStmt->get_result();
-                    if ($inboundRes && ($inboundRow = $inboundRes->fetch_assoc())) {
-                        $order['usd_price_inbound'] = $inboundRow['usd_price'];
-                    }
-                    $inboundStmt->close();
-                }
-            }
             if (!headers_sent()) {
                 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
                 header('Pragma: no-cache');

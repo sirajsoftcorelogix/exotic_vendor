@@ -190,6 +190,7 @@
     $gstPercentForIndia = max(0.0, (float)($products['gst'] ?? 0));
     $priceIndiaWithGst = $priceIndiaBase * (1 + $gstPercentForIndia / 100);
     $priceIndiaWithGstFormatted = number_format($priceIndiaWithGst, 2, '.', ',');
+    $usdPriceFormatted = number_format((float)($products['price'] ?? 0), 2, '.', ',');
   ?>
   <!-- PRODUCT HEADER -->
   <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -417,7 +418,7 @@
           </div>
         </div>
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
-          <span class="text-gray-700"><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span class="font-semibold text-gray-900">$<?php echo htmlspecialchars((string)($products['usd_price_inbound'] ?? '0')); ?></span>
+          <span class="text-gray-700"><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span class="font-semibold text-gray-900">$<?php echo htmlspecialchars($usdPriceFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
         
         <hr class="border-t">
