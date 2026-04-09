@@ -234,28 +234,6 @@
     </div>
   </div>
   <?php require __DIR__ . '/partials/jewelry_label_print_link.php'; ?>
-  <?php $fieldInfo = []; ?>
-  <div class="bg-white rounded-lg p-4 shadow-sm">
-    <div class="flex items-center justify-between gap-3 mb-3">
-      <h3 class="font-semibold text-gray-800">Field Info</h3>
-      <span class="text-xs text-gray-500">What each field means</span>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-      <?php foreach ($fieldInfo as $meta): ?>
-        <?php
-          $rawVal = trim((string)($meta['value'] ?? ''));
-          $displayVal = $rawVal !== '' ? $rawVal : '—';
-        ?>
-        <div class="rounded-lg border border-gray-200 p-3 bg-gray-50/50">
-          <div class="flex items-start justify-between gap-3">
-            <p class="text-sm font-semibold text-gray-800"><?php echo htmlspecialchars((string)$meta['label'], ENT_QUOTES, 'UTF-8'); ?></p>
-            <span class="text-xs text-gray-500 font-medium"><?php echo htmlspecialchars($displayVal, ENT_QUOTES, 'UTF-8'); ?></span>
-          </div>
-          <p class="text-xs text-gray-600 mt-1 leading-relaxed"><?php echo htmlspecialchars((string)$meta['help'], ENT_QUOTES, 'UTF-8'); ?></p>
-        </div>
-      <?php endforeach; ?>
-    </div>
-  </div>
   <!-- INVENTORY -->
   <!-- <div class="bg-white rounded-lg p-4 grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
     <div>
