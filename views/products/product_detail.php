@@ -173,7 +173,15 @@
   })();
   </script>
   <?php
-    $groupNameLower = strtolower(trim((string)($products['groupname'] ?? '')));
+    $groupRaw = trim((string)($products['groupname'] ?? ''));
+    $groupNameLower = strtolower($groupRaw);
+    if ($groupRaw === '') {
+        $groupNameDisplay = 'Default Group';
+    } elseif (function_exists('mb_convert_case')) {
+        $groupNameDisplay = mb_convert_case($groupRaw, MB_CASE_TITLE, 'UTF-8');
+    } else {
+        $groupNameDisplay = ucwords(strtolower($groupRaw));
+    }
     $isBookProduct = strpos($groupNameLower, 'book') !== false;
     $authorRaw = trim((string)($products['author'] ?? ''));
     $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
@@ -196,7 +204,7 @@
       </div>
       <div>
         <span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-md font-medium">
-          <?php echo $products['groupname'] ?? 'Default Group'; ?>
+          <?php echo htmlspecialchars($groupNameDisplay, ENT_QUOTES, 'UTF-8'); ?>
         </span> 
         <span class="text-xs ml-2 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium"><?php echo $products['item_code'] ?? ''; ?></span>
         
