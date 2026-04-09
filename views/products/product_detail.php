@@ -172,6 +172,13 @@
     });
   })();
   </script>
+  <?php
+    $groupNameLower = strtolower(trim((string)($products['groupname'] ?? '')));
+    $isBookProduct = strpos($groupNameLower, 'book') !== false;
+    $authorRaw = trim((string)($products['author'] ?? ''));
+    $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
+    $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
+  ?>
   <!-- PRODUCT HEADER -->
   <div class="bg-white rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
     <div class="flex gap-4">
@@ -227,17 +234,7 @@
     </div>
   </div>
   <?php require __DIR__ . '/partials/jewelry_label_print_link.php'; ?>
-  <?php
-    $groupNameLower = strtolower(trim((string)($products['groupname'] ?? '')));
-    $isBookProduct = strpos($groupNameLower, 'book') !== false;
-    $authorRaw = trim((string)($products['author'] ?? ''));
-    $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
-    $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
-
-    $fieldInfo = [
-      ['label' => 'USD Price', 'help' => 'USD selling price pulled from inbound data.', 'value' => (string)($products['usd_price_inbound'] ?? '')],
-    ];
-  ?>
+  <?php $fieldInfo = []; ?>
   <div class="bg-white rounded-lg p-4 shadow-sm">
     <div class="flex items-center justify-between gap-3 mb-3">
       <h3 class="font-semibold text-gray-800">Field Info</h3>
@@ -411,6 +408,9 @@
         </div>
         <div class="flex justify-between bg-green-50 p-2 rounded">
           <span><i class="fas fa-tag  mr-1 px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Price India</span><span>₹<?php echo htmlspecialchars($products['price_india'] ?? '0'); ?></span>
+        </div>
+        <div class="flex justify-between bg-green-50 p-2 rounded">
+          <span><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span>$<?php echo htmlspecialchars((string)($products['usd_price_inbound'] ?? '0')); ?></span>
         </div>
         <div class="flex justify-between bg-green-50 p-2 rounded">
           <span><i class="fas fa-rupee-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Stock Value</span><span>₹<?php echo htmlspecialchars($products['stock_value'] ?? '0'); ?></span>
