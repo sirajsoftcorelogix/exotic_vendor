@@ -265,7 +265,7 @@ class product
                     $numsold = isset($product['numsold']) ? (int)$product['numsold'] : 0;
                     $numsold_india = isset($product['numsold_india']) ? (int)$product['numsold_india'] : 0;
                     $numsold_global = isset($product['numsold_global']) ? (int)$product['numsold_global'] : 0;
-                    $lastsold = isset($product['lastsold']) ? (int)$product['lastsold'] : '';
+                    $lastsold = $this->normalizeIntValue($product['lastsold'] ?? null, 0);
                     $vendor = isset($product['vendor']) ? $product['vendor'] : '';
                     $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                     $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
@@ -344,7 +344,7 @@ class product
                             $numsold = isset($variation['numsold']) ? (int)$variation['numsold'] : 0;
                             $numsold_india = isset($variation['numsold_india']) ? (int)$variation['numsold_india'] : 0;
                             $numsold_global = isset($variation['numsold_global']) ? (int)$variation['numsold_global'] : 0;
-                            $lastsold = isset($variation['lastsold']) ? $variation['lastsold'] : '';
+                            $lastsold = $this->normalizeIntValue($variation['lastsold'] ?? null, 0);
                             $vendor = isset($product['vendor']) ? $product['vendor'] : '';
                             $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                             $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
@@ -357,7 +357,7 @@ class product
                             $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                             $updated_at = date('Y-m-d H:i:s');
                             $stmt->bind_param(
-                                'sissiissiiiissdddddddddsssss',
+                                'sissiissiiiiisdddddddddsssss',
                                 $asin,
                                 $localStock,
                                 $upc,
