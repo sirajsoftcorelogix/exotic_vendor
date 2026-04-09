@@ -1,7 +1,7 @@
 <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
 <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
-<div class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 bg-gradient-to-b from-amber-50/30 via-white to-white">
+<div class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
   <!-- SKU quick jump (product detail) -->
   <div class="bg-gradient-to-r from-amber-50 via-white to-orange-50/50 rounded-xl border border-amber-100/80 shadow-sm p-4 sm:p-5">
     <form id="productDetailSkuSearchForm" class="relative" autocomplete="off">
@@ -180,32 +180,30 @@
     $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
   ?>
   <!-- PRODUCT HEADER -->
-  <div class="bg-white/95 backdrop-blur rounded-2xl border border-amber-100 shadow-lg shadow-amber-900/5 p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
-    <div class="flex gap-4 items-start">
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="flex gap-4">
       <!-- <div class="w-24 h-32 bg-white rounded-[10px] outline outline-2 outline-offset-[-2px] outline-amber-600 ">
         <img onclick="openImagePopup('<?php //echo $products['image']; ?>')" src="<?php //echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="w-full h-full px-3 py-3 cursor-pointer" />
       </div> -->
-      <div class="shrink-0">
-        <div onclick="openImagePopup('<?php echo htmlspecialchars($products['image'] ?? '', ENT_QUOTES); ?>')" class="group flex h-36 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white border border-amber-200 shadow-sm cursor-pointer transition hover:shadow-md hover:-translate-y-0.5">
-          <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" alt="" class="block h-full w-full max-h-full max-w-full object-contain cursor-pointer transition group-hover:scale-[1.02]" />
+      <div>
+        <div onclick="openImagePopup('<?php echo htmlspecialchars($products['image'] ?? '', ENT_QUOTES); ?>')" class="flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-white outline outline-2 outline-offset-[-2px] outline-amber-600 cursor-pointer">
+          <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" alt="" class="block h-full w-full max-h-full max-w-full object-contain cursor-pointer" />
         </div>
         <p class="inline-flex items-center gap-1.5 text-[11px] text-gray-600 mt-2 px-2 py-1 rounded-md bg-gray-50 border border-gray-200">
           <i class="fas fa-barcode text-amber-600" aria-hidden="true"></i>
           UPC: <span class="font-medium text-gray-800"><?php echo htmlspecialchars((string)($products['upc'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
         </p>
       </div>
-      <div class="min-w-0">
-        <div class="flex flex-wrap items-center gap-2">
-        <span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-semibold border border-orange-200">
+      <div>
+        <span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-md font-medium">
           <?php echo $products['groupname'] ?? 'Default Group'; ?>
         </span> 
-        <span class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 font-semibold border border-gray-200"><?php echo $products['item_code'] ?? ''; ?></span>
-        </div>
+        <span class="text-xs ml-2 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium"><?php echo $products['item_code'] ?? ''; ?></span>
         
-        <h2 class="font-semibold mt-3 text-xl leading-tight text-gray-900">
+        <h2 class="font-semibold mt-2 text-lg">
           <?php echo htmlspecialchars($products['title'] ?? 'Product Title'); ?>
         </h2>
-        <p class="text-sm text-gray-500 mt-1">SKU: <span class="font-semibold text-gray-700"><?php echo htmlspecialchars($products['sku'] ?? ''); ?></span></p>
+        <p class="text-sm text-gray-500">SKU: <?php echo htmlspecialchars($products['sku'] ?? ''); ?></p>
         <?php if ($isBookProduct): ?>
           <?php if ($authorRaw !== ''): ?>
             <p class="text-sm text-gray-600 mt-1">Author: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
@@ -217,24 +215,26 @@
         <?php elseif ($authorRaw !== ''): ?>
           <p class="text-sm text-gray-600 mt-1">Artist: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
         <?php endif; ?>
-        <div class="flex flex-wrap gap-2 mt-3">
+        <div class="flex flex-wrap gap-2 mt-2">
           <?php foreach ($products['variants'] as $variant): 
             if(isset($variant['sku']) && !empty($variant['sku'])): ?>
-            <span class="px-2 py-1 border border-gray-200 rounded-md text-xs bg-gray-50 hover:bg-amber-50 hover:border-amber-200 transition"><a href="<?php echo base_url('?page=products&action=detail&id='.$variant['id']); ?>"><?php echo $variant['sku']; ?></a></span>
+            <span class="px-2 py-1 border rounded text-xs"><a href="<?php echo base_url('?page=products&action=detail&id='.$variant['id']); ?>"><?php echo $variant['sku']; ?></a></span>
           <?php endif; endforeach; ?>
         </div>
       </div>
     </div>
     <!-- Measures -->
-    <div class="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-100 p-4">
-      <h3 class="font-semibold mb-3 text-gray-800 flex items-center gap-2"><i class="fas fa-ruler-combined text-orange-600"></i>Measures</h3>
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        <div class="rounded-md bg-white/70 border border-orange-100 px-2.5 py-2"><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size: <b><?php echo htmlspecialchars((string)($products['size'] ?? '')); ?></b></div>
-        <div class="rounded-md bg-white/70 border border-orange-100 px-2.5 py-2"><i class="fas fa-palette mr-1 text-orange-600"></i>Color: <b><?php echo htmlspecialchars((string)($products['color'] ?? '')); ?></b></div>
-        <div class="rounded-md bg-white/70 border border-orange-100 px-2.5 py-2"><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length: <b><?php echo htmlspecialchars($products['prod_length'] ?  $products['prod_length'].' '.$products['length_unit'] : ''); ?> </b></div>
-        <div class="rounded-md bg-white/70 border border-orange-100 px-2.5 py-2"><i class="fas fa-ruler-vertical mr-2 text-orange-600"></i>Height: <b><?php echo htmlspecialchars($products['prod_height'] ? $products['prod_height'].' '.$products['length_unit'] : ''); ?></b></div>
-        <div class="rounded-md bg-white/70 border border-orange-100 px-2.5 py-2"><i class="fas fa-arrows-alt-h mr-1.5 text-orange-600"></i>Width: <b><?php echo htmlspecialchars($products['prod_width'] ? $products['prod_width'].' '.$products['length_unit'] : ''); ?></b></div>
-        <div class="rounded-md bg-white/70 border border-orange-100 px-2.5 py-2"><i class="fas fa-weight mr-1 text-orange-600"></i>Weight: <b><?php echo htmlspecialchars($products['product_weight'] ?  $products['product_weight'] .' ' .$products['product_weight_unit'] : ''); ?></b></div>
+    <div class="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-4">
+      <h3 class="font-semibold mb-3 text-gray-800 flex items-center gap-2">
+        <i class="fas fa-ruler-combined text-orange-600"></i>Measurements
+      </h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2"><span class="text-gray-500"><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size</span><div class="font-semibold text-gray-800"><?php echo htmlspecialchars((string)($products['size'] ?? '—')); ?></div></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2"><span class="text-gray-500"><i class="fas fa-palette mr-1 text-orange-600"></i>Color</span><div class="font-semibold text-gray-800"><?php echo htmlspecialchars((string)($products['color'] ?? '—')); ?></div></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2"><span class="text-gray-500"><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length</span><div class="font-semibold text-gray-800"><?php echo htmlspecialchars($products['prod_length'] ?  $products['prod_length'].' '.$products['length_unit'] : '—'); ?></div></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2"><span class="text-gray-500"><i class="fas fa-ruler-vertical mr-1 text-orange-600"></i>Height</span><div class="font-semibold text-gray-800"><?php echo htmlspecialchars($products['prod_height'] ? $products['prod_height'].' '.$products['length_unit'] : '—'); ?></div></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2"><span class="text-gray-500"><i class="fas fa-arrows-alt-h mr-1 text-orange-600"></i>Width</span><div class="font-semibold text-gray-800"><?php echo htmlspecialchars($products['prod_width'] ? $products['prod_width'].' '.$products['length_unit'] : '—'); ?></div></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2"><span class="text-gray-500"><i class="fas fa-weight mr-1 text-orange-600"></i>Weight</span><div class="font-semibold text-gray-800"><?php echo htmlspecialchars($products['product_weight'] ?  $products['product_weight'] .' ' .$products['product_weight_unit'] : '—'); ?></div></div>
       </div>
     </div>
   </div>
@@ -264,12 +264,12 @@
   </div> -->
   <!-- Inventory -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-  <div class="bg-white rounded-2xl border border-gray-200 p-4 shadow-md shadow-gray-900/5 space-y-4 col-span-2">
-    <h3 class="font-semibold text-gray-700 flex items-center gap-2"><i class="fas fa-boxes text-amber-600"></i>Inventory</h3>
+  <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-4 col-span-2">
+    <h3 class="font-semibold text-gray-800 flex items-center gap-2"><i class="fas fa-boxes text-amber-600"></i>Inventory</h3>
       <!-- Stats -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <!-- Local Stock -->
-        <div class="flex items-center justify-between border border-blue-100 rounded-xl p-4 relative bg-gradient-to-br from-white to-blue-50/60">
+        <div class="flex items-center justify-between border border-blue-100 bg-blue-50/50 rounded-xl p-4 relative">
           <div>
             <p class="text-sm text-gray-500">Local Stock</p>
             <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
@@ -282,7 +282,7 @@
           </button>
         </div>
         <!-- Committed -->
-        <div class="flex items-center justify-between border border-purple-100 rounded-xl p-4 bg-gradient-to-br from-white to-purple-50/60">
+        <div class="flex items-center justify-between border border-purple-100 bg-purple-50/50 rounded-xl p-4">
           <div>
             <p class="text-sm text-gray-500">Committed</p>
             <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['committed_stock'] ?? '0'); ?></p>
@@ -292,7 +292,7 @@
           </div>
         </div>
         <!-- Available -->
-        <div class="flex items-center justify-between border border-green-100 rounded-xl p-4 bg-gradient-to-br from-white to-green-50/60">
+        <div class="flex items-center justify-between border border-green-100 bg-green-50/50 rounded-xl p-4">
           <div>
             <p class="text-sm text-gray-500">Available</p>
             <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['available_stock'] ?? '0'); ?></p>
@@ -302,7 +302,7 @@
           </div>
         </div>
         <!-- In Purchase -->
-        <div class="flex items-center justify-between border border-orange-100 rounded-xl p-4 bg-gradient-to-br from-white to-orange-50/60">
+        <div class="flex items-center justify-between border border-orange-100 bg-orange-50/50 rounded-xl p-4">
           <div>
             <p class="text-sm text-gray-500">In Purchase</p>
             <p class="text-xl font-semibold"><?php echo count($products['in_purchase_list']); ?></p>
@@ -383,20 +383,20 @@
   </div>
 
   <!-- Price -->
-    <div class="bg-white border border-gray-200 rounded-2xl p-4 shadow-md shadow-gray-900/5">
-      <h3 class="font-semibold mb-3 flex items-center gap-2 text-gray-700"><i class="fas fa-receipt text-emerald-600"></i>Price</h3>
-      <div class="space-y-2 text-sm">
-        <div class="flex justify-between bg-green-50 p-2.5 rounded-lg border border-green-100">
-          <span><i class="fas fa-dollar px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Cost Price</span><span>₹<?php echo htmlspecialchars($products['cost_price'] ?? '0'); ?></span>
+    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+      <h3 class="font-semibold mb-3 flex items-center gap-2 text-gray-800"><i class="fas fa-receipt text-emerald-600"></i>Price</h3>
+      <div class="space-y-2.5 text-sm">
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-dollar px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Cost Price</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($products['cost_price'] ?? '0'); ?></span>
         </div>
-        <div class="flex justify-between bg-green-50 p-2.5 rounded-lg border border-green-100">
-          <span><i class="fas fa-tag  mr-1 px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Price India</span><span>₹<?php echo htmlspecialchars($products['price_india'] ?? '0'); ?></span>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-tag mr-1 px-2 py-1 rounded text-xs text-green-600 bg-green-100"></i>Price India</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($products['price_india'] ?? '0'); ?></span>
         </div>
-        <div class="flex justify-between bg-green-50 p-2.5 rounded-lg border border-green-100">
-          <span><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span>$<?php echo htmlspecialchars((string)($products['usd_price_inbound'] ?? '0')); ?></span>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span class="font-semibold text-gray-900">$<?php echo htmlspecialchars((string)($products['usd_price_inbound'] ?? '0')); ?></span>
         </div>
-        <div class="flex justify-between bg-green-50 p-2.5 rounded-lg border border-green-100">
-          <span><i class="fas fa-rupee-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Stock Value</span><span>₹<?php echo htmlspecialchars($products['stock_value'] ?? '0'); ?></span>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-rupee-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Stock Value</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($products['stock_value'] ?? '0'); ?></span>
         </div>
         
         <hr class="border-t">
