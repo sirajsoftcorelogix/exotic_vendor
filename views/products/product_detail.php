@@ -222,26 +222,14 @@
         return $unit !== '' ? ($n . ' ' . $unit) : $n;
     };
     $sizeDisplayRaw = trim((string)($products['size'] ?? ''));
-    if ($sizeDisplayRaw === '' && $hasLinearDim) {
-        $dimParts = [];
-        foreach (['prod_length', 'prod_width', 'prod_height'] as $dimField) {
-            $n = $linearNum($products[$dimField] ?? null);
-            if ($n !== null) {
-                $dimParts[] = $n;
-            }
-        }
-        $sizeDisplayOut = $dimParts !== [] ? (implode(' × ', $dimParts) . ($lengthUnitDisplay !== '' ? ' ' . $lengthUnitDisplay : '')) : '—';
+    $sizeDisplayOut = $sizeDisplayRaw !== '' ? $sizeDisplayRaw : '—';
+    $colorRaw = trim((string)($products['color'] ?? ''));
+    if ($colorRaw === '') {
+        $colorDisplay = '—';
+    } elseif (function_exists('mb_convert_case')) {
+        $colorDisplay = mb_convert_case($colorRaw, MB_CASE_TITLE, 'UTF-8');
     } else {
-        $sizeDisplayOut = $sizeDisplayRaw;
-        if ($sizeDisplayOut !== '' && $lengthUnitDisplay !== '') {
-            $low = strtolower($sizeDisplayOut);
-            if (strpos($low, 'inch') === false && strpos($low, 'cm') === false && strpos($low, 'mm') === false && strpos($sizeDisplayOut, '"') === false) {
-                $sizeDisplayOut .= ' ' . $lengthUnitDisplay;
-            }
-        }
-        if ($sizeDisplayOut === '') {
-            $sizeDisplayOut = '—';
-        }
+        $colorDisplay = ucwords(strtolower($colorRaw));
     }
     $formatWeightDim = static function ($value, string $unit) use ($linearNum): string {
         if ($value === null || $value === '') {
@@ -325,7 +313,7 @@
       </h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
         <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($sizeDisplayOut, ENT_QUOTES, 'UTF-8'); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-palette mr-1 text-orange-600"></i>Color</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars((string)($products['color'] ?? '—')); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-palette mr-1 text-orange-600"></i>Color</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($colorDisplay, ENT_QUOTES, 'UTF-8'); ?></span></div>
         <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_length'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
         <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-vertical mr-1 text-orange-600"></i>Height</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_height'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
         <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-arrows-alt-h mr-1 text-orange-600"></i>Width</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_width'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
