@@ -214,9 +214,26 @@
   </div>
   <?php require __DIR__ . '/partials/jewelry_label_print_link.php'; ?>
   <?php
+    $groupNameLower = strtolower(trim((string)($products['groupname'] ?? '')));
+    $isBookProduct = strpos($groupNameLower, 'book') !== false;
+    $authorRaw = trim((string)($products['author'] ?? ''));
+    $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
+    $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
+
     $fieldInfo = [
+      ['label' => 'UPC', 'help' => 'Universal Product Code used for barcode and listing sync.', 'value' => (string)($products['upc'] ?? '')],
       ['label' => 'Price (India)', 'help' => 'India-specific selling price (used for MRP in labels).', 'value' => (string)($products['price_india'] ?? '')],
+      ['label' => 'USD Price', 'help' => 'USD selling price pulled from inbound data.', 'value' => (string)($products['usd_price_inbound'] ?? '')],
+      ['label' => 'Permanently Available', 'help' => 'Shows whether this product is always available for sale.', 'value' => $permanentlyAvailableText],
+      ['label' => 'Leadtime', 'help' => 'Approximate days needed when item is not ready stock.', 'value' => (string)($products['leadtime'] ?? '')],
+      ['label' => 'Instock Leadtime', 'help' => 'Approximate dispatch time when item is already in stock.', 'value' => (string)($products['instock_leadtime'] ?? '')],
     ];
+    if ($isBookProduct) {
+      $fieldInfo[] = ['label' => 'Author', 'help' => 'Book author name.', 'value' => $authorRaw];
+      $fieldInfo[] = ['label' => 'Publisher', 'help' => 'Book publisher name.', 'value' => (string)($products['publisher'] ?? '')];
+    } elseif ($authorRaw !== '') {
+      $fieldInfo[] = ['label' => 'Artist', 'help' => 'Artist name (shown for non-book products when available).', 'value' => $authorRaw];
+    }
   ?>
   <div class="bg-white rounded-lg p-4 shadow-sm">
     <div class="flex items-center justify-between gap-3 mb-3">

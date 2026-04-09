@@ -2887,6 +2887,7 @@ class ProductsController {
         is_login();
         global $productModel;
         global $commanModel;
+        global $conn;
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
@@ -2912,6 +2913,25 @@ class ProductsController {
             $order['variants'] = $itemCode !== '' ? $productModel->getVariantsByItemCode($itemCode) : [];
             $order['warehouses'] = $productModel->getAllWarehouses();
             $order['stock_movements'] = $productModel->get_stock_movements($id);
+            $order['usd_price_inbound'] = null;
+            if ($conn && ($sku !== '' || $itemCode !== '')) {
+                $inboundSql = "SELECT usd_price
+                               FROM vp_inbound
+                               WHERE (? <> '' AND sku = ?)
+                                  OR (? <> '' AND Item_code = ?)
+                               ORDER BY id DESC
+                               LIMIT 1";
+                $inboundStmt = $conn->prepare($inboundSql);
+                if ($inboundStmt) {
+                    $inboundStmt->bind_param('ssss', $sku, $sku, $itemCode, $itemCode);
+                    $inboundStmt->execute();
+                    $inboundRes = $inboundStmt->get_result();
+                    if ($inboundRes && ($inboundRow = $inboundRes->fetch_assoc())) {
+                        $order['usd_price_inbound'] = $inboundRow['usd_price'];
+                    }
+                    $inboundStmt->close();
+                }
+            }
             if (!headers_sent()) {
                 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
                 header('Pragma: no-cache');
