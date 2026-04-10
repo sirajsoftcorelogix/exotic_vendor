@@ -173,11 +173,86 @@
   })();
   </script>
   <?php
-    $groupNameLower = strtolower(trim((string)($products['groupname'] ?? '')));
+    $groupRaw = trim((string)($products['groupname'] ?? ''));
+    $groupNameLower = strtolower($groupRaw);
+    if ($groupRaw === '') {
+        $groupNameDisplay = 'Default Group';
+    } elseif (function_exists('mb_convert_case')) {
+        $groupNameDisplay = mb_convert_case($groupRaw, MB_CASE_TITLE, 'UTF-8');
+    } else {
+        $groupNameDisplay = ucwords(strtolower($groupRaw));
+    }
     $isBookProduct = strpos($groupNameLower, 'book') !== false;
     $authorRaw = trim((string)($products['author'] ?? ''));
     $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
     $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
+    $priceIndiaBase = (float)($products['price_india'] ?? 0);
+    $gstPercentForIndia = max(0.0, (float)($products['gst'] ?? 0));
+    $priceIndiaWithGst = $priceIndiaBase * (1 + $gstPercentForIndia / 100);
+    $priceIndiaWithGstFormatted = number_format($priceIndiaWithGst, 2, '.', ',');
+    $usdPriceFormatted = number_format((float)($products['price'] ?? 0), 2, '.', ',');
+    $permanentDiscountFmt = number_format((float)($products['permanent_discount'] ?? 0), 2, '.', ',');
+    $discountGlobalFmt = number_format((float)($products['discount_global'] ?? 0), 2, '.', ',');
+    $discountIndiaFmt = number_format((float)($products['discount_india'] ?? 0), 2, '.', ',');
+    $lengthUnitRaw = trim((string)($products['length_unit'] ?? ''));
+    $weightUnitRaw = trim((string)($products['product_weight_unit'] ?? ''));
+    $linearNum = static function ($v): ?string {
+        if ($v === null || $v === '') {
+            return null;
+        }
+        if (!is_numeric($v)) {
+            $t = trim((string)$v);
+            return $t === '' ? null : $t;
+        }
+        $f = (float)$v;
+        if (abs($f) < 1e-8) {
+            return null;
+        }
+        if (abs(fmod($f, 1.0)) < 1e-8) {
+            return (string)(int)round($f);
+        }
+        return rtrim(rtrim(number_format($f, 2, '.', ''), '0'), '.');
+    };
+    $hasLinearDim = $linearNum($products['prod_length'] ?? null) !== null
+        || $linearNum($products['prod_width'] ?? null) !== null
+        || $linearNum($products['prod_height'] ?? null) !== null;
+    $lengthUnitDisplay = $lengthUnitRaw !== '' ? $lengthUnitRaw : ($hasLinearDim ? 'inch' : '');
+    $formatLinearDim = static function ($value, string $unit) use ($linearNum): string {
+        $n = $linearNum($value);
+        if ($n === null) {
+            return '—';
+        }
+        return $unit !== '' ? ($n . ' ' . $unit) : $n;
+    };
+    $sizeDisplayRaw = trim((string)($products['size'] ?? ''));
+    $sizeDisplayOut = $sizeDisplayRaw !== '' ? $sizeDisplayRaw : '—';
+    $colorRaw = trim((string)($products['color'] ?? ''));
+    if ($colorRaw === '') {
+        $colorDisplay = '—';
+    } elseif (function_exists('mb_convert_case')) {
+        $colorDisplay = mb_convert_case($colorRaw, MB_CASE_TITLE, 'UTF-8');
+    } else {
+        $colorDisplay = ucwords(strtolower($colorRaw));
+    }
+    $formatWeightDim = static function ($value, string $unit) use ($linearNum): string {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+        if (is_numeric($value)) {
+            $f = (float)$value;
+            if (abs($f) < 1e-8) {
+                return '—';
+            }
+            $n = abs(fmod($f, 1.0)) < 1e-8 ? (string)(int)round($f) : rtrim(rtrim(number_format($f, 2, '.', ''), '0'), '.');
+            return $unit !== '' ? ($n . ' ' . $unit) : $n;
+        }
+        $t = trim((string)$value);
+        if ($t === '') {
+            return '—';
+        }
+        return $unit !== '' ? ($t . ' ' . $unit) : $t;
+    };
+    $weightDisplay = $formatWeightDim($products['product_weight'] ?? null, $weightUnitRaw);
   ?>
   <!-- PRODUCT HEADER -->
   <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -196,7 +271,7 @@
       </div>
       <div>
         <span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-md font-medium">
-          <?php echo $products['groupname'] ?? 'Default Group'; ?>
+          <?php echo htmlspecialchars($groupNameDisplay, ENT_QUOTES, 'UTF-8'); ?>
         </span> 
         <span class="text-xs ml-2 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium"><?php echo $products['item_code'] ?? ''; ?></span>
         
@@ -240,12 +315,12 @@
         <i class="fas fa-ruler-combined text-orange-600"></i>Measurements
       </h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars((string)($products['size'] ?? '—')); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-palette mr-1 text-orange-600"></i>Color</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars((string)($products['color'] ?? '—')); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($products['prod_length'] ?  $products['prod_length'].' '.$products['length_unit'] : '—'); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-vertical mr-1 text-orange-600"></i>Height</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($products['prod_height'] ? $products['prod_height'].' '.$products['length_unit'] : '—'); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-arrows-alt-h mr-1 text-orange-600"></i>Width</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($products['prod_width'] ? $products['prod_width'].' '.$products['length_unit'] : '—'); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-weight mr-1 text-orange-600"></i>Weight</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($products['product_weight'] ?  $products['product_weight'] .' ' .$products['product_weight_unit'] : '—'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($sizeDisplayOut, ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-palette mr-1 text-orange-600"></i>Color</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($colorDisplay, ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_length'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-vertical mr-1 text-orange-600"></i>Height</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_height'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-arrows-alt-h mr-1 text-orange-600"></i>Width</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_width'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-weight mr-1 text-orange-600"></i>Weight</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($weightDisplay, ENT_QUOTES, 'UTF-8'); ?></span></div>
       </div>
     </div>
   </div>
@@ -257,7 +332,7 @@
       <p class="text-xl font-semibold"><?php //echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
     </div>
     <div>
-      <p class="text-gray-500 text-sm">Committed</p>
+      <p class="text-gray-500 text-sm">Pending Orders</p>
       <p class="text-xl font-semibold">0</p>
     </div>
     <div>
@@ -292,10 +367,10 @@
             <i class="fas fa-edit text-sm"></i>
           </button>
         </div>
-        <!-- Committed -->
+        <!-- Pending Orders -->
         <div class="flex items-center justify-between border border-purple-100 bg-purple-50/50 rounded-lg p-3">
           <div>
-            <p class="text-sm text-gray-500">Committed</p>
+            <p class="text-sm text-gray-500 leading-tight">Pending Orders</p>
             <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['committed_stock'] ?? '0'); ?></p>
           </div>
           <div class="bg-purple-100 text-purple-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
@@ -397,17 +472,24 @@
     <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
       <h3 class="font-semibold mb-3 flex items-center gap-2 text-gray-800"><i class="fas fa-receipt text-emerald-600"></i>Price</h3>
       <div class="space-y-2.5 text-sm">
-        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
-          <span class="text-gray-700"><i class="fas fa-dollar px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Cost Price</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($products['cost_price'] ?? '0'); ?></span>
+        <div class="flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-tag mr-1 px-2 py-1 rounded text-xs text-green-600 bg-green-100"></i>Price India</span>
+          <div class="text-right shrink-0">
+            <span class="font-semibold text-gray-900 block leading-tight">₹<?php echo htmlspecialchars($priceIndiaWithGstFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+            <span class="text-[10px] text-gray-500 leading-tight block mt-0.5">(GST Included)</span>
+          </div>
         </div>
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
-          <span class="text-gray-700"><i class="fas fa-tag mr-1 px-2 py-1 rounded text-xs text-green-600 bg-green-100"></i>Price India</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($products['price_india'] ?? '0'); ?></span>
+          <span class="text-gray-700"><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span class="font-semibold text-gray-900">$<?php echo htmlspecialchars($usdPriceFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
-          <span class="text-gray-700"><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span class="font-semibold text-gray-900">$<?php echo htmlspecialchars((string)($products['usd_price_inbound'] ?? '0')); ?></span>
+          <span class="text-gray-700"><i class="fas fa-percent px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Permanent Discount</span><span class="font-semibold text-gray-900"><?php echo htmlspecialchars($permanentDiscountFmt, ENT_QUOTES, 'UTF-8'); ?>%</span>
         </div>
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
-          <span class="text-gray-700"><i class="fas fa-rupee-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Stock Value</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($products['stock_value'] ?? '0'); ?></span>
+          <span class="text-gray-700"><i class="fas fa-globe px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Discount Global</span><span class="font-semibold text-gray-900"><?php echo htmlspecialchars($discountGlobalFmt, ENT_QUOTES, 'UTF-8'); ?>%</span>
+        </div>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-flag px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Discount India</span><span class="font-semibold text-gray-900"><?php echo htmlspecialchars($discountIndiaFmt, ENT_QUOTES, 'UTF-8'); ?>%</span>
         </div>
         
         <hr class="border-t">

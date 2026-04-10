@@ -1402,11 +1402,15 @@ class StockTransfer
         // sku/item_code do not multiply GRN lines, which happened with LEFT JOIN vp_products.
         $sql = "SELECT g.*, t.transfer_order_no, w.address_title AS location_name, u.name AS received_by_name,
                        COALESCE(
-                           (SELECT p.groupname FROM vp_products p
-                            WHERE NULLIF(TRIM(g.sku), '') IS NOT NULL AND TRIM(p.sku) = TRIM(g.sku)
+                          (SELECT p.groupname FROM vp_products p
+                           WHERE NULLIF(TRIM(g.sku), '') IS NOT NULL
+                             AND TRIM(CONVERT(p.sku USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+                                 TRIM(CONVERT(g.sku USING utf8mb4)) COLLATE utf8mb4_unicode_ci
                             LIMIT 1),
                            (SELECT p2.groupname FROM vp_products p2
-                            WHERE NULLIF(TRIM(g.item_code), '') IS NOT NULL AND TRIM(p2.item_code) = TRIM(g.item_code)
+                           WHERE NULLIF(TRIM(g.item_code), '') IS NOT NULL
+                             AND TRIM(CONVERT(p2.item_code USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+                                 TRIM(CONVERT(g.item_code USING utf8mb4)) COLLATE utf8mb4_unicode_ci
                             LIMIT 1),
                            ''
                        ) AS item_group
