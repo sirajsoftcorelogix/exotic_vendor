@@ -1266,6 +1266,9 @@ class ProductsController {
         $itemCode = trim($itemCode);
         $size = trim($size);
         $color = trim($color);
+        if ($itemCode === '') {
+            return '';
+        }
         if ($size !== '' && $color !== '') {
             return $itemCode . '-' . $size . '-' . $color;
         }
@@ -1346,7 +1349,14 @@ class ProductsController {
         if (!$handle) {
             return $rows;
         }
+        $isFirstRow = true;
         while (($row = fgetcsv($handle)) !== false) {
+            if ($isFirstRow) {
+                $isFirstRow = false;
+                if ($this->bulkImportLooksLikeHeaderRow($row)) {
+                    continue;
+                }
+            }
             $parts = $this->parseBulkImportCsvRowParts($row);
             if ($parts === null) {
                 continue;
@@ -1422,6 +1432,7 @@ class ProductsController {
             return $rows;
         }
         $sheet = @simplexml_load_string($sheetXml);
+        $isFirstRow = true;
         if ($sheet && isset($sheet->sheetData->row)) {
             foreach ($sheet->sheetData->row as $row) {
                 $byCol = [];
@@ -1431,6 +1442,20 @@ class ProductsController {
                         continue;
                     }
                     $byCol[$m[1]] = trim($this->xlsxCellPlainText($c, $sharedStrings));
+                }
+                if ($isFirstRow) {
+                    $isFirstRow = false;
+                    $firstRowCells = [
+                        (string)($byCol['A'] ?? ''),
+                        (string)($byCol['B'] ?? ''),
+                        (string)($byCol['C'] ?? ''),
+                        (string)($byCol['D'] ?? ''),
+                        (string)($byCol['E'] ?? ''),
+                        (string)($byCol['F'] ?? ''),
+                    ];
+                    if ($this->bulkImportLooksLikeHeaderRow($firstRowCells)) {
+                        continue;
+                    }
                 }
                 $parts = $this->parseBulkImportXlsxRowParts($byCol);
                 if ($parts === null) {
@@ -1449,6 +1474,49 @@ class ProductsController {
         $zip->close();
 
         return $rows;
+    }
+
+    /**
+     * Detect common column-title header row in the first line of import files.
+     *
+     * @param array<int,mixed> $cells
+     */
+    private function bulkImportLooksLikeHeaderRow(array $cells): bool {
+        $normalize = static function ($v): string {
+            $x = strtolower(trim((string)$v));
+            if ($x === '') {
+                return '';
+            }
+            $x = str_replace(['_', '-', '.'], ' ', $x);
+            $x = preg_replace('/\s+/', ' ', $x) ?? $x;
+
+            return $x;
+        };
+
+        $codeHeaders = ['itemcode', 'item code', 'code', 'product code', 'productcode', 'sku'];
+        $otherHeaders = ['sku', 'color', 'colour', 'size', 'quantity', 'qty', 'location', 'stock location'];
+        $normalized = [];
+        foreach ($cells as $c) {
+            $n = $normalize($c);
+            if ($n !== '') {
+                $normalized[] = $n;
+            }
+        }
+        if ($normalized === []) {
+            return false;
+        }
+
+        $matches = 0;
+        foreach ($normalized as $n) {
+            if (in_array($n, $codeHeaders, true) || in_array($n, $otherHeaders, true)) {
+                $matches++;
+            }
+        }
+
+        $first = $normalize($cells[0] ?? '');
+        $firstLooksLikeCodeHeader = in_array($first, $codeHeaders, true);
+
+        return $matches >= 2 || ($firstLooksLikeCodeHeader && $matches >= 1);
     }
 
     /**
