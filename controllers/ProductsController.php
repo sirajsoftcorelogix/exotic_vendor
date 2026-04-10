@@ -1278,7 +1278,6 @@ class ProductsController {
         if ($size === '' && $color !== '') {
             return $itemCode . '--' . $color;
         }
-
         return $itemCode;
     }
 
