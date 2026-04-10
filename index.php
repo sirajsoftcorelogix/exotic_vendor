@@ -473,6 +473,9 @@ switch ($page) {
             case 'bulk_import_retry':
                 $controller->bulkImportRetry();
                 break;
+            case 'bulk_import_delete_failed_rows':
+                $controller->bulkImportDeleteFailedRows();
+                break;
             case 'bulk_import_delete':
                 $controller->bulkImportDelete();
                 break;
