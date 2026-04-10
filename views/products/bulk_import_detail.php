@@ -63,6 +63,7 @@
       <button id="refreshStatusBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Refresh Status</button>
       <button id="retryFailedBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Retry all failed</button>
       <button id="retryPendingBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Retry Pending</button>
+      <button id="deleteFailedBtn" type="button" class="px-4 py-2 border border-red-300 text-red-700 rounded hover:bg-red-50 text-sm">Delete all failed</button>
     </div>
 
     <form method="get" class="flex flex-wrap gap-2 items-end mb-3">
@@ -133,6 +134,7 @@
                 <td class="px-3 py-2">
                   <?php if ($st === 'failed'): ?>
                     <button type="button" class="js-retry-item px-2 py-1 text-xs rounded border border-amber-700 text-amber-800 hover:bg-amber-50" data-item-id="<?= (int)$r['id'] ?>">Retry</button>
+                    <button type="button" class="js-delete-item ml-1 px-2 py-1 text-xs rounded border border-red-400 text-red-700 hover:bg-red-50" data-item-id="<?= (int)$r['id'] ?>">Delete</button>
                   <?php else: ?>
                     <span class="text-gray-400 text-xs">—</span>
                   <?php endif; ?>
@@ -432,6 +434,43 @@
       }
     }
 
+    async function deleteFailedRows(itemIds) {
+      const rowDelete = Array.isArray(itemIds) && itemIds.length > 0;
+      const ok = window.confirm(rowDelete
+        ? 'Delete this failed row? This cannot be undone.'
+        : 'Delete all failed rows for this job? This cannot be undone.');
+      if (!ok) return;
+      showProgress(
+        rowDelete ? 'Deleting failed row…' : 'Deleting failed rows…',
+        rowDelete ? 'Removing selected failed row.' : 'Removing all failed rows for this job.'
+      );
+      try {
+        const body = { job_id: jobId };
+        if (rowDelete) body.item_ids = itemIds;
+        const data = await fetchJson('?page=products&action=bulk_import_delete_failed_rows', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(body)
+        });
+        if (!data.success) {
+          const detailText = [data.message || 'Delete failed', data.debug || ''].filter(Boolean).join('\n');
+          showResult('error', 'Delete Failed', data.message || 'Delete failed', detailText);
+          return;
+        }
+        const deletedCount = Number(data.deleted || 0);
+        const details = deletedCount > 0
+          ? `Deleted ${deletedCount} failed row(s).`
+          : 'No failed rows matched for deletion.';
+        showResult('success', 'Delete Complete', data.message || 'Failed rows deleted.', details);
+        await new Promise(r => setTimeout(r, 300));
+        await fetchStatus();
+        window.location.reload();
+      } catch (e) {
+        const details = extractServerError(e, 'Delete failed');
+        showResult('error', 'Delete Failed', 'Could not process server response.', details);
+      }
+    }
+
     async function processLoop() {
       showProgress(
         'Processing import…',
@@ -509,11 +548,21 @@
     document.getElementById('retryPendingBtn').addEventListener('click', function() {
       retry('pending');
     });
+    document.getElementById('deleteFailedBtn').addEventListener('click', function() {
+      deleteFailedRows();
+    });
     document.querySelectorAll('.js-retry-item').forEach(function(btn) {
       btn.addEventListener('click', function() {
         const id = parseInt(btn.getAttribute('data-item-id') || '0', 10);
         if (!id) return;
         retry('failed', [id]);
+      });
+    });
+    document.querySelectorAll('.js-delete-item').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const id = parseInt(btn.getAttribute('data-item-id') || '0', 10);
+        if (!id) return;
+        deleteFailedRows([id]);
       });
     });
   })();

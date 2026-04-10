@@ -2431,6 +2431,96 @@ class ProductsController {
         exit;
     }
 
+    public function bulkImportDeleteFailedRows() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+
+        $itemIds = [];
+        if (!empty($payload['item_ids']) && is_array($payload['item_ids'])) {
+            foreach ($payload['item_ids'] as $rid) {
+                $i = (int)$rid;
+                if ($i > 0) {
+                    $itemIds[$i] = true;
+                }
+            }
+        }
+        $itemIds = array_keys($itemIds);
+
+        $where = "job_id = ? AND status = 'failed'";
+        if (!empty($itemIds)) {
+            $idList = implode(',', $itemIds);
+            $where .= " AND id IN ($idList)";
+        }
+
+        $cntSql = "SELECT COUNT(*) AS c FROM product_import_items WHERE $where";
+        $cntStmt = $conn->prepare($cntSql);
+        $cntStmt->bind_param('i', $jobId);
+        $cntStmt->execute();
+        $matched = (int)($cntStmt->get_result()->fetch_assoc()['c'] ?? 0);
+        $cntStmt->close();
+
+        if ($matched === 0) {
+            $stats = $this->refreshImportJobCounts($jobId);
+            echo json_encode([
+                'success' => true,
+                'message' => 'No failed rows matched for deletion.',
+                'matched' => 0,
+                'deleted' => 0,
+                'stats' => $stats
+            ]);
+            exit;
+        }
+
+        $sql = "DELETE FROM product_import_items WHERE $where";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            echo json_encode(['success' => false, 'message' => 'Prepare failed: ' . $conn->error]);
+            exit;
+        }
+        $stmt->bind_param('i', $jobId);
+        if (!$stmt->execute()) {
+            echo json_encode(['success' => false, 'message' => 'Delete failed: ' . $stmt->error]);
+            $stmt->close();
+            exit;
+        }
+        $deleted = (int)$stmt->affected_rows;
+        $stmt->close();
+
+        $stats = $this->refreshImportJobCounts($jobId);
+        echo json_encode([
+            'success' => true,
+            'message' => $deleted > 0 ? 'Failed rows deleted successfully.' : 'No failed rows deleted.',
+            'matched' => $matched,
+            'deleted' => $deleted,
+            'stats' => $stats
+        ]);
+        exit;
+    }
+
     public function bulkImportDelete() {
         is_login();
         if (ob_get_level() === 0) { ob_start(); }
