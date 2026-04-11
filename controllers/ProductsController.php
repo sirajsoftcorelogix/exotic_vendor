@@ -4228,9 +4228,13 @@ class ProductsController {
         $qty = 1;
         if ($map['quantity'] !== null) {
             $qtyRaw = $get($map['quantity']);
-            $qty = (int)preg_replace('/[^\d-]/', '', (string)$qtyRaw);
-            if ($qty <= 0) {
-                return null;
+            if ($qtyRaw === '') {
+                $qty = 1;
+            } else {
+                $qty = (int)preg_replace('/[^\d-]/', '', (string)$qtyRaw);
+                if ($qty <= 0) {
+                    return null;
+                }
             }
         }
 
@@ -4240,6 +4244,38 @@ class ProductsController {
             'color' => $map['color'] !== null ? $get($map['color']) : '',
             'quantity' => min(99, $qty),
         ];
+    }
+
+    /**
+     * @param \PhpOffice\PhpSpreadsheet\Cell\Cell|null $cell
+     */
+    private function spreadsheetCellToPlain($cell): string
+    {
+        if ($cell === null) {
+            return '';
+        }
+        $v = $cell->getValue();
+        if (($v === null || $v === '') && method_exists($cell, 'getCalculatedValue')) {
+            try {
+                $calc = $cell->getCalculatedValue();
+                if ($calc !== null && $calc !== '') {
+                    $v = $calc;
+                }
+            } catch (Throwable $e) {
+                // leave $v as-is
+            }
+        }
+        if ($v instanceof \PhpOffice\PhpSpreadsheet\RichText\RichText) {
+            return trim($v->getPlainText());
+        }
+        if (is_float($v) && floor($v) == $v) {
+            return (string)(int)$v;
+        }
+        if (is_int($v)) {
+            return (string)$v;
+        }
+
+        return trim((string)$v);
     }
 
     /**
@@ -4302,19 +4338,19 @@ class ProductsController {
 
         try {
             $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($tmp);
-            $reader->setReadDataOnly(true);
+            $reader->setReadDataOnly(false);
             $spreadsheet = $reader->load($tmp);
             $sheet = $spreadsheet->getActiveSheet();
             $highestRow = (int)$sheet->getHighestDataRow();
-            $highestCol = $sheet->getHighestDataColumn();
-            $colCount = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
             if ($highestRow < 2) {
                 return ['error' => 'Spreadsheet has no data rows'];
             }
+            $highestCol = $sheet->getHighestDataColumn();
+            $colCount = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
             $headerCells = [];
             for ($ci = 1; $ci <= $colCount; $ci++) {
                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
-                $headerCells[] = (string)$sheet->getCell($colLetter . '1')->getValue();
+                $headerCells[] = $this->spreadsheetCellToPlain($sheet->getCell($colLetter . '1'));
             }
             $map = $this->mapBulkSheetHeaders($headerCells);
             if ($map['item_code'] === null) {
@@ -4326,7 +4362,7 @@ class ProductsController {
                 $cells = [];
                 for ($ci = 1; $ci <= $colCount; $ci++) {
                     $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
-                    $cells[$ci - 1] = $sheet->getCell($colLetter . $r)->getValue();
+                    $cells[$ci - 1] = $this->spreadsheetCellToPlain($sheet->getCell($colLetter . $r));
                 }
                 $row = $this->bulkLabelVariantRowFromCells($cells, $map);
                 if ($row !== null) {
