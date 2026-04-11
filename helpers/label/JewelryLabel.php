@@ -185,10 +185,12 @@ final class JewelryLabel
             . '</div>';
 
         $innerRow = ''
-            . '<div class="jl-col jl-col--qr" style="flex:0 0 auto;align-self:stretch;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">'
+            . '<div class="jl-inner-row" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:0.8mm;width:100%;min-width:0;box-sizing:border-box;">'
+            . '<div class="jl-col jl-col--qr" style="flex:0 0 auto;min-width:0;display:flex;align-items:center;justify-content:center;">'
             . '<img src="' . $e($qrUri) . '" alt="" style="width:' . $e((string)$qrMm) . 'mm;height:' . $e((string)$qrMm) . 'mm;object-fit:contain;display:block;flex-shrink:0;" />'
             . '</div>'
-            . $textCluster;
+            . $textCluster
+            . '</div>';
 
         return '<div class="jl-sheet" style="'
             . 'box-sizing:border-box;width:' . $e((string)$w) . 'mm;height:' . $e((string)$h) . 'mm;'
@@ -196,8 +198,8 @@ final class JewelryLabel
             . 'font-family:' . $e($ff) . ';font-size:' . $e((string)$fs) . 'mm;line-height:' . $e((string)$lh) . ';'
             . 'color:#000;background:#fff;border:0.12mm solid #000;'
             . '">'
-            . '<div class="jl-zone jl-zone--content" style="box-sizing:border-box;flex:0 0 47%;width:47%;max-width:47%;'
-            . 'display:flex;flex-direction:row;align-items:stretch;justify-content:flex-start;gap:0.8mm;'
+            . '<div class="jl-zone jl-zone--content" style="box-sizing:border-box;flex:0 0 47%;width:47%;max-width:47%;min-height:0;align-self:stretch;'
+            . 'display:flex;flex-direction:column;justify-content:center;'
             . 'padding-top:' . $padTopContent . 'mm;padding-bottom:' . $padTopContent . 'mm;padding-left:' . $padE . 'mm;padding-right:0.5mm;">'
             . $innerRow
             . '</div>'
