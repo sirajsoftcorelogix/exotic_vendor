@@ -209,11 +209,49 @@ if (!function_exists('grn_item_group_camel_case')) {
                     of <span id="grnTotalCount"><?php echo (int) $grnTotal; ?></span>
                     line<?php echo $grnTotal === 1 ? '' : 's'; ?>
                 </p>
+
+                <div class="rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50/90 via-white to-stone-50/60 p-4 sm:p-5 shadow-sm ring-1 ring-amber-900/5">
+                    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                        <div class="min-w-0 space-y-1">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-amber-950/85">Label printing</div>
+                            <p class="text-xs sm:text-sm text-stone-600 max-w-xl leading-relaxed">
+                                Every line below starts in the print queue (checked). Adjust labels-per-line, pick a template, then print. Lines without a matching catalog product are skipped.
+                            </p>
+                        </div>
+                        <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-end gap-3 shrink-0">
+                            <div class="min-w-[11rem]">
+                                <label for="grnLabelTemplate" class="block text-[11px] font-semibold text-stone-600 mb-1">Template</label>
+                                <select id="grnLabelTemplate" class="w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-800 shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30">
+                                    <option value="jewelry">Jewelry — 100 × 12.9 mm</option>
+                                    <option value="textile">Textile — 64 × 34 mm</option>
+                                    <option value="mg_store">MG Road — 75 × 50 mm</option>
+                                </select>
+                            </div>
+                            <button type="button" id="grnLabelPrintBtn"
+                                class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white text-sm font-semibold shadow-md shadow-amber-600/20 hover:from-amber-500 hover:to-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
+                                <i class="fas fa-print text-xs opacity-90" aria-hidden="true"></i>
+                                Print labels
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-stone-600 border-t border-amber-200/50 pt-3">
+                        <label class="inline-flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="grnLabelUncheckHidden" class="h-4 w-4 rounded border-stone-300 text-amber-600 focus:ring-amber-500/40" checked />
+                            <span>Uncheck lines hidden by filters</span>
+                        </label>
+                        <span class="hidden sm:inline text-stone-300" aria-hidden="true">|</span>
+                        <button type="button" id="grnLabelSelectAll" class="font-semibold text-amber-800 hover:text-amber-950 underline decoration-amber-300 underline-offset-2">Select all</button>
+                        <button type="button" id="grnLabelSelectVisible" class="font-semibold text-amber-800 hover:text-amber-950 underline decoration-amber-300 underline-offset-2">Select visible only</button>
+                        <button type="button" id="grnLabelSelectNone" class="font-semibold text-stone-600 hover:text-stone-900 underline decoration-stone-300 underline-offset-2">Clear selection</button>
+                        <span id="grnLabelQueueSummary" class="ml-auto tabular-nums text-stone-500"></span>
+                    </div>
+                </div>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-left text-sm">
                     <thead class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <tr>
+                            <th class="px-3 py-3 whitespace-nowrap w-[7.5rem]" title="Queue for label printing">Print</th>
                             <th class="px-4 py-3 whitespace-nowrap">GRN ID</th>
                             <th class="px-4 py-3 whitespace-nowrap">Item group</th>
                             <th class="px-4 py-3 whitespace-nowrap">SKU</th>
@@ -261,12 +299,37 @@ if (!function_exists('grn_item_group_camel_case')) {
                                 $searchBlob = strtolower(preg_replace('/\s+/', ' ', trim(implode(' ', $searchParts))));
                             ?>
                             <?php $groupKey = $groupNorm === '' ? '__none__' : $groupNorm; ?>
+                            <?php
+                                $labelPid = (int)($grn['label_product_id'] ?? 0);
+                                $labelQty = (int)($grn['label_default_qty'] ?? 1);
+                                if ($labelQty < 1) {
+                                    $labelQty = 1;
+                                }
+                                if ($labelQty > 99) {
+                                    $labelQty = 99;
+                                }
+                                $labelResolvable = $labelPid > 0;
+                            ?>
                             <tr class="grn-item-row hover:bg-amber-50/30 transition-colors"
                                 data-search="<?php echo htmlspecialchars($searchBlob, ENT_QUOTES, 'UTF-8'); ?>"
                                 data-item-group="<?php echo htmlspecialchars($groupNorm, ENT_QUOTES, 'UTF-8'); ?>"
                                 data-item-group-key="<?php echo htmlspecialchars($groupKey, ENT_QUOTES, 'UTF-8'); ?>"
                                 data-sku="<?php echo htmlspecialchars($skuNorm, ENT_QUOTES, 'UTF-8'); ?>"
-                                data-item-code="<?php echo htmlspecialchars($codeNorm, ENT_QUOTES, 'UTF-8'); ?>">
+                                data-item-code="<?php echo htmlspecialchars($codeNorm, ENT_QUOTES, 'UTF-8'); ?>"
+                                data-label-product-id="<?php echo $labelPid; ?>">
+                                <td class="px-3 py-3 align-middle">
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" class="grn-label-cb h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500/50 shrink-0" <?php echo $labelResolvable ? 'checked' : 'disabled'; ?>
+                                            <?php echo !$labelResolvable ? ' title="No matching product in catalog for this line"' : ''; ?> />
+                                        <label class="sr-only">Labels qty</label>
+                                        <input type="number" min="1" max="99" value="<?php echo $labelQty; ?>"
+                                            class="grn-label-qty w-12 rounded border border-gray-200 px-1.5 py-1 text-xs tabular-nums text-center <?php echo !$labelResolvable ? 'opacity-40 cursor-not-allowed bg-gray-50' : ''; ?>"
+                                            <?php echo !$labelResolvable ? 'disabled' : ''; ?> />
+                                    </div>
+                                    <?php if (!$labelResolvable): ?>
+                                        <div class="text-[10px] text-amber-800/90 mt-1 max-w-[6rem] leading-tight" title="Resolve item code / SKU + size / color in catalog">No match</div>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="px-4 py-3 tabular-nums text-gray-700"><?php echo (int) $grn['id']; ?></td>
                                 <td class="px-4 py-3 text-gray-700 max-w-[12rem] truncate capitalize"
                                     <?php echo $itemGroup !== '' ? 'title="' . htmlspecialchars($itemGroup, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>><?php echo $itemGroup !== '' ? htmlspecialchars(grn_item_group_camel_case($itemGroup)) : '—'; ?></td>
@@ -493,6 +556,9 @@ if (!function_exists('grn_item_group_camel_case')) {
         });
         if (visibleEl) visibleEl.textContent = String(n);
         updateGroupSummary();
+        if (typeof window.grnLabelAfterFilter === 'function') {
+            window.grnLabelAfterFilter();
+        }
     }
 
     function pushQueryToUrl() {
@@ -594,5 +660,148 @@ if (!function_exists('grn_item_group_camel_case')) {
         if (ps) skuInput.value = ps;
         runFilter();
     } catch (e) { runFilter(); }
+})();
+</script>
+
+<script>
+(function () {
+    var printBtn = document.getElementById('grnLabelPrintBtn');
+    var templateSel = document.getElementById('grnLabelTemplate');
+    var uncheckHidden = document.getElementById('grnLabelUncheckHidden');
+    var selAll = document.getElementById('grnLabelSelectAll');
+    var selVisible = document.getElementById('grnLabelSelectVisible');
+    var selNone = document.getElementById('grnLabelSelectNone');
+    var summaryEl = document.getElementById('grnLabelQueueSummary');
+    if (!printBtn || !templateSel) return;
+
+    function rowVisible(tr) {
+        return tr.style.display !== 'none';
+    }
+
+    function eachRow(cb) {
+        document.querySelectorAll('tr.grn-item-row').forEach(cb);
+    }
+
+    function setChecked(tr, on) {
+        var cb = tr.querySelector('.grn-label-cb');
+        if (cb && !cb.disabled) cb.checked = !!on;
+    }
+
+    function uncheckNonVisibleRows() {
+        if (!uncheckHidden || !uncheckHidden.checked) return;
+        eachRow(function (tr) {
+            if (!rowVisible(tr)) setChecked(tr, false);
+        });
+    }
+
+    window.grnLabelAfterFilter = function () {
+        uncheckNonVisibleRows();
+        updateSummary();
+    };
+
+    function updateSummary() {
+        if (!summaryEl) return;
+        var nQueued = 0;
+        var nUnresolved = 0;
+        eachRow(function (tr) {
+            var cb = tr.querySelector('.grn-label-cb');
+            if (!cb) return;
+            if (cb.disabled) {
+                nUnresolved++;
+                return;
+            }
+            if (cb.checked) nQueued++;
+        });
+        summaryEl.textContent = nQueued + ' queued · ' + nUnresolved + ' unresolved';
+    }
+
+    eachRow(function (tr) {
+        var cb = tr.querySelector('.grn-label-cb');
+        var qty = tr.querySelector('.grn-label-qty');
+        if (cb) cb.addEventListener('change', updateSummary);
+        if (qty) qty.addEventListener('change', updateSummary);
+    });
+    if (uncheckHidden) uncheckHidden.addEventListener('change', function () {
+        uncheckNonVisibleRows();
+        updateSummary();
+    });
+    if (selAll) selAll.addEventListener('click', function () {
+        eachRow(function (tr) { setChecked(tr, true); });
+        updateSummary();
+    });
+    if (selVisible) selVisible.addEventListener('click', function () {
+        eachRow(function (tr) { setChecked(tr, rowVisible(tr)); });
+        updateSummary();
+    });
+    if (selNone) selNone.addEventListener('click', function () {
+        eachRow(function (tr) { setChecked(tr, false); });
+        updateSummary();
+    });
+
+    function openPrintHtmlInFrame(html) {
+        var old = document.getElementById('grn-label-print-frame');
+        if (old && old.parentNode) old.parentNode.removeChild(old);
+        var frame = document.createElement('iframe');
+        frame.id = 'grn-label-print-frame';
+        frame.setAttribute('title', 'GRN label print');
+        frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:120mm;height:80mm;border:0;opacity:0;pointer-events:none;z-index:-1;';
+        document.body.appendChild(frame);
+        var d = frame.contentWindow.document;
+        d.open();
+        d.write(html || '');
+        d.close();
+    }
+
+    function collectPayload() {
+        var products = [];
+        eachRow(function (tr) {
+            var cb = tr.querySelector('.grn-label-cb');
+            if (!cb || !cb.checked || cb.disabled) return;
+            var pid = parseInt(tr.getAttribute('data-label-product-id') || '0', 10);
+            if (pid <= 0) return;
+            var qtyEl = tr.querySelector('.grn-label-qty');
+            var qty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
+            if (isNaN(qty) || qty < 1) qty = 1;
+            if (qty > 99) qty = 99;
+            products.push({ id: pid, qty: qty });
+        });
+        return {
+            template: templateSel.value,
+            products: products
+        };
+    }
+
+    printBtn.addEventListener('click', async function () {
+        var payload = collectPayload();
+        if (payload.products.length < 1) {
+            alert('Select at least one line with a resolved catalog product (unchecked “No match” rows cannot print).');
+            return;
+        }
+        var prev = printBtn.textContent;
+        printBtn.disabled = true;
+        printBtn.textContent = 'Preparing…';
+        try {
+            var res = await fetch('?page=products&action=bulk_label_print_generate', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            var data = await res.json();
+            if (!data || !data.success || !data.html) {
+                alert((data && data.message) ? data.message : 'Could not generate labels.');
+                return;
+            }
+            openPrintHtmlInFrame(data.html);
+        } catch (e) {
+            alert('Could not generate labels. Please try again.');
+        } finally {
+            printBtn.disabled = false;
+            printBtn.textContent = prev;
+        }
+    });
+
+    uncheckNonVisibleRows();
+    updateSummary();
 })();
 </script>
