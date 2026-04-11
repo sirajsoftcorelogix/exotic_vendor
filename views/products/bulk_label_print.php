@@ -75,69 +75,88 @@
       </div>
     </div>
 
-    <div class="bg-white border rounded-xl shadow-sm p-4 sm:p-5 h-fit xl:sticky xl:top-4 space-y-0">
-      <div>
-        <h3 class="text-base font-semibold text-gray-800">Import from Excel / CSV</h3>
-        <p class="text-xs text-gray-500 mt-1 leading-relaxed">Columns: Item Code (required), Size and/or Color as applicable — item code only, color-only, size-only, or both. Optional Qty. First row = headers.</p>
-        <div class="mt-3">
-          <div class="flex min-w-0 items-center gap-2">
-            <label for="bulkLabelImportFile" class="sr-only">Choose file</label>
-            <input id="bulkLabelImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              class="min-w-0 flex-1 text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-amber-50 file:text-amber-900 hover:file:bg-amber-100" />
-            <button id="bulkLabelImportBtn" type="button"
-              class="shrink-0 px-2.5 py-1.5 rounded-md bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold leading-tight">
-              Upload
+    <aside class="h-fit xl:sticky xl:top-4 rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50/90 via-white to-stone-50/80 p-5 sm:p-6 shadow-md shadow-amber-900/5 ring-1 ring-stone-900/5 space-y-5">
+      <section class="rounded-xl border border-stone-200/90 bg-white/95 p-4 shadow-sm backdrop-blur-sm">
+        <div class="flex items-start gap-2.5">
+          <span class="mt-0.5 h-8 w-1 shrink-0 rounded-full bg-amber-500" aria-hidden="true"></span>
+          <div class="min-w-0 flex-1">
+            <h3 class="text-sm font-semibold tracking-tight text-stone-900">Import file</h3>
+            <p class="mt-1 text-[11px] leading-relaxed text-stone-500">Item Code required. Size and/or Color optional (all variant shapes). Optional Qty. Row 1 = headers.</p>
+            <div class="mt-3 rounded-lg border border-dashed border-stone-300/90 bg-stone-50/80 px-3 py-2.5">
+              <div class="flex min-w-0 flex-wrap items-center gap-2">
+                <label for="bulkLabelImportFile" class="sr-only">Choose file</label>
+                <input id="bulkLabelImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  class="min-w-0 flex-1 text-[11px] text-stone-600 file:mr-2 file:rounded-md file:border-0 file:bg-amber-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-amber-950 hover:file:bg-amber-200" />
+                <button id="bulkLabelImportBtn" type="button"
+                  class="shrink-0 rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-stone-800">
+                  Upload
+                </button>
+              </div>
+            </div>
+            <a href="?page=products&action=bulk_label_print_sample_csv" class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-800 hover:text-amber-950 underline decoration-amber-300 underline-offset-2">Sample CSV</a>
+            <p id="bulkLabelImportMsg" class="mt-2 hidden whitespace-pre-wrap rounded-md border px-3 py-2 text-xs leading-relaxed" role="status"></p>
+          </div>
+        </div>
+      </section>
+
+      <div class="h-px bg-gradient-to-r from-transparent via-stone-200 to-transparent" aria-hidden="true"></div>
+
+      <section class="rounded-xl border border-stone-200/90 bg-white/95 p-4 shadow-sm backdrop-blur-sm">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div class="flex items-start gap-2.5 min-w-0">
+            <span class="mt-0.5 h-8 w-1 shrink-0 rounded-full bg-amber-400" aria-hidden="true"></span>
+            <div>
+              <h3 class="text-sm font-semibold tracking-tight text-stone-900">Selection queue</h3>
+              <p class="mt-0.5 text-[11px] text-stone-500">Adjust quantity per line before printing.</p>
+            </div>
+          </div>
+          <div class="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            <button id="bulkLabelSetQtyAll" type="button"
+              class="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-[11px] font-medium text-stone-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-950">
+              Set qty for all
+            </button>
+            <button id="bulkLabelClearAll" type="button"
+              class="rounded-full border border-stone-200 bg-white px-3 py-1 text-[11px] font-medium text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-800">
+              Clear all
             </button>
           </div>
-          <a href="?page=products&action=bulk_label_print_sample_csv" class="mt-2 mb-3 inline-block text-xs text-amber-700 hover:text-amber-900 font-medium underline underline-offset-2">Sample CSV</a>
-        </div>
-        <p id="bulkLabelImportMsg" class="text-xs mt-2 hidden whitespace-pre-wrap" role="status"></p>
-      </div>
-
-      <div class="my-5 border-t border-gray-200"></div>
-
-      <div>
-        <h3 class="text-base font-semibold text-gray-800">Selection Queue</h3>
-        <p class="text-xs text-gray-500 mt-1">Set label quantity per product before print.</p>
-        <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
-          <button id="bulkLabelSetQtyAll" type="button"
-            class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 bg-transparent p-0 border-0 cursor-pointer text-left">
-            Set qty for all
-          </button>
-          <button id="bulkLabelClearAll" type="button"
-            class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 bg-transparent p-0 border-0 cursor-pointer text-right">
-            Clear all
-          </button>
-        </div>
-      </div>
-
-      <div class="mt-3 border border-gray-200 rounded-lg max-h-[280px] min-h-[120px] overflow-auto bg-white">
-        <div id="bulkLabelQueueEmpty" class="p-6 text-sm text-gray-400 text-center">No products selected.</div>
-        <div id="bulkLabelQueueList" class="divide-y divide-gray-100 hidden"></div>
-      </div>
-
-      <div class="mt-5 space-y-4">
-        <div>
-          <label for="bulkLabelTemplate" class="block text-sm font-medium text-gray-700 mb-1">Label template</label>
-          <select id="bulkLabelTemplate" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white">
-            <option value="jewelry">Jewelry — 100 × 12.9 mm</option>
-            <option value="textile">Textile — 64 × 34 mm</option>
-            <option value="mg_store">MG Road — 75 × 50 mm</option>
-          </select>
         </div>
 
-        <div class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-gray-800 space-y-2">
-          <div class="flex justify-between items-center"><span>Selected products</span><strong id="bulkLabelCountProducts" class="tabular-nums">0</strong></div>
-          <div class="flex justify-between items-center"><span>Total labels</span><strong id="bulkLabelCountLabels" class="tabular-nums">0</strong></div>
+        <div class="mt-3 max-h-[280px] min-h-[132px] overflow-auto rounded-xl border border-stone-200/80 bg-stone-50/90 shadow-inner">
+          <div id="bulkLabelQueueEmpty" class="flex min-h-[120px] flex-col items-center justify-center gap-1 px-4 py-8 text-center">
+            <span class="text-sm font-medium text-stone-400">Queue is empty</span>
+            <span class="text-xs text-stone-400">Search or import to add products</span>
+          </div>
+          <div id="bulkLabelQueueList" class="hidden space-y-2 p-2"></div>
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-amber-200/80 bg-gradient-to-b from-amber-50/90 to-white p-4 shadow-sm">
+        <label for="bulkLabelTemplate" class="block text-xs font-semibold uppercase tracking-wide text-amber-950/80">Label template</label>
+        <select id="bulkLabelTemplate" class="mt-2 w-full cursor-pointer rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-800 shadow-sm transition focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30">
+          <option value="jewelry">Jewelry — 100 × 12.9 mm</option>
+          <option value="textile">Textile — 64 × 34 mm</option>
+          <option value="mg_store">MG Road — 75 × 50 mm</option>
+        </select>
+
+        <div class="mt-4 grid grid-cols-2 gap-2">
+          <div class="rounded-lg border border-amber-200/60 bg-white/80 px-3 py-2.5 text-center shadow-sm">
+            <div class="text-[10px] font-medium uppercase tracking-wider text-stone-500">Products</div>
+            <div id="bulkLabelCountProducts" class="mt-0.5 text-lg font-bold tabular-nums text-stone-900">0</div>
+          </div>
+          <div class="rounded-lg border border-amber-200/60 bg-white/80 px-3 py-2.5 text-center shadow-sm">
+            <div class="text-[10px] font-medium uppercase tracking-wider text-stone-500">Labels</div>
+            <div id="bulkLabelCountLabels" class="mt-0.5 text-lg font-bold tabular-nums text-amber-800">0</div>
+          </div>
         </div>
 
         <button id="bulkLabelGenerateBtn" type="button"
-          class="w-full px-4 py-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-sm">
+          class="mt-4 w-full rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-amber-600/25 transition hover:from-amber-500 hover:to-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
           Print labels
         </button>
-        <p class="text-xs text-gray-500 text-center sm:text-left">Uses existing label templates to generate a bulk print job.</p>
-      </div>
-    </div>
+        <p class="mt-2 text-center text-[11px] leading-relaxed text-stone-500">Opens print preview using the template above.</p>
+      </section>
+    </aside>
   </div>
 
   <div id="bulkLabelQtyAllModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/45" role="dialog" aria-modal="true" aria-labelledby="bulkLabelQtyAllModalTitle">
@@ -176,6 +195,17 @@
       </div>
     </div>
   </div>
+
+  <div id="bulkLabelQueueImageModal" class="hidden fixed inset-0 z-[102] flex items-center justify-center p-4 sm:p-6 bg-black/75" role="dialog" aria-modal="true" aria-labelledby="bulkLabelQueueImageModalTitle">
+    <div class="relative z-10 w-full max-w-3xl flex flex-col items-center gap-3" role="document">
+      <h2 id="bulkLabelQueueImageModalTitle" class="sr-only">Product image preview</h2>
+      <button type="button" id="bulkLabelQueueImageModalClose" class="self-end rounded-lg bg-white/95 px-3 py-1.5 text-sm font-semibold text-gray-800 shadow hover:bg-white border border-gray-200">Close</button>
+      <div class="w-full rounded-xl bg-white p-2 sm:p-3 shadow-2xl ring-1 ring-black/10">
+        <img id="bulkLabelQueueImageModalImg" src="" alt="" class="mx-auto max-h-[min(75vh,560px)] w-auto max-w-full object-contain" />
+      </div>
+      <p id="bulkLabelQueueImageModalCaption" class="max-w-full text-center text-sm text-white/95 drop-shadow px-2"></p>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -210,6 +240,10 @@
   var infoModalTitle = document.getElementById('bulkLabelInfoModalTitle');
   var infoModalMessage = document.getElementById('bulkLabelInfoModalMessage');
   var infoModalOk = document.getElementById('bulkLabelInfoModalOk');
+  var queueImageModal = document.getElementById('bulkLabelQueueImageModal');
+  var queueImageModalImg = document.getElementById('bulkLabelQueueImageModalImg');
+  var queueImageModalCaption = document.getElementById('bulkLabelQueueImageModalCaption');
+  var queueImageModalClose = document.getElementById('bulkLabelQueueImageModalClose');
 
   var queueMap = {}; // key: product id -> {product, qty}
   var qtyAllLastApplied = 1;
@@ -257,6 +291,26 @@
     }
   }
 
+  function openQueueImageModal(src, caption) {
+    if (!queueImageModal || !queueImageModalImg) return;
+    queueImageModalImg.src = src || '';
+    queueImageModalImg.alt = caption || 'Product';
+    if (queueImageModalCaption) {
+      queueImageModalCaption.textContent = caption || '';
+      queueImageModalCaption.classList.toggle('hidden', !caption);
+    }
+    queueImageModal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+    try { queueImageModalClose.focus(); } catch (err) {}
+  }
+
+  function closeQueueImageModal() {
+    if (!queueImageModal || !queueImageModalImg) return;
+    queueImageModal.classList.add('hidden');
+    queueImageModalImg.src = '';
+    document.body.classList.remove('overflow-hidden');
+  }
+
   function renderQueue() {
     var keys = Object.keys(queueMap);
     queueList.innerHTML = '';
@@ -264,26 +318,31 @@
       var row = queueMap[k];
       var p = row.product || {};
       var img = imageUrlForProduct(p);
-      var thumbHtml = img
-        ? '<img src="' + esc(img) + '" alt="" class="w-full h-full object-cover" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.querySelector(\'span\').style.display=\'flex\';" /><span class="hidden items-center justify-center w-full h-full text-[10px] text-gray-400">No image</span>'
+      var cap = (p.sku || '—') + ' · ' + (p.item_code || '') + (p.title ? (' — ' + String(p.title)) : '');
+      var thumbInner = img
+        ? '<img src="' + esc(img) + '" alt="" class="w-full h-full object-cover pointer-events-none" loading="lazy" onerror="this.style.display=\'none\';var sp=this.parentNode&&this.parentNode.querySelector(\'.jl-thumb-fallback\');if(sp)sp.style.display=\'flex\';" /><span class="jl-thumb-fallback hidden items-center justify-center w-full h-full text-[10px] text-gray-400 pointer-events-none">No image</span>'
         : '<span class="flex items-center justify-center w-full h-full text-[10px] text-gray-400">No image</span>';
+      var thumbWrap = img
+        ? '<button type="button" class="bulk-label-queue-thumb h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white p-0 shadow-sm cursor-pointer ring-amber-400/0 transition hover:ring-2 hover:ring-amber-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500" data-bulk-queue-thumb="1" data-img-href="' + esc(img) + '" data-img-caption="' + esc(cap) + '" title="View larger" aria-label="View larger product image">' + thumbInner + '</button>'
+        : '<div class="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-stone-100">' + thumbInner + '</div>';
       var wrap = document.createElement('div');
-      wrap.className = 'p-3';
+      wrap.className = 'rounded-lg border border-stone-200/90 bg-white p-3 shadow-sm transition-colors hover:border-amber-200/80';
       wrap.innerHTML =
         '<div class="flex items-start justify-between gap-2">' +
-          '<div class="min-w-0 flex items-start gap-2">' +
-            '<div class="w-10 h-10 rounded border border-gray-200 overflow-hidden bg-gray-50 shrink-0">' + thumbHtml + '</div>' +
+          '<div class="min-w-0 flex items-start gap-2.5">' +
+            thumbWrap +
             '<div class="min-w-0">' +
-            '<div class="text-sm font-semibold text-gray-800 truncate">' + esc(p.sku || '—') + '</div>' +
-            '<div class="text-xs text-gray-500 truncate">' + esc(p.item_code || '') + ' · ' + esc(p.title || '') + '</div>' +
+            '<div class="text-sm font-semibold text-stone-900 truncate">' + esc(p.sku || '—') + '</div>' +
+            '<div class="text-xs text-stone-500 truncate">' + esc(p.item_code || '') + ' · ' + esc(p.title || '') + '</div>' +
             '</div>' +
           '</div>' +
-          '<button type="button" data-rm="' + esc(k) + '" class="text-xs text-red-700 hover:text-red-900">Remove</button>' +
+          '<button type="button" data-rm="' + esc(k) + '" class="shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-red-700 transition hover:bg-red-50">Remove</button>' +
         '</div>' +
-        '<div class="mt-2 flex items-center gap-2">' +
-          '<button type="button" data-dec="' + esc(k) + '" class="h-7 w-7 rounded border border-gray-300 text-sm">-</button>' +
-          '<input data-qty="' + esc(k) + '" value="' + esc(String(row.qty || 1)) + '" class="w-16 border rounded px-2 py-1 text-sm text-center" />' +
-          '<button type="button" data-inc="' + esc(k) + '" class="h-7 w-7 rounded border border-gray-300 text-sm">+</button>' +
+        '<div class="mt-2.5 flex items-center gap-2">' +
+          '<span class="text-[11px] font-medium text-stone-500">Qty</span>' +
+          '<button type="button" data-dec="' + esc(k) + '" class="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-stone-50 text-sm font-medium text-stone-700 transition hover:bg-stone-100">−</button>' +
+          '<input data-qty="' + esc(k) + '" value="' + esc(String(row.qty || 1)) + '" class="w-14 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-center text-sm font-semibold tabular-nums text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500" />' +
+          '<button type="button" data-inc="' + esc(k) + '" class="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-stone-50 text-sm font-medium text-stone-700 transition hover:bg-stone-100">+</button>' +
         '</div>';
       queueList.appendChild(wrap);
     });
@@ -472,6 +531,14 @@
   });
 
   queueList.addEventListener('click', function (e) {
+    var thumbBtn = e.target.closest('[data-bulk-queue-thumb]');
+    if (thumbBtn) {
+      var href = thumbBtn.getAttribute('data-img-href');
+      if (href) {
+        openQueueImageModal(href, thumbBtn.getAttribute('data-img-caption') || '');
+      }
+      return;
+    }
     var rm = e.target.closest('[data-rm]');
     if (rm) {
       delete queueMap[String(rm.getAttribute('data-rm'))];
@@ -511,12 +578,19 @@
   function showImportMessage(text, isError) {
     if (!importMsg) return;
     importMsg.textContent = text || '';
-    importMsg.classList.remove('hidden', 'text-red-700', 'text-gray-600');
+    importMsg.classList.remove(
+      'hidden', 'text-red-800', 'text-stone-700', 'bg-red-50', 'border-red-200',
+      'bg-stone-100', 'border-stone-200'
+    );
     if (!text) {
       importMsg.classList.add('hidden');
       return;
     }
-    importMsg.classList.add(isError ? 'text-red-700' : 'text-gray-600');
+    if (isError) {
+      importMsg.classList.add('text-red-800', 'bg-red-50', 'border-red-200');
+    } else {
+      importMsg.classList.add('text-stone-700', 'bg-stone-100', 'border-stone-200');
+    }
   }
 
   importBtn && importBtn.addEventListener('click', async function () {
@@ -635,6 +709,11 @@
     if (e.target === infoModal) closeInfoModal();
   });
 
+  queueImageModalClose && queueImageModalClose.addEventListener('click', closeQueueImageModal);
+  queueImageModal && queueImageModal.addEventListener('click', function (e) {
+    if (e.target === queueImageModal) closeQueueImageModal();
+  });
+
   qtyAllCancel.addEventListener('click', closeQtyAllModal);
   qtyAllApply.addEventListener('click', applyQtyAllFromModal);
   qtyAllModal.addEventListener('click', function (e) {
@@ -650,6 +729,13 @@
     setQtyAllInputValue(getQtyAllInputValue());
   });
   document.addEventListener('keydown', function (e) {
+    if (queueImageModal && !queueImageModal.classList.contains('hidden')) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeQueueImageModal();
+      }
+      return;
+    }
     if (infoModal && !infoModal.classList.contains('hidden')) {
       if (e.key === 'Escape') {
         e.preventDefault();
