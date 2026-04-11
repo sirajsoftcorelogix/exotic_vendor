@@ -55,6 +55,35 @@ class product
     }
 
     /**
+     * HSN / HS code from vendor product/fetch parent (master) row.
+     * API typically sends hscode on the master; variants often omit it.
+     */
+    public static function vendorApiMasterHsn(array $apiParent): string
+    {
+        foreach (['hscode', 'hsn'] as $k) {
+            if (!empty($apiParent[$k]) && trim((string)$apiParent[$k]) !== '') {
+                return trim((string)$apiParent[$k]);
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * HSN for a variant: use variant hscode/hsn when present, else fall back to master.
+     */
+    public static function vendorApiVariantHsn(array $apiParent, array $variant): string
+    {
+        foreach (['hscode', 'hsn'] as $k) {
+            if (!empty($variant[$k]) && trim((string)$variant[$k]) !== '') {
+                return trim((string)$variant[$k]);
+            }
+        }
+
+        return self::vendorApiMasterHsn($apiParent);
+    }
+
+    /**
      * Normalize vendor product/fetch JSON into a list of product rows.
      * Handles: { "SKU": { ...row } }, [ { ...row } ], or a single { "itemcode": "...", ... } object.
      */
@@ -290,7 +319,7 @@ class product
                     continue;
                 }
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
+                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
                     $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
@@ -325,9 +354,10 @@ class product
                     $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                     $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
                     $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
+                    $hsn = self::vendorApiMasterHsn($product);
                     $updated_at = date('Y-m-d H:i:s');
                     $stmt->bind_param(
-                        'sissiiiiiiiiisdddddddddsssss',
+                        'sissiiiiiiiiisddddddddssssss',
                         $asin,
                         $localStock,
                         $upc,
@@ -351,6 +381,7 @@ class product
                         $permanent_discount,
                         $discount_global,
                         $discount_india,
+                        $hsn,
                         $updated_at,
                         $sku,
                         $product['itemcode'],
@@ -369,7 +400,7 @@ class product
                 if (isset($product['variations'])) {
                     foreach ($product['variations'] as $variation) {
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
-                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
+                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                         if ($stmt) {
                             // $title = isset($product['title']) ? $product['title'] : '';
                             $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
@@ -404,9 +435,10 @@ class product
                             $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                             $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
                             $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
+                            $hsn = self::vendorApiVariantHsn($product, $variation);
                             $updated_at = date('Y-m-d H:i:s');
                             $stmt->bind_param(
-                                'sissiissiiiiisdddddddddsssss',
+                                'sissiiiiiiiiisddddddddssssss',
                                 $asin,
                                 $localStock,
                                 $upc,
@@ -430,6 +462,7 @@ class product
                                 $permanent_discount,
                                 $discount_global,
                                 $discount_india,
+                                $hsn,
                                 $updated_at,
                                 $sku,
                                 $product['itemcode'],
