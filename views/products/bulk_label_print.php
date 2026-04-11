@@ -164,6 +164,20 @@
       </div>
     </div>
   </div>
+
+  <div id="bulkLabelInfoModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/45" role="dialog" aria-modal="true" aria-labelledby="bulkLabelInfoModalTitle">
+    <div class="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden" role="document">
+      <div class="px-5 pt-5 pb-3 border-b border-gray-100">
+        <h3 id="bulkLabelInfoModalTitle" class="text-lg font-semibold text-gray-900">Notice</h3>
+      </div>
+      <div class="px-5 py-4">
+        <p id="bulkLabelInfoModalMessage" class="text-sm text-gray-600 leading-relaxed"></p>
+      </div>
+      <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+        <button type="button" id="bulkLabelInfoModalOk" class="px-5 py-2.5 text-sm rounded-lg bg-amber-600 text-white hover:bg-amber-700 font-semibold shadow-sm min-w-[5rem]">OK</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -194,6 +208,10 @@
   var importFile = document.getElementById('bulkLabelImportFile');
   var importBtn = document.getElementById('bulkLabelImportBtn');
   var importMsg = document.getElementById('bulkLabelImportMsg');
+  var infoModal = document.getElementById('bulkLabelInfoModal');
+  var infoModalTitle = document.getElementById('bulkLabelInfoModalTitle');
+  var infoModalMessage = document.getElementById('bulkLabelInfoModalMessage');
+  var infoModalOk = document.getElementById('bulkLabelInfoModalOk');
 
   var queueMap = {}; // key: product id -> {product, qty}
   var qtyAllLastApplied = 1;
@@ -562,10 +580,25 @@
     qtyAllInput.value = String(clampQtyAll(n));
   }
 
+  function openInfoModal(title, message) {
+    if (!infoModal || !infoModalTitle || !infoModalMessage) return;
+    infoModalTitle.textContent = title || 'Notice';
+    infoModalMessage.textContent = message || '';
+    infoModal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+    try { infoModalOk.focus(); } catch (e) {}
+  }
+
+  function closeInfoModal() {
+    if (!infoModal) return;
+    infoModal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+
   function openQtyAllModal() {
     var keys = Object.keys(queueMap);
     if (!keys.length) {
-      alert('Add at least one product to the queue first.');
+      openInfoModal('Selection queue is empty', 'Add at least one product to the queue first.');
       return;
     }
     qtyAllHint.textContent = keys.length + ' product(s) in queue.';
@@ -599,6 +632,11 @@
 
   setQtyAllBtn.addEventListener('click', openQtyAllModal);
 
+  infoModalOk && infoModalOk.addEventListener('click', closeInfoModal);
+  infoModal && infoModal.addEventListener('click', function (e) {
+    if (e.target === infoModal) closeInfoModal();
+  });
+
   qtyAllCancel.addEventListener('click', closeQtyAllModal);
   qtyAllApply.addEventListener('click', applyQtyAllFromModal);
   qtyAllModal.addEventListener('click', function (e) {
@@ -614,6 +652,16 @@
     setQtyAllInputValue(getQtyAllInputValue());
   });
   document.addEventListener('keydown', function (e) {
+    if (infoModal && !infoModal.classList.contains('hidden')) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeInfoModal();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        closeInfoModal();
+      }
+      return;
+    }
     if (!qtyAllModal || qtyAllModal.classList.contains('hidden')) return;
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -641,7 +689,7 @@
   generateBtn.addEventListener('click', async function () {
     var pc = Object.keys(queueMap).length;
     if (pc < 1) {
-      alert('Select at least one product.');
+      openInfoModal('Nothing to print', 'Select at least one product.');
       return;
     }
     var payload = {
