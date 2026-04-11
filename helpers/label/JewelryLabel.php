@@ -185,8 +185,8 @@ final class JewelryLabel
             . '</div>';
 
         $innerRow = ''
-            . '<div class="jl-col jl-col--qr" style="flex:0 0 auto;display:flex;align-items:flex-start;justify-content:center;align-self:flex-start;">'
-            . '<img src="' . $e($qrUri) . '" alt="" style="width:' . $e((string)$qrMm) . 'mm;height:' . $e((string)$qrMm) . 'mm;object-fit:contain;display:block;" />'
+            . '<div class="jl-col jl-col--qr" style="flex:0 0 auto;align-self:stretch;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">'
+            . '<img src="' . $e($qrUri) . '" alt="" style="width:' . $e((string)$qrMm) . 'mm;height:' . $e((string)$qrMm) . 'mm;object-fit:contain;display:block;flex-shrink:0;" />'
             . '</div>'
             . $textCluster;
 
@@ -197,12 +197,12 @@ final class JewelryLabel
             . 'color:#000;background:#fff;border:0.12mm solid #000;'
             . '">'
             . '<div class="jl-zone jl-zone--content" style="box-sizing:border-box;flex:0 0 47%;width:47%;max-width:47%;'
-            . 'display:flex;flex-direction:row;align-items:flex-start;justify-content:flex-start;gap:0.8mm;'
-            . 'padding-top:' . $padTopContent . 'mm;padding-bottom:' . $padE . 'mm;padding-left:' . $padE . 'mm;padding-right:0.5mm;">'
+            . 'display:flex;flex-direction:row;align-items:stretch;justify-content:flex-start;gap:0.8mm;'
+            . 'padding-top:' . $padTopContent . 'mm;padding-bottom:' . $padTopContent . 'mm;padding-left:' . $padE . 'mm;padding-right:0.5mm;">'
             . $innerRow
             . '</div>'
             . '<div class="jl-zone jl-zone--blank" style="box-sizing:border-box;flex:0 0 53%;width:53%;max-width:53%;'
-            . 'background:#fff;padding-top:' . $padTopContent . 'mm;padding-bottom:' . $padE . 'mm;padding-right:' . $padE . 'mm;"></div>'
+            . 'background:#fff;padding-top:' . $padTopContent . 'mm;padding-bottom:' . $padTopContent . 'mm;padding-right:' . $padE . 'mm;"></div>'
             . '</div>';
     }
 
