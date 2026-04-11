@@ -131,7 +131,8 @@ final class JewelryLabel
         $pad = (float)($cfg['padding_mm'] ?? 0.6);
         $fs = (float)($cfg['font_size_mm'] ?? 1.85);
         $ff = (string)($cfg['font_family'] ?? 'Arial, Helvetica, sans-serif');
-        $lh = (float)($cfg['line_height'] ?? 1.1);
+        $lh = (float)($cfg['line_height'] ?? 1.28);
+        $textRowGapMm = (float)($cfg['text_block_row_gap_mm'] ?? 0.55);
 
         $qrMm = self::qrDisplaySideMm($cfg);
         $qrUri = self::qrDataUri($data, $cfg);
@@ -148,6 +149,7 @@ final class JewelryLabel
         $mrpLine = $mrp !== '' ? ('MRP: ₹' . $e($mrp)) : 'MRP: —';
         $skuVal = $sku !== '' ? $e($sku) : '—';
         $lhE = $e((string)$lh);
+        $rowGapE = $e((string)$textRowGapMm);
 
         $padE = $e((string)$pad);
         $padTopContent = $e((string)($pad + 0.3));
@@ -161,21 +163,21 @@ final class JewelryLabel
 
         $detailsRow = ''
             . '<div class="jl-details" style="display:flex;flex-direction:row;align-items:flex-start;justify-content:flex-start;gap:0.8mm;width:100%;min-width:0;">'
-            . '<div class="jl-col jl-col--color" style="flex:0 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;text-align:left;">'
+            . '<div class="jl-col jl-col--color" style="flex:0 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;text-align:left;line-height:' . $lhE . ';">'
             . '<span style="font-weight:700;">Color</span>'
             . '<span style="font-weight:400;">' . ($color !== '' ? $e($color) : '—') . '</span>'
             . '</div>'
-            . '<div class="jl-col jl-col--size" style="flex:0 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;text-align:left;">'
+            . '<div class="jl-col jl-col--size" style="flex:0 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;text-align:left;line-height:' . $lhE . ';">'
             . '<span style="font-weight:700;">Size</span>'
             . '<span style="font-weight:400;">' . ($size !== '' ? $e($size) : '—') . '</span>'
             . '</div>'
-            . '<div class="jl-col jl-col--mrp" style="flex:0 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;text-align:left;">'
+            . '<div class="jl-col jl-col--mrp" style="flex:0 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;text-align:left;line-height:' . $lhE . ';">'
             . '<span style="font-weight:700;white-space:nowrap;">' . $mrpLine . '</span>'
             . '</div>'
             . '</div>';
 
         $textCluster = ''
-            . '<div class="jl-text-cluster" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:0.35mm;">'
+            . '<div class="jl-text-cluster" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:' . $rowGapE . 'mm;">'
             . $detailsRow
             . $skuBlock
             . '</div>';
