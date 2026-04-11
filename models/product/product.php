@@ -54,45 +54,41 @@ class product
         return 0.0;
     }
 
-    /** HSN from API row (master line). Variants use the same hscode as master — pass the parent item, not the variation. */
-    public static function vendorApiHsn(array $row): string
+    /** Master API row: HSN is on `hscode` (or `hsn`). Same value for all variants — pass the parent object only. */
+    public static function vendorApiHsn(array $masterRow): string
     {
-        foreach (['hscode', 'hsn', 'hsn_code', 'hs_code', 'HSN', 'HSCode', 'tax_hsn'] as $k) {
-            $v = trim((string)($row[$k] ?? ''));
-            if ($v !== '') {
-                return $v;
-            }
+        $h = trim((string)($masterRow['hscode'] ?? ''));
+        if ($h !== '') {
+            return $h;
         }
 
-        return '';
+        return trim((string)($masterRow['hsn'] ?? ''));
     }
 
-    /** Unwrap vendor product/fetch JSON to a list of rows with itemcode set. */
     public static function normalizeVendorProductFetchItems(array $data): array
     {
         if ($data === []) {
             return [];
         }
-        foreach (['data', 'items'] as $w) {
-            if (isset($data[$w]) && is_array($data[$w])) {
-                $data = $data[$w];
-            }
+        if (isset($data['data']) && is_array($data['data'])) {
+            $data = $data['data'];
         }
-        $ic = trim((string)($data['itemcode'] ?? $data['item_code'] ?? ''));
-        if ($ic !== '' && !isset($data[0])) {
+        if (isset($data['itemcode']) && trim((string)$data['itemcode']) !== '') {
+            return [$data];
+        }
+        if (isset($data['item_code']) && trim((string)$data['item_code']) !== '') {
+            $data['itemcode'] = trim((string)$data['item_code']);
+
             return [$data];
         }
         $rows = [];
         foreach ($data as $row) {
-            if (!is_array($row)) {
-                continue;
+            if (is_array($row) && trim((string)($row['itemcode'] ?? $row['item_code'] ?? '')) !== '') {
+                if (empty($row['itemcode']) && !empty($row['item_code'])) {
+                    $row['itemcode'] = trim((string)$row['item_code']);
+                }
+                $rows[] = $row;
             }
-            $ric = trim((string)($row['itemcode'] ?? $row['item_code'] ?? ''));
-            if ($ric === '') {
-                continue;
-            }
-            $row['itemcode'] = $ric;
-            $rows[] = $row;
         }
 
         return $rows;
@@ -318,12 +314,12 @@ class product
                 }
                 $product['itemcode'] = $itemcode;
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ?, sku = ? WHERE item_code = ? AND COALESCE(color,'') = ? AND COALESCE(size,'') = ?");
+                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
                     $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
-                    $color = trim((string)($product['color'] ?? ''));
-                    $size = trim((string)($product['size'] ?? ''));
+                    $color = isset($product['color']) ? (string)$product['color'] : '';
+                    $size = isset($product['size']) ? (string)$product['size'] : '';
                     // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
                     // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                     // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
@@ -353,9 +349,11 @@ class product
                     $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                     $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
                     $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
+                    $hsn = self::vendorApiHsn($product);
                     $updated_at = date('Y-m-d H:i:s');
+                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 6);
                     $stmt->bind_param(
-                        'sissiiiiiiiiisdddddddddsssss',
+                        $bt,
                         $asin,
                         $localStock,
                         $upc,
@@ -379,6 +377,7 @@ class product
                         $permanent_discount,
                         $discount_global,
                         $discount_india,
+                        $hsn,
                         $updated_at,
                         $sku,
                         $product['itemcode'],
@@ -397,12 +396,12 @@ class product
                 if (isset($product['variations'])) {
                     foreach ($product['variations'] as $variation) {
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
-                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ?, sku = ? WHERE item_code = ? AND COALESCE(color,'') = ? AND COALESCE(size,'') = ?");
+                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                         if ($stmt) {
                             // $title = isset($product['title']) ? $product['title'] : '';
                             $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
-                            $color = trim((string)($variation['color'] ?? ''));
-                            $size = trim((string)($variation['size'] ?? ''));
+                            $color = isset($variation['color']) ? (string)$variation['color'] : '';
+                            $size = isset($variation['size']) ? (string)$variation['size'] : '';
                             // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
                             // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                             // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
@@ -432,9 +431,11 @@ class product
                             $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                             $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
                             $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
+                            $hsn = self::vendorApiHsn($product);
                             $updated_at = date('Y-m-d H:i:s');
+                            $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 6);
                             $stmt->bind_param(
-                                'sissiiiiiiiiisdddddddddsssss',
+                                $bt,
                                 $asin,
                                 $localStock,
                                 $upc,
@@ -458,6 +459,7 @@ class product
                                 $permanent_discount,
                                 $discount_global,
                                 $discount_india,
+                                $hsn,
                                 $updated_at,
                                 $sku,
                                 $product['itemcode'],
