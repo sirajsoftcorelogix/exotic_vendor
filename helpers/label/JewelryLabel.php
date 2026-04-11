@@ -173,7 +173,7 @@ final class JewelryLabel
             . 'color:#000;background:#fff;border:0.12mm solid #000;'
             . '">'
             . '<div class="jl-zone jl-zone--content" style="box-sizing:border-box;flex:0 0 47%;width:47%;max-width:47%;'
-            . 'display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:0.35mm;'
+            . 'display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:0.5mm;'
             . 'padding-top:' . $padE . 'mm;padding-bottom:' . $padE . 'mm;padding-left:' . $padE . 'mm;padding-right:0.5mm;">'
             . $innerRow
             . '</div>'
