@@ -480,21 +480,188 @@ class product
         }
         return ['success' => true, 'updated_count' => $updatedCount, 'message' => 'Products updated successfully.'];
     }
+    /**
+     * Resolve a catalog row by item code and variant dimensions. Supports:
+     * (1) item code only — empty size & color; (2) color-only; (3) size-only; (4) size + color.
+     */
     public function findByItemCodeSizeColor($code, $size, $color)
     {
         $code = trim((string)$code);
         $size = trim((string)$size);
         $color = trim((string)$color);
-        // Match NULL/whitespace-only DB values with empty upload cells (size = '' does not match NULL in SQL).
+        if ($code === '') {
+            return null;
+        }
+
+        $hit = $this->findByItemCodeSizeColorExactSql($code, $size, $color);
+        if ($hit) {
+            return $hit;
+        }
+
+        $rows = $this->fetchAllProductsByItemCode($code);
+        if ($rows === []) {
+            return null;
+        }
+
+        $hit = $this->findInRowsByNormalizedSizeColor($rows, $size, $color);
+        if ($hit) {
+            return $hit;
+        }
+
+        return $this->disambiguateVariantRowsByUpload($rows, $size, $color);
+    }
+
+    /**
+     * Match NULL/whitespace-only DB values with empty upload cells (size = '' does not match NULL in SQL).
+     */
+    private function findByItemCodeSizeColorExactSql(string $code, string $size, string $color): ?array
+    {
         $sql = "SELECT * FROM vp_products WHERE item_code = ?
             AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
             AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
             LIMIT 1";
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
         $stmt->bind_param('sss', $code, $size, $color);
         $stmt->execute();
         $res = $stmt->get_result()->fetch_assoc();
-        return $res;
+        $stmt->close();
+
+        return $res ?: null;
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function fetchAllProductsByItemCode(string $code): array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM vp_products WHERE item_code = ?');
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $code);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    private function isVariantDimensionBlank($value): bool
+    {
+        return $this->normalizeVariantDimensionForMatch($value) === '';
+    }
+
+    /**
+     * Collapses case and separators so "natural-brown" matches "natural brown".
+     */
+    private function normalizeVariantDimensionForMatch($value): string
+    {
+        $s = trim((string)$value);
+        if ($s === '') {
+            return '';
+        }
+        $s = strtolower($s);
+        $collapsed = preg_replace('/[\s\-_]+/u', '', $s);
+
+        return is_string($collapsed) ? $collapsed : $s;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $rows
+     */
+    private function findInRowsByNormalizedSizeColor(array $rows, string $size, string $color): ?array
+    {
+        $ns = $this->normalizeVariantDimensionForMatch($size);
+        $nc = $this->normalizeVariantDimensionForMatch($color);
+        $hits = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $rs = $this->normalizeVariantDimensionForMatch($row['size'] ?? '');
+            $rc = $this->normalizeVariantDimensionForMatch($row['color'] ?? '');
+            if ($rs === $ns && $rc === $nc) {
+                $hits[] = $row;
+            }
+        }
+
+        return count($hits) === 1 ? $hits[0] : null;
+    }
+
+    /**
+     * When exact + full normalized match fail, apply rules per upload shape (single row or unique partial match).
+     *
+     * @param list<array<string,mixed>> $rows
+     */
+    private function disambiguateVariantRowsByUpload(array $rows, string $size, string $color): ?array
+    {
+        $sizeBlank = ($size === '');
+        $colorBlank = ($color === '');
+
+        // (1) Item code only — no size, no color in file
+        if ($sizeBlank && $colorBlank) {
+            if (count($rows) === 1) {
+                return $rows[0];
+            }
+            $bothBlank = [];
+            foreach ($rows as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+                if ($this->isVariantDimensionBlank($r['size'] ?? '') && $this->isVariantDimensionBlank($r['color'] ?? '')) {
+                    $bothBlank[] = $r;
+                }
+            }
+
+            return count($bothBlank) === 1 ? $bothBlank[0] : null;
+        }
+
+        // (2) Color-only variant in file — size empty, color set
+        if ($sizeBlank && !$colorBlank) {
+            $nc = $this->normalizeVariantDimensionForMatch($color);
+            $cands = [];
+            foreach ($rows as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+                if (!$this->isVariantDimensionBlank($r['size'] ?? '')) {
+                    continue;
+                }
+                if ($this->normalizeVariantDimensionForMatch($r['color'] ?? '') !== $nc) {
+                    continue;
+                }
+                $cands[] = $r;
+            }
+
+            return count($cands) === 1 ? $cands[0] : null;
+        }
+
+        // (3) Size-only variant in file — size set, color empty
+        if (!$sizeBlank && $colorBlank) {
+            $ns = $this->normalizeVariantDimensionForMatch($size);
+            $cands = [];
+            foreach ($rows as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+                if ($this->normalizeVariantDimensionForMatch($r['size'] ?? '') !== $ns) {
+                    continue;
+                }
+                if (!$this->isVariantDimensionBlank($r['color'] ?? '')) {
+                    continue;
+                }
+                $cands[] = $r;
+            }
+
+            return count($cands) === 1 ? $cands[0] : null;
+        }
+
+        // (4) Size + color in file: full normalized match is handled above; no further disambiguation
+        return null;
     }
     public function findBySku($sku)
     {

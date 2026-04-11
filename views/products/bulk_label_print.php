@@ -78,7 +78,7 @@
     <div class="bg-white border rounded-xl shadow-sm p-4 sm:p-5 h-fit xl:sticky xl:top-4 space-y-0">
       <div>
         <h3 class="text-base font-semibold text-gray-800">Import from Excel / CSV</h3>
-        <p class="text-xs text-gray-500 mt-1 leading-relaxed">Item Code, Size, Color; optional Qty. First row = headers.</p>
+        <p class="text-xs text-gray-500 mt-1 leading-relaxed">Columns: Item Code (required), Size and/or Color as applicable — item code only, color-only, size-only, or both. Optional Qty. First row = headers.</p>
         <div class="mt-3">
           <div class="flex min-w-0 items-center gap-2">
             <label for="bulkLabelImportFile" class="sr-only">Choose file</label>
