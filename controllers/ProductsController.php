@@ -912,6 +912,99 @@ class ProductsController {
         exit;
     }
 
+    /** POST multipart: file (.csv/.xlsx/.xls) with Item Code, Size, Color; optional Qty per row. Returns JSON products for the queue. */
+    public function bulkLabelPrintUpload() {
+        is_login();
+        header('Content-Type: application/json');
+        global $productModel;
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+        if (empty($_FILES['label_import_file']['tmp_name']) || !is_uploaded_file($_FILES['label_import_file']['tmp_name'])) {
+            echo json_encode(['success' => false, 'message' => 'Please choose a CSV or Excel file with Item Code, Size, and Color columns.']);
+            exit;
+        }
+
+        $parsed = $this->parseBulkLabelVariantUpload($_FILES['label_import_file']);
+        if (!empty($parsed['error'])) {
+            echo json_encode(['success' => false, 'message' => $parsed['error']]);
+            exit;
+        }
+
+        $rows = $parsed['rows'] ?? [];
+        if ($rows === []) {
+            echo json_encode(['success' => false, 'message' => 'No data rows found in the file.']);
+            exit;
+        }
+
+        $productsOut = [];
+        $notFound = [];
+        $lineNo = 1;
+        foreach ($rows as $r) {
+            $lineNo++;
+            $ic = (string)($r['item_code'] ?? '');
+            $size = (string)($r['size'] ?? '');
+            $color = (string)($r['color'] ?? '');
+            $repeat = isset($r['quantity']) ? max(1, min(99, (int)$r['quantity'])) : 1;
+
+            $p = $productModel->findByItemCodeSizeColor($ic, $size, $color);
+            if (!$p || empty($p['id'])) {
+                $notFound[] = [
+                    'line' => $lineNo,
+                    'item_code' => $ic,
+                    'size' => $size,
+                    'color' => $color,
+                ];
+                continue;
+            }
+
+            $rowForClient = [
+                'id' => (int)$p['id'],
+                'sku' => (string)($p['sku'] ?? ''),
+                'item_code' => (string)($p['item_code'] ?? ''),
+                'title' => (string)($p['title'] ?? ''),
+                'size' => (string)($p['size'] ?? ''),
+                'color' => (string)($p['color'] ?? ''),
+                'image' => (string)($p['image'] ?? ''),
+                'local_stock' => $p['local_stock'] ?? null,
+                'location' => (string)($p['location'] ?? ''),
+            ];
+            for ($i = 0; $i < $repeat; $i++) {
+                $productsOut[] = $rowForClient;
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'added_count' => count($productsOut),
+            'products' => $productsOut,
+            'not_found' => $notFound,
+            'message' => count($productsOut) > 0
+                ? ('Resolved ' . count($productsOut) . ' line(s) from file.')
+                : 'No matching products for the rows in this file.',
+        ]);
+        exit;
+    }
+
+    public function bulkLabelPrintSampleCsv() {
+        is_login();
+        $filename = 'bulk_label_print_sample.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            exit;
+        }
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, ['Item Code', 'Size', 'Color', 'Qty']);
+        fputcsv($out, ['GAN035', 'xl', 'orange', '1']);
+        fputcsv($out, ['SAMPLE004', 'M', 'red', '2']);
+        fclose($out);
+        exit;
+    }
+
     public function bulkImportSampleCsv() {
         is_login();
         $filename = 'bulk_product_import_sample.csv';
@@ -4062,7 +4155,7 @@ class ProductsController {
             if ($n === '') {
                 continue;
             }
-            if (in_array($n, ['itemcode', 'item code'], true)) {
+            if (in_array($n, ['itemcode', 'item code', 'product code', 'productcode'], true)) {
                 $map['item_code'] = $idx;
             } elseif ($n === 'size') {
                 $map['size'] = $idx;
@@ -4110,6 +4203,141 @@ class ProductsController {
             'color' => $map['color'] !== null ? $get($map['color']) : '',
             'quantity' => $qty,
         ];
+    }
+
+    /**
+     * @param array<int,mixed> $cells
+     * @param array{item_code: ?int, size: ?int, color: ?int, quantity: ?int} $map
+     * @return ?array{item_code: string, size: string, color: string, quantity: int}
+     */
+    private function bulkLabelVariantRowFromCells(array $cells, array $map): ?array
+    {
+        $get = static function ($i) use ($cells) {
+            if ($i === null) {
+                return '';
+            }
+
+            return isset($cells[$i]) ? trim((string)$cells[$i]) : '';
+        };
+
+        $ic = $get($map['item_code']);
+        if ($ic === '') {
+            return null;
+        }
+
+        $qty = 1;
+        if ($map['quantity'] !== null) {
+            $qtyRaw = $get($map['quantity']);
+            $qty = (int)preg_replace('/[^\d-]/', '', (string)$qtyRaw);
+            if ($qty <= 0) {
+                return null;
+            }
+        }
+
+        return [
+            'item_code' => $ic,
+            'size' => $map['size'] !== null ? $get($map['size']) : '',
+            'color' => $map['color'] !== null ? $get($map['color']) : '',
+            'quantity' => min(99, $qty),
+        ];
+    }
+
+    /**
+     * @param array $file $_FILES entry
+     * @return array{rows?: list<array<string,mixed>>, error?: string}
+     */
+    private function parseBulkLabelVariantUpload(array $file): array
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return ['error' => 'File upload failed'];
+        }
+
+        $tmp = $file['tmp_name'];
+        $name = (string)($file['name'] ?? '');
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+        if ($ext === 'csv') {
+            $raw = @file_get_contents($tmp);
+            if ($raw === false || $raw === '') {
+                return ['error' => 'Could not read CSV file'];
+            }
+            if (strncmp($raw, "\xEF\xBB\xBF", 3) === 0) {
+                $raw = substr($raw, 3);
+            }
+            $lines = preg_split('/\R/u', trim($raw)) ?: [];
+            if ($lines === []) {
+                return ['error' => 'CSV file is empty'];
+            }
+            $headerLine = array_shift($lines);
+            $headers = str_getcsv($headerLine);
+            $map = $this->mapBulkSheetHeaders($headers);
+            if ($map['item_code'] === null) {
+                return ['error' => 'First row must include an Item Code column (ItemCode or Item Code). Size, Color, and Qty are optional.'];
+            }
+
+            $rows = [];
+            foreach ($lines as $line) {
+                if (trim($line) === '') {
+                    continue;
+                }
+                $cells = str_getcsv($line);
+                $row = $this->bulkLabelVariantRowFromCells($cells, $map);
+                if ($row !== null) {
+                    $rows[] = $row;
+                }
+            }
+
+            return ['rows' => $rows];
+        }
+
+        if (!in_array($ext, ['xlsx', 'xls'], true)) {
+            return ['error' => 'Unsupported file type. Use CSV, XLSX, or XLS'];
+        }
+
+        $autoload = dirname(__DIR__) . '/vendor/autoload.php';
+        if (!is_file($autoload)) {
+            return ['error' => 'Excel support is not installed (run composer install)'];
+        }
+        require_once $autoload;
+
+        try {
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($tmp);
+            $reader->setReadDataOnly(true);
+            $spreadsheet = $reader->load($tmp);
+            $sheet = $spreadsheet->getActiveSheet();
+            $highestRow = (int)$sheet->getHighestDataRow();
+            $highestCol = $sheet->getHighestDataColumn();
+            $colCount = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
+            if ($highestRow < 2) {
+                return ['error' => 'Spreadsheet has no data rows'];
+            }
+            $headerCells = [];
+            for ($ci = 1; $ci <= $colCount; $ci++) {
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
+                $headerCells[] = (string)$sheet->getCell($colLetter . '1')->getValue();
+            }
+            $map = $this->mapBulkSheetHeaders($headerCells);
+            if ($map['item_code'] === null) {
+                return ['error' => 'First row must include an Item Code column (ItemCode or Item Code). Size, Color, and Qty are optional.'];
+            }
+
+            $rows = [];
+            for ($r = 2; $r <= $highestRow; $r++) {
+                $cells = [];
+                for ($ci = 1; $ci <= $colCount; $ci++) {
+                    $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
+                    $cells[$ci - 1] = $sheet->getCell($colLetter . $r)->getValue();
+                }
+                $row = $this->bulkLabelVariantRowFromCells($cells, $map);
+                if ($row !== null) {
+                    $rows[] = $row;
+                }
+            }
+
+            return ['rows' => $rows];
+        } catch (Throwable $e) {
+            return ['error' => 'Could not read spreadsheet: ' . $e->getMessage()];
+        }
     }
     
     private function handleEwayBillFileUpload($existingFile = '')
