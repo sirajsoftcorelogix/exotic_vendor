@@ -152,7 +152,9 @@ final class JewelryLabel
         $rowGapE = $e((string)$textRowGapMm);
 
         $padE = $e((string)$pad);
-        $padTopContent = $e((string)($pad + 0.3));
+        // Top inset includes base padding + one line-height (font_size_mm × line_height) as extra headroom
+        $lineHeightMm = $fs * $lh;
+        $padTopContent = $e((string)($pad + 0.3 + $lineHeightMm));
 
         $skuBlock = ''
             . '<div class="jl-sku" style="width:100%;max-width:100%;box-sizing:border-box;text-align:left;'
