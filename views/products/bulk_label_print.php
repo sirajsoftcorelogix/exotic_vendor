@@ -79,19 +79,17 @@
       <div>
         <h3 class="text-base font-semibold text-gray-800">Import from Excel / CSV</h3>
         <p class="text-xs text-gray-500 mt-1 leading-relaxed">Item Code, Size, Color; optional Qty. First row = headers.</p>
-        <div class="mt-3 flex flex-wrap items-end gap-3">
-          <div class="flex-1 min-w-[12rem]">
+        <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2">
+          <div class="flex min-w-0 flex-1 items-center gap-2">
             <label for="bulkLabelImportFile" class="sr-only">Choose file</label>
             <input id="bulkLabelImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              class="block w-full text-xs text-gray-600 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-amber-50 file:text-amber-900 hover:file:bg-amber-100" />
-          </div>
-          <div class="flex flex-wrap items-center gap-3 shrink-0">
-            <a href="?page=products&action=bulk_label_print_sample_csv" class="text-sm text-amber-700 hover:text-amber-900 font-medium underline underline-offset-2">Sample CSV</a>
+              class="min-w-0 flex-1 text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-amber-50 file:text-amber-900 hover:file:bg-amber-100" />
             <button id="bulkLabelImportBtn" type="button"
-              class="px-5 py-2.5 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold min-w-[6.5rem]">
+              class="shrink-0 px-2.5 py-1.5 rounded-md bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold leading-tight">
               Upload
             </button>
           </div>
+          <a href="?page=products&action=bulk_label_print_sample_csv" class="shrink-0 text-xs text-amber-700 hover:text-amber-900 font-medium underline underline-offset-2">Sample CSV</a>
         </div>
         <p id="bulkLabelImportMsg" class="text-xs mt-2 hidden whitespace-pre-wrap" role="status"></p>
       </div>
