@@ -75,61 +75,69 @@
       </div>
     </div>
 
-    <div class="bg-white border rounded-xl shadow-sm p-4 h-fit xl:sticky xl:top-4">
-      <h3 class="text-base font-semibold text-gray-800">Selection Queue</h3>
-      <p class="text-xs text-gray-500 mt-1">Set label quantity per product before print.</p>
-
-      <div class="mt-3 grid grid-cols-2 gap-2">
-        <button id="bulkLabelSetQtyAll" type="button"
-          class="w-full py-2 px-2 sm:px-3 rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
-          Set qty for all
-        </button>
-        <button id="bulkLabelClearAll" type="button"
-          class="w-full py-2 px-2 sm:px-3 rounded-lg text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2">
-          Clear all
-        </button>
-      </div>
-
-      <div class="mt-3 pt-3 border-t border-gray-100">
-        <label for="bulkLabelImportFile" class="block text-sm font-medium text-gray-700 mb-1">Import from Excel / CSV</label>
-        <p class="text-xs text-gray-500 mb-2 leading-relaxed">Columns: <strong>Item Code</strong> (or Product Code), <strong>Size</strong>, <strong>Color</strong>. Optional <strong>Qty</strong> repeats that variant in the queue. First row is treated as headers.</p>
-        <div class="flex flex-wrap items-center gap-2">
-          <input id="bulkLabelImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            class="block w-full min-w-0 text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-amber-50 file:text-amber-800 hover:file:bg-amber-100" />
-          <button id="bulkLabelImportBtn" type="button"
-            class="shrink-0 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-xs font-semibold">
-            Add file rows to queue
-          </button>
-          <a href="?page=products&action=bulk_label_print_sample_csv" class="text-xs text-amber-700 hover:text-amber-900 underline underline-offset-2">Sample CSV</a>
+    <div class="bg-white border rounded-xl shadow-sm p-4 sm:p-5 h-fit xl:sticky xl:top-4 space-y-0">
+      <div>
+        <h3 class="text-base font-semibold text-gray-800">Import from Excel / CSV</h3>
+        <p class="text-xs text-gray-500 mt-1 leading-relaxed">Item Code, Size, Color; optional Qty. First row = headers.</p>
+        <div class="mt-3 flex flex-wrap items-end gap-3">
+          <div class="flex-1 min-w-[12rem]">
+            <label for="bulkLabelImportFile" class="sr-only">Choose file</label>
+            <input id="bulkLabelImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              class="block w-full text-xs text-gray-600 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-amber-50 file:text-amber-900 hover:file:bg-amber-100" />
+          </div>
+          <div class="flex flex-wrap items-center gap-3 shrink-0">
+            <a href="?page=products&action=bulk_label_print_sample_csv" class="text-sm text-amber-700 hover:text-amber-900 font-medium underline underline-offset-2">Sample CSV</a>
+            <button id="bulkLabelImportBtn" type="button"
+              class="px-5 py-2.5 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold min-w-[6.5rem]">
+              Upload
+            </button>
+          </div>
         </div>
         <p id="bulkLabelImportMsg" class="text-xs mt-2 hidden whitespace-pre-wrap" role="status"></p>
       </div>
 
-      <div class="mt-3 border rounded-lg max-h-[280px] overflow-auto">
-        <div id="bulkLabelQueueEmpty" class="p-4 text-sm text-gray-400 text-center">No products selected.</div>
-        <div id="bulkLabelQueueList" class="divide-y hidden"></div>
+      <div class="my-5 border-t border-gray-200"></div>
+
+      <div>
+        <h3 class="text-base font-semibold text-gray-800">Selection Queue</h3>
+        <p class="text-xs text-gray-500 mt-1">Set label quantity per product before print.</p>
+        <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <button id="bulkLabelSetQtyAll" type="button"
+            class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 bg-transparent p-0 border-0 cursor-pointer text-left">
+            Set qty for all
+          </button>
+          <button id="bulkLabelClearAll" type="button"
+            class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 bg-transparent p-0 border-0 cursor-pointer text-right">
+            Clear all
+          </button>
+        </div>
       </div>
 
-      <div class="mt-4 space-y-3">
+      <div class="mt-3 border border-gray-200 rounded-lg max-h-[280px] min-h-[120px] overflow-auto bg-white">
+        <div id="bulkLabelQueueEmpty" class="p-6 text-sm text-gray-400 text-center">No products selected.</div>
+        <div id="bulkLabelQueueList" class="divide-y divide-gray-100 hidden"></div>
+      </div>
+
+      <div class="mt-5 space-y-4">
         <div>
           <label for="bulkLabelTemplate" class="block text-sm font-medium text-gray-700 mb-1">Label template</label>
-          <select id="bulkLabelTemplate" class="w-full border rounded-lg px-3 py-2 text-sm">
+          <select id="bulkLabelTemplate" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white">
             <option value="jewelry">Jewelry — 100 × 12.9 mm</option>
             <option value="textile">Textile — 64 × 34 mm</option>
             <option value="mg_store">MG Road — 75 × 50 mm</option>
           </select>
         </div>
 
-        <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm">
-          <div class="flex justify-between"><span>Selected products</span><strong id="bulkLabelCountProducts">0</strong></div>
-          <div class="flex justify-between"><span>Total labels</span><strong id="bulkLabelCountLabels">0</strong></div>
+        <div class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-gray-800 space-y-2">
+          <div class="flex justify-between items-center"><span>Selected products</span><strong id="bulkLabelCountProducts" class="tabular-nums">0</strong></div>
+          <div class="flex justify-between items-center"><span>Total labels</span><strong id="bulkLabelCountLabels" class="tabular-nums">0</strong></div>
         </div>
 
         <button id="bulkLabelGenerateBtn" type="button"
-          class="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold">
+          class="w-full px-4 py-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-sm">
           Print labels
         </button>
-        <p class="text-xs text-gray-500">Uses existing label templates to generate a bulk print job.</p>
+        <p class="text-xs text-gray-500 text-center sm:text-left">Uses existing label templates to generate a bulk print job.</p>
       </div>
     </div>
   </div>
