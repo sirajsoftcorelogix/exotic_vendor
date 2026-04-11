@@ -482,7 +482,14 @@ class product
     }
     public function findByItemCodeSizeColor($code, $size, $color)
     {
-        $sql = "SELECT * FROM vp_products WHERE item_code = ? AND size = ? AND color = ? LIMIT 1";
+        $code = trim((string)$code);
+        $size = trim((string)$size);
+        $color = trim((string)$color);
+        // Match NULL/whitespace-only DB values with empty upload cells (size = '' does not match NULL in SQL).
+        $sql = "SELECT * FROM vp_products WHERE item_code = ?
+            AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
+            AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
+            LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('sss', $code, $size, $color);
         $stmt->execute();
