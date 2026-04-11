@@ -6,8 +6,8 @@ use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
 
 /**
- * 100 × 12.9 mm jewelry label: Col1 QR (SKU), Col2 Color, Col3 Size, Col4 MRP + SKU.
- * Use from controllers, models (after loading data), or CLI — no view coupling.
+ * 100 × 12.9 mm jewelry label: content in the left 50% of the sticker (QR, Color, Size, MRP + SKU);
+ * right 50% is intentionally blank for peel / alignment. Use from controllers, models, or CLI.
  */
 final class JewelryLabel
 {
@@ -148,14 +148,9 @@ final class JewelryLabel
         $mrpLine = $mrp !== '' ? ('MRP: ₹' . $e($mrp)) : 'MRP: —';
         $skuLine = $sku !== '' ? ('SKU: ' . $e($sku)) : 'SKU: —';
 
-        return '<div class="jl-sheet" style="'
-            . 'box-sizing:border-box;width:' . $e((string)$w) . 'mm;height:' . $e((string)$h) . 'mm;'
-            . 'padding:' . $e((string)$pad) . 'mm;display:flex;flex-direction:row;align-items:center;'
-            . 'justify-content:space-between;gap:0.8mm;font-family:' . $e($ff) . ';'
-            . 'font-size:' . $e((string)$fs) . 'mm;line-height:' . $e((string)$lh) . ';color:#000;background:#fff;'
-            . 'border:0.12mm solid #000;'
-            . '">'
-            . '<div class="jl-col jl-col--qr" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;height:100%;">'
+        $padE = $e((string)$pad);
+        $innerRow = ''
+            . '<div class="jl-col jl-col--qr" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;align-self:center;">'
             . '<img src="' . $e($qrUri) . '" alt="" style="width:' . $e((string)$qrMm) . 'mm;height:' . $e((string)$qrMm) . 'mm;object-fit:contain;display:block;" />'
             . '</div>'
             . '<div class="jl-col jl-col--color" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:left;">'
@@ -169,7 +164,21 @@ final class JewelryLabel
             . '<div class="jl-col jl-col--mrp" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:left;">'
             . '<span style="font-weight:700;white-space:nowrap;">' . $mrpLine . '</span>'
             . '<span style="font-weight:600;white-space:nowrap;">' . $skuLine . '</span>'
+            . '</div>';
+
+        return '<div class="jl-sheet" style="'
+            . 'box-sizing:border-box;width:' . $e((string)$w) . 'mm;height:' . $e((string)$h) . 'mm;'
+            . 'display:flex;flex-direction:row;align-items:stretch;'
+            . 'font-family:' . $e($ff) . ';font-size:' . $e((string)$fs) . 'mm;line-height:' . $e((string)$lh) . ';'
+            . 'color:#000;background:#fff;border:0.12mm solid #000;'
+            . '">'
+            . '<div class="jl-zone jl-zone--content" style="box-sizing:border-box;flex:0 0 50%;width:50%;max-width:50%;'
+            . 'display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:0.8mm;'
+            . 'padding-top:' . $padE . 'mm;padding-bottom:' . $padE . 'mm;padding-left:' . $padE . 'mm;padding-right:0.5mm;">'
+            . $innerRow
             . '</div>'
+            . '<div class="jl-zone jl-zone--blank" style="box-sizing:border-box;flex:0 0 50%;width:50%;max-width:50%;'
+            . 'background:#fff;padding-top:' . $padE . 'mm;padding-bottom:' . $padE . 'mm;padding-right:' . $padE . 'mm;"></div>'
             . '</div>';
     }
 
