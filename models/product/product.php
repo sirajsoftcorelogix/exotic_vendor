@@ -30,6 +30,28 @@ class product
     }
 
     /**
+     * vp_products may still use utf8mb3 while the connection uses utf8mb4; MySQL 8+ can reject
+     * bound parameters when an implicit collation conversion is not allowed.
+     */
+    private function executeVpProductsStmt(\mysqli_stmt $stmt): bool
+    {
+        $prev = mysqli_character_set_name($this->db);
+        $needCompat = $prev !== false && stripos((string) $prev, 'utf8mb4') !== false;
+        if ($needCompat) {
+            if (!$this->db->set_charset('utf8mb3')) {
+                $this->db->set_charset('utf8');
+            }
+        }
+        try {
+            return $stmt->execute();
+        } finally {
+            if ($needCompat && $prev !== false && $prev !== '') {
+                $this->db->set_charset($prev);
+            }
+        }
+    }
+
+    /**
      * USD / global list price from vendor product/fetch API payload.
      * Prefer explicit USD keys, then price, then itemprice.
      */
@@ -385,7 +407,7 @@ class product
                         $size
                     );
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
-                    if ($stmt->execute()) {
+                    if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
                     }
                     if ($stmt->error) {
@@ -466,7 +488,7 @@ class product
                                 $color,
                                 $size
                             );
-                            if ($stmt->execute()) {
+                            if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
                             }
                             if ($stmt->error) {
@@ -807,7 +829,7 @@ class product
             $data['created_at'],
             $data['updated_at']
         );
-        if ($stmt->execute()) {
+        if ($this->executeVpProductsStmt($stmt)) {
             return $this->db->insert_id;
         }
         return false;
@@ -862,7 +884,7 @@ class product
             $data['updated_at'],
             $id
         );
-        return $stmt->execute();
+        return $this->executeVpProductsStmt($stmt);
     }
     public function getProductByItemCode($item_code)
     {
