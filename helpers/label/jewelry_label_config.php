@@ -19,5 +19,8 @@ return [
     /** Body text (Color / Size / MRP / SKU labels and values) */
     'font_size_mm' => 1.85,
     'font_family' => 'Arial, Helvetica, sans-serif',
-    'line_height' => 1.1,
+    /** Line box multiplier (label/value lines and wrapped SKU). */
+    'line_height' => 1.28,
+    /** Vertical gap between text block rows (e.g. Color/Size/MRP row vs SKU row), mm */
+    'text_block_row_gap_mm' => 0.55,
 ];
