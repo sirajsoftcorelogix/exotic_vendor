@@ -6,8 +6,8 @@ use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
 
 /**
- * 100 × 12.9 mm jewelry label: content in the left 50% of the sticker (QR, Color, Size, MRP + SKU);
- * right 50% is intentionally blank for peel / alignment. Use from controllers, models, or CLI.
+ * 100 × 12.9 mm jewelry label: content in the left 47% of the sticker (QR, Color, Size, MRP + SKU);
+ * the remainder is blank for margin / peel / alignment. Use from controllers, models, or CLI.
  */
 final class JewelryLabel
 {
@@ -89,7 +89,7 @@ final class JewelryLabel
         self::loadVendor();
         $cfg = self::config($config);
         $payload = self::qrPayloadFromData($data);
-        $size = max(16, (int)($cfg['qr_builder_size_px'] ?? 32));
+        $size = max(16, (int)($cfg['qr_builder_size_px'] ?? 72));
         $margin = max(0, (int)($cfg['qr_margin'] ?? 0));
 
         $qrCode = new QrCode(
@@ -113,7 +113,7 @@ final class JewelryLabel
         $h = (float)($cfg['label_height_mm'] ?? 12.9);
         $pad = (float)($cfg['padding_mm'] ?? 0.6);
         $inner = max(1.0, $h - 2 * $pad);
-        $want = (float)($cfg['qr_max_side_mm'] ?? 32.0);
+        $want = (float)($cfg['qr_max_side_mm'] ?? 10.0);
         return min($want, $inner);
     }
 
@@ -129,9 +129,9 @@ final class JewelryLabel
         $w = (float)($cfg['label_width_mm'] ?? 100);
         $h = (float)($cfg['label_height_mm'] ?? 12.9);
         $pad = (float)($cfg['padding_mm'] ?? 0.6);
-        $fs = (float)($cfg['font_size_mm'] ?? 2.4);
+        $fs = (float)($cfg['font_size_mm'] ?? 1.85);
         $ff = (string)($cfg['font_family'] ?? 'Arial, Helvetica, sans-serif');
-        $lh = (float)($cfg['line_height'] ?? 1.15);
+        $lh = (float)($cfg['line_height'] ?? 1.1);
 
         $qrMm = self::qrDisplaySideMm($cfg);
         $qrUri = self::qrDataUri($data, $cfg);
@@ -172,12 +172,12 @@ final class JewelryLabel
             . 'font-family:' . $e($ff) . ';font-size:' . $e((string)$fs) . 'mm;line-height:' . $e((string)$lh) . ';'
             . 'color:#000;background:#fff;border:0.12mm solid #000;'
             . '">'
-            . '<div class="jl-zone jl-zone--content" style="box-sizing:border-box;flex:0 0 50%;width:50%;max-width:50%;'
+            . '<div class="jl-zone jl-zone--content" style="box-sizing:border-box;flex:0 0 47%;width:47%;max-width:47%;'
             . 'display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:0.8mm;'
             . 'padding-top:' . $padE . 'mm;padding-bottom:' . $padE . 'mm;padding-left:' . $padE . 'mm;padding-right:0.5mm;">'
             . $innerRow
             . '</div>'
-            . '<div class="jl-zone jl-zone--blank" style="box-sizing:border-box;flex:0 0 50%;width:50%;max-width:50%;'
+            . '<div class="jl-zone jl-zone--blank" style="box-sizing:border-box;flex:0 0 53%;width:53%;max-width:53%;'
             . 'background:#fff;padding-top:' . $padE . 'mm;padding-bottom:' . $padE . 'mm;padding-right:' . $padE . 'mm;"></div>'
             . '</div>';
     }
