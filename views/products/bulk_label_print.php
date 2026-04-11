@@ -90,6 +90,21 @@
         </button>
       </div>
 
+      <div class="mt-3 pt-3 border-t border-gray-100">
+        <label for="bulkLabelImportFile" class="block text-sm font-medium text-gray-700 mb-1">Import from Excel / CSV</label>
+        <p class="text-xs text-gray-500 mb-2 leading-relaxed">Columns: <strong>Item Code</strong> (or Product Code), <strong>Size</strong>, <strong>Color</strong>. Optional <strong>Qty</strong> repeats that variant in the queue. First row is treated as headers.</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <input id="bulkLabelImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            class="block w-full min-w-0 text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-amber-50 file:text-amber-800 hover:file:bg-amber-100" />
+          <button id="bulkLabelImportBtn" type="button"
+            class="shrink-0 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-xs font-semibold">
+            Add file rows to queue
+          </button>
+          <a href="?page=products&action=bulk_label_print_sample_csv" class="text-xs text-amber-700 hover:text-amber-900 underline underline-offset-2">Sample CSV</a>
+        </div>
+        <p id="bulkLabelImportMsg" class="text-xs mt-2 hidden whitespace-pre-wrap" role="status"></p>
+      </div>
+
       <div class="mt-3 border rounded-lg max-h-[280px] overflow-auto">
         <div id="bulkLabelQueueEmpty" class="p-4 text-sm text-gray-400 text-center">No products selected.</div>
         <div id="bulkLabelQueueList" class="divide-y hidden"></div>
@@ -168,6 +183,9 @@
   var qtyAllInc = document.getElementById('bulkLabelQtyAllInc');
   var qtyAllDec = document.getElementById('bulkLabelQtyAllDec');
   var qtyAllHint = document.getElementById('bulkLabelQtyAllHint');
+  var importFile = document.getElementById('bulkLabelImportFile');
+  var importBtn = document.getElementById('bulkLabelImportBtn');
+  var importMsg = document.getElementById('bulkLabelImportMsg');
 
   var queueMap = {}; // key: product id -> {product, qty}
   var qtyAllLastApplied = 1;
@@ -464,6 +482,64 @@
   clearAllBtn.addEventListener('click', function () {
     queueMap = {};
     renderQueue();
+  });
+
+  function showImportMessage(text, isError) {
+    if (!importMsg) return;
+    importMsg.textContent = text || '';
+    importMsg.classList.remove('hidden', 'text-red-700', 'text-gray-600');
+    if (!text) {
+      importMsg.classList.add('hidden');
+      return;
+    }
+    importMsg.classList.add(isError ? 'text-red-700' : 'text-gray-600');
+  }
+
+  importBtn && importBtn.addEventListener('click', async function () {
+    if (!importFile || !importFile.files || !importFile.files.length) {
+      showImportMessage('Choose a CSV or Excel file first.', true);
+      return;
+    }
+    var fd = new FormData();
+    fd.append('label_import_file', importFile.files[0]);
+    var prev = importBtn.textContent;
+    importBtn.disabled = true;
+    importBtn.textContent = 'Importing…';
+    showImportMessage('');
+    try {
+      var res = await fetch('?page=products&action=bulk_label_print_upload', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+        body: fd
+      });
+      var data = await res.json();
+      if (!data || !data.success) {
+        showImportMessage((data && data.message) ? data.message : 'Import failed.', true);
+        return;
+      }
+      var list = data.products || [];
+      list.forEach(function (p) { addProductToQueue(p); });
+      var nf = data.not_found || [];
+      var parts = [];
+      if (list.length) {
+        parts.push('Added ' + list.length + ' queue line(s) from the file.');
+      } else {
+        parts.push('No rows matched products in your catalog.');
+      }
+      if (nf.length) {
+        var lines = nf.slice(0, 8).map(function (r) {
+          return 'Line ' + r.line + ': ' + (r.item_code || '—') + ' / ' + (r.size || '—') + ' / ' + (r.color || '—');
+        });
+        parts.push('Not found (' + nf.length + '): ' + lines.join('; ') + (nf.length > 8 ? ' …' : ''));
+      }
+      showImportMessage(parts.join('\n'), nf.length && !list.length);
+    } catch (e) {
+      showImportMessage('Could not upload file. Try again.', true);
+    } finally {
+      importBtn.disabled = false;
+      importBtn.textContent = prev;
+    }
   });
 
   function clampQtyAll(n) {
