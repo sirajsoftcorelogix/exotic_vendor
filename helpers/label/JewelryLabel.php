@@ -164,7 +164,7 @@ final class JewelryLabel
             . '</div>';
 
         $detailsRow = ''
-            . '<div class="jl-details" style="display:flex;flex-direction:row;align-items:flex-start;justify-content:flex-start;gap:0.10mm;width:100%;min-width:0;">'
+            . '<div class="jl-details" style="display:flex;flex-direction:row;align-items:flex-start;justify-content:flex-start;gap:1mm;width:100%;min-width:0;">'
             . '<div class="jl-col jl-col--color" style="flex:0 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;text-align:left;line-height:' . $lhE . ';">'
             . '<span style="font-weight:700;">Color</span>'
             . '<span style="font-weight:400;">' . ($color !== '' ? $e($color) : '—') . '</span>'
@@ -185,7 +185,7 @@ final class JewelryLabel
             . '</div>';
 
         $innerRow = ''
-            . '<div class="jl-inner-row" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:0.10mm;width:100%;min-width:0;box-sizing:border-box;">'
+            . '<div class="jl-inner-row" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:1.00mm;width:100%;min-width:0;box-sizing:border-box;">'
             . '<div class="jl-col jl-col--qr" style="flex:0 0 auto;min-width:0;display:flex;align-items:center;justify-content:center;">'
             . '<img src="' . $e($qrUri) . '" alt="" style="width:' . $e((string)$qrMm) . 'mm;height:' . $e((string)$qrMm) . 'mm;object-fit:contain;display:block;flex-shrink:0;" />'
             . '</div>'
