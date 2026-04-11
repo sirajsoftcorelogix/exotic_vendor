@@ -6,8 +6,8 @@ use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
 
 /**
- * 100 × 12.9 mm jewelry label: left 47% — QR, then SKU (full width of three text columns, wrapping),
- * then Color | Size | MRP. Remainder blank for margin / peel. Use from controllers, models, or CLI.
+ * 100 × 12.9 mm jewelry label: left 47% — QR; text block row Color | Size | MRP; then SKU (full width, wraps).
+ * Remainder blank for margin / peel. Use from controllers, models, or CLI.
  */
 final class JewelryLabel
 {
@@ -176,8 +176,8 @@ final class JewelryLabel
 
         $textCluster = ''
             . '<div class="jl-text-cluster" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:0.35mm;">'
-            . $skuBlock
             . $detailsRow
+            . $skuBlock
             . '</div>';
 
         $innerRow = ''
