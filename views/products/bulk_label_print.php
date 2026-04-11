@@ -79,8 +79,8 @@
       <div>
         <h3 class="text-base font-semibold text-gray-800">Import from Excel / CSV</h3>
         <p class="text-xs text-gray-500 mt-1 leading-relaxed">Item Code, Size, Color; optional Qty. First row = headers.</p>
-        <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2">
-          <div class="flex min-w-0 flex-1 items-center gap-2">
+        <div class="mt-3">
+          <div class="flex min-w-0 items-center gap-2">
             <label for="bulkLabelImportFile" class="sr-only">Choose file</label>
             <input id="bulkLabelImportFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               class="min-w-0 flex-1 text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-amber-50 file:text-amber-900 hover:file:bg-amber-100" />
@@ -89,7 +89,7 @@
               Upload
             </button>
           </div>
-          <a href="?page=products&action=bulk_label_print_sample_csv" class="shrink-0 text-xs text-amber-700 hover:text-amber-900 font-medium underline underline-offset-2">Sample CSV</a>
+          <a href="?page=products&action=bulk_label_print_sample_csv" class="mt-2 mb-3 inline-block text-xs text-amber-700 hover:text-amber-900 font-medium underline underline-offset-2">Sample CSV</a>
         </div>
         <p id="bulkLabelImportMsg" class="text-xs mt-2 hidden whitespace-pre-wrap" role="status"></p>
       </div>
