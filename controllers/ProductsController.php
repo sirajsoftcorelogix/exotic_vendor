@@ -610,7 +610,7 @@ class ProductsController {
             $item['material'] = isset($apiItem['material']) ? $apiItem['material'] : '';
             $item['cost_price'] = isset($apiItem['cp']) ? (float)$apiItem['cp'] : 0.0;           
             $item['gst'] = isset($apiItem['gst']) ? (float)$apiItem['gst'] : 0.0;
-            $item['hsn'] = isset($apiItem['hscode']) ? $apiItem['hscode'] : '';
+            $item['hsn'] = product::vendorApiMasterHsn($apiItem);
             $item['description'] = isset($apiItem['snippet_description']) ? $apiItem['snippet_description'] : '';
             $item['asin'] = isset($apiItem['asin']) ? $apiItem['asin'] : '';
             $item['upc'] = isset($apiItem['upc']) ? $apiItem['upc'] : '';
@@ -684,7 +684,7 @@ class ProductsController {
                     $variantItem['finalprice'] = isset($variant['finalprice']) ? floatval($variant['finalprice']) : $variantItem['itemprice'];
                     $variantItem['cost_price'] = isset($variant['cp']) ? (float)$variant['cp'] : 0.0;
                     $variantItem['gst'] = isset($variant['gst']) ? (float)$variant['gst'] : 0.0;
-                    $variantItem['hsn'] = isset($variant['hsn']) ? $variant['hsn'] : '';
+                    $variantItem['hsn'] = product::vendorApiVariantHsn($apiItem, $variant);
                     $variantItem['description'] = isset($variant['snippet_description']) ? $variant['snippet_description'] : '';
                     $variantItem['image'] = isset($variant['image']) ? 'https://cdn.exoticindia.com/images/products/original/'.$variant['image'] : $item['image'];
                     $variantItem['asin'] = isset($variant['asin']) ? $variant['asin'] : '';
