@@ -924,6 +924,12 @@ switch ($page) {
             case 'remove-custom-discount':
                 $controller->remove_custom_discount();
                 break;
+            case 'get-product-api':
+                $controller->getProductApi();
+                break;
+            case 'toggle_addon':
+                $controller->toggle_addon();
+                break;
             default:
                 $controller->index();
                 break;
