@@ -432,6 +432,9 @@ switch ($page) {
             case 'update_api_call':
                 $controller->updateApiCall();
                 break;
+            case 'vendor_product_fetch_payload':
+                $controller->vendorProductFetchPayload();
+                break;
             case 'import_api_call':
                 $controller->importApiCall();
                 break;
@@ -440,6 +443,15 @@ switch ($page) {
                 break;
             case 'bulk_label_print':
                 $controller->bulkLabelPrintUi();
+                break;
+            case 'bulk_label_print_generate':
+                $controller->bulkLabelPrintGenerate();
+                break;
+            case 'bulk_label_print_upload':
+                $controller->bulkLabelPrintUpload();
+                break;
+            case 'bulk_label_print_sample_csv':
+                $controller->bulkLabelPrintSampleCsv();
                 break;
             case 'bulk_import_sample_csv':
                 $controller->bulkImportSampleCsv();
@@ -461,6 +473,9 @@ switch ($page) {
                 break;
             case 'bulk_import_retry':
                 $controller->bulkImportRetry();
+                break;
+            case 'bulk_import_delete_failed_rows':
+                $controller->bulkImportDeleteFailedRows();
                 break;
             case 'bulk_import_delete':
                 $controller->bulkImportDelete();

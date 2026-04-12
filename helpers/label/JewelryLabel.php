@@ -6,8 +6,8 @@ use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
 
 /**
- * 100 × 12.9 mm jewelry label: Col1 QR (SKU), Col2 Color, Col3 Size, Col4 MRP + SKU.
- * Use from controllers, models (after loading data), or CLI — no view coupling.
+ * 100 × 12.9 mm jewelry label: left 47% — QR; text block row Color | Size | MRP; then SKU (full width, wraps).
+ * Remainder blank for margin / peel. Use from controllers, models, or CLI.
  */
 final class JewelryLabel
 {
@@ -57,7 +57,7 @@ final class JewelryLabel
     public static function fromProductRow(array $product): array
     {
         $sku = trim((string)($product['sku'] ?? ''));
-        $mrpRaw = $product['itemprice'] ?? $product['cost_price'] ?? '';
+        $mrpRaw = $product['price_india'] ?? '';
         $mrp = $mrpRaw;
         if ($mrpRaw !== '' && $mrpRaw !== null && is_numeric($mrpRaw)) {
             $mrp = number_format((float)$mrpRaw, 0, '.', ',');
@@ -89,7 +89,7 @@ final class JewelryLabel
         self::loadVendor();
         $cfg = self::config($config);
         $payload = self::qrPayloadFromData($data);
-        $size = max(16, (int)($cfg['qr_builder_size_px'] ?? 32));
+        $size = max(16, (int)($cfg['qr_builder_size_px'] ?? 72));
         $margin = max(0, (int)($cfg['qr_margin'] ?? 0));
 
         $qrCode = new QrCode(
@@ -113,7 +113,7 @@ final class JewelryLabel
         $h = (float)($cfg['label_height_mm'] ?? 12.9);
         $pad = (float)($cfg['padding_mm'] ?? 0.6);
         $inner = max(1.0, $h - 2 * $pad);
-        $want = (float)($cfg['qr_max_side_mm'] ?? 32.0);
+        $want = (float)($cfg['qr_max_side_mm'] ?? 10.0);
         return min($want, $inner);
     }
 
@@ -129,9 +129,10 @@ final class JewelryLabel
         $w = (float)($cfg['label_width_mm'] ?? 100);
         $h = (float)($cfg['label_height_mm'] ?? 12.9);
         $pad = (float)($cfg['padding_mm'] ?? 0.6);
-        $fs = (float)($cfg['font_size_mm'] ?? 2.4);
+        $fs = (float)($cfg['font_size_mm'] ?? 1.85);
         $ff = (string)($cfg['font_family'] ?? 'Arial, Helvetica, sans-serif');
-        $lh = (float)($cfg['line_height'] ?? 1.15);
+        $lh = (float)($cfg['line_height'] ?? 1.28);
+        $textRowGapMm = (float)($cfg['text_block_row_gap_mm'] ?? 0.55);
 
         $qrMm = self::qrDisplaySideMm($cfg);
         $qrUri = self::qrDataUri($data, $cfg);
@@ -146,30 +147,64 @@ final class JewelryLabel
         };
 
         $mrpLine = $mrp !== '' ? ('MRP: ₹' . $e($mrp)) : 'MRP: —';
-        $skuLine = $sku !== '' ? ('SKU: ' . $e($sku)) : 'SKU: —';
+        $skuVal = $sku !== '' ? $e($sku) : '—';
+        $lhE = $e((string)$lh);
+        $rowGapE = $e((string)$textRowGapMm);
 
-        return '<div class="jl-sheet" style="'
-            . 'box-sizing:border-box;width:' . $e((string)$w) . 'mm;height:' . $e((string)$h) . 'mm;'
-            . 'padding:' . $e((string)$pad) . 'mm;display:flex;flex-direction:row;align-items:center;'
-            . 'justify-content:space-between;gap:0.8mm;font-family:' . $e($ff) . ';'
-            . 'font-size:' . $e((string)$fs) . 'mm;line-height:' . $e((string)$lh) . ';color:#000;background:#fff;'
-            . 'border:0.12mm solid #000;'
-            . '">'
-            . '<div class="jl-col jl-col--qr" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;height:100%;">'
-            . '<img src="' . $e($qrUri) . '" alt="" style="width:' . $e((string)$qrMm) . 'mm;height:' . $e((string)$qrMm) . 'mm;object-fit:contain;display:block;" />'
-            . '</div>'
-            . '<div class="jl-col jl-col--color" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:left;">'
+        $padE = $e((string)$pad);
+        // Top inset includes base padding + one line-height (font_size_mm × line_height) as extra headroom
+        $lineHeightMm = $fs * $lh;
+        $padTopContent = $e((string)($pad + 0.3 + $lineHeightMm));
+
+        $skuBlock = ''
+            . '<div class="jl-sku" style="width:100%;max-width:100%;box-sizing:border-box;text-align:left;'
+            . 'white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:' . $lhE . ';">'
+            . '<span style="font-weight:700;">SKU: </span>'
+            . '<span style="font-weight:600;">' . $skuVal . '</span>'
+            . '</div>';
+
+        $detailsRow = ''
+            . '<div class="jl-details" style="display:flex;flex-direction:row;align-items:flex-start;justify-content:flex-start;gap:1.2mm;width:100%;min-width:0;">'
+            . '<div class="jl-col jl-col--color" style="flex:0 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;text-align:left;line-height:' . $lhE . ';">'
             . '<span style="font-weight:700;">Color</span>'
             . '<span style="font-weight:400;">' . ($color !== '' ? $e($color) : '—') . '</span>'
             . '</div>'
-            . '<div class="jl-col jl-col--size" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:left;">'
+            . '<div class="jl-col jl-col--size" style="flex:0 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;text-align:left;line-height:' . $lhE . ';">'
             . '<span style="font-weight:700;">Size</span>'
             . '<span style="font-weight:400;">' . ($size !== '' ? $e($size) : '—') . '</span>'
             . '</div>'
-            . '<div class="jl-col jl-col--mrp" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:left;">'
+            . '<div class="jl-col jl-col--mrp" style="flex:0 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;text-align:left;line-height:' . $lhE . ';">'
             . '<span style="font-weight:700;white-space:nowrap;">' . $mrpLine . '</span>'
-            . '<span style="font-weight:600;white-space:nowrap;">' . $skuLine . '</span>'
             . '</div>'
+            . '</div>';
+
+        $textCluster = ''
+            . '<div class="jl-text-cluster" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:' . $rowGapE . 'mm;">'
+            . $detailsRow
+            . $skuBlock
+            . '</div>';
+
+        $innerRow = ''
+            . '<div class="jl-inner-row" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:1.2mm;width:100%;min-width:0;box-sizing:border-box;">'
+            . '<div class="jl-col jl-col--qr" style="flex:0 0 auto;min-width:0;display:flex;align-items:center;justify-content:center;">'
+            . '<img src="' . $e($qrUri) . '" alt="" style="width:' . $e((string)$qrMm) . 'mm;height:' . $e((string)$qrMm) . 'mm;object-fit:contain;display:block;flex-shrink:0;" />'
+            . '</div>'
+            . $textCluster
+            . '</div>';
+
+        return '<div class="jl-sheet" style="'
+            . 'box-sizing:border-box;width:' . $e((string)$w) . 'mm;height:' . $e((string)$h) . 'mm;'
+            . 'display:flex;flex-direction:row;align-items:stretch;'
+            . 'font-family:' . $e($ff) . ';font-size:' . $e((string)$fs) . 'mm;line-height:' . $e((string)$lh) . ';'
+            . 'color:#000;background:#fff;border:0.12mm solid #000;'
+            . '">'
+            . '<div class="jl-zone jl-zone--content" style="box-sizing:border-box;flex:0 0 47%;width:47%;max-width:47%;min-height:0;align-self:stretch;'
+            . 'display:flex;flex-direction:column;justify-content:center;'
+            . 'padding-top:' . $padTopContent . 'mm;padding-bottom:' . $padTopContent . 'mm;padding-left:' . $padE . 'mm;padding-right:0.5mm;">'
+            . $innerRow
+            . '</div>'
+            . '<div class="jl-zone jl-zone--blank" style="box-sizing:border-box;flex:0 0 53%;width:53%;max-width:53%;'
+            . 'background:#fff;padding-top:' . $padTopContent . 'mm;padding-bottom:' . $padTopContent . 'mm;padding-right:' . $padE . 'mm;"></div>'
             . '</div>';
     }
 

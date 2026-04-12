@@ -337,12 +337,25 @@ class ProductsController {
     public function updateApiCall(){
         is_login();
         global $productModel;
-        //echo "Update API called"; exit;
-        if(empty($_GET['itemCode'])){
+        // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
+        $raw = isset($_GET['itemCode']) ? trim((string)$_GET['itemCode']) : '';
+        if ($raw === '') {
             echo json_encode(['success' => false, 'message' => 'itemcode invalid to update product.']);
             exit;
         }
-        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes='.$_GET['itemCode']; // Production API new endpoint
+        $codes = array_values(array_unique(array_map('trim', array_filter(explode(',', $raw), static function ($c) {
+            return trim((string)$c) !== '';
+        }))));
+        if (count($codes) === 0) {
+            echo json_encode(['success' => false, 'message' => 'itemcode invalid to update product.']);
+            exit;
+        }
+        if (count($codes) > 50) {
+            echo json_encode(['success' => false, 'message' => 'Maximum 50 item codes per request.']);
+            exit;
+        }
+        $itemcodesQuery = implode(',', $codes);
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemcodesQuery);
        
         // if (!empty($_GET['item_code'])) {
         //     $postData = [
@@ -376,22 +389,18 @@ class ProductsController {
             return;
         }
 
-        $product = json_decode($response, true);
-        if (!is_array($product)) {
-            //echo "Invalid API response format.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Invalid API response format.']], 'API Error');
             return;
         }
-        // print_array($product);
-        // exit;
-        if (empty($product)) {
-            //echo "No orders found in the API response.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
+        $productRows = product::normalizeVendorProductFetchItems($decoded);
+        if ($productRows === []) {
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No product rows in API response.']], 'No Products Found');
             return;
         }
-        // Process and save orders to the database
-        $updatedCount = $productModel->updateProductFromApi($product);
-        echo json_encode($updatedCount);
+        $updateResult = $productModel->updateProductFromApi($productRows);
+        echo json_encode($updateResult);
         exit;
         // if ($updatedCount['success']) {
         //     renderTemplateClean('views/success/success.php', ['message' => 'Product updated successfully. Total products updated: ' . $updatedCount['updated_count']], 'Update Successful');
@@ -399,6 +408,71 @@ class ProductsController {
         //     renderTemplateClean('views/errors/error.php', ['message' => $updatedCount['message']], 'Update Failed');
         // }
     }
+
+    /**
+     * Return the vendor product/fetch API JSON only (no DB updates).
+     * GET itemCode or itemcodes — comma-separated, same as update API (max 50).
+     * Example: ?page=products&action=vendor_product_fetch_payload&itemCode=AC88
+     */
+    public function vendorProductFetchPayload(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=UTF-8');
+        $raw = isset($_GET['itemcodes']) ? trim((string)$_GET['itemcodes']) : (isset($_GET['itemCode']) ? trim((string)$_GET['itemCode']) : '');
+        if ($raw === '') {
+            echo json_encode(['success' => false, 'message' => 'Provide itemCode or itemcodes (comma-separated).'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        $codes = array_values(array_unique(array_map('trim', array_filter(explode(',', $raw), static function ($c) {
+            return trim((string)$c) !== '';
+        }))));
+        if ($codes === []) {
+            echo json_encode(['success' => false, 'message' => 'No valid item codes.'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        if (count($codes) > 50) {
+            echo json_encode(['success' => false, 'message' => 'Maximum 50 item codes per request.'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        $itemcodesQuery = implode(',', $codes);
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemcodesQuery);
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+        if ($response === false) {
+            echo json_encode(['success' => false, 'message' => 'API request failed.', 'curl_error' => $curlErr, 'url' => $url], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'API response was not valid JSON.',
+                'url' => $url,
+                'itemcodes_requested' => $codes,
+                'raw_body' => $response,
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        echo json_encode([
+            'success' => true,
+            'url' => $url,
+            'itemcodes_requested' => $codes,
+            'payload' => $decoded,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function importApiCall($manualCodes = null) {
         global $productModel;
         $t0 = microtime(true);
@@ -457,7 +531,7 @@ class ProductsController {
         $updated = 0;
         $failed = [];
         $createdIdsByCode = [];
-        // prepare comma separated itemcodes (no spaces)
+        // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
         $itm = implode(',', $codes);
         $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itm);
 
@@ -502,7 +576,7 @@ class ProductsController {
             // single object
             $items = [$apiResult];
         }*/
-        $items = $apiResult; 
+        $items = product::normalizeVendorProductFetchItems($apiResult);
         //print_array($items);
         if (count($items) === 0) {
             return $respond(['success' => false, 'message' => 'No items found in API response.', 'timing' => $importTiming($codesCount, $apiMsElapsed)]);
@@ -526,14 +600,17 @@ class ProductsController {
                 : '';
             $item['groupname'] = $apiItem['groupname'] ?? '';
             $item['local_stock'] = isset($apiItem['local_stock']) ? (int)$apiItem['local_stock'] : (isset($apiItem['stock']) ? (int)$apiItem['stock'] : 0);
-            $item['itemprice'] = isset($apiItem['price']) ? floatval($apiItem['price']) : (isset($apiItem['itemprice']) ? floatval($apiItem['itemprice']) : 0.0);
+            $usdList = product::vendorApiUsdPrice($apiItem);
+            $item['itemprice'] = isset($apiItem['itemprice']) && $apiItem['itemprice'] !== '' && $apiItem['itemprice'] !== null
+                ? floatval($apiItem['itemprice'])
+                : (isset($apiItem['price']) && $apiItem['price'] !== '' && $apiItem['price'] !== null ? floatval($apiItem['price']) : $usdList);
             $item['finalprice'] = isset($apiItem['finalprice']) ? floatval($apiItem['finalprice']) : $item['itemprice'];
             $item['color'] = $apiItem['color'] ?? '';
             $item['size'] =  isset($apiItem['size']) ? $apiItem['size'] : '';
             $item['material'] = isset($apiItem['material']) ? $apiItem['material'] : '';
             $item['cost_price'] = isset($apiItem['cp']) ? (float)$apiItem['cp'] : 0.0;           
             $item['gst'] = isset($apiItem['gst']) ? (float)$apiItem['gst'] : 0.0;
-            $item['hsn'] = isset($apiItem['hscode']) ? $apiItem['hscode'] : '';
+            $item['hsn'] = product::vendorApiHsn($apiItem);
             $item['description'] = isset($apiItem['snippet_description']) ? $apiItem['snippet_description'] : '';
             $item['asin'] = isset($apiItem['asin']) ? $apiItem['asin'] : '';
             $item['upc'] = isset($apiItem['upc']) ? $apiItem['upc'] : '';
@@ -550,7 +627,7 @@ class ProductsController {
             $item['vendor'] = isset($apiItem['vendor']) ? $apiItem['vendor'] : '';
             $item['shippingfee'] = isset($apiItem['shippingfee']) ? (float)$apiItem['shippingfee'] : 0.0;
             $item['sourcingfee'] = isset($apiItem['sourcingfee']) ? (float)$apiItem['sourcingfee'] : 0.0;
-            $item['price'] = isset($apiItem['price']) ? (float)$apiItem['price'] : 0.0;
+            $item['price'] = $usdList;
             $item['price_india'] = isset($apiItem['price_india']) ? (float)$apiItem['price_india'] : 0.0;
             $item['price_india_suggested'] = isset($apiItem['price_india_suggested']) ? (float)$apiItem['price_india_suggested'] : 0.0;
             $item['mrp_india'] = isset($apiItem['mrp_india']) ? (float)$apiItem['mrp_india'] : 0.0;
@@ -599,11 +676,15 @@ class ProductsController {
                     $variantItem['color'] = $variant['color'] ?? '';
                     $variantItem['title'] = $variant['title'] ?? $item['title'];                    
                     $variantItem['local_stock'] = isset($variant['local_stock']) ? (int)$variant['local_stock'] : 0;
-                    $variantItem['itemprice'] = isset($variant['price']) ? floatval($variant['price']) : 0.0;
+                    $mergedVariant = array_merge($apiItem, $variant);
+                    $usdVar = product::vendorApiUsdPrice($mergedVariant);
+                    $variantItem['itemprice'] = isset($variant['itemprice']) && $variant['itemprice'] !== '' && $variant['itemprice'] !== null
+                        ? floatval($variant['itemprice'])
+                        : (isset($variant['price']) && $variant['price'] !== '' && $variant['price'] !== null ? floatval($variant['price']) : $usdVar);
                     $variantItem['finalprice'] = isset($variant['finalprice']) ? floatval($variant['finalprice']) : $variantItem['itemprice'];
                     $variantItem['cost_price'] = isset($variant['cp']) ? (float)$variant['cp'] : 0.0;
                     $variantItem['gst'] = isset($variant['gst']) ? (float)$variant['gst'] : 0.0;
-                    $variantItem['hsn'] = isset($variant['hsn']) ? $variant['hsn'] : '';
+                    $variantItem['hsn'] = product::vendorApiHsn($apiItem);
                     $variantItem['description'] = isset($variant['snippet_description']) ? $variant['snippet_description'] : '';
                     $variantItem['image'] = isset($variant['image']) ? 'https://cdn.exoticindia.com/images/products/original/'.$variant['image'] : $item['image'];
                     $variantItem['asin'] = isset($variant['asin']) ? $variant['asin'] : '';
@@ -621,7 +702,7 @@ class ProductsController {
                     $variantItem['vendor'] = isset($variant['vendor']) ? $variant['vendor'] : '';
                     $variantItem['shippingfee'] = isset($variant['shippingfee']) ? (float)$variant['shippingfee'] : 0.0;
                     $variantItem['sourcingfee'] = isset($variant['sourcingfee']) ? (float)$variant['sourcingfee'] : 0.0;
-                    $variantItem['price'] = isset($variant['price']) ? (float)$variant['price'] : 0.0;
+                    $variantItem['price'] = $usdVar;
                     $variantItem['price_india'] = isset($variant['price_india']) ? (float)$variant['price_india'] : 0.0;
                     $variantItem['price_india_suggested'] = isset($variant['price_india_suggested']) ? (float)$variant['price_india_suggested'] : 0.0;
                     $variantItem['mrp_india'] = isset($variant['mrp_india']) ? (float)$variant['mrp_india'] : 0.0;
@@ -748,6 +829,180 @@ class ProductsController {
             'isAdminUser' => $isAdminUser,
             'selectedWarehouseId' => $loginWarehouseId,
         ], 'Bulk Label Print');
+    }
+
+    /** Generate printable HTML for bulk label queue (JSON in, HTML out via JSON). */
+    public function bulkLabelPrintGenerate() {
+        is_login();
+        global $productModel;
+        header('Content-Type: application/json');
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid request payload.']);
+            exit;
+        }
+
+        $template = trim((string)($payload['template'] ?? ''));
+        $items = $payload['products'] ?? [];
+        if (!in_array($template, ['jewelry', 'textile', 'mg_store'], true)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid label template selected.']);
+            exit;
+        }
+        if (!is_array($items) || count($items) === 0) {
+            echo json_encode(['success' => false, 'message' => 'Please select at least one product.']);
+            exit;
+        }
+
+        $rows = [];
+        $missing = [];
+        foreach ($items as $it) {
+            $pid = isset($it['id']) ? (int)$it['id'] : 0;
+            $qty = isset($it['qty']) ? (int)$it['qty'] : 1;
+            $qty = max(1, min(99, $qty));
+            if ($pid <= 0) {
+                continue;
+            }
+            $p = $productModel->getProduct($pid);
+            if (!$p || !is_array($p)) {
+                $missing[] = $pid;
+                continue;
+            }
+
+            if ($template === 'jewelry') {
+                require_once dirname(__DIR__) . '/helpers/label/JewelryLabel.php';
+                $labelRow = JewelryLabel::fromProductRow($p);
+            } elseif ($template === 'textile') {
+                require_once dirname(__DIR__) . '/helpers/label/TextileLabel.php';
+                $labelRow = TextileLabel::fromProductRow($p);
+            } else {
+                require_once dirname(__DIR__) . '/helpers/label/MgStoreLabel.php';
+                $labelRow = MgStoreLabel::fromProductRow($p);
+            }
+
+            for ($i = 0; $i < $qty; $i++) {
+                $rows[] = $labelRow;
+            }
+        }
+
+        if ($rows === []) {
+            $msg = 'No valid products found to print.';
+            if ($missing !== []) {
+                $msg .= ' Missing product IDs: ' . implode(', ', $missing);
+            }
+            echo json_encode(['success' => false, 'message' => $msg]);
+            exit;
+        }
+
+        if ($template === 'jewelry') {
+            $html = JewelryLabel::renderPrintDocumentBatch($rows);
+        } elseif ($template === 'textile') {
+            $html = TextileLabel::renderPrintDocumentBatch($rows);
+        } else {
+            $html = MgStoreLabel::renderPrintDocumentBatch($rows);
+        }
+
+        echo json_encode([
+            'success' => true,
+            'html' => $html,
+            'total_labels' => count($rows),
+            'missing_product_ids' => $missing,
+        ]);
+        exit;
+    }
+
+    /** POST multipart: file (.csv/.xlsx/.xls) with Item Code, Size, Color; optional Qty per row. Returns JSON products for the queue. */
+    public function bulkLabelPrintUpload() {
+        is_login();
+        header('Content-Type: application/json');
+        global $productModel;
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+        if (empty($_FILES['label_import_file']['tmp_name']) || !is_uploaded_file($_FILES['label_import_file']['tmp_name'])) {
+            echo json_encode(['success' => false, 'message' => 'Please choose a CSV or Excel file with Item Code, Size, and Color columns.']);
+            exit;
+        }
+
+        $parsed = $this->parseBulkLabelVariantUpload($_FILES['label_import_file']);
+        if (!empty($parsed['error'])) {
+            echo json_encode(['success' => false, 'message' => $parsed['error']]);
+            exit;
+        }
+
+        $rows = $parsed['rows'] ?? [];
+        if ($rows === []) {
+            echo json_encode(['success' => false, 'message' => 'No data rows found in the file.']);
+            exit;
+        }
+
+        $productsOut = [];
+        $notFound = [];
+        $lineNo = 1;
+        foreach ($rows as $r) {
+            $lineNo++;
+            $ic = (string)($r['item_code'] ?? '');
+            $size = (string)($r['size'] ?? '');
+            $color = (string)($r['color'] ?? '');
+            $repeat = isset($r['quantity']) ? max(1, min(99, (int)$r['quantity'])) : 1;
+
+            $p = $productModel->findByItemCodeSizeColor($ic, $size, $color);
+            if (!$p || empty($p['id'])) {
+                $notFound[] = [
+                    'line' => $lineNo,
+                    'item_code' => $ic,
+                    'size' => $size,
+                    'color' => $color,
+                ];
+                continue;
+            }
+
+            $rowForClient = [
+                'id' => (int)$p['id'],
+                'sku' => (string)($p['sku'] ?? ''),
+                'item_code' => (string)($p['item_code'] ?? ''),
+                'title' => (string)($p['title'] ?? ''),
+                'size' => (string)($p['size'] ?? ''),
+                'color' => (string)($p['color'] ?? ''),
+                'image' => (string)($p['image'] ?? ''),
+                'local_stock' => $p['local_stock'] ?? null,
+                'location' => (string)($p['location'] ?? ''),
+            ];
+            for ($i = 0; $i < $repeat; $i++) {
+                $productsOut[] = $rowForClient;
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'added_count' => count($productsOut),
+            'products' => $productsOut,
+            'not_found' => $notFound,
+            'message' => count($productsOut) > 0
+                ? ('Resolved ' . count($productsOut) . ' line(s) from file.')
+                : 'No matching products for the rows in this file.',
+        ]);
+        exit;
+    }
+
+    public function bulkLabelPrintSampleCsv() {
+        is_login();
+        $filename = 'bulk_label_print_sample.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            exit;
+        }
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, ['Item Code', 'Size', 'Color', 'Qty']);
+        fputcsv($out, ['GAN035', 'xl', 'orange', '1']);
+        fputcsv($out, ['SAMPLE004', 'M', 'red', '2']);
+        fclose($out);
+        exit;
     }
 
     public function bulkImportSampleCsv() {
@@ -1104,6 +1359,9 @@ class ProductsController {
         $itemCode = trim($itemCode);
         $size = trim($size);
         $color = trim($color);
+        if ($itemCode === '') {
+            return '';
+        }
         if ($size !== '' && $color !== '') {
             return $itemCode . '-' . $size . '-' . $color;
         }
@@ -1113,7 +1371,6 @@ class ProductsController {
         if ($size === '' && $color !== '') {
             return $itemCode . '--' . $color;
         }
-
         return $itemCode;
     }
 
@@ -1184,7 +1441,14 @@ class ProductsController {
         if (!$handle) {
             return $rows;
         }
+        $isFirstRow = true;
         while (($row = fgetcsv($handle)) !== false) {
+            if ($isFirstRow) {
+                $isFirstRow = false;
+                if ($this->bulkImportLooksLikeHeaderRow($row)) {
+                    continue;
+                }
+            }
             $parts = $this->parseBulkImportCsvRowParts($row);
             if ($parts === null) {
                 continue;
@@ -1260,6 +1524,7 @@ class ProductsController {
             return $rows;
         }
         $sheet = @simplexml_load_string($sheetXml);
+        $isFirstRow = true;
         if ($sheet && isset($sheet->sheetData->row)) {
             foreach ($sheet->sheetData->row as $row) {
                 $byCol = [];
@@ -1269,6 +1534,20 @@ class ProductsController {
                         continue;
                     }
                     $byCol[$m[1]] = trim($this->xlsxCellPlainText($c, $sharedStrings));
+                }
+                if ($isFirstRow) {
+                    $isFirstRow = false;
+                    $firstRowCells = [
+                        (string)($byCol['A'] ?? ''),
+                        (string)($byCol['B'] ?? ''),
+                        (string)($byCol['C'] ?? ''),
+                        (string)($byCol['D'] ?? ''),
+                        (string)($byCol['E'] ?? ''),
+                        (string)($byCol['F'] ?? ''),
+                    ];
+                    if ($this->bulkImportLooksLikeHeaderRow($firstRowCells)) {
+                        continue;
+                    }
                 }
                 $parts = $this->parseBulkImportXlsxRowParts($byCol);
                 if ($parts === null) {
@@ -1287,6 +1566,49 @@ class ProductsController {
         $zip->close();
 
         return $rows;
+    }
+
+    /**
+     * Detect common column-title header row in the first line of import files.
+     *
+     * @param array<int,mixed> $cells
+     */
+    private function bulkImportLooksLikeHeaderRow(array $cells): bool {
+        $normalize = static function ($v): string {
+            $x = strtolower(trim((string)$v));
+            if ($x === '') {
+                return '';
+            }
+            $x = str_replace(['_', '-', '.'], ' ', $x);
+            $x = preg_replace('/\s+/', ' ', $x) ?? $x;
+
+            return $x;
+        };
+
+        $codeHeaders = ['itemcode', 'item code', 'code', 'product code', 'productcode', 'sku'];
+        $otherHeaders = ['sku', 'color', 'colour', 'size', 'quantity', 'qty', 'location', 'stock location'];
+        $normalized = [];
+        foreach ($cells as $c) {
+            $n = $normalize($c);
+            if ($n !== '') {
+                $normalized[] = $n;
+            }
+        }
+        if ($normalized === []) {
+            return false;
+        }
+
+        $matches = 0;
+        foreach ($normalized as $n) {
+            if (in_array($n, $codeHeaders, true) || in_array($n, $otherHeaders, true)) {
+                $matches++;
+            }
+        }
+
+        $first = $normalize($cells[0] ?? '');
+        $firstLooksLikeCodeHeader = in_array($first, $codeHeaders, true);
+
+        return $matches >= 2 || ($firstLooksLikeCodeHeader && $matches >= 1);
     }
 
     /**
@@ -2202,6 +2524,96 @@ class ProductsController {
         exit;
     }
 
+    public function bulkImportDeleteFailedRows() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+
+        $itemIds = [];
+        if (!empty($payload['item_ids']) && is_array($payload['item_ids'])) {
+            foreach ($payload['item_ids'] as $rid) {
+                $i = (int)$rid;
+                if ($i > 0) {
+                    $itemIds[$i] = true;
+                }
+            }
+        }
+        $itemIds = array_keys($itemIds);
+
+        $where = "job_id = ? AND status = 'failed'";
+        if (!empty($itemIds)) {
+            $idList = implode(',', $itemIds);
+            $where .= " AND id IN ($idList)";
+        }
+
+        $cntSql = "SELECT COUNT(*) AS c FROM product_import_items WHERE $where";
+        $cntStmt = $conn->prepare($cntSql);
+        $cntStmt->bind_param('i', $jobId);
+        $cntStmt->execute();
+        $matched = (int)($cntStmt->get_result()->fetch_assoc()['c'] ?? 0);
+        $cntStmt->close();
+
+        if ($matched === 0) {
+            $stats = $this->refreshImportJobCounts($jobId);
+            echo json_encode([
+                'success' => true,
+                'message' => 'No failed rows matched for deletion.',
+                'matched' => 0,
+                'deleted' => 0,
+                'stats' => $stats
+            ]);
+            exit;
+        }
+
+        $sql = "DELETE FROM product_import_items WHERE $where";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            echo json_encode(['success' => false, 'message' => 'Prepare failed: ' . $conn->error]);
+            exit;
+        }
+        $stmt->bind_param('i', $jobId);
+        if (!$stmt->execute()) {
+            echo json_encode(['success' => false, 'message' => 'Delete failed: ' . $stmt->error]);
+            $stmt->close();
+            exit;
+        }
+        $deleted = (int)$stmt->affected_rows;
+        $stmt->close();
+
+        $stats = $this->refreshImportJobCounts($jobId);
+        echo json_encode([
+            'success' => true,
+            'message' => $deleted > 0 ? 'Failed rows deleted successfully.' : 'No failed rows deleted.',
+            'matched' => $matched,
+            'deleted' => $deleted,
+            'stats' => $stats
+        ]);
+        exit;
+    }
+
     public function bulkImportDelete() {
         is_login();
         if (ob_get_level() === 0) { ob_start(); }
@@ -2809,28 +3221,34 @@ class ProductsController {
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
-            $order['stock_value'] = $order['local_stock'] * $order['cost_price'];
-            $order['committed_stock'] = $commanModel->getCommittedStockBySku($order['sku']);
-            $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
-            $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
-            $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
+            if (!$order || !is_array($order)) {
+                echo '<p>Product details not found.</p>';
+                exit;
+            }
+
+            $sku = trim((string)($order['sku'] ?? ''));
+            $itemCode = trim((string)($order['item_code'] ?? ''));
+            $localStock = (float)($order['local_stock'] ?? 0);
+            $costPrice = (float)($order['cost_price'] ?? 0);
+
+            $order['stock_value'] = $localStock * $costPrice;
+            $order['committed_stock'] = $sku !== '' ? (int)$commanModel->getCommittedStockBySku($sku) : 0;
+            $order['available_stock'] = $localStock - (float)$order['committed_stock'];
+            $order['in_purchase_list'] = $sku !== '' ? $commanModel->isInPurchaseList($sku) : [];
+            $order['vendors'] = $itemCode !== '' ? $productModel->getVendorByItemCode($itemCode) : [];
             $order['stock_history'] = $productModel->enrichStockHistoryRowsForLedger(
-                $productModel->stock_history($order['sku'], 100, 0, (int)$id)
+                $productModel->stock_history($sku, 100, 0, (int)$id)
             );
-            $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
-            $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
+            $order['stocks'] = $sku !== '' ? $productModel->getStockSummaryBySku($sku) : ['total_added' => 0, 'total_deducted' => 0];
+            $order['variants'] = $itemCode !== '' ? $productModel->getVariantsByItemCode($itemCode) : [];
             $order['warehouses'] = $productModel->getAllWarehouses();
             $order['stock_movements'] = $productModel->get_stock_movements($id);
-            if ($order) {
-                if (!headers_sent()) {
-                    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-                    header('Pragma: no-cache');
-                    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
-                }
-                renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
-            } else {
-              echo '<p>Product details not found.</p>';
+            if (!headers_sent()) {
+                header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+                header('Pragma: no-cache');
+                header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
             }
+            renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
         } else {
             echo '<p>Invalid Product Item Code.</p>';
         }
@@ -3737,7 +4155,7 @@ class ProductsController {
             if ($n === '') {
                 continue;
             }
-            if (in_array($n, ['itemcode', 'item code'], true)) {
+            if (in_array($n, ['itemcode', 'item code', 'product code', 'productcode'], true)) {
                 $map['item_code'] = $idx;
             } elseif ($n === 'size') {
                 $map['size'] = $idx;
@@ -3785,6 +4203,177 @@ class ProductsController {
             'color' => $map['color'] !== null ? $get($map['color']) : '',
             'quantity' => $qty,
         ];
+    }
+
+    /**
+     * @param array<int,mixed> $cells
+     * @param array{item_code: ?int, size: ?int, color: ?int, quantity: ?int} $map
+     * @return ?array{item_code: string, size: string, color: string, quantity: int}
+     */
+    private function bulkLabelVariantRowFromCells(array $cells, array $map): ?array
+    {
+        $get = static function ($i) use ($cells) {
+            if ($i === null) {
+                return '';
+            }
+
+            return isset($cells[$i]) ? trim((string)$cells[$i]) : '';
+        };
+
+        $ic = $get($map['item_code']);
+        if ($ic === '') {
+            return null;
+        }
+
+        $qty = 1;
+        if ($map['quantity'] !== null) {
+            $qtyRaw = $get($map['quantity']);
+            if ($qtyRaw === '') {
+                $qty = 1;
+            } else {
+                $qty = (int)preg_replace('/[^\d-]/', '', (string)$qtyRaw);
+                if ($qty <= 0) {
+                    return null;
+                }
+            }
+        }
+
+        return [
+            'item_code' => $ic,
+            'size' => $map['size'] !== null ? $get($map['size']) : '',
+            'color' => $map['color'] !== null ? $get($map['color']) : '',
+            'quantity' => min(99, $qty),
+        ];
+    }
+
+    /**
+     * @param \PhpOffice\PhpSpreadsheet\Cell\Cell|null $cell
+     */
+    private function spreadsheetCellToPlain($cell): string
+    {
+        if ($cell === null) {
+            return '';
+        }
+        $v = $cell->getValue();
+        if (($v === null || $v === '') && method_exists($cell, 'getCalculatedValue')) {
+            try {
+                $calc = $cell->getCalculatedValue();
+                if ($calc !== null && $calc !== '') {
+                    $v = $calc;
+                }
+            } catch (Throwable $e) {
+                // leave $v as-is
+            }
+        }
+        if ($v instanceof \PhpOffice\PhpSpreadsheet\RichText\RichText) {
+            return trim($v->getPlainText());
+        }
+        if (is_float($v) && floor($v) == $v) {
+            return (string)(int)$v;
+        }
+        if (is_int($v)) {
+            return (string)$v;
+        }
+
+        return trim((string)$v);
+    }
+
+    /**
+     * @param array $file $_FILES entry
+     * @return array{rows?: list<array<string,mixed>>, error?: string}
+     */
+    private function parseBulkLabelVariantUpload(array $file): array
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return ['error' => 'File upload failed'];
+        }
+
+        $tmp = $file['tmp_name'];
+        $name = (string)($file['name'] ?? '');
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+        if ($ext === 'csv') {
+            $raw = @file_get_contents($tmp);
+            if ($raw === false || $raw === '') {
+                return ['error' => 'Could not read CSV file'];
+            }
+            if (strncmp($raw, "\xEF\xBB\xBF", 3) === 0) {
+                $raw = substr($raw, 3);
+            }
+            $lines = preg_split('/\R/u', trim($raw)) ?: [];
+            if ($lines === []) {
+                return ['error' => 'CSV file is empty'];
+            }
+            $headerLine = array_shift($lines);
+            $headers = str_getcsv($headerLine);
+            $map = $this->mapBulkSheetHeaders($headers);
+            if ($map['item_code'] === null) {
+                return ['error' => 'First row must include an Item Code column (ItemCode or Item Code). Size, Color, and Qty are optional.'];
+            }
+
+            $rows = [];
+            foreach ($lines as $line) {
+                if (trim($line) === '') {
+                    continue;
+                }
+                $cells = str_getcsv($line);
+                $row = $this->bulkLabelVariantRowFromCells($cells, $map);
+                if ($row !== null) {
+                    $rows[] = $row;
+                }
+            }
+
+            return ['rows' => $rows];
+        }
+
+        if (!in_array($ext, ['xlsx', 'xls'], true)) {
+            return ['error' => 'Unsupported file type. Use CSV, XLSX, or XLS'];
+        }
+
+        $autoload = dirname(__DIR__) . '/vendor/autoload.php';
+        if (!is_file($autoload)) {
+            return ['error' => 'Excel support is not installed (run composer install)'];
+        }
+        require_once $autoload;
+
+        try {
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($tmp);
+            $reader->setReadDataOnly(false);
+            $spreadsheet = $reader->load($tmp);
+            $sheet = $spreadsheet->getActiveSheet();
+            $highestRow = (int)$sheet->getHighestDataRow();
+            if ($highestRow < 2) {
+                return ['error' => 'Spreadsheet has no data rows'];
+            }
+            $highestCol = $sheet->getHighestDataColumn();
+            $colCount = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
+            $headerCells = [];
+            for ($ci = 1; $ci <= $colCount; $ci++) {
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
+                $headerCells[] = $this->spreadsheetCellToPlain($sheet->getCell($colLetter . '1'));
+            }
+            $map = $this->mapBulkSheetHeaders($headerCells);
+            if ($map['item_code'] === null) {
+                return ['error' => 'First row must include an Item Code column (ItemCode or Item Code). Size, Color, and Qty are optional.'];
+            }
+
+            $rows = [];
+            for ($r = 2; $r <= $highestRow; $r++) {
+                $cells = [];
+                for ($ci = 1; $ci <= $colCount; $ci++) {
+                    $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
+                    $cells[$ci - 1] = $this->spreadsheetCellToPlain($sheet->getCell($colLetter . $r));
+                }
+                $row = $this->bulkLabelVariantRowFromCells($cells, $map);
+                if ($row !== null) {
+                    $rows[] = $row;
+                }
+            }
+
+            return ['rows' => $rows];
+        } catch (Throwable $e) {
+            return ['error' => 'Could not read spreadsheet: ' . $e->getMessage()];
+        }
     }
     
     private function handleEwayBillFileUpload($existingFile = '')

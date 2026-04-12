@@ -1,7 +1,7 @@
 <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
 <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
-<div class="max-w-7xl mx-auto p-4 space-y-6">
+<div class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
   <!-- SKU quick jump (product detail) -->
   <div class="bg-gradient-to-r from-amber-50 via-white to-orange-50/50 rounded-xl border border-amber-100/80 shadow-sm p-4 sm:p-5">
     <form id="productDetailSkuSearchForm" class="relative" autocomplete="off">
@@ -172,25 +172,135 @@
     });
   })();
   </script>
+  <?php
+    $groupRaw = trim((string)($products['groupname'] ?? ''));
+    $groupNameLower = strtolower($groupRaw);
+    if ($groupRaw === '') {
+        $groupNameDisplay = 'Default Group';
+    } elseif (function_exists('mb_convert_case')) {
+        $groupNameDisplay = mb_convert_case($groupRaw, MB_CASE_TITLE, 'UTF-8');
+    } else {
+        $groupNameDisplay = ucwords(strtolower($groupRaw));
+    }
+    $isBookProduct = strpos($groupNameLower, 'book') !== false;
+    $authorRaw = trim((string)($products['author'] ?? ''));
+    $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
+    $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
+    $priceIndiaBase = (float)($products['price_india'] ?? 0);
+    $gstPercentForIndia = max(0.0, (float)($products['gst'] ?? 0));
+    $priceIndiaWithGst = $priceIndiaBase * (1 + $gstPercentForIndia / 100);
+    $priceIndiaWithGstFormatted = number_format($priceIndiaWithGst, 2, '.', ',');
+    $usdPriceFormatted = number_format((float)($products['price'] ?? 0), 2, '.', ',');
+    $permanentDiscountFmt = number_format((float)($products['permanent_discount'] ?? 0), 2, '.', ',');
+    $discountGlobalFmt = number_format((float)($products['discount_global'] ?? 0), 2, '.', ',');
+    $discountIndiaFmt = number_format((float)($products['discount_india'] ?? 0), 2, '.', ',');
+    $lengthUnitRaw = trim((string)($products['length_unit'] ?? ''));
+    $weightUnitRaw = trim((string)($products['product_weight_unit'] ?? ''));
+    $linearNum = static function ($v): ?string {
+        if ($v === null || $v === '') {
+            return null;
+        }
+        if (!is_numeric($v)) {
+            $t = trim((string)$v);
+            return $t === '' ? null : $t;
+        }
+        $f = (float)$v;
+        if (abs($f) < 1e-8) {
+            return null;
+        }
+        if (abs(fmod($f, 1.0)) < 1e-8) {
+            return (string)(int)round($f);
+        }
+        return rtrim(rtrim(number_format($f, 2, '.', ''), '0'), '.');
+    };
+    $hasLinearDim = $linearNum($products['prod_length'] ?? null) !== null
+        || $linearNum($products['prod_width'] ?? null) !== null
+        || $linearNum($products['prod_height'] ?? null) !== null;
+    $lengthUnitDisplay = $lengthUnitRaw !== '' ? $lengthUnitRaw : ($hasLinearDim ? 'inch' : '');
+    $formatLinearDim = static function ($value, string $unit) use ($linearNum): string {
+        $n = $linearNum($value);
+        if ($n === null) {
+            return '—';
+        }
+        return $unit !== '' ? ($n . ' ' . $unit) : $n;
+    };
+    $sizeDisplayRaw = trim((string)($products['size'] ?? ''));
+    $sizeDisplayOut = $sizeDisplayRaw !== '' ? $sizeDisplayRaw : '—';
+    $colorRaw = trim((string)($products['color'] ?? ''));
+    if ($colorRaw === '') {
+        $colorDisplay = '—';
+    } elseif (function_exists('mb_convert_case')) {
+        $colorDisplay = mb_convert_case($colorRaw, MB_CASE_TITLE, 'UTF-8');
+    } else {
+        $colorDisplay = ucwords(strtolower($colorRaw));
+    }
+    $formatWeightDim = static function ($value, string $unit) use ($linearNum): string {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+        if (is_numeric($value)) {
+            $f = (float)$value;
+            if (abs($f) < 1e-8) {
+                return '—';
+            }
+            $n = abs(fmod($f, 1.0)) < 1e-8 ? (string)(int)round($f) : rtrim(rtrim(number_format($f, 2, '.', ''), '0'), '.');
+            return $unit !== '' ? ($n . ' ' . $unit) : $n;
+        }
+        $t = trim((string)$value);
+        if ($t === '') {
+            return '—';
+        }
+        return $unit !== '' ? ($t . ' ' . $unit) : $t;
+    };
+    $weightDisplay = $formatWeightDim($products['product_weight'] ?? null, $weightUnitRaw);
+  ?>
   <!-- PRODUCT HEADER -->
-  <div class="bg-white rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
     <div class="flex gap-4">
       <!-- <div class="w-24 h-32 bg-white rounded-[10px] outline outline-2 outline-offset-[-2px] outline-amber-600 ">
         <img onclick="openImagePopup('<?php //echo $products['image']; ?>')" src="<?php //echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="w-full h-full px-3 py-3 cursor-pointer" />
       </div> -->
-      <div onclick="openImagePopup('<?php echo htmlspecialchars($products['image'] ?? '', ENT_QUOTES); ?>')" class="flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-white outline outline-2 outline-offset-[-2px] outline-amber-600 cursor-pointer">
-        <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" alt="" class="block h-full w-full max-h-full max-w-full object-contain cursor-pointer" />
+      <div>
+        <div onclick="openImagePopup('<?php echo htmlspecialchars($products['image'] ?? '', ENT_QUOTES); ?>')" class="flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-white outline outline-2 outline-offset-[-2px] outline-amber-600 cursor-pointer">
+          <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" alt="" class="block h-full w-full max-h-full max-w-full object-contain cursor-pointer" />
+        </div>
+        <p class="inline-flex items-center gap-1.5 text-[11px] text-gray-600 mt-2 px-2 py-1 rounded-md bg-gray-50 border border-gray-200">
+          <i class="fas fa-barcode text-amber-600" aria-hidden="true"></i>
+          UPC: <span class="font-medium text-gray-800"><?php echo htmlspecialchars((string)($products['upc'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
+        </p>
       </div>
       <div>
-        <span class="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded">
-          <?php echo $products['groupname'] ?? 'Default Group'; ?>
+        <span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-md font-medium">
+          <?php echo htmlspecialchars($groupNameDisplay, ENT_QUOTES, 'UTF-8'); ?>
         </span> 
-        <span class="text-sm ml-2"> <?php echo $products['item_code'] ?? ''; ?></span>
+        <span class="text-xs ml-2 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium"><?php echo $products['item_code'] ?? ''; ?></span>
         
         <h2 class="font-semibold mt-2 text-lg">
           <?php echo htmlspecialchars($products['title'] ?? 'Product Title'); ?>
         </h2>
-        <p class="text-sm text-gray-500">SKU: <?php echo htmlspecialchars($products['sku'] ?? ''); ?></p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <p class="text-sm text-gray-500">SKU: <?php echo htmlspecialchars($products['sku'] ?? ''); ?></p>
+          <button
+            type="button"
+            id="refreshProductApiBtn"
+            data-item-code="<?php echo htmlspecialchars((string)($products['item_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+            onclick="updateProductProfileFromApi(this)">
+            <i class="fas fa-sync-alt text-[11px]" aria-hidden="true"></i>
+            Refresh from API
+          </button>
+        </div>
+        <?php if ($isBookProduct): ?>
+          <?php if ($authorRaw !== ''): ?>
+            <p class="text-sm text-gray-600 mt-1">Author: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
+          <?php endif; ?>
+          <?php $publisherRaw = trim((string)($products['publisher'] ?? '')); ?>
+          <?php if ($publisherRaw !== ''): ?>
+            <p class="text-sm text-gray-600">Publisher: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($publisherRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
+          <?php endif; ?>
+        <?php elseif ($authorRaw !== ''): ?>
+          <p class="text-sm text-gray-600 mt-1">Artist: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
+        <?php endif; ?>
         <div class="flex flex-wrap gap-2 mt-2">
           <?php foreach ($products['variants'] as $variant): 
             if(isset($variant['sku']) && !empty($variant['sku'])): ?>
@@ -200,15 +310,17 @@
       </div>
     </div>
     <!-- Measures -->
-    <div class="bg-orange-50 rounded-lg p-4">
-      <h3 class="font-semibold mb-2">Measures</h3>
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        <div><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size: <b><?php echo htmlspecialchars((string)($products['size'] ?? '')); ?></b></div>
-        <div><i class="fas fa-palette mr-1 text-orange-600"></i>Color: <b><?php echo htmlspecialchars((string)($products['color'] ?? '')); ?></b></div>
-        <div><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length: <b><?php echo htmlspecialchars($products['prod_length'] ?  $products['prod_length'].' '.$products['length_unit'] : ''); ?> </b></div>
-        <div><i class="fas fa-ruler-vertical mr-2 text-orange-600"></i>Height: <b><?php echo htmlspecialchars($products['prod_height'] ? $products['prod_height'].' '.$products['length_unit'] : ''); ?></b></div>
-        <div><i class="fas fa-arrows-alt-h mr-1.5 text-orange-600"></i>Width: <b><?php echo htmlspecialchars($products['prod_width'] ? $products['prod_width'].' '.$products['length_unit'] : ''); ?></b></div>
-        <div><i class="fas fa-weight mr-1 text-orange-600"></i>Weight: <b><?php echo htmlspecialchars($products['product_weight'] ?  $products['product_weight'] .' ' .$products['product_weight_unit'] : ''); ?></b></div>
+    <div class="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-4">
+      <h3 class="font-semibold mb-3 text-gray-800 flex items-center gap-2">
+        <i class="fas fa-ruler-combined text-orange-600"></i>Measurements
+      </h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($sizeDisplayOut, ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-palette mr-1 text-orange-600"></i>Color</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($colorDisplay, ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_length'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-vertical mr-1 text-orange-600"></i>Height</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_height'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-arrows-alt-h mr-1 text-orange-600"></i>Width</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_width'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-weight mr-1 text-orange-600"></i>Weight</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($weightDisplay, ENT_QUOTES, 'UTF-8'); ?></span></div>
       </div>
     </div>
   </div>
@@ -220,7 +332,7 @@
       <p class="text-xl font-semibold"><?php //echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
     </div>
     <div>
-      <p class="text-gray-500 text-sm">Committed</p>
+      <p class="text-gray-500 text-sm">Pending Orders</p>
       <p class="text-xl font-semibold">0</p>
     </div>
     <div>
@@ -238,108 +350,146 @@
   </div> -->
   <!-- Inventory -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-  <div class="bg-white rounded-lg p-4 shadow-sm space-y-4 col-span-2">
-    <h3 class="font-semibold text-gray-700">Inventory</h3>
+  <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-4 col-span-2">
+    <h3 class="font-semibold text-gray-800 flex items-center gap-2"><i class="fas fa-boxes text-amber-600"></i>Inventory</h3>
       <!-- Stats -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
         <!-- Local Stock -->
-        <div class="flex items-center justify-between border rounded-lg p-4 relative">
+        <div class="flex items-center justify-between border border-blue-100 bg-blue-50/50 rounded-lg p-3 relative">
           <div>
             <p class="text-sm text-gray-500">Local Stock</p>
-            <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
+            <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
           </div>
-          <div class="bg-blue-100 text-blue-600 p-2 rounded-lg">
-            📦
+          <div class="bg-blue-100 text-blue-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+            <i class="fas fa-box-open"></i>
           </div>
           <button class="absolute top-0 right-1 text-gray-500 hover:text-blue-600" onclick="openStockModal()">
             <i class="fas fa-edit text-sm"></i>
           </button>
         </div>
-        <!-- Committed -->
-        <div class="flex items-center justify-between border rounded-lg p-4">
+        <!-- Pending Orders -->
+        <div class="flex items-center justify-between border border-purple-100 bg-purple-50/50 rounded-lg p-3">
           <div>
-            <p class="text-sm text-gray-500">Committed</p>
-            <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['committed_stock'] ?? '0'); ?></p>
+            <p class="text-sm text-gray-500 leading-tight">Pending Orders</p>
+            <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['committed_stock'] ?? '0'); ?></p>
           </div>
-          <div class="bg-purple-100 text-purple-600 p-2 rounded-lg">
-            ⏱️
+          <div class="bg-purple-100 text-purple-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+            <i class="fas fa-link"></i>
           </div>
         </div>
         <!-- Available -->
-        <div class="flex items-center justify-between border rounded-lg p-4">
+        <div class="flex items-center justify-between border border-green-100 bg-green-50/50 rounded-lg p-3">
           <div>
             <p class="text-sm text-gray-500">Available</p>
-            <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['available_stock'] ?? '0'); ?></p>
+            <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['available_stock'] ?? '0'); ?></p>
           </div>
-          <div class="bg-green-100 text-green-600 p-2 rounded-lg">
-            📈
+          <div class="bg-green-100 text-green-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+            <i class="fas fa-check-circle"></i>
           </div>
         </div>
         <!-- In Purchase -->
-        <div class="flex items-center justify-between border rounded-lg p-4">
+        <div class="flex items-center justify-between border border-orange-100 bg-orange-50/50 rounded-lg p-3">
           <div>
             <p class="text-sm text-gray-500">In Purchase</p>
-            <p class="text-xl font-semibold"><?php echo count($products['in_purchase_list']); ?></p>
+            <p class="text-lg font-semibold leading-tight"><?php echo count($products['in_purchase_list']); ?></p>
           </div>
-          <div class="bg-orange-100 text-orange-600 p-2 rounded-lg">
-            🛒
+          <div class="bg-orange-100 text-orange-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+            <i class="fas fa-shopping-cart"></i>
           </div>
         </div>
       </div>
       <!-- Number Sold -->
-     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-          <div class="flex items-center justify-between border rounded-lg p-4 bg-white">
+     <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2.5">
+          <div class="flex items-center justify-between border border-gray-200 rounded-lg p-3 bg-white">
             <div>
               <p class="text-sm text-gray-500">Number Sold</p>
-              <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['numsold'] ?? '0'); ?></p>
+              <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['numsold'] ?? '0'); ?></p>
             </div>
-            <div class="bg-gray-100 text-gray-600 p-2 rounded-lg">
-              📊
+            <div class="bg-gray-100 text-gray-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+              <i class="fas fa-chart-line"></i>
             </div>
           </div>
 
-          <div class="flex items-center justify-between border rounded-lg p-4 bg-red-50 relative">
+          <div class="flex items-center justify-between border border-red-100 rounded-lg p-3 bg-red-50 relative">
             <div>
               <p class="text-sm text-gray-500">Min Stock</p>
-              <p class="text-xl font-semibold text-red-600"><?php echo htmlspecialchars($products['min_stock'] ?? '0'); ?></p>
+              <p class="text-lg font-semibold text-red-600 leading-tight"><?php echo htmlspecialchars($products['min_stock'] ?? '0'); ?></p>
             </div>
-            <div class="bg-red-100 p-2 rounded-lg">
-               🔔
+            <div class="bg-red-100 text-red-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+               <i class="fas fa-bell"></i>
             </div>
             <button class="absolute top-1 right-1 text-gray-400 hover:text-red-600" onclick="openMinMaxModal()">
               <i class="fas fa-pencil-alt text-[10px]"></i>
             </button>
           </div>
 
-          <div class="flex items-center justify-between border rounded-lg p-4 bg-blue-50 relative">
+          <div class="flex items-center justify-between border border-blue-100 rounded-lg p-3 bg-blue-50 relative">
             <div>
               <p class="text-sm text-gray-500">Max Stock</p>
-              <p class="text-xl font-semibold text-blue-600"><?php echo htmlspecialchars($products['max_stock'] ?? '0'); ?></p>
+              <p class="text-lg font-semibold text-blue-600 leading-tight"><?php echo htmlspecialchars($products['max_stock'] ?? '0'); ?></p>
             </div>
-            <div class="bg-blue-100 p-2 rounded-lg">
-               🛡️
+            <div class="bg-blue-100 text-blue-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+               <i class="fas fa-shield-alt"></i>
             </div>
             <button class="absolute top-1 right-1 text-gray-400 hover:text-blue-600" onclick="openMinMaxModal()">
               <i class="fas fa-pencil-alt text-[10px]"></i>
             </button>
           </div>
 
-          <div class="hidden md:block"></div>
+          <div class="flex items-center justify-between border border-emerald-100 rounded-lg p-3 bg-emerald-50">
+            <div>
+              <p class="text-sm text-gray-500">Permanently Available</p>
+              <p class="text-lg font-semibold text-emerald-700 leading-tight"><?php echo htmlspecialchars($permanentlyAvailableText); ?></p>
+            </div>
+            <div class="bg-emerald-100 text-emerald-700 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+               <i class="fas fa-check"></i>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between border border-indigo-100 rounded-lg p-3 bg-indigo-50">
+            <div>
+              <p class="text-sm text-gray-500">Leadtime</p>
+              <p class="text-lg font-semibold text-indigo-700 leading-tight"><?php echo htmlspecialchars((string)($products['leadtime'] ?? '0')); ?></p>
+            </div>
+            <div class="bg-indigo-100 text-indigo-700 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+               <i class="fas fa-hourglass-half"></i>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between border border-cyan-100 rounded-lg p-3 bg-cyan-50">
+            <div>
+              <p class="text-sm text-gray-500">Instock Leadtime</p>
+              <p class="text-lg font-semibold text-cyan-700 leading-tight"><?php echo htmlspecialchars((string)($products['instock_leadtime'] ?? '0')); ?></p>
+            </div>
+            <div class="bg-cyan-100 text-cyan-700 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+               <i class="fas fa-truck"></i>
+            </div>
+          </div>
         </div>
   </div>
 
   <!-- Price -->
-    <div class="bg-white border rounded-lg p-4">
-      <h3 class="font-semibold mb-3">Price</h3>
-      <div class="space-y-2 text-sm">
-        <div class="flex justify-between bg-green-50 p-2 rounded">
-          <span><i class="fas fa-dollar px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Cost Price</span><span>₹<?php echo htmlspecialchars($products['cost_price'] ?? '0'); ?></span>
+    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+      <h3 class="font-semibold mb-3 flex items-center gap-2 text-gray-800"><i class="fas fa-receipt text-emerald-600"></i>Price</h3>
+      <div class="space-y-2.5 text-sm">
+        <div class="flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-tag mr-1 px-2 py-1 rounded text-xs text-green-600 bg-green-100"></i>Price India</span>
+          <div class="text-right shrink-0">
+            <span class="font-semibold text-gray-900 block leading-tight">₹<?php echo htmlspecialchars($priceIndiaWithGstFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+            <span class="text-[10px] text-gray-500 leading-tight block mt-0.5">(GST Included)</span>
+          </div>
         </div>
-        <div class="flex justify-between bg-green-50 p-2 rounded">
-          <span><i class="fas fa-tag  mr-1 px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Item Price</span><span>₹<?php echo htmlspecialchars($products['itemprice'] ?? '0'); ?></span>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span class="font-semibold text-gray-900">$<?php echo htmlspecialchars($usdPriceFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="flex justify-between bg-green-50 p-2 rounded">
-          <span><i class="fas fa-rupee-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Stock Value</span><span>₹<?php echo htmlspecialchars($products['stock_value'] ?? '0'); ?></span>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-percent px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Permanent Discount</span><span class="font-semibold text-gray-900"><?php echo htmlspecialchars($permanentDiscountFmt, ENT_QUOTES, 'UTF-8'); ?>%</span>
+        </div>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-globe px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Discount Global</span><span class="font-semibold text-gray-900"><?php echo htmlspecialchars($discountGlobalFmt, ENT_QUOTES, 'UTF-8'); ?>%</span>
+        </div>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-flag px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Discount India</span><span class="font-semibold text-gray-900"><?php echo htmlspecialchars($discountIndiaFmt, ENT_QUOTES, 'UTF-8'); ?>%</span>
         </div>
         
         <hr class="border-t">
@@ -636,7 +786,95 @@
   </div>
 </div>
 <!--Stock Adjustment Card Ends -->
+<div id="profileStatusModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+  <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-5 relative">
+    <button type="button" onclick="closeProfileStatusModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-700">✕</button>
+    <div class="flex items-start gap-3">
+      <div id="profileStatusModalIcon" class="h-9 w-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+        <i class="fas fa-info-circle"></i>
+      </div>
+      <div class="min-w-0">
+        <h3 id="profileStatusModalTitle" class="text-base font-semibold text-gray-800">Notice</h3>
+        <p id="profileStatusModalMessage" class="text-sm text-gray-600 mt-1 leading-relaxed"></p>
+      </div>
+    </div>
+    <div class="mt-5 flex justify-end">
+      <button id="profileStatusModalOkBtn" type="button" onclick="closeProfileStatusModal()" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold">OK</button>
+    </div>
+  </div>
+</div>
 <script>
+  var profileStatusReloadOnClose = false;
+
+  function showProfileStatusModal(message, type, reloadOnClose) {
+    var modal = document.getElementById('profileStatusModal');
+    var titleEl = document.getElementById('profileStatusModalTitle');
+    var msgEl = document.getElementById('profileStatusModalMessage');
+    var iconWrap = document.getElementById('profileStatusModalIcon');
+    var iconEl = iconWrap ? iconWrap.querySelector('i') : null;
+
+    profileStatusReloadOnClose = !!reloadOnClose;
+    if (titleEl) titleEl.textContent = (type === 'success') ? 'Success' : ((type === 'error') ? 'Error' : 'Notice');
+    if (msgEl) msgEl.textContent = message || '';
+
+    if (iconWrap && iconEl) {
+      iconWrap.className = 'h-9 w-9 rounded-full flex items-center justify-center shrink-0';
+      if (type === 'success') {
+        iconWrap.classList.add('bg-emerald-100', 'text-emerald-700');
+        iconEl.className = 'fas fa-check-circle';
+      } else if (type === 'error') {
+        iconWrap.classList.add('bg-red-100', 'text-red-700');
+        iconEl.className = 'fas fa-exclamation-circle';
+      } else {
+        iconWrap.classList.add('bg-blue-100', 'text-blue-700');
+        iconEl.className = 'fas fa-info-circle';
+      }
+    }
+
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  function closeProfileStatusModal() {
+    var modal = document.getElementById('profileStatusModal');
+    if (modal) modal.classList.add('hidden');
+    if (profileStatusReloadOnClose) {
+      profileStatusReloadOnClose = false;
+      window.location.reload();
+    }
+  }
+
+  async function updateProductProfileFromApi(btn) {
+    var itemCode = (btn && btn.dataset && btn.dataset.itemCode) ? String(btn.dataset.itemCode).trim() : '';
+    if (!itemCode) {
+      showProfileStatusModal('Item code is missing for this product.', 'error', false);
+      return;
+    }
+
+    var oldHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('opacity-70', 'cursor-not-allowed');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin text-[11px]" aria-hidden="true"></i> Updating...';
+
+    try {
+      var res = await fetch('index.php?page=products&action=update_api_call&itemCode=' + encodeURIComponent(itemCode), {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' }
+      });
+      var data = await res.json();
+      if (data && data.success) {
+        showProfileStatusModal('Product updated successfully from API.', 'success', true);
+        return;
+      }
+      showProfileStatusModal('Update failed: ' + ((data && data.message) ? data.message : 'Unknown error'), 'error', false);
+    } catch (e) {
+      showProfileStatusModal('An error occurred while updating this product.', 'error', false);
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('opacity-70', 'cursor-not-allowed');
+      btn.innerHTML = oldHtml;
+    }
+  }
+
   function openStockModal() {
     document.getElementById('stockModal').classList.remove('hidden');
   }

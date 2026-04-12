@@ -206,21 +206,31 @@ class Order{
        
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
         //echo $sql;
         // Add limit and offset to params and types
         $params[] = $limit;
         $params[] = $offset;
         $types = str_repeat('s', count($params) - 2) . 'ii';
         $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $orders = [];
-        if ($result && $result->num_rows > 0) {
-            while ($row = $result->fetch_assoc()) {
-                $orders[] = $row;
+
+        try {
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $orders = [];
+            if ($result && $result->num_rows > 0) {
+                while ($row = $result->fetch_assoc()) {
+                    $orders[] = $row;
+                }
             }
+            return $orders;
+        } catch (\mysqli_sql_exception $e) {
+            // Prevent fatal crash when MySQL cannot create temp files (e.g. /tmp full).
+            error_log('Order::getAllOrders failed: ' . $e->getMessage());
+            return [];
         }
-        return $orders;
     }
     public function getOrdersCount($filters = []) {
         //$sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
