@@ -448,6 +448,7 @@ $dpDateMax = date('Y-m-d');
         var cell = skuInput.closest('.dp-sku-cell');
         var box = cell ? cell.querySelector('.dp-sku-suggestions') : null;
         var debounce = null;
+        var fetchAbort = null;
 
         function clearBox() {
             if (!box) return;
@@ -479,14 +480,24 @@ $dpDateMax = date('Y-m-d');
 
         skuInput.addEventListener('input', function () {
             clearTimeout(debounce);
+            if (fetchAbort) {
+                fetchAbort.abort();
+            }
             var q = skuInput.value.trim();
             if (q.length < 2) {
+                if (fetchAbort) {
+                    fetchAbort.abort();
+                    fetchAbort = null;
+                }
                 clearBox();
                 return;
             }
             debounce = setTimeout(function () {
+                var ctrl = new AbortController();
+                fetchAbort = ctrl;
                 fetch(productSearchUrl(q), {
                     credentials: 'same-origin',
+                    signal: ctrl.signal,
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest'
@@ -494,11 +505,21 @@ $dpDateMax = date('Y-m-d');
                 })
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
+                        if (fetchAbort !== ctrl) return;
                         if (!Array.isArray(data)) { clearBox(); return; }
                         render(data);
                     })
-                    .catch(function () { clearBox(); });
-            }, 220);
+                    .catch(function (err) {
+                        if (err && err.name === 'AbortError') return;
+                        if (fetchAbort !== ctrl) return;
+                        clearBox();
+                    })
+                    .finally(function () {
+                        if (fetchAbort === ctrl) {
+                            fetchAbort = null;
+                        }
+                    });
+            }, 120);
         });
 
         if (box) {

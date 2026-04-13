@@ -291,6 +291,51 @@ class product
         }
         return $orderItems;
     }
+
+    /**
+     * Lightweight product search for autocomplete (minimal columns + hard limit).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getProductItemsForAutocomplete($search = '', $limit = 40)
+    {
+        $search = trim((string) $search);
+        if ($search === '') {
+            return [];
+        }
+        $searchTerm = '%' . $search . '%';
+        $limit = max(1, min(100, (int) $limit));
+        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, gst, hsn FROM vp_products
+            WHERE (item_code LIKE ? OR title LIKE ? OR sku LIKE ?)
+            LIMIT ?';
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param('sssi', $searchTerm, $searchTerm, $searchTerm, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = [
+                    'id' => $row['id'],
+                    'sku' => $row['sku'],
+                    'item_code' => $row['item_code'],
+                    'title' => $row['title'],
+                    'color' => $row['color'],
+                    'size' => $row['size'],
+                    'cost_price' => $row['cost_price'],
+                    'gst' => $row['gst'],
+                    'hsn' => $row['hsn'],
+                ];
+            }
+        }
+        $stmt->close();
+
+        return $orderItems;
+    }
+
     public function getProductItemsByCode($item_code = '')
     {
         $searchTerm = "%$item_code%";

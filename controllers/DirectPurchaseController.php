@@ -60,7 +60,7 @@ class DirectPurchaseController
             exit;
         }
         $productModel = new product($conn);
-        $items = $productModel->getProductItems($q);
+        $items = $productModel->getProductItemsForAutocomplete($q, 40);
         echo json_encode(is_array($items) ? $items : []);
         exit;
     }
