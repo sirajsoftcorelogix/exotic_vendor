@@ -26,6 +26,7 @@ if (!isset($dpCurrencies[$dpCurrencyVal])) {
 }
 $dpCurrencySym = dp_currency_symbol($dpCurrencyVal);
 $dpDateMax = date('Y-m-d');
+$dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Header band (stock transfer style) -->
@@ -142,25 +143,39 @@ $dpDateMax = date('Y-m-d');
                 <table class="min-w-full divide-y divide-gray-200 text-sm" id="line-items-table">
                     <thead>
                         <tr class="bg-gray-100">
+                            <th class="px-2 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 w-16">Image</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[14rem]">SKU</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">Cost / item</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">Qty</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">HSN</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">GST %</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">Unit</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">GST amt</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">Line total</th>
                             <th class="px-3 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 w-12"></th>
                         </tr>
                     </thead>
                     <tbody id="line-items-body" class="divide-y divide-gray-100">
                         <?php foreach ($items as $idx => $it): ?>
+                            <?php
+                            $lineImg = trim((string) ($it['product_image'] ?? ''));
+                            $thumbShow = $lineImg !== '' ? $lineImg : $dpThumbPlaceholder;
+                            ?>
                             <tr class="dp-line hover:bg-amber-50/30 transition-colors">
+                                <td class="px-2 py-2 align-top text-center w-16">
+                                    <button type="button" class="dp-thumb-trigger mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0 shadow-sm transition hover:ring-2 hover:ring-amber-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 <?= $lineImg === '' ? 'opacity-60 cursor-not-allowed' : 'cursor-zoom-in' ?>"
+                                        data-full-src="<?= htmlspecialchars($lineImg) ?>"
+                                        title="<?= $lineImg !== '' ? 'View larger' : '' ?>"
+                                        aria-label="<?= $lineImg !== '' ? 'Enlarge product image' : 'No product image' ?>">
+                                        <img src="<?= htmlspecialchars($thumbShow) ?>" alt="" class="dp-line-thumb-img h-full w-full object-cover" loading="lazy" data-placeholder="<?= htmlspecialchars($dpThumbPlaceholder) ?>"
+                                            onerror="this.onerror=null;this.src=this.getAttribute('data-placeholder')||'';">
+                                    </button>
+                                </td>
                                 <td class="px-3 py-2 align-top min-w-[14rem]">
                                     <div class="relative dp-sku-cell">
                                         <input type="hidden" name="item_code[]" class="dp-h-item-code" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
                                         <input type="hidden" name="color[]" class="dp-h-color" value="<?= htmlspecialchars($it['color'] ?? '') ?>">
                                         <input type="hidden" name="size[]" class="dp-h-size" value="<?= htmlspecialchars($it['size'] ?? '') ?>">
+                                        <input type="hidden" name="gst_amount[]" class="dp-gst" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>">
                                         <input type="text" name="sku[]" autocomplete="off" placeholder="Search SKU, code, title…"
                                             class="dp-sku w-full min-w-[12rem] <?= $inpSm ?>"
                                             value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
@@ -172,7 +187,6 @@ $dpDateMax = date('Y-m-d');
                                 <td class="px-3 py-2 align-top min-w-[8rem]"><input name="hsn[]" class="w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
                                 <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
                                 <td class="px-3 py-2 align-top min-w-[6rem]"><input name="unit[]" class="w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
-                                <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="gst_amount[]" class="dp-gst w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>"></td>
                                 <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
                                 <td class="px-3 py-2 text-center align-top">
                                     <button type="button" class="dp-remove inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
@@ -207,7 +221,7 @@ $dpDateMax = date('Y-m-d');
                                 </tr>
                                 <tr>
                                     <td class="py-2 pr-3 text-gray-600">GST <span class="text-gray-400 font-normal">(total)</span></td>
-                                    <td class="py-2 text-right font-medium text-gray-900">
+                                    <td class="py-2 text-right font-medium text-gray-900 w-44">
                                         <div class="flex items-center justify-end gap-1">
                                             <span class="dp-summary-cur-sym text-gray-500 tabular-nums shrink-0" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
                                             <input type="number" step="0.01" name="igst_total" id="f_igst_total" readonly tabindex="-1"
@@ -216,35 +230,39 @@ $dpDateMax = date('Y-m-d');
                                         </div>
                                     </td>
                                 </tr>
+                                <tr>
+                                    <td class="py-2 pr-3 text-gray-600">Discount</td>
+                                    <td class="py-2 text-right font-medium text-gray-900 w-44">
+                                        <div class="flex items-center justify-end gap-1">
+                                            <span class="dp-summary-cur-sym text-gray-500 tabular-nums shrink-0" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
+                                            <input type="number" step="0.01" name="discount" id="f_discount"
+                                                class="min-w-0 flex-1 text-right rounded-lg border border-gray-200 bg-white px-2 py-2 text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 outline-none transition"
+                                                value="<?= htmlspecialchars((string) ($pData['discount'] ?? '0')) ?>">
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 pr-3 text-gray-600">Round off</td>
+                                    <td class="py-2 text-right font-medium text-gray-900 w-44">
+                                        <div class="flex items-center justify-end gap-1">
+                                            <span class="dp-summary-cur-sym text-gray-500 tabular-nums shrink-0" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
+                                            <input type="number" step="0.01" name="round_off" id="f_round_off"
+                                                class="min-w-0 flex-1 text-right rounded-lg border border-gray-200 bg-white px-2 py-2 text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 outline-none transition"
+                                                value="<?= htmlspecialchars((string) ($pData['round_off'] ?? '0')) ?>">
+                                        </div>
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                         <input type="hidden" name="sgst_total" id="f_sgst_total" value="<?= htmlspecialchars((string) ($pData['sgst_total'] ?? '0')) ?>">
                         <input type="hidden" name="cgst_total" id="f_cgst_total" value="<?= htmlspecialchars((string) ($pData['cgst_total'] ?? '0')) ?>">
-                        <div class="mt-4 space-y-3">
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">Discount</label>
-                                <div class="flex items-center gap-1">
-                                    <span class="dp-summary-cur-sym text-gray-500 text-sm tabular-nums shrink-0" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
-                                    <input type="number" step="0.01" name="discount" id="f_discount" class="<?= $inp ?> min-w-0 flex-1 text-right"
-                                        value="<?= htmlspecialchars((string) ($pData['discount'] ?? '0')) ?>">
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">Round off</label>
-                                <div class="flex items-center gap-1">
-                                    <span class="dp-summary-cur-sym text-gray-500 text-sm tabular-nums shrink-0" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
-                                    <input type="number" step="0.01" name="round_off" id="f_round_off" class="<?= $inp ?> min-w-0 flex-1 text-right"
-                                        value="<?= htmlspecialchars((string) ($pData['round_off'] ?? '0')) ?>">
-                                </div>
-                            </div>
-                            <div class="pt-2 border-t border-gray-200">
-                                <label class="block text-xs font-semibold text-amber-900/90 mb-1">Grand total</label>
-                                <div class="flex items-center gap-1.5 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 shadow-sm">
-                                    <span class="dp-summary-cur-sym text-amber-900/80 text-lg tabular-nums shrink-0 font-bold" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
-                                    <input type="number" step="0.01" name="grand_total" id="f_grand_total" readonly tabindex="-1"
-                                        class="min-w-0 flex-1 border-0 bg-transparent text-right text-base font-bold text-amber-950 p-0 focus:ring-0"
-                                        value="<?= htmlspecialchars((string) ($pData['grand_total'] ?? '0')) ?>">
-                                </div>
+                        <div class="mt-4 pt-3 border-t border-gray-200/80">
+                            <div class="text-amber-900/90 text-sm font-semibold mb-2">Grand total</div>
+                            <div class="flex items-center gap-1.5 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 shadow-sm">
+                                <span class="dp-summary-cur-sym text-amber-900/80 text-lg tabular-nums shrink-0 font-bold" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
+                                <input type="number" step="0.01" name="grand_total" id="f_grand_total" readonly tabindex="-1"
+                                    class="min-w-0 flex-1 border-0 bg-transparent text-right text-base font-bold text-amber-950 p-0 focus:ring-0"
+                                    value="<?= htmlspecialchars((string) ($pData['grand_total'] ?? '0')) ?>">
                             </div>
                         </div>
                         <p class="mt-3 text-[11px] text-gray-500 leading-snug">
@@ -300,14 +318,28 @@ $dpDateMax = date('Y-m-d');
     </form>
 </div>
 
+<div id="dp-img-lightbox" class="fixed inset-0 z-[200] hidden flex-col items-center justify-center bg-black/85 p-6" role="dialog" aria-modal="true" aria-labelledby="dp-img-lightbox-title">
+    <p id="dp-img-lightbox-title" class="sr-only">Enlarged product image</p>
+    <button type="button" id="dp-img-lightbox-close" class="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white text-xl font-light hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400" aria-label="Close">&times;</button>
+    <img id="dp-img-lightbox-img" src="" alt="" class="max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl ring-1 ring-white/10">
+</div>
+
 <table class="hidden">
     <tbody id="line-item-template">
         <tr class="dp-line hover:bg-amber-50/30 transition-colors">
+            <td class="px-2 py-2 align-top text-center w-16">
+                <button type="button" class="dp-thumb-trigger mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0 opacity-60 cursor-not-allowed shadow-sm"
+                    data-full-src="" title="" aria-label="No product image">
+                    <img src="<?= htmlspecialchars($dpThumbPlaceholder) ?>" alt="" class="dp-line-thumb-img h-full w-full object-cover" loading="lazy" data-placeholder="<?= htmlspecialchars($dpThumbPlaceholder) ?>"
+                        onerror="this.onerror=null;this.src=this.getAttribute('data-placeholder')||'';">
+                </button>
+            </td>
             <td class="px-3 py-2 align-top min-w-[14rem]">
                 <div class="relative dp-sku-cell">
                     <input type="hidden" name="item_code[]" class="dp-h-item-code" value="">
                     <input type="hidden" name="color[]" class="dp-h-color" value="">
                     <input type="hidden" name="size[]" class="dp-h-size" value="">
+                    <input type="hidden" name="gst_amount[]" class="dp-gst" value="">
                     <input type="text" name="sku[]" autocomplete="off" placeholder="Search SKU, code, title…"
                         class="dp-sku w-full min-w-[12rem] <?= $inpSm ?>" value="">
                     <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
@@ -318,7 +350,6 @@ $dpDateMax = date('Y-m-d');
             <td class="px-3 py-2 align-top min-w-[8rem]"><input name="hsn[]" class="w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 align-top min-w-[6rem]"><input name="unit[]" class="w-full min-w-[5rem] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="gst_amount[]" class="dp-gst w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 text-center align-top">
                 <button type="button" class="dp-remove inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
@@ -331,6 +362,7 @@ $dpDateMax = date('Y-m-d');
 
 <script>
 (function () {
+    var DP_THUMB_PLACEHOLDER = <?= json_encode($dpThumbPlaceholder, JSON_UNESCAPED_UNICODE) ?>;
     var DP_CUR_SYM = <?= json_encode(dp_currency_symbol_map(), JSON_UNESCAPED_UNICODE) ?>;
 
     function syncSummaryCurrencySymbols() {
@@ -355,6 +387,27 @@ $dpDateMax = date('Y-m-d');
         var v = parseFloat(el.value);
         return isNaN(v) ? 0 : v;
     }
+    function setLineThumb(tr, url) {
+        var btn = tr.querySelector('.dp-thumb-trigger');
+        var img = tr.querySelector('.dp-line-thumb-img');
+        if (!btn || !img) return;
+        var u = (url && String(url).trim()) ? String(url).trim() : '';
+        btn.setAttribute('data-full-src', u);
+        if (u) {
+            img.src = u;
+            btn.classList.remove('opacity-60', 'cursor-not-allowed');
+            btn.classList.add('cursor-zoom-in');
+            btn.setAttribute('title', 'View larger');
+            btn.setAttribute('aria-label', 'Enlarge product image');
+        } else {
+            img.src = DP_THUMB_PLACEHOLDER;
+            btn.classList.add('opacity-60', 'cursor-not-allowed');
+            btn.classList.remove('cursor-zoom-in');
+            btn.removeAttribute('title');
+            btn.setAttribute('aria-label', 'No product image');
+        }
+    }
+
     function recalcRow(tr) {
         var cost = parseNum(tr.querySelector('.dp-cost'));
         var qty = parseNum(tr.querySelector('.dp-qty'));
@@ -439,6 +492,7 @@ $dpDateMax = date('Y-m-d');
         if (hsn && item.hsn != null) hsn.value = String(item.hsn);
         var rate = tr.querySelector('.dp-rate');
         if (rate && item.gst != null && item.gst !== '') rate.value = item.gst;
+        setLineThumb(tr, item.image != null && item.image !== '' ? item.image : '');
         recalcRow(tr);
     }
 
@@ -547,8 +601,6 @@ $dpDateMax = date('Y-m-d');
             var el = tr.querySelector(sel);
             if (el) el.addEventListener('input', function () { recalcRow(tr); });
         });
-        var gstEl = tr.querySelector('.dp-gst');
-        if (gstEl) gstEl.addEventListener('input', function () { recalcInvoiceTotals(); });
         var lineTot = tr.querySelector('.dp-line-total');
         if (lineTot) lineTot.addEventListener('input', function () { recalcInvoiceTotals(); });
         var rm = tr.querySelector('.dp-remove');
@@ -563,7 +615,43 @@ $dpDateMax = date('Y-m-d');
         if (sku) initSkuSearch(sku);
     }
 
+    function initDpImageLightbox() {
+        var lb = document.getElementById('dp-img-lightbox');
+        var lbImg = document.getElementById('dp-img-lightbox-img');
+        var lbClose = document.getElementById('dp-img-lightbox-close');
+        if (!lb || !lbImg) return;
+        function openLb(url) {
+            if (!url || !String(url).trim()) return;
+            lbImg.src = url;
+            lb.classList.remove('hidden');
+            lb.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeLb() {
+            lb.classList.add('hidden');
+            lb.classList.remove('flex');
+            lbImg.src = '';
+            document.body.style.overflow = '';
+        }
+        document.getElementById('line-items-body').addEventListener('click', function (e) {
+            var btn = e.target.closest('.dp-thumb-trigger');
+            if (!btn) return;
+            var url = btn.getAttribute('data-full-src') || '';
+            if (!String(url).trim()) return;
+            e.preventDefault();
+            openLb(url);
+        });
+        if (lbClose) lbClose.addEventListener('click', closeLb);
+        lb.addEventListener('click', function (e) {
+            if (e.target === lb) closeLb();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !lb.classList.contains('hidden')) closeLb();
+        });
+    }
+
     document.querySelectorAll('#line-items-body .dp-line').forEach(bindRow);
+    initDpImageLightbox();
     window.addEventListener('resize', syncAllOpenSkuSuggestBoxes);
     window.addEventListener('scroll', syncAllOpenSkuSuggestBoxes, true);
     var lineXScroll = document.getElementById('line-items-x-scroll');

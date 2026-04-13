@@ -81,6 +81,7 @@ class DirectPurchaseController
     public function edit()
     {
         is_login();
+        global $conn;
         global $directPurchaseModel;
         global $directPurchaseVendorModel;
 
@@ -95,6 +96,17 @@ class DirectPurchaseController
             exit;
         }
         $items = $directPurchaseModel->getItems($id);
+        $productModel = new product($conn);
+        foreach ($items as &$it) {
+            $img = $productModel->getImageForPurchaseLine(
+                (string) ($it['item_code'] ?? ''),
+                (string) ($it['sku'] ?? ''),
+                (string) ($it['color'] ?? ''),
+                (string) ($it['size'] ?? '')
+            );
+            $it['product_image'] = $img ?? '';
+        }
+        unset($it);
         $vendors = $directPurchaseVendorModel->getAllVendors();
 
         renderTemplate('views/direct_purchase/form.php', [

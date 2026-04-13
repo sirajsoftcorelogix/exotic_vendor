@@ -305,7 +305,7 @@ class product
         }
         $searchTerm = '%' . $search . '%';
         $limit = max(1, min(100, (int) $limit));
-        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, gst, hsn FROM vp_products
+        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, gst, hsn, image FROM vp_products
             WHERE (item_code LIKE ? OR title LIKE ? OR sku LIKE ?)
             LIMIT ?';
         $stmt = $this->db->prepare($sql);
@@ -328,12 +328,54 @@ class product
                     'cost_price' => $row['cost_price'],
                     'gst' => $row['gst'],
                     'hsn' => $row['hsn'],
+                    'image' => $row['image'] ?? '',
                 ];
             }
         }
         $stmt->close();
 
         return $orderItems;
+    }
+
+    /**
+     * Resolve product image for a direct-purchase line (variant match, then SKU).
+     */
+    public function getImageForPurchaseLine(string $itemCode, string $sku, string $color, string $size): ?string
+    {
+        $itemCode = trim($itemCode);
+        $sku = trim($sku);
+        $color = trim($color);
+        $size = trim($size);
+
+        if ($itemCode !== '') {
+            $sql = 'SELECT image FROM vp_products WHERE item_code = ? AND COALESCE(color, \'\') = ? AND COALESCE(size, \'\') = ? LIMIT 1';
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('sss', $itemCode, $color, $size);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (!empty($res['image'])) {
+                    return (string) $res['image'];
+                }
+            }
+        }
+
+        if ($sku !== '') {
+            $sql = 'SELECT image FROM vp_products WHERE sku = ? LIMIT 1';
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('s', $sku);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (!empty($res['image'])) {
+                    return (string) $res['image'];
+                }
+            }
+        }
+
+        return null;
     }
 
     public function getProductItemsByCode($item_code = '')
