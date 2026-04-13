@@ -327,6 +327,31 @@ switch ($page) {
         }
         break;
 
+    case 'direct_purchase':
+        require_once 'controllers/DirectPurchaseController.php';
+        $controller = new DirectPurchaseController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'add':
+                $controller->add();
+                break;
+            case 'edit':
+                $controller->edit();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'delete':
+                $controller->delete();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+
     case 'invoices':
         require_once 'controllers/InvoicesController.php';
         $controller = new InvoicesController();
