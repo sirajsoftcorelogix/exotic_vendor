@@ -161,10 +161,23 @@ class DirectPurchaseController
             $invoiceFile = $existing['invoice_file'] ?? null;
         }
 
-        if (!empty($_FILES['invoice_file']['name']) && isset($_FILES['invoice_file']['error']) && $_FILES['invoice_file']['error'] === UPLOAD_ERR_OK) {
-            $invoiceFile = $this->storeInvoiceUpload($_FILES['invoice_file']);
-            if ($invoiceFile === null) {
-                $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Invoice upload failed. Use PDF, JPG or PNG.'];
+        if (!empty($_FILES['invoice_file']['name'])) {
+            $invErr = (int) ($_FILES['invoice_file']['error'] ?? UPLOAD_ERR_NO_FILE);
+            if ($invErr === UPLOAD_ERR_OK) {
+                $invoiceFile = $this->storeInvoiceUpload($_FILES['invoice_file']);
+                if ($invoiceFile === null) {
+                    $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Invoice file must be a PDF or image (JPG, PNG, GIF, WebP), max 2 MB.'];
+                    $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
+                    header('Location: ' . $redir);
+                    exit;
+                }
+            } elseif ($invErr === UPLOAD_ERR_INI_SIZE || $invErr === UPLOAD_ERR_FORM_SIZE) {
+                $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Invoice file is too large. Maximum size is 2 MB.'];
+                $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
+                header('Location: ' . $redir);
+                exit;
+            } elseif ($invErr !== UPLOAD_ERR_NO_FILE) {
+                $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Invoice upload failed. Try again.'];
                 $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
                 header('Location: ' . $redir);
                 exit;
@@ -339,6 +352,14 @@ class DirectPurchaseController
      */
     private function storeInvoiceUpload($file)
     {
+        $maxBytes = 2 * 1024 * 1024;
+        if (!isset($file['tmp_name'], $file['name'], $file['size']) || !is_uploaded_file($file['tmp_name'])) {
+            return null;
+        }
+        if ((int) $file['size'] > $maxBytes) {
+            return null;
+        }
+
         $uploadDir = __DIR__ . '/../uploads/direct_purchase/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0755, true);
@@ -347,10 +368,24 @@ class DirectPurchaseController
         $tmp = $file['tmp_name'];
         $parts = explode('.', $name);
         $ext = strtolower(end($parts));
-        $allowed = ['pdf', 'jpg', 'jpeg', 'png'];
+        $allowed = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
         if (!in_array($ext, $allowed, true)) {
             return null;
         }
+
+        $mime = null;
+        if (function_exists('mime_content_type')) {
+            $mime = @mime_content_type($tmp) ?: null;
+        }
+        if ($mime === null && class_exists('finfo')) {
+            $fi = new \finfo(FILEINFO_MIME_TYPE);
+            $mime = $fi->file($tmp) ?: null;
+        }
+        $allowedMime = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if ($mime !== null && $mime !== 'application/octet-stream' && !in_array($mime, $allowedMime, true)) {
+            return null;
+        }
+
         $newName = 'dp_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
         $dest = $uploadDir . $newName;
         if (!move_uploaded_file($tmp, $dest)) {

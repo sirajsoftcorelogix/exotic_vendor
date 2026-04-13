@@ -99,8 +99,9 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Invoice file</label>
-                    <input type="file" name="invoice_file" accept=".pdf,.jpg,.jpeg,.png"
+                    <input type="file" name="invoice_file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,application/pdf,image/*"
                         class="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-amber-50 file:text-amber-900 file:font-medium">
+                    <p class="mt-1 text-xs text-gray-500">PDF or image only. Maximum file size 2 MB.</p>
                     <?php if ($purchase && !empty($purchase['invoice_file'])): ?>
                         <p class="mt-2 text-sm text-gray-600">Current:
                             <a href="<?= htmlspecialchars($purchase['invoice_file']) ?>" target="_blank" rel="noopener noreferrer"
