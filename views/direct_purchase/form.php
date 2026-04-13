@@ -132,7 +132,7 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div class="border-b border-gray-200 pb-3 mb-4">
-                <div class="text-lg font-semibold text-gray-800">Line items &amp; totals</div>
+                <div class="text-lg font-semibold text-gray-800">Line Items</div>
             </div>
             <div class="overflow-x-auto" id="line-items-x-scroll">
                 <table class="min-w-full divide-y divide-gray-200 text-sm" id="line-items-table">
