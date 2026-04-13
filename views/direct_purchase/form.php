@@ -25,7 +25,7 @@ if (!isset($dpCurrencies[$dpCurrencyVal])) {
     $dpCurrencyVal = 'INR';
 }
 $dpCurrencySym = dp_currency_symbol($dpCurrencyVal);
-$dpDateMax = date('Y-m-d');
+$dpDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
 $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">

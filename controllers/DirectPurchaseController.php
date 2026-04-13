@@ -231,10 +231,28 @@ class DirectPurchaseController
      * @param array<string, mixed> $filters
      * @return array<string, mixed>
      */
+    private function directPurchaseTodayYmd(): string
+    {
+        $tz = new \DateTimeZone('Asia/Kolkata');
+
+        return (new \DateTimeImmutable('now', $tz))->format('Y-m-d');
+    }
+
+    private function isValidYmdCalendarDate(string $ymd): bool
+    {
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $ymd, $m)) {
+            return false;
+        }
+        $y = (int) $m[1];
+        $mo = (int) $m[2];
+        $d = (int) $m[3];
+
+        return checkdate($mo, $d, $y);
+    }
+
     private function sanitizeDirectPurchaseListDateFilters(array $filters): array
     {
-        $today = new \DateTimeImmutable('today');
-        $todayStr = $today->format('Y-m-d');
+        $todayStr = $this->directPurchaseTodayYmd();
 
         foreach (['invoice_date_from', 'invoice_date_to'] as $key) {
             $v = isset($filters[$key]) ? trim((string) $filters[$key]) : '';
@@ -242,12 +260,11 @@ class DirectPurchaseController
                 $filters[$key] = '';
                 continue;
             }
-            $d = \DateTimeImmutable::createFromFormat('Y-m-d', $v);
-            if ($d === false || $d->format('Y-m-d') !== $v) {
+            if (!$this->isValidYmdCalendarDate($v)) {
                 $filters[$key] = '';
                 continue;
             }
-            if ($d > $today) {
+            if ($v > $todayStr) {
                 $filters[$key] = $todayStr;
             }
         }
@@ -256,17 +273,16 @@ class DirectPurchaseController
     }
 
     /**
-     * @return string|null Error message, or null if date is valid and not after today
+     * @return string|null Error message, or null if date is valid and not after today (Asia/Kolkata calendar day)
      */
     private function validateDirectPurchaseDateNotFuture(string $dateStr, string $fieldLabel): ?string
     {
         $dateStr = trim($dateStr);
-        $d = \DateTimeImmutable::createFromFormat('Y-m-d', $dateStr);
-        if ($d === false || $d->format('Y-m-d') !== $dateStr) {
+        if (!$this->isValidYmdCalendarDate($dateStr)) {
             return $fieldLabel . ' must be a valid date.';
         }
-        $today = new \DateTimeImmutable('today');
-        if ($d > $today) {
+        $todayStr = $this->directPurchaseTodayYmd();
+        if ($dateStr > $todayStr) {
             return $fieldLabel . ' cannot be in the future.';
         }
 

@@ -29,7 +29,7 @@ if (!empty($_GET)) {
     }
 }
 $pgBase = '?page=direct_purchase&action=list&limit=' . $limit . $queryString;
-$dpFilterDateMax = date('Y-m-d');
+$dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Page header (matches stock transfer history) -->
