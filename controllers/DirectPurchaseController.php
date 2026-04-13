@@ -358,12 +358,10 @@ class DirectPurchaseController
             exit;
         }
         $returns = $directPurchaseReturnModel->listForPurchase($dpId);
-        $vendors = $directPurchaseVendorModel->getAllVendors();
 
         renderTemplate('views/direct_purchase/return_list.php', [
             'purchase' => $purchase,
             'returns' => $returns,
-            'vendors' => $vendors,
         ], 'Purchase returns');
     }
 
