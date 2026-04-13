@@ -361,35 +361,54 @@ class pos
         if ($limit < 1) {
             $limit = 200;
         }
-        if ($limit > 1000) {
-            $limit = 1000;
+        if ($limit > 500) {
+            $limit = 500;
         }
 
-        $where = " WHERE sm.warehouse_id = ? AND sm_newer.id IS NULL AND p.is_active = 1 ";
+        if ($warehouseId <= 0) {
+            return [];
+        }
+
+        // Latest movement per product for this warehouse (same pattern as getProductsDataTable).
+        // Avoid LEFT JOIN sm_newer ... IS NULL — that join explodes on busy SKUs and causes gateway timeouts.
+        $join = "
+            INNER JOIN (
+                SELECT sm1.product_id, sm1.running_stock AS stock_qty
+                FROM vp_stock_movements sm1
+                INNER JOIN (
+                    SELECT product_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE warehouse_id = ?
+                    GROUP BY product_id
+                ) latest ON latest.max_id = sm1.id AND latest.product_id = sm1.product_id
+            ) sm ON sm.product_id = p.id
+        ";
+
+        $where = ' WHERE p.is_active = 1 ';
         $params = [$warehouseId];
-        $types = "i";
+        $types = 'i';
 
         if ($category !== '' && $category !== 'allProducts') {
-            $where .= " AND p.groupname = ? ";
+            $where .= ' AND p.groupname = ? ';
             $params[] = $category;
-            $types .= "s";
+            $types .= 's';
         }
 
         if ($search !== '') {
-            $where .= " AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ";
+            $where .= ' AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ';
             $like = '%' . $search . '%';
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
-            $types .= "sss";
+            $types .= 'sss';
         }
 
         if ($stockStatus === 'out') {
-            $where .= " AND sm.running_stock = 0 ";
+            $where .= ' AND sm.stock_qty = 0 ';
         } elseif ($stockStatus === 'low') {
-            $where .= " AND sm.running_stock BETWEEN 1 AND 5 ";
+            $where .= ' AND sm.stock_qty BETWEEN 1 AND 5 ';
         } elseif ($stockStatus === 'in') {
-            $where .= " AND sm.running_stock > 0 ";
+            $where .= ' AND sm.stock_qty > 0 ';
         }
 
         $sql = "
@@ -404,24 +423,22 @@ class pos
                 p.image,
                 p.itemprice AS sell_price,
                 p.cost_price,
-                sm.running_stock AS stock_qty
-            FROM vp_stock_movements sm
-            LEFT JOIN vp_stock_movements sm_newer
-                ON sm.product_id = sm_newer.product_id
-               AND sm.warehouse_id = sm_newer.warehouse_id
-               AND sm.id < sm_newer.id
-            INNER JOIN vp_products p
-                ON p.id = sm.product_id
+                sm.stock_qty AS stock_qty
+            FROM vp_products p
+            $join
             $where
-            ORDER BY stock_qty ASC, p.title ASC
-            LIMIT $limit
+            ORDER BY sm.stock_qty ASC, p.title ASC
+            LIMIT {$limit}
         ";
 
         $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
         $result = $stmt->get_result();
-        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
         $stmt->close();
 
         return $rows;
