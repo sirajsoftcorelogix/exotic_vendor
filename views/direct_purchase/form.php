@@ -125,7 +125,6 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                 <table class="min-w-full divide-y divide-gray-200 text-sm" id="line-items-table">
                     <thead>
                         <tr class="bg-gray-100">
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Item code</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">SKU</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Color</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Size</th>
@@ -142,8 +141,10 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                     <tbody id="line-items-body" class="divide-y divide-gray-100">
                         <?php foreach ($items as $idx => $it): ?>
                             <tr class="dp-line hover:bg-amber-50/30 transition-colors">
-                                <td class="px-3 py-2"><input name="item_code[]" class="w-[92px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>"></td>
-                                <td class="px-3 py-2"><input name="sku[]" class="w-[92px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['sku'] ?? '') ?>"></td>
+                                <td class="px-3 py-2">
+                                    <input type="hidden" name="item_code[]" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
+                                    <input name="sku[]" class="w-[92px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
+                                </td>
                                 <td class="px-3 py-2"><input name="color[]" class="w-[76px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['color'] ?? '') ?>"></td>
                                 <td class="px-3 py-2"><input name="size[]" class="w-[76px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['size'] ?? '') ?>"></td>
                                 <td class="px-3 py-2"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-[96px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>"></td>
@@ -264,8 +265,10 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
 <table class="hidden">
     <tbody id="line-item-template">
         <tr class="dp-line hover:bg-amber-50/30 transition-colors">
-            <td class="px-3 py-2"><input name="item_code[]" class="w-[92px] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2"><input name="sku[]" class="w-[92px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2">
+                <input type="hidden" name="item_code[]" value="">
+                <input name="sku[]" class="w-[92px] <?= $inpSm ?>" value="">
+            </td>
             <td class="px-3 py-2"><input name="color[]" class="w-[76px] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2"><input name="size[]" class="w-[76px] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-[96px] <?= $inpSm ?>" value=""></td>

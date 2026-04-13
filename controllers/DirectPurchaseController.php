@@ -184,10 +184,10 @@ class DirectPurchaseController
     private function collectLineItemsFromPost()
     {
         $codes = $_POST['item_code'] ?? [];
-        if (!is_array($codes)) {
+        $skus = $_POST['sku'] ?? [];
+        if (!is_array($skus)) {
             return [];
         }
-        $skus = $_POST['sku'] ?? [];
         $colors = $_POST['color'] ?? [];
         $sizes = $_POST['size'] ?? [];
         $costs = $_POST['cost_per_item'] ?? [];
@@ -199,7 +199,7 @@ class DirectPurchaseController
         $lineTots = $_POST['line_total'] ?? [];
 
         $out = [];
-        $n = count($codes);
+        $n = max(count($skus), is_array($qtys) ? count($qtys) : 0);
         for ($i = 0; $i < $n; $i++) {
             $qty = isset($qtys[$i]) ? (float) $qtys[$i] : 0;
             if ($qty <= 0) {

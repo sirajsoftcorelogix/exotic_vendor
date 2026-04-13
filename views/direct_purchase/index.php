@@ -104,7 +104,7 @@ $pgBase = '?page=direct_purchase&action=list&limit=' . $limit . $queryString;
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Keyword</label>
                     <input type="text" name="search_text" value="<?= htmlspecialchars($filters['search_text'] ?? '') ?>"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
-                        placeholder="Invoice no., vendor, item code, SKU…"
+                        placeholder="Invoice no., vendor, SKU…"
                         autocomplete="off">
                 </div>
                 <div>
