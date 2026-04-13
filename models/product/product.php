@@ -253,12 +253,12 @@ class product
     public function getProductItems($search = '')
     {
         $searchTerm = "%$search%";
-        $sql = "SELECT * FROM vp_products WHERE (item_code LIKE ? OR title LIKE ?)";
+        $sql = "SELECT * FROM vp_products WHERE (item_code LIKE ? OR title LIKE ? OR sku LIKE ?)";
         $stmt = $this->db->prepare($sql);
         if ($stmt === false) {
             return [];
         }
-        $stmt->bind_param('ss', $searchTerm, $searchTerm);
+        $stmt->bind_param('sss', $searchTerm, $searchTerm, $searchTerm);
         $stmt->execute();
         $result = $stmt->get_result();
         $orderItems = [];
@@ -291,6 +291,93 @@ class product
         }
         return $orderItems;
     }
+
+    /**
+     * Lightweight product search for autocomplete (minimal columns + hard limit).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getProductItemsForAutocomplete($search = '', $limit = 40)
+    {
+        $search = trim((string) $search);
+        if ($search === '') {
+            return [];
+        }
+        $searchTerm = '%' . $search . '%';
+        $limit = max(1, min(100, (int) $limit));
+        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, gst, hsn, image FROM vp_products
+            WHERE sku LIKE ?
+            LIMIT ?';
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param('si', $searchTerm, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = [
+                    'id' => $row['id'],
+                    'sku' => $row['sku'],
+                    'item_code' => $row['item_code'],
+                    'title' => $row['title'],
+                    'color' => $row['color'],
+                    'size' => $row['size'],
+                    'cost_price' => $row['cost_price'],
+                    'gst' => $row['gst'],
+                    'hsn' => $row['hsn'],
+                    'image' => $row['image'] ?? '',
+                ];
+            }
+        }
+        $stmt->close();
+
+        return $orderItems;
+    }
+
+    /**
+     * Resolve product image for a direct-purchase line (variant match, then SKU).
+     */
+    public function getImageForPurchaseLine(string $itemCode, string $sku, string $color, string $size): ?string
+    {
+        $itemCode = trim($itemCode);
+        $sku = trim($sku);
+        $color = trim($color);
+        $size = trim($size);
+
+        if ($itemCode !== '') {
+            $sql = 'SELECT image FROM vp_products WHERE item_code = ? AND COALESCE(color, \'\') = ? AND COALESCE(size, \'\') = ? LIMIT 1';
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('sss', $itemCode, $color, $size);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (!empty($res['image'])) {
+                    return (string) $res['image'];
+                }
+            }
+        }
+
+        if ($sku !== '') {
+            $sql = 'SELECT image FROM vp_products WHERE sku = ? LIMIT 1';
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('s', $sku);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (!empty($res['image'])) {
+                    return (string) $res['image'];
+                }
+            }
+        }
+
+        return null;
+    }
+
     public function getProductItemsByCode($item_code = '')
     {
         $searchTerm = "%$item_code%";
@@ -2117,6 +2204,20 @@ class product
                 'ledger_type' => 'Bulk import',
                 'icon' => 'fa-cloud-upload-alt',
                 'text_color_class' => 'text-teal-600',
+            ];
+        }
+        if ($mt === 'IN' && $rt === 'DIRECT_PURCHASE') {
+            return [
+                'ledger_type' => 'Direct purchase',
+                'icon' => 'fa-arrow-up',
+                'text_color_class' => 'text-green-600',
+            ];
+        }
+        if ($mt === 'OUT' && $rt === 'DIRECT_PURCHASE_RETURN') {
+            return [
+                'ledger_type' => 'Purchase return',
+                'icon' => 'fa-undo',
+                'text_color_class' => 'text-amber-700',
             ];
         }
         if ($mt === 'OUT' && $rt === 'INVOICE') {

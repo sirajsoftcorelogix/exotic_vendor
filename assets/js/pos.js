@@ -1,4 +1,5 @@
 $(function () {
+  let productApiCache = {};
   let currentPage = 1;
   const perPage = 12;
   let currentCategory = '';
@@ -108,7 +109,8 @@ $(function () {
 
   function renderProductModal(p, key) {
     activeModalKey = key;
-
+    $('#pmAddons').html('');
+    $('#pmAddonsWrapper').addClass('hidden');
     const title = (p.title || '').replace(/\s+/g, ' ').trim();
     $('#pmTitle').text(title || 'Product');
 
@@ -124,7 +126,59 @@ $(function () {
     let color = (p.color && p.color !== '0') ? String(p.color).trim() : '';
 
     let variation = '';
+    //  ADDONS UI (FINAL CLEAN)
 
+    let addons = [];
+
+    if (p && p.addon_options && Array.isArray(p.addon_options.default_options)) {
+      addons = p.addon_options.default_options;
+    }
+
+    if (addons.length > 0) {
+
+      let addonsHtml = '';
+
+      addons.forEach(opt => {
+
+        //  CONDITION
+        let isExpress = (opt.title || '').toLowerCase().includes('express');
+
+        let bgClass = isExpress ? 'bg-green-100' : 'bg-[#f5f5f5]';
+        let textColor = isExpress ? 'text-green-900' : 'text-gray-800';
+        let priceColor = isExpress ? 'text-green-900' : 'text-gray-700';
+
+        addonsHtml += `
+    <label class="flex items-center justify-between gap-2 rounded-lg ${bgClass} px-3 py-2 cursor-pointer">
+
+      <div class="flex items-center gap-2">
+
+        <input type="checkbox"
+               class="addon-checkbox h-4 w-4 ${isExpress ? 'text-green-600' : 'text-gray-600'} border-gray-300 rounded"
+               data-entry="${opt.cart_entry}">
+
+        <div>
+          <div class="text-[10px] ${textColor} leading-tight">
+            ${opt.title}
+          </div>
+        </div>
+
+      </div>
+
+      <div class="text-[11px] font-semibold ${priceColor} whitespace-nowrap">
+        ₹ ${parseFloat(opt.price).toFixed(2)}
+      </div>
+
+    </label>
+  `;
+      });
+
+      $('#pmAddons').html(addonsHtml);
+      $('#pmAddonsWrapper').removeClass('hidden');
+
+    } else {
+      $('#pmAddonsWrapper').addClass('hidden');
+      $('#pmAddons').html('');
+    }
     // build variation properly
     if (!size && color) {
       variation = ':' + color;
@@ -143,15 +197,27 @@ $(function () {
     $('#modal_variation').val(variation);
 
 
-
     const badges = [];
-    if (isMeaningful(p.item_code)) badges.push(`<span class="rounded-md bg-orange-100 px-2 py-1 text-[10px] text-orange-700">Code: ${p.item_code}</span>`);
-    if (isMeaningful(p.sku)) badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${p.sku}</span>`);
-    if (isMeaningful(p.groupname)) badges.push(`<span class="rounded-md bg-gray-100 px-2 py-1 text-[10px] text-gray-700">${p.groupname}</span>`);
-    if (isMeaningful(p.stock_qty)) badges.push(`<span class="rounded-md bg-green-100 px-2 py-1 text-[10px] text-green-700">Stock: ${p.stock_qty}</span>`);
-    $('#modal_product_code').val(p.item_code || p.code || p.id || '');  // most important line
-    // $('#modal_qty').val(getModalQty());
-    setModalQty(1);
+
+    if (isMeaningful(p.item_code)) {
+      badges.push(`<span class="rounded-md bg-orange-100 px-2 py-1 text-[10px] text-orange-700">Code: ${p.item_code}</span>`);
+    }
+
+    // SKU = same as code (your API)
+    if (isMeaningful(p.item_code)) {
+      badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${p.item_code}</span>`);
+    }
+
+    //  MAIN CATEGORY (RIGHT SIDE STYLE)
+    if (isMeaningful(p.maincategory)) {
+      badges.push(`<span class="rounded-md bg-gray-100 px-2 py-1 text-[10px] text-gray-700 capitalize">${p.maincategory}</span>`);
+    }
+
+    //  STOCK
+    if (isMeaningful(p.stock_qty)) {
+      badges.push(`<span class="rounded-md bg-green-100 px-2 py-1 text-[10px] text-green-700">Stock: ${p.stock_qty}</span>`);
+    }
+
     $('#pmBadges').html(badges.join(''));
 
     let html = '';
@@ -163,7 +229,15 @@ $(function () {
     if (isMeaningful(p.cost_price)) {
       html += addRow('Cost Price', `₹ ${Number(p.cost_price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
     }
+    //  DIMENSIONS
+    if (isMeaningful(p.dimensions)) {
+      html += addRow('Dimensions', p.dimensions);
+    }
 
+    //  WEIGHT
+    if (isMeaningful(p.weight)) {
+      html += addRow('Weight', p.weight + ' kg');
+    }
     if (isMeaningful(p.hsn)) html += addRow('HSN', p.hsn);
     if (isMeaningful(p.color)) html += addRow('Color', p.color);
     if (isMeaningful(p.size)) html += addRow('Size', p.size);
@@ -222,7 +296,8 @@ $(function () {
 
       const cardHtml = `
         <div class="product-card cursor-pointer rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition"
-             data-pkey="${key}">
+             data-pkey="${key}"
+data-code="${p.item_code}">
           <div class="bg-gray-50 p-2">
             <img src="${imgSrc}" alt="${safeTitle}"
                  class="mx-auto h-56 lg:h-52 xl:h-48 object-contain" />
@@ -324,7 +399,7 @@ $(function () {
   // EVENT LISTENERS (only products & modal)
   // ────────────────────────────────────────────────
 
-  $cards.on('click', '.product-card', function () {
+  $cards.on('click', '.product-card1', function () {
     const key = $(this).data('pkey');
     const p = productsByKey.get(key);
     if (!p) return;
@@ -351,7 +426,100 @@ $(function () {
     currentCategory = $(this).data('category') || '';
     resetAndLoad();
   });
+  $(document).on('click', '.product-card', function () {
 
+    let code = $(this).data('code');
+    if (!code) return;
+
+    openModal();
+
+    //  CACHE HIT
+    if (productApiCache[code]) {
+      renderProductModal(productApiCache[code], code);
+      return;
+    }
+
+    //  LOADING STATE
+    $('#pmTitle').text('Loading...');
+    $('#pmDetails').html('Loading...');
+
+    $.ajax({
+      url: '?page=pos_register&action=get-product-api',
+      type: 'GET',
+      data: { code: code },
+      dataType: 'json',
+      success: function (res) {
+
+        let p = res.data || {};
+
+        //  SAVE CACHE
+        productApiCache[code] = p;
+
+        //  USE EXISTING MODAL FUNCTION
+        renderProductModal(p, code);
+      }
+    });
+  });
+  function renderModalData(p) {
+
+    $('#pmTitle').text(p.title || 'Product');
+    $('#pmImage').attr('src', p.image || '');
+
+    $('#pmDetails').html(`
+        <div>Price</div><div>:</div><div>₹ ${p.price || 0}</div>
+        <div>Material</div><div>:</div><div>${p.material || '-'}</div>
+        <div>Size</div><div>:</div><div>${p.size || '-'}</div>
+        <div>Color</div><div>:</div><div>${p.color || '-'}</div>
+    `);
+
+    $('#modal_product_code').val(p.item_code || '');
+
+    // ADDONS
+    let addonsHtml = '';
+
+    if (p.addon_options) {
+      alert("sdsdsdsd")
+      p.addon_options.default_options.forEach(opt => {
+        addonsHtml += `
+                <label class="flex justify-between border px-3 py-2 rounded-lg">
+                    <div>
+                        <input type="checkbox" class="addon-checkbox"
+                               data-entry="${opt.cart_entry}">
+                        ${opt.title}
+                    </div>
+                    <div>₹ ${opt.price}</div>
+                </label>
+            `;
+      });
+
+      $('#pmAddons').html(addonsHtml);
+      $('#pmAddonsWrapper').removeClass('hidden');
+
+    } else {
+      $('#pmAddonsWrapper').addClass('hidden');
+    }
+  }
+  //  HANDLE ADDON SELECTION
+  $(document).on('change', '.addon-checkbox', function () {
+
+    let selected = [];
+
+    $('.addon-checkbox:checked').each(function () {
+      let entry = $(this).data('entry');
+
+      if (entry) {
+        selected.push(entry);
+      }
+    });
+
+    //  JOIN WITH PIPE
+    let optionsStr = selected.join('|');
+
+    console.log("FINAL OPTIONS:", optionsStr);
+
+    //  SET HIDDEN INPUT
+    $('#modal_options').val(optionsStr);
+  });
   let searchTimeout = null;
   $('#searchCode, #searchName').on('keyup change', function () {
     clearTimeout(searchTimeout);

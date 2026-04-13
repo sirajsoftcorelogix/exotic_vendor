@@ -327,6 +327,46 @@ switch ($page) {
         }
         break;
 
+    case 'direct_purchase':
+        require_once 'controllers/DirectPurchaseController.php';
+        $controller = new DirectPurchaseController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'add':
+                $controller->add();
+                break;
+            case 'edit':
+                $controller->edit();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'delete':
+                $controller->delete();
+                break;
+            case 'product_search':
+                $controller->productSearch();
+                break;
+            case 'return_list':
+                $controller->returnList();
+                break;
+            case 'return_add':
+                $controller->returnAdd();
+                break;
+            case 'return_save':
+                $controller->returnSave();
+                break;
+            case 'return_delete':
+                $controller->returnDelete();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+
     case 'invoices':
         require_once 'controllers/InvoicesController.php';
         $controller = new InvoicesController();
@@ -928,6 +968,12 @@ switch ($page) {
                 break;
             case 'remove-custom-discount':
                 $controller->remove_custom_discount();
+                break;
+            case 'get-product-api':
+                $controller->getProductApi();
+                break;
+            case 'toggle_addon':
+                $controller->toggle_addon();
                 break;
             default:
                 $controller->index();

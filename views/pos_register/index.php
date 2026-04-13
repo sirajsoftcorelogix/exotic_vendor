@@ -283,6 +283,7 @@
                   </div>
 
                 </div>
+             
                 <?php if (!empty($item['shipping']) && $item['shipping'] > 0): ?>
 
                   <!-- <div class="flex gap-2"> -->
@@ -309,6 +310,7 @@
                     </div>
 
                     <div>
+
 
                       <div class="text-[9px] text-green-900 leading-tight">
                         <?= htmlspecialchars($item['shipping_title'] ?? 'Express Shipping') ?>
@@ -566,6 +568,14 @@
             id="pmDetails">
             <!-- rows injected here -->
           </div>
+          <!-- ADDONS -->
+          <div id="pmAddonsWrapper" class="mt-4 hidden">
+            <div class="text-xs font-semibold text-gray-700 mb-2">
+              Add-ons
+            </div>
+
+            <div id="pmAddons" class="space-y-2"></div>
+          </div>
 
           <!-- Footer -->
           <div class="mt-6 flex flex-wrap items-center justify-end gap-2">
@@ -622,6 +632,7 @@
     </div>
   </div>
 </div>
+
 <!-- CUSTOMER MODAL -->
 <div id="customerModal" class="fixed inset-0 z-[9999] hidden">
 
@@ -1550,11 +1561,10 @@
   }
 </script>
 <script>
-//   $('#sortBy, #minPrice, #maxPrice, #stockFilter').on('change keyup', function () {
-//   clearTimeout(searchTimeout);
-//   searchTimeout = setTimeout(function () {
-//     resetAndLoad();
-//   }, 400);
-// });
-
+  //   $('#sortBy, #minPrice, #maxPrice, #stockFilter').on('change keyup', function () {
+  //   clearTimeout(searchTimeout);
+  //   searchTimeout = setTimeout(function () {
+  //     resetAndLoad();
+  //   }, 400);
+  // });
 </script>
