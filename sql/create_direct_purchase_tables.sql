@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS `vp_direct_purchases` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `vendor_id` INT UNSIGNED NOT NULL,
+  `warehouse_id` INT UNSIGNED NOT NULL DEFAULT 0,
   `invoice_number` VARCHAR(100) NOT NULL,
   `invoice_date` DATE NOT NULL,
   `invoice_file` VARCHAR(500) DEFAULT NULL,

@@ -234,8 +234,14 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                                             aria-label="Edit purchase">
                                             <i class="fas fa-edit text-xs" aria-hidden="true"></i>
                                         </a>
+                                        <a href="?page=direct_purchase&action=return_list&amp;dp_id=<?= (int) $p['id'] ?>"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-white text-amber-700 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+                                            title="Purchase returns"
+                                            aria-label="Purchase returns">
+                                            <i class="fas fa-undo-alt text-xs" aria-hidden="true"></i>
+                                        </a>
                                         <a href="?page=direct_purchase&action=delete&id=<?= (int) $p['id'] ?>"
-                                            onclick="return confirm('Delete this purchase and all line items?');"
+                                            onclick="return confirm('Delete this purchase? Line items, returns, and related stock movements will be removed or reversed.');"
                                             class="inline-flex h-7 w-7 items-center justify-center rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1"
                                             title="Delete purchase"
                                             aria-label="Delete purchase">

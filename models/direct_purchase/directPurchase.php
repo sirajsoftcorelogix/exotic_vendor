@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/DirectPurchaseStock.php';
+
 class DirectPurchase
 {
     /** @var mysqli */
@@ -128,13 +130,100 @@ class DirectPurchase
         return $rows;
     }
 
+    public function countReturns(int $purchaseId): int
+    {
+        $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_direct_purchase_returns WHERE direct_purchase_id = ?');
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('i', $purchaseId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int) ($row['c'] ?? 0);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function getReturnIdsForPurchase(int $purchaseId): array
+    {
+        $stmt = $this->conn->prepare('SELECT id FROM vp_direct_purchase_returns WHERE direct_purchase_id = ? ORDER BY id ASC');
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $purchaseId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $ids = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $ids[] = (int) $row['id'];
+            }
+        }
+        $stmt->close();
+
+        return $ids;
+    }
+
+    /**
+     * Purchase lines with how much has already been returned (any return doc).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getItemsWithReturnable(int $purchaseId): array
+    {
+        $items = $this->getItems($purchaseId);
+        $stmt = $this->conn->prepare(
+            'SELECT ri.direct_purchase_item_id, SUM(ri.return_qty) AS sq
+            FROM vp_direct_purchase_return_items ri
+            INNER JOIN vp_direct_purchase_returns r ON r.id = ri.direct_purchase_return_id
+            WHERE r.direct_purchase_id = ?
+            GROUP BY ri.direct_purchase_item_id'
+        );
+        $sums = [];
+        if ($stmt) {
+            $stmt->bind_param('i', $purchaseId);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    $sums[(int) $row['direct_purchase_item_id']] = (float) ($row['sq'] ?? 0);
+                }
+            }
+            $stmt->close();
+        }
+        foreach ($items as &$it) {
+            $iid = (int) ($it['id'] ?? 0);
+            $already = (float) ($sums[$iid] ?? 0);
+            $it['already_returned_qty'] = $already;
+            $it['returnable_qty'] = max(0.0, (float) ($it['qty'] ?? 0) - $already);
+        }
+        unset($it);
+
+        return $items;
+    }
+
     public function delete(int $id): bool
     {
-        $stmt = $this->conn->prepare('DELETE FROM vp_direct_purchases WHERE id = ?');
-        $stmt->bind_param('i', $id);
-        $ok = $stmt->execute();
-        $stmt->close();
-        return $ok;
+        $this->conn->begin_transaction();
+        try {
+            foreach ($this->getReturnIdsForPurchase($id) as $rid) {
+                DirectPurchaseStock::reverseMovementsForRef($this->conn, DirectPurchaseStock::REF_RETURN, $rid);
+            }
+            DirectPurchaseStock::reverseMovementsForRef($this->conn, DirectPurchaseStock::REF_PURCHASE, $id);
+            $stmt = $this->conn->prepare('DELETE FROM vp_direct_purchases WHERE id = ?');
+            $stmt->bind_param('i', $id);
+            $ok = $stmt->execute();
+            $stmt->close();
+            $this->conn->commit();
+
+            return $ok;
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
     }
 
     /**
@@ -146,14 +235,16 @@ class DirectPurchase
         $this->conn->begin_transaction();
         try {
             $sql = 'INSERT INTO vp_direct_purchases (
-                vendor_id, invoice_number, invoice_date, invoice_file, currency,
+                vendor_id, warehouse_id, invoice_number, invoice_date, invoice_file, currency,
                 subtotal, discount, igst_total, sgst_total, cgst_total, round_off, grand_total,
                 created_by
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)';
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
             $stmt = $this->conn->prepare($sql);
+            $bindTypes = 'ii' . 'ssss' . str_repeat('d', 7) . 'i';
             $stmt->bind_param(
-                'issssdddddddi',
+                $bindTypes,
                 $header['vendor_id'],
+                $header['warehouse_id'],
                 $header['invoice_number'],
                 $header['invoice_date'],
                 $header['invoice_file'],
@@ -172,6 +263,8 @@ class DirectPurchase
             $stmt->close();
 
             $this->insertItemRows($pid, $items);
+            $stockLines = DirectPurchaseStock::buildStockLinesFromPostedItems($this->conn, $items);
+            DirectPurchaseStock::applyPurchaseIn($this->conn, $pid, (int) $header['warehouse_id'], $stockLines);
             $this->conn->commit();
             return $pid;
         } catch (Throwable $e) {
@@ -188,14 +281,18 @@ class DirectPurchase
     {
         $this->conn->begin_transaction();
         try {
+            DirectPurchaseStock::reverseMovementsForRef($this->conn, DirectPurchaseStock::REF_PURCHASE, $id);
+
             $sql = 'UPDATE vp_direct_purchases SET
-                vendor_id = ?, invoice_number = ?, invoice_date = ?, invoice_file = ?, currency = ?,
+                vendor_id = ?, warehouse_id = ?, invoice_number = ?, invoice_date = ?, invoice_file = ?, currency = ?,
                 subtotal = ?, discount = ?, igst_total = ?, sgst_total = ?, cgst_total = ?, round_off = ?, grand_total = ?
                 WHERE id = ?';
             $stmt = $this->conn->prepare($sql);
+            $bindTypes = 'ii' . 'ssss' . str_repeat('d', 7) . 'i';
             $stmt->bind_param(
-                'issssdddddddi',
+                $bindTypes,
                 $header['vendor_id'],
+                $header['warehouse_id'],
                 $header['invoice_number'],
                 $header['invoice_date'],
                 $header['invoice_file'],
@@ -218,6 +315,9 @@ class DirectPurchase
             $del->close();
 
             $this->insertItemRows($id, $items);
+            $fresh = $this->getItems($id);
+            $stockLines = DirectPurchaseStock::buildStockLinesFromDbItems($this->conn, $fresh);
+            DirectPurchaseStock::applyPurchaseIn($this->conn, $id, (int) $header['warehouse_id'], $stockLines);
             $this->conn->commit();
         } catch (Throwable $e) {
             $this->conn->rollback();

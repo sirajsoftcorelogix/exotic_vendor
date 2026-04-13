@@ -27,6 +27,10 @@ if (!isset($dpCurrencies[$dpCurrencyVal])) {
 $dpCurrencySym = dp_currency_symbol($dpCurrencyVal);
 $dpDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
 $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
+$warehouses = $data['warehouses'] ?? [];
+$defWh = (int) ($data['default_warehouse_id'] ?? 0);
+$dpLocked = !empty($data['purchase_locked']);
+$whSelected = (int) ($pData['warehouse_id'] ?? $defWh);
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Header band (stock transfer style) -->
@@ -56,7 +60,14 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
                     </p>
                 <?php endif; ?>
             </div>
-            <div class="flex shrink-0">
+            <div class="flex shrink-0 flex-wrap gap-2 justify-end">
+                <?php if ($isEdit && $purchase): ?>
+                    <a href="?page=direct_purchase&action=return_list&amp;dp_id=<?= (int) $purchase['id'] ?>"
+                        class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-amber-200 bg-white text-amber-900 text-sm font-semibold hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
+                        <i class="fas fa-undo-alt text-xs opacity-90" aria-hidden="true"></i>
+                        Returns
+                    </a>
+                <?php endif; ?>
                 <a href="?page=direct_purchase&action=list"
                     class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
                     <i class="fas fa-arrow-left text-xs opacity-90" aria-hidden="true"></i>
@@ -77,7 +88,15 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
         </div>
     <?php endif; ?>
 
-    <form method="post" action="?page=direct_purchase&action=save" enctype="multipart/form-data" id="dp-form" class="space-y-6">
+    <?php if ($dpLocked && $purchase): ?>
+        <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 shadow-sm" role="status">
+            This purchase has returns and cannot be edited. Delete all returns for this purchase first, then you can change lines again.
+            <a href="?page=direct_purchase&action=return_list&amp;dp_id=<?= (int) $purchase['id'] ?>"
+                class="ml-2 font-semibold text-amber-900 underline underline-offset-2 decoration-amber-700/40 hover:text-amber-950">View returns</a>
+        </div>
+    <?php endif; ?>
+
+    <form method="post" action="?page=direct_purchase&action=save" enctype="multipart/form-data" id="dp-form" class="space-y-6" <?= $dpLocked ? 'onsubmit="return false;"' : '' ?>>
         <?php if ($isEdit && $purchase): ?>
             <input type="hidden" name="id" value="<?= (int) $purchase['id'] ?>">
         <?php endif; ?>
@@ -96,6 +115,22 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
                             </option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Warehouse (stock) <span class="text-red-500">*</span></label>
+                    <select name="warehouse_id" id="warehouse_id" class="<?= $inp ?> bg-white" <?= $dpLocked ? 'disabled' : 'required' ?>>
+                        <option value="">Select warehouse</option>
+                        <?php foreach ($warehouses as $wh): ?>
+                            <option value="<?= (int) ($wh['id'] ?? 0) ?>"
+                                <?= $whSelected === (int) ($wh['id'] ?? 0) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($wh['address_title'] ?? ('#' . (int) ($wh['id'] ?? 0)))) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if ($dpLocked && $purchase): ?>
+                        <input type="hidden" name="warehouse_id" value="<?= (int) ($purchase['warehouse_id'] ?? 0) ?>">
+                    <?php endif; ?>
+                    <p class="mt-1 text-xs text-gray-500">Goods receipt stock is posted to this warehouse (same pattern as GRN).</p>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Invoice file</label>
@@ -281,8 +316,8 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
                 class="inline-flex justify-center items-center px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 transition">
                 Cancel
             </a>
-            <button type="submit"
-                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
+            <button type="submit" <?= $dpLocked ? 'disabled' : '' ?>
+                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition <?= $dpLocked ? 'opacity-50 cursor-not-allowed pointer-events-none' : '' ?>">
                 <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
                 <?= $isEdit ? 'Update purchase' : 'Save purchase' ?>
             </button>

@@ -1,10 +1,13 @@
 <?php
 
 require_once 'models/direct_purchase/directPurchase.php';
+require_once 'models/direct_purchase/directPurchaseReturn.php';
 require_once 'models/vendor/vendor.php';
 require_once 'models/product/product.php';
+require_once 'models/comman/tables.php';
 
 $directPurchaseModel = new DirectPurchase($conn);
+$directPurchaseReturnModel = new DirectPurchaseReturn($conn);
 $directPurchaseVendorModel = new vendor($conn);
 
 class DirectPurchaseController
@@ -68,13 +71,20 @@ class DirectPurchaseController
     public function add()
     {
         is_login();
+        global $conn;
         global $directPurchaseVendorModel;
         $vendors = $directPurchaseVendorModel->getAllVendors();
+        $commanModel = new Tables($conn);
+        $warehouses = $commanModel->get_exotic_address();
+        $defaultWarehouseId = (int) ($_SESSION['warehouse_id'] ?? ($_SESSION['user']['warehouse_id'] ?? 0));
         renderTemplate('views/direct_purchase/form.php', [
             'purchase' => null,
             'items' => [],
             'vendors' => $vendors,
+            'warehouses' => $warehouses,
+            'default_warehouse_id' => $defaultWarehouseId,
             'is_edit' => false,
+            'purchase_locked' => false,
         ], 'Add direct purchase');
     }
 
@@ -108,12 +118,19 @@ class DirectPurchaseController
         }
         unset($it);
         $vendors = $directPurchaseVendorModel->getAllVendors();
+        $commanModel = new Tables($conn);
+        $warehouses = $commanModel->get_exotic_address();
+        $defaultWarehouseId = (int) ($purchase['warehouse_id'] ?? ($_SESSION['warehouse_id'] ?? ($_SESSION['user']['warehouse_id'] ?? 0)));
+        $purchaseLocked = $directPurchaseModel->countReturns($id) > 0;
 
         renderTemplate('views/direct_purchase/form.php', [
             'purchase' => $purchase,
             'items' => $items,
             'vendors' => $vendors,
+            'warehouses' => $warehouses,
+            'default_warehouse_id' => $defaultWarehouseId,
             'is_edit' => true,
+            'purchase_locked' => $purchaseLocked,
         ], 'Edit direct purchase');
     }
 
@@ -128,7 +145,14 @@ class DirectPurchaseController
         }
 
         $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+        if ($id > 0 && $directPurchaseModel->countReturns($id) > 0) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'This purchase has returns. Delete all purchase returns before editing.'];
+            header('Location: ?page=direct_purchase&action=edit&id=' . $id);
+            exit;
+        }
+
         $vendorId = isset($_POST['vendor_id']) ? (int) $_POST['vendor_id'] : 0;
+        $warehouseId = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
         $invoiceNumber = trim((string) ($_POST['invoice_number'] ?? ''));
         $invoiceDate = trim((string) ($_POST['invoice_date'] ?? ''));
 
@@ -150,6 +174,13 @@ class DirectPurchaseController
         $items = $this->collectLineItemsFromPost();
         if (empty($items)) {
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Add at least one line item.'];
+            $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
+            header('Location: ' . $redir);
+            exit;
+        }
+
+        if ($warehouseId <= 0) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Select a warehouse for stock movement.'];
             $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
             header('Location: ' . $redir);
             exit;
@@ -192,6 +223,7 @@ class DirectPurchaseController
 
         $header = [
             'vendor_id' => $vendorId,
+            'warehouse_id' => $warehouseId,
             'invoice_number' => $invoiceNumber,
             'invoice_date' => $invoiceDate,
             'invoice_file' => $invoiceFile,
@@ -203,7 +235,7 @@ class DirectPurchaseController
             'cgst_total' => (float) ($_POST['cgst_total'] ?? 0),
             'round_off' => (float) ($_POST['round_off'] ?? 0),
             'grand_total' => (float) ($_POST['grand_total'] ?? 0),
-            'created_by' => isset($_SESSION['user']['id']) ? (int) $_SESSION['user']['id'] : null,
+            'created_by' => (int) ($_SESSION['user']['id'] ?? 0),
         ];
 
         try {
@@ -233,8 +265,13 @@ class DirectPurchaseController
             header('Location: ?page=direct_purchase&action=list');
             exit;
         }
-        $directPurchaseModel->delete($id);
-        $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Purchase deleted.'];
+        try {
+            $directPurchaseModel->delete($id);
+            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Purchase deleted.'];
+        } catch (Throwable $e) {
+            error_log('DirectPurchase delete: ' . $e->getMessage());
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not delete purchase.'];
+        }
         header('Location: ?page=direct_purchase&action=list');
         exit;
     }
@@ -301,6 +338,224 @@ class DirectPurchaseController
         }
 
         return null;
+    }
+
+    public function returnList()
+    {
+        is_login();
+        global $conn;
+        global $directPurchaseModel;
+        global $directPurchaseReturnModel;
+
+        $dpId = isset($_GET['dp_id']) ? (int) $_GET['dp_id'] : 0;
+        if ($dpId <= 0) {
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+        $purchase = $directPurchaseModel->getById($dpId);
+        if (!$purchase) {
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+        $returns = $directPurchaseReturnModel->listForPurchase($dpId);
+        $vendors = $directPurchaseVendorModel->getAllVendors();
+
+        renderTemplate('views/direct_purchase/return_list.php', [
+            'purchase' => $purchase,
+            'returns' => $returns,
+            'vendors' => $vendors,
+        ], 'Purchase returns');
+    }
+
+    public function returnAdd()
+    {
+        is_login();
+        global $conn;
+        global $directPurchaseModel;
+        global $directPurchaseVendorModel;
+
+        $dpId = isset($_GET['dp_id']) ? (int) $_GET['dp_id'] : 0;
+        if ($dpId <= 0) {
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+        $purchase = $directPurchaseModel->getById($dpId);
+        if (!$purchase) {
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+        $lines = $directPurchaseModel->getItemsWithReturnable($dpId);
+        $commanModel = new Tables($conn);
+        $warehouses = $commanModel->get_exotic_address();
+        $defaultWh = (int) ($purchase['warehouse_id'] ?? ($_SESSION['warehouse_id'] ?? ($_SESSION['user']['warehouse_id'] ?? 0)));
+
+        renderTemplate('views/direct_purchase/return_form.php', [
+            'purchase' => $purchase,
+            'lines' => $lines,
+            'warehouses' => $warehouses,
+            'default_warehouse_id' => $defaultWh,
+        ], 'New purchase return');
+    }
+
+    public function returnSave()
+    {
+        is_login();
+        global $directPurchaseModel;
+        global $directPurchaseReturnModel;
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+
+        $dpId = isset($_POST['direct_purchase_id']) ? (int) $_POST['direct_purchase_id'] : 0;
+        $returnDate = trim((string) ($_POST['return_date'] ?? ''));
+        $warehouseId = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
+        $remarks = trim((string) ($_POST['remarks'] ?? ''));
+
+        if ($dpId <= 0 || $returnDate === '' || $warehouseId <= 0) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Purchase, return date, and warehouse are required.'];
+            header('Location: ?page=direct_purchase&action=return_add&dp_id=' . max(1, $dpId));
+            exit;
+        }
+
+        $dateErr = $this->validateDirectPurchaseDateNotFuture($returnDate, 'Return date');
+        if ($dateErr !== null) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $dateErr];
+            header('Location: ?page=direct_purchase&action=return_add&dp_id=' . $dpId);
+            exit;
+        }
+
+        $purchase = $directPurchaseModel->getById($dpId);
+        if (!$purchase) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Purchase not found.'];
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+
+        $itemIds = $_POST['dp_item_id'] ?? [];
+        $returnQtys = $_POST['return_qty'] ?? [];
+        if (!is_array($itemIds) || !is_array($returnQtys)) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Invalid return line data.'];
+            header('Location: ?page=direct_purchase&action=return_add&dp_id=' . $dpId);
+            exit;
+        }
+
+        $itemsById = [];
+        foreach ($directPurchaseModel->getItems($dpId) as $row) {
+            $itemsById[(int) $row['id']] = $row;
+        }
+        $alreadyReturned = $directPurchaseReturnModel->sumReturnedQtyByItem($dpId, 0);
+
+        $returnLines = [];
+        $sumLineTotal = 0.0;
+        $sumGst = 0.0;
+        $n = max(count($itemIds), count($returnQtys));
+        for ($i = 0; $i < $n; $i++) {
+            $iid = isset($itemIds[$i]) ? (int) $itemIds[$i] : 0;
+            $rq = isset($returnQtys[$i]) ? (float) $returnQtys[$i] : 0;
+            if ($iid <= 0 || $rq <= 0) {
+                continue;
+            }
+            if (!isset($itemsById[$iid])) {
+                continue;
+            }
+            $dpLine = $itemsById[$iid];
+            $origQty = (float) ($dpLine['qty'] ?? 0);
+            $prevRet = (float) ($alreadyReturned[$iid] ?? 0);
+            $maxRet = max(0.0, $origQty - $prevRet);
+            if ($rq > $maxRet + 1e-9) {
+                $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Return quantity exceeds remaining quantity for one or more lines.'];
+                header('Location: ?page=direct_purchase&action=return_add&dp_id=' . $dpId);
+                exit;
+            }
+            $ratio = $origQty > 0 ? ($rq / $origQty) : 0;
+            $lineTotal = round((float) ($dpLine['line_total'] ?? 0) * $ratio, 2);
+            $gstAmt = round((float) ($dpLine['gst_amount'] ?? 0) * $ratio, 2);
+            $sumLineTotal += $lineTotal;
+            $sumGst += $gstAmt;
+            $returnLines[] = [
+                'direct_purchase_item_id' => $iid,
+                'return_qty' => $rq,
+                'gst_amount' => $gstAmt,
+                'line_total' => $lineTotal,
+                'sort_order' => count($returnLines),
+            ];
+        }
+
+        if ($returnLines === []) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Enter a return quantity on at least one line.'];
+            header('Location: ?page=direct_purchase&action=return_add&dp_id=' . $dpId);
+            exit;
+        }
+
+        $currency = strtoupper(trim((string) ($purchase['currency'] ?? 'INR')));
+        $subtotal = max(0.0, round($sumLineTotal - $sumGst, 2));
+        $pSub = (float) ($purchase['subtotal'] ?? 0);
+        $ratioTax = $pSub > 0 ? ($subtotal / $pSub) : 0;
+        $igst = round((float) ($purchase['igst_total'] ?? 0) * $ratioTax, 2);
+        $sgst = round((float) ($purchase['sgst_total'] ?? 0) * $ratioTax, 2);
+        $cgst = round((float) ($purchase['cgst_total'] ?? 0) * $ratioTax, 2);
+        $discount = 0.0;
+        $roundOff = round($sumLineTotal - ($subtotal + $igst + $sgst + $cgst), 2);
+        $grandTotal = round($sumLineTotal, 2);
+        $roundOff = round($grandTotal - ($subtotal + $igst + $sgst + $cgst + $discount), 2);
+
+        $header = [
+            'direct_purchase_id' => $dpId,
+            'warehouse_id' => $warehouseId,
+            'return_date' => $returnDate,
+            'remarks' => $remarks,
+            'currency' => $currency,
+            'subtotal' => $subtotal,
+            'discount' => $discount,
+            'igst_total' => $igst,
+            'sgst_total' => $sgst,
+            'cgst_total' => $cgst,
+            'round_off' => $roundOff,
+            'grand_total' => $grandTotal,
+            'created_by' => (int) ($_SESSION['user']['id'] ?? 0),
+        ];
+
+        try {
+            $directPurchaseReturnModel->insertReturn($header, $returnLines);
+            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Purchase return saved and stock updated.'];
+        } catch (Throwable $e) {
+            error_log('DirectPurchase returnSave: ' . $e->getMessage());
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not save return. ' . $e->getMessage()];
+        }
+
+        header('Location: ?page=direct_purchase&action=return_list&dp_id=' . $dpId);
+        exit;
+    }
+
+    public function returnDelete()
+    {
+        is_login();
+        global $directPurchaseReturnModel;
+
+        $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+        if ($id <= 0) {
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+        $row = $directPurchaseReturnModel->getById($id);
+        if (!$row) {
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+        $dpId = (int) ($row['direct_purchase_id'] ?? 0);
+
+        try {
+            $directPurchaseReturnModel->deleteReturn($id);
+            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Return deleted and stock restored.'];
+        } catch (Throwable $e) {
+            error_log('DirectPurchase returnDelete: ' . $e->getMessage());
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not delete return.'];
+        }
+
+        header('Location: ?page=direct_purchase&action=return_list&dp_id=' . $dpId);
+        exit;
     }
 
     /**

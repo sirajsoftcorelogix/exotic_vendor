@@ -349,6 +349,18 @@ switch ($page) {
             case 'product_search':
                 $controller->productSearch();
                 break;
+            case 'return_list':
+                $controller->returnList();
+                break;
+            case 'return_add':
+                $controller->returnAdd();
+                break;
+            case 'return_save':
+                $controller->returnSave();
+                break;
+            case 'return_delete':
+                $controller->returnDelete();
+                break;
             default:
                 $controller->index();
                 break;
