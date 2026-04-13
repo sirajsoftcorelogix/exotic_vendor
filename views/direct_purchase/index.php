@@ -42,7 +42,7 @@ $pgBase = '?page=direct_purchase&action=list&limit=' . $limit . $queryString;
                     <span>Purchasing · Direct purchase</span>
                 </div>
                 <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
-                    Direct purchase <span class="text-amber-800">register</span>
+                    Direct purchase
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
                     Record vendor invoices without a PO, attach files, capture GST line items, and track payment details—aligned with your stock transfer workspace styling.
