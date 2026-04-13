@@ -148,11 +148,11 @@ class DirectPurchase
             $sql = 'INSERT INTO vp_direct_purchases (
                 vendor_id, invoice_number, invoice_date, invoice_file, currency,
                 subtotal, discount, igst_total, sgst_total, cgst_total, round_off, grand_total,
-                payment_mode, payment_reference, payment_date, payment_notes, created_by
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+                created_by
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)';
             $stmt = $this->conn->prepare($sql);
             $stmt->bind_param(
-                'issssdddddddssssi',
+                'issssdddddddi',
                 $header['vendor_id'],
                 $header['invoice_number'],
                 $header['invoice_date'],
@@ -165,10 +165,6 @@ class DirectPurchase
                 $header['cgst_total'],
                 $header['round_off'],
                 $header['grand_total'],
-                $header['payment_mode'],
-                $header['payment_reference'],
-                $header['payment_date'],
-                $header['payment_notes'],
                 $header['created_by']
             );
             $stmt->execute();
@@ -194,12 +190,11 @@ class DirectPurchase
         try {
             $sql = 'UPDATE vp_direct_purchases SET
                 vendor_id = ?, invoice_number = ?, invoice_date = ?, invoice_file = ?, currency = ?,
-                subtotal = ?, discount = ?, igst_total = ?, sgst_total = ?, cgst_total = ?, round_off = ?, grand_total = ?,
-                payment_mode = ?, payment_reference = ?, payment_date = ?, payment_notes = ?
+                subtotal = ?, discount = ?, igst_total = ?, sgst_total = ?, cgst_total = ?, round_off = ?, grand_total = ?
                 WHERE id = ?';
             $stmt = $this->conn->prepare($sql);
             $stmt->bind_param(
-                'issssdddddddssssi',
+                'issssdddddddi',
                 $header['vendor_id'],
                 $header['invoice_number'],
                 $header['invoice_date'],
@@ -212,10 +207,6 @@ class DirectPurchase
                 $header['cgst_total'],
                 $header['round_off'],
                 $header['grand_total'],
-                $header['payment_mode'],
-                $header['payment_reference'],
-                $header['payment_date'],
-                $header['payment_notes'],
                 $id
             );
             $stmt->execute();

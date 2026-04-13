@@ -275,37 +275,6 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div class="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-3 mb-4">Payment details</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Mode</label>
-                    <select name="payment_mode" class="<?= $inp ?> bg-white">
-                        <?php
-                        $pm = $pData['payment_mode'] ?? '';
-                        $modes = ['' => '— Select —', 'Cash' => 'Cash', 'Bank transfer' => 'Bank transfer', 'UPI' => 'UPI', 'Cheque' => 'Cheque', 'Credit' => 'Credit', 'Other' => 'Other'];
-                        foreach ($modes as $val => $label): ?>
-                            <option value="<?= htmlspecialchars($val) ?>" <?= $pm === $val ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Reference / txn id</label>
-                    <input type="text" name="payment_reference" class="<?= $inp ?>"
-                        value="<?= htmlspecialchars($pData['payment_reference'] ?? '') ?>">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Payment date</label>
-                    <input type="date" name="payment_date" class="<?= $inp ?>" max="<?= htmlspecialchars($dpDateMax) ?>"
-                        value="<?= htmlspecialchars($pData['payment_date'] ?? '') ?>">
-                </div>
-                <div class="md:col-span-2 lg:col-span-4">
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Notes</label>
-                    <textarea name="payment_notes" rows="3" class="<?= $inp ?> resize-y min-h-[80px]"><?= htmlspecialchars($pData['payment_notes'] ?? '') ?></textarea>
-                </div>
-            </div>
-        </div>
-
         <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
             <a href="?page=direct_purchase&action=list"
                 class="inline-flex justify-center items-center px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 transition">

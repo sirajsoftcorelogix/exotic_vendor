@@ -48,7 +48,7 @@ $dpFilterDateMax = date('Y-m-d');
                     Direct purchase
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-                    Record vendor invoices without a PO, attach files, capture GST line items, and track payment details—aligned with your stock transfer workspace styling.
+                    Record vendor invoices without a PO, attach files, and capture GST line items—aligned with your stock transfer workspace styling.
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center">

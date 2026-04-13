@@ -147,17 +147,6 @@ class DirectPurchaseController
             exit;
         }
 
-        $paymentDateRaw = trim((string) ($_POST['payment_date'] ?? ''));
-        if ($paymentDateRaw !== '') {
-            $payErr = $this->validateDirectPurchaseDateNotFuture($paymentDateRaw, 'Payment date');
-            if ($payErr !== null) {
-                $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $payErr];
-                $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
-                header('Location: ' . $redir);
-                exit;
-            }
-        }
-
         $items = $this->collectLineItemsFromPost();
         if (empty($items)) {
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Add at least one line item.'];
@@ -201,10 +190,6 @@ class DirectPurchaseController
             'cgst_total' => (float) ($_POST['cgst_total'] ?? 0),
             'round_off' => (float) ($_POST['round_off'] ?? 0),
             'grand_total' => (float) ($_POST['grand_total'] ?? 0),
-            'payment_mode' => trim((string) ($_POST['payment_mode'] ?? '')) ?: null,
-            'payment_reference' => trim((string) ($_POST['payment_reference'] ?? '')) ?: null,
-            'payment_date' => $paymentDateRaw !== '' ? $paymentDateRaw : null,
-            'payment_notes' => trim((string) ($_POST['payment_notes'] ?? '')) ?: null,
             'created_by' => isset($_SESSION['user']['id']) ? (int) $_SESSION['user']['id'] : null,
         ];
 
