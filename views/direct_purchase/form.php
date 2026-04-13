@@ -42,7 +42,7 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                     </p>
                 <?php else: ?>
                     <p class="mt-2 text-sm text-gray-600 max-w-2xl leading-relaxed">
-                        Select vendor, upload the invoice, enter line-level GST fields, then totals and payment—same visual language as stock transfer screens.
+                        Select vendor, upload the invoice, and enter lines—totals update automatically like a standard invoice.
                     </p>
                 <?php endif; ?>
             </div>
@@ -114,7 +114,7 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3 mb-4">
-                <div class="text-lg font-semibold text-gray-800">Line items</div>
+                <div class="text-lg font-semibold text-gray-800">Line items &amp; totals</div>
                 <button type="button" id="add-line-btn"
                     class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
                     <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
@@ -168,54 +168,57 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                 </table>
             </div>
             <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                Type at least 2 characters in SKU to search products (SKU, item code, or title). Line totals update when cost, quantity, or GST % change.
+                Type at least 2 characters in SKU to search products (SKU, item code, or title). Line amounts recalc from cost, qty, and GST %; invoice totals below update automatically.
             </p>
-        </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div class="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-3 mb-4">Totals</div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Subtotal</label>
-                    <input type="number" step="0.01" name="subtotal" id="f_subtotal" class="<?= $inp ?>"
-                        value="<?= htmlspecialchars((string) ($pData['subtotal'] ?? '0')) ?>">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Discount</label>
-                    <input type="number" step="0.01" name="discount" class="<?= $inp ?>"
-                        value="<?= htmlspecialchars((string) ($pData['discount'] ?? '0')) ?>">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">IGST total</label>
-                    <input type="number" step="0.01" name="igst_total" class="<?= $inp ?>"
-                        value="<?= htmlspecialchars((string) ($pData['igst_total'] ?? '0')) ?>">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">SGST total</label>
-                    <input type="number" step="0.01" name="sgst_total" class="<?= $inp ?>"
-                        value="<?= htmlspecialchars((string) ($pData['sgst_total'] ?? '0')) ?>">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">CGST total</label>
-                    <input type="number" step="0.01" name="cgst_total" class="<?= $inp ?>"
-                        value="<?= htmlspecialchars((string) ($pData['cgst_total'] ?? '0')) ?>">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Round off</label>
-                    <input type="number" step="0.01" name="round_off" class="<?= $inp ?>"
-                        value="<?= htmlspecialchars((string) ($pData['round_off'] ?? '0')) ?>">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Grand total</label>
-                    <input type="number" step="0.01" name="grand_total" id="f_grand_total" class="<?= $inp ?>"
-                        value="<?= htmlspecialchars((string) ($pData['grand_total'] ?? '0')) ?>">
-                </div>
-                <div class="flex items-end">
-                    <button type="button" id="sum-lines-btn"
-                        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm font-semibold hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 transition">
-                        <i class="fas fa-calculator text-xs opacity-90" aria-hidden="true"></i>
-                        Sum line totals → subtotal
-                    </button>
+            <div class="mt-6 pt-5 border-t border-gray-200">
+                <div class="flex flex-col lg:flex-row lg:items-start lg:justify-end gap-6">
+                    <div class="w-full lg:max-w-md rounded-xl border border-gray-200 bg-gray-50/80 p-4 sm:p-5">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Invoice summary</div>
+                        <table class="w-full text-sm">
+                            <tbody class="divide-y divide-gray-200/80">
+                                <tr>
+                                    <td class="py-2 pr-3 text-gray-600">Subtotal <span class="text-gray-400 font-normal">(taxable)</span></td>
+                                    <td class="py-2 text-right font-medium text-gray-900 w-36">
+                                        <input type="number" step="0.01" name="subtotal" id="f_subtotal" readonly tabindex="-1"
+                                            class="w-full text-right rounded-lg border border-gray-200 bg-white px-2 py-2 text-gray-900 shadow-sm"
+                                            value="<?= htmlspecialchars((string) ($pData['subtotal'] ?? '0')) ?>">
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 pr-3 text-gray-600">GST <span class="text-gray-400 font-normal">(total)</span></td>
+                                    <td class="py-2 text-right font-medium text-gray-900">
+                                        <input type="number" step="0.01" name="igst_total" id="f_igst_total" readonly tabindex="-1"
+                                            class="w-full text-right rounded-lg border border-gray-200 bg-white px-2 py-2 text-gray-900 shadow-sm"
+                                            value="<?= htmlspecialchars((string) ($pData['igst_total'] ?? '0')) ?>">
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <input type="hidden" name="sgst_total" id="f_sgst_total" value="<?= htmlspecialchars((string) ($pData['sgst_total'] ?? '0')) ?>">
+                        <input type="hidden" name="cgst_total" id="f_cgst_total" value="<?= htmlspecialchars((string) ($pData['cgst_total'] ?? '0')) ?>">
+                        <div class="mt-4 space-y-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Discount</label>
+                                <input type="number" step="0.01" name="discount" id="f_discount" class="<?= $inp ?>"
+                                    value="<?= htmlspecialchars((string) ($pData['discount'] ?? '0')) ?>">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Round off</label>
+                                <input type="number" step="0.01" name="round_off" id="f_round_off" class="<?= $inp ?>"
+                                    value="<?= htmlspecialchars((string) ($pData['round_off'] ?? '0')) ?>">
+                            </div>
+                            <div class="pt-2 border-t border-gray-200">
+                                <label class="block text-xs font-semibold text-amber-900/90 mb-1">Grand total</label>
+                                <input type="number" step="0.01" name="grand_total" id="f_grand_total" readonly tabindex="-1"
+                                    class="w-full text-right rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2.5 text-base font-bold text-amber-950 shadow-sm"
+                                    value="<?= htmlspecialchars((string) ($pData['grand_total'] ?? '0')) ?>">
+                            </div>
+                        </div>
+                        <p class="mt-3 text-[11px] text-gray-500 leading-snug">
+                            Grand total uses the sum of line totals, minus discount, plus round off—match discount and round off to the vendor invoice if needed.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -319,6 +322,33 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
         var lineIn = tr.querySelector('.dp-line-total');
         if (gstIn) gstIn.value = gst.toFixed(2);
         if (lineIn) lineIn.value = (taxable + gst).toFixed(2);
+        recalcInvoiceTotals();
+    }
+
+    function recalcInvoiceTotals() {
+        var taxableSum = 0;
+        var gstSum = 0;
+        var lineSum = 0;
+        document.querySelectorAll('#line-items-body .dp-line').forEach(function (tr) {
+            var cost = parseNum(tr.querySelector('.dp-cost'));
+            var qty = parseNum(tr.querySelector('.dp-qty'));
+            taxableSum += cost * qty;
+            gstSum += parseNum(tr.querySelector('.dp-gst'));
+            lineSum += parseNum(tr.querySelector('.dp-line-total'));
+        });
+        var sub = document.getElementById('f_subtotal');
+        var igst = document.getElementById('f_igst_total');
+        var sgst = document.getElementById('f_sgst_total');
+        var cgst = document.getElementById('f_cgst_total');
+        var discount = parseNum(document.getElementById('f_discount'));
+        var roundOff = parseNum(document.getElementById('f_round_off'));
+        var grand = document.getElementById('f_grand_total');
+        if (sub) sub.value = taxableSum.toFixed(2);
+        if (igst) igst.value = gstSum.toFixed(2);
+        if (sgst) sgst.value = '0.00';
+        if (cgst) cgst.value = '0.00';
+        var g = lineSum - discount + roundOff;
+        if (grand) grand.value = g.toFixed(2);
     }
 
     function escapeHtml(str) {
@@ -453,10 +483,17 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
             var el = tr.querySelector(sel);
             if (el) el.addEventListener('input', function () { recalcRow(tr); });
         });
+        var gstEl = tr.querySelector('.dp-gst');
+        if (gstEl) gstEl.addEventListener('input', function () { recalcInvoiceTotals(); });
+        var lineTot = tr.querySelector('.dp-line-total');
+        if (lineTot) lineTot.addEventListener('input', function () { recalcInvoiceTotals(); });
         var rm = tr.querySelector('.dp-remove');
         if (rm) rm.addEventListener('click', function () {
             var body = document.getElementById('line-items-body');
-            if (body.querySelectorAll('.dp-line').length > 1) tr.remove();
+            if (body.querySelectorAll('.dp-line').length > 1) {
+                tr.remove();
+                recalcInvoiceTotals();
+            }
         });
         var sku = tr.querySelector('.dp-sku');
         if (sku) initSkuSearch(sku);
@@ -475,18 +512,13 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
         var tr = tpl.cloneNode(true);
         body.appendChild(tr);
         bindRow(tr);
+        recalcInvoiceTotals();
     });
-    document.getElementById('sum-lines-btn').addEventListener('click', function () {
-        var sum = 0;
-        document.querySelectorAll('#line-items-body .dp-line-total').forEach(function (el) {
-            var v = parseFloat(el.value);
-            if (!isNaN(v)) sum += v;
-        });
-        var sub = document.getElementById('f_subtotal');
-        if (sub) sub.value = sum.toFixed(2);
-        var gt = document.getElementById('f_grand_total');
-        if (gt && (!gt.value || parseFloat(gt.value) === 0)) gt.value = sum.toFixed(2);
-    });
+    var fDisc = document.getElementById('f_discount');
+    var fRo = document.getElementById('f_round_off');
+    if (fDisc) fDisc.addEventListener('input', recalcInvoiceTotals);
+    if (fRo) fRo.addEventListener('input', recalcInvoiceTotals);
+    recalcInvoiceTotals();
     if (window.jQuery && jQuery.fn.select2) {
         jQuery('#vendor_id').select2({ width: '100%', placeholder: 'Select vendor' });
     }
