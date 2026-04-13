@@ -121,7 +121,7 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                     Add row
                 </button>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto" id="line-items-x-scroll">
                 <table class="min-w-full divide-y divide-gray-200 text-sm" id="line-items-table">
                     <thead>
                         <tr class="bg-gray-100">
@@ -147,7 +147,7 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                                         <input type="text" name="sku[]" autocomplete="off" placeholder="Search SKU, code, title…"
                                             class="dp-sku w-full min-w-[12rem] <?= $inpSm ?>"
                                             value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
-                                        <div class="dp-sku-suggestions absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden z-[100] text-left"></div>
+                                        <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                                     </div>
                                 </td>
                                 <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>"></td>
@@ -275,7 +275,7 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                     <input type="hidden" name="size[]" class="dp-h-size" value="">
                     <input type="text" name="sku[]" autocomplete="off" placeholder="Search SKU, code, title…"
                         class="dp-sku w-full min-w-[12rem] <?= $inpSm ?>" value="">
-                    <div class="dp-sku-suggestions absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden z-[100] text-left"></div>
+                    <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                 </div>
             </td>
             <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
@@ -296,7 +296,13 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
 
 <script>
 (function () {
-    var searchUrl = '?page=direct_purchase&action=product_search&q=';
+    function productSearchUrl(q) {
+        var u = new URL(window.location.href);
+        u.searchParams.set('page', 'direct_purchase');
+        u.searchParams.set('action', 'product_search');
+        u.searchParams.set('q', q);
+        return u.toString();
+    }
 
     function parseNum(el) {
         if (!el) return 0;
@@ -322,6 +328,25 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
     }
     function b64EncodeUtf8(str) {
         return btoa(unescape(encodeURIComponent(str)));
+    }
+
+    function syncSkuSuggestBox(box, skuInput) {
+        if (!box || !skuInput || box.classList.contains('hidden')) return;
+        var r = skuInput.getBoundingClientRect();
+        box.style.position = 'fixed';
+        box.style.left = r.left + 'px';
+        box.style.top = (r.bottom + 4) + 'px';
+        box.style.width = Math.max(r.width, 200) + 'px';
+        box.style.zIndex = '10000';
+    }
+
+    function syncAllOpenSkuSuggestBoxes() {
+        document.querySelectorAll('.dp-sku-suggestions').forEach(function (box) {
+            if (box.classList.contains('hidden')) return;
+            var cell = box.closest('.dp-sku-cell');
+            var inp = cell && cell.querySelector('.dp-sku');
+            if (inp) syncSkuSuggestBox(box, inp);
+        });
     }
 
     function dpFillRowFromProduct(tr, item) {
@@ -355,6 +380,11 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
             if (!box) return;
             box.innerHTML = '';
             box.classList.add('hidden');
+            box.style.position = '';
+            box.style.left = '';
+            box.style.top = '';
+            box.style.width = '';
+            box.style.zIndex = '';
         }
 
         function render(list) {
@@ -371,6 +401,7 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                     '<span class="font-semibold text-gray-900">' + line1 + '</span><br><span class="text-xs text-gray-600">' + line2 + '</span></button>';
             }).join('');
             box.classList.remove('hidden');
+            syncSkuSuggestBox(box, skuInput);
         }
 
         skuInput.addEventListener('input', function () {
@@ -381,7 +412,13 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                 return;
             }
             debounce = setTimeout(function () {
-                fetch(searchUrl + encodeURIComponent(q), { credentials: 'same-origin' })
+                fetch(productSearchUrl(q), {
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
                         if (!Array.isArray(data)) { clearBox(); return; }
@@ -426,6 +463,12 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
     }
 
     document.querySelectorAll('#line-items-body .dp-line').forEach(bindRow);
+    window.addEventListener('resize', syncAllOpenSkuSuggestBoxes);
+    window.addEventListener('scroll', syncAllOpenSkuSuggestBoxes, true);
+    var lineXScroll = document.getElementById('line-items-x-scroll');
+    if (lineXScroll) {
+        lineXScroll.addEventListener('scroll', syncAllOpenSkuSuggestBoxes, true);
+    }
     document.getElementById('add-line-btn').addEventListener('click', function () {
         var tpl = document.querySelector('#line-item-template tr');
         var body = document.getElementById('line-items-body');
