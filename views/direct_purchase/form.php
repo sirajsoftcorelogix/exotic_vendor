@@ -15,29 +15,69 @@ $flash = $_SESSION['direct_purchase_flash'] ?? null;
 if ($flash) {
     unset($_SESSION['direct_purchase_flash']);
 }
+$inp = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition';
+$inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition';
 ?>
-<div class="max-w-[1600px] mx-auto space-y-6 mr-4 pb-10">
-    <?php if ($flash): ?>
-        <?php $cls = ($flash['type'] ?? '') === 'success' ? 'text-green-700 bg-green-50 border-green-200' : 'text-red-700 bg-red-50 border-red-200'; ?>
-        <div class="rounded-lg border px-4 py-3 <?= $cls ?>"><?= htmlspecialchars($flash['text'] ?? '') ?></div>
-    <?php endif; ?>
-
-    <div class="flex flex-wrap items-center justify-between gap-4">
-        <h1 class="text-2xl font-bold text-gray-900"><?= $isEdit ? 'Edit direct purchase' : 'Add direct purchase' ?></h1>
-        <a href="index.php?page=direct_purchase&action=list" class="text-amber-800 hover:underline text-sm font-medium">← Back to list</a>
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+    <!-- Header band (stock transfer style) -->
+    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
+        <div class="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-amber-300/20 blur-3xl" aria-hidden="true"></div>
+        <div class="relative px-5 py-6 sm:px-7 sm:py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div class="min-w-0">
+                <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-3">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+                        <i class="fas fa-receipt text-[11px]" aria-hidden="true"></i>
+                    </span>
+                    <span><?= $isEdit ? 'Edit entry' : 'New entry' ?></span>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
+                    <?= $isEdit ? 'Edit direct purchase' : 'Add direct purchase' ?>
+                </h1>
+                <?php if ($isEdit && $purchase): ?>
+                    <p class="mt-2 text-sm text-gray-600">
+                        Invoice <strong class="font-mono text-gray-900"><?= htmlspecialchars($pData['invoice_number'] ?? '') ?></strong>
+                        <?php if (!empty($pData['invoice_date'])): ?>
+                            · <span class="text-gray-500"><?= htmlspecialchars(date('j M Y', strtotime($pData['invoice_date']))) ?></span>
+                        <?php endif; ?>
+                    </p>
+                <?php else: ?>
+                    <p class="mt-2 text-sm text-gray-600 max-w-2xl leading-relaxed">
+                        Select vendor, upload the invoice, enter line-level GST fields, then totals and payment—same visual language as stock transfer screens.
+                    </p>
+                <?php endif; ?>
+            </div>
+            <div class="flex shrink-0">
+                <a href="?page=direct_purchase&action=list"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
+                    <i class="fas fa-arrow-left text-xs opacity-90" aria-hidden="true"></i>
+                    Back to list
+                </a>
+            </div>
+        </div>
     </div>
 
-    <form method="post" action="index.php?page=direct_purchase&action=save" enctype="multipart/form-data" id="dp-form" class="space-y-6">
+    <?php if (is_array($flash) && trim((string) ($flash['text'] ?? '')) !== ''): ?>
+        <?php $flashType = ($flash['type'] ?? '') === 'success' ? 'success' : 'error';
+        $flashRing = $flashType === 'success'
+            ? 'border-emerald-200/80 bg-emerald-50/90 text-emerald-900'
+            : 'border-red-200/80 bg-red-50/90 text-red-900';
+        ?>
+        <div class="mb-6 rounded-xl border px-4 py-3 text-sm font-medium shadow-sm <?= $flashRing ?>" role="status">
+            <?= htmlspecialchars((string) $flash['text']) ?>
+        </div>
+    <?php endif; ?>
+
+    <form method="post" action="?page=direct_purchase&action=save" enctype="multipart/form-data" id="dp-form" class="space-y-6">
         <?php if ($isEdit && $purchase): ?>
             <input type="hidden" name="id" value="<?= (int) $purchase['id'] ?>">
         <?php endif; ?>
 
-        <div class="bg-white rounded-xl shadow-md p-6 space-y-4">
-            <h2 class="text-lg font-semibold text-gray-800 border-b pb-2">Vendor &amp; invoice</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-3 mb-4">Vendor &amp; invoice</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-2">
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Vendor <span class="text-red-500">*</span></label>
-                    <select name="vendor_id" id="vendor_id" required class="w-full dp-select">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Vendor <span class="text-red-500">*</span></label>
+                    <select name="vendor_id" id="vendor_id" required class="<?= $inp ?> bg-white">
                         <option value="">Select vendor</option>
                         <?php foreach ($vendors as $v): ?>
                             <option value="<?= (int) $v['id'] ?>"
@@ -48,122 +88,140 @@ if ($flash) {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Invoice file</label>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Invoice file</label>
                     <input type="file" name="invoice_file" accept=".pdf,.jpg,.jpeg,.png"
-                           class="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700">
+                        class="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-amber-50 file:text-amber-900 file:font-medium">
                     <?php if ($purchase && !empty($purchase['invoice_file'])): ?>
-                        <p class="mt-1 text-sm">Current: <a href="<?= htmlspecialchars($purchase['invoice_file']) ?>" target="_blank" class="text-amber-700 hover:underline">View</a> (leave empty to keep)</p>
+                        <p class="mt-2 text-sm text-gray-600">Current:
+                            <a href="<?= htmlspecialchars($purchase['invoice_file']) ?>" target="_blank" rel="noopener noreferrer"
+                                class="font-medium text-amber-800/90 hover:text-amber-950 hover:underline underline-offset-2 decoration-amber-800/30">View attachment</a>
+                            <span class="text-gray-400">(leave empty to keep)</span>
+                        </p>
                     <?php endif; ?>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Invoice number <span class="text-red-500">*</span></label>
-                    <input type="text" name="invoice_number" required class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars($pData['invoice_number'] ?? '') ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Invoice number <span class="text-red-500">*</span></label>
+                    <input type="text" name="invoice_number" required class="<?= $inp ?>"
+                        value="<?= htmlspecialchars($pData['invoice_number'] ?? '') ?>">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Invoice date <span class="text-red-500">*</span></label>
-                    <input type="date" name="invoice_date" required class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars($pData['invoice_date'] ?? '') ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Invoice date <span class="text-red-500">*</span></label>
+                    <input type="date" name="invoice_date" required class="<?= $inp ?>"
+                        value="<?= htmlspecialchars($pData['invoice_date'] ?? '') ?>">
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-md p-6 space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
-                <h2 class="text-lg font-semibold text-gray-800">Line items</h2>
-                <button type="button" id="add-line-btn" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium px-3 py-1.5 rounded-lg">+ Add row</button>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3 mb-4">
+                <div class="text-lg font-semibold text-gray-800">Line items</div>
+                <button type="button" id="add-line-btn"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
+                    <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
+                    Add row
+                </button>
             </div>
             <div class="overflow-x-auto">
-                <table class="min-w-full text-sm" id="line-items-table">
+                <table class="min-w-full divide-y divide-gray-200 text-sm" id="line-items-table">
                     <thead>
-                    <tr class="text-left text-xs font-medium text-gray-500 uppercase border-b">
-                        <th class="py-2 pr-2">Item code</th>
-                        <th class="py-2 pr-2">SKU</th>
-                        <th class="py-2 pr-2">Color</th>
-                        <th class="py-2 pr-2">Size</th>
-                        <th class="py-2 pr-2">Cost / item</th>
-                        <th class="py-2 pr-2">Qty</th>
-                        <th class="py-2 pr-2">HSN</th>
-                        <th class="py-2 pr-2">GST %</th>
-                        <th class="py-2 pr-2">Unit</th>
-                        <th class="py-2 pr-2">GST amt</th>
-                        <th class="py-2 pr-2">Line total</th>
-                        <th class="py-2 w-10"></th>
-                    </tr>
-                    </thead>
-                    <tbody id="line-items-body">
-                    <?php foreach ($items as $idx => $it): ?>
-                        <tr class="dp-line border-b border-gray-100">
-                            <td class="py-1 pr-1"><input name="item_code[]" class="w-[88px] px-1 py-1 border rounded" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>"></td>
-                            <td class="py-1 pr-1"><input name="sku[]" class="w-[88px] px-1 py-1 border rounded" value="<?= htmlspecialchars($it['sku'] ?? '') ?>"></td>
-                            <td class="py-1 pr-1"><input name="color[]" class="w-[72px] px-1 py-1 border rounded" value="<?= htmlspecialchars($it['color'] ?? '') ?>"></td>
-                            <td class="py-1 pr-1"><input name="size[]" class="w-[72px] px-1 py-1 border rounded" value="<?= htmlspecialchars($it['size'] ?? '') ?>"></td>
-                            <td class="py-1 pr-1"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-[88px] px-1 py-1 border rounded" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>"></td>
-                            <td class="py-1 pr-1"><input type="number" step="0.001" name="qty[]" class="dp-qty w-[72px] px-1 py-1 border rounded" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>"></td>
-                            <td class="py-1 pr-1"><input name="hsn[]" class="w-[72px] px-1 py-1 border rounded" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
-                            <td class="py-1 pr-1"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-[64px] px-1 py-1 border rounded" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
-                            <td class="py-1 pr-1"><input name="unit[]" class="w-[56px] px-1 py-1 border rounded" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
-                            <td class="py-1 pr-1"><input type="number" step="0.01" name="gst_amount[]" class="dp-gst w-[80px] px-1 py-1 border rounded" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>"></td>
-                            <td class="py-1 pr-1"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-[88px] px-1 py-1 border rounded" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
-                            <td class="py-1"><button type="button" class="dp-remove text-red-600 hover:text-red-800 text-xs px-1" title="Remove">&times;</button></td>
+                        <tr class="bg-gray-100">
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Item code</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">SKU</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Color</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Size</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Cost / item</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Qty</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">HSN</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">GST %</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Unit</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">GST amt</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Line total</th>
+                            <th class="px-3 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 w-12"></th>
                         </tr>
-                    <?php endforeach; ?>
+                    </thead>
+                    <tbody id="line-items-body" class="divide-y divide-gray-100">
+                        <?php foreach ($items as $idx => $it): ?>
+                            <tr class="dp-line hover:bg-amber-50/30 transition-colors">
+                                <td class="px-3 py-2"><input name="item_code[]" class="w-[92px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>"></td>
+                                <td class="px-3 py-2"><input name="sku[]" class="w-[92px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['sku'] ?? '') ?>"></td>
+                                <td class="px-3 py-2"><input name="color[]" class="w-[76px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['color'] ?? '') ?>"></td>
+                                <td class="px-3 py-2"><input name="size[]" class="w-[76px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['size'] ?? '') ?>"></td>
+                                <td class="px-3 py-2"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-[96px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2"><input type="number" step="0.001" name="qty[]" class="dp-qty w-[80px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2"><input name="hsn[]" class="w-[76px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
+                                <td class="px-3 py-2"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-[72px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2"><input name="unit[]" class="w-[64px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
+                                <td class="px-3 py-2"><input type="number" step="0.01" name="gst_amount[]" class="dp-gst w-[88px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-[96px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2 text-center">
+                                    <button type="button" class="dp-remove inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
+                                        <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
-            <p class="text-xs text-gray-500">Line totals recalculate when cost, quantity or GST % change (GST amount = taxable &times; GST% &divide; 100, line total = taxable + GST).</p>
+            <p class="mt-3 text-xs text-gray-500 leading-relaxed">
+                Line totals update when cost, quantity, or GST % change (GST = taxable &times; GST% &divide; 100; line total = taxable + GST).
+            </p>
         </div>
 
-        <div class="bg-white rounded-xl shadow-md p-6 space-y-4">
-            <h2 class="text-lg font-semibold text-gray-800 border-b pb-2">Totals</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-3 mb-4">Totals</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Subtotal</label>
-                    <input type="number" step="0.01" name="subtotal" id="f_subtotal" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars((string) ($pData['subtotal'] ?? '0')) ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Subtotal</label>
+                    <input type="number" step="0.01" name="subtotal" id="f_subtotal" class="<?= $inp ?>"
+                        value="<?= htmlspecialchars((string) ($pData['subtotal'] ?? '0')) ?>">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Discount</label>
-                    <input type="number" step="0.01" name="discount" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars((string) ($pData['discount'] ?? '0')) ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Discount</label>
+                    <input type="number" step="0.01" name="discount" class="<?= $inp ?>"
+                        value="<?= htmlspecialchars((string) ($pData['discount'] ?? '0')) ?>">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">IGST total</label>
-                    <input type="number" step="0.01" name="igst_total" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars((string) ($pData['igst_total'] ?? '0')) ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">IGST total</label>
+                    <input type="number" step="0.01" name="igst_total" class="<?= $inp ?>"
+                        value="<?= htmlspecialchars((string) ($pData['igst_total'] ?? '0')) ?>">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">SGST total</label>
-                    <input type="number" step="0.01" name="sgst_total" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars((string) ($pData['sgst_total'] ?? '0')) ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">SGST total</label>
+                    <input type="number" step="0.01" name="sgst_total" class="<?= $inp ?>"
+                        value="<?= htmlspecialchars((string) ($pData['sgst_total'] ?? '0')) ?>">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">CGST total</label>
-                    <input type="number" step="0.01" name="cgst_total" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars((string) ($pData['cgst_total'] ?? '0')) ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">CGST total</label>
+                    <input type="number" step="0.01" name="cgst_total" class="<?= $inp ?>"
+                        value="<?= htmlspecialchars((string) ($pData['cgst_total'] ?? '0')) ?>">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Round off</label>
-                    <input type="number" step="0.01" name="round_off" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars((string) ($pData['round_off'] ?? '0')) ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Round off</label>
+                    <input type="number" step="0.01" name="round_off" class="<?= $inp ?>"
+                        value="<?= htmlspecialchars((string) ($pData['round_off'] ?? '0')) ?>">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Grand total</label>
-                    <input type="number" step="0.01" name="grand_total" id="f_grand_total" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars((string) ($pData['grand_total'] ?? '0')) ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Grand total</label>
+                    <input type="number" step="0.01" name="grand_total" id="f_grand_total" class="<?= $inp ?>"
+                        value="<?= htmlspecialchars((string) ($pData['grand_total'] ?? '0')) ?>">
                 </div>
                 <div class="flex items-end">
-                    <button type="button" id="sum-lines-btn" class="text-sm bg-amber-50 text-amber-900 font-medium px-3 py-2 rounded-lg border border-amber-200 hover:bg-amber-100">Sum line totals → subtotal</button>
+                    <button type="button" id="sum-lines-btn"
+                        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm font-semibold hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 transition">
+                        <i class="fas fa-calculator text-xs opacity-90" aria-hidden="true"></i>
+                        Sum line totals → subtotal
+                    </button>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-md p-6 space-y-4">
-            <h2 class="text-lg font-semibold text-gray-800 border-b pb-2">Payment details</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-3 mb-4">Payment details</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Mode</label>
-                    <select name="payment_mode" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Mode</label>
+                    <select name="payment_mode" class="<?= $inp ?> bg-white">
                         <?php
                         $pm = $pData['payment_mode'] ?? '';
                         $modes = ['' => '— Select —', 'Cash' => 'Cash', 'Bank transfer' => 'Bank transfer', 'UPI' => 'UPI', 'Cheque' => 'Cheque', 'Credit' => 'Credit', 'Other' => 'Other'];
@@ -173,45 +231,56 @@ if ($flash) {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Reference / txn id</label>
-                    <input type="text" name="payment_reference" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars($pData['payment_reference'] ?? '') ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Reference / txn id</label>
+                    <input type="text" name="payment_reference" class="<?= $inp ?>"
+                        value="<?= htmlspecialchars($pData['payment_reference'] ?? '') ?>">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Payment date</label>
-                    <input type="date" name="payment_date" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                           value="<?= htmlspecialchars($pData['payment_date'] ?? '') ?>">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Payment date</label>
+                    <input type="date" name="payment_date" class="<?= $inp ?>"
+                        value="<?= htmlspecialchars($pData['payment_date'] ?? '') ?>">
                 </div>
                 <div class="md:col-span-2 lg:col-span-4">
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Notes</label>
-                    <textarea name="payment_notes" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg"><?= htmlspecialchars($pData['payment_notes'] ?? '') ?></textarea>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Notes</label>
+                    <textarea name="payment_notes" rows="3" class="<?= $inp ?> resize-y min-h-[80px]"><?= htmlspecialchars($pData['payment_notes'] ?? '') ?></textarea>
                 </div>
             </div>
         </div>
 
-        <div class="flex gap-3">
-            <button type="submit" class="bg-gray-800 hover:bg-gray-900 text-white font-semibold px-6 py-2.5 rounded-lg"><?= $isEdit ? 'Update purchase' : 'Save purchase' ?></button>
-            <a href="index.php?page=direct_purchase&action=list" class="inline-flex items-center px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</a>
+        <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
+            <a href="?page=direct_purchase&action=list"
+                class="inline-flex justify-center items-center px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 transition">
+                Cancel
+            </a>
+            <button type="submit"
+                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
+                <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
+                <?= $isEdit ? 'Update purchase' : 'Save purchase' ?>
+            </button>
         </div>
     </form>
 </div>
 
 <table class="hidden">
- <tbody id="line-item-template">
-    <tr class="dp-line border-b border-gray-100">
-        <td class="py-1 pr-1"><input name="item_code[]" class="w-[88px] px-1 py-1 border rounded" value=""></td>
-        <td class="py-1 pr-1"><input name="sku[]" class="w-[88px] px-1 py-1 border rounded" value=""></td>
-        <td class="py-1 pr-1"><input name="color[]" class="w-[72px] px-1 py-1 border rounded" value=""></td>
-        <td class="py-1 pr-1"><input name="size[]" class="w-[72px] px-1 py-1 border rounded" value=""></td>
-        <td class="py-1 pr-1"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-[88px] px-1 py-1 border rounded" value=""></td>
-        <td class="py-1 pr-1"><input type="number" step="0.001" name="qty[]" class="dp-qty w-[72px] px-1 py-1 border rounded" value="1"></td>
-        <td class="py-1 pr-1"><input name="hsn[]" class="w-[72px] px-1 py-1 border rounded" value=""></td>
-        <td class="py-1 pr-1"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-[64px] px-1 py-1 border rounded" value=""></td>
-        <td class="py-1 pr-1"><input name="unit[]" class="w-[56px] px-1 py-1 border rounded" value=""></td>
-        <td class="py-1 pr-1"><input type="number" step="0.01" name="gst_amount[]" class="dp-gst w-[80px] px-1 py-1 border rounded" value=""></td>
-        <td class="py-1 pr-1"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-[88px] px-1 py-1 border rounded" value=""></td>
-        <td class="py-1"><button type="button" class="dp-remove text-red-600 hover:text-red-800 text-xs px-1" title="Remove">&times;</button></td>
-    </tr>
+    <tbody id="line-item-template">
+        <tr class="dp-line hover:bg-amber-50/30 transition-colors">
+            <td class="px-3 py-2"><input name="item_code[]" class="w-[92px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2"><input name="sku[]" class="w-[92px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2"><input name="color[]" class="w-[76px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2"><input name="size[]" class="w-[76px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-[96px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2"><input type="number" step="0.001" name="qty[]" class="dp-qty w-[80px] <?= $inpSm ?>" value="1"></td>
+            <td class="px-3 py-2"><input name="hsn[]" class="w-[76px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-[72px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2"><input name="unit[]" class="w-[64px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2"><input type="number" step="0.01" name="gst_amount[]" class="dp-gst w-[88px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-[96px] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2 text-center">
+                <button type="button" class="dp-remove inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
+                    <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
+                </button>
+            </td>
+        </tr>
     </tbody>
 </table>
 
@@ -253,7 +322,7 @@ if ($flash) {
     });
     document.getElementById('sum-lines-btn').addEventListener('click', function () {
         var sum = 0;
-        document.querySelectorAll('.dp-line-total').forEach(function (el) {
+        document.querySelectorAll('#line-items-body .dp-line-total').forEach(function (el) {
             var v = parseFloat(el.value);
             if (!isNaN(v)) sum += v;
         });

@@ -62,12 +62,12 @@ class DirectPurchaseController
 
         $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
         if ($id <= 0) {
-            header('Location: index.php?page=direct_purchase&action=list');
+            header('Location: ?page=direct_purchase&action=list');
             exit;
         }
         $purchase = $directPurchaseModel->getById($id);
         if (!$purchase) {
-            header('Location: index.php?page=direct_purchase&action=list');
+            header('Location: ?page=direct_purchase&action=list');
             exit;
         }
         $items = $directPurchaseModel->getItems($id);
@@ -87,7 +87,7 @@ class DirectPurchaseController
         global $directPurchaseModel;
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: index.php?page=direct_purchase&action=list');
+            header('Location: ?page=direct_purchase&action=list');
             exit;
         }
 
@@ -98,7 +98,7 @@ class DirectPurchaseController
 
         if ($vendorId <= 0 || $invoiceNumber === '' || $invoiceDate === '') {
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Vendor, invoice number and invoice date are required.'];
-            $redir = $id > 0 ? 'index.php?page=direct_purchase&action=edit&id=' . $id : 'index.php?page=direct_purchase&action=add';
+            $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
             header('Location: ' . $redir);
             exit;
         }
@@ -106,7 +106,7 @@ class DirectPurchaseController
         $items = $this->collectLineItemsFromPost();
         if (empty($items)) {
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Add at least one line item.'];
-            $redir = $id > 0 ? 'index.php?page=direct_purchase&action=edit&id=' . $id : 'index.php?page=direct_purchase&action=add';
+            $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
             header('Location: ' . $redir);
             exit;
         }
@@ -121,7 +121,7 @@ class DirectPurchaseController
             $invoiceFile = $this->storeInvoiceUpload($_FILES['invoice_file']);
             if ($invoiceFile === null) {
                 $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Invoice upload failed. Use PDF, JPG or PNG.'];
-                $redir = $id > 0 ? 'index.php?page=direct_purchase&action=edit&id=' . $id : 'index.php?page=direct_purchase&action=add';
+                $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
                 header('Location: ' . $redir);
                 exit;
             }
@@ -158,7 +158,7 @@ class DirectPurchaseController
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not save purchase.'];
         }
 
-        header('Location: index.php?page=direct_purchase&action=list');
+        header('Location: ?page=direct_purchase&action=list');
         exit;
     }
 
@@ -169,12 +169,12 @@ class DirectPurchaseController
 
         $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
         if ($id <= 0) {
-            header('Location: index.php?page=direct_purchase&action=list');
+            header('Location: ?page=direct_purchase&action=list');
             exit;
         }
         $directPurchaseModel->delete($id);
         $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Purchase deleted.'];
-        header('Location: index.php?page=direct_purchase&action=list');
+        header('Location: ?page=direct_purchase&action=list');
         exit;
     }
 
