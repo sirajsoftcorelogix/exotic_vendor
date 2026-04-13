@@ -248,7 +248,7 @@ class DirectPurchase
             $gstAmt = (float) ($row['gst_amount'] ?? 0);
             $lineTot = (float) ($row['line_total'] ?? 0);
             $stmt->bind_param(
-                'isssddsdsddi',
+                'issssddsdsddi',
                 $purchaseId,
                 $itemCode,
                 $sku,
