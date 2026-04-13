@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS `vp_direct_purchases` (
   `invoice_number` VARCHAR(100) NOT NULL,
   `invoice_date` DATE NOT NULL,
   `invoice_file` VARCHAR(500) DEFAULT NULL,
+  `currency` VARCHAR(10) NOT NULL DEFAULT 'INR',
   `subtotal` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   `discount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   `igst_total` DECIMAL(15,2) NOT NULL DEFAULT 0.00,

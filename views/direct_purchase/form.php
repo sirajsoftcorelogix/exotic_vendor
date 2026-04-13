@@ -1,4 +1,6 @@
 <?php
+require_once dirname(dirname(__DIR__)) . '/helpers/direct_purchase_currency.php';
+
 $purchase = $data['purchase'] ?? null;
 $pData = $purchase ?? [];
 $items = $data['items'] ?? [];
@@ -17,6 +19,13 @@ if ($flash) {
 }
 $inp = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition';
 $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition';
+$dpCurrencies = dp_currency_form_options();
+$dpCurrencyVal = strtoupper(trim((string) ($pData['currency'] ?? 'INR')));
+if (!isset($dpCurrencies[$dpCurrencyVal])) {
+    $dpCurrencyVal = 'INR';
+}
+$dpCurrencySym = dp_currency_symbol($dpCurrencyVal);
+$dpDateMax = date('Y-m-d');
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Header band (stock transfer style) -->
@@ -106,8 +115,16 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Invoice date <span class="text-red-500">*</span></label>
-                    <input type="date" name="invoice_date" required class="<?= $inp ?>"
+                    <input type="date" name="invoice_date" required class="<?= $inp ?>" max="<?= htmlspecialchars($dpDateMax) ?>"
                         value="<?= htmlspecialchars($pData['invoice_date'] ?? '') ?>">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Currency</label>
+                    <select name="currency" id="dp_currency" class="<?= $inp ?> bg-white">
+                        <?php foreach ($dpCurrencies as $code => $label): ?>
+                            <option value="<?= htmlspecialchars($code) ?>" <?= $dpCurrencyVal === $code ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
         </div>
@@ -179,18 +196,24 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                             <tbody class="divide-y divide-gray-200/80">
                                 <tr>
                                     <td class="py-2 pr-3 text-gray-600">Subtotal <span class="text-gray-400 font-normal">(taxable)</span></td>
-                                    <td class="py-2 text-right font-medium text-gray-900 w-36">
-                                        <input type="number" step="0.01" name="subtotal" id="f_subtotal" readonly tabindex="-1"
-                                            class="w-full text-right rounded-lg border border-gray-200 bg-white px-2 py-2 text-gray-900 shadow-sm"
-                                            value="<?= htmlspecialchars((string) ($pData['subtotal'] ?? '0')) ?>">
+                                    <td class="py-2 text-right font-medium text-gray-900 w-44">
+                                        <div class="flex items-center justify-end gap-1">
+                                            <span class="dp-summary-cur-sym text-gray-500 tabular-nums shrink-0" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
+                                            <input type="number" step="0.01" name="subtotal" id="f_subtotal" readonly tabindex="-1"
+                                                class="min-w-0 flex-1 text-right rounded-lg border border-gray-200 bg-white px-2 py-2 text-gray-900 shadow-sm"
+                                                value="<?= htmlspecialchars((string) ($pData['subtotal'] ?? '0')) ?>">
+                                        </div>
                                     </td>
                                 </tr>
                                 <tr>
                                     <td class="py-2 pr-3 text-gray-600">GST <span class="text-gray-400 font-normal">(total)</span></td>
                                     <td class="py-2 text-right font-medium text-gray-900">
-                                        <input type="number" step="0.01" name="igst_total" id="f_igst_total" readonly tabindex="-1"
-                                            class="w-full text-right rounded-lg border border-gray-200 bg-white px-2 py-2 text-gray-900 shadow-sm"
-                                            value="<?= htmlspecialchars((string) ($pData['igst_total'] ?? '0')) ?>">
+                                        <div class="flex items-center justify-end gap-1">
+                                            <span class="dp-summary-cur-sym text-gray-500 tabular-nums shrink-0" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
+                                            <input type="number" step="0.01" name="igst_total" id="f_igst_total" readonly tabindex="-1"
+                                                class="min-w-0 flex-1 text-right rounded-lg border border-gray-200 bg-white px-2 py-2 text-gray-900 shadow-sm"
+                                                value="<?= htmlspecialchars((string) ($pData['igst_total'] ?? '0')) ?>">
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>
@@ -200,19 +223,28 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                         <div class="mt-4 space-y-3">
                             <div>
                                 <label class="block text-xs font-semibold text-gray-600 mb-1">Discount</label>
-                                <input type="number" step="0.01" name="discount" id="f_discount" class="<?= $inp ?>"
-                                    value="<?= htmlspecialchars((string) ($pData['discount'] ?? '0')) ?>">
+                                <div class="flex items-center gap-1">
+                                    <span class="dp-summary-cur-sym text-gray-500 text-sm tabular-nums shrink-0" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
+                                    <input type="number" step="0.01" name="discount" id="f_discount" class="<?= $inp ?> min-w-0 flex-1 text-right"
+                                        value="<?= htmlspecialchars((string) ($pData['discount'] ?? '0')) ?>">
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-gray-600 mb-1">Round off</label>
-                                <input type="number" step="0.01" name="round_off" id="f_round_off" class="<?= $inp ?>"
-                                    value="<?= htmlspecialchars((string) ($pData['round_off'] ?? '0')) ?>">
+                                <div class="flex items-center gap-1">
+                                    <span class="dp-summary-cur-sym text-gray-500 text-sm tabular-nums shrink-0" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
+                                    <input type="number" step="0.01" name="round_off" id="f_round_off" class="<?= $inp ?> min-w-0 flex-1 text-right"
+                                        value="<?= htmlspecialchars((string) ($pData['round_off'] ?? '0')) ?>">
+                                </div>
                             </div>
                             <div class="pt-2 border-t border-gray-200">
                                 <label class="block text-xs font-semibold text-amber-900/90 mb-1">Grand total</label>
-                                <input type="number" step="0.01" name="grand_total" id="f_grand_total" readonly tabindex="-1"
-                                    class="w-full text-right rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2.5 text-base font-bold text-amber-950 shadow-sm"
-                                    value="<?= htmlspecialchars((string) ($pData['grand_total'] ?? '0')) ?>">
+                                <div class="flex items-center gap-1.5 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 shadow-sm">
+                                    <span class="dp-summary-cur-sym text-amber-900/80 text-lg tabular-nums shrink-0 font-bold" aria-hidden="true"><?= htmlspecialchars($dpCurrencySym) ?></span>
+                                    <input type="number" step="0.01" name="grand_total" id="f_grand_total" readonly tabindex="-1"
+                                        class="min-w-0 flex-1 border-0 bg-transparent text-right text-base font-bold text-amber-950 p-0 focus:ring-0"
+                                        value="<?= htmlspecialchars((string) ($pData['grand_total'] ?? '0')) ?>">
+                                </div>
                             </div>
                         </div>
                         <p class="mt-3 text-[11px] text-gray-500 leading-snug">
@@ -244,7 +276,7 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Payment date</label>
-                    <input type="date" name="payment_date" class="<?= $inp ?>"
+                    <input type="date" name="payment_date" class="<?= $inp ?>" max="<?= htmlspecialchars($dpDateMax) ?>"
                         value="<?= htmlspecialchars($pData['payment_date'] ?? '') ?>">
                 </div>
                 <div class="md:col-span-2 lg:col-span-4">
@@ -299,6 +331,17 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
 
 <script>
 (function () {
+    var DP_CUR_SYM = <?= json_encode(dp_currency_symbol_map(), JSON_UNESCAPED_UNICODE) ?>;
+
+    function syncSummaryCurrencySymbols() {
+        var sel = document.getElementById('dp_currency');
+        var code = sel && sel.value ? String(sel.value) : 'INR';
+        var sym = (DP_CUR_SYM && DP_CUR_SYM[code]) ? DP_CUR_SYM[code] : (DP_CUR_SYM.INR || '');
+        document.querySelectorAll('.dp-summary-cur-sym').forEach(function (el) {
+            el.textContent = sym;
+        });
+    }
+
     function productSearchUrl(q) {
         var u = new URL(window.location.href);
         u.searchParams.set('page', 'direct_purchase');
@@ -519,8 +562,15 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
     if (fDisc) fDisc.addEventListener('input', recalcInvoiceTotals);
     if (fRo) fRo.addEventListener('input', recalcInvoiceTotals);
     recalcInvoiceTotals();
+    var dpCurSel = document.getElementById('dp_currency');
+    if (dpCurSel) {
+        dpCurSel.addEventListener('change', syncSummaryCurrencySymbols);
+    }
     if (window.jQuery && jQuery.fn.select2) {
         jQuery('#vendor_id').select2({ width: '100%', placeholder: 'Select vendor' });
+        jQuery('#dp_currency').select2({ width: '100%', minimumResultsForSearch: 6 });
+        jQuery('#dp_currency').on('select2:select change', syncSummaryCurrencySymbols);
     }
+    syncSummaryCurrencySymbols();
 })();
 </script>

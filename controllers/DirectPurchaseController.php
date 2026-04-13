@@ -25,6 +25,8 @@ class DirectPurchaseController
             'vendor_id' => isset($_GET['vendor_id']) ? (int) $_GET['vendor_id'] : 0,
         ];
 
+        $filters = $this->sanitizeDirectPurchaseListDateFilters($filters);
+
         $result = $directPurchaseModel->searchPurchases($filters, $pageNo, $limit);
         $totalPages = $limit > 0 ? (int) ceil($result['total'] / $limit) : 1;
 
@@ -125,6 +127,25 @@ class DirectPurchaseController
             exit;
         }
 
+        $dateErr = $this->validateDirectPurchaseDateNotFuture($invoiceDate, 'Invoice date');
+        if ($dateErr !== null) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $dateErr];
+            $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
+            header('Location: ' . $redir);
+            exit;
+        }
+
+        $paymentDateRaw = trim((string) ($_POST['payment_date'] ?? ''));
+        if ($paymentDateRaw !== '') {
+            $payErr = $this->validateDirectPurchaseDateNotFuture($paymentDateRaw, 'Payment date');
+            if ($payErr !== null) {
+                $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $payErr];
+                $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
+                header('Location: ' . $redir);
+                exit;
+            }
+        }
+
         $items = $this->collectLineItemsFromPost();
         if (empty($items)) {
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Add at least one line item.'];
@@ -149,11 +170,18 @@ class DirectPurchaseController
             }
         }
 
+        $allowedCurrencies = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD', 'HKD', 'JPY', 'CNY', 'AUD', 'CAD', 'CHF', 'NZD', 'SAR', 'THB'];
+        $currency = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) ($_POST['currency'] ?? 'INR')));
+        if ($currency === '' || !in_array($currency, $allowedCurrencies, true)) {
+            $currency = 'INR';
+        }
+
         $header = [
             'vendor_id' => $vendorId,
             'invoice_number' => $invoiceNumber,
             'invoice_date' => $invoiceDate,
             'invoice_file' => $invoiceFile,
+            'currency' => $currency,
             'subtotal' => (float) ($_POST['subtotal'] ?? 0),
             'discount' => (float) ($_POST['discount'] ?? 0),
             'igst_total' => (float) ($_POST['igst_total'] ?? 0),
@@ -163,7 +191,7 @@ class DirectPurchaseController
             'grand_total' => (float) ($_POST['grand_total'] ?? 0),
             'payment_mode' => trim((string) ($_POST['payment_mode'] ?? '')) ?: null,
             'payment_reference' => trim((string) ($_POST['payment_reference'] ?? '')) ?: null,
-            'payment_date' => trim((string) ($_POST['payment_date'] ?? '')) ?: null,
+            'payment_date' => $paymentDateRaw !== '' ? $paymentDateRaw : null,
             'payment_notes' => trim((string) ($_POST['payment_notes'] ?? '')) ?: null,
             'created_by' => isset($_SESSION['user']['id']) ? (int) $_SESSION['user']['id'] : null,
         ];
@@ -198,6 +226,54 @@ class DirectPurchaseController
         $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Purchase deleted.'];
         header('Location: ?page=direct_purchase&action=list');
         exit;
+    }
+
+    /**
+     * Drop invalid dates and cap filter "to"/"from" at today so list search cannot target the future.
+     *
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function sanitizeDirectPurchaseListDateFilters(array $filters): array
+    {
+        $today = new \DateTimeImmutable('today');
+        $todayStr = $today->format('Y-m-d');
+
+        foreach (['invoice_date_from', 'invoice_date_to'] as $key) {
+            $v = isset($filters[$key]) ? trim((string) $filters[$key]) : '';
+            if ($v === '') {
+                $filters[$key] = '';
+                continue;
+            }
+            $d = \DateTimeImmutable::createFromFormat('Y-m-d', $v);
+            if ($d === false || $d->format('Y-m-d') !== $v) {
+                $filters[$key] = '';
+                continue;
+            }
+            if ($d > $today) {
+                $filters[$key] = $todayStr;
+            }
+        }
+
+        return $filters;
+    }
+
+    /**
+     * @return string|null Error message, or null if date is valid and not after today
+     */
+    private function validateDirectPurchaseDateNotFuture(string $dateStr, string $fieldLabel): ?string
+    {
+        $dateStr = trim($dateStr);
+        $d = \DateTimeImmutable::createFromFormat('Y-m-d', $dateStr);
+        if ($d === false || $d->format('Y-m-d') !== $dateStr) {
+            return $fieldLabel . ' must be a valid date.';
+        }
+        $today = new \DateTimeImmutable('today');
+        if ($d > $today) {
+            return $fieldLabel . ' cannot be in the future.';
+        }
+
+        return null;
     }
 
     /**

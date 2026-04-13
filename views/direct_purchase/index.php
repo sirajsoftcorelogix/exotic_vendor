@@ -1,4 +1,6 @@
 <?php
+require_once dirname(dirname(__DIR__)) . '/helpers/direct_purchase_currency.php';
+
 /** @var array $data */
 $filters = $data['filters'] ?? [];
 $pageNo = (int) ($data['page_no'] ?? 1);
@@ -27,6 +29,7 @@ if (!empty($_GET)) {
     }
 }
 $pgBase = '?page=direct_purchase&action=list&limit=' . $limit . $queryString;
+$dpFilterDateMax = date('Y-m-d');
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Page header (matches stock transfer history) -->
@@ -129,11 +132,13 @@ $pgBase = '?page=direct_purchase&action=list&limit=' . $limit . $queryString;
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Invoice from</label>
                     <input type="date" name="invoice_date_from" value="<?= htmlspecialchars($filters['invoice_date_from'] ?? '') ?>"
+                        max="<?= htmlspecialchars($dpFilterDateMax) ?>"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Invoice to</label>
                     <input type="date" name="invoice_date_to" value="<?= htmlspecialchars($filters['invoice_date_to'] ?? '') ?>"
+                        max="<?= htmlspecialchars($dpFilterDateMax) ?>"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                 </div>
             </div>
@@ -195,7 +200,21 @@ $pgBase = '?page=direct_purchase&action=list&limit=' . $limit . $queryString;
                                     <?= !empty($p['invoice_date']) ? htmlspecialchars(date('j M Y', strtotime($p['invoice_date']))) : '—'; ?>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm text-gray-800"><?= htmlspecialchars($p['vendor_name'] ?? '') ?></td>
-                                <td class="px-5 py-4 align-top text-sm text-right font-medium text-gray-900 tabular-nums"><?= number_format((float) ($p['grand_total'] ?? 0), 2) ?></td>
+                                <td class="px-5 py-4 align-top text-sm text-right font-medium text-gray-900 tabular-nums">
+                                    <?php
+                                    $cur = strtoupper(trim((string) ($p['currency'] ?? 'INR')));
+                                    if ($cur === '') {
+                                        $cur = 'INR';
+                                    }
+                                    $curSym = dp_currency_symbol($cur);
+                                    $curDec = dp_currency_decimals($cur);
+                                    ?>
+                                    <span class="inline-flex items-baseline justify-end gap-1.5 flex-wrap">
+                                        <span class="text-gray-700" title="<?= htmlspecialchars($cur) ?>"><?= htmlspecialchars($curSym) ?></span>
+                                        <span><?= number_format((float) ($p['grand_total'] ?? 0), $curDec) ?></span>
+                                        <span class="text-gray-500 font-normal text-xs"><?= htmlspecialchars($cur) ?></span>
+                                    </span>
+                                </td>
                                 <td class="px-5 py-4 align-top text-center text-sm">
                                     <?php if (!empty($p['invoice_file'])): ?>
                                         <a href="<?= htmlspecialchars($p['invoice_file']) ?>" target="_blank" rel="noopener noreferrer"

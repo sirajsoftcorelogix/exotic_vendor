@@ -146,17 +146,18 @@ class DirectPurchase
         $this->conn->begin_transaction();
         try {
             $sql = 'INSERT INTO vp_direct_purchases (
-                vendor_id, invoice_number, invoice_date, invoice_file,
+                vendor_id, invoice_number, invoice_date, invoice_file, currency,
                 subtotal, discount, igst_total, sgst_total, cgst_total, round_off, grand_total,
                 payment_mode, payment_reference, payment_date, payment_notes, created_by
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
             $stmt = $this->conn->prepare($sql);
             $stmt->bind_param(
-                'isssdddddddssssi',
+                'issssdddddddssssi',
                 $header['vendor_id'],
                 $header['invoice_number'],
                 $header['invoice_date'],
                 $header['invoice_file'],
+                $header['currency'],
                 $header['subtotal'],
                 $header['discount'],
                 $header['igst_total'],
@@ -192,17 +193,18 @@ class DirectPurchase
         $this->conn->begin_transaction();
         try {
             $sql = 'UPDATE vp_direct_purchases SET
-                vendor_id = ?, invoice_number = ?, invoice_date = ?, invoice_file = ?,
+                vendor_id = ?, invoice_number = ?, invoice_date = ?, invoice_file = ?, currency = ?,
                 subtotal = ?, discount = ?, igst_total = ?, sgst_total = ?, cgst_total = ?, round_off = ?, grand_total = ?,
                 payment_mode = ?, payment_reference = ?, payment_date = ?, payment_notes = ?
                 WHERE id = ?';
             $stmt = $this->conn->prepare($sql);
             $stmt->bind_param(
-                'isssdddddddssssi',
+                'issssdddddddssssi',
                 $header['vendor_id'],
                 $header['invoice_number'],
                 $header['invoice_date'],
                 $header['invoice_file'],
+                $header['currency'],
                 $header['subtotal'],
                 $header['discount'],
                 $header['igst_total'],
