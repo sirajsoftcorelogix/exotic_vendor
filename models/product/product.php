@@ -2206,6 +2206,20 @@ class product
                 'text_color_class' => 'text-teal-600',
             ];
         }
+        if ($mt === 'IN' && $rt === 'DIRECT_PURCHASE') {
+            return [
+                'ledger_type' => 'Direct purchase',
+                'icon' => 'fa-arrow-up',
+                'text_color_class' => 'text-green-600',
+            ];
+        }
+        if ($mt === 'OUT' && $rt === 'DIRECT_PURCHASE_RETURN') {
+            return [
+                'ledger_type' => 'Purchase return',
+                'icon' => 'fa-undo',
+                'text_color_class' => 'text-amber-700',
+            ];
+        }
         if ($mt === 'OUT' && $rt === 'INVOICE') {
             return [
                 'ledger_type' => 'Sale (invoice)',
