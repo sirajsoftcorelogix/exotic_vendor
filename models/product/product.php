@@ -253,12 +253,12 @@ class product
     public function getProductItems($search = '')
     {
         $searchTerm = "%$search%";
-        $sql = "SELECT * FROM vp_products WHERE (item_code LIKE ? OR title LIKE ?)";
+        $sql = "SELECT * FROM vp_products WHERE (item_code LIKE ? OR title LIKE ? OR sku LIKE ?)";
         $stmt = $this->db->prepare($sql);
         if ($stmt === false) {
             return [];
         }
-        $stmt->bind_param('ss', $searchTerm, $searchTerm);
+        $stmt->bind_param('sss', $searchTerm, $searchTerm, $searchTerm);
         $stmt->execute();
         $result = $stmt->get_result();
         $orderItems = [];

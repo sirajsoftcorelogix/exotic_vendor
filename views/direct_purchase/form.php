@@ -125,36 +125,39 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                 <table class="min-w-full divide-y divide-gray-200 text-sm" id="line-items-table">
                     <thead>
                         <tr class="bg-gray-100">
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">SKU</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Color</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Size</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Cost / item</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Qty</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">HSN</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">GST %</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Unit</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">GST amt</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200">Line total</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[14rem]">SKU</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">Cost / item</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">Qty</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">HSN</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">GST %</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">Unit</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">GST amt</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">Line total</th>
                             <th class="px-3 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 w-12"></th>
                         </tr>
                     </thead>
                     <tbody id="line-items-body" class="divide-y divide-gray-100">
                         <?php foreach ($items as $idx => $it): ?>
                             <tr class="dp-line hover:bg-amber-50/30 transition-colors">
-                                <td class="px-3 py-2">
-                                    <input type="hidden" name="item_code[]" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
-                                    <input name="sku[]" class="w-[92px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
+                                <td class="px-3 py-2 align-top min-w-[14rem]">
+                                    <div class="relative dp-sku-cell">
+                                        <input type="hidden" name="item_code[]" class="dp-h-item-code" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
+                                        <input type="hidden" name="color[]" class="dp-h-color" value="<?= htmlspecialchars($it['color'] ?? '') ?>">
+                                        <input type="hidden" name="size[]" class="dp-h-size" value="<?= htmlspecialchars($it['size'] ?? '') ?>">
+                                        <input type="text" name="sku[]" autocomplete="off" placeholder="Search SKU, code, title…"
+                                            class="dp-sku w-full min-w-[12rem] <?= $inpSm ?>"
+                                            value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
+                                        <div class="dp-sku-suggestions absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden z-[100] text-left"></div>
+                                    </div>
                                 </td>
-                                <td class="px-3 py-2"><input name="color[]" class="w-[76px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['color'] ?? '') ?>"></td>
-                                <td class="px-3 py-2"><input name="size[]" class="w-[76px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['size'] ?? '') ?>"></td>
-                                <td class="px-3 py-2"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-[96px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>"></td>
-                                <td class="px-3 py-2"><input type="number" step="0.001" name="qty[]" class="dp-qty w-[80px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>"></td>
-                                <td class="px-3 py-2"><input name="hsn[]" class="w-[76px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
-                                <td class="px-3 py-2"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-[72px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
-                                <td class="px-3 py-2"><input name="unit[]" class="w-[64px] <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
-                                <td class="px-3 py-2"><input type="number" step="0.01" name="gst_amount[]" class="dp-gst w-[88px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>"></td>
-                                <td class="px-3 py-2"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-[96px] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
-                                <td class="px-3 py-2 text-center">
+                                <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.001" name="qty[]" class="dp-qty w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2 align-top min-w-[8rem]"><input name="hsn[]" class="w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
+                                <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2 align-top min-w-[6rem]"><input name="unit[]" class="w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
+                                <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="gst_amount[]" class="dp-gst w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2 text-center align-top">
                                     <button type="button" class="dp-remove inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
                                         <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
                                     </button>
@@ -165,7 +168,7 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
                 </table>
             </div>
             <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                Line totals update when cost, quantity, or GST % change (GST = taxable &times; GST% &divide; 100; line total = taxable + GST).
+                Type at least 2 characters in SKU to search products (SKU, item code, or title). Line totals update when cost, quantity, or GST % change.
             </p>
         </div>
 
@@ -265,20 +268,24 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
 <table class="hidden">
     <tbody id="line-item-template">
         <tr class="dp-line hover:bg-amber-50/30 transition-colors">
-            <td class="px-3 py-2">
-                <input type="hidden" name="item_code[]" value="">
-                <input name="sku[]" class="w-[92px] <?= $inpSm ?>" value="">
+            <td class="px-3 py-2 align-top min-w-[14rem]">
+                <div class="relative dp-sku-cell">
+                    <input type="hidden" name="item_code[]" class="dp-h-item-code" value="">
+                    <input type="hidden" name="color[]" class="dp-h-color" value="">
+                    <input type="hidden" name="size[]" class="dp-h-size" value="">
+                    <input type="text" name="sku[]" autocomplete="off" placeholder="Search SKU, code, title…"
+                        class="dp-sku w-full min-w-[12rem] <?= $inpSm ?>" value="">
+                    <div class="dp-sku-suggestions absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden z-[100] text-left"></div>
+                </div>
             </td>
-            <td class="px-3 py-2"><input name="color[]" class="w-[76px] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2"><input name="size[]" class="w-[76px] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-[96px] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2"><input type="number" step="0.001" name="qty[]" class="dp-qty w-[80px] <?= $inpSm ?>" value="1"></td>
-            <td class="px-3 py-2"><input name="hsn[]" class="w-[76px] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-[72px] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2"><input name="unit[]" class="w-[64px] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2"><input type="number" step="0.01" name="gst_amount[]" class="dp-gst w-[88px] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-[96px] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2 text-center">
+            <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.001" name="qty[]" class="dp-qty w-full min-w-[5rem] <?= $inpSm ?>" value="1"></td>
+            <td class="px-3 py-2 align-top min-w-[8rem]"><input name="hsn[]" class="w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2 align-top min-w-[6rem]"><input name="unit[]" class="w-full min-w-[5rem] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="gst_amount[]" class="dp-gst w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2 text-center align-top">
                 <button type="button" class="dp-remove inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
                     <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
                 </button>
@@ -289,7 +296,10 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
 
 <script>
 (function () {
+    var searchUrl = '?page=direct_purchase&action=product_search&q=';
+
     function parseNum(el) {
+        if (!el) return 0;
         var v = parseFloat(el.value);
         return isNaN(v) ? 0 : v;
     }
@@ -301,9 +311,106 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
         var gst = taxable * (rate / 100);
         var gstIn = tr.querySelector('.dp-gst');
         var lineIn = tr.querySelector('.dp-line-total');
-        gstIn.value = gst.toFixed(2);
-        lineIn.value = (taxable + gst).toFixed(2);
+        if (gstIn) gstIn.value = gst.toFixed(2);
+        if (lineIn) lineIn.value = (taxable + gst).toFixed(2);
     }
+
+    function escapeHtml(str) {
+        return String(str || '').replace(/[&<>"']/g, function (s) {
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[s];
+        });
+    }
+    function b64EncodeUtf8(str) {
+        return btoa(unescape(encodeURIComponent(str)));
+    }
+
+    function dpFillRowFromProduct(tr, item) {
+        var cell = tr.querySelector('.dp-sku-cell');
+        if (!cell || !item) return;
+        var ic = cell.querySelector('.dp-h-item-code');
+        var col = cell.querySelector('.dp-h-color');
+        var sz = cell.querySelector('.dp-h-size');
+        var skuEl = cell.querySelector('.dp-sku');
+        if (ic) ic.value = item.item_code != null ? String(item.item_code) : '';
+        if (col) col.value = item.color != null ? String(item.color) : '';
+        if (sz) sz.value = item.size != null ? String(item.size) : '';
+        if (skuEl) skuEl.value = item.sku != null ? String(item.sku) : '';
+        var cost = tr.querySelector('.dp-cost');
+        if (cost && item.cost_price != null && item.cost_price !== '') cost.value = item.cost_price;
+        var hsn = tr.querySelector('input[name="hsn[]"]');
+        if (hsn && item.hsn != null) hsn.value = String(item.hsn);
+        var rate = tr.querySelector('.dp-rate');
+        if (rate && item.gst != null && item.gst !== '') rate.value = item.gst;
+        recalcRow(tr);
+    }
+
+    function initSkuSearch(skuInput) {
+        var tr = skuInput.closest('tr');
+        if (!tr) return;
+        var cell = skuInput.closest('.dp-sku-cell');
+        var box = cell ? cell.querySelector('.dp-sku-suggestions') : null;
+        var debounce = null;
+
+        function clearBox() {
+            if (!box) return;
+            box.innerHTML = '';
+            box.classList.add('hidden');
+        }
+
+        function render(list) {
+            if (!box) return;
+            if (!list || !list.length) {
+                clearBox();
+                return;
+            }
+            box.innerHTML = list.slice(0, 18).map(function (it) {
+                var line1 = escapeHtml(it.sku || '') + (it.item_code ? ' · ' + escapeHtml(it.item_code) : '');
+                var line2 = escapeHtml((it.title || '').substring(0, 80));
+                var b64 = b64EncodeUtf8(JSON.stringify(it));
+                return '<button type="button" class="dp-sku-pick w-full text-left px-3 py-2 text-sm hover:bg-amber-50 border-b border-gray-100 last:border-0" data-b64="' + b64 + '">' +
+                    '<span class="font-semibold text-gray-900">' + line1 + '</span><br><span class="text-xs text-gray-600">' + line2 + '</span></button>';
+            }).join('');
+            box.classList.remove('hidden');
+        }
+
+        skuInput.addEventListener('input', function () {
+            clearTimeout(debounce);
+            var q = skuInput.value.trim();
+            if (q.length < 2) {
+                clearBox();
+                return;
+            }
+            debounce = setTimeout(function () {
+                fetch(searchUrl + encodeURIComponent(q), { credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (!Array.isArray(data)) { clearBox(); return; }
+                        render(data);
+                    })
+                    .catch(function () { clearBox(); });
+            }, 220);
+        });
+
+        if (box) {
+            box.addEventListener('mousedown', function (e) {
+                var btn = e.target.closest('.dp-sku-pick');
+                if (!btn) return;
+                e.preventDefault();
+                try {
+                    var raw = btn.getAttribute('data-b64') || '';
+                    var item = JSON.parse(decodeURIComponent(escape(atob(raw))));
+                    dpFillRowFromProduct(tr, item);
+                } catch (err) { console.error(err); }
+                clearBox();
+                skuInput.focus();
+            });
+        }
+
+        skuInput.addEventListener('blur', function () {
+            setTimeout(clearBox, 150);
+        });
+    }
+
     function bindRow(tr) {
         ['.dp-cost', '.dp-qty', '.dp-rate'].forEach(function (sel) {
             var el = tr.querySelector(sel);
@@ -314,7 +421,10 @@ $inpSm = 'px-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 shad
             var body = document.getElementById('line-items-body');
             if (body.querySelectorAll('.dp-line').length > 1) tr.remove();
         });
+        var sku = tr.querySelector('.dp-sku');
+        if (sku) initSkuSearch(sku);
     }
+
     document.querySelectorAll('#line-items-body .dp-line').forEach(bindRow);
     document.getElementById('add-line-btn').addEventListener('click', function () {
         var tpl = document.querySelector('#line-item-template tr');

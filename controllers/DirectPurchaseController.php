@@ -2,6 +2,7 @@
 
 require_once 'models/direct_purchase/directPurchase.php';
 require_once 'models/vendor/vendor.php';
+require_once 'models/product/product.php';
 
 $directPurchaseModel = new DirectPurchase($conn);
 $directPurchaseVendorModel = new vendor($conn);
@@ -39,6 +40,27 @@ class DirectPurchaseController
             'filters' => $filters,
             'vendors' => $vendors,
         ], 'Direct purchases');
+    }
+
+    public function productSearch()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+        $q = isset($_GET['q']) ? trim((string) $_GET['q']) : '';
+        if (function_exists('mb_strlen')) {
+            if (mb_strlen($q) < 2) {
+                echo json_encode([]);
+                exit;
+            }
+        } elseif (strlen($q) < 2) {
+            echo json_encode([]);
+            exit;
+        }
+        $productModel = new product($conn);
+        $items = $productModel->getProductItems($q);
+        echo json_encode(is_array($items) ? $items : []);
+        exit;
     }
 
     public function add()

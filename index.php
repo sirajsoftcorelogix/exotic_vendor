@@ -346,6 +346,9 @@ switch ($page) {
             case 'delete':
                 $controller->delete();
                 break;
+            case 'product_search':
+                $controller->productSearch();
+                break;
             default:
                 $controller->index();
                 break;
