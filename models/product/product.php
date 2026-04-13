@@ -306,13 +306,13 @@ class product
         $searchTerm = '%' . $search . '%';
         $limit = max(1, min(100, (int) $limit));
         $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, gst, hsn, image FROM vp_products
-            WHERE (item_code LIKE ? OR title LIKE ? OR sku LIKE ?)
+            WHERE sku LIKE ?
             LIMIT ?';
         $stmt = $this->db->prepare($sql);
         if ($stmt === false) {
             return [];
         }
-        $stmt->bind_param('sssi', $searchTerm, $searchTerm, $searchTerm, $limit);
+        $stmt->bind_param('si', $searchTerm, $limit);
         $stmt->execute();
         $result = $stmt->get_result();
         $orderItems = [];

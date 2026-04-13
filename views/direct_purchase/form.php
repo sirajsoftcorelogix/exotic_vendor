@@ -131,13 +131,8 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3 mb-4">
+            <div class="border-b border-gray-200 pb-3 mb-4">
                 <div class="text-lg font-semibold text-gray-800">Line items &amp; totals</div>
-                <button type="button" id="add-line-btn"
-                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
-                    <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
-                    Add row
-                </button>
             </div>
             <div class="overflow-x-auto" id="line-items-x-scroll">
                 <table class="min-w-full divide-y divide-gray-200 text-sm" id="line-items-table">
@@ -176,7 +171,7 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
                                         <input type="hidden" name="color[]" class="dp-h-color" value="<?= htmlspecialchars($it['color'] ?? '') ?>">
                                         <input type="hidden" name="size[]" class="dp-h-size" value="<?= htmlspecialchars($it['size'] ?? '') ?>">
                                         <input type="hidden" name="gst_amount[]" class="dp-gst" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>">
-                                        <input type="text" name="sku[]" autocomplete="off" placeholder="Search SKU, code, title…"
+                                        <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
                                             class="dp-sku w-full min-w-[12rem] <?= $inpSm ?>"
                                             value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
                                         <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
@@ -198,8 +193,15 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
                     </tbody>
                 </table>
             </div>
+            <div class="mt-3 flex flex-wrap items-center gap-3">
+                <button type="button" id="add-line-btn"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
+                    <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
+                    Add row
+                </button>
+            </div>
             <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                Type at least 2 characters in SKU to search products (SKU, item code, or title). Line amounts recalc from cost, qty, and GST %; invoice totals below update automatically.
+                Type at least 2 characters to search products by SKU only. Line amounts recalc from cost, qty, and GST %; invoice totals below update automatically.
             </p>
 
             <div class="mt-6 pt-5 border-t border-gray-200">
@@ -340,7 +342,7 @@ $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
                     <input type="hidden" name="color[]" class="dp-h-color" value="">
                     <input type="hidden" name="size[]" class="dp-h-size" value="">
                     <input type="hidden" name="gst_amount[]" class="dp-gst" value="">
-                    <input type="text" name="sku[]" autocomplete="off" placeholder="Search SKU, code, title…"
+                    <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
                         class="dp-sku w-full min-w-[12rem] <?= $inpSm ?>" value="">
                     <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                 </div>
