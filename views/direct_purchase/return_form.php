@@ -53,7 +53,7 @@ $inp = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-9
                         <?php foreach ($warehouses as $wh): ?>
                             <option value="<?= (int) ($wh['id'] ?? 0) ?>"
                                 <?= $defWh === (int) ($wh['id'] ?? 0) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($wh['address_title'] ?? ('#' . (int) ($wh['id'] ?? 0)))) ?>
+                                <?= htmlspecialchars($wh['address_title'] ?? ('#' . (int) ($wh['id'] ?? 0))) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>

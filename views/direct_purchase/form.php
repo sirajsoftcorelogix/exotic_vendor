@@ -123,7 +123,7 @@ $whSelected = (int) ($pData['warehouse_id'] ?? $defWh);
                         <?php foreach ($warehouses as $wh): ?>
                             <option value="<?= (int) ($wh['id'] ?? 0) ?>"
                                 <?= $whSelected === (int) ($wh['id'] ?? 0) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($wh['address_title'] ?? ('#' . (int) ($wh['id'] ?? 0)))) ?>
+                                <?= htmlspecialchars($wh['address_title'] ?? ('#' . (int) ($wh['id'] ?? 0))) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
