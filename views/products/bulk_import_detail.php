@@ -197,6 +197,20 @@
   </div>
 </div>
 
+<div id="confirmModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-xl bg-white shadow-2xl border p-5">
+      <div id="confirmModalTitle" class="font-semibold text-gray-800 mb-2">Confirm Action</div>
+      <div id="confirmModalMessage" class="text-sm text-gray-600">Are you sure?</div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button id="confirmModalCancelBtn" type="button" class="px-3 py-1.5 text-xs rounded border hover:bg-gray-50">Cancel</button>
+        <button id="confirmModalOkBtn" type="button" class="px-3 py-1.5 text-xs rounded bg-amber-600 text-white hover:bg-amber-700">Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   (function() {
     const jobId = <?= $jobId ?>;
@@ -210,6 +224,12 @@
     const overlayProgressWrap = document.getElementById('overlayProgressWrap');
     const overlayProgressBar = document.getElementById('overlayProgressBar');
     const overlayProgressText = document.getElementById('overlayProgressText');
+    const confirmModal = document.getElementById('confirmModal');
+    const confirmModalTitle = document.getElementById('confirmModalTitle');
+    const confirmModalMessage = document.getElementById('confirmModalMessage');
+    const confirmModalCancelBtn = document.getElementById('confirmModalCancelBtn');
+    const confirmModalOkBtn = document.getElementById('confirmModalOkBtn');
+    let confirmResolver = null;
 
     function disableUi(disabled) {
       document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
@@ -239,6 +259,15 @@
     function hideOverlay() {
       overlay.classList.add('hidden');
       disableUi(false);
+    }
+
+    function confirmWithModal(title, message) {
+      return new Promise(function(resolve) {
+        confirmResolver = resolve;
+        confirmModalTitle.textContent = title || 'Confirm Action';
+        confirmModalMessage.textContent = message || 'Are you sure?';
+        confirmModal.classList.remove('hidden');
+      });
     }
 
     function showResult(type, title, message, details) {
@@ -376,6 +405,20 @@
     });
     overlayOkBtn.addEventListener('click', function() {
       hideOverlay();
+    });
+    confirmModalCancelBtn.addEventListener('click', function() {
+      confirmModal.classList.add('hidden');
+      if (confirmResolver) {
+        confirmResolver(false);
+        confirmResolver = null;
+      }
+    });
+    confirmModalOkBtn.addEventListener('click', function() {
+      confirmModal.classList.add('hidden');
+      if (confirmResolver) {
+        confirmResolver(true);
+        confirmResolver = null;
+      }
     });
 
     function renderStats(stats, jobTiming) {
@@ -544,7 +587,11 @@
     }
 
     async function reuploadLoop() {
-      if (!window.confirm('ReUpload will refetch all item codes from API and update product data. Continue?')) return;
+      const ok = await confirmWithModal(
+        'Confirm ReUpload',
+        'ReUpload will refetch all item codes from API and update product data. Continue?'
+      );
+      if (!ok) return;
       showProgress(
         'ReUploading products…',
         'Refetching products from API in batches of 50.'
