@@ -475,13 +475,13 @@ $where";
     }
     public function getAllWarehouses()
     {
-        global $conn;
         $sql = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
-        $result = mysqli_query($conn, $sql);
-
+        $result = $this->db->query($sql);
         $warehouses = [];
-        while ($row = mysqli_fetch_assoc($result)) {
-            $warehouses[] = $row;
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $warehouses[] = $row;
+            }
         }
         return $warehouses;
     }
