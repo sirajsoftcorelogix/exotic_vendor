@@ -47,6 +47,9 @@ class PurchaseOrdersController {
         if (!empty($_GET['status'])) {
             $filters['status_filter'] = $_GET['status'];
         }
+        if (!empty($_GET['exclude_completed']) && (string)$_GET['exclude_completed'] === '1') {
+            $filters['exclude_completed'] = true;
+        }
         if(!empty($_GET['po_from']) && !empty($_GET['po_to'])){
             $filters['po_from'] = $_GET['po_from'];
             $filters['po_to'] = $_GET['po_to'];
@@ -115,6 +118,9 @@ class PurchaseOrdersController {
         // }
         if (!empty($_GET['status'])) {
             $filters['status_filter'] = $_GET['status'];
+        }
+        if (!empty($_GET['exclude_completed']) && (string)$_GET['exclude_completed'] === '1') {
+            $filters['exclude_completed'] = true;
         }
         if(!empty($_GET['po_from']) && !empty($_GET['po_to'])){
             $filters['po_from'] = $_GET['po_from'];
