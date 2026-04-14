@@ -404,6 +404,11 @@ switch ($page) {
                     $controller->generateAlankitIrnForInvoice($invoice_id);
                 }
                 break;
+            case 'api_fetch_vouchers':
+                require_once 'controllers/OrdersAPIController.php';
+                $apiController = new OrdersAPIController($conn);
+                $apiController->fetchVouchers();
+                break;
             default:
                 $controller->index();
                 break;

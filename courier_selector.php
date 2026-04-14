@@ -246,7 +246,7 @@ function courierExclusionReasons(array $c, $isCOD)
         $reasons[] = 'COD is required for this order but the courier does not support COD.';
     }
 
-    if ((int)($c['pickup_availability'] ?? 0) !== 1) {
+    if ((int)($c['pickup_availability'] ?? 0) === 0) {
         $pa = $c['pickup_availability'] ?? null;
         $reasons[] = 'Reliability filter: pickup not available at pickup location (pickup_availability must be 1; got '
             . json_encode($pa) . ').';

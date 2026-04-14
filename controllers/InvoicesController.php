@@ -368,6 +368,8 @@ class InvoicesController
                 error_log("Alankit IRN: Missing customer or firm details for invoice #$invoiceId");
                 return false;
             }
+            //fetch customer from vp_customers form email and phone
+            $customer_info = $commanModel->getRecordById('vp_customers', $invoice['customer_id'] ?? 0);
 
             // Prepare line items
             $lineItems = [];
@@ -392,27 +394,37 @@ class InvoicesController
             }
 
             // Prepare Alankit IRN payload
+            $buyerAddress = ($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? '');
+            $shippingAddress = ($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '');
             $irnPayload = [
                 'invoice_number' => $invoice['invoice_number'] ?? '',
                 'invoice_date' => $invoice['invoice_date'] ?? date('Y-m-d'),
-                'seller_gstin' => $firm['gstin'] ?? '',
+                'seller_gstin' => $firm['gst'] ?? '',
                 'seller_name' => $firm['firm_name'] ?? '',
                 'seller_address' => $firm['address'] ?? '',
                 'seller_city' => $firm['city'] ?? '',
-                'seller_state' => $firm['state'] ?? '',
+                'seller_state' => $firm['state'] ?? '',                
+                'seller_pincode' => $firm['pin'],
+                'seller_email' => $firm['email'] ?? '',
+                'seller_phone' => $firm['phone'] ?? '',
+                'seller_state_code' => $firm['state_code'] ?? '',
                 'seller_country' => 'IN',
                 'buyer_name' => $customer['first_name'] . ' ' . $customer['last_name'] ?? '',
-                'buyer_address' => $customer['shipping_address_line1'] ?? $customer['address_line1'] ?? '',
-                'buyer_city' => $customer['shipping_city'] ?? $customer['city'] ?? '',
-                'buyer_state' => $customer['shipping_state'] ?? $customer['state'] ?? '',
-                'buyer_country' => $customer['shipping_country'] ?? $customer['country'] ?? 'IN',
-                'buyer_pincode' => $customer['shipping_zipcode'] ?? $customer['zipcode'] ?? '',
+                'buyer_address' => $buyerAddress,
+                'buyer_city' => trim($customer['city']) ?? $customer['city'] ?? '',
+                'buyer_state' => trim($customer['state']) ?? $customer['state'] ?? '',
+                'buyer_country' => trim($customer['country']) ?? $customer['country'] ?? 'IN',
+                'buyer_pincode' => trim($customer['zipcode']) ?? $customer['zipcode'] ?? '',
+                'buyer_state_code' => trim($customer['state_code']) ?? $customer['state_code'] ?? '',
+                'buyer_email' => $customer_info['email'] ?? '',
+                'buyer_phone' => $customer_info['phone'] ?? '',
+                'buyer_gstin' => $customer['gstin'] ?? '',
                 'shipping_name' => $customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? '',
-                'shipping_address' => $customer['shipping_address_line1'] ?? '',
-                'shipping_city' => $customer['shipping_city'] ?? '',
-                'shipping_state' => $customer['shipping_state'] ?? '',
-                'shipping_country' => $customer['shipping_country'] ?? 'IN',
-                'shipping_pincode' => $customer['shipping_zipcode'] ?? '',
+                'shipping_address' => trim($shippingAddress) ? $shippingAddress : $buyerAddress,
+                'shipping_city' => trim($shippingAddress) ? $customer['shipping_city'] : $customer['city'] ?? '',
+                'shipping_state' => trim($shippingAddress) ? $customer['shipping_state'] : $customer['state'] ?? '',
+                'shipping_country' => trim($shippingAddress) ? $customer['shipping_country'] : $customer['country'] ?? 'IN',
+                'shipping_pincode' => trim($shippingAddress) ? $customer['shipping_zipcode'] : $customer['zipcode'] ?? '',
                 'currency' => $invoice['currency'] ?? 'INR',
                 'line_items' => $lineItems,
                 'subtotal' => $invoice['subtotal'] ?? 0,

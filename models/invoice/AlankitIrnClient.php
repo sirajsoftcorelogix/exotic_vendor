@@ -240,7 +240,8 @@ class AlankitIrnClient {
         error_log("Alankit IRN: Sending request with token: " . substr($this->token, 0, 20) . "...");
         $response = $this->sendRequest($url, $requestData, true, 'POST', $this->username);
         error_log("Alankit IRN: API response received. Status: " . ($response['Status'] ?? 'unknown'));
-        
+        echo "url: " . $url . "\n";
+
         // Step 6: Decrypt response if needed and extract IRN
         if ($response && isset($response['Status']) && $response['Status'] === 1) {
             // Response Data is encrypted, decrypt it
@@ -294,7 +295,8 @@ class AlankitIrnClient {
                 return false;
             }
             
-            error_log("Alankit IRN: Decrypting Sek (" . strlen($encryptedData) . " bytes)");
+            error_log("Alankit IRN: Decrypting Sek (" . $encryptedData . ") with AppKey (hashed to 32 bytes)");
+            error_log("Alankit IRN: AppKey used for decryption (original): " . $appKey);
             
             // Use SHA-256 hash of AppKey as decryption key (32 bytes)
             $keyBytes = hash('sha256', $appKey, true);
@@ -311,7 +313,8 @@ class AlankitIrnClient {
             );
             
             if ($decrypted !== false) {
-                error_log("Alankit IRN: Sek decrypted successfully (" . strlen($decrypted) . " bytes)");
+                error_log("Alankit IRN: Sek decrypted successfully length: " . strlen($decrypted) . " bytes)");
+                error_log("Alankit IRN: Sek decrypted content (Base64): " . base64_encode($decrypted));
                 // Return as Base64 for use in encryptWithSek
                 return base64_encode($decrypted);
             } else {
@@ -427,7 +430,7 @@ class AlankitIrnClient {
             'Version' => '1.1',
             'TranDtls' => [
                 'TaxSch' => 'GST',
-                'SupTyp' => $invoice['invoice_type'] ?? 'B2B',
+                'SupTyp' => $invoice['buyer_gstin'] ? 'B2B' : 'B2C',
                 'RegRev' => 'N',
                 'EcmGstin' => null,
                 'IgstOnIntra' => 'N'
@@ -464,10 +467,10 @@ class AlankitIrnClient {
                 'Gstin' => $invoice['buyer_gstin'] ?? '',
                 'LglNm' => $invoice['buyer_name'] ?? '',
                 'TrdNm' => $invoice['buyer_name'] ?? '',
-                'Addr1' => $invoice['buyer_address'] ?? '',
-                'Loc' => $invoice['buyer_city'] ?? '',
-                'Pin' => (int)($invoice['buyer_pincode'] ?? 0),
-                'Stcd' => $invoice['buyer_state_code'] ?? ''
+                'Addr1' => $invoice['shipping_address'] ?? '',
+                'Loc' => $invoice['shipping_city'] ?? '',
+                'Pin' => (int)($invoice['shipping_pincode'] ?? 0),
+                'Stcd' => $invoice['shipping_state'] ?? ''
             ],
             'ItemList' => $itemList,
             'ValDtls' => [

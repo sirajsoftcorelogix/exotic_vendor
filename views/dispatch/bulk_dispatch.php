@@ -730,6 +730,8 @@
                                 🗑 Remove Order
                             </button>
                         </div>
+                        <div id="availableCourierCompanies" class="px-4 py-2 text-xs text-gray-700 border-t border-gray-200">
+                        </div>
                     `;
                     container.appendChild(newOrderDiv);
                     currentBox = newOrderDiv.querySelector('[data-order-number]');
@@ -1536,6 +1538,52 @@
             };
             setTimeout(() => document.addEventListener('click', closeDropdown), 10);
             return;
+        }
+    });
+
+    // Handle List Couriers button
+    document.addEventListener('click', function(e) {
+        if (e.target.matches('.list-couriers-btn') || e.target.closest('.list-couriers-btn')) {
+            e.preventDefault();
+            
+            // Find the closest order container
+            const orderContainer = e.target.closest('.px-4.pt-4.pb-2');
+            if (!orderContainer) return;
+            
+            // Get the first box in the order (the one with data-order-number)
+            const boxElement = orderContainer.querySelector('[data-order-number]');
+            if (!boxElement) return;
+            
+            // Get weight and box size inputs
+            const weightInput = boxElement.querySelector('.weight-input');
+            const boxSizeSelect = boxElement.querySelector('.BoxSize');
+            
+            if (!weightInput || !boxSizeSelect) {
+                showAlert('Weight and Box Size inputs not found', 'error');
+                return;
+            }
+            
+            // Validate weight
+            const weight = parseFloat(weightInput.value) || 0;
+            if (weight <= 0) {
+                showAlert('Please enter a valid weight (greater than 0 kg)', 'warning');
+                return;
+            }
+            
+            // Validate box size (should not be CUSTOM with empty values)
+            const boxSizeValue = boxSizeSelect.value;
+            const selectedOption = boxSizeSelect.options[boxSizeSelect.selectedIndex];
+            const length = parseFloat(selectedOption.getAttribute('data-length')) || 0;
+            const breadth = parseFloat(selectedOption.getAttribute('data-width')) || 0;
+            const height = parseFloat(selectedOption.getAttribute('data-height')) || 0;
+            
+            if (boxSizeValue === 'CUSTOM' || length <= 0 || breadth <= 0 || height <= 0) {
+                showAlert('Please select a valid box size', 'warning');
+                return;
+            }
+            
+            // All validations passed, fetch couriers
+            fetchCouriersForBox(boxElement);
         }
     });
 
