@@ -31,17 +31,20 @@ function compareExpressCouriers($a, $b)
     //     return $stressCmp;
     // }
 
+    if ($a['rating'] !== $b['rating']) {
+        return $b['rating'] <=> $a['rating'];
+    }
+    if ($a['freight'] !== $b['freight']) {
+        return $a['freight'] <=> $b['freight'];
+    }
+
     $perfA = performanceScore($a);
     $perfB = performanceScore($b);
-
     if ($perfA !== $perfB) {
         return $perfB <=> $perfA;
     }
-    if ($a['etd'] !== $b['etd']) {
-        return $a['etd'] <=> $b['etd'];
-    }
 
-    return $b['rating'] <=> $a['rating'];
+    return $a['etd'] <=> $b['etd'];
 }
 
 function rankExpress($couriers)
@@ -110,18 +113,18 @@ function compareEconomyCouriers($a, $b)
     //     return $stressCmp;
     // }
 
+    if ($a['rating'] !== $b['rating']) {
+        return $b['rating'] <=> $a['rating'];
+    }
+    if ($a['freight'] !== $b['freight']) {
+        return $a['freight'] <=> $b['freight'];
+    }
+
     if (isset($a['economy_composite'], $b['economy_composite'])) {
         $cmp = $b['economy_composite'] <=> $a['economy_composite'];
         if ($cmp !== 0) {
             return $cmp;
         }
-    }
-
-    if ($a['freight'] !== $b['freight']) {
-        return $a['freight'] <=> $b['freight'];
-    }
-    if ($a['etd'] !== $b['etd']) {
-        return $a['etd'] <=> $b['etd'];
     }
 
     $perfA = performanceScore($a);
@@ -130,7 +133,7 @@ function compareEconomyCouriers($a, $b)
         return $perfB <=> $perfA;
     }
 
-    return $b['rating'] <=> $a['rating'];
+    return $a['etd'] <=> $b['etd'];
 }
 
 function rankEconomy($couriers)
