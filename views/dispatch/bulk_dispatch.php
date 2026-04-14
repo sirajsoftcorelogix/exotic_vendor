@@ -1733,20 +1733,23 @@
                     });
 
                     if (items.length > 0) {
-                        // Get weight input value
-                        const weightInput = boxElement.querySelector('input[type="text"][value*="0."]');
+                        const weightInput = boxElement.querySelector('.weight-input');
                         const weight = weightInput ? parseFloat(weightInput.value) : totalWeight;
                         
-                        // Get box size
-                        const boxSizeSelect = boxElement.querySelector('select');
+                        const boxSizeSelect = boxElement.querySelector('select.BoxSize') || boxElement.querySelector('select');
                         const box_size = boxSizeSelect ? boxSizeSelect.value : 'R1 - 7x4x1';
+
+                        const courierId = boxElement.getAttribute('data-selected-courier-id') || '';
+                        const courierName = boxElement.getAttribute('data-selected-courier-name') || '';
 
                         boxes.push({
                             weight: weight,
                             box_size: box_size,
                             items: items,
                             groupname: boxGroupname,
-                            pickup_location: null
+                            pickup_location: null,
+                            courier_id: courierId,
+                            courier_name: courierName
                         });
                     }
                 });
