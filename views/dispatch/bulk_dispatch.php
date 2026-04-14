@@ -1020,7 +1020,7 @@
                     courierHtml += '<div class="font-semibold text-gray-700 mt-2 mb-1">Output After Filter</div>';
                     courierHtml += '<pre class="debug-output text-[11px] leading-4 whitespace-pre-wrap break-all max-h-40 overflow-auto"></pre>';
                     courierHtml += '</div>';
-                    courierHtml += '<div class="space-y-2 flex flex-wrap gap-2 justify-start items-stretch overflow-auto max-h-32">';
+                    courierHtml += '<div class="flex flex-nowrap gap-2 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-2 -mx-1 px-1" style="-webkit-overflow-scrolling: touch;">';
                     
                     data.couriers.forEach(courier => {
                         const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
@@ -1028,7 +1028,7 @@
                         const etd = courier.etd || 'N/A';
                         
                         courierHtml += `
-                            <div class="border border-orange-200 rounded p-2 hover:bg-orange-50 cursor-pointer flex flex-col w-52" data-courier-id="${courier.id}">
+                            <div class="border border-orange-200 rounded p-2 hover:bg-orange-50 cursor-pointer flex flex-col w-52 flex-shrink-0" data-courier-id="${courier.id}">
                                 <div class="flex justify-between items-start">
                                     <div class="flex-1">
                                         <p class="font-bold text-gray-800">${escapeHtml(courier.name)}</p>
