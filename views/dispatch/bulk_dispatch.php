@@ -713,7 +713,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="availableCourierCompanies" class="px-4 py-2 text-xs text-gray-700 border-t border-gray-200">
+                        <div id="availableCourierCompanies" class="mt-2 sm:mt-3 border-t border-gray-200 pt-2 sm:pt-3">
                         </div>
 
                         <div class="mt-2 mb-4 flex flex-wrap items-center justify-between">
@@ -969,7 +969,18 @@
             const courierContainer = boxElement.closest('.px-4.pt-4.pb-2').querySelector('#availableCourierCompanies');
             console.log('Courier container found:', !!courierContainer);
             if (courierContainer) {
-                courierContainer.innerHTML = '<div class="text-xs text-gray-500 py-2">⏳ Fetching available couriers...</div>';
+                courierContainer.innerHTML = `
+                    <div class="courier-rates-panel rounded-xl border border-gray-200 bg-gradient-to-b from-slate-50 to-white shadow-sm overflow-hidden text-[13px]">
+                        <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white/80">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white shadow-sm" aria-hidden="true">
+                                <i class="fas fa-spinner fa-spin text-sm"></i>
+                            </span>
+                            <div>
+                                <div class="font-semibold text-gray-900">Loading courier options</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">Checking serviceability for this box…</div>
+                            </div>
+                        </div>
+                    </div>`;
             }
             
             // Call the PHP endpoint
@@ -1002,42 +1013,69 @@
                 boxElement._lastCourierDebugInput = data?.debug?.input_before_filter || null;
                 boxElement._lastCourierDebugOutput = data?.debug?.output_after_filter || null;
                 if (data.success && data.couriers && data.couriers.length > 0) {
-                    // Display couriers
-                    let courierHtml = '<div class="text-xs"><div class="font-semibold text-gray-800 mb-2">Available Couriers:</div>';
-                    courierHtml += '<div class="mb-2 flex flex-wrap gap-2">';
-                    courierHtml += '<button type="button" class="copy-filter-input-btn bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2 py-1 text-xs">Copy Input Before Filter</button>';
-                    courierHtml += '<button type="button" class="toggle-filter-debug-btn bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2 py-1 text-xs">Show Input/Output</button>';
-                    courierHtml += '</div>';
-                    courierHtml += '<div class="filter-debug-panel hidden mb-2 bg-gray-50 border border-gray-200 rounded p-2">';
-                    courierHtml += '<div class="font-semibold text-gray-700 mb-1">Input Before Filter</div>';
-                    courierHtml += '<pre class="debug-input text-[11px] leading-4 whitespace-pre-wrap break-all max-h-40 overflow-auto"></pre>';
-                    courierHtml += '<div class="font-semibold text-gray-700 mt-2 mb-1">Output After Filter</div>';
-                    courierHtml += '<pre class="debug-output text-[11px] leading-4 whitespace-pre-wrap break-all max-h-40 overflow-auto"></pre>';
-                    courierHtml += '</div>';
-                    courierHtml += '<div class="flex flex-nowrap gap-2 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-2 -mx-1 px-1" style="-webkit-overflow-scrolling: touch;">';
+                    const n = data.couriers.length;
+                    let courierHtml = `
+                    <div class="courier-rates-panel rounded-xl border border-gray-200 bg-gradient-to-b from-slate-50 to-white shadow-sm overflow-hidden text-[13px]">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 py-2.5 border-b border-gray-100 bg-white/90">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white shadow-sm" aria-hidden="true">
+                                    <i class="fas fa-shipping-fast text-sm"></i>
+                                </span>
+                                <div class="min-w-0">
+                                    <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
+                                    <div class="text-[11px] text-gray-500 truncate">${n} option${n !== 1 ? 's' : ''} · best rating, then lowest price</div>
+                                </div>
+                                <span class="shrink-0 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800">${n}</span>
+                            </div>
+                            <p class="text-[11px] text-gray-400 sm:text-right">Scroll sideways to compare</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/95 border-b border-gray-100">
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1 hidden sm:inline">Debug</span>
+                            <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy input (pre-filter)
+                            </button>
+                            <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-code text-[10px] text-gray-500" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
+                            </button>
+                        </div>
+                        <div class="filter-debug-panel hidden border-b border-gray-200 bg-slate-900 px-3 py-2">
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
+                            <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
+                            <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
+                        </div>
+                        <div class="px-2 sm:px-3 py-3">
+                            <div class="flex flex-nowrap gap-3 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-1 scroll-smooth [scrollbar-width:thin]" style="-webkit-overflow-scrolling: touch;">`;
                     
-                    data.couriers.forEach(courier => {
+                    data.couriers.forEach((courier, idx) => {
                         const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
                         const price = courier.price ? ('₹ ' + parseFloat(courier.price).toFixed(2)) : 'N/A';
                         const etd = courier.etd || 'N/A';
-                        
+                        const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
                         courierHtml += `
-                            <div class="border border-orange-200 rounded p-2 hover:bg-orange-50 cursor-pointer flex flex-col w-52 flex-shrink-0" data-courier-id="${courier.id}">
-                                <div class="flex justify-between items-start">
-                                    <div class="flex-1">
-                                        <p class="font-bold text-gray-800">${escapeHtml(courier.name)}</p>
-                                        <div class="grid grid-cols-3 gap-2 mt-1 text-xs text-gray-700">
-                                            <div><span class="font-semibold">Price:</span> ${price}</div>
-                                            <div><span class="font-semibold">ETD:</span> ${etd}</div>
-                                            <div><span class="font-semibold">Rating:</span> ${rating}<i class="fas fa-star text-yellow-500 ml-1"></i></div>
-                                        </div>
-                                    </div>
+                            <div class="group relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border border-gray-200 bg-white p-3 shadow-sm cursor-pointer transition-all duration-200 hover:border-orange-300 hover:shadow-md hover:bg-orange-50/30 focus-within:ring-2 focus-within:ring-orange-400 focus-within:ring-offset-2" data-courier-id="${courier.id}" role="button" tabindex="0">
+                                ${idx === 0 ? '<span class="absolute right-2 top-2 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">Top pick</span>' : ''}
+                                <p class="pr-16 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name)}</p>
+                                <div class="mt-3">
+                                    <div class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Price</div>
+                                    <div class="text-lg font-bold tabular-nums text-orange-600">${price}</div>
+                                </div>
+                                <div class="mt-3 flex flex-wrap gap-1.5">
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                                        <span class="text-slate-400">ETD</span> ${escapeHtml(etdShort)}
+                                    </span>
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-100">
+                                        <i class="fas fa-star text-amber-500 text-[10px]" aria-hidden="true"></i> ${escapeHtml(rating)}
+                                    </span>
                                 </div>
                             </div>
                         `;
                     });
                     
-                    courierHtml += '</div></div>';
+                    courierHtml += `
+                            </div>
+                        </div>
+                    </div>`;
                     if (courierContainer) {
                         courierContainer.innerHTML = courierHtml;
                         const inputPre = courierContainer.querySelector('.debug-input');
@@ -1051,17 +1089,35 @@
                     }
                 } else {
                     if (courierContainer) {
-                        let emptyHtml = '<div class="text-xs text-red-600 py-2">❌ No couriers available for this route</div>';
-                        emptyHtml += '<div class="mb-2 flex flex-wrap gap-2">';
-                        emptyHtml += '<button type="button" class="copy-filter-input-btn bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2 py-1 text-xs">Copy Input Before Filter</button>';
-                        emptyHtml += '<button type="button" class="toggle-filter-debug-btn bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2 py-1 text-xs">Show Input/Output</button>';
-                        emptyHtml += '</div>';
-                        emptyHtml += '<div class="filter-debug-panel hidden mb-2 bg-gray-50 border border-gray-200 rounded p-2">';
-                        emptyHtml += '<div class="font-semibold text-gray-700 mb-1">Input Before Filter</div>';
-                        emptyHtml += '<pre class="debug-input text-[11px] leading-4 whitespace-pre-wrap break-all max-h-40 overflow-auto"></pre>';
-                        emptyHtml += '<div class="font-semibold text-gray-700 mt-2 mb-1">Output After Filter</div>';
-                        emptyHtml += '<pre class="debug-output text-[11px] leading-4 whitespace-pre-wrap break-all max-h-40 overflow-auto"></pre>';
-                        emptyHtml += '</div>';
+                        let emptyHtml = `
+                        <div class="courier-rates-panel rounded-xl border border-amber-200 bg-gradient-to-b from-amber-50/80 to-white shadow-sm overflow-hidden text-[13px]">
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between px-3 py-3 border-b border-amber-100 bg-white/70">
+                                <div class="flex gap-3 min-w-0">
+                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700" aria-hidden="true">
+                                        <i class="fas fa-inbox text-lg"></i>
+                                    </span>
+                                    <div class="min-w-0">
+                                        <div class="font-semibold text-amber-950">No couriers for this route</div>
+                                        <p class="text-[12px] text-amber-900/80 mt-1 leading-snug">Nothing passed the filters. Try another box size, weight, or payment type, or open debug to inspect the API payload.</p>
+                                    </div>
+                                </div>
+                                <span class="shrink-0 self-start rounded-full bg-amber-200/80 px-2 py-0.5 text-[11px] font-semibold text-amber-950">0 options</span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-amber-50/50 border-b border-amber-100/80">
+                                <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-amber-950 shadow-sm hover:bg-amber-50 transition-colors">
+                                    <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy input (pre-filter)
+                                </button>
+                                <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-amber-950 shadow-sm hover:bg-amber-50 transition-colors">
+                                    <i class="fas fa-code text-[10px]" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
+                                </button>
+                            </div>
+                            <div class="filter-debug-panel hidden border-b border-gray-200 bg-slate-900 px-3 py-2">
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
+                                <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
+                                <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
+                            </div>
+                        </div>`;
                         courierContainer.innerHTML = emptyHtml;
                         const inputPre = courierContainer.querySelector('.debug-input');
                         const outputPre = courierContainer.querySelector('.debug-output');
@@ -1077,7 +1133,16 @@
             .catch(error => {
                 console.error('Error fetching couriers:', error);
                 if (courierContainer) {
-                    courierContainer.innerHTML = '<div class="text-xs text-red-600 py-2">⚠️ Error fetching couriers</div>';
+                    courierContainer.innerHTML = `
+                        <div class="rounded-xl border border-red-200 bg-gradient-to-b from-red-50 to-white px-4 py-3 shadow-sm flex gap-3 items-start text-[13px]">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600" aria-hidden="true">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </span>
+                            <div>
+                                <div class="font-semibold text-red-900">Could not load couriers</div>
+                                <p class="text-[12px] text-red-800/90 mt-1">Network or server error. Check your connection and try again.</p>
+                            </div>
+                        </div>`;
                 }
             });
         }
@@ -1118,7 +1183,13 @@
                 const panel = container?.querySelector('.filter-debug-panel');
                 if (!panel) return;
                 panel.classList.toggle('hidden');
-                toggleBtn.textContent = panel.classList.contains('hidden') ? 'Show Input/Output' : 'Hide Input/Output';
+                const label = toggleBtn.querySelector('.toggle-filter-debug-label');
+                const hidden = panel.classList.contains('hidden');
+                if (label) {
+                    label.textContent = hidden ? 'Show raw input / output' : 'Hide raw input / output';
+                } else {
+                    toggleBtn.textContent = hidden ? 'Show raw input / output' : 'Hide raw input / output';
+                }
             }
         });
         
