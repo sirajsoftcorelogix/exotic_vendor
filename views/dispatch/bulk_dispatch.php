@@ -227,6 +227,76 @@
         let currentShippingAddress = ''; // Store shipping address from API response
         if (!modal) return;
 
+        function bulkDispatchOrderTheme(isInternational) {
+            if (isInternational) {
+                return {
+                    attr: 'international',
+                    orderHeader: 'bg-violet-600 text-white',
+                    intlPill: '<span class="shrink-0 rounded-md bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">International</span>',
+                    boxBorder: 'border-violet-400',
+                    boxToolbar: 'bg-violet-50 border-violet-200',
+                    boxIcon: 'bg-violet-500',
+                    boxSummary: 'bg-violet-50',
+                    btnItem: 'bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1 rounded',
+                    btnAddBox: 'bg-violet-600 hover:bg-violet-700 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2',
+                    btnListCourier: 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-semibold px-4 py-2 rounded text-sm',
+                    courierShipIcon: 'bg-violet-600',
+                    courierCountBadge: 'bg-violet-100 text-violet-800',
+                    courierPrice: 'text-violet-700',
+                    courierRadio: 'text-violet-600 focus:ring-violet-500',
+                    courierTileChecked: 'has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50/40 has-[:checked]:ring-2 has-[:checked]:ring-violet-400 has-[:checked]:ring-offset-1',
+                    courierTileHover: 'hover:border-violet-300',
+                    courierTopPick: 'bg-violet-600',
+                    loadingSpinner: 'border-violet-600',
+                    emptyPanelBorder: 'border-violet-200',
+                    emptyPanelGradient: 'from-violet-50/80',
+                    emptyHeaderBorder: 'border-violet-100',
+                    emptyHeaderBg: 'bg-white/70',
+                    emptyIconBg: 'bg-violet-100 text-violet-700',
+                    emptyTitle: 'text-violet-950',
+                    emptyText: 'text-violet-900/80',
+                    emptyBadge: 'bg-violet-200/80 text-violet-950',
+                    emptyToolbarBg: 'bg-violet-50/50 border-violet-100/80',
+                    emptyBtn: 'border-violet-200 bg-white text-violet-950 shadow-sm hover:bg-violet-50',
+                };
+            }
+            return {
+                attr: 'domestic',
+                orderHeader: 'bg-orange-500 text-white',
+                intlPill: '',
+                boxBorder: 'border-orange-400',
+                boxToolbar: 'bg-orange-50 border-orange-200',
+                boxIcon: 'bg-orange-400',
+                boxSummary: 'bg-orange-50',
+                btnItem: 'bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded',
+                btnAddBox: 'bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2',
+                btnListCourier: 'bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded text-sm',
+                courierShipIcon: 'bg-orange-500',
+                courierCountBadge: 'bg-orange-100 text-orange-800',
+                courierPrice: 'text-orange-600',
+                courierRadio: 'text-orange-600 focus:ring-orange-500',
+                courierTileChecked: 'has-[:checked]:border-orange-500 has-[:checked]:bg-orange-50/40 has-[:checked]:ring-2 has-[:checked]:ring-orange-400 has-[:checked]:ring-offset-1',
+                courierTileHover: 'hover:border-orange-300',
+                courierTopPick: 'bg-orange-500',
+                loadingSpinner: 'border-orange-500',
+                emptyPanelBorder: 'border-amber-200',
+                emptyPanelGradient: 'from-amber-50/80',
+                emptyHeaderBorder: 'border-amber-100',
+                emptyHeaderBg: 'bg-white/70',
+                emptyIconBg: 'bg-amber-100 text-amber-700',
+                emptyTitle: 'text-amber-950',
+                emptyText: 'text-amber-900/80',
+                emptyBadge: 'bg-amber-200/80 text-amber-950',
+                emptyToolbarBg: 'bg-amber-50/50 border-amber-100/80',
+                emptyBtn: 'border-amber-200 bg-white text-amber-950 shadow-sm hover:bg-amber-50',
+            };
+        }
+
+        function bulkDispatchThemeFromSection(orderSection) {
+            if (!orderSection) return bulkDispatchOrderTheme(false);
+            return bulkDispatchOrderTheme(orderSection.getAttribute('data-order-theme') === 'international');
+        }
+
         // Function to update box totals
         function updateBoxTotals(boxElement) {
             if (!boxElement) return;
@@ -536,6 +606,7 @@
                         if (data.success) {
                             // Store shipping address from API response
                             currentShippingAddress = data.shipping_address || '';
+                            modal.dataset.orderTheme = data.is_international ? 'international' : 'domestic';
                             
                             // Update modal header
                             const orderNoLink = modal.querySelector('.flex.justify-between div:first-child a');
@@ -629,21 +700,26 @@
                     const isExpress = false;
                     const isCOD = false;
                     const newBoxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+                    const tm = bulkDispatchOrderTheme(modal.dataset.orderTheme === 'international');
+                    newOrderDiv.setAttribute('data-order-theme', tm.attr);
                     newOrderDiv.innerHTML = `
-                        <div class="bg-orange-500 text-white px-4 py-2 flex flex-wrap justify-between items-center rounded-t">
-                            <div class="font-semibold">
+                        <div class="${tm.orderHeader} px-4 py-2 flex flex-wrap justify-between items-center gap-2 rounded-t">
+                            <div class="flex flex-wrap items-center gap-2 min-w-0">
+                                ${tm.intlPill}
+                                <div class="font-semibold truncate">
                                 ${customerName} - ${customerId}
+                                </div>
                             </div>
-                            <div class="text-xs sm:text-sm">
+                            <div class="text-xs sm:text-sm min-w-0">
                                 <span class="font-semibold">Shipping to:</span>
                                 ${currentShippingAddress || 'Address not available'}
                             </div>
                         </div>
 
-                        <div class="border border-orange-400 border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
-                            <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
+                        <div class="bulk-dispatch-box border ${tm.boxBorder} border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
+                            <div class="px-4 py-2 flex flex-wrap items-center justify-between ${tm.boxToolbar} border-b">
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
+                                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full ${tm.boxIcon} text-white text-sm">
                                         📦
                                     </span>
                                     <span class="font-semibold text-gray-800">Box 1</span> <span class="text-xs text-green-500 express-badge hidden">EXPRESS</span> <span class="text-xs text-blue-500 cod-badge hidden">COD</span>
@@ -675,7 +751,7 @@
                                         </select>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <button type="button" data-open-select-items class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded">
+                                        <button type="button" data-open-select-items class="${tm.btnItem}">
                                             + Item
                                         </button>
                                         <button type="button" class="remove-box-btn text-red-500 hover:text-red-700 text-xs font-semibold px-3 py-1 rounded border border-red-300 bg-white">
@@ -702,7 +778,7 @@
 
                             <div class="items-container"></div>
 
-                            <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs bg-orange-50">
+                            <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs ${tm.boxSummary}">
                                 <div class="flex flex-wrap gap-4 text-gray-700 summary-info">
                                     <span class="order-summary"><span class="font-semibold">Order:-</span> 0</span>
                                     <span class="sku-summary"><span class="font-semibold">SKU Count:</span> 0</span>
@@ -719,10 +795,10 @@
 
                         <div class="mt-2 mb-4 flex flex-wrap items-center justify-between gap-2">
                             <div class="flex items-center gap-2">
-                                <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2 add-box-btn">
+                                <button class="${tm.btnAddBox} add-box-btn">
                                     <span>+ Add Box</span>
                                 </button>
-                                <button type="button" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded text-sm list-couriers-btn">
+                                <button type="button" class="${tm.btnListCourier} list-couriers-btn">
                                     📋 List Couriers
                                 </button>
                             </div>
@@ -972,15 +1048,18 @@
                 console.log('Invalid dimensions for courier check', { weight, length, breadth, height });
                 return;
             }
+
+            const orderSectionForTheme = boxElement.closest('.px-4.pt-4.pb-2');
+            const tm = bulkDispatchThemeFromSection(orderSectionForTheme);
             
             // Show loading state in courier container
-            const courierContainer = boxElement.closest('.px-4.pt-4.pb-2').querySelector('#availableCourierCompanies');
+            const courierContainer = orderSectionForTheme && orderSectionForTheme.querySelector('#availableCourierCompanies');
             console.log('Courier container found:', !!courierContainer);
             if (courierContainer) {
                 courierContainer.innerHTML = `
                     <div class="courier-rates-panel rounded-xl border border-gray-200 bg-gradient-to-b from-slate-50 to-white shadow-sm overflow-hidden text-[13px]">
                         <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white/80">
-                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white shadow-sm" aria-hidden="true">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tm.courierShipIcon} text-white shadow-sm" aria-hidden="true">
                                 <i class="fas fa-spinner fa-spin text-sm"></i>
                             </span>
                             <div>
@@ -1032,14 +1111,14 @@
                     <div class="courier-rates-panel rounded-xl border border-gray-200 bg-gradient-to-b from-slate-50 to-white shadow-sm overflow-hidden text-[13px]">
                         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 py-2.5 border-b border-gray-100 bg-white/90">
                             <div class="flex items-center gap-2 min-w-0">
-                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white shadow-sm" aria-hidden="true">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tm.courierShipIcon} text-white shadow-sm" aria-hidden="true">
                                     <i class="fas fa-shipping-fast text-sm"></i>
                                 </span>
                                 <div class="min-w-0">
                                     <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
                                     <div class="text-[11px] text-gray-500 truncate">${n} option${n !== 1 ? 's' : ''} · select one · best rating, then lowest price</div>
                                 </div>
-                                <span class="shrink-0 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800">${n}</span>
+                                <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.courierCountBadge}">${n}</span>
                             </div>
                             <p class="text-[11px] text-gray-400 sm:text-right">Scroll sideways to compare</p>
                         </div>
@@ -1069,13 +1148,13 @@
                         const cid = courier.id != null ? String(courier.id) : '';
                         const checkedAttr = idx === 0 ? ' checked' : '';
                         courierHtml += `
-                            <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:border-orange-300 hover:shadow-md has-[:checked]:border-orange-500 has-[:checked]:bg-orange-50/40 has-[:checked]:ring-2 has-[:checked]:ring-orange-400 has-[:checked]:ring-offset-1">
-                                <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 text-orange-600 focus:ring-orange-500" data-courier-name="${escapeHtml(String(courier.name ?? ''))}"${checkedAttr}/>
-                                ${idx === 0 ? '<span class="absolute right-2 top-2 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm pointer-events-none">Top pick</span>' : ''}
+                            <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md ${tm.courierTileHover} ${tm.courierTileChecked}">
+                                <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 ${tm.courierRadio}" data-courier-name="${escapeHtml(String(courier.name ?? ''))}"${checkedAttr}/>
+                                ${idx === 0 ? '<span class="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm pointer-events-none ' + tm.courierTopPick + '">Top pick</span>' : ''}
                                 <p class="pr-14 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name)}</p>
                                 <div class="mt-3">
                                     <div class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Price</div>
-                                    <div class="text-lg font-bold tabular-nums text-orange-600">${price}</div>
+                                    <div class="text-lg font-bold tabular-nums ${tm.courierPrice}">${price}</div>
                                 </div>
                                 <div class="mt-3 flex flex-wrap gap-1.5">
                                     <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
@@ -1116,24 +1195,24 @@
                 } else {
                     if (courierContainer) {
                         let emptyHtml = `
-                        <div class="courier-rates-panel rounded-xl border border-amber-200 bg-gradient-to-b from-amber-50/80 to-white shadow-sm overflow-hidden text-[13px]">
-                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between px-3 py-3 border-b border-amber-100 bg-white/70">
+                        <div class="courier-rates-panel rounded-xl border ${tm.emptyPanelBorder} bg-gradient-to-b ${tm.emptyPanelGradient} to-white shadow-sm overflow-hidden text-[13px]">
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between px-3 py-3 border-b ${tm.emptyHeaderBorder} ${tm.emptyHeaderBg}">
                                 <div class="flex gap-3 min-w-0">
-                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700" aria-hidden="true">
+                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tm.emptyIconBg}" aria-hidden="true">
                                         <i class="fas fa-inbox text-lg"></i>
                                     </span>
                                     <div class="min-w-0">
-                                        <div class="font-semibold text-amber-950">No couriers for this route</div>
-                                        <p class="text-[12px] text-amber-900/80 mt-1 leading-snug">Nothing passed the filters. Try another box size, weight, or payment type, or open debug to inspect the API payload.</p>
+                                        <div class="font-semibold ${tm.emptyTitle}">No couriers for this route</div>
+                                        <p class="text-[12px] ${tm.emptyText} mt-1 leading-snug">Nothing passed the filters. Try another box size, weight, or payment type, or open debug to inspect the API payload.</p>
                                     </div>
                                 </div>
-                                <span class="shrink-0 self-start rounded-full bg-amber-200/80 px-2 py-0.5 text-[11px] font-semibold text-amber-950">0 options</span>
+                                <span class="shrink-0 self-start rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.emptyBadge}">0 options</span>
                             </div>
-                            <div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-amber-50/50 border-b border-amber-100/80">
-                                <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-amber-950 shadow-sm hover:bg-amber-50 transition-colors">
+                            <div class="flex flex-wrap items-center gap-2 px-3 py-2 ${tm.emptyToolbarBg} border-b">
+                                <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
                                     <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy input (pre-filter)
                                 </button>
-                                <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-amber-950 shadow-sm hover:bg-amber-50 transition-colors">
+                                <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
                                     <i class="fas fa-code text-[10px]" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
                                 </button>
                             </div>
@@ -1235,6 +1314,7 @@
                     if (data.success) {
                         // Store shipping address from API response
                         currentShippingAddress = data.shipping_address || '';
+                        modal.dataset.orderTheme = data.is_international ? 'international' : 'domestic';
                         
                         // Update modal header
                         const orderNoLink = modal.querySelector('.flex.justify-between div:first-child a');
@@ -1305,17 +1385,17 @@
             const customerId = orderBox.getAttribute('data-customer-id');
             const customerName = orderBox.getAttribute('data-customer-name');
             
-            // Count existing boxes in this order
-            const existingBoxes = orderContainer.querySelectorAll('.border.border-orange-400');
+            const tm = bulkDispatchThemeFromSection(orderContainer);
+            const existingBoxes = orderContainer.querySelectorAll('.bulk-dispatch-box');
             const boxNumber = existingBoxes.length + 1;
             const newBoxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
             
             // Create new box HTML
             const newBoxHtml = `
-                <div class="border border-orange-400 border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
-                            <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
+                <div class="bulk-dispatch-box border ${tm.boxBorder} border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
+                            <div class="px-4 py-2 flex flex-wrap items-center justify-between ${tm.boxToolbar} border-b">
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
+                                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full ${tm.boxIcon} text-white text-sm">
                                         📦
                                     </span>
                                     <span class="font-semibold text-gray-800">Box ${boxNumber}</span> <span class="text-xs text-green-500 express-badge hidden">EXPRESS</span> <span class="text-xs text-blue-500 cod-badge hidden">COD</span>
@@ -1347,7 +1427,7 @@
                                         </select>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <button type="button" data-open-select-items class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded">
+                                        <button type="button" data-open-select-items class="${tm.btnItem}">
                                             + Item
                                         </button>
                                         <button type="button" class="remove-box-btn text-red-500 hover:text-red-700 text-xs font-semibold px-3 py-1 rounded border border-red-300 bg-white">
@@ -1374,7 +1454,7 @@
 
                     <div class="items-container"></div>
 
-                    <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs bg-orange-50">
+                    <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs ${tm.boxSummary}">
                         <div class="flex flex-wrap gap-4 text-gray-700">
                             <span class="order-summary"><span class="font-semibold">Order:</span> 0</span>
                             <span class="sku-summary"><span class="font-semibold">SKU Count:</span> 0</span>
