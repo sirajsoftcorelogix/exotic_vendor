@@ -317,23 +317,24 @@ class Dispatch {
         curl_close($ch);
         return json_decode($response, true);
     }
-    //get awb info from shiprocket
-    public function getShiprocketAwbInfo($shipment_id) {
+    //get awb info from shiprocket (optional courier_id = user-selected courier from serviceability)
+    public function getShiprocketAwbInfo($shipment_id, $courier_id = null) {
         $url = "https://apiv2.shiprocket.in/v1/external/courier/assign/awb";
         $headers = [
             "Content-Type: application/json",
             "Authorization: Bearer " . $this->getShiprocketToken()
         ];
-        $postData = json_encode([
-            "shipment_id" => $shipment_id
-        ]);
+        $body = ['shipment_id' => $shipment_id];
+        if ($courier_id !== null && $courier_id !== '' && is_numeric($courier_id)) {
+            $body['courier_id'] = (int)$courier_id;
+        }
+        $postData = json_encode($body);
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        $response = curl_exec($ch); 
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        $response = curl_exec($ch); 
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        $response = curl_exec($ch);
         curl_close($ch);
         return json_decode($response, true);
     }
