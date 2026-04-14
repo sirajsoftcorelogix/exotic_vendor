@@ -418,6 +418,7 @@ class pos
                 p.sku,
                 p.title,
                 p.groupname,
+                COALESCE(NULLIF(TRIM(cat.display_name), ''), p.groupname) AS category_display,
                 p.size,
                 p.color,
                 p.image,
@@ -426,6 +427,7 @@ class pos
                 sm.stock_qty AS stock_qty
             FROM vp_products p
             $join
+            LEFT JOIN `category` cat ON cat.category = p.groupname
             $where
             ORDER BY sm.stock_qty ASC, p.title ASC
             LIMIT {$limit}
