@@ -511,6 +511,9 @@ switch ($page) {
             case 'bulk_import_process_batch':
                 $controller->bulkImportProcessBatch();
                 break;
+            case 'bulk_import_refetch_batch':
+                $controller->bulkImportRefetchBatch();
+                break;
             case 'bulk_import_retry':
                 $controller->bulkImportRetry();
                 break;
