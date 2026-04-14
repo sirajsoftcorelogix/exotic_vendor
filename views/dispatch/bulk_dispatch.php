@@ -721,7 +721,7 @@
                             <div class="flex flex-wrap items-center gap-2 min-w-0">
                                 ${tm.intlPill}
                                 <div class="font-semibold truncate">
-                                ${customerName} - ${customerId}
+                                ${orderNumber} · ${customerName} - ${customerId}
                                 </div>
                             </div>
                             <div class="text-xs sm:text-sm min-w-0">
