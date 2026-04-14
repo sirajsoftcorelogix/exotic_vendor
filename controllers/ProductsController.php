@@ -609,7 +609,9 @@ class ProductsController {
             if ($baseSku !== '') {
                 $localStockBySku[$baseSku] = $item['local_stock'];
             }
-            $baseVariantKey = $codeKey . '|' . strtolower(trim((string)$item['size'])) . '|' . strtolower(trim((string)$item['color']));
+            $baseSize = trim((string)($apiItem['size'] ?? ''));
+            $baseColor = trim((string)($apiItem['color'] ?? ''));
+            $baseVariantKey = $codeKey . '|' . strtolower($baseSize) . '|' . strtolower($baseColor);
             $localStockByVariant[$baseVariantKey] = $item['local_stock'];
             $usdList = product::vendorApiUsdPrice($apiItem);
             $item['itemprice'] = isset($apiItem['itemprice']) && $apiItem['itemprice'] !== '' && $apiItem['itemprice'] !== null
