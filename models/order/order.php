@@ -37,6 +37,10 @@ class Order{
             $sql .= " AND vp_orders.item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
         }
+        if (!empty($filters['sku'])) {
+            $sql .= " AND vp_orders.sku = ?";
+            $params[] = $filters['sku'];
+        }
         if (!empty($filters['po_no'])) {
             $sql .= " AND vp_orders.po_number LIKE ?";
             $params[] = '%' . $filters['po_no'] . '%';
@@ -259,6 +263,10 @@ class Order{
         if (!empty($filters['item_code'])) {
             $sql .= " AND item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
+        }
+        if (!empty($filters['sku'])) {
+            $sql .= " AND sku = ?";
+            $params[] = $filters['sku'];
         }
         if (!empty($filters['po_no'])) {
             $sql .= " AND vp_orders.po_number LIKE ?";
