@@ -716,10 +716,15 @@
                         <div id="availableCourierCompanies" class="mt-2 sm:mt-3 border-t border-gray-200 pt-2 sm:pt-3">
                         </div>
 
-                        <div class="mt-2 mb-4 flex flex-wrap items-center justify-between">
-                            <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2 add-box-btn">
-                                <span>+ Add Box</span>
-                            </button>
+                        <div class="mt-2 mb-4 flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2 add-box-btn">
+                                    <span>+ Add Box</span>
+                                </button>
+                                <button type="button" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded text-sm list-couriers-btn">
+                                    📋 List Couriers
+                                </button>
+                            </div>
                             <button type="button" class="remove-order-btn text-red-500 hover:text-red-700 text-sm font-semibold px-4 py-2 rounded">
                                 🗑 Remove Order
                             </button>
@@ -1248,6 +1253,22 @@
 
     // Handle Add Box button for dynamically added orders
     document.addEventListener('click', function(e) {
+        if (e.target.matches('.list-couriers-btn') || e.target.closest('.list-couriers-btn')) {
+            e.preventDefault();
+            const orderContainer = e.target.closest('.px-4.pt-4.pb-2');
+            if (!orderContainer) return;
+
+            const boxes = orderContainer.querySelectorAll('[data-order-number]');
+            if (!boxes.length) {
+                showAlert('No boxes found for this order', 'warning');
+                return;
+            }
+
+            boxes.forEach(box => fetchCouriersForBox(box));
+            showAlert('Refreshing courier list...', 'success');
+            return;
+        }
+
         if (e.target.matches('.add-box-btn') || e.target.closest('.add-box-btn')) {
             e.preventDefault();
             
