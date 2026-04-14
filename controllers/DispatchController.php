@@ -1824,6 +1824,10 @@ class DispatchController {
                 'success' => true,
                 'couriers' => $couriers,
                 'selected' => $selectedCouriers['selected'] ?? null,
+                'debug' => [
+                    'input_before_filter' => $serviceability['data'] ?? null,
+                    'output_after_filter' => $selectedCouriers
+                ],
                 'message' => 'Couriers fetched and ranked successfully'
             ]);
             exit;

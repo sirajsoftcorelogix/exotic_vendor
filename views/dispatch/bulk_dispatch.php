@@ -1005,9 +1005,21 @@
             })
             .then(data => {
                 console.log('Response data:', data);
+                boxElement._lastCourierDebugInput = data?.debug?.input_before_filter || null;
+                boxElement._lastCourierDebugOutput = data?.debug?.output_after_filter || null;
                 if (data.success && data.couriers && data.couriers.length > 0) {
                     // Display couriers
                     let courierHtml = '<div class="text-xs"><div class="font-semibold text-gray-800 mb-2">Available Couriers:</div>';
+                    courierHtml += '<div class="mb-2 flex flex-wrap gap-2">';
+                    courierHtml += '<button type="button" class="copy-filter-input-btn bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2 py-1 text-xs">Copy Input Before Filter</button>';
+                    courierHtml += '<button type="button" class="toggle-filter-debug-btn bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2 py-1 text-xs">Show Input/Output</button>';
+                    courierHtml += '</div>';
+                    courierHtml += '<div class="filter-debug-panel hidden mb-2 bg-gray-50 border border-gray-200 rounded p-2">';
+                    courierHtml += '<div class="font-semibold text-gray-700 mb-1">Input Before Filter</div>';
+                    courierHtml += '<pre class="debug-input text-[11px] leading-4 whitespace-pre-wrap break-all max-h-40 overflow-auto"></pre>';
+                    courierHtml += '<div class="font-semibold text-gray-700 mt-2 mb-1">Output After Filter</div>';
+                    courierHtml += '<pre class="debug-output text-[11px] leading-4 whitespace-pre-wrap break-all max-h-40 overflow-auto"></pre>';
+                    courierHtml += '</div>';
                     courierHtml += '<div class="space-y-2 flex flex-wrap gap-2 justify-start items-stretch overflow-auto max-h-32">';
                     
                     data.couriers.forEach(courier => {
@@ -1034,10 +1046,37 @@
                     courierHtml += '</div></div>';
                     if (courierContainer) {
                         courierContainer.innerHTML = courierHtml;
+                        const inputPre = courierContainer.querySelector('.debug-input');
+                        const outputPre = courierContainer.querySelector('.debug-output');
+                        if (inputPre) {
+                            inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
+                        }
+                        if (outputPre) {
+                            outputPre.textContent = JSON.stringify(boxElement._lastCourierDebugOutput || {}, null, 2);
+                        }
                     }
                 } else {
                     if (courierContainer) {
-                        courierContainer.innerHTML = '<div class="text-xs text-red-600 py-2">❌ No couriers available for this route</div>';
+                        let emptyHtml = '<div class="text-xs text-red-600 py-2">❌ No couriers available for this route</div>';
+                        emptyHtml += '<div class="mb-2 flex flex-wrap gap-2">';
+                        emptyHtml += '<button type="button" class="copy-filter-input-btn bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2 py-1 text-xs">Copy Input Before Filter</button>';
+                        emptyHtml += '<button type="button" class="toggle-filter-debug-btn bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2 py-1 text-xs">Show Input/Output</button>';
+                        emptyHtml += '</div>';
+                        emptyHtml += '<div class="filter-debug-panel hidden mb-2 bg-gray-50 border border-gray-200 rounded p-2">';
+                        emptyHtml += '<div class="font-semibold text-gray-700 mb-1">Input Before Filter</div>';
+                        emptyHtml += '<pre class="debug-input text-[11px] leading-4 whitespace-pre-wrap break-all max-h-40 overflow-auto"></pre>';
+                        emptyHtml += '<div class="font-semibold text-gray-700 mt-2 mb-1">Output After Filter</div>';
+                        emptyHtml += '<pre class="debug-output text-[11px] leading-4 whitespace-pre-wrap break-all max-h-40 overflow-auto"></pre>';
+                        emptyHtml += '</div>';
+                        courierContainer.innerHTML = emptyHtml;
+                        const inputPre = courierContainer.querySelector('.debug-input');
+                        const outputPre = courierContainer.querySelector('.debug-output');
+                        if (inputPre) {
+                            inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
+                        }
+                        if (outputPre) {
+                            outputPre.textContent = JSON.stringify(boxElement._lastCourierDebugOutput || {}, null, 2);
+                        }
                     }
                 }
             })
@@ -1048,6 +1087,46 @@
                 }
             });
         }
+
+        // Debug actions in courier container
+        document.addEventListener('click', async function (e) {
+            const copyBtn = e.target.closest('.copy-filter-input-btn');
+            if (copyBtn) {
+                const box = copyBtn.closest('.px-4.pt-4.pb-2')?.querySelector('[data-order-number]');
+                const inputBeforeFilter = box?._lastCourierDebugInput || null;
+                if (!inputBeforeFilter) {
+                    showAlert('No input-before-filter data available yet', 'warning');
+                    return;
+                }
+                const raw = JSON.stringify(inputBeforeFilter, null, 2);
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(raw);
+                    } else {
+                        const temp = document.createElement('textarea');
+                        temp.value = raw;
+                        document.body.appendChild(temp);
+                        temp.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(temp);
+                    }
+                    showAlert('Input before filter copied', 'success');
+                } catch (err) {
+                    console.error('Copy failed:', err);
+                    showAlert('Failed to copy input before filter', 'error');
+                }
+                return;
+            }
+
+            const toggleBtn = e.target.closest('.toggle-filter-debug-btn');
+            if (toggleBtn) {
+                const container = toggleBtn.closest('#availableCourierCompanies');
+                const panel = container?.querySelector('.filter-debug-panel');
+                if (!panel) return;
+                panel.classList.toggle('hidden');
+                toggleBtn.textContent = panel.classList.contains('hidden') ? 'Show Input/Output' : 'Hide Input/Output';
+            }
+        });
         
         // Handle Add Order button
         document.getElementById('addOrderBtn').addEventListener('click', function() {
