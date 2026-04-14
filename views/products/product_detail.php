@@ -394,7 +394,13 @@
           </div>
         </div>
         <!-- In Purchase -->
-        <div class="flex items-center justify-between border border-orange-100 bg-orange-50/50 rounded-lg p-3">
+        <a
+          href="<?php echo base_url('?page=purchase_orders&action=list&exclude_completed=1&item_code=' . rawurlencode((string)($products['item_code'] ?? ''))); ?>"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center justify-between border border-orange-100 bg-orange-50/50 rounded-lg p-3 hover:bg-orange-100/60 transition"
+          title="View non-completed purchase orders for this product"
+        >
           <div>
             <p class="text-sm text-gray-500">In Purchase</p>
             <p class="text-lg font-semibold leading-tight"><?php echo count($products['in_purchase_list']); ?></p>
@@ -402,7 +408,7 @@
           <div class="bg-orange-100 text-orange-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
             <i class="fas fa-shopping-cart"></i>
           </div>
-        </div>
+        </a>
       </div>
       <!-- Number Sold -->
      <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2.5">
