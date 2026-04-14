@@ -628,6 +628,7 @@
                     newOrderDiv.className = 'px-4 pt-4 pb-2';
                     const isExpress = false;
                     const isCOD = false;
+                    const newBoxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
                     newOrderDiv.innerHTML = `
                         <div class="bg-orange-500 text-white px-4 py-2 flex flex-wrap justify-between items-center rounded-t">
                             <div class="font-semibold">
@@ -639,7 +640,7 @@
                             </div>
                         </div>
 
-                        <div class="border border-orange-400 border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}">
+                        <div class="border border-orange-400 border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
                             <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
                                 <div class="flex items-center gap-2">
                                     <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
@@ -1018,6 +1019,12 @@
                 boxElement._lastCourierDebugInput = data?.debug?.input_before_filter || null;
                 boxElement._lastCourierDebugOutput = data?.debug?.output_after_filter || null;
                 if (data.success && data.couriers && data.couriers.length > 0) {
+                    let boxUid = boxElement.getAttribute('data-box-uid');
+                    if (!boxUid) {
+                        boxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+                        boxElement.setAttribute('data-box-uid', boxUid);
+                    }
+                    const courierGroupName = 'courier_pick_' + boxUid.replace(/[^a-zA-Z0-9_-]/g, '_');
                     const n = data.couriers.length;
                     let courierHtml = `
                     <div class="courier-rates-panel rounded-xl border border-gray-200 bg-gradient-to-b from-slate-50 to-white shadow-sm overflow-hidden text-[13px]">
@@ -1028,7 +1035,7 @@
                                 </span>
                                 <div class="min-w-0">
                                     <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
-                                    <div class="text-[11px] text-gray-500 truncate">${n} option${n !== 1 ? 's' : ''} · best rating, then lowest price</div>
+                                    <div class="text-[11px] text-gray-500 truncate">${n} option${n !== 1 ? 's' : ''} · select one · best rating, then lowest price</div>
                                 </div>
                                 <span class="shrink-0 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800">${n}</span>
                             </div>
@@ -1057,10 +1064,13 @@
                         const price = courier.price ? ('₹ ' + parseFloat(courier.price).toFixed(2)) : 'N/A';
                         const etd = courier.etd || 'N/A';
                         const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
+                        const cid = courier.id != null ? String(courier.id) : '';
+                        const checkedAttr = idx === 0 ? ' checked' : '';
                         courierHtml += `
-                            <div class="group relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border border-gray-200 bg-white p-3 shadow-sm cursor-pointer transition-all duration-200 hover:border-orange-300 hover:shadow-md hover:bg-orange-50/30 focus-within:ring-2 focus-within:ring-orange-400 focus-within:ring-offset-2" data-courier-id="${courier.id}" role="button" tabindex="0">
-                                ${idx === 0 ? '<span class="absolute right-2 top-2 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">Top pick</span>' : ''}
-                                <p class="pr-16 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name)}</p>
+                            <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:border-orange-300 hover:shadow-md has-[:checked]:border-orange-500 has-[:checked]:bg-orange-50/40 has-[:checked]:ring-2 has-[:checked]:ring-orange-400 has-[:checked]:ring-offset-1">
+                                <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 text-orange-600 focus:ring-orange-500" data-courier-name="${escapeHtml(String(courier.name ?? ''))}"${checkedAttr}/>
+                                ${idx === 0 ? '<span class="absolute right-2 top-2 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm pointer-events-none">Top pick</span>' : ''}
+                                <p class="pr-14 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name)}</p>
                                 <div class="mt-3">
                                     <div class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Price</div>
                                     <div class="text-lg font-bold tabular-nums text-orange-600">${price}</div>
@@ -1073,7 +1083,7 @@
                                         <i class="fas fa-star text-amber-500 text-[10px]" aria-hidden="true"></i> ${escapeHtml(rating)}
                                     </span>
                                 </div>
-                            </div>
+                            </label>
                         `;
                     });
                     
@@ -1091,6 +1101,15 @@
                         if (outputPre) {
                             outputPre.textContent = JSON.stringify(boxElement._lastCourierDebugOutput || {}, null, 2);
                         }
+                        const syncCourierPick = (radio) => {
+                            if (!radio || !radio.checked) return;
+                            boxElement.setAttribute('data-selected-courier-id', radio.value || '');
+                            boxElement.setAttribute('data-selected-courier-name', radio.getAttribute('data-courier-name') || '');
+                        };
+                        courierContainer.querySelectorAll('.courier-tile-radio').forEach((r) => {
+                            r.addEventListener('change', () => syncCourierPick(r));
+                        });
+                        syncCourierPick(courierContainer.querySelector('.courier-tile-radio:checked'));
                     }
                 } else {
                     if (courierContainer) {
@@ -1287,10 +1306,11 @@
             // Count existing boxes in this order
             const existingBoxes = orderContainer.querySelectorAll('.border.border-orange-400');
             const boxNumber = existingBoxes.length + 1;
+            const newBoxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
             
             // Create new box HTML
             const newBoxHtml = `
-                <div class="border border-orange-400 border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}">
+                <div class="border border-orange-400 border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
                             <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
                                 <div class="flex items-center gap-2">
                                     <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
