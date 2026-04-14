@@ -2192,6 +2192,13 @@ class product
                 'text_color_class' => $mt === 'IN' ? 'text-green-600' : 'text-red-600',
             ];
         }
+        if ($rt === 'EGREENREFETCH' && ($mt === 'IN' || $mt === 'OUT')) {
+            return [
+                'ledger_type' => 'Stock adjustment',
+                'icon' => 'fa-sliders-h',
+                'text_color_class' => $mt === 'IN' ? 'text-green-600' : 'text-red-600',
+            ];
+        }
         if ($mt === 'IN' && $rt === 'GRN') {
             return [
                 'ledger_type' => 'Purchase (GRN)',
