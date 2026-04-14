@@ -98,7 +98,8 @@ class POSRegisterController
         $usersModel = new User($conn);
 
         $sessionWh = (int) ($_SESSION['warehouse_id'] ?? 0);
-        $isAdmin = isset($_SESSION['user']['role_id']) && (int) $_SESSION['user']['role_id'] === 1;
+        // Match helpers/html_helpers.php hasPermission(): admin is role_id == 1 (loose, handles string "1").
+        $isAdmin = isset($_SESSION['user']['role_id']) && $_SESSION['user']['role_id'] == 1;
 
         $reportWh = $sessionWh;
         if ($isAdmin && isset($_GET['warehouse_id'])) {
