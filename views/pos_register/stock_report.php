@@ -84,7 +84,7 @@
                   <td class="px-3 py-2 font-semibold text-slate-700"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
                   <td class="px-3 py-2"><?= htmlspecialchars($r['sku'] ?? '') ?></td>
                   <td class="px-3 py-2"><?= htmlspecialchars($r['title'] ?? '') ?></td>
-                  <td class="px-3 py-2"><?= htmlspecialchars($r['groupname'] ?? '') ?></td>
+                  <td class="px-3 py-2"><?= htmlspecialchars((string) ($r['category_display'] ?? $r['groupname'] ?? '')) ?></td>
                   <td class="px-5 py-2.5 align-middle min-w-[11rem] whitespace-nowrap">
                     <?php if ($qty <= 0): ?>
                       <span class="inline-flex rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">Out (0)</span>
