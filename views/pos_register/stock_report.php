@@ -15,23 +15,26 @@
 
   <main class="mx-auto max-w-[1500px] px-4 py-5">
     <div class="rounded-2xl bg-white border p-4">
-      <form method="get" action="index.php" class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-5">
+      <form method="get" action="index.php" class="mb-4 grid grid-cols-1 gap-3 <?= !empty($can_change_warehouse) ? 'md:grid-cols-6' : 'md:grid-cols-5' ?>">
         <input type="hidden" name="page" value="pos_register">
         <input type="hidden" name="action" value="stock-report">
 
-        <?php if (!empty($can_change_warehouse) && !empty($warehouses)): ?>
-          <div class="md:col-span-5 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <label for="stock_report_warehouse" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">Warehouse</label>
-            <select id="stock_report_warehouse" name="warehouse_id"
-              class="w-full max-w-md rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-orange-500 outline-none">
-              <?php foreach ($warehouses as $wh): ?>
-                <?php $wid = (int) ($wh['id'] ?? 0); ?>
-                <option value="<?= $wid ?>" <?= ((int) ($filters['warehouse_id'] ?? 0) === $wid) ? 'selected' : '' ?>>
-                  <?= htmlspecialchars((string) ($wh['address_title'] ?? ('#' . $wid))) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <p class="mt-2 text-xs text-slate-500">Admins can switch warehouse for this report. Other users only see their assigned warehouse.</p>
+        <?php if (!empty($can_change_warehouse)): ?>
+          <div class="flex flex-col gap-1">
+            <label for="stock_report_warehouse" class="text-xs font-semibold uppercase tracking-wide text-slate-600">Warehouse</label>
+            <?php if (!empty($warehouses)): ?>
+              <select id="stock_report_warehouse" name="warehouse_id"
+                class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-orange-500 outline-none">
+                <?php foreach ($warehouses as $wh): ?>
+                  <?php $wid = (int) ($wh['id'] ?? 0); ?>
+                  <option value="<?= $wid ?>" <?= ((int) ($filters['warehouse_id'] ?? 0) === $wid) ? 'selected' : '' ?>>
+                    <?= htmlspecialchars((string) ($wh['address_title'] ?? ('#' . $wid))) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            <?php else: ?>
+              <p class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">No active warehouses found.</p>
+            <?php endif; ?>
           </div>
         <?php endif; ?>
 
