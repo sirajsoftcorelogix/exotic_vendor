@@ -1906,6 +1906,134 @@ class ProductsController {
         return null;
     }
 
+    /**
+     * For ReUpload/API refetch:
+     * - If no prior movement exists for this product+warehouse+variant, create OPENING_STOCK at target qty.
+     * - If prior movement exists, create IN/OUT adjustment so latest running stock becomes target qty.
+     * @return string|null Error message, or null on success
+     */
+    private function bulkImportApplyRefetchStock(
+        mysqli $conn,
+        int $warehouseId,
+        string $itemCode,
+        string $importSku,
+        string $importSize,
+        string $importColor,
+        int $targetQty,
+        string $stockLocation,
+        int $userId,
+        int $importItemId
+    ): ?string {
+        if ($warehouseId <= 0) {
+            return 'Warehouse is required for stock update.';
+        }
+        $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku, $importSize, $importColor);
+        if (!$product) {
+            return 'Product not found for stock update (item_code/SKU/size/color).';
+        }
+        $productId = (int)($product['id'] ?? 0);
+        if ($productId <= 0) {
+            return 'Invalid product id for stock update.';
+        }
+
+        $sku = trim($importSku) !== '' ? trim($importSku) : ((string)($product['sku'] ?? ''));
+        $size = trim($importSize);
+        $color = trim($importColor);
+        $loc = trim($stockLocation);
+        if ($loc === '') {
+            $loc = '-';
+        }
+        $targetQty = max(0, (int)$targetQty);
+        $refType = 'EgreenRefetch';
+        $refId = 'import_item:' . (int)$importItemId;
+
+        if (!$conn->begin_transaction()) {
+            return 'Could not start transaction for stock update.';
+        }
+
+        $latestStmt = $conn->prepare("SELECT running_stock
+            FROM vp_stock_movements
+            WHERE product_id = ? AND warehouse_id = ? AND item_code = ?
+              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
+              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
+            ORDER BY id DESC
+            LIMIT 1");
+        if (!$latestStmt) {
+            $conn->rollback();
+            return 'Could not prepare stock read query.';
+        }
+        $latestStmt->bind_param('iisss', $productId, $warehouseId, $itemCode, $size, $color);
+        if (!$latestStmt->execute()) {
+            $err = $latestStmt->error;
+            $latestStmt->close();
+            $conn->rollback();
+            return 'Could not read latest stock movement: ' . $err;
+        }
+        $latestRow = $latestStmt->get_result()->fetch_assoc();
+        $latestStmt->close();
+
+        if (!$latestRow) {
+            $reason = 'Opening stock set from API ReUpload';
+            $ins = $conn->prepare("INSERT INTO vp_stock_movements
+                (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, ?, ?, ?)");
+            if (!$ins) {
+                $conn->rollback();
+                return 'Could not prepare opening stock insert.';
+            }
+            $ins->bind_param('issssisiisssi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $targetQty, $targetQty, $refType, $refId, $reason, $userId);
+            if (!$ins->execute()) {
+                $err = $ins->error;
+                $ins->close();
+                $conn->rollback();
+                return 'Opening stock insert failed: ' . $err;
+            }
+            $ins->close();
+        } else {
+            $current = (int)($latestRow['running_stock'] ?? 0);
+            $delta = $targetQty - $current;
+            if ($delta !== 0) {
+                $movementType = $delta > 0 ? 'IN' : 'OUT';
+                $qty = abs($delta);
+                $reason = 'Stock adjusted from API ReUpload';
+                $insAdj = $conn->prepare("INSERT INTO vp_stock_movements
+                    (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                if (!$insAdj) {
+                    $conn->rollback();
+                    return 'Could not prepare adjustment insert.';
+                }
+                $insAdj->bind_param('issssissiisssi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $movementType, $qty, $targetQty, $refType, $refId, $reason, $userId);
+                if (!$insAdj->execute()) {
+                    $err = $insAdj->error;
+                    $insAdj->close();
+                    $conn->rollback();
+                    return 'Adjustment insert failed: ' . $err;
+                }
+                $insAdj->close();
+            }
+        }
+
+        $upd = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
+        if (!$upd) {
+            $conn->rollback();
+            return 'Could not prepare product stock update.';
+        }
+        $upd->bind_param('ii', $targetQty, $productId);
+        if (!$upd->execute()) {
+            $err = $upd->error;
+            $upd->close();
+            $conn->rollback();
+            return 'Product local_stock update failed: ' . $err;
+        }
+        $upd->close();
+
+        if (!$conn->commit()) {
+            return 'Could not commit stock update transaction.';
+        }
+        return null;
+    }
+
     private function bulkImportUploadErrorMessage(int $code): string {
         switch ($code) {
             case UPLOAD_ERR_INI_SIZE:
@@ -2477,8 +2605,18 @@ class ProductsController {
             exit;
         }
 
+        $jobWarehouseId = 0;
+        $jwStmt = $conn->prepare('SELECT warehouse_id FROM product_import_jobs WHERE id = ? LIMIT 1');
+        if ($jwStmt) {
+            $jwStmt->bind_param('i', $jobId);
+            $jwStmt->execute();
+            $jwRow = $jwStmt->get_result()->fetch_assoc();
+            $jwStmt->close();
+            $jobWarehouseId = (int)($jwRow['warehouse_id'] ?? 0);
+        }
+
         $picked = [];
-        $stmtPick = $conn->prepare("SELECT id, item_code FROM product_import_items WHERE job_id = ? AND id > ? ORDER BY id ASC LIMIT 50");
+        $stmtPick = $conn->prepare("SELECT id, item_code, import_sku, import_size, import_color, stock_location FROM product_import_items WHERE job_id = ? AND id > ? ORDER BY id ASC LIMIT 50");
         if (!$stmtPick) {
             echo json_encode(['success' => false, 'message' => 'Could not prepare refetch query.']);
             exit;
@@ -2537,6 +2675,10 @@ class ProductsController {
         }
 
         $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
+        $localStockByCode = is_array($result['local_stock_by_code'] ?? null) ? $result['local_stock_by_code'] : [];
+        $localStockBySku = is_array($result['local_stock_by_sku'] ?? null) ? $result['local_stock_by_sku'] : [];
+        $localStockByVariant = is_array($result['local_stock_by_variant'] ?? null) ? $result['local_stock_by_variant'] : [];
+        $batchUserId = (int)($_SESSION['user']['id'] ?? 0);
         $updatedRows = 0;
         $failedRows = 0;
         foreach ($picked as $row) {
@@ -2544,6 +2686,43 @@ class ProductsController {
             if ($rowCode !== '' && in_array($rowCode, $failedCodes, true)) {
                 $failedRows++;
             } else {
+                $rowId = (int)($row['id'] ?? 0);
+                $impSku = trim((string)($row['import_sku'] ?? ''));
+                $isz = trim((string)($row['import_size'] ?? ''));
+                $ico = trim((string)($row['import_color'] ?? ''));
+                $stockLoc = (string)($row['stock_location'] ?? '');
+                if ($impSku === '') {
+                    $impSku = $this->buildBulkImportAutoSku($rowCode, $isz, $ico);
+                }
+                $resolvedQty = null;
+                $skuKey = strtoupper($impSku);
+                $variantKey = strtoupper($rowCode) . '|' . strtolower($isz) . '|' . strtolower($ico);
+                $codeKey = strtoupper($rowCode);
+                if ($skuKey !== '' && array_key_exists($skuKey, $localStockBySku)) {
+                    $resolvedQty = (int)$localStockBySku[$skuKey];
+                } elseif (array_key_exists($variantKey, $localStockByVariant)) {
+                    $resolvedQty = (int)$localStockByVariant[$variantKey];
+                } elseif (array_key_exists($codeKey, $localStockByCode)) {
+                    $resolvedQty = (int)$localStockByCode[$codeKey];
+                }
+                if ($resolvedQty !== null && $rowId > 0 && $jobWarehouseId > 0) {
+                    $stockErr = $this->bulkImportApplyRefetchStock(
+                        $conn,
+                        $jobWarehouseId,
+                        $rowCode,
+                        $impSku,
+                        $isz,
+                        $ico,
+                        max(0, (int)$resolvedQty),
+                        $stockLoc,
+                        $batchUserId,
+                        $rowId
+                    );
+                    if ($stockErr !== null) {
+                        $failedRows++;
+                        continue;
+                    }
+                }
                 $updatedRows++;
             }
         }
