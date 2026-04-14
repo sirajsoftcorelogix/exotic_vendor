@@ -358,12 +358,14 @@ class pos
         $category = trim((string)($filters['category'] ?? ''));
         $stockStatus = trim((string)($filters['stock_status'] ?? 'all'));
         $limit = isset($filters['limit']) ? (int)$filters['limit'] : 200;
+        $pageNo = isset($filters['page_no']) ? max(1, (int)$filters['page_no']) : 1;
         if ($limit < 1) {
             $limit = 200;
         }
         if ($limit > 500) {
             $limit = 500;
         }
+        $offset = ($pageNo - 1) * $limit;
 
         if ($warehouseId <= 0) {
             return [];
@@ -430,7 +432,7 @@ class pos
             LEFT JOIN `category` cat ON cat.category = p.groupname
             $where
             ORDER BY sm.stock_qty ASC, p.title ASC
-            LIMIT {$limit}
+            LIMIT {$limit} OFFSET {$offset}
         ";
 
         $stmt = $this->db->prepare($sql);
@@ -444,5 +446,73 @@ class pos
         $stmt->close();
 
         return $rows;
+    }
+
+    public function getStockReportCount(array $filters = []): int
+    {
+        $warehouseId = isset($filters['warehouse_id']) ? (int)$filters['warehouse_id'] : (isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0);
+        $search = trim((string)($filters['search'] ?? ''));
+        $category = trim((string)($filters['category'] ?? ''));
+        $stockStatus = trim((string)($filters['stock_status'] ?? 'all'));
+
+        if ($warehouseId <= 0) {
+            return 0;
+        }
+
+        $join = "
+            INNER JOIN (
+                SELECT sm1.product_id, sm1.running_stock AS stock_qty
+                FROM vp_stock_movements sm1
+                INNER JOIN (
+                    SELECT product_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE warehouse_id = ?
+                    GROUP BY product_id
+                ) latest ON latest.max_id = sm1.id AND latest.product_id = sm1.product_id
+            ) sm ON sm.product_id = p.id
+        ";
+
+        $where = ' WHERE p.is_active = 1 ';
+        $params = [$warehouseId];
+        $types = 'i';
+
+        if ($category !== '' && $category !== 'allProducts') {
+            $where .= ' AND p.groupname = ? ';
+            $params[] = $category;
+            $types .= 's';
+        }
+        if ($search !== '') {
+            $where .= ' AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ';
+            $like = '%' . $search . '%';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $types .= 'sss';
+        }
+        if ($stockStatus === 'out') {
+            $where .= ' AND sm.stock_qty = 0 ';
+        } elseif ($stockStatus === 'low') {
+            $where .= ' AND sm.stock_qty BETWEEN 1 AND 5 ';
+        } elseif ($stockStatus === 'in') {
+            $where .= ' AND sm.stock_qty > 0 ';
+        }
+
+        $sql = "
+            SELECT COUNT(*) AS cnt
+            FROM vp_products p
+            $join
+            $where
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return 0;
+        }
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $res = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int)($res['cnt'] ?? 0);
     }
 }

@@ -5,6 +5,14 @@ $filtersPanelOpen =
   || (($filters['stock_status'] ?? 'all') !== 'all')
   || (!empty($can_change_warehouse) && (int)($filters['warehouse_id'] ?? 0) > 0);
 $rowCount = is_array($rows ?? null) ? count($rows) : 0;
+$pageNo = max(1, (int)($page_no ?? ($filters['page_no'] ?? 1)));
+$limit = max(1, (int)($limit ?? ($filters['limit'] ?? 200)));
+$totalRows = max(0, (int)($total_rows ?? 0));
+$totalPages = max(1, (int)($total_pages ?? 1));
+$qsParams = $_GET ?? [];
+unset($qsParams['page_no']);
+$qs = $qsParams ? ('&' . http_build_query($qsParams)) : '';
+$pgBase = '?page=pos_register&action=stock-report' . $qs;
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
   <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
@@ -202,10 +210,34 @@ $rowCount = is_array($rows ?? null) ? count($rows) : 0;
 
   <div class="mt-6 rounded-xl border border-gray-200 bg-white px-4 py-4 shadow-sm">
     <p class="text-sm text-gray-600">
-      Showing <span class="font-medium text-gray-900 tabular-nums"><?= $rowCount ?></span> stock rows
+      Showing <span class="font-medium text-gray-900 tabular-nums"><?= $rowCount ?></span> of
+      <span class="font-medium text-gray-900 tabular-nums"><?= number_format($totalRows) ?></span> stock rows
       for <span class="font-medium text-gray-900"><?= htmlspecialchars($warehouse_name ?? 'No Warehouse') ?></span>.
     </p>
   </div>
+
+  <?php if ($totalPages > 1): ?>
+    <div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-4 shadow-sm">
+      <p class="text-sm text-gray-600">
+        Showing
+        <span class="font-medium text-gray-900 tabular-nums"><?= ($pageNo - 1) * $limit + 1 ?></span>
+        –
+        <span class="font-medium text-gray-900 tabular-nums"><?= min($pageNo * $limit, $totalRows) ?></span>
+        of <span class="font-medium text-gray-900 tabular-nums"><?= number_format($totalRows) ?></span>
+      </p>
+      <nav class="flex flex-wrap items-center gap-2" aria-label="Pagination">
+        <a href="<?= htmlspecialchars($pgBase . '&page_no=1') ?>"
+          class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?= $pageNo <= 1 ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' ?>">First</a>
+        <a href="<?= htmlspecialchars($pgBase . '&page_no=' . max(1, $pageNo - 1)) ?>"
+          class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?= $pageNo <= 1 ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' ?>">Previous</a>
+        <span class="px-3 py-1.5 text-sm text-gray-700 tabular-nums">Page <?= $pageNo ?> / <?= $totalPages ?></span>
+        <a href="<?= htmlspecialchars($pgBase . '&page_no=' . min($totalPages, $pageNo + 1)) ?>"
+          class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?= $pageNo >= $totalPages ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' ?>">Next</a>
+        <a href="<?= htmlspecialchars($pgBase . '&page_no=' . $totalPages) ?>"
+          class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?= $pageNo >= $totalPages ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' ?>">Last</a>
+      </nav>
+    </div>
+  <?php endif; ?>
 </div>
 
 <!-- Image Expand Modal -->
