@@ -297,6 +297,10 @@
             return bulkDispatchOrderTheme(orderSection.getAttribute('data-order-theme') === 'international');
         }
 
+        const MIN_AUTO_BOX_WEIGHT_KG = 0.5; // 500g — carriers / API minimum billable
+        const WEIGHT_INPUT_BUFFER_FACTOR = 1.2; // applied when auto total is at or above 500g
+        const MAX_BOX_WEIGHT_KG = 20;
+
         // Function to update box totals
         function updateBoxTotals(boxElement) {
             if (!boxElement) return;
@@ -353,6 +357,16 @@
                 //if (spans[1]) spans[1].innerHTML = '<span class="font-semibold">SKU:</span> ' + skuCount;                
                 //if (spans[2]) spans[2].innerHTML = '<span class="font-semibold">Quantity:</span> ' + totalQuantity;
                 //if (spans[3]) spans[3].innerHTML = '<span class="font-semibold">Weight:</span> ' + totalWeight.toFixed(3) + ' kg';
+            }
+
+            const weightInput = boxElement.querySelector('.weight-input');
+            if (weightInput && skuCount > 0) {
+                if (totalWeight < MIN_AUTO_BOX_WEIGHT_KG) {
+                    weightInput.value = MIN_AUTO_BOX_WEIGHT_KG.toFixed(3);
+                } else {
+                    const withBuffer = totalWeight * WEIGHT_INPUT_BUFFER_FACTOR;
+                    weightInput.value = Math.min(withBuffer, MAX_BOX_WEIGHT_KG).toFixed(3);
+                }
             }
         }
 
