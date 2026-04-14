@@ -25,10 +25,11 @@ function compareStressLast($a, $b)
 
 function compareExpressCouriers($a, $b)
 {
-    $stressCmp = compareStressLast($a, $b);
-    if ($stressCmp !== 0) {
-        return $stressCmp;
-    }
+    // Stress flag sorting is temporarily disabled.
+    // $stressCmp = compareStressLast($a, $b);
+    // if ($stressCmp !== 0) {
+    //     return $stressCmp;
+    // }
 
     $perfA = performanceScore($a);
     $perfB = performanceScore($b);
@@ -103,10 +104,11 @@ function assignEconomyCompositeScores(array &$couriers)
 
 function compareEconomyCouriers($a, $b)
 {
-    $stressCmp = compareStressLast($a, $b);
-    if ($stressCmp !== 0) {
-        return $stressCmp;
-    }
+    // Stress flag sorting is temporarily disabled.
+    // $stressCmp = compareStressLast($a, $b);
+    // if ($stressCmp !== 0) {
+    //     return $stressCmp;
+    // }
 
     if (isset($a['economy_composite'], $b['economy_composite'])) {
         $cmp = $b['economy_composite'] <=> $a['economy_composite'];
