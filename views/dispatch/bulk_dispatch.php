@@ -1058,7 +1058,7 @@
                         </div>
                         <div class="px-2 sm:px-3 py-3">
                             <div class="flex flex-nowrap gap-3 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-1 scroll-smooth [scrollbar-width:thin]" style="-webkit-overflow-scrolling: touch;">`;
-                    
+
                     data.couriers.forEach((courier, idx) => {
                         const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
                         const price = courier.price ? ('₹ ' + parseFloat(courier.price).toFixed(2)) : 'N/A';
