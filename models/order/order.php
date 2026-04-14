@@ -153,7 +153,7 @@ class Order{
             $params[] = '%' . $filters['author'] . '%';            
         }
         if (!empty($filters['unshipped'])) {
-            $sql .= " AND vp_orders.status != 'shipped'";
+            $sql .= " AND vp_orders.status != 'shipped' AND vp_orders.status != 'cancelled' AND vp_orders.status NOT LIKE 'return%'";
         }
         //echo $sql;
         //sortdaterange
@@ -371,7 +371,7 @@ class Order{
             $params[] = '%' . $filters['author'] . '%';            
         }
         if (!empty($filters['unshipped'])) {
-            $sql .= " AND vp_orders.status != 'shipped'";
+            $sql .= " AND vp_orders.status != 'shipped' AND vp_orders.status != 'cancelled' AND vp_orders.status NOT LIKE 'return%'";
         }
         if (!empty($filters['sortdaterange'])) {
             if ($filters['sortdaterange'] === 'last_7_days') {
