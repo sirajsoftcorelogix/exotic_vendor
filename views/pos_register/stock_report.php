@@ -56,7 +56,7 @@
               <th class="px-3 py-2 text-left">SKU</th>
               <th class="px-3 py-2 text-left">Title</th>
               <th class="px-3 py-2 text-left">Category</th>
-              <th class="px-3 py-2 text-left">Stock</th>
+              <th class="px-5 py-2.5 text-left min-w-[11rem] whitespace-nowrap">Stock</th>
               <th class="px-3 py-2 text-left">Sell Price</th>
             </tr>
           </thead>
@@ -85,13 +85,13 @@
                   <td class="px-3 py-2"><?= htmlspecialchars($r['sku'] ?? '') ?></td>
                   <td class="px-3 py-2"><?= htmlspecialchars($r['title'] ?? '') ?></td>
                   <td class="px-3 py-2"><?= htmlspecialchars($r['groupname'] ?? '') ?></td>
-                  <td class="px-3 py-2">
+                  <td class="px-5 py-2.5 align-middle min-w-[11rem] whitespace-nowrap">
                     <?php if ($qty <= 0): ?>
-                      <span class="rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-700">Out (0)</span>
+                      <span class="inline-flex rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">Out (0)</span>
                     <?php elseif ($qty <= 5): ?>
-                      <span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">Low (<?= $qty ?>)</span>
+                      <span class="inline-flex rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700">Low (<?= $qty ?>)</span>
                     <?php else: ?>
-                      <span class="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
+                      <span class="inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
                     <?php endif; ?>
                   </td>
                   <td class="px-3 py-2"><?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
