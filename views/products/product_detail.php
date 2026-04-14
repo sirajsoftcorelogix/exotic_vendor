@@ -369,7 +369,7 @@
         </div>
         <!-- Pending Orders -->
         <a
-          href="<?php echo base_url('?page=orders&action=list&options=unshipped&item_code=' . rawurlencode((string)($products['item_code'] ?? ''))); ?>"
+          href="<?php echo base_url('?page=orders&action=list&options=unshipped&sku=' . rawurlencode((string)($products['sku'] ?? '')) . '&item_code=' . rawurlencode((string)($products['item_code'] ?? ''))); ?>"
           target="_blank"
           rel="noopener noreferrer"
           class="flex items-center justify-between border border-purple-100 bg-purple-50/50 rounded-lg p-3 hover:bg-purple-100/60 transition"

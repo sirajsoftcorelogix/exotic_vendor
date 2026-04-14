@@ -34,6 +34,9 @@ class OrdersController {
         if (!empty($_GET['item_code'])) {
             $filters['item_code'] = $_GET['item_code'];            
         }
+        if (!empty($_GET['sku'])) {
+            $filters['sku'] = $_GET['sku'];
+        }
         if (!empty($_GET['order_from']) && !empty($_GET['order_till'])) {
             $filters['order_from'] = $_GET['order_from'];
             $filters['order_till'] = $_GET['order_till'];
