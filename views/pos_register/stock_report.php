@@ -1,127 +1,211 @@
-<div class="min-h-screen">
-  <header class="border-b bg-white">
-    <div class="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-3">
-      <a href="?page=pos_register&action=list" class="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">Back to POS</a>
-      <h1 class="text-base font-semibold text-slate-800">Stock Report</h1>
-      <div class="ml-auto flex items-center gap-2 border rounded-xl px-3 py-2">
-        <div class="h-8 w-8 rounded-full bg-slate-300"></div>
-        <div class="text-xs">
-          <div class="font-semibold"><?= htmlspecialchars($warehouse_name ?? 'No Warehouse') ?></div>
-          <div class="text-slate-500">Sales Terminal</div>
+<?php
+$filtersPanelOpen =
+  trim((string)($filters['search'] ?? '')) !== ''
+  || (($filters['category'] ?? 'allProducts') !== 'allProducts')
+  || (($filters['stock_status'] ?? 'all') !== 'all')
+  || (!empty($can_change_warehouse) && (int)($filters['warehouse_id'] ?? 0) > 0);
+$rowCount = is_array($rows ?? null) ? count($rows) : 0;
+?>
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+  <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
+    <div class="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" aria-hidden="true"></div>
+    <div class="pointer-events-none absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-sky-200/15 blur-2xl" aria-hidden="true"></div>
+    <div class="relative px-5 py-7 sm:px-8 sm:py-9 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+      <div class="min-w-0 max-w-3xl">
+        <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
+          <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+            <i class="fas fa-warehouse text-[11px]" aria-hidden="true"></i>
+          </span>
+          <span>POS Register · Stock report</span>
         </div>
+        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Stock report</h1>
+        <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+          Monitor warehouse stock by SKU, category, and status using the same list workspace style as direct purchase.
+        </p>
+      </div>
+      <div class="flex shrink-0 lg:pl-4 lg:self-center gap-2">
+        <span class="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700">
+          <i class="fas fa-store-alt text-amber-600 text-xs" aria-hidden="true"></i>
+          <?= htmlspecialchars($warehouse_name ?? 'No Warehouse') ?>
+        </span>
+        <a href="?page=pos_register&action=list" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition">
+          Back to POS
+        </a>
       </div>
     </div>
-  </header>
+  </div>
 
-  <main class="mx-auto max-w-[1500px] px-4 py-5">
-    <div class="rounded-2xl bg-white border p-4">
-      <form method="get" action="index.php" class="mb-4 grid grid-cols-1 gap-3 <?= !empty($can_change_warehouse) ? 'md:grid-cols-6' : 'md:grid-cols-5' ?>">
-        <input type="hidden" name="page" value="pos_register">
-        <input type="hidden" name="action" value="stock-report">
+  <style>
+    #pos-stock-filters > summary { list-style: none; }
+    #pos-stock-filters > summary::-webkit-details-marker { display: none; }
+    #pos-stock-filters[open] > summary { border-bottom: 1px solid rgba(251, 243, 219, 0.85); }
+    #pos-stock-filters:not([open]) .psf-label-open { display: none; }
+    #pos-stock-filters[open] .psf-label-closed { display: none; }
+    #pos-stock-filters[open] .psf-chevron { transform: rotate(180deg); }
+  </style>
 
+  <details id="pos-stock-filters" class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden mb-6 ring-1 ring-gray-900/[0.03]" <?= $filtersPanelOpen ? 'open' : '' ?>>
+    <summary class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 flex items-center justify-between gap-4 cursor-pointer">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
+          <i class="fas fa-filter text-sm" aria-hidden="true"></i>
+        </span>
+        <div class="min-w-0">
+          <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
+          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword, category, stock status, and rows limit.</p>
+        </div>
+      </div>
+      <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
+        <span class="psf-label-closed">Show</span>
+        <span class="psf-label-open">Hide</span>
+        <i class="psf-chevron fas fa-chevron-down text-[10px] transition-transform duration-200" aria-hidden="true"></i>
+      </span>
+    </summary>
+
+    <form method="get" action="index.php" class="p-5">
+      <input type="hidden" name="page" value="pos_register">
+      <input type="hidden" name="action" value="stock-report">
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-4">
         <?php if (!empty($can_change_warehouse)): ?>
-          <div class="flex flex-col gap-1">
-            <label for="stock_report_warehouse" class="text-xs font-semibold uppercase tracking-wide text-slate-600">Warehouse</label>
-            <?php if (!empty($warehouses)): ?>
-              <select id="stock_report_warehouse" name="warehouse_id"
-                class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-orange-500 outline-none">
-                <?php foreach ($warehouses as $wh): ?>
-                  <?php $wid = (int) ($wh['id'] ?? 0); ?>
-                  <option value="<?= $wid ?>" <?= ((int) ($filters['warehouse_id'] ?? 0) === $wid) ? 'selected' : '' ?>>
-                    <?= htmlspecialchars((string) ($wh['address_title'] ?? ('#' . $wid))) ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            <?php else: ?>
-              <p class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">No active warehouses found.</p>
-            <?php endif; ?>
+          <div>
+            <label for="stock_report_warehouse" class="block text-xs font-semibold text-gray-600 mb-1">Warehouse</label>
+            <select id="stock_report_warehouse" name="warehouse_id" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+              <?php foreach ($warehouses ?? [] as $wh): ?>
+                <?php $wid = (int)($wh['id'] ?? 0); ?>
+                <option value="<?= $wid ?>" <?= ((int)($filters['warehouse_id'] ?? 0) === $wid) ? 'selected' : '' ?>>
+                  <?= htmlspecialchars((string)($wh['address_title'] ?? ('#' . $wid))) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
           </div>
         <?php endif; ?>
 
-        <input
-          type="text"
-          name="search"
-          value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
-          placeholder="Search by item code, sku, title"
-          class="rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-orange-500 outline-none md:col-span-2"
-        >
+        <div class="<?= !empty($can_change_warehouse) ? 'sm:col-span-2' : 'sm:col-span-2 lg:col-span-2' ?>">
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Keyword</label>
+          <input
+            type="text"
+            name="search"
+            value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
+            placeholder="Item code, SKU, title"
+            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
+          >
+        </div>
 
-        <select name="category" class="rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-orange-500 outline-none">
-          <?php foreach (($categories ?? []) as $slug => $label): ?>
-            <option value="<?= htmlspecialchars($slug) ?>" <?= (($filters['category'] ?? 'allProducts') === $slug) ? 'selected' : '' ?>>
-              <?= htmlspecialchars($label) ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+          <select name="category" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+            <?php foreach (($categories ?? []) as $slug => $label): ?>
+              <option value="<?= htmlspecialchars($slug) ?>" <?= (($filters['category'] ?? 'allProducts') === $slug) ? 'selected' : '' ?>>
+                <?= htmlspecialchars($label) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
 
-        <select name="stock_status" class="rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-orange-500 outline-none">
-          <option value="all" <?= (($filters['stock_status'] ?? 'all') === 'all') ? 'selected' : '' ?>>All Stock</option>
-          <option value="out" <?= (($filters['stock_status'] ?? 'all') === 'out') ? 'selected' : '' ?>>Out of Stock</option>
-          <option value="low" <?= (($filters['stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low Stock (1-5)</option>
-          <option value="in" <?= (($filters['stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In Stock</option>
-        </select>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Stock status</label>
+          <select name="stock_status" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+            <option value="all" <?= (($filters['stock_status'] ?? 'all') === 'all') ? 'selected' : '' ?>>All stock</option>
+            <option value="out" <?= (($filters['stock_status'] ?? 'all') === 'out') ? 'selected' : '' ?>>Out of stock</option>
+            <option value="low" <?= (($filters['stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low stock (1-5)</option>
+            <option value="in" <?= (($filters['stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In stock</option>
+          </select>
+        </div>
 
-        <button type="submit" class="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
-          Apply
-        </button>
-      </form>
-
-      <div class="overflow-x-auto rounded-xl border">
-        <table class="min-w-full text-sm">
-          <thead class="bg-slate-50 text-slate-600">
-            <tr>
-              <th class="px-3 py-2 text-left">Image</th>
-              <th class="px-3 py-2 text-left">Item Code</th>
-              <th class="px-3 py-2 text-left">SKU</th>
-              <th class="px-3 py-2 text-left">Title</th>
-              <th class="px-3 py-2 text-left">Category</th>
-              <th class="px-5 py-2.5 text-left min-w-[11rem] whitespace-nowrap">Stock</th>
-              <th class="px-3 py-2 text-left">Sell Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php if (empty($rows)): ?>
-              <tr>
-                <td colspan="7" class="px-3 py-8 text-center text-slate-400">No stock records found.</td>
-              </tr>
-            <?php else: ?>
-              <?php foreach ($rows as $r): ?>
-                <?php $qty = (int)($r['stock_qty'] ?? 0); ?>
-                <tr class="border-t">
-                  <td class="px-3 py-2">
-                    <?php
-                      $imgUrl = $r['image'] ?: 'https://dummyimage.com/256x256/e5e7eb/6b7280&text=No+Image';
-                    ?>
-                    <img
-                      src="<?= htmlspecialchars($imgUrl) ?>"
-                      data-full-img="<?= htmlspecialchars($imgUrl) ?>"
-                      class="h-10 w-10 rounded object-cover bg-slate-100 cursor-pointer hover:opacity-90 transition"
-                      alt="Product image"
-                      loading="lazy"
-                      onclick="openStockReportImage(this)">
-                  </td>
-                  <td class="px-3 py-2 font-semibold text-slate-700"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
-                  <td class="px-3 py-2"><?= htmlspecialchars($r['sku'] ?? '') ?></td>
-                  <td class="px-3 py-2"><?= htmlspecialchars($r['title'] ?? '') ?></td>
-                  <td class="px-3 py-2"><?= htmlspecialchars((string) ($r['category_display'] ?? $r['groupname'] ?? '')) ?></td>
-                  <td class="px-5 py-2.5 align-middle min-w-[11rem] whitespace-nowrap">
-                    <?php if ($qty <= 0): ?>
-                      <span class="inline-flex rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">Out (0)</span>
-                    <?php elseif ($qty <= 5): ?>
-                      <span class="inline-flex rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700">Low (<?= $qty ?>)</span>
-                    <?php else: ?>
-                      <span class="inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
-                    <?php endif; ?>
-                  </td>
-                  <td class="px-3 py-2"><?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
-                </tr>
-              <?php endforeach; ?>
-            <?php endif; ?>
-          </tbody>
-        </table>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Rows</label>
+          <select name="limit" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+            <?php foreach ([50, 100, 200, 500] as $l): ?>
+              <option value="<?= $l ?>" <?= ((int)($filters['limit'] ?? 200) === $l) ? 'selected' : '' ?>><?= $l ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
       </div>
+
+      <div class="mt-5 flex flex-wrap items-center gap-3">
+        <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
+          <i class="fas fa-search text-xs opacity-90" aria-hidden="true"></i>
+          Apply filters
+        </button>
+        <a href="?page=pos_register&action=stock-report" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition">
+          Reset
+        </a>
+      </div>
+    </form>
+  </details>
+
+  <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-left">
+        <thead>
+          <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+            <th class="px-5 py-3.5 whitespace-nowrap">Image</th>
+            <th class="px-5 py-3.5 whitespace-nowrap">Item code</th>
+            <th class="px-5 py-3.5 whitespace-nowrap">SKU</th>
+            <th class="px-5 py-3.5 min-w-[14rem]">Title</th>
+            <th class="px-5 py-3.5 whitespace-nowrap">Category</th>
+            <th class="px-5 py-3.5 whitespace-nowrap">Stock</th>
+            <th class="px-5 py-3.5 whitespace-nowrap text-right">Sell price</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <?php if (empty($rows)): ?>
+            <tr>
+              <td colspan="7" class="px-5 py-16 text-center">
+                <div class="mx-auto flex max-w-sm flex-col items-center">
+                  <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
+                    <i class="fas fa-inbox" aria-hidden="true"></i>
+                  </span>
+                  <p class="text-base font-medium text-gray-900">No stock records found</p>
+                  <p class="mt-1 text-sm text-gray-500">Try adjusting filters to broaden results.</p>
+                </div>
+              </td>
+            </tr>
+          <?php else: ?>
+            <?php foreach ($rows as $r): ?>
+              <?php
+                $qty = (int)($r['stock_qty'] ?? 0);
+                $imgUrl = $r['image'] ?: 'https://dummyimage.com/256x256/e5e7eb/6b7280&text=No+Image';
+              ?>
+              <tr class="hover:bg-amber-50/40 transition-colors">
+                <td class="px-5 py-4 align-top">
+                  <img
+                    src="<?= htmlspecialchars($imgUrl) ?>"
+                    data-full-img="<?= htmlspecialchars($imgUrl) ?>"
+                    class="h-10 w-10 rounded object-cover bg-slate-100 cursor-pointer hover:opacity-90 transition"
+                    alt="Product image"
+                    loading="lazy"
+                    onclick="openStockReportImage(this)">
+                </td>
+                <td class="px-5 py-4 align-top font-mono text-sm font-semibold text-gray-900"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
+                <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars($r['sku'] ?? '') ?></td>
+                <td class="px-5 py-4 align-top text-sm text-gray-800"><?= htmlspecialchars($r['title'] ?? '') ?></td>
+                <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars((string)($r['category_display'] ?? $r['groupname'] ?? '')) ?></td>
+                <td class="px-5 py-4 align-top">
+                  <?php if ($qty <= 0): ?>
+                    <span class="inline-flex rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">Out (0)</span>
+                  <?php elseif ($qty <= 5): ?>
+                    <span class="inline-flex rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700">Low (<?= $qty ?>)</span>
+                  <?php else: ?>
+                    <span class="inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
+                  <?php endif; ?>
+                </td>
+                <td class="px-5 py-4 align-top text-sm text-right font-medium text-gray-900 tabular-nums"><?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
+              </tr>
+            <?php endforeach; ?>
+          <?php endif; ?>
+        </tbody>
+      </table>
     </div>
-  </main>
+  </div>
+
+  <div class="mt-6 rounded-xl border border-gray-200 bg-white px-4 py-4 shadow-sm">
+    <p class="text-sm text-gray-600">
+      Showing <span class="font-medium text-gray-900 tabular-nums"><?= $rowCount ?></span> stock rows
+      for <span class="font-medium text-gray-900"><?= htmlspecialchars($warehouse_name ?? 'No Warehouse') ?></span>.
+    </p>
+  </div>
 </div>
 
 <!-- Image Expand Modal -->
