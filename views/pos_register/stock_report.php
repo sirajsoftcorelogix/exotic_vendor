@@ -19,6 +19,22 @@
         <input type="hidden" name="page" value="pos_register">
         <input type="hidden" name="action" value="stock-report">
 
+        <?php if (!empty($can_change_warehouse) && !empty($warehouses)): ?>
+          <div class="md:col-span-5 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+            <label for="stock_report_warehouse" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">Warehouse</label>
+            <select id="stock_report_warehouse" name="warehouse_id"
+              class="w-full max-w-md rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-orange-500 outline-none">
+              <?php foreach ($warehouses as $wh): ?>
+                <?php $wid = (int) ($wh['id'] ?? 0); ?>
+                <option value="<?= $wid ?>" <?= ((int) ($filters['warehouse_id'] ?? 0) === $wid) ? 'selected' : '' ?>>
+                  <?= htmlspecialchars((string) ($wh['address_title'] ?? ('#' . $wid))) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+            <p class="mt-2 text-xs text-slate-500">Admins can switch warehouse for this report. Other users only see their assigned warehouse.</p>
+          </div>
+        <?php endif; ?>
+
         <input
           type="text"
           name="search"

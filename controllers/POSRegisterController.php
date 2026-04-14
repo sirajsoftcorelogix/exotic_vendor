@@ -97,9 +97,23 @@ class POSRegisterController
         global $conn;
         $usersModel = new User($conn);
 
+        $sessionWh = (int) ($_SESSION['warehouse_id'] ?? 0);
+        $isAdmin = isset($_SESSION['user']['role_id']) && (int) $_SESSION['user']['role_id'] === 1;
+
+        $reportWh = $sessionWh;
+        if ($isAdmin && isset($_GET['warehouse_id'])) {
+            $reqWh = (int) $_GET['warehouse_id'];
+            if ($reqWh > 0) {
+                $check = $usersModel->getWarehouseById($reqWh);
+                if (!empty($check['id'])) {
+                    $reportWh = $reqWh;
+                }
+            }
+        }
+
         $warehouseName = 'No Warehouse';
-        if (!empty($_SESSION['warehouse_id'])) {
-            $warehouse = $usersModel->getWarehouseById($_SESSION['warehouse_id']);
+        if ($reportWh > 0) {
+            $warehouse = $usersModel->getWarehouseById($reportWh);
             $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
         }
 
@@ -108,16 +122,21 @@ class POSRegisterController
             'category' => $_GET['category'] ?? 'allProducts',
             'stock_status' => $_GET['stock_status'] ?? 'all',
             'limit' => $_GET['limit'] ?? 200,
+            'warehouse_id' => $reportWh,
         ];
 
         $categories = ['allProducts' => 'All Products'] + getCategories();
         $rows = $this->pos->getStockReport($filters);
 
+        $warehouses = $isAdmin ? $usersModel->getAllWarehouses() : [];
+
         renderTemplate('views/pos_register/stock_report.php', [
             'warehouse_name' => $warehouseName,
             'categories' => $categories,
             'filters' => $filters,
-            'rows' => $rows
+            'rows' => $rows,
+            'can_change_warehouse' => $isAdmin,
+            'warehouses' => $warehouses,
         ]);
     }
 
