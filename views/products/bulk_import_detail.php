@@ -60,6 +60,7 @@
 
     <div class="flex flex-wrap gap-2 mb-4">
       <button id="startProcessBtn" type="button" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm font-semibold">Start / Resume Processing</button>
+      <button id="reuploadBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">ReUpload</button>
       <button id="refreshStatusBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Refresh Status</button>
       <button id="retryFailedBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Retry all failed</button>
       <button id="retryPendingBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Retry Pending</button>
@@ -122,7 +123,19 @@
               <tr class="border-t">
                 <td class="px-3 py-2"><?= (int)$r['id'] ?></td>
                 <td class="px-3 py-2 font-medium"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
-                <td class="px-3 py-2"><?= htmlspecialchars(($r['product_sku'] ?? '') !== '' ? $r['product_sku'] : ($r['import_sku'] ?? '')) ?></td>
+                <td class="px-3 py-2">
+                  <?php
+                    $displaySku = (($r['product_sku'] ?? '') !== '') ? (string)$r['product_sku'] : (string)($r['import_sku'] ?? '');
+                    $productId = (int)($r['product_id'] ?? 0);
+                  ?>
+                  <?php if ($displaySku !== '' && $productId > 0): ?>
+                    <a href="?page=products&action=detail&id=<?= $productId ?>" target="_blank" rel="noopener noreferrer" class="text-amber-700 hover:text-amber-900 underline">
+                      <?= htmlspecialchars($displaySku) ?>
+                    </a>
+                  <?php else: ?>
+                    <?= htmlspecialchars($displaySku) ?>
+                  <?php endif; ?>
+                </td>
                 <td class="px-3 py-2"><?= htmlspecialchars($r['import_color'] ?? '') ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($r['import_size'] ?? '') ?></td>
                 <td class="px-3 py-2 text-right tabular-nums"><?= (int)($r['opening_qty'] ?? 0) ?></td>
@@ -530,6 +543,56 @@
       }
     }
 
+    async function reuploadLoop() {
+      if (!window.confirm('ReUpload will refetch all item codes from API and update product data. Continue?')) return;
+      showProgress(
+        'ReUploading products…',
+        'Refetching products from API in batches of 50.'
+      );
+      try {
+        let lastId = 0;
+        let totalRows = 0;
+        let updatedRows = 0;
+        let failedRows = 0;
+        while (true) {
+          const data = await fetchJsonWithAutoRetry(
+            '?page=products&action=bulk_import_refetch_batch',
+            {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ job_id: jobId, last_id: lastId })
+            },
+            function(info) {
+              const sec = Math.max(1, Math.round(info.delayMs / 1000));
+              overlayMessage.textContent =
+                'Temporary network or server timeout (attempt ' + info.attempt + '). Retrying in about ' + sec + 's…';
+            }
+          );
+          if (!data.success) {
+            const detailText = [data.message || 'ReUpload failed', data.debug || ''].filter(Boolean).join('\n');
+            showResult('error', 'ReUpload Failed', data.message || 'ReUpload failed', detailText);
+            return;
+          }
+          if (data.done) break;
+          lastId = Number(data.last_id || lastId);
+          totalRows += Number(data.batch_size || 0);
+          updatedRows += Number(data.updated_rows || 0);
+          failedRows += Number(data.failed_rows || 0);
+          overlayProgressText.textContent = `Processed ${totalRows} rows | Updated ${updatedRows} | Failed ${failedRows}`;
+          overlayProgressBar.classList.remove('animate-pulse');
+          overlayProgressBar.style.width = '65%';
+          await new Promise(r => setTimeout(r, 150));
+        }
+        const detail = `Processed rows: ${totalRows}\nUpdated rows: ${updatedRows}\nFailed rows: ${failedRows}`;
+        showResult('success', 'ReUpload Complete', 'Products were refetched from API.', detail);
+        await new Promise(r => setTimeout(r, 350));
+        window.location.reload();
+      } catch (e) {
+        const details = extractServerError(e, 'ReUpload failed');
+        showResult('error', 'ReUpload Failed', 'Could not process server response.', details);
+      }
+    }
+
     document.getElementById('refreshStatusBtn').addEventListener('click', function() {
       showProgress('Refreshing status…', 'Fetching latest job summary.');
       fetchStatus()
@@ -541,6 +604,9 @@
     });
     document.getElementById('startProcessBtn').addEventListener('click', function() {
       processLoop();
+    });
+    document.getElementById('reuploadBtn').addEventListener('click', function() {
+      reuploadLoop();
     });
     document.getElementById('retryFailedBtn').addEventListener('click', function() {
       retry('failed');

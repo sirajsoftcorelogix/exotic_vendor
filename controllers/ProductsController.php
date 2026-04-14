@@ -531,6 +531,9 @@ class ProductsController {
         $updated = 0;
         $failed = [];
         $createdIdsByCode = [];
+        $localStockByCode = [];
+        $localStockBySku = [];
+        $localStockByVariant = [];
         // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
         $itm = implode(',', $codes);
         $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itm);
@@ -589,6 +592,7 @@ class ProductsController {
             $failed[] = '(unknown)';
             continue;
             }
+            $codeKey = strtoupper($code);
 
             // map API item to DB fields (adjust as needed)
             $item = [];
@@ -600,6 +604,13 @@ class ProductsController {
                 : '';
             $item['groupname'] = $apiItem['groupname'] ?? '';
             $item['local_stock'] = isset($apiItem['local_stock']) ? (int)$apiItem['local_stock'] : (isset($apiItem['stock']) ? (int)$apiItem['stock'] : 0);
+            $localStockByCode[$codeKey] = $item['local_stock'];
+            $baseSku = strtoupper(trim((string)($item['sku'] ?? '')));
+            if ($baseSku !== '') {
+                $localStockBySku[$baseSku] = $item['local_stock'];
+            }
+            $baseVariantKey = $codeKey . '|' . strtolower(trim((string)$item['size'])) . '|' . strtolower(trim((string)$item['color']));
+            $localStockByVariant[$baseVariantKey] = $item['local_stock'];
             $usdList = product::vendorApiUsdPrice($apiItem);
             $item['itemprice'] = isset($apiItem['itemprice']) && $apiItem['itemprice'] !== '' && $apiItem['itemprice'] !== null
                 ? floatval($apiItem['itemprice'])
@@ -676,6 +687,12 @@ class ProductsController {
                     $variantItem['color'] = $variant['color'] ?? '';
                     $variantItem['title'] = $variant['title'] ?? $item['title'];                    
                     $variantItem['local_stock'] = isset($variant['local_stock']) ? (int)$variant['local_stock'] : 0;
+                    $variantSku = strtoupper(trim((string)($variantItem['sku'] ?? '')));
+                    if ($variantSku !== '') {
+                        $localStockBySku[$variantSku] = $variantItem['local_stock'];
+                    }
+                    $variantKey = $codeKey . '|' . strtolower(trim((string)$variantItem['size'])) . '|' . strtolower(trim((string)$variantItem['color']));
+                    $localStockByVariant[$variantKey] = $variantItem['local_stock'];
                     $mergedVariant = array_merge($apiItem, $variant);
                     $usdVar = product::vendorApiUsdPrice($mergedVariant);
                     $variantItem['itemprice'] = isset($variant['itemprice']) && $variant['itemprice'] !== '' && $variant['itemprice'] !== null
@@ -742,6 +759,9 @@ class ProductsController {
         ];
         if ($internalCall) {
             $payload['created_ids_by_code'] = $createdIdsByCode;
+            $payload['local_stock_by_code'] = $localStockByCode;
+            $payload['local_stock_by_sku'] = $localStockBySku;
+            $payload['local_stock_by_variant'] = $localStockByVariant;
         }
         return $respond($payload);
     }
@@ -1107,7 +1127,16 @@ class ProductsController {
                               AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '') COLLATE utf8mb4_general_ci
                             ORDER BY p.id DESC
                             LIMIT 1
-                        ) AS product_sku
+                        ) AS product_sku,
+                        (
+                            SELECT p.id
+                            FROM vp_products p
+                            WHERE p.item_code COLLATE utf8mb4_general_ci = pii.item_code COLLATE utf8mb4_general_ci
+                              AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_size), ''), '') COLLATE utf8mb4_general_ci
+                              AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '') COLLATE utf8mb4_general_ci
+                            ORDER BY p.id DESC
+                            LIMIT 1
+                        ) AS product_id
                     FROM product_import_items pii
                     $where
                     ORDER BY pii.id ASC
@@ -2302,6 +2331,9 @@ class ProductsController {
         if (!empty($result['success'])) {
             $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
             $createdIdsByCode = is_array($result['created_ids_by_code'] ?? null) ? $result['created_ids_by_code'] : [];
+            $localStockByCode = is_array($result['local_stock_by_code'] ?? null) ? $result['local_stock_by_code'] : [];
+            $localStockBySku = is_array($result['local_stock_by_sku'] ?? null) ? $result['local_stock_by_sku'] : [];
+            $localStockByVariant = is_array($result['local_stock_by_variant'] ?? null) ? $result['local_stock_by_variant'] : [];
             foreach ($ids as $idx => $id) {
                 $code = $codes[$idx];
                 $rowPick = $picked[$idx] ?? [];
@@ -2312,6 +2344,29 @@ class ProductsController {
                 $ico = trim((string)($rowPick['import_color'] ?? ''));
                 if ($impSku === '') {
                     $impSku = $this->buildBulkImportAutoSku((string)$code, $isz, $ico);
+                }
+                // If uploaded qty is missing/0, use API local stock as import qty fallback.
+                if ($openQty <= 0) {
+                    $resolvedQty = null;
+                    $skuKey = strtoupper($impSku);
+                    $variantKey = strtoupper((string)$code) . '|' . strtolower($isz) . '|' . strtolower($ico);
+                    $codeKey = strtoupper((string)$code);
+                    if ($skuKey !== '' && array_key_exists($skuKey, $localStockBySku)) {
+                        $resolvedQty = (int)$localStockBySku[$skuKey];
+                    } elseif (array_key_exists($variantKey, $localStockByVariant)) {
+                        $resolvedQty = (int)$localStockByVariant[$variantKey];
+                    } elseif (array_key_exists($codeKey, $localStockByCode)) {
+                        $resolvedQty = (int)$localStockByCode[$codeKey];
+                    }
+                    if ($resolvedQty !== null) {
+                        $openQty = max(0, $resolvedQty);
+                        $qtyUp = $conn->prepare("UPDATE product_import_items SET opening_qty = ? WHERE id = ?");
+                        if ($qtyUp) {
+                            $qtyUp->bind_param('ii', $openQty, $id);
+                            $qtyUp->execute();
+                            $qtyUp->close();
+                        }
+                    }
                 }
                 $isFailed = in_array($code, $failedCodes, true);
                 if ($isFailed) {
@@ -2387,6 +2442,119 @@ class ProductsController {
                 'rows_in_batch' => $rowCount,
                 'rows_per_second' => $rowsPerSec,
             ],
+        ]);
+        exit;
+    }
+
+    public function bulkImportRefetchBatch() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        $lastId = isset($payload['last_id']) ? (int)$payload['last_id'] : 0;
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+
+        $picked = [];
+        $stmtPick = $conn->prepare("SELECT id, item_code FROM product_import_items WHERE job_id = ? AND id > ? ORDER BY id ASC LIMIT 50");
+        if (!$stmtPick) {
+            echo json_encode(['success' => false, 'message' => 'Could not prepare refetch query.']);
+            exit;
+        }
+        $stmtPick->bind_param('ii', $jobId, $lastId);
+        $stmtPick->execute();
+        $res = $stmtPick->get_result();
+        while ($res && ($row = $res->fetch_assoc())) {
+            $picked[] = $row;
+        }
+        $stmtPick->close();
+
+        if (empty($picked)) {
+            echo json_encode([
+                'success' => true,
+                'done' => true,
+                'batch_size' => 0,
+                'last_id' => $lastId,
+                'updated_rows' => 0,
+                'failed_rows' => 0,
+                'failed_codes' => [],
+            ]);
+            exit;
+        }
+
+        $codes = [];
+        foreach ($picked as $row) {
+            $c = trim((string)($row['item_code'] ?? ''));
+            if ($c !== '') {
+                $codes[] = $c;
+            }
+        }
+        $codes = array_values(array_unique($codes));
+        if (empty($codes)) {
+            $newLastId = (int)end($picked)['id'];
+            echo json_encode([
+                'success' => true,
+                'done' => false,
+                'batch_size' => count($picked),
+                'last_id' => $newLastId,
+                'updated_rows' => 0,
+                'failed_rows' => 0,
+                'failed_codes' => [],
+            ]);
+            exit;
+        }
+
+        $result = $this->importApiCall($codes);
+        if (!is_array($result) || empty($result['success'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => (string)($result['message'] ?? 'API refetch failed.'),
+                'last_id' => (int)end($picked)['id'],
+            ]);
+            exit;
+        }
+
+        $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
+        $updatedRows = 0;
+        $failedRows = 0;
+        foreach ($picked as $row) {
+            $rowCode = (string)($row['item_code'] ?? '');
+            if ($rowCode !== '' && in_array($rowCode, $failedCodes, true)) {
+                $failedRows++;
+            } else {
+                $updatedRows++;
+            }
+        }
+        $newLastId = (int)end($picked)['id'];
+        echo json_encode([
+            'success' => true,
+            'done' => false,
+            'batch_size' => count($picked),
+            'last_id' => $newLastId,
+            'updated_rows' => $updatedRows,
+            'failed_rows' => $failedRows,
+            'failed_codes' => $failedCodes,
+            'import_result' => $result,
         ]);
         exit;
     }
