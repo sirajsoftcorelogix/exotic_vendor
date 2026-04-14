@@ -368,7 +368,11 @@
           </button>
         </div>
         <!-- Pending Orders -->
-        <div class="flex items-center justify-between border border-purple-100 bg-purple-50/50 rounded-lg p-3">
+        <a
+          href="<?php echo base_url('?page=orders&action=list&options=unshipped&item_code=' . rawurlencode((string)($products['item_code'] ?? ''))); ?>"
+          class="flex items-center justify-between border border-purple-100 bg-purple-50/50 rounded-lg p-3 hover:bg-purple-100/60 transition"
+          title="View unshipped orders for this product"
+        >
           <div>
             <p class="text-sm text-gray-500 leading-tight">Pending Orders</p>
             <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['committed_stock'] ?? '0'); ?></p>
@@ -376,7 +380,7 @@
           <div class="bg-purple-100 text-purple-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
             <i class="fas fa-link"></i>
           </div>
-        </div>
+        </a>
         <!-- Available -->
         <div class="flex items-center justify-between border border-green-100 bg-green-50/50 rounded-lg p-3">
           <div>
