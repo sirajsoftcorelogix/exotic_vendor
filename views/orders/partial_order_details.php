@@ -20,20 +20,20 @@ $odSectionHead = static function (string $label): void {
 ?>
 <div class="order-details-modal-root max-w-full text-gray-800 -mt-2">
     <!-- Order summary (compact for drawer width) -->
-    <div class="rounded-xl border border-amber-200/80 bg-gradient-to-br from-amber-600 to-amber-700 text-white shadow-md p-5 sm:p-6">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 text-base sm:text-lg">
-            <div class="space-y-2">
+    <div class="rounded-xl border border-amber-200/80 bg-gradient-to-br from-amber-600 to-amber-700 text-white shadow-sm p-4 sm:p-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5 text-sm sm:text-[15px]">
+            <div class="space-y-1.5">
                 <?php $link = 'index.php?page=orders&action=get_order_details_html&type=outer&order_number=' . $order[0]['order_number']; ?>
-                <p class="font-bold text-amber-50 text-sm sm:text-base uppercase tracking-wider">Order</p>
-                <p class="text-2xl sm:text-3xl font-bold leading-tight tracking-tight">
-                    <a href="<?php echo htmlspecialchars($link); ?>" class="text-white underline decoration-white/50 underline-offset-2 hover:decoration-white" target="_blank" rel="noopener noreferrer"><?php echo htmlspecialchars((string)$order[0]['order_number']); ?></a>
+                <p class="font-semibold text-amber-50/95 text-[11px] sm:text-xs uppercase tracking-wide">Order</p>
+                <p class="text-xl sm:text-2xl font-bold leading-snug">
+                    <a href="<?php echo htmlspecialchars($link); ?>" class="text-white underline decoration-white/45 underline-offset-2 hover:decoration-white" target="_blank" rel="noopener noreferrer"><?php echo htmlspecialchars((string)$order[0]['order_number']); ?></a>
                 </p>
-                <p class="text-amber-50/95 text-base sm:text-lg"><span class="font-semibold text-white">Date:</span> <?php echo htmlspecialchars(date('d M Y', strtotime($order[0]['order_date']))); ?></p>
+                <p class="text-sm sm:text-[15px] text-amber-50/95"><span class="font-semibold text-white/95">Date:</span> <?php echo htmlspecialchars(date('d M Y', strtotime($order[0]['order_date']))); ?></p>
             </div>
-            <div class="space-y-2 sm:text-right">
-                <p class="font-bold text-amber-50 text-sm sm:text-base uppercase tracking-wider sm:text-right">Totals</p>
-                <p class="text-lg sm:text-xl font-semibold leading-snug"><span class="font-semibold text-white/95">Order value:</span> <?php echo htmlspecialchars(number_format((float)($orderremarks['total'] ?? 0), 2)); ?> <span class="font-medium text-amber-50"><?php echo htmlspecialchars((string)$currency); ?></span></p>
-                <p class="text-base sm:text-lg"><span class="font-semibold text-white/95">Payment:</span> <?php echo htmlspecialchars((string)($order[0]['payment_type'] ?? '')); ?></p>
+            <div class="space-y-1.5 sm:text-right">
+                <p class="font-semibold text-amber-50/95 text-[11px] sm:text-xs uppercase tracking-wide sm:text-right">Totals</p>
+                <p class="text-base sm:text-lg font-semibold leading-snug"><span class="font-semibold text-white/95">Order value:</span> <?php echo htmlspecialchars(number_format((float)($orderremarks['total'] ?? 0), 2)); ?> <span class="font-medium text-amber-50"><?php echo htmlspecialchars((string)$currency); ?></span></p>
+                <p class="text-sm sm:text-[15px]"><span class="font-semibold text-white/95">Payment:</span> <?php echo htmlspecialchars((string)($order[0]['payment_type'] ?? '')); ?></p>
             </div>
         </div>
     </div>
