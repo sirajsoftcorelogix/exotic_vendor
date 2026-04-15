@@ -582,17 +582,41 @@ class ProductsController {
         $items = product::normalizeVendorProductFetchItems($apiResult);
         //print_array($items);
         if (count($items) === 0) {
+            if ($internalCall) {
+                $failed = array_values($codes);
+                return $respond([
+                    'success' => true,
+                    'message' => 'API returned no product rows; requested codes skipped so ReUpload can continue.',
+                    'created' => 0,
+                    'updated' => 0,
+                    'failed' => $failed,
+                    'timing' => $importTiming($codesCount, $apiMsElapsed, 0, 0),
+                    'created_ids_by_code' => $createdIdsByCode,
+                    'local_stock_by_code' => $localStockByCode,
+                    'local_stock_by_sku' => $localStockBySku,
+                    'local_stock_by_variant' => $localStockByVariant,
+                ]);
+            }
             return $respond(['success' => false, 'message' => 'No items found in API response.', 'timing' => $importTiming($codesCount, $apiMsElapsed)]);
         }
-        
+
+        $codesPresentInResponse = [];
         foreach ($items as $apiItem) {
+            $itemRowCode = '';
+            try {
+            if (!is_array($apiItem)) {
+                $failed[] = '(invalid_row)';
+                continue;
+            }
             // detect item code from common keys
             $code = trim($apiItem['itemcode'] ?? $apiItem['item_code'] ?? $apiItem['sku'] ?? '');
+            $itemRowCode = $code;
             if ($code === '') {
             $failed[] = '(unknown)';
             continue;
             }
             $codeKey = strtoupper($code);
+            $codesPresentInResponse[$codeKey] = true;
 
             // map API item to DB fields (adjust as needed)
             $item = [];
@@ -680,7 +704,7 @@ class ProductsController {
             // echo "Created: $created, Updated: $updated, Failed: " . count($failed) . "\n";
             // print_r($existing);
             //varient
-            if (isset($apiItem['variations'])) {
+            if (isset($apiItem['variations']) && is_array($apiItem['variations'])) {
                 foreach ($apiItem['variations'] as $variant) {
                     $variantItem = $item; // start with base item
                     $variantItem['item_code'] = $apiItem['itemcode'] ?? $apiItem['item_code'];
@@ -749,7 +773,25 @@ class ProductsController {
 
             // tiny sleep to be gentle on third-party API/service
             usleep(100000); // 100ms
+            } catch (\Throwable $e) {
+                $fc = trim((string)$itemRowCode);
+                if ($fc === '' && is_array($apiItem)) {
+                    $fc = trim((string)($apiItem['itemcode'] ?? $apiItem['item_code'] ?? $apiItem['sku'] ?? ''));
+                }
+                $failed[] = $fc !== '' ? $fc : '(unknown)';
+            }
         }
+
+        if ($internalCall) {
+            foreach ($codes as $reqCode) {
+                $rk = strtoupper(trim((string)$reqCode));
+                if ($rk === '' || isset($codesPresentInResponse[$rk])) {
+                    continue;
+                }
+                $failed[] = (string)$reqCode;
+            }
+        }
+        $failed = array_values(array_unique(array_map('strval', $failed)));
 
         $payload = [
             'success' => true,
@@ -2771,6 +2813,13 @@ class ProductsController {
         }
 
         $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
+        $failedCodeLookup = [];
+        foreach ($failedCodes as $fc) {
+            $fu = strtoupper(trim((string)$fc));
+            if ($fu !== '') {
+                $failedCodeLookup[$fu] = true;
+            }
+        }
         $localStockByCode = is_array($result['local_stock_by_code'] ?? null) ? $result['local_stock_by_code'] : [];
         $localStockBySku = is_array($result['local_stock_by_sku'] ?? null) ? $result['local_stock_by_sku'] : [];
         $localStockByVariant = is_array($result['local_stock_by_variant'] ?? null) ? $result['local_stock_by_variant'] : [];
@@ -2779,7 +2828,8 @@ class ProductsController {
         $failedRows = 0;
         foreach ($picked as $row) {
             $rowCode = (string)($row['item_code'] ?? '');
-            if ($rowCode !== '' && in_array($rowCode, $failedCodes, true)) {
+            $rowCodeUpper = strtoupper(trim($rowCode));
+            if ($rowCodeUpper !== '' && isset($failedCodeLookup[$rowCodeUpper])) {
                 $failedRows++;
             } else {
                 $rowId = (int)($row['id'] ?? 0);
@@ -2801,6 +2851,7 @@ class ProductsController {
                 } elseif (array_key_exists($codeKey, $localStockByCode)) {
                     $resolvedQty = (int)$localStockByCode[$codeKey];
                 }
+                $stockApplied = false;
                 if ($resolvedQty !== null && $rowId > 0 && $jobWarehouseId > 0) {
                     $stockErr = $this->bulkImportApplyRefetchStock(
                         $conn,
@@ -2818,8 +2869,11 @@ class ProductsController {
                         $failedRows++;
                         continue;
                     }
+                    $stockApplied = true;
                 }
-                $updatedRows++;
+                if ($stockApplied) {
+                    $updatedRows++;
+                }
             }
         }
         $newLastId = (int)end($picked)['id'];
