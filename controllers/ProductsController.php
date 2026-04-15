@@ -1057,7 +1057,9 @@ class ProductsController {
             exit;
         }
 
-        $this->refreshImportJobCounts($jobId);
+        // Do not call refreshImportJobCounts() here: it aggregates every import row for the job
+        // on each request and makes pagination painfully slow on large jobs. Counts are kept
+        // up to date by batch processing; use "Refresh Status" to reconcile from the server.
 
         $job = null;
         $stmtJob = $conn->prepare("SELECT j.*, u.name AS created_by_name, ea.address_title AS warehouse_name
@@ -1120,25 +1122,7 @@ class ProductsController {
                         pii.error_message,
                         pii.created_at,
                         pii.updated_at,
-                        pii.processed_at,
-                        (
-                            SELECT p.sku
-                            FROM vp_products p
-                            WHERE p.item_code COLLATE utf8mb4_general_ci = pii.item_code COLLATE utf8mb4_general_ci
-                              AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_size), ''), '') COLLATE utf8mb4_general_ci
-                              AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '') COLLATE utf8mb4_general_ci
-                            ORDER BY p.id DESC
-                            LIMIT 1
-                        ) AS product_sku,
-                        (
-                            SELECT p.id
-                            FROM vp_products p
-                            WHERE p.item_code COLLATE utf8mb4_general_ci = pii.item_code COLLATE utf8mb4_general_ci
-                              AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_size), ''), '') COLLATE utf8mb4_general_ci
-                              AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '') COLLATE utf8mb4_general_ci
-                            ORDER BY p.id DESC
-                            LIMIT 1
-                        ) AS product_id
+                        pii.processed_at
                     FROM product_import_items pii
                     $where
                     ORDER BY pii.id ASC
@@ -1156,6 +1140,8 @@ class ProductsController {
         }
         $listStmt->close();
 
+        $rows = $this->hydrateBulkImportDetailProductLinks($conn, $rows);
+
         renderTemplate('views/products/bulk_import_detail.php', [
             'job' => $job,
             'rows' => $rows,
@@ -1165,6 +1151,116 @@ class ProductsController {
             'total_items' => $totalItems,
             'total_pages' => $totalPages
         ], 'Bulk Import Detail');
+    }
+
+    /**
+     * Match import row dimensions the same way as legacy SQL:
+     * IFNULL(NULLIF(TRIM(v), ''), '')
+     */
+    private function bulkImportNormDimForProductLookup(?string $v): string {
+        $t = trim((string)$v);
+        return $t === '' ? '' : $t;
+    }
+
+    /**
+     * Lookup key for pairing import lines to vp_products (item_code + size + color), case-insensitive like utf8mb4_general_ci.
+     */
+    private function bulkImportProductMatchKey(string $itemCode, string $importSize, string $importColor): string {
+        $fold = static function (string $s): string {
+            if (function_exists('mb_strtolower')) {
+                return mb_strtolower($s, 'UTF-8');
+            }
+            return strtolower($s);
+        };
+        $ic = $fold(trim($itemCode));
+        $ns = $fold($this->bulkImportNormDimForProductLookup($importSize));
+        $nc = $fold($this->bulkImportNormDimForProductLookup($importColor));
+        return $ic . "\x1e" . $ns . "\x1e" . $nc;
+    }
+
+    /**
+     * Resolves product id/sku for the current page without per-row correlated subqueries against vp_products.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function hydrateBulkImportDetailProductLinks(\mysqli $conn, array $rows): array {
+        if ($rows === []) {
+            return $rows;
+        }
+        $codes = [];
+        foreach ($rows as $r) {
+            $c = trim((string)($r['item_code'] ?? ''));
+            if ($c !== '') {
+                $codes[$c] = true;
+            }
+        }
+        $codeList = array_keys($codes);
+        if ($codeList === []) {
+            foreach ($rows as &$r0) {
+                $r0['product_sku'] = '';
+                $r0['product_id'] = '';
+            }
+            unset($r0);
+            return $rows;
+        }
+
+        $bestByKey = [];
+        $chunkSize = 80;
+        for ($i = 0, $n = count($codeList); $i < $n; $i += $chunkSize) {
+            $chunk = array_slice($codeList, $i, $chunkSize);
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = "SELECT p.id, p.sku, p.item_code,
+                        IFNULL(NULLIF(TRIM(p.color), ''), '') AS norm_color,
+                        IFNULL(NULLIF(TRIM(p.size), ''), '') AS norm_size
+                    FROM vp_products p
+                    WHERE p.item_code IN ($placeholders)";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $types = str_repeat('s', count($chunk));
+            $bindArgs = [&$types];
+            foreach ($chunk as $k => $_v) {
+                $bindArgs[] = &$chunk[$k];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($res && ($pr = $res->fetch_assoc())) {
+                $key = $this->bulkImportProductMatchKey(
+                    (string)($pr['item_code'] ?? ''),
+                    (string)($pr['norm_size'] ?? ''),
+                    (string)($pr['norm_color'] ?? '')
+                );
+                $pid = (int)($pr['id'] ?? 0);
+                if ($pid <= 0) {
+                    continue;
+                }
+                if (!isset($bestByKey[$key]) || $pid > (int)$bestByKey[$key]['id']) {
+                    $bestByKey[$key] = ['id' => $pid, 'sku' => (string)($pr['sku'] ?? '')];
+                }
+            }
+            $stmt->close();
+        }
+
+        foreach ($rows as &$r) {
+            $key = $this->bulkImportProductMatchKey(
+                (string)($r['item_code'] ?? ''),
+                (string)($r['import_size'] ?? ''),
+                (string)($r['import_color'] ?? '')
+            );
+            if (isset($bestByKey[$key])) {
+                $r['product_id'] = (string)$bestByKey[$key]['id'];
+                $r['product_sku'] = $bestByKey[$key]['sku'];
+            } else {
+                $r['product_id'] = '';
+                $r['product_sku'] = '';
+            }
+        }
+        unset($r);
+
+        return $rows;
     }
 
     private function ensureBulkImportTables() {
