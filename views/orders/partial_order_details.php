@@ -9,23 +9,31 @@ foreach ($order as $items => $item) {
     $currency = $item['currency'] ?? $currency;
 }
 $countries = country_array();
+$odSectionHead = static function (string $label): void {
+    echo '<div class="px-3 sm:px-4 pt-3 pb-2.5 bg-gradient-to-b from-slate-100/90 to-slate-50/50 border-b border-slate-200/90">';
+    echo '<div class="flex items-center gap-2">';
+    echo '<span class="w-1 self-stretch min-h-[0.875rem] rounded-full bg-amber-500 shrink-0" aria-hidden="true"></span>';
+    echo '<h4 class="text-[11px] font-bold uppercase tracking-widest text-slate-600">' . htmlspecialchars($label) . '</h4>';
+    echo '</div>';
+    echo '</div>';
+};
 ?>
 <div class="order-details-modal-root max-w-full text-gray-800 -mt-2">
     <!-- Order summary (compact for drawer width) -->
-    <div class="rounded-xl border border-amber-200/80 bg-gradient-to-br from-amber-600 to-amber-700 text-white shadow-sm p-4 sm:p-5">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
-            <div class="space-y-1.5">
+    <div class="rounded-xl border border-amber-200/80 bg-gradient-to-br from-amber-600 to-amber-700 text-white shadow-md p-5 sm:p-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 text-base sm:text-lg">
+            <div class="space-y-2">
                 <?php $link = 'index.php?page=orders&action=get_order_details_html&type=outer&order_number=' . $order[0]['order_number']; ?>
-                <p class="font-semibold text-amber-50/90 text-xs uppercase tracking-wide">Order</p>
-                <p class="text-base font-semibold">
-                    <a href="<?php echo htmlspecialchars($link); ?>" class="text-white underline decoration-white/40 hover:decoration-white" target="_blank" rel="noopener noreferrer"><?php echo htmlspecialchars((string)$order[0]['order_number']); ?></a>
+                <p class="font-bold text-amber-50 text-sm sm:text-base uppercase tracking-wider">Order</p>
+                <p class="text-2xl sm:text-3xl font-bold leading-tight tracking-tight">
+                    <a href="<?php echo htmlspecialchars($link); ?>" class="text-white underline decoration-white/50 underline-offset-2 hover:decoration-white" target="_blank" rel="noopener noreferrer"><?php echo htmlspecialchars((string)$order[0]['order_number']); ?></a>
                 </p>
-                <p class="text-amber-50/95"><span class="font-medium text-white/90">Date:</span> <?php echo htmlspecialchars(date('d M Y', strtotime($order[0]['order_date']))); ?></p>
+                <p class="text-amber-50/95 text-base sm:text-lg"><span class="font-semibold text-white">Date:</span> <?php echo htmlspecialchars(date('d M Y', strtotime($order[0]['order_date']))); ?></p>
             </div>
-            <div class="space-y-1.5 sm:text-right">
-                <p class="font-semibold text-amber-50/90 text-xs uppercase tracking-wide sm:text-right">Totals</p>
-                <p><span class="font-medium text-white/90">Order value:</span> <?php echo htmlspecialchars(number_format((float)($orderremarks['total'] ?? 0), 2)); ?> <?php echo htmlspecialchars((string)$currency); ?></p>
-                <p><span class="font-medium text-white/90">Payment:</span> <?php echo htmlspecialchars((string)($order[0]['payment_type'] ?? '')); ?></p>
+            <div class="space-y-2 sm:text-right">
+                <p class="font-bold text-amber-50 text-sm sm:text-base uppercase tracking-wider sm:text-right">Totals</p>
+                <p class="text-lg sm:text-xl font-semibold leading-snug"><span class="font-semibold text-white/95">Order value:</span> <?php echo htmlspecialchars(number_format((float)($orderremarks['total'] ?? 0), 2)); ?> <span class="font-medium text-amber-50"><?php echo htmlspecialchars((string)$currency); ?></span></p>
+                <p class="text-base sm:text-lg"><span class="font-semibold text-white/95">Payment:</span> <?php echo htmlspecialchars((string)($order[0]['payment_type'] ?? '')); ?></p>
             </div>
         </div>
     </div>
@@ -68,16 +76,6 @@ $countries = country_array();
 
                 <div class="accordion-content-details rounded-b-xl bg-slate-100/70 border-t border-slate-200/80">
                     <div class="p-3 sm:p-4 space-y-4">
-                    <?php
-                    $odSectionHead = static function (string $label): void {
-                        echo '<div class="px-3 sm:px-4 pt-3 pb-2.5 bg-gradient-to-b from-slate-100/90 to-slate-50/50 border-b border-slate-200/90">';
-                        echo '<div class="flex items-center gap-2">';
-                        echo '<span class="w-1 self-stretch min-h-[0.875rem] rounded-full bg-amber-500 shrink-0" aria-hidden="true"></span>';
-                        echo '<h4 class="text-[11px] font-bold uppercase tracking-widest text-slate-600">' . htmlspecialchars($label) . '</h4>';
-                        echo '</div>';
-                        echo '</div>';
-                    };
-                    ?>
 
                     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
                         <?php $odSectionHead('Countries'); ?>
@@ -95,7 +93,7 @@ $countries = country_array();
 
                     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
                         <?php $odSectionHead('Channel'); ?>
-                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
                                 <p><span class="section-title text-gray-600">Marketplace</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['marketplace_vendor'] ?? '')); ?></span></p>
                             </div>
@@ -107,7 +105,7 @@ $countries = country_array();
 
                     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
                         <?php $odSectionHead('Product details'); ?>
-                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <?php if (!empty($item['author']) || !empty($item['publisher'])): ?>
                                 <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
                                     <p><span class="section-title text-gray-600">Author</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['author'] ?? '')); ?></span></p>
@@ -135,14 +133,14 @@ $countries = country_array();
                     ?>
                     <div class="rounded-xl border border-amber-200/90 bg-gradient-to-b from-amber-50/90 to-amber-50/40 shadow-sm overflow-hidden ring-1 ring-amber-900/[0.06]">
                         <?php $odSectionHead('Addons'); ?>
-                        <div class="px-3 sm:px-4 pb-4 pt-1">
+                        <div class="px-3 sm:px-4 pb-4 pt-3">
                             <p class="section-value text-gray-900 leading-relaxed"><?php echo htmlspecialchars($optStr !== '' ? $optStr : '—'); ?></p>
                         </div>
                     </div>
 
                     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
                         <?php $odSectionHead('Stock'); ?>
-                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
                                 <p><span class="section-title text-gray-600">Local stock</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['local_stock'] ?? '')); ?></span></p>
                                 <p><span class="section-title text-gray-600">Location</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['location'] ?? '')); ?></span></p>
@@ -156,7 +154,7 @@ $countries = country_array();
 
                     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
                         <?php $odSectionHead('Pricing & tax'); ?>
-                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
                                 <p><span class="section-title text-gray-600">Item price</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['itemprice'] ?? '')); ?></span></p>
                                 <p><span class="section-title text-gray-600">Final price</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['finalprice'] ?? '')); ?></span></p>
@@ -174,7 +172,7 @@ $countries = country_array();
 
                     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
                         <?php $odSectionHead('Discounts'); ?>
-                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
                                 <p><span class="section-title text-gray-600">Coupon</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['coupon'] ?? '')); ?></span></p>
                                 <p><span class="section-title text-gray-600">Coupon reduce</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['coupon_reduce'] ?? '')); ?></span></p>
@@ -188,7 +186,7 @@ $countries = country_array();
 
                     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
                         <?php $odSectionHead('Backorder'); ?>
-                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
                                 <p><span class="section-title text-gray-600">Backorder status</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['backorder_status'] ?? '')); ?></span></p>
                                 <p><span class="section-title text-gray-600">Backorder %</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['backorder_percent'] ?? '')); ?></span></p>
@@ -202,7 +200,7 @@ $countries = country_array();
 
                     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
                         <?php $odSectionHead('Dimensions'); ?>
-                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
                                 <p><span class="section-title text-gray-600">Product weight</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['product_weight'] ?? '') . (string)($item['product_weight_unit'] ?? '')); ?></span></p>
                                 <p><span class="section-title text-gray-600">Product height</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['prod_height'] ?? '')); ?></span></p>
@@ -216,7 +214,7 @@ $countries = country_array();
 
                     <div class="rounded-xl border border-slate-300/90 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.04]">
                         <?php $odSectionHead('Notes'); ?>
-                        <div class="px-3 sm:px-4 pb-4 pt-1">
+                        <div class="px-3 sm:px-4 pb-4 pt-3">
                             <div class="rounded-lg border border-slate-200 bg-slate-50/80 p-3 min-h-[2.5rem]">
                                 <p class="notes-text text-sm text-gray-700 leading-relaxed"><?php echo nl2br(htmlspecialchars((string)($item['remarks'] ?? ''))); ?></p>
                             </div>
