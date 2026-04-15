@@ -123,11 +123,19 @@ class POSRegisterController
             'category' => $_GET['category'] ?? 'allProducts',
             'stock_status' => $_GET['stock_status'] ?? 'all',
             'limit' => $_GET['limit'] ?? 200,
+            'page_no' => isset($_GET['page_no']) ? max(1, (int)$_GET['page_no']) : 1,
             'warehouse_id' => $reportWh,
         ];
 
         $categories = ['allProducts' => 'All Products'] + getCategories();
+        $totalRows = $this->pos->getStockReportCount($filters);
         $rows = $this->pos->getStockReport($filters);
+        $limit = (int)($filters['limit'] ?? 200);
+        $pageNo = (int)($filters['page_no'] ?? 1);
+        $totalPages = $limit > 0 ? (int)ceil($totalRows / $limit) : 1;
+        if ($totalPages < 1) {
+            $totalPages = 1;
+        }
 
         $warehouses = $isAdmin ? $usersModel->getAllWarehouses() : [];
 
@@ -136,6 +144,10 @@ class POSRegisterController
             'categories' => $categories,
             'filters' => $filters,
             'rows' => $rows,
+            'page_no' => $pageNo,
+            'limit' => $limit,
+            'total_rows' => $totalRows,
+            'total_pages' => $totalPages,
             'can_change_warehouse' => $isAdmin,
             'warehouses' => $warehouses,
         ]);

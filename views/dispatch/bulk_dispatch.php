@@ -227,6 +227,80 @@
         let currentShippingAddress = ''; // Store shipping address from API response
         if (!modal) return;
 
+        function bulkDispatchOrderTheme(isInternational) {
+            if (isInternational) {
+                return {
+                    attr: 'international',
+                    orderHeader: 'bg-violet-600 text-white',
+                    intlPill: '<span class="shrink-0 rounded-md bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">International</span>',
+                    boxBorder: 'border-violet-400',
+                    boxToolbar: 'bg-violet-50 border-violet-200',
+                    boxIcon: 'bg-violet-500',
+                    boxSummary: 'bg-violet-50',
+                    btnItem: 'bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1 rounded',
+                    btnAddBox: 'bg-violet-600 hover:bg-violet-700 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2',
+                    btnListCourier: 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-semibold px-4 py-2 rounded text-sm',
+                    courierShipIcon: 'bg-violet-600',
+                    courierCountBadge: 'bg-violet-100 text-violet-800',
+                    courierPrice: 'text-violet-700',
+                    courierRadio: 'text-violet-600 focus:ring-violet-500',
+                    courierTileChecked: 'has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50/40 has-[:checked]:ring-2 has-[:checked]:ring-violet-400 has-[:checked]:ring-offset-1',
+                    courierTileHover: 'hover:border-violet-300',
+                    courierTopPick: 'bg-violet-600',
+                    loadingSpinner: 'border-violet-600',
+                    emptyPanelBorder: 'border-violet-200',
+                    emptyPanelGradient: 'from-violet-50/80',
+                    emptyHeaderBorder: 'border-violet-100',
+                    emptyHeaderBg: 'bg-white/70',
+                    emptyIconBg: 'bg-violet-100 text-violet-700',
+                    emptyTitle: 'text-violet-950',
+                    emptyText: 'text-violet-900/80',
+                    emptyBadge: 'bg-violet-200/80 text-violet-950',
+                    emptyToolbarBg: 'bg-violet-50/50 border-violet-100/80',
+                    emptyBtn: 'border-violet-200 bg-white text-violet-950 shadow-sm hover:bg-violet-50',
+                };
+            }
+            return {
+                attr: 'domestic',
+                orderHeader: 'bg-orange-500 text-white',
+                intlPill: '',
+                boxBorder: 'border-orange-400',
+                boxToolbar: 'bg-orange-50 border-orange-200',
+                boxIcon: 'bg-orange-400',
+                boxSummary: 'bg-orange-50',
+                btnItem: 'bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded',
+                btnAddBox: 'bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2',
+                btnListCourier: 'bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded text-sm',
+                courierShipIcon: 'bg-orange-500',
+                courierCountBadge: 'bg-orange-100 text-orange-800',
+                courierPrice: 'text-orange-600',
+                courierRadio: 'text-orange-600 focus:ring-orange-500',
+                courierTileChecked: 'has-[:checked]:border-orange-500 has-[:checked]:bg-orange-50/40 has-[:checked]:ring-2 has-[:checked]:ring-orange-400 has-[:checked]:ring-offset-1',
+                courierTileHover: 'hover:border-orange-300',
+                courierTopPick: 'bg-orange-500',
+                loadingSpinner: 'border-orange-500',
+                emptyPanelBorder: 'border-amber-200',
+                emptyPanelGradient: 'from-amber-50/80',
+                emptyHeaderBorder: 'border-amber-100',
+                emptyHeaderBg: 'bg-white/70',
+                emptyIconBg: 'bg-amber-100 text-amber-700',
+                emptyTitle: 'text-amber-950',
+                emptyText: 'text-amber-900/80',
+                emptyBadge: 'bg-amber-200/80 text-amber-950',
+                emptyToolbarBg: 'bg-amber-50/50 border-amber-100/80',
+                emptyBtn: 'border-amber-200 bg-white text-amber-950 shadow-sm hover:bg-amber-50',
+            };
+        }
+
+        function bulkDispatchThemeFromSection(orderSection) {
+            if (!orderSection) return bulkDispatchOrderTheme(false);
+            return bulkDispatchOrderTheme(orderSection.getAttribute('data-order-theme') === 'international');
+        }
+
+        const MIN_AUTO_BOX_WEIGHT_KG = 0.5; // 500g — carriers / API minimum billable
+        const WEIGHT_INPUT_BUFFER_FACTOR = 1.2; // applied when auto total is at or above 500g
+        const MAX_BOX_WEIGHT_KG = 20;
+
         // Function to update box totals
         function updateBoxTotals(boxElement) {
             if (!boxElement) return;
@@ -283,6 +357,16 @@
                 //if (spans[1]) spans[1].innerHTML = '<span class="font-semibold">SKU:</span> ' + skuCount;                
                 //if (spans[2]) spans[2].innerHTML = '<span class="font-semibold">Quantity:</span> ' + totalQuantity;
                 //if (spans[3]) spans[3].innerHTML = '<span class="font-semibold">Weight:</span> ' + totalWeight.toFixed(3) + ' kg';
+            }
+
+            const weightInput = boxElement.querySelector('.weight-input');
+            if (weightInput && skuCount > 0) {
+                if (totalWeight < MIN_AUTO_BOX_WEIGHT_KG) {
+                    weightInput.value = MIN_AUTO_BOX_WEIGHT_KG.toFixed(3);
+                } else {
+                    const withBuffer = totalWeight * WEIGHT_INPUT_BUFFER_FACTOR;
+                    weightInput.value = Math.min(withBuffer, MAX_BOX_WEIGHT_KG).toFixed(3);
+                }
             }
         }
 
@@ -536,6 +620,7 @@
                         if (data.success) {
                             // Store shipping address from API response
                             currentShippingAddress = data.shipping_address || '';
+                            modal.dataset.orderTheme = data.is_international ? 'international' : 'domestic';
                             
                             // Update modal header
                             const orderNoLink = modal.querySelector('.flex.justify-between div:first-child a');
@@ -628,21 +713,27 @@
                     newOrderDiv.className = 'px-4 pt-4 pb-2';
                     const isExpress = false;
                     const isCOD = false;
+                    const newBoxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+                    const tm = bulkDispatchOrderTheme(modal.dataset.orderTheme === 'international');
+                    newOrderDiv.setAttribute('data-order-theme', tm.attr);
                     newOrderDiv.innerHTML = `
-                        <div class="bg-orange-500 text-white px-4 py-2 flex flex-wrap justify-between items-center rounded-t">
-                            <div class="font-semibold">
-                                ${customerName} - ${customerId}
+                        <div class="${tm.orderHeader} px-4 py-2 flex flex-wrap justify-between items-center gap-2 rounded-t">
+                            <div class="flex flex-wrap items-center gap-2 min-w-0">
+                                ${tm.intlPill}
+                                <div class="font-semibold truncate">
+                                ${orderNumber} · ${customerName}(${customerId})
+                                </div>
                             </div>
-                            <div class="text-xs sm:text-sm">
+                            <div class="text-xs sm:text-sm min-w-0">
                                 <span class="font-semibold">Shipping to:</span>
                                 ${currentShippingAddress || 'Address not available'}
                             </div>
                         </div>
 
-                        <div class="border border-orange-400 border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}">
-                            <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
+                        <div class="bulk-dispatch-box border ${tm.boxBorder} border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
+                            <div class="px-4 py-2 flex flex-wrap items-center justify-between ${tm.boxToolbar} border-b">
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
+                                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full ${tm.boxIcon} text-white text-sm">
                                         📦
                                     </span>
                                     <span class="font-semibold text-gray-800">Box 1</span> <span class="text-xs text-green-500 express-badge hidden">EXPRESS</span> <span class="text-xs text-blue-500 cod-badge hidden">COD</span>
@@ -674,7 +765,7 @@
                                         </select>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <button type="button" data-open-select-items class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded">
+                                        <button type="button" data-open-select-items class="${tm.btnItem}">
                                             + Item
                                         </button>
                                         <button type="button" class="remove-box-btn text-red-500 hover:text-red-700 text-xs font-semibold px-3 py-1 rounded border border-red-300 bg-white">
@@ -701,7 +792,7 @@
 
                             <div class="items-container"></div>
 
-                            <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs bg-orange-50">
+                            <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs ${tm.boxSummary}">
                                 <div class="flex flex-wrap gap-4 text-gray-700 summary-info">
                                     <span class="order-summary"><span class="font-semibold">Order:-</span> 0</span>
                                     <span class="sku-summary"><span class="font-semibold">SKU Count:</span> 0</span>
@@ -713,16 +804,23 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="availableCourierCompanies" class="px-4 py-2 text-xs text-gray-700 border-t border-gray-200">
+                        <div id="availableCourierCompanies" class="mt-2 sm:mt-3 border-t border-gray-200 pt-2 sm:pt-3">
                         </div>
 
-                        <div class="mt-2 mb-4 flex flex-wrap items-center justify-between">
-                            <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2 add-box-btn">
-                                <span>+ Add Box</span>
-                            </button>
+                        <div class="mt-2 mb-4 flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <button class="${tm.btnAddBox} add-box-btn">
+                                    <span>+ Add Box</span>
+                                </button>
+                                <button type="button" class="${tm.btnListCourier} list-couriers-btn">
+                                    📋 List Couriers
+                                </button>
+                            </div>
                             <button type="button" class="remove-order-btn text-red-500 hover:text-red-700 text-sm font-semibold px-4 py-2 rounded">
                                 🗑 Remove Order
                             </button>
+                        </div>
+                        <div id="availableCourierCompanies" class="px-4 py-2 text-xs text-gray-700 border-t border-gray-200">
                         </div>
                     `;
                     container.appendChild(newOrderDiv);
@@ -964,12 +1062,26 @@
                 console.log('Invalid dimensions for courier check', { weight, length, breadth, height });
                 return;
             }
+
+            const orderSectionForTheme = boxElement.closest('.px-4.pt-4.pb-2');
+            const tm = bulkDispatchThemeFromSection(orderSectionForTheme);
             
             // Show loading state in courier container
-            const courierContainer = boxElement.closest('.px-4.pt-4.pb-2').querySelector('#availableCourierCompanies');
+            const courierContainer = orderSectionForTheme && orderSectionForTheme.querySelector('#availableCourierCompanies');
             console.log('Courier container found:', !!courierContainer);
             if (courierContainer) {
-                courierContainer.innerHTML = '<div class="text-xs text-gray-500 py-2">⏳ Fetching available couriers...</div>';
+                courierContainer.innerHTML = `
+                    <div class="courier-rates-panel rounded-xl border border-gray-200 bg-gradient-to-b from-slate-50 to-white shadow-sm overflow-hidden text-[13px]">
+                        <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white/80">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tm.courierShipIcon} text-white shadow-sm" aria-hidden="true">
+                                <i class="fas fa-spinner fa-spin text-sm"></i>
+                            </span>
+                            <div>
+                                <div class="font-semibold text-gray-900">Loading courier options</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">Checking serviceability for this box…</div>
+                            </div>
+                        </div>
+                    </div>`;
             }
             
             // Call the PHP endpoint
@@ -999,49 +1111,206 @@
             })
             .then(data => {
                 console.log('Response data:', data);
+                boxElement._lastCourierDebugInput = data?.debug?.input_before_filter || null;
+                boxElement._lastCourierDebugOutput = data?.debug?.output_after_filter || null;
                 if (data.success && data.couriers && data.couriers.length > 0) {
-                    // Display couriers
-                    let courierHtml = '<div class="text-xs"><div class="font-semibold text-gray-800 mb-2">Available Couriers:</div>';
-                    courierHtml += '<div class="space-y-2 flex flex-wrap gap-2 justify-start items-stretch overflow-auto max-h-32">';
-                    
-                    data.couriers.forEach(courier => {
+                    let boxUid = boxElement.getAttribute('data-box-uid');
+                    if (!boxUid) {
+                        boxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+                        boxElement.setAttribute('data-box-uid', boxUid);
+                    }
+                    const courierGroupName = 'courier_pick_' + boxUid.replace(/[^a-zA-Z0-9_-]/g, '_');
+                    const n = data.couriers.length;
+                    let courierHtml = `
+                    <div class="courier-rates-panel rounded-xl border border-gray-200 bg-gradient-to-b from-slate-50 to-white shadow-sm overflow-hidden text-[13px]">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 py-2.5 border-b border-gray-100 bg-white/90">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tm.courierShipIcon} text-white shadow-sm" aria-hidden="true">
+                                    <i class="fas fa-shipping-fast text-sm"></i>
+                                </span>
+                                <div class="min-w-0">
+                                    <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
+                                    <div class="text-[11px] text-gray-500 truncate">${n} option${n !== 1 ? 's' : ''} · select one · best rating, then lowest price</div>
+                                </div>
+                                <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.courierCountBadge}">${n}</span>
+                            </div>
+                            <p class="text-[11px] text-gray-400 sm:text-right">Scroll sideways to compare</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/95 border-b border-gray-100">
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1 hidden sm:inline">Debug</span>
+                            <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy input (pre-filter)
+                            </button>
+                            <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-code text-[10px] text-gray-500" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
+                            </button>
+                        </div>
+                        <div class="filter-debug-panel hidden border-b border-gray-200 bg-slate-900 px-3 py-2">
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
+                            <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
+                            <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
+                        </div>
+                        <div class="px-2 sm:px-3 py-3">
+                            <div class="flex flex-nowrap gap-3 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-1 scroll-smooth [scrollbar-width:thin]" style="-webkit-overflow-scrolling: touch;">`;
+
+                    data.couriers.forEach((courier, idx) => {
                         const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
                         const price = courier.price ? ('₹ ' + parseFloat(courier.price).toFixed(2)) : 'N/A';
                         const etd = courier.etd || 'N/A';
-                        
+                        const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
+                        const cid = courier.id != null ? String(courier.id) : '';
+                        const checkedAttr = idx === 0 ? ' checked' : '';
                         courierHtml += `
-                            <div class="border border-orange-200 rounded p-2 hover:bg-orange-50 cursor-pointer flex flex-col w-52" data-courier-id="${courier.id}">
-                                <div class="flex justify-between items-start">
-                                    <div class="flex-1">
-                                        <p class="font-bold text-gray-800">${escapeHtml(courier.name)}</p>
-                                        <div class="grid grid-cols-3 gap-2 mt-1 text-xs text-gray-700">
-                                            <div><span class="font-semibold">Price:</span> ${price}</div>
-                                            <div><span class="font-semibold">ETD:</span> ${etd}</div>
-                                            <div><span class="font-semibold">Rating:</span> ${rating}<i class="fas fa-star text-yellow-500 ml-1"></i></div>
-                                        </div>
-                                    </div>
+                            <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md ${tm.courierTileHover} ${tm.courierTileChecked}">
+                                <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 ${tm.courierRadio}" data-courier-name="${escapeHtml(String(courier.name ?? ''))}"${checkedAttr}/>
+                                ${idx === 0 ? '<span class="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm pointer-events-none ' + tm.courierTopPick + '">Top pick</span>' : ''}
+                                <p class="pr-14 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name)}</p>
+                                <div class="mt-3">
+                                    <div class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Price</div>
+                                    <div class="text-lg font-bold tabular-nums ${tm.courierPrice}">${price}</div>
                                 </div>
-                            </div>
+                                <div class="mt-3 flex flex-wrap gap-1.5">
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                                        <span class="text-slate-400">ETD</span> ${escapeHtml(etdShort)}
+                                    </span>
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-100">
+                                        <i class="fas fa-star text-amber-500 text-[10px]" aria-hidden="true"></i> ${escapeHtml(rating)}
+                                    </span>
+                                </div>
+                            </label>
                         `;
                     });
                     
-                    courierHtml += '</div></div>';
+                    courierHtml += `
+                            </div>
+                        </div>
+                    </div>`;
                     if (courierContainer) {
                         courierContainer.innerHTML = courierHtml;
+                        const inputPre = courierContainer.querySelector('.debug-input');
+                        const outputPre = courierContainer.querySelector('.debug-output');
+                        if (inputPre) {
+                            inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
+                        }
+                        if (outputPre) {
+                            outputPre.textContent = JSON.stringify(boxElement._lastCourierDebugOutput || {}, null, 2);
+                        }
+                        const syncCourierPick = (radio) => {
+                            if (!radio || !radio.checked) return;
+                            boxElement.setAttribute('data-selected-courier-id', radio.value || '');
+                            boxElement.setAttribute('data-selected-courier-name', radio.getAttribute('data-courier-name') || '');
+                        };
+                        courierContainer.querySelectorAll('.courier-tile-radio').forEach((r) => {
+                            r.addEventListener('change', () => syncCourierPick(r));
+                        });
+                        syncCourierPick(courierContainer.querySelector('.courier-tile-radio:checked'));
                     }
                 } else {
                     if (courierContainer) {
-                        courierContainer.innerHTML = '<div class="text-xs text-red-600 py-2">❌ No couriers available for this route</div>';
+                        let emptyHtml = `
+                        <div class="courier-rates-panel rounded-xl border ${tm.emptyPanelBorder} bg-gradient-to-b ${tm.emptyPanelGradient} to-white shadow-sm overflow-hidden text-[13px]">
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between px-3 py-3 border-b ${tm.emptyHeaderBorder} ${tm.emptyHeaderBg}">
+                                <div class="flex gap-3 min-w-0">
+                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tm.emptyIconBg}" aria-hidden="true">
+                                        <i class="fas fa-inbox text-lg"></i>
+                                    </span>
+                                    <div class="min-w-0">
+                                        <div class="font-semibold ${tm.emptyTitle}">No couriers for this route</div>
+                                        <p class="text-[12px] ${tm.emptyText} mt-1 leading-snug">Nothing passed the filters. Try another box size, weight, or payment type, or open debug to inspect the API payload.</p>
+                                    </div>
+                                </div>
+                                <span class="shrink-0 self-start rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.emptyBadge}">0 options</span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 px-3 py-2 ${tm.emptyToolbarBg} border-b">
+                                <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
+                                    <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy input (pre-filter)
+                                </button>
+                                <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
+                                    <i class="fas fa-code text-[10px]" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
+                                </button>
+                            </div>
+                            <div class="filter-debug-panel hidden border-b border-gray-200 bg-slate-900 px-3 py-2">
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
+                                <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
+                                <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
+                            </div>
+                        </div>`;
+                        courierContainer.innerHTML = emptyHtml;
+                        const inputPre = courierContainer.querySelector('.debug-input');
+                        const outputPre = courierContainer.querySelector('.debug-output');
+                        if (inputPre) {
+                            inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
+                        }
+                        if (outputPre) {
+                            outputPre.textContent = JSON.stringify(boxElement._lastCourierDebugOutput || {}, null, 2);
+                        }
                     }
                 }
             })
             .catch(error => {
                 console.error('Error fetching couriers:', error);
                 if (courierContainer) {
-                    courierContainer.innerHTML = '<div class="text-xs text-red-600 py-2">⚠️ Error fetching couriers</div>';
+                    courierContainer.innerHTML = `
+                        <div class="rounded-xl border border-red-200 bg-gradient-to-b from-red-50 to-white px-4 py-3 shadow-sm flex gap-3 items-start text-[13px]">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600" aria-hidden="true">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </span>
+                            <div>
+                                <div class="font-semibold text-red-900">Could not load couriers</div>
+                                <p class="text-[12px] text-red-800/90 mt-1">Network or server error. Check your connection and try again.</p>
+                            </div>
+                        </div>`;
                 }
             });
         }
+
+        // Debug actions in courier container
+        document.addEventListener('click', async function (e) {
+            const copyBtn = e.target.closest('.copy-filter-input-btn');
+            if (copyBtn) {
+                const box = copyBtn.closest('.px-4.pt-4.pb-2')?.querySelector('[data-order-number]');
+                const inputBeforeFilter = box?._lastCourierDebugInput || null;
+                if (!inputBeforeFilter) {
+                    showAlert('No input-before-filter data available yet', 'warning');
+                    return;
+                }
+                const raw = JSON.stringify(inputBeforeFilter, null, 2);
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(raw);
+                    } else {
+                        const temp = document.createElement('textarea');
+                        temp.value = raw;
+                        document.body.appendChild(temp);
+                        temp.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(temp);
+                    }
+                    showAlert('Input before filter copied', 'success');
+                } catch (err) {
+                    console.error('Copy failed:', err);
+                    showAlert('Failed to copy input before filter', 'error');
+                }
+                return;
+            }
+
+            const toggleBtn = e.target.closest('.toggle-filter-debug-btn');
+            if (toggleBtn) {
+                const container = toggleBtn.closest('#availableCourierCompanies');
+                const panel = container?.querySelector('.filter-debug-panel');
+                if (!panel) return;
+                panel.classList.toggle('hidden');
+                const label = toggleBtn.querySelector('.toggle-filter-debug-label');
+                const hidden = panel.classList.contains('hidden');
+                if (label) {
+                    label.textContent = hidden ? 'Show raw input / output' : 'Hide raw input / output';
+                } else {
+                    toggleBtn.textContent = hidden ? 'Show raw input / output' : 'Hide raw input / output';
+                }
+            }
+        });
         
         // Handle Add Order button
         document.getElementById('addOrderBtn').addEventListener('click', function() {
@@ -1059,6 +1328,7 @@
                     if (data.success) {
                         // Store shipping address from API response
                         currentShippingAddress = data.shipping_address || '';
+                        modal.dataset.orderTheme = data.is_international ? 'international' : 'domestic';
                         
                         // Update modal header
                         const orderNoLink = modal.querySelector('.flex.justify-between div:first-child a');
@@ -1098,6 +1368,22 @@
 
     // Handle Add Box button for dynamically added orders
     document.addEventListener('click', function(e) {
+        if (e.target.matches('.list-couriers-btn') || e.target.closest('.list-couriers-btn')) {
+            e.preventDefault();
+            const orderContainer = e.target.closest('.px-4.pt-4.pb-2');
+            if (!orderContainer) return;
+
+            const boxes = orderContainer.querySelectorAll('[data-order-number]');
+            if (!boxes.length) {
+                showAlert('No boxes found for this order', 'warning');
+                return;
+            }
+
+            boxes.forEach(box => fetchCouriersForBox(box));
+            showAlert('Refreshing courier list...', 'success');
+            return;
+        }
+
         if (e.target.matches('.add-box-btn') || e.target.closest('.add-box-btn')) {
             e.preventDefault();
             
@@ -1113,16 +1399,17 @@
             const customerId = orderBox.getAttribute('data-customer-id');
             const customerName = orderBox.getAttribute('data-customer-name');
             
-            // Count existing boxes in this order
-            const existingBoxes = orderContainer.querySelectorAll('.border.border-orange-400');
+            const tm = bulkDispatchThemeFromSection(orderContainer);
+            const existingBoxes = orderContainer.querySelectorAll('.bulk-dispatch-box');
             const boxNumber = existingBoxes.length + 1;
+            const newBoxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
             
             // Create new box HTML
             const newBoxHtml = `
-                <div class="border border-orange-400 border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}">
-                            <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
+                <div class="bulk-dispatch-box border ${tm.boxBorder} border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
+                            <div class="px-4 py-2 flex flex-wrap items-center justify-between ${tm.boxToolbar} border-b">
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
+                                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full ${tm.boxIcon} text-white text-sm">
                                         📦
                                     </span>
                                     <span class="font-semibold text-gray-800">Box ${boxNumber}</span> <span class="text-xs text-green-500 express-badge hidden">EXPRESS</span> <span class="text-xs text-blue-500 cod-badge hidden">COD</span>
@@ -1154,7 +1441,7 @@
                                         </select>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <button type="button" data-open-select-items class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded">
+                                        <button type="button" data-open-select-items class="${tm.btnItem}">
                                             + Item
                                         </button>
                                         <button type="button" class="remove-box-btn text-red-500 hover:text-red-700 text-xs font-semibold px-3 py-1 rounded border border-red-300 bg-white">
@@ -1181,7 +1468,7 @@
 
                     <div class="items-container"></div>
 
-                    <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs bg-orange-50">
+                    <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs ${tm.boxSummary}">
                         <div class="flex flex-wrap gap-4 text-gray-700">
                             <span class="order-summary"><span class="font-semibold">Order:</span> 0</span>
                             <span class="sku-summary"><span class="font-semibold">SKU Count:</span> 0</span>
@@ -1348,6 +1635,52 @@
         }
     });
 
+    // Handle List Couriers button
+    document.addEventListener('click', function(e) {
+        if (e.target.matches('.list-couriers-btn') || e.target.closest('.list-couriers-btn')) {
+            e.preventDefault();
+            
+            // Find the closest order container
+            const orderContainer = e.target.closest('.px-4.pt-4.pb-2');
+            if (!orderContainer) return;
+            
+            // Get the first box in the order (the one with data-order-number)
+            const boxElement = orderContainer.querySelector('[data-order-number]');
+            if (!boxElement) return;
+            
+            // Get weight and box size inputs
+            const weightInput = boxElement.querySelector('.weight-input');
+            const boxSizeSelect = boxElement.querySelector('.BoxSize');
+            
+            if (!weightInput || !boxSizeSelect) {
+                showAlert('Weight and Box Size inputs not found', 'error');
+                return;
+            }
+            
+            // Validate weight
+            const weight = parseFloat(weightInput.value) || 0;
+            if (weight <= 0) {
+                showAlert('Please enter a valid weight (greater than 0 kg)', 'warning');
+                return;
+            }
+            
+            // Validate box size (should not be CUSTOM with empty values)
+            const boxSizeValue = boxSizeSelect.value;
+            const selectedOption = boxSizeSelect.options[boxSizeSelect.selectedIndex];
+            const length = parseFloat(selectedOption.getAttribute('data-length')) || 0;
+            const breadth = parseFloat(selectedOption.getAttribute('data-width')) || 0;
+            const height = parseFloat(selectedOption.getAttribute('data-height')) || 0;
+            
+            if (boxSizeValue === 'CUSTOM' || length <= 0 || breadth <= 0 || height <= 0) {
+                showAlert('Please select a valid box size', 'warning');
+                return;
+            }
+            
+            // All validations passed, fetch couriers
+            fetchCouriersForBox(boxElement);
+        }
+    });
+
     // Handle bulk create invoices and dispatch
     const bulkCreateBtn = document.getElementById('bulkCreateInvoiceDispatchBtn');
     if (bulkCreateBtn) {
@@ -1400,20 +1733,23 @@
                     });
 
                     if (items.length > 0) {
-                        // Get weight input value
-                        const weightInput = boxElement.querySelector('input[type="text"][value*="0."]');
+                        const weightInput = boxElement.querySelector('.weight-input');
                         const weight = weightInput ? parseFloat(weightInput.value) : totalWeight;
                         
-                        // Get box size
-                        const boxSizeSelect = boxElement.querySelector('select');
+                        const boxSizeSelect = boxElement.querySelector('select.BoxSize') || boxElement.querySelector('select');
                         const box_size = boxSizeSelect ? boxSizeSelect.value : 'R1 - 7x4x1';
+
+                        const courierId = boxElement.getAttribute('data-selected-courier-id') || '';
+                        const courierName = boxElement.getAttribute('data-selected-courier-name') || '';
 
                         boxes.push({
                             weight: weight,
                             box_size: box_size,
                             items: items,
                             groupname: boxGroupname,
-                            pickup_location: null
+                            pickup_location: null,
+                            courier_id: courierId,
+                            courier_name: courierName
                         });
                     }
                 });

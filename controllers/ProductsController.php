@@ -582,17 +582,41 @@ class ProductsController {
         $items = product::normalizeVendorProductFetchItems($apiResult);
         //print_array($items);
         if (count($items) === 0) {
+            if ($internalCall) {
+                $failed = array_values($codes);
+                return $respond([
+                    'success' => true,
+                    'message' => 'API returned no product rows; requested codes skipped so ReUpload can continue.',
+                    'created' => 0,
+                    'updated' => 0,
+                    'failed' => $failed,
+                    'timing' => $importTiming($codesCount, $apiMsElapsed, 0, 0),
+                    'created_ids_by_code' => $createdIdsByCode,
+                    'local_stock_by_code' => $localStockByCode,
+                    'local_stock_by_sku' => $localStockBySku,
+                    'local_stock_by_variant' => $localStockByVariant,
+                ]);
+            }
             return $respond(['success' => false, 'message' => 'No items found in API response.', 'timing' => $importTiming($codesCount, $apiMsElapsed)]);
         }
-        
+
+        $codesPresentInResponse = [];
         foreach ($items as $apiItem) {
+            $itemRowCode = '';
+            try {
+            if (!is_array($apiItem)) {
+                $failed[] = '(invalid_row)';
+                continue;
+            }
             // detect item code from common keys
             $code = trim($apiItem['itemcode'] ?? $apiItem['item_code'] ?? $apiItem['sku'] ?? '');
+            $itemRowCode = $code;
             if ($code === '') {
             $failed[] = '(unknown)';
             continue;
             }
             $codeKey = strtoupper($code);
+            $codesPresentInResponse[$codeKey] = true;
 
             // map API item to DB fields (adjust as needed)
             $item = [];
@@ -680,7 +704,7 @@ class ProductsController {
             // echo "Created: $created, Updated: $updated, Failed: " . count($failed) . "\n";
             // print_r($existing);
             //varient
-            if (isset($apiItem['variations'])) {
+            if (isset($apiItem['variations']) && is_array($apiItem['variations'])) {
                 foreach ($apiItem['variations'] as $variant) {
                     $variantItem = $item; // start with base item
                     $variantItem['item_code'] = $apiItem['itemcode'] ?? $apiItem['item_code'];
@@ -749,7 +773,25 @@ class ProductsController {
 
             // tiny sleep to be gentle on third-party API/service
             usleep(100000); // 100ms
+            } catch (\Throwable $e) {
+                $fc = trim((string)$itemRowCode);
+                if ($fc === '' && is_array($apiItem)) {
+                    $fc = trim((string)($apiItem['itemcode'] ?? $apiItem['item_code'] ?? $apiItem['sku'] ?? ''));
+                }
+                $failed[] = $fc !== '' ? $fc : '(unknown)';
+            }
         }
+
+        if ($internalCall) {
+            foreach ($codes as $reqCode) {
+                $rk = strtoupper(trim((string)$reqCode));
+                if ($rk === '' || isset($codesPresentInResponse[$rk])) {
+                    continue;
+                }
+                $failed[] = (string)$reqCode;
+            }
+        }
+        $failed = array_values(array_unique(array_map('strval', $failed)));
 
         $payload = [
             'success' => true,
@@ -1057,7 +1099,9 @@ class ProductsController {
             exit;
         }
 
-        $this->refreshImportJobCounts($jobId);
+        // Do not call refreshImportJobCounts() here: it aggregates every import row for the job
+        // on each request and makes pagination painfully slow on large jobs. Counts are kept
+        // up to date by batch processing; use "Refresh Status" to reconcile from the server.
 
         $job = null;
         $stmtJob = $conn->prepare("SELECT j.*, u.name AS created_by_name, ea.address_title AS warehouse_name
@@ -1120,25 +1164,7 @@ class ProductsController {
                         pii.error_message,
                         pii.created_at,
                         pii.updated_at,
-                        pii.processed_at,
-                        (
-                            SELECT p.sku
-                            FROM vp_products p
-                            WHERE p.item_code COLLATE utf8mb4_general_ci = pii.item_code COLLATE utf8mb4_general_ci
-                              AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_size), ''), '') COLLATE utf8mb4_general_ci
-                              AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '') COLLATE utf8mb4_general_ci
-                            ORDER BY p.id DESC
-                            LIMIT 1
-                        ) AS product_sku,
-                        (
-                            SELECT p.id
-                            FROM vp_products p
-                            WHERE p.item_code COLLATE utf8mb4_general_ci = pii.item_code COLLATE utf8mb4_general_ci
-                              AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_size), ''), '') COLLATE utf8mb4_general_ci
-                              AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '') COLLATE utf8mb4_general_ci
-                            ORDER BY p.id DESC
-                            LIMIT 1
-                        ) AS product_id
+                        pii.processed_at
                     FROM product_import_items pii
                     $where
                     ORDER BY pii.id ASC
@@ -1156,6 +1182,8 @@ class ProductsController {
         }
         $listStmt->close();
 
+        $rows = $this->hydrateBulkImportDetailProductLinks($conn, $rows);
+
         renderTemplate('views/products/bulk_import_detail.php', [
             'job' => $job,
             'rows' => $rows,
@@ -1165,6 +1193,170 @@ class ProductsController {
             'total_items' => $totalItems,
             'total_pages' => $totalPages
         ], 'Bulk Import Detail');
+    }
+
+    /**
+     * Match import row dimensions the same way as legacy SQL:
+     * IFNULL(NULLIF(TRIM(v), ''), '')
+     */
+    private function bulkImportNormDimForProductLookup(?string $v): string {
+        $t = trim((string)$v);
+        return $t === '' ? '' : $t;
+    }
+
+    /**
+     * Lookup key for pairing import lines to vp_products (item_code + size + color), case-insensitive like utf8mb4_general_ci.
+     */
+    private function bulkImportProductMatchKey(string $itemCode, string $importSize, string $importColor): string {
+        $fold = static function (string $s): string {
+            if (function_exists('mb_strtolower')) {
+                return mb_strtolower($s, 'UTF-8');
+            }
+            return strtolower($s);
+        };
+        $ic = $fold(trim($itemCode));
+        $ns = $fold($this->bulkImportNormDimForProductLookup($importSize));
+        $nc = $fold($this->bulkImportNormDimForProductLookup($importColor));
+        return $ic . "\x1e" . $ns . "\x1e" . $nc;
+    }
+
+    /**
+     * Resolves product id/sku for the current page without per-row correlated subqueries against vp_products.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function hydrateBulkImportDetailProductLinks(\mysqli $conn, array $rows): array {
+        if ($rows === []) {
+            return $rows;
+        }
+        $codes = [];
+        $skus = [];
+        foreach ($rows as $r) {
+            $c = trim((string)($r['item_code'] ?? ''));
+            if ($c !== '') {
+                $codes[$c] = true;
+            }
+            $s = trim((string)($r['import_sku'] ?? ''));
+            if ($s !== '') {
+                $skus[$s] = true;
+            }
+        }
+        $codeList = array_keys($codes);
+        if ($codeList === []) {
+            foreach ($rows as &$r0) {
+                $r0['product_sku'] = '';
+                $r0['product_id'] = '';
+                $r0['product_local_stock'] = '';
+            }
+            unset($r0);
+            return $rows;
+        }
+
+        $bestByKey = [];
+        $bestBySku = [];
+        $chunkSize = 80;
+        for ($i = 0, $n = count($codeList); $i < $n; $i += $chunkSize) {
+            $chunk = array_slice($codeList, $i, $chunkSize);
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = "SELECT p.id, p.sku, p.item_code, IFNULL(p.local_stock, 0) AS local_stock,
+                        IFNULL(NULLIF(TRIM(p.color), ''), '') AS norm_color,
+                        IFNULL(NULLIF(TRIM(p.size), ''), '') AS norm_size
+                    FROM vp_products p
+                    WHERE p.item_code IN ($placeholders)";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $types = str_repeat('s', count($chunk));
+            $bindArgs = [&$types];
+            foreach ($chunk as $k => $_v) {
+                $bindArgs[] = &$chunk[$k];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($res && ($pr = $res->fetch_assoc())) {
+                $key = $this->bulkImportProductMatchKey(
+                    (string)($pr['item_code'] ?? ''),
+                    (string)($pr['norm_size'] ?? ''),
+                    (string)($pr['norm_color'] ?? '')
+                );
+                $pid = (int)($pr['id'] ?? 0);
+                if ($pid <= 0) {
+                    continue;
+                }
+                if (!isset($bestByKey[$key]) || $pid > (int)$bestByKey[$key]['id']) {
+                    $bestByKey[$key] = [
+                        'id' => $pid,
+                        'sku' => (string)($pr['sku'] ?? ''),
+                        'local_stock' => (int)($pr['local_stock'] ?? 0),
+                    ];
+                }
+            }
+            $stmt->close();
+        }
+
+        $skuList = array_keys($skus);
+        for ($i = 0, $n = count($skuList); $i < $n; $i += $chunkSize) {
+            $chunk = array_slice($skuList, $i, $chunkSize);
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = "SELECT p.id, p.sku, IFNULL(p.local_stock, 0) AS local_stock
+                    FROM vp_products p
+                    WHERE p.sku IN ($placeholders)";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $types = str_repeat('s', count($chunk));
+            $bindArgs = [&$types];
+            foreach ($chunk as $k => $_v) {
+                $bindArgs[] = &$chunk[$k];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($res && ($pr = $res->fetch_assoc())) {
+                $pid = (int)($pr['id'] ?? 0);
+                $psku = strtoupper(trim((string)($pr['sku'] ?? '')));
+                if ($pid <= 0 || $psku === '') {
+                    continue;
+                }
+                if (!isset($bestBySku[$psku]) || $pid > (int)$bestBySku[$psku]['id']) {
+                    $bestBySku[$psku] = [
+                        'id' => $pid,
+                        'sku' => (string)($pr['sku'] ?? ''),
+                        'local_stock' => (int)($pr['local_stock'] ?? 0),
+                    ];
+                }
+            }
+            $stmt->close();
+        }
+
+        foreach ($rows as &$r) {
+            $key = $this->bulkImportProductMatchKey(
+                (string)($r['item_code'] ?? ''),
+                (string)($r['import_size'] ?? ''),
+                (string)($r['import_color'] ?? '')
+            );
+            if (isset($bestByKey[$key])) {
+                $r['product_id'] = (string)$bestByKey[$key]['id'];
+                $r['product_sku'] = $bestByKey[$key]['sku'];
+                $r['product_local_stock'] = (string)(int)($bestByKey[$key]['local_stock'] ?? 0);
+            } elseif (($r['import_sku'] ?? '') !== '' && isset($bestBySku[strtoupper(trim((string)$r['import_sku']))])) {
+                $bySku = $bestBySku[strtoupper(trim((string)$r['import_sku']))];
+                $r['product_id'] = (string)$bySku['id'];
+                $r['product_sku'] = $bySku['sku'];
+                $r['product_local_stock'] = (string)(int)($bySku['local_stock'] ?? 0);
+            } else {
+                $r['product_id'] = '';
+                $r['product_sku'] = '';
+                $r['product_local_stock'] = '';
+            }
+        }
+        unset($r);
+
+        return $rows;
     }
 
     private function ensureBulkImportTables() {
@@ -2675,6 +2867,13 @@ class ProductsController {
         }
 
         $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
+        $failedCodeLookup = [];
+        foreach ($failedCodes as $fc) {
+            $fu = strtoupper(trim((string)$fc));
+            if ($fu !== '') {
+                $failedCodeLookup[$fu] = true;
+            }
+        }
         $localStockByCode = is_array($result['local_stock_by_code'] ?? null) ? $result['local_stock_by_code'] : [];
         $localStockBySku = is_array($result['local_stock_by_sku'] ?? null) ? $result['local_stock_by_sku'] : [];
         $localStockByVariant = is_array($result['local_stock_by_variant'] ?? null) ? $result['local_stock_by_variant'] : [];
@@ -2683,7 +2882,8 @@ class ProductsController {
         $failedRows = 0;
         foreach ($picked as $row) {
             $rowCode = (string)($row['item_code'] ?? '');
-            if ($rowCode !== '' && in_array($rowCode, $failedCodes, true)) {
+            $rowCodeUpper = strtoupper(trim($rowCode));
+            if ($rowCodeUpper !== '' && isset($failedCodeLookup[$rowCodeUpper])) {
                 $failedRows++;
             } else {
                 $rowId = (int)($row['id'] ?? 0);
@@ -2693,6 +2893,23 @@ class ProductsController {
                 $stockLoc = (string)($row['stock_location'] ?? '');
                 if ($impSku === '') {
                     $impSku = $this->buildBulkImportAutoSku($rowCode, $isz, $ico);
+                }
+                if ($jobWarehouseId <= 0 || $rowId <= 0) {
+                    $failedRows++;
+                    if ($rowCodeUpper !== '') {
+                        $failedCodeLookup[$rowCodeUpper] = true;
+                        $failedCodes[] = $rowCode;
+                    }
+                    if ($rowId > 0) {
+                        $msg = 'ReUpdate skipped: warehouse is not configured for this job.';
+                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                        if ($stmtF) {
+                            $stmtF->bind_param('si', $msg, $rowId);
+                            $stmtF->execute();
+                            $stmtF->close();
+                        }
+                    }
+                    continue;
                 }
                 $resolvedQty = null;
                 $skuKey = strtoupper($impSku);
@@ -2705,6 +2922,22 @@ class ProductsController {
                 } elseif (array_key_exists($codeKey, $localStockByCode)) {
                     $resolvedQty = (int)$localStockByCode[$codeKey];
                 }
+                if ($resolvedQty === null) {
+                    $failedRows++;
+                    if ($rowCodeUpper !== '') {
+                        $failedCodeLookup[$rowCodeUpper] = true;
+                        $failedCodes[] = $rowCode;
+                    }
+                    $msg = 'ReUpdate skipped: API local stock missing for this item/SKU.';
+                    $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                    if ($stmtF) {
+                        $stmtF->bind_param('si', $msg, $rowId);
+                        $stmtF->execute();
+                        $stmtF->close();
+                    }
+                    continue;
+                }
+                $stockApplied = false;
                 if ($resolvedQty !== null && $rowId > 0 && $jobWarehouseId > 0) {
                     $stockErr = $this->bulkImportApplyRefetchStock(
                         $conn,
@@ -2720,10 +2953,23 @@ class ProductsController {
                     );
                     if ($stockErr !== null) {
                         $failedRows++;
+                        if ($rowCodeUpper !== '') {
+                            $failedCodeLookup[$rowCodeUpper] = true;
+                            $failedCodes[] = $rowCode;
+                        }
+                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                        if ($stmtF) {
+                            $stmtF->bind_param('si', $stockErr, $rowId);
+                            $stmtF->execute();
+                            $stmtF->close();
+                        }
                         continue;
                     }
+                    $stockApplied = true;
                 }
-                $updatedRows++;
+                if ($stockApplied) {
+                    $updatedRows++;
+                }
             }
         }
         $newLastId = (int)end($picked)['id'];
@@ -2734,7 +2980,7 @@ class ProductsController {
             'last_id' => $newLastId,
             'updated_rows' => $updatedRows,
             'failed_rows' => $failedRows,
-            'failed_codes' => $failedCodes,
+            'failed_codes' => array_values(array_unique(array_map('strval', $failedCodes))),
             'import_result' => $result,
         ]);
         exit;
@@ -4805,7 +5051,7 @@ class ProductsController {
             echo json_encode(['success' => false, 'message' => 'Invalid warehouse selection']);
             exit;
         }
-
+ 
         require_once 'models/product/StockTransfer.php';
         $stockTransferModel = new StockTransfer($conn);
 

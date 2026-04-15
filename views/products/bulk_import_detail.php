@@ -95,11 +95,9 @@
         <thead class="bg-gray-50 text-gray-600">
           <tr>
             <th class="px-3 py-2 text-left">#</th>
-            <th class="px-3 py-2 text-left">Item Code</th>
             <th class="px-3 py-2 text-left">SKU</th>
-            <th class="px-3 py-2 text-left">Color</th>
-            <th class="px-3 py-2 text-left">Size</th>
-            <th class="px-3 py-2 text-right">Qty</th>
+            <th class="px-3 py-2 text-right" title="Quantity from import file; when empty, opening stock uses product local stock">Qty</th>
+            <th class="px-3 py-2 text-right" title="Matched product local_stock (used when file qty is empty)">Local stock</th>
             <th class="px-3 py-2 text-left">Location</th>
             <th class="px-3 py-2 text-left">Status</th>
             <th class="px-3 py-2 text-left">Attempts</th>
@@ -110,7 +108,7 @@
         </thead>
         <tbody>
           <?php if (empty($rows)): ?>
-            <tr><td colspan="12" class="px-3 py-8 text-center text-gray-400">No records found.</td></tr>
+            <tr><td colspan="10" class="px-3 py-8 text-center text-gray-400">No records found.</td></tr>
           <?php else: ?>
             <?php foreach ($rows as $r): ?>
               <?php
@@ -122,7 +120,6 @@
               ?>
               <tr class="border-t">
                 <td class="px-3 py-2"><?= (int)$r['id'] ?></td>
-                <td class="px-3 py-2 font-medium"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
                 <td class="px-3 py-2">
                   <?php
                     $displaySku = (($r['product_sku'] ?? '') !== '') ? (string)$r['product_sku'] : (string)($r['import_sku'] ?? '');
@@ -136,9 +133,11 @@
                     <?= htmlspecialchars($displaySku) ?>
                   <?php endif; ?>
                 </td>
-                <td class="px-3 py-2"><?= htmlspecialchars($r['import_color'] ?? '') ?></td>
-                <td class="px-3 py-2"><?= htmlspecialchars($r['import_size'] ?? '') ?></td>
                 <td class="px-3 py-2 text-right tabular-nums"><?= (int)($r['opening_qty'] ?? 0) ?></td>
+                <td class="px-3 py-2 text-right tabular-nums text-gray-700"><?php
+                  $pls = $r['product_local_stock'] ?? '';
+                  echo ($pls !== '' && $pls !== null) ? (string)(int)$pls : '—';
+                ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($r['stock_location'] ?? '') ?></td>
                 <td class="px-3 py-2"><span class="text-xs px-2 py-1 rounded <?= $stClass ?>"><?= htmlspecialchars($st) ?></span></td>
                 <td class="px-3 py-2"><?= (int)($r['attempt_count'] ?? 0) ?></td>

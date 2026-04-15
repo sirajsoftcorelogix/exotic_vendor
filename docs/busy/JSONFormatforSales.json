@@ -1,0 +1,452 @@
+{
+  "Data Care": {
+    "company": "DATA_CARE",
+    "godown": "Main Location",
+    "totalVouchers": 2,
+    "vouchers": [
+      {
+        "externalId": "0",
+        "narration": "",
+        "partyName": "MAA SHARDA AUTOMOBILES",
+        "partyAccountCode": "",
+        "partyGSTN": "URP",
+        "partyState": "Uttar Pradesh",
+        "partyCountry": "INDIA",
+        "partyPincode": "222002",
+        "shipToPlace": "JAUNPUR",
+        "billToPlace": "JAUNPUR",
+        "partyEmail": "ABC@GMAIL.COM",
+        "partyMobile": "",
+        "vchDate": "16-Mar-2026",
+        "amount": 1975.95,
+        "vchType": "Sales",
+        "InvoiceNumber": "BAJAJ2026-00190",
+        "vchItems": [
+          {
+            "gstRate": 18.0,
+            "amount": 477.59,
+            "hsnCode": "87141090",
+            "baseUnits": "PCS",
+            "rate": 327.1186,
+            "actualQty": 0.0,
+            "qty": 2.0,
+            "stockItem": "LEVER BRAKE",
+            "godown": "Main Location",
+            "partNo": "DH191001",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 2.0,
+                "disc": 27.0,
+                "rate": 327.1186,
+                "amount": 477.59
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 442.33,
+            "hsnCode": "87141090",
+            "baseUnits": "PCS",
+            "rate": 121.1864,
+            "actualQty": 0.0,
+            "qty": 5.0,
+            "stockItem": "CABLE THROTTLE",
+            "godown": "Main Location",
+            "partNo": "DH191082",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 5.0,
+                "disc": 27.0,
+                "rate": 121.1864,
+                "amount": 442.33
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 703.4,
+            "hsnCode": "87149400",
+            "baseUnits": "PCS",
+            "rate": 321.1864,
+            "actualQty": 0.0,
+            "qty": 3.0,
+            "stockItem": "HOSE BRAKE FRONT",
+            "godown": "Main Location",
+            "partNo": "DJ151076",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 3.0,
+                "disc": 27.0,
+                "rate": 321.1864,
+                "amount": 703.4
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 352.63,
+            "hsnCode": "40169990",
+            "baseUnits": "PCS",
+            "rate": 48.3051,
+            "actualQty": 0.0,
+            "qty": 10.0,
+            "stockItem": "SLEEVE CARBURETOR",
+            "godown": "Main Location",
+            "partNo": "JZ581210",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 10.0,
+                "disc": 27.0,
+                "rate": 48.3051,
+                "amount": 352.63
+              }
+            ]
+          }
+        ],
+        "vchLedgers": [
+          {
+            "amount": -2332.0,
+            "ledgerName": "MAA SHARDA AUTOMOBILES",
+            "isDeemedPositive": true,
+            "vchLedBill": [
+              {
+                "billName": "190",
+                "billAmount": -2332.0,
+                "billType": "New Ref"
+              }
+            ],
+            "isPartyLedger": true,
+            "isLastDeemedPositive": true
+          },
+          {
+            "amount": 1975.95,
+            "ledgerName": "GST Sales A/c",
+            "isDeemedPositive": false,
+            "isPartyLedger": false,
+            "isLastDeemedPositive": false
+          },
+          {
+            "amount": 177.84,
+            "ledgerName": "CGST",
+            "isDeemedPositive": false,
+            "isPartyLedger": false,
+            "isLastDeemedPositive": false
+          },
+          {
+            "amount": 177.84,
+            "ledgerName": "SGST",
+            "isDeemedPositive": false,
+            "isPartyLedger": false,
+            "isLastDeemedPositive": false
+          },
+          {
+            "amount": 0.37,
+            "ledgerName": "RoundOff",
+            "isDeemedPositive": false,
+            "isPartyLedger": false,
+            "isLastDeemedPositive": false
+          }
+        ]
+      },
+      {
+        "externalId": "0",
+        "narration": "",
+        "partyName": "SACHIN AUTO AGENCY",
+        "partyAccountCode": "",
+        "partyGSTN": "10JXQPS9933E1ZW",
+        "partyState": "Bihar",
+        "partyCountry": "INDIA",
+        "partyPincode": "843320",
+        "shipToPlace": "Pupri",
+        "billToPlace": "Pupri",
+        "partyEmail": "ABC@GMAIL.COM",
+        "partyMobile": "9999999999",
+        "vchDate": "21-Mar-2026",
+        "amount": 20884.81,
+        "vchType": "Sales",
+        "InvoiceNumber": "BAJAJ2026-00242",
+        "vchItems": [
+          {
+            "gstRate": 18.0,
+            "amount": 507.29,
+            "hsnCode": "84133020",
+            "baseUnits": "PCS",
+            "rate": 347.4576,
+            "actualQty": 0.0,
+            "qty": 2.0,
+            "stockItem": "PUMP OIL PULSAR DTS-I",
+            "godown": "Main Location",
+            "partNo": "52DH0169",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 2.0,
+                "disc": 27.0,
+                "rate": 347.4576,
+                "amount": 507.29
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 532.03,
+            "hsnCode": "87149990",
+            "baseUnits": "PCS",
+            "rate": 728.8136,
+            "actualQty": 0.0,
+            "qty": 1.0,
+            "stockItem": "FAIRING BLACK+SAF BLUE DCL",
+            "godown": "Main Location",
+            "partNo": "52DJ0517",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 1.0,
+                "disc": 27.0,
+                "rate": 728.8136,
+                "amount": 532.03
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 334.07,
+            "hsnCode": "84212300",
+            "baseUnits": "PCS",
+            "rate": 45.7627,
+            "actualQty": 0.0,
+            "qty": 10.0,
+            "stockItem": "ELEMENT OIL FILTER",
+            "godown": "Main Location",
+            "partNo": "DD121181",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 10.0,
+                "disc": 27.0,
+                "rate": 45.7627,
+                "amount": 334.07
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 1004.68,
+            "hsnCode": "87141090",
+            "baseUnits": "PCS",
+            "rate": 1376.2712,
+            "actualQty": 0.0,
+            "qty": 1.0,
+            "stockItem": "ARM ASSEMBLY SWING",
+            "godown": "Main Location",
+            "partNo": "DH171062",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 1.0,
+                "disc": 27.0,
+                "rate": 1376.2712,
+                "amount": 1004.68
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 958.9,
+            "hsnCode": "87141090",
+            "baseUnits": "PCS",
+            "rate": 131.3559,
+            "actualQty": 0.0,
+            "qty": 10.0,
+            "stockItem": "CABLE ACC UG3",
+            "godown": "Main Location",
+            "partNo": "DJ191061",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 10.0,
+                "disc": 27.0,
+                "rate": 131.3559,
+                "amount": 958.9
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 4587.25,
+            "hsnCode": "85122010",
+            "baseUnits": "PCS",
+            "rate": 1256.7797,
+            "actualQty": 0.0,
+            "qty": 5.0,
+            "stockItem": "LAMP HEAD ASSEMBLY",
+            "godown": "Main Location",
+            "partNo": "DJ201176",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 5.0,
+                "disc": 27.0,
+                "rate": 1256.7797,
+                "amount": 4587.25
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 457.8,
+            "hsnCode": "87141090",
+            "baseUnits": "PCS",
+            "rate": 125.4237,
+            "actualQty": 0.0,
+            "qty": 5.0,
+            "stockItem": "STAND SIDE",
+            "godown": "Main Location",
+            "partNo": "DL161048",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 5.0,
+                "disc": 27.0,
+                "rate": 125.4237,
+                "amount": 457.8
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 7300.0,
+            "hsnCode": "40169330",
+            "baseUnits": "PCS",
+            "rate": 50.0,
+            "actualQty": 0.0,
+            "qty": 200.0,
+            "stockItem": "SEAL OIL FORK DOUBLE GART",
+            "godown": "Main Location",
+            "partNo": "DL181080",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 200.0,
+                "disc": 27.0,
+                "rate": 50.0,
+                "amount": 7300.0
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 1262.03,
+            "hsnCode": "85111000",
+            "baseUnits": "PCS",
+            "rate": 86.4407,
+            "actualQty": 0.0,
+            "qty": 20.0,
+            "stockItem": "SPARK PLUG",
+            "godown": "Main Location",
+            "partNo": "JA351209",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 20.0,
+                "disc": 27.0,
+                "rate": 86.4407,
+                "amount": 1262.03
+              }
+            ]
+          },
+          {
+            "gstRate": 18.0,
+            "amount": 3940.76,
+            "hsnCode": "87141090",
+            "baseUnits": "PCS",
+            "rate": 539.8305,
+            "actualQty": 0.0,
+            "qty": 10.0,
+            "stockItem": "ASSEMBLY GEAR BALANCER IDLER",
+            "godown": "Main Location",
+            "partNo": "PD531229",
+            "disc": 27.0,
+            "batchDetails": [
+              {
+                "batch": "",
+                "godown": "Main Location",
+                "qty": 10.0,
+                "disc": 27.0,
+                "rate": 539.8305,
+                "amount": 3940.76
+              }
+            ]
+          }
+        ],
+        "vchLedgers": [
+          {
+            "amount": -24644.0,
+            "ledgerName": "SACHIN AUTO AGENCY",
+            "isDeemedPositive": true,
+            "vchLedBill": [
+              {
+                "billName": "238",
+                "billAmount": -24644.0,
+                "billType": "New Ref"
+              }
+            ],
+            "isPartyLedger": true,
+            "isLastDeemedPositive": true
+          },
+          {
+            "amount": 20884.81,
+            "ledgerName": "GST Sales A/c",
+            "isDeemedPositive": false,
+            "isPartyLedger": false,
+            "isLastDeemedPositive": false
+          },
+          {
+            "amount": 3759.27,
+            "ledgerName": "IGST",
+            "isDeemedPositive": false,
+            "isPartyLedger": false,
+            "isLastDeemedPositive": false
+          },
+          {
+            "amount": -0.08,
+            "ledgerName": "RoundOff",
+            "isDeemedPositive": false,
+            "isPartyLedger": false,
+            "isLastDeemedPositive": false
+          }
+        ]
+      }
+    ]
+  }
+}

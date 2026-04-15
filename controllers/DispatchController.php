@@ -1353,7 +1353,7 @@ class DispatchController {
                         'billing_weight' => $weight > $volumetric_weight ? $weight : $volumetric_weight,
                         'shipping_charges' => 0,
                         'dispatch_date' => date('Y-m-d H:i:s'),
-                        'courier_name' => null,
+                        'courier_name' => !empty($boxData['courier_name']) ? $boxData['courier_name'] : null,
                         'shiprocket_order_id' => null,
                         'shiprocket_shipment_id' => null,
                         'shiprocket_tracking_url' => null,
@@ -1641,16 +1641,21 @@ class DispatchController {
                         $ordersModel->updateOrderByOrderNumber($order_number, ['status' => 'Dispatched']);
                         //add shipment_id in created_dispatches array for response
                         $created_dispatches[$index]['shiprocket_shipment_id'] = $shiprocketResponse['json']['shipment_id'] ?? null;
-                        // Get AWB info
+                        // Get AWB info (pass UI-selected courier_id for assign/awb)
+                        $awbInfoResponse = null;
                         if (!empty($shiprocketResponse['json']['shipment_id'])) {
-                            $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shiprocketResponse['json']['shipment_id']);
+                            $selectedCourierId = null;
+                            if (!empty($boxData['courier_id']) && is_numeric($boxData['courier_id'])) {
+                                $selectedCourierId = (int)$boxData['courier_id'];
+                            }
+                            $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shiprocketResponse['json']['shipment_id'], $selectedCourierId);
                             if ($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
                                 $awbCode = $awbInfoResponse['response']['data']['awb_code'];
                                 $dispatchModel->updateDispatchAwbCode($shiprocketResponse['json']['shipment_id'], $awbCode);
                             }
                         }
                         //add awb_code in created_dispatches array for response
-                        if (!empty($shiprocketResponse['json']['shipment_id']) && !empty($awbInfoResponse['response']['data']['awb_code'])) {
+                        if (!empty($shiprocketResponse['json']['shipment_id']) && is_array($awbInfoResponse) && !empty($awbInfoResponse['response']['data']['awb_code'])) {
                             $created_dispatches[$index]['awb_code'] = $awbInfoResponse['response']['data']['awb_code'];
                         }
                         // Get label info
@@ -1824,6 +1829,10 @@ class DispatchController {
                 'success' => true,
                 'couriers' => $couriers,
                 'selected' => $selectedCouriers['selected'] ?? null,
+                'debug' => [
+                    'input_before_filter' => $serviceability['data'] ?? null,
+                    'output_after_filter' => $selectedCouriers
+                ],
                 'message' => 'Couriers fetched and ranked successfully'
             ]);
             exit;

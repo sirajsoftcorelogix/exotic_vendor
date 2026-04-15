@@ -25,22 +25,26 @@ function compareStressLast($a, $b)
 
 function compareExpressCouriers($a, $b)
 {
-    $stressCmp = compareStressLast($a, $b);
-    if ($stressCmp !== 0) {
-        return $stressCmp;
+    // Stress flag sorting is temporarily disabled.
+    // $stressCmp = compareStressLast($a, $b);
+    // if ($stressCmp !== 0) {
+    //     return $stressCmp;
+    // }
+
+    if ($a['rating'] !== $b['rating']) {
+        return $b['rating'] <=> $a['rating'];
+    }
+    if ($a['freight'] !== $b['freight']) {
+        return $a['freight'] <=> $b['freight'];
     }
 
     $perfA = performanceScore($a);
     $perfB = performanceScore($b);
-
     if ($perfA !== $perfB) {
         return $perfB <=> $perfA;
     }
-    if ($a['etd'] !== $b['etd']) {
-        return $a['etd'] <=> $b['etd'];
-    }
 
-    return $b['rating'] <=> $a['rating'];
+    return $a['etd'] <=> $b['etd'];
 }
 
 function rankExpress($couriers)
@@ -103,9 +107,17 @@ function assignEconomyCompositeScores(array &$couriers)
 
 function compareEconomyCouriers($a, $b)
 {
-    $stressCmp = compareStressLast($a, $b);
-    if ($stressCmp !== 0) {
-        return $stressCmp;
+    // Stress flag sorting is temporarily disabled.
+    // $stressCmp = compareStressLast($a, $b);
+    // if ($stressCmp !== 0) {
+    //     return $stressCmp;
+    // }
+
+    if ($a['rating'] !== $b['rating']) {
+        return $b['rating'] <=> $a['rating'];
+    }
+    if ($a['freight'] !== $b['freight']) {
+        return $a['freight'] <=> $b['freight'];
     }
 
     if (isset($a['economy_composite'], $b['economy_composite'])) {
@@ -115,20 +127,13 @@ function compareEconomyCouriers($a, $b)
         }
     }
 
-    if ($a['freight'] !== $b['freight']) {
-        return $a['freight'] <=> $b['freight'];
-    }
-    if ($a['etd'] !== $b['etd']) {
-        return $a['etd'] <=> $b['etd'];
-    }
-
     $perfA = performanceScore($a);
     $perfB = performanceScore($b);
     if ($perfA !== $perfB) {
         return $perfB <=> $perfA;
     }
 
-    return $b['rating'] <=> $a['rating'];
+    return $a['etd'] <=> $b['etd'];
 }
 
 function rankEconomy($couriers)
@@ -241,7 +246,7 @@ function courierExclusionReasons(array $c, $isCOD)
         $reasons[] = 'COD is required for this order but the courier does not support COD.';
     }
 
-    if ((int)($c['pickup_availability'] ?? 0) !== 1) {
+    if ((int)($c['pickup_availability'] ?? 0) === 0) {
         $pa = $c['pickup_availability'] ?? null;
         $reasons[] = 'Reliability filter: pickup not available at pickup location (pickup_availability must be 1; got '
             . json_encode($pa) . ').';

@@ -1,9 +1,11 @@
 <?php 
 require_once 'models/order/order.php';
 require_once 'models/comman/tables.php';
+require_once 'models/invoice/invoice.php';
 
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
+$invoiceModel = new Invoice($conn);
 
 class OrdersAPIController { 
     
@@ -585,6 +587,164 @@ class OrdersAPIController {
             echo json_encode([
                 'success' => false,
                 'message' => 'Error generating token: ' . $e->getMessage()
+            ]);
+        }
+
+        exit;
+    }
+
+    /**
+     * Fetch vouchers (invoices) for a specific date
+     * GET/POST parameters:
+     * - date (required): Date in format YYYY-MM-DD
+     * - token (required): API token for authentication
+     * 
+     * Returns JSON response with vouchers in BUSY format
+     */
+    public function fetchVouchers() {
+        global $invoiceModel;
+        header('Content-Type: application/json');
+
+        // Validate API token
+        if (!$this->validateApiToken()) {
+            http_response_code(401);
+            echo json_encode(['success' => false, 'message' => 'Unauthorized: Invalid or missing API token.']);
+            exit;
+        }
+
+        // Get date parameter
+        $date = isset($_GET['date']) ? trim($_GET['date']) : (isset($_POST['date']) ? trim($_POST['date']) : '');
+
+        // Validate date format (YYYY-MM-DD)
+        if (empty($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invalid or missing date parameter. Required format: YYYY-MM-DD'
+            ]);
+            exit;
+        }
+
+        try {
+            // Fetch all invoices for the specified date
+            $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.customer_id, i.total_amount, 
+                           i.subtotal, i.tax_amount, i.discount_amount, i.status, c.name, c.email, c.phone
+                    FROM vp_invoices i
+                    LEFT JOIN vp_customers c ON i.customer_id = c.id
+                    WHERE DATE(i.invoice_date) = ?
+                    ORDER BY i.invoice_date DESC";
+            
+            $stmt = $GLOBALS['conn']->prepare($sql);
+            if (!$stmt) {
+                throw new Exception('Database error: Unable to prepare statement');
+            }
+
+            $stmt->bind_param('s', $date);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            $vouchers = [];
+            if ($result && $result->num_rows > 0) {
+                while ($invoice = $result->fetch_assoc()) {
+                    // Fetch invoice items
+                    $itemsSql = "SELECT * FROM vp_invoice_items WHERE invoice_id = ?";
+                    $itemsStmt = $GLOBALS['conn']->prepare($itemsSql);
+                    if (!$itemsStmt) {
+                        throw new Exception('Database error: Unable to fetch invoice items');
+                    }
+
+                    $itemsStmt->bind_param('i', $invoice['id']);
+                    $itemsStmt->execute();
+                    $itemsResult = $itemsStmt->get_result();
+
+                    $vchItems = [];
+                    $totalAmount = 0;
+
+                    while ($item = $itemsResult->fetch_assoc()) {
+                        $itemAmount = floatval($item['line_total'] ?? 0);
+                        $totalAmount += $itemAmount;
+
+                        $vchItem = [
+                            'gstRate' => floatval($item['tax_rate'] ?? 0),
+                            'amount' => round($itemAmount, 2),
+                            'hsnCode' => $item['hsn'] ?? '',
+                            'baseUnits' => 'PCS',
+                            'rate' => floatval($item['unit_price'] ?? 0),
+                            'actualQty' => 0.0,
+                            'qty' => floatval($item['quantity'] ?? 0),
+                            'stockItem' => $item['item_name'] ?? '',
+                            'godown' => 'Main Location',
+                            'partNo' => $item['item_code'] ?? '',
+                            'disc' => 0.0,
+                            'batchDetails' => [
+                                [
+                                    'batch' => '',
+                                    'godown' => 'Main Location',
+                                    'qty' => floatval($item['quantity'] ?? 0),
+                                    'disc' => 0.0,
+                                    'rate' => floatval($item['unit_price'] ?? 0),
+                                    'amount' => round($itemAmount, 2)
+                                ]
+                            ]
+                        ];
+
+                        $vchItems[] = $vchItem;
+                    }
+
+                    // Format date as DD-MMM-YYYY (e.g., 16-Mar-2026)
+                    $formattedDate = date('d-M-Y', strtotime($invoice['invoice_date']));
+
+                    $voucher = [
+                        'externalId' => (string)$invoice['id'],
+                        'narration' => '',
+                        'partyName' => $invoice['name'] ?? '',
+                        'partyAccountCode' => '',
+                        'partyGSTN' => '',
+                        'partyState' => '',
+                        'partyCountry' => 'INDIA',
+                        'partyPincode' => '',
+                        'shipToPlace' => '',
+                        'billToPlace' => '',
+                        'partyEmail' => $invoice['email'] ?? '',
+                        'partyMobile' => $invoice['phone'] ?? '',
+                        'vchDate' => $formattedDate,
+                        'amount' => round($totalAmount, 2),
+                        'vchType' => 'Sales',
+                        'InvoiceNumber' => $invoice['invoice_number'] ?? '',
+                        'vchItems' => $vchItems
+                    ];
+
+                    $vouchers[] = $voucher;
+                }
+            }
+
+            // Get company and warehouse info (fallback to defaults if not available)
+            $company = 'Main Company';
+            // $companyQuery = "SELECT setting_value FROM vp_settings WHERE setting_name = 'company_name' LIMIT 1";
+            // $companyResult = $GLOBALS['conn']->query($companyQuery);
+            // if ($companyResult && $companyResult->num_rows > 0) {
+            //     $companyRow = $companyResult->fetch_assoc();
+            //     $company = $companyRow['setting_value'] ?? 'Main Company';
+            // }
+
+            // Build response in BUSY JSON format
+            $response = [
+                $company => [
+                    'company' => strtoupper(str_replace(' ', '_', $company)),
+                    'godown' => 'Main Location',
+                    'totalVouchers' => count($vouchers),
+                    'vouchers' => $vouchers
+                ]
+            ];
+
+            http_response_code(200);
+            echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error fetching vouchers: ' . $e->getMessage()
             ]);
         }
 
