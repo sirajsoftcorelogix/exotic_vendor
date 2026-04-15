@@ -1604,9 +1604,9 @@
             </button>
         </div>
 
-        <div class="h-full bg-white shadow-xl p-8 overflow-y-auto flex flex-col w-full">
-            <!-- Modal Content -->
-            <div class="" id="details-modal-content">
+        <div class="h-full bg-white shadow-xl px-4 py-5 sm:px-6 sm:py-6 overflow-y-auto flex flex-col w-full">
+            <!-- Modal Content (AJAX: get_order_details_html&type=inner) -->
+            <div class="min-h-0" id="details-modal-content">
                 <!-- Dynamic content will be loaded here -->
 
             </div>
@@ -2227,7 +2227,7 @@
                 const orderData = JSON.parse(link.getAttribute('data-order'));
                 //console.log('Fetching details for order:', orderData.order_number);
                 //loadingImage.classList.remove('hidden');
-                modalContentDiv.innerHTML = '<p>Loading...</p>'; // Show loading indicator
+                modalContentDiv.innerHTML = '<div class="flex flex-col items-center justify-center py-16 text-gray-500" role="status"><span class="inline-block h-9 w-9 rounded-full border-2 border-amber-500 border-t-transparent animate-spin mb-3" aria-hidden="true"></span><span class="text-sm font-medium">Loading order…</span></div>';
 
                 fetch(`?page=orders&action=get_order_details_html&type=inner&order_number=${encodeURIComponent(orderData.order_number)}`)
                     .then(response => response.text())
@@ -2241,7 +2241,7 @@
                     })
                     .catch(error => {
                         console.error('Error loading order details:', error);
-                        modalContentDiv.innerHTML = '<p>Error loading order details.</p>';
+                        modalContentDiv.innerHTML = '<div class="rounded-lg border border-red-200 bg-red-50 text-red-800 text-sm p-4 text-center">Could not load order details. Please try again.</div>';
                     });
             });
         });
