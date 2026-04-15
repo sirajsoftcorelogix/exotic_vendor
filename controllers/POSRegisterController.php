@@ -333,7 +333,8 @@ class POSRegisterController
             'maincategory' => $data['maincategory'] ?? '',
             'dimensions' => $this->cleanValue($data['dimensions'] ?? ''),
             'weight' => $data['product_weight_kg'] ?? '',
-
+            'express_shipping_cost' => $data['express_shipping_cost'] ?? 0,
+            'express_shipping_option' => $data['express_shipping_option'] ?? null,
             'addon_options' => $data['addon_options'] ?? []
         ];
 
