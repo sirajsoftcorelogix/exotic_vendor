@@ -30,10 +30,10 @@ $countries = country_array();
         </div>
     </div>
 
-    <div class="mt-4 space-y-3">
+    <div class="mt-5 space-y-5">
         <?php foreach ($order as $items => $item): ?>
-            <div class="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                <div class="accordion-trigger cursor-pointer p-3 sm:p-4 hover:bg-gray-50/80 transition-colors border-b border-gray-100">
+            <div class="border border-gray-200/90 rounded-xl overflow-hidden bg-white shadow-md ring-1 ring-black/[0.04]">
+                <div class="accordion-trigger cursor-pointer p-3 sm:p-4 hover:bg-amber-50/40 transition-colors border-b border-gray-200">
                     <div class="flex gap-3 sm:gap-4">
                         <div class="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg border border-gray-100 bg-gray-50 overflow-hidden">
                             <img src="<?php echo htmlspecialchars($item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'); ?>" alt=""
@@ -57,7 +57,7 @@ $countries = country_array();
                                     <?php else: ?>
                                         <form action="<?php echo htmlspecialchars(base_url('?page=purchase_orders&action=create')); ?>" method="post" class="inline">
                                             <input type="hidden" name="poitem[]" value="<?php echo (int)$item['id']; ?>">
-                                            <button type="submit" class="po-button text-xs px-2 py-1 rounded-md border border-amber-700/40 bg-white hover:bg-amber-50">Create PO</button>
+                                            <button type="submit" class="po-button text-xs px-2.5 py-1.5 rounded-md font-medium bg-amber-600 text-white border border-amber-700 shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1">Create PO</button>
                                         </form>
                                     <?php endif; ?>
                                 </div>
