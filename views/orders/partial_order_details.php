@@ -66,118 +66,161 @@ $countries = country_array();
                     </div>
                 </div>
 
-                <div class="accordion-content-details px-3 sm:px-4 pb-4 space-y-3 rounded-b-xl">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
-                        <div class="rounded-lg border border-gray-100 bg-gray-50/90 p-3">
-                            <p class="section-title block mb-1">Shipping country</p>
-                            <span class="section-value text-gray-900"><?php echo htmlspecialchars((string)($countries[$item['shipping_country']] ?? '')); ?></span>
-                        </div>
-                        <div class="rounded-lg border border-gray-100 bg-gray-50/90 p-3">
-                            <p class="section-title block mb-1">Billing country</p>
-                            <span class="section-value text-gray-900"><?php echo htmlspecialchars((string)($countries[$item['country']] ?? '')); ?></span>
-                        </div>
-                    </div>
+                <div class="accordion-content-details rounded-b-xl bg-slate-100/70 border-t border-slate-200/80">
+                    <div class="p-3 sm:p-4 space-y-4">
+                    <?php
+                    $odSectionHead = static function (string $label): void {
+                        echo '<div class="flex items-center gap-2 px-1">';
+                        echo '<span class="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent max-w-[2rem]" aria-hidden="true"></span>';
+                        echo '<h4 class="text-[11px] font-bold uppercase tracking-widest text-gray-500 whitespace-nowrap">' . htmlspecialchars($label) . '</h4>';
+                        echo '<span class="h-px flex-1 bg-gradient-to-r from-gray-300 via-gray-300 to-transparent" aria-hidden="true"></span>';
+                        echo '</div>';
+                    };
+                    ?>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div class="rounded-lg border border-gray-100 p-3">
-                            <p><span class="section-title">Marketplace</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['marketplace_vendor'] ?? '')); ?></span></p>
-                        </div>
-                        <div class="rounded-lg border border-gray-100 p-3">
-                            <p><span class="section-title">Vendor</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['vendor'] ?? '')); ?></span></p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <?php if (!empty($item['author']) || !empty($item['publisher'])): ?>
-                            <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                                <p><span class="section-title">Author</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['author'] ?? '')); ?></span></p>
-                                <p><span class="section-title">Publisher</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['publisher'] ?? '')); ?></span></p>
+                    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
+                        <?php $odSectionHead('Countries'); ?>
+                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
+                                <p class="section-title block mb-1 text-gray-600">Shipping country</p>
+                                <span class="section-value text-gray-900 font-medium"><?php echo htmlspecialchars((string)($countries[$item['shipping_country']] ?? '')); ?></span>
                             </div>
-                            <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                                <p><span class="section-title">Shipping fee</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['shippingfee'] ?? 'N/A')); ?></span></p>
-                                <p><span class="section-title">Sourcing fee</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['sourcingfee'] ?? 'N/A')); ?></span></p>
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
+                                <p class="section-title block mb-1 text-gray-600">Billing country</p>
+                                <span class="section-value text-gray-900 font-medium"><?php echo htmlspecialchars((string)($countries[$item['country']] ?? '')); ?></span>
                             </div>
-                        <?php else: ?>
-                            <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                                <p><span class="section-title">Color</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['color'] ?? '')); ?></span></p>
-                                <p><span class="section-title">Size</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['size'] ?? '')); ?></span></p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
+                        <?php $odSectionHead('Channel'); ?>
+                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
+                                <p><span class="section-title text-gray-600">Marketplace</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['marketplace_vendor'] ?? '')); ?></span></p>
                             </div>
-                            <div class="rounded-lg border border-gray-100 p-3">
-                                <p><span class="section-title">Material</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['material'] ?? '')); ?></span></p>
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
+                                <p><span class="section-title text-gray-600">Vendor</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['vendor'] ?? '')); ?></span></p>
                             </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="rounded-lg border border-amber-100 bg-amber-50/60 p-3">
-                        <?php
-                        $options = json_decode($item['options'] ?? '[]', true);
-                        $optStr = is_array($options) ? implode(', ', $options) : '';
-                        ?>
-                        <p><span class="section-title">Addons</span><br><span class="section-value"><?php echo htmlspecialchars($optStr); ?></span></p>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                            <p><span class="section-title">Local stock</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['local_stock'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Location</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['location'] ?? '')); ?></span></p>
-                        </div>
-                        <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                            <p><span class="section-title">Sold quantity</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['numsold'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Order quantity</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['quantity'] ?? '')); ?></span></p>
                         </div>
                     </div>
 
-                    <div class="rounded-lg border border-gray-100 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div class="space-y-1">
-                            <p><span class="section-title">Item price</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['itemprice'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Final price</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['finalprice'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Currency</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['currency'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Line total</span><br><span class="section-value"><?php echo htmlspecialchars((string)((float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 0))); ?></span></p>
-                        </div>
-                        <div class="space-y-1">
-                            <p><span class="section-title">HSN code</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['hsn'] ?? '')); ?></span></p>
-                            <p><span class="section-title">GST</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['gst'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Credit</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['credit'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Payment type</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['payment_type'] ?? '')); ?></span></p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                            <p><span class="section-title">Coupon</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['coupon'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Coupon reduce</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['coupon_reduce'] ?? '')); ?></span></p>
-                        </div>
-                        <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                            <p><span class="section-title">Gift voucher</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['giftvoucher'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Gift voucher reduce</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['giftvoucher_reduce'] ?? '')); ?></span></p>
+                    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
+                        <?php $odSectionHead('Product details'); ?>
+                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <?php if (!empty($item['author']) || !empty($item['publisher'])): ?>
+                                <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                    <p><span class="section-title text-gray-600">Author</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['author'] ?? '')); ?></span></p>
+                                    <p><span class="section-title text-gray-600">Publisher</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['publisher'] ?? '')); ?></span></p>
+                                </div>
+                                <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                    <p><span class="section-title text-gray-600">Shipping fee</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['shippingfee'] ?? 'N/A')); ?></span></p>
+                                    <p><span class="section-title text-gray-600">Sourcing fee</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['sourcingfee'] ?? 'N/A')); ?></span></p>
+                                </div>
+                            <?php else: ?>
+                                <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                    <p><span class="section-title text-gray-600">Color</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['color'] ?? '')); ?></span></p>
+                                    <p><span class="section-title text-gray-600">Size</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['size'] ?? '')); ?></span></p>
+                                </div>
+                                <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
+                                    <p><span class="section-title text-gray-600">Material</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['material'] ?? '')); ?></span></p>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                            <p><span class="section-title">Backorder status</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['backorder_status'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Backorder %</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['backorder_percent'] ?? '')); ?></span></p>
-                        </div>
-                        <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                            <p><span class="section-title">Backorder delay</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['backorder_delay'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Expected delivery</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['delivery_due_date'] ?? '')); ?></span></p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                            <p><span class="section-title">Product weight</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['product_weight'] ?? '') . (string)($item['product_weight_unit'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Product height</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['prod_height'] ?? '')); ?></span></p>
-                        </div>
-                        <div class="rounded-lg border border-gray-100 p-3 space-y-1">
-                            <p><span class="section-title">Product length</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['prod_length'] ?? '') . (string)($item['length_unit'] ?? '')); ?></span></p>
-                            <p><span class="section-title">Product width</span><br><span class="section-value"><?php echo htmlspecialchars((string)($item['prod_width'] ?? '') . (string)($item['length_unit'] ?? '')); ?></span></p>
+                    <?php
+                    $options = json_decode($item['options'] ?? '[]', true);
+                    $optStr = is_array($options) ? implode(', ', $options) : '';
+                    ?>
+                    <div class="rounded-xl border border-amber-200/90 bg-gradient-to-b from-amber-50/90 to-amber-50/40 shadow-sm overflow-hidden ring-1 ring-amber-900/[0.06]">
+                        <?php $odSectionHead('Addons'); ?>
+                        <div class="px-3 sm:px-4 pb-4 pt-1">
+                            <p class="section-value text-gray-900 leading-relaxed"><?php echo htmlspecialchars($optStr !== '' ? $optStr : '—'); ?></p>
                         </div>
                     </div>
 
-                    <div class="rounded-lg border border-gray-100 bg-gray-50/80 p-3">
-                        <p class="notes-title font-semibold text-gray-700 text-sm">Notes</p>
-                        <p class="notes-text mt-1 text-sm text-gray-600 leading-relaxed"><?php echo nl2br(htmlspecialchars((string)($item['remarks'] ?? ''))); ?></p>
+                    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
+                        <?php $odSectionHead('Stock'); ?>
+                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                <p><span class="section-title text-gray-600">Local stock</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['local_stock'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Location</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['location'] ?? '')); ?></span></p>
+                            </div>
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                <p><span class="section-title text-gray-600">Sold quantity</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['numsold'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Order quantity</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['quantity'] ?? '')); ?></span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
+                        <?php $odSectionHead('Pricing & tax'); ?>
+                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                <p><span class="section-title text-gray-600">Item price</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['itemprice'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Final price</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['finalprice'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Currency</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['currency'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Line total</span><br><span class="section-value font-semibold text-amber-900 tabular-nums"><?php echo htmlspecialchars((string)((float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 0))); ?></span></p>
+                            </div>
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                <p><span class="section-title text-gray-600">HSN code</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['hsn'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">GST</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['gst'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Credit</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['credit'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Payment type</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['payment_type'] ?? '')); ?></span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
+                        <?php $odSectionHead('Discounts'); ?>
+                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                <p><span class="section-title text-gray-600">Coupon</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['coupon'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Coupon reduce</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['coupon_reduce'] ?? '')); ?></span></p>
+                            </div>
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                <p><span class="section-title text-gray-600">Gift voucher</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['giftvoucher'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Gift voucher reduce</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['giftvoucher_reduce'] ?? '')); ?></span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
+                        <?php $odSectionHead('Backorder'); ?>
+                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                <p><span class="section-title text-gray-600">Backorder status</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['backorder_status'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Backorder %</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['backorder_percent'] ?? '')); ?></span></p>
+                            </div>
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                <p><span class="section-title text-gray-600">Backorder delay</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['backorder_delay'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Expected delivery</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['delivery_due_date'] ?? '')); ?></span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
+                        <?php $odSectionHead('Dimensions'); ?>
+                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                <p><span class="section-title text-gray-600">Product weight</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['product_weight'] ?? '') . (string)($item['product_weight_unit'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Product height</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['prod_height'] ?? '')); ?></span></p>
+                            </div>
+                            <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                <p><span class="section-title text-gray-600">Product length</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['prod_length'] ?? '') . (string)($item['length_unit'] ?? '')); ?></span></p>
+                                <p><span class="section-title text-gray-600">Product width</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['prod_width'] ?? '') . (string)($item['length_unit'] ?? '')); ?></span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-slate-300/90 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.04]">
+                        <?php $odSectionHead('Notes'); ?>
+                        <div class="px-3 sm:px-4 pb-4 pt-1">
+                            <div class="rounded-lg border border-slate-200 bg-slate-50/80 p-3 min-h-[2.5rem]">
+                                <p class="notes-text text-sm text-gray-700 leading-relaxed"><?php echo nl2br(htmlspecialchars((string)($item['remarks'] ?? ''))); ?></p>
+                            </div>
+                        </div>
+                    </div>
                     </div>
                 </div>
             </div>
