@@ -1242,6 +1242,7 @@ class ProductsController {
             foreach ($rows as &$r0) {
                 $r0['product_sku'] = '';
                 $r0['product_id'] = '';
+                $r0['product_local_stock'] = '';
             }
             unset($r0);
             return $rows;
@@ -1252,7 +1253,7 @@ class ProductsController {
         for ($i = 0, $n = count($codeList); $i < $n; $i += $chunkSize) {
             $chunk = array_slice($codeList, $i, $chunkSize);
             $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-            $sql = "SELECT p.id, p.sku, p.item_code,
+            $sql = "SELECT p.id, p.sku, p.item_code, IFNULL(p.local_stock, 0) AS local_stock,
                         IFNULL(NULLIF(TRIM(p.color), ''), '') AS norm_color,
                         IFNULL(NULLIF(TRIM(p.size), ''), '') AS norm_size
                     FROM vp_products p
@@ -1280,7 +1281,11 @@ class ProductsController {
                     continue;
                 }
                 if (!isset($bestByKey[$key]) || $pid > (int)$bestByKey[$key]['id']) {
-                    $bestByKey[$key] = ['id' => $pid, 'sku' => (string)($pr['sku'] ?? '')];
+                    $bestByKey[$key] = [
+                        'id' => $pid,
+                        'sku' => (string)($pr['sku'] ?? ''),
+                        'local_stock' => (int)($pr['local_stock'] ?? 0),
+                    ];
                 }
             }
             $stmt->close();
@@ -1295,9 +1300,11 @@ class ProductsController {
             if (isset($bestByKey[$key])) {
                 $r['product_id'] = (string)$bestByKey[$key]['id'];
                 $r['product_sku'] = $bestByKey[$key]['sku'];
+                $r['product_local_stock'] = (string)(int)($bestByKey[$key]['local_stock'] ?? 0);
             } else {
                 $r['product_id'] = '';
                 $r['product_sku'] = '';
+                $r['product_local_stock'] = '';
             }
         }
         unset($r);
