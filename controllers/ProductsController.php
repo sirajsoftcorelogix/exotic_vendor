@@ -1231,10 +1231,15 @@ class ProductsController {
             return $rows;
         }
         $codes = [];
+        $skus = [];
         foreach ($rows as $r) {
             $c = trim((string)($r['item_code'] ?? ''));
             if ($c !== '') {
                 $codes[$c] = true;
+            }
+            $s = trim((string)($r['import_sku'] ?? ''));
+            if ($s !== '') {
+                $skus[$s] = true;
             }
         }
         $codeList = array_keys($codes);
@@ -1249,6 +1254,7 @@ class ProductsController {
         }
 
         $bestByKey = [];
+        $bestBySku = [];
         $chunkSize = 80;
         for ($i = 0, $n = count($codeList); $i < $n; $i += $chunkSize) {
             $chunk = array_slice($codeList, $i, $chunkSize);
@@ -1291,6 +1297,42 @@ class ProductsController {
             $stmt->close();
         }
 
+        $skuList = array_keys($skus);
+        for ($i = 0, $n = count($skuList); $i < $n; $i += $chunkSize) {
+            $chunk = array_slice($skuList, $i, $chunkSize);
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = "SELECT p.id, p.sku, IFNULL(p.local_stock, 0) AS local_stock
+                    FROM vp_products p
+                    WHERE p.sku IN ($placeholders)";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $types = str_repeat('s', count($chunk));
+            $bindArgs = [&$types];
+            foreach ($chunk as $k => $_v) {
+                $bindArgs[] = &$chunk[$k];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($res && ($pr = $res->fetch_assoc())) {
+                $pid = (int)($pr['id'] ?? 0);
+                $psku = strtoupper(trim((string)($pr['sku'] ?? '')));
+                if ($pid <= 0 || $psku === '') {
+                    continue;
+                }
+                if (!isset($bestBySku[$psku]) || $pid > (int)$bestBySku[$psku]['id']) {
+                    $bestBySku[$psku] = [
+                        'id' => $pid,
+                        'sku' => (string)($pr['sku'] ?? ''),
+                        'local_stock' => (int)($pr['local_stock'] ?? 0),
+                    ];
+                }
+            }
+            $stmt->close();
+        }
+
         foreach ($rows as &$r) {
             $key = $this->bulkImportProductMatchKey(
                 (string)($r['item_code'] ?? ''),
@@ -1301,6 +1343,11 @@ class ProductsController {
                 $r['product_id'] = (string)$bestByKey[$key]['id'];
                 $r['product_sku'] = $bestByKey[$key]['sku'];
                 $r['product_local_stock'] = (string)(int)($bestByKey[$key]['local_stock'] ?? 0);
+            } elseif (($r['import_sku'] ?? '') !== '' && isset($bestBySku[strtoupper(trim((string)$r['import_sku']))])) {
+                $bySku = $bestBySku[strtoupper(trim((string)$r['import_sku']))];
+                $r['product_id'] = (string)$bySku['id'];
+                $r['product_sku'] = $bySku['sku'];
+                $r['product_local_stock'] = (string)(int)($bySku['local_stock'] ?? 0);
             } else {
                 $r['product_id'] = '';
                 $r['product_sku'] = '';
@@ -2847,6 +2894,23 @@ class ProductsController {
                 if ($impSku === '') {
                     $impSku = $this->buildBulkImportAutoSku($rowCode, $isz, $ico);
                 }
+                if ($jobWarehouseId <= 0 || $rowId <= 0) {
+                    $failedRows++;
+                    if ($rowCodeUpper !== '') {
+                        $failedCodeLookup[$rowCodeUpper] = true;
+                        $failedCodes[] = $rowCode;
+                    }
+                    if ($rowId > 0) {
+                        $msg = 'ReUpdate skipped: warehouse is not configured for this job.';
+                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                        if ($stmtF) {
+                            $stmtF->bind_param('si', $msg, $rowId);
+                            $stmtF->execute();
+                            $stmtF->close();
+                        }
+                    }
+                    continue;
+                }
                 $resolvedQty = null;
                 $skuKey = strtoupper($impSku);
                 $variantKey = strtoupper($rowCode) . '|' . strtolower($isz) . '|' . strtolower($ico);
@@ -2857,6 +2921,21 @@ class ProductsController {
                     $resolvedQty = (int)$localStockByVariant[$variantKey];
                 } elseif (array_key_exists($codeKey, $localStockByCode)) {
                     $resolvedQty = (int)$localStockByCode[$codeKey];
+                }
+                if ($resolvedQty === null) {
+                    $failedRows++;
+                    if ($rowCodeUpper !== '') {
+                        $failedCodeLookup[$rowCodeUpper] = true;
+                        $failedCodes[] = $rowCode;
+                    }
+                    $msg = 'ReUpdate skipped: API local stock missing for this item/SKU.';
+                    $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                    if ($stmtF) {
+                        $stmtF->bind_param('si', $msg, $rowId);
+                        $stmtF->execute();
+                        $stmtF->close();
+                    }
+                    continue;
                 }
                 $stockApplied = false;
                 if ($resolvedQty !== null && $rowId > 0 && $jobWarehouseId > 0) {
@@ -2874,6 +2953,16 @@ class ProductsController {
                     );
                     if ($stockErr !== null) {
                         $failedRows++;
+                        if ($rowCodeUpper !== '') {
+                            $failedCodeLookup[$rowCodeUpper] = true;
+                            $failedCodes[] = $rowCode;
+                        }
+                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                        if ($stmtF) {
+                            $stmtF->bind_param('si', $stockErr, $rowId);
+                            $stmtF->execute();
+                            $stmtF->close();
+                        }
                         continue;
                     }
                     $stockApplied = true;
@@ -2891,7 +2980,7 @@ class ProductsController {
             'last_id' => $newLastId,
             'updated_rows' => $updatedRows,
             'failed_rows' => $failedRows,
-            'failed_codes' => $failedCodes,
+            'failed_codes' => array_values(array_unique(array_map('strval', $failedCodes))),
             'import_result' => $result,
         ]);
         exit;
