@@ -5051,7 +5051,7 @@ class ProductsController {
             echo json_encode(['success' => false, 'message' => 'Invalid warehouse selection']);
             exit;
         }
-
+ 
         require_once 'models/product/StockTransfer.php';
         $stockTransferModel = new StockTransfer($conn);
 
