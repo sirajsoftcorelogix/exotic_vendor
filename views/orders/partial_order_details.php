@@ -70,17 +70,18 @@ $countries = country_array();
                     <div class="p-3 sm:p-4 space-y-4">
                     <?php
                     $odSectionHead = static function (string $label): void {
-                        echo '<div class="flex items-center gap-2 px-1">';
-                        echo '<span class="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent max-w-[2rem]" aria-hidden="true"></span>';
-                        echo '<h4 class="text-[11px] font-bold uppercase tracking-widest text-gray-500 whitespace-nowrap">' . htmlspecialchars($label) . '</h4>';
-                        echo '<span class="h-px flex-1 bg-gradient-to-r from-gray-300 via-gray-300 to-transparent" aria-hidden="true"></span>';
+                        echo '<div class="px-3 sm:px-4 pt-3 pb-2.5 bg-gradient-to-b from-slate-100/90 to-slate-50/50 border-b border-slate-200/90">';
+                        echo '<div class="flex items-center gap-2">';
+                        echo '<span class="w-1 self-stretch min-h-[0.875rem] rounded-full bg-amber-500 shrink-0" aria-hidden="true"></span>';
+                        echo '<h4 class="text-[11px] font-bold uppercase tracking-widest text-slate-600">' . htmlspecialchars($label) . '</h4>';
+                        echo '</div>';
                         echo '</div>';
                     };
                     ?>
 
                     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
                         <?php $odSectionHead('Countries'); ?>
-                        <div class="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
                                 <p class="section-title block mb-1 text-gray-600">Shipping country</p>
                                 <span class="section-value text-gray-900 font-medium"><?php echo htmlspecialchars((string)($countries[$item['shipping_country']] ?? '')); ?></span>
