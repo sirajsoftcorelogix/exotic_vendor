@@ -154,7 +154,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
             <th class="px-5 py-3.5 whitespace-nowrap">Location</th>
             <th class="px-5 py-3.5 whitespace-nowrap">Stock</th>
             <th class="px-5 py-3.5 whitespace-nowrap text-right">Sell price</th>
-            <th class="px-5 py-3.5 min-w-[14rem]">Title</th>
+            <th class="px-5 py-3.5 min-w-[10rem]">Title</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -203,7 +203,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                   <?php endif; ?>
                 </td>
                 <td class="px-5 py-4 align-top text-sm text-right font-medium text-gray-900 tabular-nums"><?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
-                <td class="px-5 py-4 align-top text-sm text-gray-800"><?= htmlspecialchars($r['title'] ?? '') ?></td>
+                <td class="px-5 py-4 align-top text-sm text-gray-800 max-w-[10rem] break-words"><?= htmlspecialchars($r['title'] ?? '') ?></td>
               </tr>
             <?php endforeach; ?>
           <?php endif; ?>
