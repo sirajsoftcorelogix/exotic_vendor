@@ -2142,9 +2142,10 @@ class product
     public function stock_history($sku, $limit = 100, $offset = 0, $productId = 0)
     {
         // Join exotic_address and match by sku OR product_id (migration-safe).
-        $sql = "SELECT sm.*, ea.address_title AS warehouse_name
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name, u.name AS updated_by_name
                 FROM vp_stock_movements sm
                 LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id
+                LEFT JOIN vp_users u ON sm.update_by_user = u.id
                 WHERE (sm.sku = ? OR sm.product_id = ?)
                 ORDER BY sm.created_at DESC
                 LIMIT ? OFFSET ?";
@@ -2186,8 +2187,16 @@ class product
             ];
         }
         if ($rt === 'MANUAL' && ($mt === 'IN' || $mt === 'OUT')) {
+            $manualByName = trim((string)($row['updated_by_name'] ?? ''));
+            if ($manualByName === '' && !empty($row['update_by_user'])) {
+                $manualByName = 'User #' . (int)$row['update_by_user'];
+            }
+            $ledgerLabel = 'Stock adjustment';
+            if ($manualByName !== '') {
+                $ledgerLabel .= ' (' . $manualByName . ')';
+            }
             return [
-                'ledger_type' => 'Stock adjustment',
+                'ledger_type' => $ledgerLabel,
                 'icon' => 'fa-sliders-h',
                 'text_color_class' => $mt === 'IN' ? 'text-green-600' : 'text-red-600',
             ];
@@ -2321,13 +2330,16 @@ class product
                 ? (string)$data['ref_type']
                 : 'MANUAL';
             $ref_id = array_key_exists('ref_id', $data) ? (string)$data['ref_id'] : '0';
+            $updatedByUser = isset($data['update_by_user'])
+                ? (int)$data['update_by_user']
+                : (isset($data['user_id']) ? (int)$data['user_id'] : 0);
 
             $insertStmt->bind_param(
                 'isssssssiiisss', 
                 $data['product_id'], $data['sku'], $data['item_code'], 
                 $data['size'], $data['color'], $data['warehouse_id'], 
                 $data['location'], $data['movement_type'], $adj_qty, 
-                $new_stock, $data['user_id'], $ref_type, $ref_id, $data['reason']
+                $new_stock, $updatedByUser, $ref_type, $ref_id, $data['reason']
             );
 
             if (!$insertStmt->execute()) {
@@ -2421,9 +2433,10 @@ class product
             $whereSql = 'WHERE ' . implode(' AND ', $where);
         }
 
-        $sql = "SELECT sm.*, ea.address_title AS warehouse_name 
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name, u.name AS updated_by_name
                 FROM vp_stock_movements sm 
                 LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id 
+                LEFT JOIN vp_users u ON sm.update_by_user = u.id
                 $whereSql 
                 ORDER BY sm.created_at DESC 
                 LIMIT ? OFFSET ?";
