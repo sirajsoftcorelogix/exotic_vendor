@@ -144,7 +144,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   </details>
 
   <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
-    <div class="overflow-x-auto max-h-[68vh]">
+    <div class="overflow-x-auto">
       <table class="min-w-full text-left">
         <thead class="sticky top-0 z-10">
           <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
