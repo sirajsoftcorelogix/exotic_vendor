@@ -177,16 +177,22 @@ class Stock {
             return ['success' => false, 'message' => 'Product not found'];
         }
 
-        $defaultRef = (($movement_type === 'IN') || ($movement_type === 'TRANSFER_IN')) ? 'GRN' : 'ORDER';
-        $refTypeResolved = $ref_type !== null && $ref_type !== '' ? $ref_type : $defaultRef;
+        $movementTypeNormalized = strtoupper(trim((string)$movement_type));
+        $quantity = abs((int)$quantity);
+        $defaultRef = (($movementTypeNormalized === 'IN') || ($movementTypeNormalized === 'TRANSFER_IN')) ? 'GRN' : 'ORDER';
+        $refTypeResolved = strtoupper(trim((string)($ref_type !== null && $ref_type !== '' ? $ref_type : $defaultRef)));
+        // Safety: cancellation flow must always restore stock, never deduct.
+        if ($refTypeResolved === 'INVOICE_CANCEL') {
+            $movementTypeNormalized = 'IN';
+        }
         $refIdStr = $reference_id !== null && $reference_id !== '' ? (string)$reference_id : '0';
         $wh = (int)($_SESSION['warehouse_id'] ?? 0);
         $reason = 'Stock movement';
-        if ($movement_type === 'OUT' && $refTypeResolved === 'INVOICE') {
+        if ($movementTypeNormalized === 'OUT' && $refTypeResolved === 'INVOICE') {
             $reason = 'Invoice #' . $refIdStr;
-        } elseif ($movement_type === 'OUT' && $refTypeResolved === 'ORDER') {
+        } elseif ($movementTypeNormalized === 'OUT' && $refTypeResolved === 'ORDER') {
             $reason = 'Order ' . $refIdStr;
-        } elseif ($movement_type === 'IN' && $refTypeResolved === 'INVOICE_CANCEL') {
+        } elseif ($movementTypeNormalized === 'IN' && $refTypeResolved === 'INVOICE_CANCEL') {
             $reason = 'Invoice cancelled / dispatch cancelled #' . $refIdStr;
         }
 
@@ -198,7 +204,7 @@ class Stock {
             'color' => $prod['color'],
             'warehouse_id' => $wh,
             'location' => '',
-            'movement_type' => $movement_type,
+            'movement_type' => $movementTypeNormalized,
             'quantity' => $quantity,
             'user_id' => $_SESSION['user']['id'] ?? 0,
             'reason' => $reason,
