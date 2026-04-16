@@ -138,25 +138,17 @@ class pos
         $countSql = "
     SELECT COUNT(*)
     FROM vp_products p
-    LEFT JOIN (
-        SELECT sm1.product_id, sm1.running_stock
-        FROM vp_stock_movements sm1
-        JOIN (
-            SELECT product_id, MAX(id) AS max_id
-            FROM vp_stock_movements
-            WHERE warehouse_id = ?
-            GROUP BY product_id
-        ) latest ON latest.max_id = sm1.id
-    ) sm ON sm.product_id = p.id
     $where
     ";
 
         $countStmt = $this->db->prepare($countSql);
 
-        $countTypes = "i" . $types;
-        $countParams = array_merge([$warehouseId], $params);
+        $countTypes = $types;
+        $countParams = $params;
 
-        $countStmt->bind_param($countTypes, ...$countParams);
+        if ($countTypes !== '') {
+            $countStmt->bind_param($countTypes, ...$countParams);
+        }
         $countStmt->execute();
         $countStmt->bind_result($recordsFiltered);
         $countStmt->fetch();
@@ -182,19 +174,16 @@ class pos
         p.prod_length,
         p.length_unit,
         p.cost_price,
-        COALESCE(sm.running_stock, 0) AS stock_qty,
+        COALESCE((
+            SELECT sm.running_stock
+            FROM vp_stock_movements sm
+            WHERE sm.product_id = p.id
+              AND sm.warehouse_id = ?
+            ORDER BY sm.id DESC
+            LIMIT 1
+        ), 0) AS stock_qty,
         p.itemprice AS price
     FROM vp_products p
-    LEFT JOIN (
-        SELECT sm1.product_id, sm1.running_stock
-        FROM vp_stock_movements sm1
-        JOIN (
-            SELECT product_id, MAX(id) AS max_id
-            FROM vp_stock_movements
-            WHERE warehouse_id = ?
-            GROUP BY product_id
-        ) latest ON latest.max_id = sm1.id
-    ) sm ON sm.product_id = p.id
     $where
     ORDER BY p.$orderColumn $orderDir
     LIMIT ?, ?
