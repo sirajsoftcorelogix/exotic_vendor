@@ -4001,6 +4001,30 @@ class ProductsController {
         }
         exit;
     }
+    public function updateStockMovementLocation() {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json');
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            if (!is_array($data)) {
+                throw new Exception('Invalid request payload.');
+            }
+            $movementId = (int)($data['movement_id'] ?? 0);
+            $productId = (int)($data['product_id'] ?? 0);
+            $location = trim((string)($data['location'] ?? ''));
+            if ($movementId <= 0 || $productId <= 0) {
+                throw new Exception('Invalid movement/product reference.');
+            }
+            $result = $productModel->updateStockMovementLocation($movementId, $productId, $location);
+            echo json_encode($result);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
 
     /**
      * Update frontend stock using vendor product/modify API.
