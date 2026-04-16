@@ -478,6 +478,38 @@
             </div>
           </div>
         </div>
+
+      <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+        <div class="bg-gray-50 px-3 py-2 border-b border-gray-200">
+          <h4 class="text-sm font-semibold text-gray-700">Running Stock by Warehouse &amp; Location</h4>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="p-2 border text-left">Warehouse</th>
+                <th class="p-2 border text-left">Location</th>
+                <th class="p-2 border text-right">Running Stock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if (!empty($products['warehouse_location_stock']) && is_array($products['warehouse_location_stock'])): ?>
+                <?php foreach ($products['warehouse_location_stock'] as $ws): ?>
+                  <tr>
+                    <td class="p-2 border"><?php echo htmlspecialchars((string)($ws['warehouse_name'] ?? '')); ?></td>
+                    <td class="p-2 border"><?php echo htmlspecialchars((string)($ws['location'] ?? '')); ?></td>
+                    <td class="p-2 border text-right font-semibold"><?php echo htmlspecialchars((string)($ws['running_stock'] ?? '0')); ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php else: ?>
+                <tr>
+                  <td colspan="3" class="p-3 border text-center text-gray-500">No warehouse/location stock rows found.</td>
+                </tr>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
   </div>
 
   <!-- Price -->

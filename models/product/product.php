@@ -2561,6 +2561,38 @@ class product
         $result = $stmt->get_result();
         return $result ? $result->fetch_assoc() : null;
     }
+    public function getLatestRunningStockByWarehouseLocation($productId)
+    {
+        $sql = "SELECT 
+                    sm.warehouse_id,
+                    COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
+                    sm.location,
+                    sm.running_stock,
+                    sm.updated_at,
+                    sm.created_at
+                FROM vp_stock_movements sm
+                INNER JOIN (
+                    SELECT warehouse_id, COALESCE(NULLIF(TRIM(location), ''), '__EMPTY__') AS location_key, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE product_id = ?
+                    GROUP BY warehouse_id, COALESCE(NULLIF(TRIM(location), ''), '__EMPTY__')
+                ) latest ON latest.max_id = sm.id
+                LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
+                WHERE sm.product_id = ?
+                ORDER BY ea.address_title ASC, sm.location ASC";
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+        $pid = (int)$productId;
+        $stmt->bind_param('ii', $pid, $pid);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
     public function setProductLimits($productId, $minStock, $maxStock){
         $sql = "UPDATE vp_products 
                 SET min_stock = ?, 
