@@ -38,15 +38,28 @@ class product
         $prev = mysqli_character_set_name($this->db);
         $needCompat = $prev !== false && stripos((string) $prev, 'utf8mb4') !== false;
         if ($needCompat) {
-            if (!$this->db->set_charset('utf8mb3')) {
-                $this->db->set_charset('utf8');
+            try {
+                $ok = $this->db->set_charset('utf8mb3');
+            } catch (\mysqli_sql_exception $e) {
+                $ok = false;
+            }
+            if (!$ok) {
+                try {
+                    $this->db->set_charset('utf8');
+                } catch (\mysqli_sql_exception $e) {
+                    // keep existing charset if neither is supported
+                }
             }
         }
         try {
             return $stmt->execute();
         } finally {
             if ($needCompat && $prev !== false && $prev !== '') {
-                $this->db->set_charset($prev);
+                try {
+                    $this->db->set_charset($prev);
+                } catch (\mysqli_sql_exception $e) {
+                    // ignore restore failure; statement execution already completed
+                }
             }
         }
     }
