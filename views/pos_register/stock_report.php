@@ -190,7 +190,16 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                     loading="lazy"
                     onclick="openStockReportImage(this)">
                 </td>
-                <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars((string)($r['sku'] ?? $r['item_code'] ?? '')) ?></td>
+                <td class="px-5 py-4 align-top text-sm">
+                  <a
+                    href="<?= htmlspecialchars('?page=products&action=detail&id=' . (int)($r['id'] ?? 0)) ?>"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-amber-700 hover:text-amber-800 hover:underline font-medium"
+                  >
+                    <?= htmlspecialchars((string)($r['sku'] ?? $r['item_code'] ?? '')) ?>
+                  </a>
+                </td>
                 <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars($categoryLabel) ?></td>
                 <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars((string)($r['location'] ?? '')) ?></td>
                 <td class="px-5 py-4 align-top">
