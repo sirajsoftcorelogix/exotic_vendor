@@ -190,7 +190,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                     loading="lazy"
                     onclick="openStockReportImage(this)">
                 </td>
-                <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars($r['sku'] ?? '') ?></td>
+                <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars((string)($r['sku'] ?? $r['item_code'] ?? '')) ?></td>
                 <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars($categoryLabel) ?></td>
                 <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars((string)($r['location'] ?? '')) ?></td>
                 <td class="px-5 py-4 align-top">
