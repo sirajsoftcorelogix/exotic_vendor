@@ -57,25 +57,28 @@ class pos
 
         // PRODUCT NAME
         if ($productName !== '') {
-            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ?) ";
+            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ? OR p.sku LIKE ?) ";
             $params[] = "%{$productName}%";
             $params[] = "%{$productName}%";
-            $types .= "ss";
+            $params[] = "%{$productName}%";
+            $types .= "sss";
         }
 
         // PRODUCT CODE (NEW)
         if ($productCode !== '') {
-            $where .= " AND p.item_code LIKE ? ";
+            $where .= " AND (p.item_code LIKE ? OR p.sku LIKE ?) ";
             $params[] = "%{$productCode}%";
-            $types .= "s";
+            $params[] = "%{$productCode}%";
+            $types .= "ss";
         }
 
         // GLOBAL SEARCH
         if ($searchValue !== '') {
-            $where .= " AND (p.item_code LIKE ? OR p.title LIKE ?) ";
+            $where .= " AND (p.item_code LIKE ? OR p.sku LIKE ? OR p.title LIKE ?) ";
             $params[] = "%{$searchValue}%";
             $params[] = "%{$searchValue}%";
-            $types .= "ss";
+            $params[] = "%{$searchValue}%";
+            $types .= "sss";
         }
 
         // PRICE FILTER (NEW)
@@ -98,17 +101,19 @@ class pos
         }
 
         if ($productName !== '') {
-            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ?) ";
+            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ? OR p.sku LIKE ?) ";
             $params[] = "%{$productName}%";
             $params[] = "%{$productName}%";
-            $types .= "ss";
+            $params[] = "%{$productName}%";
+            $types .= "sss";
         }
 
         if ($searchValue !== '') {
-            $where .= " AND (p.item_code LIKE ? OR p.title LIKE ?) ";
+            $where .= " AND (p.item_code LIKE ? OR p.sku LIKE ? OR p.title LIKE ?) ";
             $params[] = "%{$searchValue}%";
             $params[] = "%{$searchValue}%";
-            $types .= "ss";
+            $params[] = "%{$searchValue}%";
+            $types .= "sss";
         }
 
         /* ================= ORDER ================= */
@@ -133,7 +138,7 @@ class pos
         $countSql = "
     SELECT COUNT(*)
     FROM vp_products p
-    JOIN (
+    LEFT JOIN (
         SELECT sm1.product_id, sm1.running_stock
         FROM vp_stock_movements sm1
         JOIN (
@@ -142,7 +147,6 @@ class pos
             WHERE warehouse_id = ?
             GROUP BY product_id
         ) latest ON latest.max_id = sm1.id
-        WHERE sm1.running_stock > 0
     ) sm ON sm.product_id = p.id
     $where
     ";
@@ -178,10 +182,10 @@ class pos
         p.prod_length,
         p.length_unit,
         p.cost_price,
-        sm.running_stock AS stock_qty,
+        COALESCE(sm.running_stock, 0) AS stock_qty,
         p.itemprice AS price
     FROM vp_products p
-    JOIN (
+    LEFT JOIN (
         SELECT sm1.product_id, sm1.running_stock
         FROM vp_stock_movements sm1
         JOIN (
@@ -190,7 +194,6 @@ class pos
             WHERE warehouse_id = ?
             GROUP BY product_id
         ) latest ON latest.max_id = sm1.id
-        WHERE sm1.running_stock > 0
     ) sm ON sm.product_id = p.id
     $where
     ORDER BY p.$orderColumn $orderDir
