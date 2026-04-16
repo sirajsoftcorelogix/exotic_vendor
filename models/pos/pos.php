@@ -44,22 +44,26 @@ class pos
         $totalStmt->close();
 
         /* ================= FILTERS ================= */
+        $stockJoin = "
+            LEFT JOIN (
+                SELECT smx.product_id, smx.running_stock
+                FROM vp_stock_movements smx
+                INNER JOIN (
+                    SELECT product_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE warehouse_id = ?
+                    GROUP BY product_id
+                ) latest ON latest.max_id = smx.id
+            ) sx ON sx.product_id = p.id
+        ";
+
         $where  = " WHERE p.is_active = 1 ";
         $params = [];
         $types  = "";
 
         // Show only sellable rows in POS:
         // (a) stock > 0 in current warehouse OR (b) permanently available.
-        $where .= " AND (
-            p.permanently_available = 1
-            OR EXISTS (
-                SELECT 1
-                FROM vp_stock_movements smx
-                WHERE smx.product_id = p.id
-                  AND smx.warehouse_id = ?
-                  AND smx.running_stock > 0
-            )
-        ) ";
+        $where .= " AND (p.permanently_available = 1 OR COALESCE(sx.running_stock, 0) > 0) ";
         $params[] = (int)$warehouseId;
         $types .= "i";
 
@@ -109,28 +113,6 @@ class pos
             $types .= "d";
         }
 
-        if (!empty($category) && $category != 'allProducts') {
-            $where .= " AND p.groupname = ? ";
-            $params[] = $category;
-            $types .= "s";
-        }
-
-        if ($productName !== '') {
-            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ? OR p.sku LIKE ?) ";
-            $params[] = "%{$productName}%";
-            $params[] = "%{$productName}%";
-            $params[] = "%{$productName}%";
-            $types .= "sss";
-        }
-
-        if ($searchValue !== '') {
-            $where .= " AND (p.item_code LIKE ? OR p.sku LIKE ? OR p.title LIKE ?) ";
-            $params[] = "%{$searchValue}%";
-            $params[] = "%{$searchValue}%";
-            $params[] = "%{$searchValue}%";
-            $types .= "sss";
-        }
-
         /* ================= ORDER ================= */
         $allowedColumns = [
             'item_code',
@@ -153,6 +135,7 @@ class pos
         $countSql = "
     SELECT COUNT(*)
     FROM vp_products p
+    $stockJoin
     $where
     ";
 
@@ -189,16 +172,10 @@ class pos
         p.prod_length,
         p.length_unit,
         p.cost_price,
-        COALESCE((
-            SELECT sm.running_stock
-            FROM vp_stock_movements sm
-            WHERE sm.product_id = p.id
-              AND sm.warehouse_id = ?
-            ORDER BY sm.id DESC
-            LIMIT 1
-        ), 0) AS stock_qty,
+        COALESCE(sx.running_stock, 0) AS stock_qty,
         p.itemprice AS price
     FROM vp_products p
+    $stockJoin
     $where
     ORDER BY p.$orderColumn $orderDir
     LIMIT ?, ?
@@ -206,8 +183,8 @@ class pos
 
         $dataStmt = $this->db->prepare($dataSql);
 
-        $dataTypes = "i" . $types . "ii";
-        $dataParams = array_merge([$warehouseId], $params, [$start, $length]);
+        $dataTypes = $types . "ii";
+        $dataParams = array_merge($params, [$start, $length]);
 
         $dataStmt->bind_param($dataTypes, ...$dataParams);
         $dataStmt->execute();
