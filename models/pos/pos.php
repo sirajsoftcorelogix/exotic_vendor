@@ -403,11 +403,11 @@ class pos
         }
 
         if ($stockStatus === 'out') {
-            $where .= ' AND sm.stock_qty = 0 ';
+            $where .= ' AND sm.running_stock = 0 ';
         } elseif ($stockStatus === 'low') {
-            $where .= ' AND sm.stock_qty BETWEEN 1 AND 5 ';
+            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
         } elseif ($stockStatus === 'in') {
-            $where .= ' AND sm.stock_qty > 0 ';
+            $where .= ' AND sm.running_stock > 0 ';
         }
 
         $sql = "
@@ -423,13 +423,13 @@ class pos
                 p.image,
                 p.itemprice AS sell_price,
                 p.cost_price,
-                sm.stock_qty AS stock_qty,
+                sm.running_stock AS stock_qty,
                 sm.location AS location
             FROM vp_products p
             $join
             LEFT JOIN `category` cat ON cat.category = p.groupname
             $where
-            ORDER BY sm.stock_qty ASC, p.title ASC
+            ORDER BY sm.running_stock ASC, p.title ASC
             LIMIT {$limit} OFFSET {$offset}
         ";
 
@@ -485,11 +485,11 @@ class pos
             $types .= 'sss';
         }
         if ($stockStatus === 'out') {
-            $where .= ' AND sm.stock_qty = 0 ';
+            $where .= ' AND sm.running_stock = 0 ';
         } elseif ($stockStatus === 'low') {
-            $where .= ' AND sm.stock_qty BETWEEN 1 AND 5 ';
+            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
         } elseif ($stockStatus === 'in') {
-            $where .= ' AND sm.stock_qty > 0 ';
+            $where .= ' AND sm.running_stock > 0 ';
         }
 
         $sql = "
