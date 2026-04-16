@@ -26,7 +26,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                     <span>Warehouse · <?php echo $isBulkEdit ? 'Edit transfer' : 'New transfer'; ?></span>
                 </div>
                 <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
-                    <?php echo $isBulkEdit ? 'Edit' : 'Bulk'; ?> <span class="text-amber-800">stock transfer</span>
+                    <?php echo $isBulkEdit ? 'Edit' : 'Stock'; ?> <span class="text-amber-800">Transfer</span>
                 </h1>
                 <p class="mt-2 sm:mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
                     <?php echo $isBulkEdit

@@ -4653,7 +4653,7 @@ class ProductsController {
             }
         }
 
-        $pageTitle = $transfer ? 'Edit stock transfer' : 'Bulk stock transfer';
+        $pageTitle = $transfer ? 'Edit stock transfer' : 'Stock Transfer';
 
         $transferGrnCount = 0;
         if ($transfer_id > 0 && $transfer) {
