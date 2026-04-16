@@ -431,7 +431,10 @@ data-code="${p.item_code}">
 
     let code = $(this).data('code');
     if (!code) return;
-
+    openProductModalByCode(code);
+  });
+  function openProductModalByCode(code) {
+    if (!code) return;
     openModal();
 
     //  CACHE HIT
@@ -450,17 +453,38 @@ data-code="${p.item_code}">
       data: { code: code },
       dataType: 'json',
       success: function (res) {
-
         let p = res.data || {};
-
         //  SAVE CACHE
         productApiCache[code] = p;
-
         //  USE EXISTING MODAL FUNCTION
         renderProductModal(p, code);
       }
     });
-  });
+  }
+  function checkAvailabilityAndMaybeOpen(product) {
+    if (!product) return;
+    const productId = product.id != null ? String(product.id) : '';
+    const itemCode = product.item_code != null ? String(product.item_code) : '';
+    const sku = product.sku != null ? String(product.sku) : '';
+    const codeForPopup = itemCode || sku;
+    if (!codeForPopup) return;
+    const url = '?page=pos_register&action=product-availability'
+      + (productId ? ('&product_id=' + encodeURIComponent(productId)) : ('&q=' + encodeURIComponent(itemCode || sku)));
+    fetch(url, {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.success && data.current_available === false && data.message) {
+          alert(data.message);
+          openProductModalByCode(codeForPopup);
+        }
+      })
+      .catch(function () {
+        // keep search flow functional even if availability endpoint fails
+      });
+  }
   function renderModalData(p) {
 
     $('#pmTitle').text(p.title || 'Product');
@@ -619,6 +643,11 @@ data-code="${p.item_code}">
     $searchName.val(selected);
     hideSuggest();
     resetAndLoad();
+    checkAvailabilityAndMaybeOpen({
+      id: '',
+      sku: sku,
+      item_code: itemCode
+    });
   });
 
   $searchName.on('blur', function () {
@@ -653,6 +682,7 @@ data-code="${p.item_code}">
             $searchName.val(selected);
             hideSearchError();
             resetAndLoad();
+            checkAvailabilityAndMaybeOpen(data.product);
             return;
           }
           showSearchError((data && data.message) ? data.message : 'No product found with this SKU.');
