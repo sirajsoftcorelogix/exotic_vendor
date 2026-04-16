@@ -371,19 +371,16 @@ class pos
             return [];
         }
 
-        // Latest movement per product for this warehouse (same pattern as getProductsDataTable).
-        // Avoid LEFT JOIN sm_newer ... IS NULL — that join explodes on busy SKUs and causes gateway timeouts.
+        // Get latest movement id per product for selected warehouse, then join movement row by PK.
+        // This avoids materializing full movement rows during GROUP BY and is generally faster.
         $join = "
             INNER JOIN (
-                SELECT sm1.product_id, sm1.running_stock AS stock_qty, sm1.location
-                FROM vp_stock_movements sm1
-                INNER JOIN (
-                    SELECT product_id, MAX(id) AS max_id
-                    FROM vp_stock_movements
-                    WHERE warehouse_id = ?
-                    GROUP BY product_id
-                ) latest ON latest.max_id = sm1.id AND latest.product_id = sm1.product_id
-            ) sm ON sm.product_id = p.id
+                SELECT product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE warehouse_id = ?
+                GROUP BY product_id
+            ) latest ON latest.product_id = p.id
+            INNER JOIN vp_stock_movements sm ON sm.id = latest.max_id
         ";
 
         $where = ' WHERE p.is_active = 1 ';
@@ -462,15 +459,12 @@ class pos
 
         $join = "
             INNER JOIN (
-                SELECT sm1.product_id, sm1.running_stock AS stock_qty
-                FROM vp_stock_movements sm1
-                INNER JOIN (
-                    SELECT product_id, MAX(id) AS max_id
-                    FROM vp_stock_movements
-                    WHERE warehouse_id = ?
-                    GROUP BY product_id
-                ) latest ON latest.max_id = sm1.id AND latest.product_id = sm1.product_id
-            ) sm ON sm.product_id = p.id
+                SELECT product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE warehouse_id = ?
+                GROUP BY product_id
+            ) latest ON latest.product_id = p.id
+            INNER JOIN vp_stock_movements sm ON sm.id = latest.max_id
         ";
 
         $where = ' WHERE p.is_active = 1 ';
