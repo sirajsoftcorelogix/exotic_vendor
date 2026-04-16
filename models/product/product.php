@@ -2564,6 +2564,7 @@ class product
     public function getLatestRunningStockByWarehouseLocation($productId)
     {
         $sql = "SELECT 
+                    sm.id AS movement_id,
                     sm.warehouse_id,
                     COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
                     sm.location,
@@ -2592,6 +2593,27 @@ class product
             return $result->fetch_all(MYSQLI_ASSOC);
         }
         return [];
+    }
+    public function updateStockMovementLocation($movementId, $productId, $location)
+    {
+        $sql = "UPDATE vp_stock_movements 
+                SET location = ?, updated_at = NOW()
+                WHERE id = ? AND product_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+        $movementId = (int)$movementId;
+        $productId = (int)$productId;
+        $location = trim((string)$location);
+        $stmt->bind_param('sii', $location, $movementId, $productId);
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
+        }
+        if ($stmt->affected_rows < 1) {
+            return ['success' => false, 'message' => 'No stock movement row updated.'];
+        }
+        return ['success' => true, 'message' => 'Location updated successfully.'];
     }
     public function setProductLimits($productId, $minStock, $maxStock){
         $sql = "UPDATE vp_products 
