@@ -60,9 +60,11 @@
 
     <div class="flex flex-wrap gap-2 mb-4">
       <button id="startProcessBtn" type="button" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm font-semibold">Start / Resume Processing</button>
+      <button id="reuploadBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">ReUpload</button>
       <button id="refreshStatusBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Refresh Status</button>
       <button id="retryFailedBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Retry all failed</button>
       <button id="retryPendingBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Retry Pending</button>
+      <button id="deleteFailedBtn" type="button" class="px-4 py-2 border border-red-300 text-red-700 rounded hover:bg-red-50 text-sm">Delete all failed</button>
     </div>
 
     <form method="get" class="flex flex-wrap gap-2 items-end mb-3">
@@ -93,11 +95,9 @@
         <thead class="bg-gray-50 text-gray-600">
           <tr>
             <th class="px-3 py-2 text-left">#</th>
-            <th class="px-3 py-2 text-left">Item Code</th>
             <th class="px-3 py-2 text-left">SKU</th>
-            <th class="px-3 py-2 text-left">Color</th>
-            <th class="px-3 py-2 text-left">Size</th>
-            <th class="px-3 py-2 text-right">Qty</th>
+            <th class="px-3 py-2 text-right" title="Quantity from import file; when empty, opening stock uses product local stock">Qty</th>
+            <th class="px-3 py-2 text-right" title="Matched product local_stock (used when file qty is empty)">Local stock</th>
             <th class="px-3 py-2 text-left">Location</th>
             <th class="px-3 py-2 text-left">Status</th>
             <th class="px-3 py-2 text-left">Attempts</th>
@@ -108,7 +108,7 @@
         </thead>
         <tbody>
           <?php if (empty($rows)): ?>
-            <tr><td colspan="12" class="px-3 py-8 text-center text-gray-400">No records found.</td></tr>
+            <tr><td colspan="10" class="px-3 py-8 text-center text-gray-400">No records found.</td></tr>
           <?php else: ?>
             <?php foreach ($rows as $r): ?>
               <?php
@@ -120,11 +120,24 @@
               ?>
               <tr class="border-t">
                 <td class="px-3 py-2"><?= (int)$r['id'] ?></td>
-                <td class="px-3 py-2 font-medium"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
-                <td class="px-3 py-2"><?= htmlspecialchars(($r['product_sku'] ?? '') !== '' ? $r['product_sku'] : ($r['import_sku'] ?? '')) ?></td>
-                <td class="px-3 py-2"><?= htmlspecialchars($r['import_color'] ?? '') ?></td>
-                <td class="px-3 py-2"><?= htmlspecialchars($r['import_size'] ?? '') ?></td>
+                <td class="px-3 py-2">
+                  <?php
+                    $displaySku = (($r['product_sku'] ?? '') !== '') ? (string)$r['product_sku'] : (string)($r['import_sku'] ?? '');
+                    $productId = (int)($r['product_id'] ?? 0);
+                  ?>
+                  <?php if ($displaySku !== '' && $productId > 0): ?>
+                    <a href="?page=products&action=detail&id=<?= $productId ?>" target="_blank" rel="noopener noreferrer" class="text-amber-700 hover:text-amber-900 underline">
+                      <?= htmlspecialchars($displaySku) ?>
+                    </a>
+                  <?php else: ?>
+                    <?= htmlspecialchars($displaySku) ?>
+                  <?php endif; ?>
+                </td>
                 <td class="px-3 py-2 text-right tabular-nums"><?= (int)($r['opening_qty'] ?? 0) ?></td>
+                <td class="px-3 py-2 text-right tabular-nums text-gray-700"><?php
+                  $pls = $r['product_local_stock'] ?? '';
+                  echo ($pls !== '' && $pls !== null) ? (string)(int)$pls : '—';
+                ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($r['stock_location'] ?? '') ?></td>
                 <td class="px-3 py-2"><span class="text-xs px-2 py-1 rounded <?= $stClass ?>"><?= htmlspecialchars($st) ?></span></td>
                 <td class="px-3 py-2"><?= (int)($r['attempt_count'] ?? 0) ?></td>
@@ -133,6 +146,7 @@
                 <td class="px-3 py-2">
                   <?php if ($st === 'failed'): ?>
                     <button type="button" class="js-retry-item px-2 py-1 text-xs rounded border border-amber-700 text-amber-800 hover:bg-amber-50" data-item-id="<?= (int)$r['id'] ?>">Retry</button>
+                    <button type="button" class="js-delete-item ml-1 px-2 py-1 text-xs rounded border border-red-400 text-red-700 hover:bg-red-50" data-item-id="<?= (int)$r['id'] ?>">Delete</button>
                   <?php else: ?>
                     <span class="text-gray-400 text-xs">—</span>
                   <?php endif; ?>
@@ -182,6 +196,20 @@
   </div>
 </div>
 
+<div id="confirmModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-xl bg-white shadow-2xl border p-5">
+      <div id="confirmModalTitle" class="font-semibold text-gray-800 mb-2">Confirm Action</div>
+      <div id="confirmModalMessage" class="text-sm text-gray-600">Are you sure?</div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button id="confirmModalCancelBtn" type="button" class="px-3 py-1.5 text-xs rounded border hover:bg-gray-50">Cancel</button>
+        <button id="confirmModalOkBtn" type="button" class="px-3 py-1.5 text-xs rounded bg-amber-600 text-white hover:bg-amber-700">Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   (function() {
     const jobId = <?= $jobId ?>;
@@ -195,6 +223,12 @@
     const overlayProgressWrap = document.getElementById('overlayProgressWrap');
     const overlayProgressBar = document.getElementById('overlayProgressBar');
     const overlayProgressText = document.getElementById('overlayProgressText');
+    const confirmModal = document.getElementById('confirmModal');
+    const confirmModalTitle = document.getElementById('confirmModalTitle');
+    const confirmModalMessage = document.getElementById('confirmModalMessage');
+    const confirmModalCancelBtn = document.getElementById('confirmModalCancelBtn');
+    const confirmModalOkBtn = document.getElementById('confirmModalOkBtn');
+    let confirmResolver = null;
 
     function disableUi(disabled) {
       document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
@@ -224,6 +258,15 @@
     function hideOverlay() {
       overlay.classList.add('hidden');
       disableUi(false);
+    }
+
+    function confirmWithModal(title, message) {
+      return new Promise(function(resolve) {
+        confirmResolver = resolve;
+        confirmModalTitle.textContent = title || 'Confirm Action';
+        confirmModalMessage.textContent = message || 'Are you sure?';
+        confirmModal.classList.remove('hidden');
+      });
     }
 
     function showResult(type, title, message, details) {
@@ -362,6 +405,20 @@
     overlayOkBtn.addEventListener('click', function() {
       hideOverlay();
     });
+    confirmModalCancelBtn.addEventListener('click', function() {
+      confirmModal.classList.add('hidden');
+      if (confirmResolver) {
+        confirmResolver(false);
+        confirmResolver = null;
+      }
+    });
+    confirmModalOkBtn.addEventListener('click', function() {
+      confirmModal.classList.add('hidden');
+      if (confirmResolver) {
+        confirmResolver(true);
+        confirmResolver = null;
+      }
+    });
 
     function renderStats(stats, jobTiming) {
       document.getElementById('totalItems').textContent = stats.total_items ?? 0;
@@ -432,6 +489,43 @@
       }
     }
 
+    async function deleteFailedRows(itemIds) {
+      const rowDelete = Array.isArray(itemIds) && itemIds.length > 0;
+      const ok = window.confirm(rowDelete
+        ? 'Delete this failed row? This cannot be undone.'
+        : 'Delete all failed rows for this job? This cannot be undone.');
+      if (!ok) return;
+      showProgress(
+        rowDelete ? 'Deleting failed row…' : 'Deleting failed rows…',
+        rowDelete ? 'Removing selected failed row.' : 'Removing all failed rows for this job.'
+      );
+      try {
+        const body = { job_id: jobId };
+        if (rowDelete) body.item_ids = itemIds;
+        const data = await fetchJson('?page=products&action=bulk_import_delete_failed_rows', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(body)
+        });
+        if (!data.success) {
+          const detailText = [data.message || 'Delete failed', data.debug || ''].filter(Boolean).join('\n');
+          showResult('error', 'Delete Failed', data.message || 'Delete failed', detailText);
+          return;
+        }
+        const deletedCount = Number(data.deleted || 0);
+        const details = deletedCount > 0
+          ? `Deleted ${deletedCount} failed row(s).`
+          : 'No failed rows matched for deletion.';
+        showResult('success', 'Delete Complete', data.message || 'Failed rows deleted.', details);
+        await new Promise(r => setTimeout(r, 300));
+        await fetchStatus();
+        window.location.reload();
+      } catch (e) {
+        const details = extractServerError(e, 'Delete failed');
+        showResult('error', 'Delete Failed', 'Could not process server response.', details);
+      }
+    }
+
     async function processLoop() {
       showProgress(
         'Processing import…',
@@ -491,6 +585,60 @@
       }
     }
 
+    async function reuploadLoop() {
+      const ok = await confirmWithModal(
+        'Confirm ReUpload',
+        'ReUpload will refetch all item codes from API and update product data. Continue?'
+      );
+      if (!ok) return;
+      showProgress(
+        'ReUploading products…',
+        'Refetching products from API in batches of 50.'
+      );
+      try {
+        let lastId = 0;
+        let totalRows = 0;
+        let updatedRows = 0;
+        let failedRows = 0;
+        while (true) {
+          const data = await fetchJsonWithAutoRetry(
+            '?page=products&action=bulk_import_refetch_batch',
+            {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ job_id: jobId, last_id: lastId })
+            },
+            function(info) {
+              const sec = Math.max(1, Math.round(info.delayMs / 1000));
+              overlayMessage.textContent =
+                'Temporary network or server timeout (attempt ' + info.attempt + '). Retrying in about ' + sec + 's…';
+            }
+          );
+          if (!data.success) {
+            const detailText = [data.message || 'ReUpload failed', data.debug || ''].filter(Boolean).join('\n');
+            showResult('error', 'ReUpload Failed', data.message || 'ReUpload failed', detailText);
+            return;
+          }
+          if (data.done) break;
+          lastId = Number(data.last_id || lastId);
+          totalRows += Number(data.batch_size || 0);
+          updatedRows += Number(data.updated_rows || 0);
+          failedRows += Number(data.failed_rows || 0);
+          overlayProgressText.textContent = `Processed ${totalRows} rows | Updated ${updatedRows} | Failed ${failedRows}`;
+          overlayProgressBar.classList.remove('animate-pulse');
+          overlayProgressBar.style.width = '65%';
+          await new Promise(r => setTimeout(r, 150));
+        }
+        const detail = `Processed rows: ${totalRows}\nUpdated rows: ${updatedRows}\nFailed rows: ${failedRows}`;
+        showResult('success', 'ReUpload Complete', 'Products were refetched from API.', detail);
+        await new Promise(r => setTimeout(r, 350));
+        window.location.reload();
+      } catch (e) {
+        const details = extractServerError(e, 'ReUpload failed');
+        showResult('error', 'ReUpload Failed', 'Could not process server response.', details);
+      }
+    }
+
     document.getElementById('refreshStatusBtn').addEventListener('click', function() {
       showProgress('Refreshing status…', 'Fetching latest job summary.');
       fetchStatus()
@@ -503,17 +651,30 @@
     document.getElementById('startProcessBtn').addEventListener('click', function() {
       processLoop();
     });
+    document.getElementById('reuploadBtn').addEventListener('click', function() {
+      reuploadLoop();
+    });
     document.getElementById('retryFailedBtn').addEventListener('click', function() {
       retry('failed');
     });
     document.getElementById('retryPendingBtn').addEventListener('click', function() {
       retry('pending');
     });
+    document.getElementById('deleteFailedBtn').addEventListener('click', function() {
+      deleteFailedRows();
+    });
     document.querySelectorAll('.js-retry-item').forEach(function(btn) {
       btn.addEventListener('click', function() {
         const id = parseInt(btn.getAttribute('data-item-id') || '0', 10);
         if (!id) return;
         retry('failed', [id]);
+      });
+    });
+    document.querySelectorAll('.js-delete-item').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const id = parseInt(btn.getAttribute('data-item-id') || '0', 10);
+        if (!id) return;
+        deleteFailedRows([id]);
       });
     });
   })();

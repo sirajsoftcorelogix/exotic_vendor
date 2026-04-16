@@ -29,6 +29,93 @@ class product
         return (int)$default;
     }
 
+    /**
+     * vp_products may still use utf8mb3 while the connection uses utf8mb4; MySQL 8+ can reject
+     * bound parameters when an implicit collation conversion is not allowed.
+     */
+    private function executeVpProductsStmt(\mysqli_stmt $stmt): bool
+    {
+        $prev = mysqli_character_set_name($this->db);
+        $needCompat = $prev !== false && stripos((string) $prev, 'utf8mb4') !== false;
+        if ($needCompat) {
+            if (!$this->db->set_charset('utf8mb3')) {
+                $this->db->set_charset('utf8');
+            }
+        }
+        try {
+            return $stmt->execute();
+        } finally {
+            if ($needCompat && $prev !== false && $prev !== '') {
+                $this->db->set_charset($prev);
+            }
+        }
+    }
+
+    /**
+     * USD / global list price from vendor product/fetch API payload.
+     * Prefer explicit USD keys, then price, then itemprice.
+     */
+    public static function vendorApiUsdPrice(array $apiItem): float
+    {
+        foreach (['usd_price', 'price_usd', 'usdprice', 'usdPrice'] as $k) {
+            if (!array_key_exists($k, $apiItem)) {
+                continue;
+            }
+            $v = $apiItem[$k];
+            if ($v === null || $v === '') {
+                continue;
+            }
+            return (float)$v;
+        }
+        if (isset($apiItem['price']) && $apiItem['price'] !== '' && $apiItem['price'] !== null) {
+            return (float)$apiItem['price'];
+        }
+        if (isset($apiItem['itemprice']) && $apiItem['itemprice'] !== '' && $apiItem['itemprice'] !== null) {
+            return (float)$apiItem['itemprice'];
+        }
+        return 0.0;
+    }
+
+    /** Master API row: HSN is on `hscode` (or `hsn`). Same value for all variants — pass the parent object only. */
+    public static function vendorApiHsn(array $masterRow): string
+    {
+        $h = trim((string)($masterRow['hscode'] ?? ''));
+        if ($h !== '') {
+            return $h;
+        }
+
+        return trim((string)($masterRow['hsn'] ?? ''));
+    }
+
+    public static function normalizeVendorProductFetchItems(array $data): array
+    {
+        if ($data === []) {
+            return [];
+        }
+        if (isset($data['data']) && is_array($data['data'])) {
+            $data = $data['data'];
+        }
+        if (isset($data['itemcode']) && trim((string)$data['itemcode']) !== '') {
+            return [$data];
+        }
+        if (isset($data['item_code']) && trim((string)$data['item_code']) !== '') {
+            $data['itemcode'] = trim((string)$data['item_code']);
+
+            return [$data];
+        }
+        $rows = [];
+        foreach ($data as $row) {
+            if (is_array($row) && trim((string)($row['itemcode'] ?? $row['item_code'] ?? '')) !== '') {
+                if (empty($row['itemcode']) && !empty($row['item_code'])) {
+                    $row['itemcode'] = trim((string)$row['item_code']);
+                }
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
+    }
+
     public function __construct($db)
     {
         $this->db = $db;
@@ -166,12 +253,12 @@ class product
     public function getProductItems($search = '')
     {
         $searchTerm = "%$search%";
-        $sql = "SELECT * FROM vp_products WHERE (item_code LIKE ? OR title LIKE ?)";
+        $sql = "SELECT * FROM vp_products WHERE (item_code LIKE ? OR title LIKE ? OR sku LIKE ?)";
         $stmt = $this->db->prepare($sql);
         if ($stmt === false) {
             return [];
         }
-        $stmt->bind_param('ss', $searchTerm, $searchTerm);
+        $stmt->bind_param('sss', $searchTerm, $searchTerm, $searchTerm);
         $stmt->execute();
         $result = $stmt->get_result();
         $orderItems = [];
@@ -204,6 +291,93 @@ class product
         }
         return $orderItems;
     }
+
+    /**
+     * Lightweight product search for autocomplete (minimal columns + hard limit).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getProductItemsForAutocomplete($search = '', $limit = 40)
+    {
+        $search = trim((string) $search);
+        if ($search === '') {
+            return [];
+        }
+        $searchTerm = '%' . $search . '%';
+        $limit = max(1, min(100, (int) $limit));
+        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, gst, hsn, image FROM vp_products
+            WHERE sku LIKE ?
+            LIMIT ?';
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param('si', $searchTerm, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = [
+                    'id' => $row['id'],
+                    'sku' => $row['sku'],
+                    'item_code' => $row['item_code'],
+                    'title' => $row['title'],
+                    'color' => $row['color'],
+                    'size' => $row['size'],
+                    'cost_price' => $row['cost_price'],
+                    'gst' => $row['gst'],
+                    'hsn' => $row['hsn'],
+                    'image' => $row['image'] ?? '',
+                ];
+            }
+        }
+        $stmt->close();
+
+        return $orderItems;
+    }
+
+    /**
+     * Resolve product image for a direct-purchase line (variant match, then SKU).
+     */
+    public function getImageForPurchaseLine(string $itemCode, string $sku, string $color, string $size): ?string
+    {
+        $itemCode = trim($itemCode);
+        $sku = trim($sku);
+        $color = trim($color);
+        $size = trim($size);
+
+        if ($itemCode !== '') {
+            $sql = 'SELECT image FROM vp_products WHERE item_code = ? AND COALESCE(color, \'\') = ? AND COALESCE(size, \'\') = ? LIMIT 1';
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('sss', $itemCode, $color, $size);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (!empty($res['image'])) {
+                    return (string) $res['image'];
+                }
+            }
+        }
+
+        if ($sku !== '') {
+            $sql = 'SELECT image FROM vp_products WHERE sku = ? LIMIT 1';
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('s', $sku);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (!empty($res['image'])) {
+                    return (string) $res['image'];
+                }
+            }
+        }
+
+        return null;
+    }
+
     public function getProductItemsByCode($item_code = '')
     {
         $searchTerm = "%$item_code%";
@@ -240,13 +414,21 @@ class product
         // exit;
         if (isset($productData) && is_array($productData)) {
             foreach ($productData as $product) {
+                if (!is_array($product)) {
+                    continue;
+                }
+                $itemcode = trim((string)($product['itemcode'] ?? $product['item_code'] ?? ''));
+                if ($itemcode === '') {
+                    continue;
+                }
+                $product['itemcode'] = $itemcode;
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
+                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
                     $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
-                    $color = isset($product['color']) ? $product['color'] : '';
-                    $size = isset($product['size']) ? $product['size'] : '';
+                    $color = isset($product['color']) ? (string)$product['color'] : '';
+                    $size = isset($product['size']) ? (string)$product['size'] : '';
                     // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
                     // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                     // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
@@ -265,20 +447,22 @@ class product
                     $numsold = isset($product['numsold']) ? (int)$product['numsold'] : 0;
                     $numsold_india = isset($product['numsold_india']) ? (int)$product['numsold_india'] : 0;
                     $numsold_global = isset($product['numsold_global']) ? (int)$product['numsold_global'] : 0;
-                    $lastsold = isset($product['lastsold']) ? (int)$product['lastsold'] : '';
+                    $lastsold = $this->normalizeIntValue($product['lastsold'] ?? null, 0);
                     $vendor = isset($product['vendor']) ? $product['vendor'] : '';
                     $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                     $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
-                    $price = isset($product['price']) ? (float)$product['price'] : 0.0;
+                    $price = self::vendorApiUsdPrice($product);
                     $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
                     $price_india_suggested = isset($product['price_india_suggested']) ? (float)$product['price_india_suggested'] : 0.0;
                     $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
                     $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                     $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
                     $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
+                    $hsn = self::vendorApiHsn($product);
                     $updated_at = date('Y-m-d H:i:s');
+                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 6);
                     $stmt->bind_param(
-                        'sissiiiiiiiiisdddddddddsssss',
+                        $bt,
                         $asin,
                         $localStock,
                         $upc,
@@ -302,6 +486,7 @@ class product
                         $permanent_discount,
                         $discount_global,
                         $discount_india,
+                        $hsn,
                         $updated_at,
                         $sku,
                         $product['itemcode'],
@@ -309,7 +494,7 @@ class product
                         $size
                     );
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
-                    if ($stmt->execute()) {
+                    if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
                     }
                     if ($stmt->error) {
@@ -320,12 +505,12 @@ class product
                 if (isset($product['variations'])) {
                     foreach ($product['variations'] as $variation) {
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
-                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
+                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                         if ($stmt) {
                             // $title = isset($product['title']) ? $product['title'] : '';
                             $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
-                            $color = isset($variation['color']) ? $variation['color'] : '';
-                            $size = isset($variation['size']) ? $variation['size'] : '';
+                            $color = isset($variation['color']) ? (string)$variation['color'] : '';
+                            $size = isset($variation['size']) ? (string)$variation['size'] : '';
                             // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
                             // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                             // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
@@ -344,20 +529,22 @@ class product
                             $numsold = isset($variation['numsold']) ? (int)$variation['numsold'] : 0;
                             $numsold_india = isset($variation['numsold_india']) ? (int)$variation['numsold_india'] : 0;
                             $numsold_global = isset($variation['numsold_global']) ? (int)$variation['numsold_global'] : 0;
-                            $lastsold = isset($variation['lastsold']) ? $variation['lastsold'] : '';
+                            $lastsold = $this->normalizeIntValue($variation['lastsold'] ?? null, 0);
                             $vendor = isset($product['vendor']) ? $product['vendor'] : '';
                             $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                             $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
-                            $price = isset($product['price']) ? (float)$product['price'] : 0.0;
+                            $price = self::vendorApiUsdPrice(array_merge($product, $variation));
                             $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
                             $price_india_suggested = isset($product['price_india_suggested']) ? (float)$product['price_india_suggested'] : 0.0;
                             $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
                             $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                             $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
                             $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
+                            $hsn = self::vendorApiHsn($product);
                             $updated_at = date('Y-m-d H:i:s');
+                            $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 6);
                             $stmt->bind_param(
-                                'sissiissiiiissdddddddddsssss',
+                                $bt,
                                 $asin,
                                 $localStock,
                                 $upc,
@@ -381,13 +568,14 @@ class product
                                 $permanent_discount,
                                 $discount_global,
                                 $discount_india,
+                                $hsn,
                                 $updated_at,
                                 $sku,
                                 $product['itemcode'],
                                 $color,
                                 $size
                             );
-                            if ($stmt->execute()) {
+                            if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
                             }
                             if ($stmt->error) {
@@ -401,14 +589,188 @@ class product
         }
         return ['success' => true, 'updated_count' => $updatedCount, 'message' => 'Products updated successfully.'];
     }
+    /**
+     * Resolve a catalog row by item code and variant dimensions. Supports:
+     * (1) item code only — empty size & color; (2) color-only; (3) size-only; (4) size + color.
+     */
     public function findByItemCodeSizeColor($code, $size, $color)
     {
-        $sql = "SELECT * FROM vp_products WHERE item_code = ? AND size = ? AND color = ? LIMIT 1";
+        $code = trim((string)$code);
+        $size = trim((string)$size);
+        $color = trim((string)$color);
+        if ($code === '') {
+            return null;
+        }
+
+        $hit = $this->findByItemCodeSizeColorExactSql($code, $size, $color);
+        if ($hit) {
+            return $hit;
+        }
+
+        $rows = $this->fetchAllProductsByItemCode($code);
+        if ($rows === []) {
+            return null;
+        }
+
+        $hit = $this->findInRowsByNormalizedSizeColor($rows, $size, $color);
+        if ($hit) {
+            return $hit;
+        }
+
+        return $this->disambiguateVariantRowsByUpload($rows, $size, $color);
+    }
+
+    /**
+     * Match NULL/whitespace-only DB values with empty upload cells (size = '' does not match NULL in SQL).
+     */
+    private function findByItemCodeSizeColorExactSql(string $code, string $size, string $color): ?array
+    {
+        $sql = "SELECT * FROM vp_products WHERE item_code = ?
+            AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
+            AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
+            LIMIT 1";
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
         $stmt->bind_param('sss', $code, $size, $color);
         $stmt->execute();
         $res = $stmt->get_result()->fetch_assoc();
-        return $res;
+        $stmt->close();
+
+        return $res ?: null;
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function fetchAllProductsByItemCode(string $code): array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM vp_products WHERE item_code = ?');
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $code);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    private function isVariantDimensionBlank($value): bool
+    {
+        return $this->normalizeVariantDimensionForMatch($value) === '';
+    }
+
+    /**
+     * Collapses case and separators so "natural-brown" matches "natural brown".
+     */
+    private function normalizeVariantDimensionForMatch($value): string
+    {
+        $s = trim((string)$value);
+        if ($s === '') {
+            return '';
+        }
+        $s = strtolower($s);
+        $collapsed = preg_replace('/[\s\-_]+/u', '', $s);
+
+        return is_string($collapsed) ? $collapsed : $s;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $rows
+     */
+    private function findInRowsByNormalizedSizeColor(array $rows, string $size, string $color): ?array
+    {
+        $ns = $this->normalizeVariantDimensionForMatch($size);
+        $nc = $this->normalizeVariantDimensionForMatch($color);
+        $hits = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $rs = $this->normalizeVariantDimensionForMatch($row['size'] ?? '');
+            $rc = $this->normalizeVariantDimensionForMatch($row['color'] ?? '');
+            if ($rs === $ns && $rc === $nc) {
+                $hits[] = $row;
+            }
+        }
+
+        return count($hits) === 1 ? $hits[0] : null;
+    }
+
+    /**
+     * When exact + full normalized match fail, apply rules per upload shape (single row or unique partial match).
+     *
+     * @param list<array<string,mixed>> $rows
+     */
+    private function disambiguateVariantRowsByUpload(array $rows, string $size, string $color): ?array
+    {
+        $sizeBlank = ($size === '');
+        $colorBlank = ($color === '');
+
+        // (1) Item code only — no size, no color in file
+        if ($sizeBlank && $colorBlank) {
+            if (count($rows) === 1) {
+                return $rows[0];
+            }
+            $bothBlank = [];
+            foreach ($rows as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+                if ($this->isVariantDimensionBlank($r['size'] ?? '') && $this->isVariantDimensionBlank($r['color'] ?? '')) {
+                    $bothBlank[] = $r;
+                }
+            }
+
+            return count($bothBlank) === 1 ? $bothBlank[0] : null;
+        }
+
+        // (2) Color-only variant in file — size empty, color set
+        if ($sizeBlank && !$colorBlank) {
+            $nc = $this->normalizeVariantDimensionForMatch($color);
+            $cands = [];
+            foreach ($rows as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+                if (!$this->isVariantDimensionBlank($r['size'] ?? '')) {
+                    continue;
+                }
+                if ($this->normalizeVariantDimensionForMatch($r['color'] ?? '') !== $nc) {
+                    continue;
+                }
+                $cands[] = $r;
+            }
+
+            return count($cands) === 1 ? $cands[0] : null;
+        }
+
+        // (3) Size-only variant in file — size set, color empty
+        if (!$sizeBlank && $colorBlank) {
+            $ns = $this->normalizeVariantDimensionForMatch($size);
+            $cands = [];
+            foreach ($rows as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+                if ($this->normalizeVariantDimensionForMatch($r['size'] ?? '') !== $ns) {
+                    continue;
+                }
+                if (!$this->isVariantDimensionBlank($r['color'] ?? '')) {
+                    continue;
+                }
+                $cands[] = $r;
+            }
+
+            return count($cands) === 1 ? $cands[0] : null;
+        }
+
+        // (4) Size + color in file: full normalized match is handled above; no further disambiguation
+        return null;
     }
     public function findBySku($sku)
     {
@@ -554,7 +916,7 @@ class product
             $data['created_at'],
             $data['updated_at']
         );
-        if ($stmt->execute()) {
+        if ($this->executeVpProductsStmt($stmt)) {
             return $this->db->insert_id;
         }
         return false;
@@ -609,7 +971,7 @@ class product
             $data['updated_at'],
             $id
         );
-        return $stmt->execute();
+        return $this->executeVpProductsStmt($stmt);
     }
     public function getProductByItemCode($item_code)
     {
@@ -1780,9 +2142,10 @@ class product
     public function stock_history($sku, $limit = 100, $offset = 0, $productId = 0)
     {
         // Join exotic_address and match by sku OR product_id (migration-safe).
-        $sql = "SELECT sm.*, ea.address_title AS warehouse_name
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name, u.name AS updated_by_name
                 FROM vp_stock_movements sm
                 LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id
+                LEFT JOIN vp_users u ON sm.update_by_user = u.id
                 WHERE (sm.sku = ? OR sm.product_id = ?)
                 ORDER BY sm.created_at DESC
                 LIMIT ? OFFSET ?";
@@ -1824,6 +2187,21 @@ class product
             ];
         }
         if ($rt === 'MANUAL' && ($mt === 'IN' || $mt === 'OUT')) {
+            $manualByName = trim((string)($row['updated_by_name'] ?? ''));
+            if ($manualByName === '' && !empty($row['update_by_user'])) {
+                $manualByName = 'User #' . (int)$row['update_by_user'];
+            }
+            $ledgerLabel = 'Stock adjustment';
+            if ($manualByName !== '') {
+                $ledgerLabel .= ' (' . $manualByName . ')';
+            }
+            return [
+                'ledger_type' => $ledgerLabel,
+                'icon' => 'fa-sliders-h',
+                'text_color_class' => $mt === 'IN' ? 'text-green-600' : 'text-red-600',
+            ];
+        }
+        if ($rt === 'EGREENREFETCH' && ($mt === 'IN' || $mt === 'OUT')) {
             return [
                 'ledger_type' => 'Stock adjustment',
                 'icon' => 'fa-sliders-h',
@@ -1842,6 +2220,20 @@ class product
                 'ledger_type' => 'Bulk import',
                 'icon' => 'fa-cloud-upload-alt',
                 'text_color_class' => 'text-teal-600',
+            ];
+        }
+        if ($mt === 'IN' && $rt === 'DIRECT_PURCHASE') {
+            return [
+                'ledger_type' => 'Direct purchase',
+                'icon' => 'fa-arrow-up',
+                'text_color_class' => 'text-green-600',
+            ];
+        }
+        if ($mt === 'OUT' && $rt === 'DIRECT_PURCHASE_RETURN') {
+            return [
+                'ledger_type' => 'Purchase return',
+                'icon' => 'fa-undo',
+                'text_color_class' => 'text-amber-700',
             ];
         }
         if ($mt === 'OUT' && $rt === 'INVOICE') {
@@ -1938,13 +2330,16 @@ class product
                 ? (string)$data['ref_type']
                 : 'MANUAL';
             $ref_id = array_key_exists('ref_id', $data) ? (string)$data['ref_id'] : '0';
+            $updatedByUser = isset($data['update_by_user'])
+                ? (int)$data['update_by_user']
+                : (isset($data['user_id']) ? (int)$data['user_id'] : 0);
 
             $insertStmt->bind_param(
                 'isssssssiiisss', 
                 $data['product_id'], $data['sku'], $data['item_code'], 
                 $data['size'], $data['color'], $data['warehouse_id'], 
                 $data['location'], $data['movement_type'], $adj_qty, 
-                $new_stock, $data['user_id'], $ref_type, $ref_id, $data['reason']
+                $new_stock, $updatedByUser, $ref_type, $ref_id, $data['reason']
             );
 
             if (!$insertStmt->execute()) {
@@ -2038,9 +2433,10 @@ class product
             $whereSql = 'WHERE ' . implode(' AND ', $where);
         }
 
-        $sql = "SELECT sm.*, ea.address_title AS warehouse_name 
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name, u.name AS updated_by_name
                 FROM vp_stock_movements sm 
                 LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id 
+                LEFT JOIN vp_users u ON sm.update_by_user = u.id
                 $whereSql 
                 ORDER BY sm.created_at DESC 
                 LIMIT ? OFFSET ?";
@@ -2164,6 +2560,60 @@ class product
         $stmt->execute();
         $result = $stmt->get_result();
         return $result ? $result->fetch_assoc() : null;
+    }
+    public function getLatestRunningStockByWarehouseLocation($productId)
+    {
+        $sql = "SELECT 
+                    sm.id AS movement_id,
+                    sm.warehouse_id,
+                    COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
+                    sm.location,
+                    sm.running_stock,
+                    sm.updated_at,
+                    sm.created_at
+                FROM vp_stock_movements sm
+                INNER JOIN (
+                    SELECT warehouse_id, COALESCE(NULLIF(TRIM(location), ''), '__EMPTY__') AS location_key, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE product_id = ?
+                    GROUP BY warehouse_id, COALESCE(NULLIF(TRIM(location), ''), '__EMPTY__')
+                ) latest ON latest.max_id = sm.id
+                LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
+                WHERE sm.product_id = ?
+                ORDER BY ea.address_title ASC, sm.location ASC";
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+        $pid = (int)$productId;
+        $stmt->bind_param('ii', $pid, $pid);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+    public function updateStockMovementLocation($movementId, $productId, $location)
+    {
+        $sql = "UPDATE vp_stock_movements 
+                SET location = ?, updated_at = NOW()
+                WHERE id = ? AND product_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+        $movementId = (int)$movementId;
+        $productId = (int)$productId;
+        $location = trim((string)$location);
+        $stmt->bind_param('sii', $location, $movementId, $productId);
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
+        }
+        if ($stmt->affected_rows < 1) {
+            return ['success' => false, 'message' => 'No stock movement row updated.'];
+        }
+        return ['success' => true, 'message' => 'Location updated successfully.'];
     }
     public function setProductLimits($productId, $minStock, $maxStock){
         $sql = "UPDATE vp_products 

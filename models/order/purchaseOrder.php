@@ -13,7 +13,10 @@ class PurchaseOrder {
         if (!empty($filters['status_filter'])) {
             $statusFilter = $this->db->real_escape_string($filters['status_filter']);
             $sql .= " AND purchase_orders.status = '$statusFilter'";
-        }       
+        }
+        if (!empty($filters['exclude_completed'])) {
+            $sql .= " AND purchase_orders.status != 'completed'";
+        }
         if (!empty($filters['due_date'])) {
             $dueDate = $this->db->real_escape_string($filters['due_date']);
             $sql .= " AND purchase_orders.expected_delivery_date = '$dueDate'";

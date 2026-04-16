@@ -98,7 +98,7 @@
     </div>
   </div>
   <div data-layer="Background+Border+Shadow" class="BackgroundBorderShadow w-60 h-24 left-[284.66px] top-[362px] absolute bg-white rounded-[10px] shadow-[0px_1px_2px_-1px_rgba(0,0,0,0.10)] shadow-[0px_1px_3px_0px_rgba(0,0,0,0.10)] outline outline-1 outline-offset-[-1px] outline-gray-200 overflow-hidden">
-    <div data-layer="Committed" class="Committed w-20 h-5 left-[17.34px] top-[17px] absolute justify-center text-gray-600 text-sm font-normal font-['SansSerif'] leading-5">Committed</div>
+    <div data-layer="Pending Orders" class="Committed w-20 h-5 left-[17.34px] top-[17px] absolute justify-center text-gray-600 text-sm font-normal font-['SansSerif'] leading-5">Pending Orders</div>
     <div data-layer="09" class="w-7 h-8 left-[17px] top-[41px] absolute justify-center text-gray-900 text-2xl font-bold font-['SansSerif'] leading-8">09</div>
     <div data-layer="Background" class="Background size-9 left-[191.67px] top-[17px] absolute bg-purple-50 rounded-[10px]">
       <div data-svg-wrapper data-layer="SVG" class="Svg left-[8px] top-[8px] absolute">

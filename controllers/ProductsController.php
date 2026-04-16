@@ -337,12 +337,25 @@ class ProductsController {
     public function updateApiCall(){
         is_login();
         global $productModel;
-        //echo "Update API called"; exit;
-        if(empty($_GET['itemCode'])){
+        // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
+        $raw = isset($_GET['itemCode']) ? trim((string)$_GET['itemCode']) : '';
+        if ($raw === '') {
             echo json_encode(['success' => false, 'message' => 'itemcode invalid to update product.']);
             exit;
         }
-        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes='.$_GET['itemCode']; // Production API new endpoint
+        $codes = array_values(array_unique(array_map('trim', array_filter(explode(',', $raw), static function ($c) {
+            return trim((string)$c) !== '';
+        }))));
+        if (count($codes) === 0) {
+            echo json_encode(['success' => false, 'message' => 'itemcode invalid to update product.']);
+            exit;
+        }
+        if (count($codes) > 50) {
+            echo json_encode(['success' => false, 'message' => 'Maximum 50 item codes per request.']);
+            exit;
+        }
+        $itemcodesQuery = implode(',', $codes);
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemcodesQuery);
        
         // if (!empty($_GET['item_code'])) {
         //     $postData = [
@@ -376,22 +389,18 @@ class ProductsController {
             return;
         }
 
-        $product = json_decode($response, true);
-        if (!is_array($product)) {
-            //echo "Invalid API response format.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Invalid API response format.']], 'API Error');
             return;
         }
-        // print_array($product);
-        // exit;
-        if (empty($product)) {
-            //echo "No orders found in the API response.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
+        $productRows = product::normalizeVendorProductFetchItems($decoded);
+        if ($productRows === []) {
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No product rows in API response.']], 'No Products Found');
             return;
         }
-        // Process and save orders to the database
-        $updatedCount = $productModel->updateProductFromApi($product);
-        echo json_encode($updatedCount);
+        $updateResult = $productModel->updateProductFromApi($productRows);
+        echo json_encode($updateResult);
         exit;
         // if ($updatedCount['success']) {
         //     renderTemplateClean('views/success/success.php', ['message' => 'Product updated successfully. Total products updated: ' . $updatedCount['updated_count']], 'Update Successful');
@@ -399,6 +408,71 @@ class ProductsController {
         //     renderTemplateClean('views/errors/error.php', ['message' => $updatedCount['message']], 'Update Failed');
         // }
     }
+
+    /**
+     * Return the vendor product/fetch API JSON only (no DB updates).
+     * GET itemCode or itemcodes — comma-separated, same as update API (max 50).
+     * Example: ?page=products&action=vendor_product_fetch_payload&itemCode=AC88
+     */
+    public function vendorProductFetchPayload(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=UTF-8');
+        $raw = isset($_GET['itemcodes']) ? trim((string)$_GET['itemcodes']) : (isset($_GET['itemCode']) ? trim((string)$_GET['itemCode']) : '');
+        if ($raw === '') {
+            echo json_encode(['success' => false, 'message' => 'Provide itemCode or itemcodes (comma-separated).'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        $codes = array_values(array_unique(array_map('trim', array_filter(explode(',', $raw), static function ($c) {
+            return trim((string)$c) !== '';
+        }))));
+        if ($codes === []) {
+            echo json_encode(['success' => false, 'message' => 'No valid item codes.'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        if (count($codes) > 50) {
+            echo json_encode(['success' => false, 'message' => 'Maximum 50 item codes per request.'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        $itemcodesQuery = implode(',', $codes);
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemcodesQuery);
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+        if ($response === false) {
+            echo json_encode(['success' => false, 'message' => 'API request failed.', 'curl_error' => $curlErr, 'url' => $url], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'API response was not valid JSON.',
+                'url' => $url,
+                'itemcodes_requested' => $codes,
+                'raw_body' => $response,
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        echo json_encode([
+            'success' => true,
+            'url' => $url,
+            'itemcodes_requested' => $codes,
+            'payload' => $decoded,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function importApiCall($manualCodes = null) {
         global $productModel;
         $t0 = microtime(true);
@@ -457,7 +531,10 @@ class ProductsController {
         $updated = 0;
         $failed = [];
         $createdIdsByCode = [];
-        // prepare comma separated itemcodes (no spaces)
+        $localStockByCode = [];
+        $localStockBySku = [];
+        $localStockByVariant = [];
+        // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
         $itm = implode(',', $codes);
         $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itm);
 
@@ -502,19 +579,44 @@ class ProductsController {
             // single object
             $items = [$apiResult];
         }*/
-        $items = $apiResult; 
+        $items = product::normalizeVendorProductFetchItems($apiResult);
         //print_array($items);
         if (count($items) === 0) {
+            if ($internalCall) {
+                $failed = array_values($codes);
+                return $respond([
+                    'success' => true,
+                    'message' => 'API returned no product rows; requested codes skipped so ReUpload can continue.',
+                    'created' => 0,
+                    'updated' => 0,
+                    'failed' => $failed,
+                    'timing' => $importTiming($codesCount, $apiMsElapsed, 0, 0),
+                    'created_ids_by_code' => $createdIdsByCode,
+                    'local_stock_by_code' => $localStockByCode,
+                    'local_stock_by_sku' => $localStockBySku,
+                    'local_stock_by_variant' => $localStockByVariant,
+                ]);
+            }
             return $respond(['success' => false, 'message' => 'No items found in API response.', 'timing' => $importTiming($codesCount, $apiMsElapsed)]);
         }
-        
+
+        $codesPresentInResponse = [];
         foreach ($items as $apiItem) {
+            $itemRowCode = '';
+            try {
+            if (!is_array($apiItem)) {
+                $failed[] = '(invalid_row)';
+                continue;
+            }
             // detect item code from common keys
             $code = trim($apiItem['itemcode'] ?? $apiItem['item_code'] ?? $apiItem['sku'] ?? '');
+            $itemRowCode = $code;
             if ($code === '') {
             $failed[] = '(unknown)';
             continue;
             }
+            $codeKey = strtoupper($code);
+            $codesPresentInResponse[$codeKey] = true;
 
             // map API item to DB fields (adjust as needed)
             $item = [];
@@ -526,14 +628,26 @@ class ProductsController {
                 : '';
             $item['groupname'] = $apiItem['groupname'] ?? '';
             $item['local_stock'] = isset($apiItem['local_stock']) ? (int)$apiItem['local_stock'] : (isset($apiItem['stock']) ? (int)$apiItem['stock'] : 0);
-            $item['itemprice'] = isset($apiItem['price']) ? floatval($apiItem['price']) : (isset($apiItem['itemprice']) ? floatval($apiItem['itemprice']) : 0.0);
+            $localStockByCode[$codeKey] = $item['local_stock'];
+            $baseSku = strtoupper(trim((string)($item['sku'] ?? '')));
+            if ($baseSku !== '') {
+                $localStockBySku[$baseSku] = $item['local_stock'];
+            }
+            $baseSize = trim((string)($apiItem['size'] ?? ''));
+            $baseColor = trim((string)($apiItem['color'] ?? ''));
+            $baseVariantKey = $codeKey . '|' . strtolower($baseSize) . '|' . strtolower($baseColor);
+            $localStockByVariant[$baseVariantKey] = $item['local_stock'];
+            $usdList = product::vendorApiUsdPrice($apiItem);
+            $item['itemprice'] = isset($apiItem['itemprice']) && $apiItem['itemprice'] !== '' && $apiItem['itemprice'] !== null
+                ? floatval($apiItem['itemprice'])
+                : (isset($apiItem['price']) && $apiItem['price'] !== '' && $apiItem['price'] !== null ? floatval($apiItem['price']) : $usdList);
             $item['finalprice'] = isset($apiItem['finalprice']) ? floatval($apiItem['finalprice']) : $item['itemprice'];
             $item['color'] = $apiItem['color'] ?? '';
             $item['size'] =  isset($apiItem['size']) ? $apiItem['size'] : '';
             $item['material'] = isset($apiItem['material']) ? $apiItem['material'] : '';
             $item['cost_price'] = isset($apiItem['cp']) ? (float)$apiItem['cp'] : 0.0;           
             $item['gst'] = isset($apiItem['gst']) ? (float)$apiItem['gst'] : 0.0;
-            $item['hsn'] = isset($apiItem['hscode']) ? $apiItem['hscode'] : '';
+            $item['hsn'] = product::vendorApiHsn($apiItem);
             $item['description'] = isset($apiItem['snippet_description']) ? $apiItem['snippet_description'] : '';
             $item['asin'] = isset($apiItem['asin']) ? $apiItem['asin'] : '';
             $item['upc'] = isset($apiItem['upc']) ? $apiItem['upc'] : '';
@@ -550,7 +664,7 @@ class ProductsController {
             $item['vendor'] = isset($apiItem['vendor']) ? $apiItem['vendor'] : '';
             $item['shippingfee'] = isset($apiItem['shippingfee']) ? (float)$apiItem['shippingfee'] : 0.0;
             $item['sourcingfee'] = isset($apiItem['sourcingfee']) ? (float)$apiItem['sourcingfee'] : 0.0;
-            $item['price'] = isset($apiItem['price']) ? (float)$apiItem['price'] : 0.0;
+            $item['price'] = $usdList;
             $item['price_india'] = isset($apiItem['price_india']) ? (float)$apiItem['price_india'] : 0.0;
             $item['price_india_suggested'] = isset($apiItem['price_india_suggested']) ? (float)$apiItem['price_india_suggested'] : 0.0;
             $item['mrp_india'] = isset($apiItem['mrp_india']) ? (float)$apiItem['mrp_india'] : 0.0;
@@ -590,7 +704,7 @@ class ProductsController {
             // echo "Created: $created, Updated: $updated, Failed: " . count($failed) . "\n";
             // print_r($existing);
             //varient
-            if (isset($apiItem['variations'])) {
+            if (isset($apiItem['variations']) && is_array($apiItem['variations'])) {
                 foreach ($apiItem['variations'] as $variant) {
                     $variantItem = $item; // start with base item
                     $variantItem['item_code'] = $apiItem['itemcode'] ?? $apiItem['item_code'];
@@ -599,11 +713,21 @@ class ProductsController {
                     $variantItem['color'] = $variant['color'] ?? '';
                     $variantItem['title'] = $variant['title'] ?? $item['title'];                    
                     $variantItem['local_stock'] = isset($variant['local_stock']) ? (int)$variant['local_stock'] : 0;
-                    $variantItem['itemprice'] = isset($variant['price']) ? floatval($variant['price']) : 0.0;
+                    $variantSku = strtoupper(trim((string)($variantItem['sku'] ?? '')));
+                    if ($variantSku !== '') {
+                        $localStockBySku[$variantSku] = $variantItem['local_stock'];
+                    }
+                    $variantKey = $codeKey . '|' . strtolower(trim((string)$variantItem['size'])) . '|' . strtolower(trim((string)$variantItem['color']));
+                    $localStockByVariant[$variantKey] = $variantItem['local_stock'];
+                    $mergedVariant = array_merge($apiItem, $variant);
+                    $usdVar = product::vendorApiUsdPrice($mergedVariant);
+                    $variantItem['itemprice'] = isset($variant['itemprice']) && $variant['itemprice'] !== '' && $variant['itemprice'] !== null
+                        ? floatval($variant['itemprice'])
+                        : (isset($variant['price']) && $variant['price'] !== '' && $variant['price'] !== null ? floatval($variant['price']) : $usdVar);
                     $variantItem['finalprice'] = isset($variant['finalprice']) ? floatval($variant['finalprice']) : $variantItem['itemprice'];
                     $variantItem['cost_price'] = isset($variant['cp']) ? (float)$variant['cp'] : 0.0;
                     $variantItem['gst'] = isset($variant['gst']) ? (float)$variant['gst'] : 0.0;
-                    $variantItem['hsn'] = isset($variant['hsn']) ? $variant['hsn'] : '';
+                    $variantItem['hsn'] = product::vendorApiHsn($apiItem);
                     $variantItem['description'] = isset($variant['snippet_description']) ? $variant['snippet_description'] : '';
                     $variantItem['image'] = isset($variant['image']) ? 'https://cdn.exoticindia.com/images/products/original/'.$variant['image'] : $item['image'];
                     $variantItem['asin'] = isset($variant['asin']) ? $variant['asin'] : '';
@@ -621,7 +745,7 @@ class ProductsController {
                     $variantItem['vendor'] = isset($variant['vendor']) ? $variant['vendor'] : '';
                     $variantItem['shippingfee'] = isset($variant['shippingfee']) ? (float)$variant['shippingfee'] : 0.0;
                     $variantItem['sourcingfee'] = isset($variant['sourcingfee']) ? (float)$variant['sourcingfee'] : 0.0;
-                    $variantItem['price'] = isset($variant['price']) ? (float)$variant['price'] : 0.0;
+                    $variantItem['price'] = $usdVar;
                     $variantItem['price_india'] = isset($variant['price_india']) ? (float)$variant['price_india'] : 0.0;
                     $variantItem['price_india_suggested'] = isset($variant['price_india_suggested']) ? (float)$variant['price_india_suggested'] : 0.0;
                     $variantItem['mrp_india'] = isset($variant['mrp_india']) ? (float)$variant['mrp_india'] : 0.0;
@@ -649,7 +773,25 @@ class ProductsController {
 
             // tiny sleep to be gentle on third-party API/service
             usleep(100000); // 100ms
+            } catch (\Throwable $e) {
+                $fc = trim((string)$itemRowCode);
+                if ($fc === '' && is_array($apiItem)) {
+                    $fc = trim((string)($apiItem['itemcode'] ?? $apiItem['item_code'] ?? $apiItem['sku'] ?? ''));
+                }
+                $failed[] = $fc !== '' ? $fc : '(unknown)';
+            }
         }
+
+        if ($internalCall) {
+            foreach ($codes as $reqCode) {
+                $rk = strtoupper(trim((string)$reqCode));
+                if ($rk === '' || isset($codesPresentInResponse[$rk])) {
+                    continue;
+                }
+                $failed[] = (string)$reqCode;
+            }
+        }
+        $failed = array_values(array_unique(array_map('strval', $failed)));
 
         $payload = [
             'success' => true,
@@ -661,6 +803,9 @@ class ProductsController {
         ];
         if ($internalCall) {
             $payload['created_ids_by_code'] = $createdIdsByCode;
+            $payload['local_stock_by_code'] = $localStockByCode;
+            $payload['local_stock_by_sku'] = $localStockBySku;
+            $payload['local_stock_by_variant'] = $localStockByVariant;
         }
         return $respond($payload);
     }
@@ -684,13 +829,244 @@ class ProductsController {
             }
         }
 
-        global $usersModel;
-        $warehouses = $usersModel->getAllWarehouses();
+        $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+        $loginWarehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($loginWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $loginWarehouseId = (int)$_SESSION['user']['warehouse_id'];
+        }
+
+        $warehouses = [];
+        if ($isAdminUser) {
+            $whSql = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
+            $whRes = mysqli_query($conn, $whSql);
+            if ($whRes) {
+                while ($wh = mysqli_fetch_assoc($whRes)) {
+                    $warehouses[] = $wh;
+                }
+            }
+        } elseif ($loginWarehouseId > 0) {
+            $whStmt = $conn->prepare("SELECT id, address_title FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1");
+            if ($whStmt) {
+                $whStmt->bind_param('i', $loginWarehouseId);
+                $whStmt->execute();
+                $whRes = $whStmt->get_result();
+                if ($whRes && ($wh = $whRes->fetch_assoc())) {
+                    $warehouses[] = $wh;
+                }
+                $whStmt->close();
+            }
+        }
 
         renderTemplate('views/products/bulk_import.php', [
             'jobs' => $jobs,
             'warehouses' => $warehouses,
+            'selectedWarehouseId' => $loginWarehouseId,
         ], 'Bulk Product Import');
+    }
+
+    /** UI-only module for fast bulk label selection and queueing. */
+    public function bulkLabelPrintUi() {
+        is_login();
+        global $productModel;
+
+        $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+        $loginWarehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($loginWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $loginWarehouseId = (int)$_SESSION['user']['warehouse_id'];
+        }
+
+        $allWarehouses = $productModel->getAllWarehouses();
+        $warehouses = [];
+        foreach ((array)$allWarehouses as $wh) {
+            $wid = (int)($wh['id'] ?? 0);
+            if ($wid <= 0) {
+                continue;
+            }
+            if (!$isAdminUser && $loginWarehouseId > 0 && $wid !== $loginWarehouseId) {
+                continue;
+            }
+            $warehouses[] = $wh;
+        }
+
+        renderTemplate('views/products/bulk_label_print.php', [
+            'warehouses' => $warehouses,
+            'isAdminUser' => $isAdminUser,
+            'selectedWarehouseId' => $loginWarehouseId,
+        ], 'Bulk Label Print');
+    }
+
+    /** Generate printable HTML for bulk label queue (JSON in, HTML out via JSON). */
+    public function bulkLabelPrintGenerate() {
+        is_login();
+        global $productModel;
+        header('Content-Type: application/json');
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid request payload.']);
+            exit;
+        }
+
+        $template = trim((string)($payload['template'] ?? ''));
+        $items = $payload['products'] ?? [];
+        if (!in_array($template, ['jewelry', 'textile', 'mg_store'], true)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid label template selected.']);
+            exit;
+        }
+        if (!is_array($items) || count($items) === 0) {
+            echo json_encode(['success' => false, 'message' => 'Please select at least one product.']);
+            exit;
+        }
+
+        $rows = [];
+        $missing = [];
+        foreach ($items as $it) {
+            $pid = isset($it['id']) ? (int)$it['id'] : 0;
+            $qty = isset($it['qty']) ? (int)$it['qty'] : 1;
+            $qty = max(1, min(99, $qty));
+            if ($pid <= 0) {
+                continue;
+            }
+            $p = $productModel->getProduct($pid);
+            if (!$p || !is_array($p)) {
+                $missing[] = $pid;
+                continue;
+            }
+
+            if ($template === 'jewelry') {
+                require_once dirname(__DIR__) . '/helpers/label/JewelryLabel.php';
+                $labelRow = JewelryLabel::fromProductRow($p);
+            } elseif ($template === 'textile') {
+                require_once dirname(__DIR__) . '/helpers/label/TextileLabel.php';
+                $labelRow = TextileLabel::fromProductRow($p);
+            } else {
+                require_once dirname(__DIR__) . '/helpers/label/MgStoreLabel.php';
+                $labelRow = MgStoreLabel::fromProductRow($p);
+            }
+
+            for ($i = 0; $i < $qty; $i++) {
+                $rows[] = $labelRow;
+            }
+        }
+
+        if ($rows === []) {
+            $msg = 'No valid products found to print.';
+            if ($missing !== []) {
+                $msg .= ' Missing product IDs: ' . implode(', ', $missing);
+            }
+            echo json_encode(['success' => false, 'message' => $msg]);
+            exit;
+        }
+
+        if ($template === 'jewelry') {
+            $html = JewelryLabel::renderPrintDocumentBatch($rows);
+        } elseif ($template === 'textile') {
+            $html = TextileLabel::renderPrintDocumentBatch($rows);
+        } else {
+            $html = MgStoreLabel::renderPrintDocumentBatch($rows);
+        }
+
+        echo json_encode([
+            'success' => true,
+            'html' => $html,
+            'total_labels' => count($rows),
+            'missing_product_ids' => $missing,
+        ]);
+        exit;
+    }
+
+    /** POST multipart: file (.csv/.xlsx/.xls) with Item Code, Size, Color; optional Qty per row. Returns JSON products for the queue. */
+    public function bulkLabelPrintUpload() {
+        is_login();
+        header('Content-Type: application/json');
+        global $productModel;
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+        if (empty($_FILES['label_import_file']['tmp_name']) || !is_uploaded_file($_FILES['label_import_file']['tmp_name'])) {
+            echo json_encode(['success' => false, 'message' => 'Please choose a CSV or Excel file with Item Code, Size, and Color columns.']);
+            exit;
+        }
+
+        $parsed = $this->parseBulkLabelVariantUpload($_FILES['label_import_file']);
+        if (!empty($parsed['error'])) {
+            echo json_encode(['success' => false, 'message' => $parsed['error']]);
+            exit;
+        }
+
+        $rows = $parsed['rows'] ?? [];
+        if ($rows === []) {
+            echo json_encode(['success' => false, 'message' => 'No data rows found in the file.']);
+            exit;
+        }
+
+        $productsOut = [];
+        $notFound = [];
+        $lineNo = 1;
+        foreach ($rows as $r) {
+            $lineNo++;
+            $ic = (string)($r['item_code'] ?? '');
+            $size = (string)($r['size'] ?? '');
+            $color = (string)($r['color'] ?? '');
+            $repeat = isset($r['quantity']) ? max(1, min(99, (int)$r['quantity'])) : 1;
+
+            $p = $productModel->findByItemCodeSizeColor($ic, $size, $color);
+            if (!$p || empty($p['id'])) {
+                $notFound[] = [
+                    'line' => $lineNo,
+                    'item_code' => $ic,
+                    'size' => $size,
+                    'color' => $color,
+                ];
+                continue;
+            }
+
+            $rowForClient = [
+                'id' => (int)$p['id'],
+                'sku' => (string)($p['sku'] ?? ''),
+                'item_code' => (string)($p['item_code'] ?? ''),
+                'title' => (string)($p['title'] ?? ''),
+                'size' => (string)($p['size'] ?? ''),
+                'color' => (string)($p['color'] ?? ''),
+                'image' => (string)($p['image'] ?? ''),
+                'local_stock' => $p['local_stock'] ?? null,
+                'location' => (string)($p['location'] ?? ''),
+            ];
+            for ($i = 0; $i < $repeat; $i++) {
+                $productsOut[] = $rowForClient;
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'added_count' => count($productsOut),
+            'products' => $productsOut,
+            'not_found' => $notFound,
+            'message' => count($productsOut) > 0
+                ? ('Resolved ' . count($productsOut) . ' line(s) from file.')
+                : 'No matching products for the rows in this file.',
+        ]);
+        exit;
+    }
+
+    public function bulkLabelPrintSampleCsv() {
+        is_login();
+        $filename = 'bulk_label_print_sample.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            exit;
+        }
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, ['Item Code', 'Size', 'Color', 'Qty']);
+        fputcsv($out, ['GAN035', 'xl', 'orange', '1']);
+        fputcsv($out, ['SAMPLE004', 'M', 'red', '2']);
+        fclose($out);
+        exit;
     }
 
     public function bulkImportSampleCsv() {
@@ -723,7 +1099,9 @@ class ProductsController {
             exit;
         }
 
-        $this->refreshImportJobCounts($jobId);
+        // Do not call refreshImportJobCounts() here: it aggregates every import row for the job
+        // on each request and makes pagination painfully slow on large jobs. Counts are kept
+        // up to date by batch processing; use "Refresh Status" to reconcile from the server.
 
         $job = null;
         $stmtJob = $conn->prepare("SELECT j.*, u.name AS created_by_name, ea.address_title AS warehouse_name
@@ -786,16 +1164,7 @@ class ProductsController {
                         pii.error_message,
                         pii.created_at,
                         pii.updated_at,
-                        pii.processed_at,
-                        (
-                            SELECT p.sku
-                            FROM vp_products p
-                            WHERE p.item_code COLLATE utf8mb4_general_ci = pii.item_code COLLATE utf8mb4_general_ci
-                              AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_size), ''), '') COLLATE utf8mb4_general_ci
-                              AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '') COLLATE utf8mb4_general_ci
-                            ORDER BY p.id DESC
-                            LIMIT 1
-                        ) AS product_sku
+                        pii.processed_at
                     FROM product_import_items pii
                     $where
                     ORDER BY pii.id ASC
@@ -813,6 +1182,8 @@ class ProductsController {
         }
         $listStmt->close();
 
+        $rows = $this->hydrateBulkImportDetailProductLinks($conn, $rows);
+
         renderTemplate('views/products/bulk_import_detail.php', [
             'job' => $job,
             'rows' => $rows,
@@ -822,6 +1193,170 @@ class ProductsController {
             'total_items' => $totalItems,
             'total_pages' => $totalPages
         ], 'Bulk Import Detail');
+    }
+
+    /**
+     * Match import row dimensions the same way as legacy SQL:
+     * IFNULL(NULLIF(TRIM(v), ''), '')
+     */
+    private function bulkImportNormDimForProductLookup(?string $v): string {
+        $t = trim((string)$v);
+        return $t === '' ? '' : $t;
+    }
+
+    /**
+     * Lookup key for pairing import lines to vp_products (item_code + size + color), case-insensitive like utf8mb4_general_ci.
+     */
+    private function bulkImportProductMatchKey(string $itemCode, string $importSize, string $importColor): string {
+        $fold = static function (string $s): string {
+            if (function_exists('mb_strtolower')) {
+                return mb_strtolower($s, 'UTF-8');
+            }
+            return strtolower($s);
+        };
+        $ic = $fold(trim($itemCode));
+        $ns = $fold($this->bulkImportNormDimForProductLookup($importSize));
+        $nc = $fold($this->bulkImportNormDimForProductLookup($importColor));
+        return $ic . "\x1e" . $ns . "\x1e" . $nc;
+    }
+
+    /**
+     * Resolves product id/sku for the current page without per-row correlated subqueries against vp_products.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function hydrateBulkImportDetailProductLinks(\mysqli $conn, array $rows): array {
+        if ($rows === []) {
+            return $rows;
+        }
+        $codes = [];
+        $skus = [];
+        foreach ($rows as $r) {
+            $c = trim((string)($r['item_code'] ?? ''));
+            if ($c !== '') {
+                $codes[$c] = true;
+            }
+            $s = trim((string)($r['import_sku'] ?? ''));
+            if ($s !== '') {
+                $skus[$s] = true;
+            }
+        }
+        $codeList = array_keys($codes);
+        if ($codeList === []) {
+            foreach ($rows as &$r0) {
+                $r0['product_sku'] = '';
+                $r0['product_id'] = '';
+                $r0['product_local_stock'] = '';
+            }
+            unset($r0);
+            return $rows;
+        }
+
+        $bestByKey = [];
+        $bestBySku = [];
+        $chunkSize = 80;
+        for ($i = 0, $n = count($codeList); $i < $n; $i += $chunkSize) {
+            $chunk = array_slice($codeList, $i, $chunkSize);
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = "SELECT p.id, p.sku, p.item_code, IFNULL(p.local_stock, 0) AS local_stock,
+                        IFNULL(NULLIF(TRIM(p.color), ''), '') AS norm_color,
+                        IFNULL(NULLIF(TRIM(p.size), ''), '') AS norm_size
+                    FROM vp_products p
+                    WHERE p.item_code IN ($placeholders)";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $types = str_repeat('s', count($chunk));
+            $bindArgs = [&$types];
+            foreach ($chunk as $k => $_v) {
+                $bindArgs[] = &$chunk[$k];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($res && ($pr = $res->fetch_assoc())) {
+                $key = $this->bulkImportProductMatchKey(
+                    (string)($pr['item_code'] ?? ''),
+                    (string)($pr['norm_size'] ?? ''),
+                    (string)($pr['norm_color'] ?? '')
+                );
+                $pid = (int)($pr['id'] ?? 0);
+                if ($pid <= 0) {
+                    continue;
+                }
+                if (!isset($bestByKey[$key]) || $pid > (int)$bestByKey[$key]['id']) {
+                    $bestByKey[$key] = [
+                        'id' => $pid,
+                        'sku' => (string)($pr['sku'] ?? ''),
+                        'local_stock' => (int)($pr['local_stock'] ?? 0),
+                    ];
+                }
+            }
+            $stmt->close();
+        }
+
+        $skuList = array_keys($skus);
+        for ($i = 0, $n = count($skuList); $i < $n; $i += $chunkSize) {
+            $chunk = array_slice($skuList, $i, $chunkSize);
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = "SELECT p.id, p.sku, IFNULL(p.local_stock, 0) AS local_stock
+                    FROM vp_products p
+                    WHERE p.sku IN ($placeholders)";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $types = str_repeat('s', count($chunk));
+            $bindArgs = [&$types];
+            foreach ($chunk as $k => $_v) {
+                $bindArgs[] = &$chunk[$k];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($res && ($pr = $res->fetch_assoc())) {
+                $pid = (int)($pr['id'] ?? 0);
+                $psku = strtoupper(trim((string)($pr['sku'] ?? '')));
+                if ($pid <= 0 || $psku === '') {
+                    continue;
+                }
+                if (!isset($bestBySku[$psku]) || $pid > (int)$bestBySku[$psku]['id']) {
+                    $bestBySku[$psku] = [
+                        'id' => $pid,
+                        'sku' => (string)($pr['sku'] ?? ''),
+                        'local_stock' => (int)($pr['local_stock'] ?? 0),
+                    ];
+                }
+            }
+            $stmt->close();
+        }
+
+        foreach ($rows as &$r) {
+            $key = $this->bulkImportProductMatchKey(
+                (string)($r['item_code'] ?? ''),
+                (string)($r['import_size'] ?? ''),
+                (string)($r['import_color'] ?? '')
+            );
+            if (isset($bestByKey[$key])) {
+                $r['product_id'] = (string)$bestByKey[$key]['id'];
+                $r['product_sku'] = $bestByKey[$key]['sku'];
+                $r['product_local_stock'] = (string)(int)($bestByKey[$key]['local_stock'] ?? 0);
+            } elseif (($r['import_sku'] ?? '') !== '' && isset($bestBySku[strtoupper(trim((string)$r['import_sku']))])) {
+                $bySku = $bestBySku[strtoupper(trim((string)$r['import_sku']))];
+                $r['product_id'] = (string)$bySku['id'];
+                $r['product_sku'] = $bySku['sku'];
+                $r['product_local_stock'] = (string)(int)($bySku['local_stock'] ?? 0);
+            } else {
+                $r['product_id'] = '';
+                $r['product_sku'] = '';
+                $r['product_local_stock'] = '';
+            }
+        }
+        unset($r);
+
+        return $rows;
     }
 
     private function ensureBulkImportTables() {
@@ -1047,6 +1582,9 @@ class ProductsController {
         $itemCode = trim($itemCode);
         $size = trim($size);
         $color = trim($color);
+        if ($itemCode === '') {
+            return '';
+        }
         if ($size !== '' && $color !== '') {
             return $itemCode . '-' . $size . '-' . $color;
         }
@@ -1056,7 +1594,6 @@ class ProductsController {
         if ($size === '' && $color !== '') {
             return $itemCode . '--' . $color;
         }
-
         return $itemCode;
     }
 
@@ -1127,7 +1664,14 @@ class ProductsController {
         if (!$handle) {
             return $rows;
         }
+        $isFirstRow = true;
         while (($row = fgetcsv($handle)) !== false) {
+            if ($isFirstRow) {
+                $isFirstRow = false;
+                if ($this->bulkImportLooksLikeHeaderRow($row)) {
+                    continue;
+                }
+            }
             $parts = $this->parseBulkImportCsvRowParts($row);
             if ($parts === null) {
                 continue;
@@ -1203,6 +1747,7 @@ class ProductsController {
             return $rows;
         }
         $sheet = @simplexml_load_string($sheetXml);
+        $isFirstRow = true;
         if ($sheet && isset($sheet->sheetData->row)) {
             foreach ($sheet->sheetData->row as $row) {
                 $byCol = [];
@@ -1212,6 +1757,20 @@ class ProductsController {
                         continue;
                     }
                     $byCol[$m[1]] = trim($this->xlsxCellPlainText($c, $sharedStrings));
+                }
+                if ($isFirstRow) {
+                    $isFirstRow = false;
+                    $firstRowCells = [
+                        (string)($byCol['A'] ?? ''),
+                        (string)($byCol['B'] ?? ''),
+                        (string)($byCol['C'] ?? ''),
+                        (string)($byCol['D'] ?? ''),
+                        (string)($byCol['E'] ?? ''),
+                        (string)($byCol['F'] ?? ''),
+                    ];
+                    if ($this->bulkImportLooksLikeHeaderRow($firstRowCells)) {
+                        continue;
+                    }
                 }
                 $parts = $this->parseBulkImportXlsxRowParts($byCol);
                 if ($parts === null) {
@@ -1230,6 +1789,49 @@ class ProductsController {
         $zip->close();
 
         return $rows;
+    }
+
+    /**
+     * Detect common column-title header row in the first line of import files.
+     *
+     * @param array<int,mixed> $cells
+     */
+    private function bulkImportLooksLikeHeaderRow(array $cells): bool {
+        $normalize = static function ($v): string {
+            $x = strtolower(trim((string)$v));
+            if ($x === '') {
+                return '';
+            }
+            $x = str_replace(['_', '-', '.'], ' ', $x);
+            $x = preg_replace('/\s+/', ' ', $x) ?? $x;
+
+            return $x;
+        };
+
+        $codeHeaders = ['itemcode', 'item code', 'code', 'product code', 'productcode', 'sku'];
+        $otherHeaders = ['sku', 'color', 'colour', 'size', 'quantity', 'qty', 'location', 'stock location'];
+        $normalized = [];
+        foreach ($cells as $c) {
+            $n = $normalize($c);
+            if ($n !== '') {
+                $normalized[] = $n;
+            }
+        }
+        if ($normalized === []) {
+            return false;
+        }
+
+        $matches = 0;
+        foreach ($normalized as $n) {
+            if (in_array($n, $codeHeaders, true) || in_array($n, $otherHeaders, true)) {
+                $matches++;
+            }
+        }
+
+        $first = $normalize($cells[0] ?? '');
+        $firstLooksLikeCodeHeader = in_array($first, $codeHeaders, true);
+
+        return $matches >= 2 || ($firstLooksLikeCodeHeader && $matches >= 1);
     }
 
     /**
@@ -1496,6 +2098,134 @@ class ProductsController {
         return null;
     }
 
+    /**
+     * For ReUpload/API refetch:
+     * - If no prior movement exists for this product+warehouse+variant, create OPENING_STOCK at target qty.
+     * - If prior movement exists, create IN/OUT adjustment so latest running stock becomes target qty.
+     * @return string|null Error message, or null on success
+     */
+    private function bulkImportApplyRefetchStock(
+        mysqli $conn,
+        int $warehouseId,
+        string $itemCode,
+        string $importSku,
+        string $importSize,
+        string $importColor,
+        int $targetQty,
+        string $stockLocation,
+        int $userId,
+        int $importItemId
+    ): ?string {
+        if ($warehouseId <= 0) {
+            return 'Warehouse is required for stock update.';
+        }
+        $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku, $importSize, $importColor);
+        if (!$product) {
+            return 'Product not found for stock update (item_code/SKU/size/color).';
+        }
+        $productId = (int)($product['id'] ?? 0);
+        if ($productId <= 0) {
+            return 'Invalid product id for stock update.';
+        }
+
+        $sku = trim($importSku) !== '' ? trim($importSku) : ((string)($product['sku'] ?? ''));
+        $size = trim($importSize);
+        $color = trim($importColor);
+        $loc = trim($stockLocation);
+        if ($loc === '') {
+            $loc = '-';
+        }
+        $targetQty = max(0, (int)$targetQty);
+        $refType = 'EgreenRefetch';
+        $refId = 'import_item:' . (int)$importItemId;
+
+        if (!$conn->begin_transaction()) {
+            return 'Could not start transaction for stock update.';
+        }
+
+        $latestStmt = $conn->prepare("SELECT running_stock
+            FROM vp_stock_movements
+            WHERE product_id = ? AND warehouse_id = ? AND item_code = ?
+              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
+              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
+            ORDER BY id DESC
+            LIMIT 1");
+        if (!$latestStmt) {
+            $conn->rollback();
+            return 'Could not prepare stock read query.';
+        }
+        $latestStmt->bind_param('iisss', $productId, $warehouseId, $itemCode, $size, $color);
+        if (!$latestStmt->execute()) {
+            $err = $latestStmt->error;
+            $latestStmt->close();
+            $conn->rollback();
+            return 'Could not read latest stock movement: ' . $err;
+        }
+        $latestRow = $latestStmt->get_result()->fetch_assoc();
+        $latestStmt->close();
+
+        if (!$latestRow) {
+            $reason = 'Opening stock set from API ReUpload';
+            $ins = $conn->prepare("INSERT INTO vp_stock_movements
+                (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, ?, ?, ?)");
+            if (!$ins) {
+                $conn->rollback();
+                return 'Could not prepare opening stock insert.';
+            }
+            $ins->bind_param('issssisiisssi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $targetQty, $targetQty, $refType, $refId, $reason, $userId);
+            if (!$ins->execute()) {
+                $err = $ins->error;
+                $ins->close();
+                $conn->rollback();
+                return 'Opening stock insert failed: ' . $err;
+            }
+            $ins->close();
+        } else {
+            $current = (int)($latestRow['running_stock'] ?? 0);
+            $delta = $targetQty - $current;
+            if ($delta !== 0) {
+                $movementType = $delta > 0 ? 'IN' : 'OUT';
+                $qty = abs($delta);
+                $reason = 'Stock adjusted from API ReUpload';
+                $insAdj = $conn->prepare("INSERT INTO vp_stock_movements
+                    (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                if (!$insAdj) {
+                    $conn->rollback();
+                    return 'Could not prepare adjustment insert.';
+                }
+                $insAdj->bind_param('issssissiisssi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $movementType, $qty, $targetQty, $refType, $refId, $reason, $userId);
+                if (!$insAdj->execute()) {
+                    $err = $insAdj->error;
+                    $insAdj->close();
+                    $conn->rollback();
+                    return 'Adjustment insert failed: ' . $err;
+                }
+                $insAdj->close();
+            }
+        }
+
+        $upd = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
+        if (!$upd) {
+            $conn->rollback();
+            return 'Could not prepare product stock update.';
+        }
+        $upd->bind_param('ii', $targetQty, $productId);
+        if (!$upd->execute()) {
+            $err = $upd->error;
+            $upd->close();
+            $conn->rollback();
+            return 'Product local_stock update failed: ' . $err;
+        }
+        $upd->close();
+
+        if (!$conn->commit()) {
+            return 'Could not commit stock update transaction.';
+        }
+        return null;
+    }
+
     private function bulkImportUploadErrorMessage(int $code): string {
         switch ($code) {
             case UPLOAD_ERR_INI_SIZE:
@@ -1566,6 +2296,15 @@ class ProductsController {
         $warehouseId = isset($_POST['warehouse_id']) ? (int)$_POST['warehouse_id'] : 0;
         if ($warehouseId <= 0) {
             echo json_encode(['success' => false, 'message' => 'Please select a warehouse.']);
+            exit;
+        }
+        $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+        $loginWarehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($loginWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $loginWarehouseId = (int)$_SESSION['user']['warehouse_id'];
+        }
+        if (!$isAdminUser && $loginWarehouseId > 0 && $warehouseId !== $loginWarehouseId) {
+            echo json_encode(['success' => false, 'message' => 'You can import only to your assigned warehouse.']);
             exit;
         }
         $whStmt = $conn->prepare('SELECT id FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1');
@@ -1914,6 +2653,9 @@ class ProductsController {
         if (!empty($result['success'])) {
             $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
             $createdIdsByCode = is_array($result['created_ids_by_code'] ?? null) ? $result['created_ids_by_code'] : [];
+            $localStockByCode = is_array($result['local_stock_by_code'] ?? null) ? $result['local_stock_by_code'] : [];
+            $localStockBySku = is_array($result['local_stock_by_sku'] ?? null) ? $result['local_stock_by_sku'] : [];
+            $localStockByVariant = is_array($result['local_stock_by_variant'] ?? null) ? $result['local_stock_by_variant'] : [];
             foreach ($ids as $idx => $id) {
                 $code = $codes[$idx];
                 $rowPick = $picked[$idx] ?? [];
@@ -1924,6 +2666,29 @@ class ProductsController {
                 $ico = trim((string)($rowPick['import_color'] ?? ''));
                 if ($impSku === '') {
                     $impSku = $this->buildBulkImportAutoSku((string)$code, $isz, $ico);
+                }
+                // If uploaded qty is missing/0, use API local stock as import qty fallback.
+                if ($openQty <= 0) {
+                    $resolvedQty = null;
+                    $skuKey = strtoupper($impSku);
+                    $variantKey = strtoupper((string)$code) . '|' . strtolower($isz) . '|' . strtolower($ico);
+                    $codeKey = strtoupper((string)$code);
+                    if ($skuKey !== '' && array_key_exists($skuKey, $localStockBySku)) {
+                        $resolvedQty = (int)$localStockBySku[$skuKey];
+                    } elseif (array_key_exists($variantKey, $localStockByVariant)) {
+                        $resolvedQty = (int)$localStockByVariant[$variantKey];
+                    } elseif (array_key_exists($codeKey, $localStockByCode)) {
+                        $resolvedQty = (int)$localStockByCode[$codeKey];
+                    }
+                    if ($resolvedQty !== null) {
+                        $openQty = max(0, $resolvedQty);
+                        $qtyUp = $conn->prepare("UPDATE product_import_items SET opening_qty = ? WHERE id = ?");
+                        if ($qtyUp) {
+                            $qtyUp->bind_param('ii', $openQty, $id);
+                            $qtyUp->execute();
+                            $qtyUp->close();
+                        }
+                    }
                 }
                 $isFailed = in_array($code, $failedCodes, true);
                 if ($isFailed) {
@@ -1999,6 +2764,224 @@ class ProductsController {
                 'rows_in_batch' => $rowCount,
                 'rows_per_second' => $rowsPerSec,
             ],
+        ]);
+        exit;
+    }
+
+    public function bulkImportRefetchBatch() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        $lastId = isset($payload['last_id']) ? (int)$payload['last_id'] : 0;
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+
+        $jobWarehouseId = 0;
+        $jwStmt = $conn->prepare('SELECT warehouse_id FROM product_import_jobs WHERE id = ? LIMIT 1');
+        if ($jwStmt) {
+            $jwStmt->bind_param('i', $jobId);
+            $jwStmt->execute();
+            $jwRow = $jwStmt->get_result()->fetch_assoc();
+            $jwStmt->close();
+            $jobWarehouseId = (int)($jwRow['warehouse_id'] ?? 0);
+        }
+
+        $picked = [];
+        $stmtPick = $conn->prepare("SELECT id, item_code, import_sku, import_size, import_color, stock_location FROM product_import_items WHERE job_id = ? AND id > ? ORDER BY id ASC LIMIT 50");
+        if (!$stmtPick) {
+            echo json_encode(['success' => false, 'message' => 'Could not prepare refetch query.']);
+            exit;
+        }
+        $stmtPick->bind_param('ii', $jobId, $lastId);
+        $stmtPick->execute();
+        $res = $stmtPick->get_result();
+        while ($res && ($row = $res->fetch_assoc())) {
+            $picked[] = $row;
+        }
+        $stmtPick->close();
+
+        if (empty($picked)) {
+            echo json_encode([
+                'success' => true,
+                'done' => true,
+                'batch_size' => 0,
+                'last_id' => $lastId,
+                'updated_rows' => 0,
+                'failed_rows' => 0,
+                'failed_codes' => [],
+            ]);
+            exit;
+        }
+
+        $codes = [];
+        foreach ($picked as $row) {
+            $c = trim((string)($row['item_code'] ?? ''));
+            if ($c !== '') {
+                $codes[] = $c;
+            }
+        }
+        $codes = array_values(array_unique($codes));
+        if (empty($codes)) {
+            $newLastId = (int)end($picked)['id'];
+            echo json_encode([
+                'success' => true,
+                'done' => false,
+                'batch_size' => count($picked),
+                'last_id' => $newLastId,
+                'updated_rows' => 0,
+                'failed_rows' => 0,
+                'failed_codes' => [],
+            ]);
+            exit;
+        }
+
+        $result = $this->importApiCall($codes);
+        if (!is_array($result) || empty($result['success'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => (string)($result['message'] ?? 'API refetch failed.'),
+                'last_id' => (int)end($picked)['id'],
+            ]);
+            exit;
+        }
+
+        $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
+        $failedCodeLookup = [];
+        foreach ($failedCodes as $fc) {
+            $fu = strtoupper(trim((string)$fc));
+            if ($fu !== '') {
+                $failedCodeLookup[$fu] = true;
+            }
+        }
+        $localStockByCode = is_array($result['local_stock_by_code'] ?? null) ? $result['local_stock_by_code'] : [];
+        $localStockBySku = is_array($result['local_stock_by_sku'] ?? null) ? $result['local_stock_by_sku'] : [];
+        $localStockByVariant = is_array($result['local_stock_by_variant'] ?? null) ? $result['local_stock_by_variant'] : [];
+        $batchUserId = (int)($_SESSION['user']['id'] ?? 0);
+        $updatedRows = 0;
+        $failedRows = 0;
+        foreach ($picked as $row) {
+            $rowCode = (string)($row['item_code'] ?? '');
+            $rowCodeUpper = strtoupper(trim($rowCode));
+            if ($rowCodeUpper !== '' && isset($failedCodeLookup[$rowCodeUpper])) {
+                $failedRows++;
+            } else {
+                $rowId = (int)($row['id'] ?? 0);
+                $impSku = trim((string)($row['import_sku'] ?? ''));
+                $isz = trim((string)($row['import_size'] ?? ''));
+                $ico = trim((string)($row['import_color'] ?? ''));
+                $stockLoc = (string)($row['stock_location'] ?? '');
+                if ($impSku === '') {
+                    $impSku = $this->buildBulkImportAutoSku($rowCode, $isz, $ico);
+                }
+                if ($jobWarehouseId <= 0 || $rowId <= 0) {
+                    $failedRows++;
+                    if ($rowCodeUpper !== '') {
+                        $failedCodeLookup[$rowCodeUpper] = true;
+                        $failedCodes[] = $rowCode;
+                    }
+                    if ($rowId > 0) {
+                        $msg = 'ReUpdate skipped: warehouse is not configured for this job.';
+                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                        if ($stmtF) {
+                            $stmtF->bind_param('si', $msg, $rowId);
+                            $stmtF->execute();
+                            $stmtF->close();
+                        }
+                    }
+                    continue;
+                }
+                $resolvedQty = null;
+                $skuKey = strtoupper($impSku);
+                $variantKey = strtoupper($rowCode) . '|' . strtolower($isz) . '|' . strtolower($ico);
+                $codeKey = strtoupper($rowCode);
+                if ($skuKey !== '' && array_key_exists($skuKey, $localStockBySku)) {
+                    $resolvedQty = (int)$localStockBySku[$skuKey];
+                } elseif (array_key_exists($variantKey, $localStockByVariant)) {
+                    $resolvedQty = (int)$localStockByVariant[$variantKey];
+                } elseif (array_key_exists($codeKey, $localStockByCode)) {
+                    $resolvedQty = (int)$localStockByCode[$codeKey];
+                }
+                if ($resolvedQty === null) {
+                    $failedRows++;
+                    if ($rowCodeUpper !== '') {
+                        $failedCodeLookup[$rowCodeUpper] = true;
+                        $failedCodes[] = $rowCode;
+                    }
+                    $msg = 'ReUpdate skipped: API local stock missing for this item/SKU.';
+                    $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                    if ($stmtF) {
+                        $stmtF->bind_param('si', $msg, $rowId);
+                        $stmtF->execute();
+                        $stmtF->close();
+                    }
+                    continue;
+                }
+                $stockApplied = false;
+                if ($resolvedQty !== null && $rowId > 0 && $jobWarehouseId > 0) {
+                    $stockErr = $this->bulkImportApplyRefetchStock(
+                        $conn,
+                        $jobWarehouseId,
+                        $rowCode,
+                        $impSku,
+                        $isz,
+                        $ico,
+                        max(0, (int)$resolvedQty),
+                        $stockLoc,
+                        $batchUserId,
+                        $rowId
+                    );
+                    if ($stockErr !== null) {
+                        $failedRows++;
+                        if ($rowCodeUpper !== '') {
+                            $failedCodeLookup[$rowCodeUpper] = true;
+                            $failedCodes[] = $rowCode;
+                        }
+                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                        if ($stmtF) {
+                            $stmtF->bind_param('si', $stockErr, $rowId);
+                            $stmtF->execute();
+                            $stmtF->close();
+                        }
+                        continue;
+                    }
+                    $stockApplied = true;
+                }
+                if ($stockApplied) {
+                    $updatedRows++;
+                }
+            }
+        }
+        $newLastId = (int)end($picked)['id'];
+        echo json_encode([
+            'success' => true,
+            'done' => false,
+            'batch_size' => count($picked),
+            'last_id' => $newLastId,
+            'updated_rows' => $updatedRows,
+            'failed_rows' => $failedRows,
+            'failed_codes' => array_values(array_unique(array_map('strval', $failedCodes))),
+            'import_result' => $result,
         ]);
         exit;
     }
@@ -2131,6 +3114,96 @@ class ProductsController {
             'message' => $msg,
             'matched' => $matched,
             'affected' => $affected,
+            'stats' => $stats
+        ]);
+        exit;
+    }
+
+    public function bulkImportDeleteFailedRows() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+
+        $itemIds = [];
+        if (!empty($payload['item_ids']) && is_array($payload['item_ids'])) {
+            foreach ($payload['item_ids'] as $rid) {
+                $i = (int)$rid;
+                if ($i > 0) {
+                    $itemIds[$i] = true;
+                }
+            }
+        }
+        $itemIds = array_keys($itemIds);
+
+        $where = "job_id = ? AND status = 'failed'";
+        if (!empty($itemIds)) {
+            $idList = implode(',', $itemIds);
+            $where .= " AND id IN ($idList)";
+        }
+
+        $cntSql = "SELECT COUNT(*) AS c FROM product_import_items WHERE $where";
+        $cntStmt = $conn->prepare($cntSql);
+        $cntStmt->bind_param('i', $jobId);
+        $cntStmt->execute();
+        $matched = (int)($cntStmt->get_result()->fetch_assoc()['c'] ?? 0);
+        $cntStmt->close();
+
+        if ($matched === 0) {
+            $stats = $this->refreshImportJobCounts($jobId);
+            echo json_encode([
+                'success' => true,
+                'message' => 'No failed rows matched for deletion.',
+                'matched' => 0,
+                'deleted' => 0,
+                'stats' => $stats
+            ]);
+            exit;
+        }
+
+        $sql = "DELETE FROM product_import_items WHERE $where";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            echo json_encode(['success' => false, 'message' => 'Prepare failed: ' . $conn->error]);
+            exit;
+        }
+        $stmt->bind_param('i', $jobId);
+        if (!$stmt->execute()) {
+            echo json_encode(['success' => false, 'message' => 'Delete failed: ' . $stmt->error]);
+            $stmt->close();
+            exit;
+        }
+        $deleted = (int)$stmt->affected_rows;
+        $stmt->close();
+
+        $stats = $this->refreshImportJobCounts($jobId);
+        echo json_encode([
+            'success' => true,
+            'message' => $deleted > 0 ? 'Failed rows deleted successfully.' : 'No failed rows deleted.',
+            'matched' => $matched,
+            'deleted' => $deleted,
             'stats' => $stats
         ]);
         exit;
@@ -2743,28 +3816,35 @@ class ProductsController {
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
-            $order['stock_value'] = $order['local_stock'] * $order['cost_price'];
-            $order['committed_stock'] = $commanModel->getCommittedStockBySku($order['sku']);
-            $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
-            $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
-            $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
+            if (!$order || !is_array($order)) {
+                echo '<p>Product details not found.</p>';
+                exit;
+            }
+
+            $sku = trim((string)($order['sku'] ?? ''));
+            $itemCode = trim((string)($order['item_code'] ?? ''));
+            $localStock = (float)($order['local_stock'] ?? 0);
+            $costPrice = (float)($order['cost_price'] ?? 0);
+
+            $order['stock_value'] = $localStock * $costPrice;
+            $order['committed_stock'] = $sku !== '' ? (int)$commanModel->getCommittedStockBySku($sku) : 0;
+            $order['available_stock'] = $localStock - (float)$order['committed_stock'];
+            $order['in_purchase_list'] = $sku !== '' ? $commanModel->isInPurchaseList($sku) : [];
+            $order['vendors'] = $itemCode !== '' ? $productModel->getVendorByItemCode($itemCode) : [];
             $order['stock_history'] = $productModel->enrichStockHistoryRowsForLedger(
-                $productModel->stock_history($order['sku'], 100, 0, (int)$id)
+                $productModel->stock_history($sku, 100, 0, (int)$id)
             );
-            $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
-            $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
+            $order['stocks'] = $sku !== '' ? $productModel->getStockSummaryBySku($sku) : ['total_added' => 0, 'total_deducted' => 0];
+            $order['variants'] = $itemCode !== '' ? $productModel->getVariantsByItemCode($itemCode) : [];
             $order['warehouses'] = $productModel->getAllWarehouses();
             $order['stock_movements'] = $productModel->get_stock_movements($id);
-            if ($order) {
-                if (!headers_sent()) {
-                    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-                    header('Pragma: no-cache');
-                    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
-                }
-                renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
-            } else {
-              echo '<p>Product details not found.</p>';
+            $order['warehouse_location_stock'] = $productModel->getLatestRunningStockByWarehouseLocation((int)$id);
+            if (!headers_sent()) {
+                header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+                header('Pragma: no-cache');
+                header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
             }
+            renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
         } else {
             echo '<p>Invalid Product Item Code.</p>';
         }
@@ -2869,6 +3949,10 @@ class ProductsController {
             $data = json_decode($json, true);
 
             if (!$data) throw new Exception('Invalid JSON');
+            $sessionUserId = (int)($_SESSION['user']['id'] ?? 0);
+            if ($sessionUserId <= 0) {
+                throw new Exception('Invalid session user.');
+            }
 
             // Fetch current product details to get SKU, Item Code, Size, Color
             $product = $productModel->getProduct($data['product_id']);
@@ -2883,13 +3967,33 @@ class ProductsController {
                 'color'         => $product['color'],
                 'quantity'      => (int)$data['quantity'],
                 'reason'        => $data['reason'],
-                'user_id'       => (int)$data['user_id'],
+                'update_by_user'=> $sessionUserId,
                 'movement_type' => $data['type'],
                 'warehouse_id'  => $data['warehouse_id'],
                 'location'      => $data['location']
             ];
 
             $result = $productModel->insertStockMovement($insertData);
+
+            // Push latest stock to frontend/vendor API after local stock adjustment succeeds.
+            if (!empty($result['success'])) {
+                $freshProduct = $productModel->getProduct($insertData['product_id']);
+                if ($freshProduct) {
+                    $vendorSync = $this->syncProductStockToVendorFrontend($freshProduct, $insertData);
+                    $result['vendor_sync'] = $vendorSync;
+                    if (empty($vendorSync['success'])) {
+                        $existingMessage = isset($result['message']) ? (string)$result['message'] : 'Stock updated.';
+                        $syncMessage = isset($vendorSync['message']) ? (string)$vendorSync['message'] : 'Vendor sync failed.';
+                        $result['message'] = $existingMessage . ' ' . $syncMessage;
+                    }
+                } else {
+                    $result['vendor_sync'] = [
+                        'success' => false,
+                        'message' => 'Stock updated locally, but could not reload product for vendor sync.'
+                    ];
+                }
+            }
+
             echo json_encode($result);
 
         } catch (Exception $e) {
@@ -2897,6 +4001,100 @@ class ProductsController {
         }
         exit;
     }
+    public function updateStockMovementLocation() {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json');
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            if (!is_array($data)) {
+                throw new Exception('Invalid request payload.');
+            }
+            $movementId = (int)($data['movement_id'] ?? 0);
+            $productId = (int)($data['product_id'] ?? 0);
+            $location = trim((string)($data['location'] ?? ''));
+            if ($movementId <= 0 || $productId <= 0) {
+                throw new Exception('Invalid movement/product reference.');
+            }
+            $result = $productModel->updateStockMovementLocation($movementId, $productId, $location);
+            echo json_encode($result);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * Update frontend stock using vendor product/modify API.
+     */
+    private function syncProductStockToVendorFrontend(array $product, array $movement): array
+    {
+        $itemCode = trim((string)($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
+        }
+
+        $size = trim((string)($product['size'] ?? ''));
+        $color = trim((string)($product['color'] ?? ''));
+        $qty = (int)($movement['quantity'] ?? 0);
+        $movementType = strtoupper(trim((string)($movement['movement_type'] ?? '')));
+        $positiveTypes = ['IN', 'TRANSFER_IN', 'OPENING_STOCK'];
+        $signedDelta = in_array($movementType, $positiveTypes, true) ? $qty : (-1 * $qty);
+
+        $url = 'https://www.exoticindia.com/vendor-api/product/modify'
+            . '?itemcode=' . urlencode($itemCode)
+            . '&size=' . urlencode($size)
+            . '&color=' . urlencode($color);
+
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+        $postData = [
+            'local_stock_delta' => $signedDelta,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false) {
+            return ['success' => false, 'message' => 'Vendor API request failed: ' . $curlErr];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            return [
+                'success' => ($httpCode >= 200 && $httpCode < 300),
+                'message' => ($httpCode >= 200 && $httpCode < 300)
+                    ? 'Vendor stock sync completed.'
+                    : 'Vendor API returned non-JSON response.',
+                'http_code' => $httpCode,
+                'raw_response' => $response,
+            ];
+        }
+
+        $apiSuccess = isset($decoded['success']) ? (bool)$decoded['success'] : ($httpCode >= 200 && $httpCode < 300);
+        return [
+            'success' => $apiSuccess,
+            'message' => $decoded['message'] ?? ($apiSuccess ? 'Vendor stock sync completed.' : 'Vendor stock sync failed.'),
+            'http_code' => $httpCode,
+            'response' => $decoded,
+        ];
+    }
+
     public function updateStockLimits() {
         is_login();
         global $productModel;
@@ -3455,7 +4653,7 @@ class ProductsController {
             }
         }
 
-        $pageTitle = $transfer ? 'Edit stock transfer' : 'Bulk stock transfer';
+        $pageTitle = $transfer ? 'Edit stock transfer' : 'Stock Transfer';
 
         $transferGrnCount = 0;
         if ($transfer_id > 0 && $transfer) {
@@ -3671,7 +4869,7 @@ class ProductsController {
             if ($n === '') {
                 continue;
             }
-            if (in_array($n, ['itemcode', 'item code'], true)) {
+            if (in_array($n, ['itemcode', 'item code', 'product code', 'productcode'], true)) {
                 $map['item_code'] = $idx;
             } elseif ($n === 'size') {
                 $map['size'] = $idx;
@@ -3719,6 +4917,177 @@ class ProductsController {
             'color' => $map['color'] !== null ? $get($map['color']) : '',
             'quantity' => $qty,
         ];
+    }
+
+    /**
+     * @param array<int,mixed> $cells
+     * @param array{item_code: ?int, size: ?int, color: ?int, quantity: ?int} $map
+     * @return ?array{item_code: string, size: string, color: string, quantity: int}
+     */
+    private function bulkLabelVariantRowFromCells(array $cells, array $map): ?array
+    {
+        $get = static function ($i) use ($cells) {
+            if ($i === null) {
+                return '';
+            }
+
+            return isset($cells[$i]) ? trim((string)$cells[$i]) : '';
+        };
+
+        $ic = $get($map['item_code']);
+        if ($ic === '') {
+            return null;
+        }
+
+        $qty = 1;
+        if ($map['quantity'] !== null) {
+            $qtyRaw = $get($map['quantity']);
+            if ($qtyRaw === '') {
+                $qty = 1;
+            } else {
+                $qty = (int)preg_replace('/[^\d-]/', '', (string)$qtyRaw);
+                if ($qty <= 0) {
+                    return null;
+                }
+            }
+        }
+
+        return [
+            'item_code' => $ic,
+            'size' => $map['size'] !== null ? $get($map['size']) : '',
+            'color' => $map['color'] !== null ? $get($map['color']) : '',
+            'quantity' => min(99, $qty),
+        ];
+    }
+
+    /**
+     * @param \PhpOffice\PhpSpreadsheet\Cell\Cell|null $cell
+     */
+    private function spreadsheetCellToPlain($cell): string
+    {
+        if ($cell === null) {
+            return '';
+        }
+        $v = $cell->getValue();
+        if (($v === null || $v === '') && method_exists($cell, 'getCalculatedValue')) {
+            try {
+                $calc = $cell->getCalculatedValue();
+                if ($calc !== null && $calc !== '') {
+                    $v = $calc;
+                }
+            } catch (Throwable $e) {
+                // leave $v as-is
+            }
+        }
+        if ($v instanceof \PhpOffice\PhpSpreadsheet\RichText\RichText) {
+            return trim($v->getPlainText());
+        }
+        if (is_float($v) && floor($v) == $v) {
+            return (string)(int)$v;
+        }
+        if (is_int($v)) {
+            return (string)$v;
+        }
+
+        return trim((string)$v);
+    }
+
+    /**
+     * @param array $file $_FILES entry
+     * @return array{rows?: list<array<string,mixed>>, error?: string}
+     */
+    private function parseBulkLabelVariantUpload(array $file): array
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return ['error' => 'File upload failed'];
+        }
+
+        $tmp = $file['tmp_name'];
+        $name = (string)($file['name'] ?? '');
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+        if ($ext === 'csv') {
+            $raw = @file_get_contents($tmp);
+            if ($raw === false || $raw === '') {
+                return ['error' => 'Could not read CSV file'];
+            }
+            if (strncmp($raw, "\xEF\xBB\xBF", 3) === 0) {
+                $raw = substr($raw, 3);
+            }
+            $lines = preg_split('/\R/u', trim($raw)) ?: [];
+            if ($lines === []) {
+                return ['error' => 'CSV file is empty'];
+            }
+            $headerLine = array_shift($lines);
+            $headers = str_getcsv($headerLine);
+            $map = $this->mapBulkSheetHeaders($headers);
+            if ($map['item_code'] === null) {
+                return ['error' => 'First row must include an Item Code column (ItemCode or Item Code). Size, Color, and Qty are optional.'];
+            }
+
+            $rows = [];
+            foreach ($lines as $line) {
+                if (trim($line) === '') {
+                    continue;
+                }
+                $cells = str_getcsv($line);
+                $row = $this->bulkLabelVariantRowFromCells($cells, $map);
+                if ($row !== null) {
+                    $rows[] = $row;
+                }
+            }
+
+            return ['rows' => $rows];
+        }
+
+        if (!in_array($ext, ['xlsx', 'xls'], true)) {
+            return ['error' => 'Unsupported file type. Use CSV, XLSX, or XLS'];
+        }
+
+        $autoload = dirname(__DIR__) . '/vendor/autoload.php';
+        if (!is_file($autoload)) {
+            return ['error' => 'Excel support is not installed (run composer install)'];
+        }
+        require_once $autoload;
+
+        try {
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($tmp);
+            $reader->setReadDataOnly(false);
+            $spreadsheet = $reader->load($tmp);
+            $sheet = $spreadsheet->getActiveSheet();
+            $highestRow = (int)$sheet->getHighestDataRow();
+            if ($highestRow < 2) {
+                return ['error' => 'Spreadsheet has no data rows'];
+            }
+            $highestCol = $sheet->getHighestDataColumn();
+            $colCount = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
+            $headerCells = [];
+            for ($ci = 1; $ci <= $colCount; $ci++) {
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
+                $headerCells[] = $this->spreadsheetCellToPlain($sheet->getCell($colLetter . '1'));
+            }
+            $map = $this->mapBulkSheetHeaders($headerCells);
+            if ($map['item_code'] === null) {
+                return ['error' => 'First row must include an Item Code column (ItemCode or Item Code). Size, Color, and Qty are optional.'];
+            }
+
+            $rows = [];
+            for ($r = 2; $r <= $highestRow; $r++) {
+                $cells = [];
+                for ($ci = 1; $ci <= $colCount; $ci++) {
+                    $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
+                    $cells[$ci - 1] = $this->spreadsheetCellToPlain($sheet->getCell($colLetter . $r));
+                }
+                $row = $this->bulkLabelVariantRowFromCells($cells, $map);
+                if ($row !== null) {
+                    $rows[] = $row;
+                }
+            }
+
+            return ['rows' => $rows];
+        } catch (Throwable $e) {
+            return ['error' => 'Could not read spreadsheet: ' . $e->getMessage()];
+        }
     }
     
     private function handleEwayBillFileUpload($existingFile = '')
@@ -3801,7 +5170,7 @@ class ProductsController {
             echo json_encode(['success' => false, 'message' => 'Invalid warehouse selection']);
             exit;
         }
-
+ 
         require_once 'models/product/StockTransfer.php';
         $stockTransferModel = new StockTransfer($conn);
 

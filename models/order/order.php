@@ -37,6 +37,10 @@ class Order{
             $sql .= " AND vp_orders.item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
         }
+        if (!empty($filters['sku'])) {
+            $sql .= " AND vp_orders.sku = ?";
+            $params[] = $filters['sku'];
+        }
         if (!empty($filters['po_no'])) {
             $sql .= " AND vp_orders.po_number LIKE ?";
             $params[] = '%' . $filters['po_no'] . '%';
@@ -153,7 +157,7 @@ class Order{
             $params[] = '%' . $filters['author'] . '%';            
         }
         if (!empty($filters['unshipped'])) {
-            $sql .= " AND vp_orders.status != 'shipped'";
+            $sql .= " AND vp_orders.status != 'shipped' AND vp_orders.status != 'cancelled' AND vp_orders.status NOT LIKE 'return%'";
         }
         //echo $sql;
         //sortdaterange
@@ -206,21 +210,31 @@ class Order{
        
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
         //echo $sql;
         // Add limit and offset to params and types
         $params[] = $limit;
         $params[] = $offset;
         $types = str_repeat('s', count($params) - 2) . 'ii';
         $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $orders = [];
-        if ($result && $result->num_rows > 0) {
-            while ($row = $result->fetch_assoc()) {
-                $orders[] = $row;
+
+        try {
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $orders = [];
+            if ($result && $result->num_rows > 0) {
+                while ($row = $result->fetch_assoc()) {
+                    $orders[] = $row;
+                }
             }
+            return $orders;
+        } catch (\mysqli_sql_exception $e) {
+            // Prevent fatal crash when MySQL cannot create temp files (e.g. /tmp full).
+            error_log('Order::getAllOrders failed: ' . $e->getMessage());
+            return [];
         }
-        return $orders;
     }
     public function getOrdersCount($filters = []) {
         //$sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
@@ -249,6 +263,10 @@ class Order{
         if (!empty($filters['item_code'])) {
             $sql .= " AND item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
+        }
+        if (!empty($filters['sku'])) {
+            $sql .= " AND sku = ?";
+            $params[] = $filters['sku'];
         }
         if (!empty($filters['po_no'])) {
             $sql .= " AND vp_orders.po_number LIKE ?";
@@ -361,7 +379,7 @@ class Order{
             $params[] = '%' . $filters['author'] . '%';            
         }
         if (!empty($filters['unshipped'])) {
-            $sql .= " AND vp_orders.status != 'shipped'";
+            $sql .= " AND vp_orders.status != 'shipped' AND vp_orders.status != 'cancelled' AND vp_orders.status NOT LIKE 'return%'";
         }
         if (!empty($filters['sortdaterange'])) {
             if ($filters['sortdaterange'] === 'last_7_days') {

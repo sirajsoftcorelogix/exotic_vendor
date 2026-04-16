@@ -327,6 +327,46 @@ switch ($page) {
         }
         break;
 
+    case 'direct_purchase':
+        require_once 'controllers/DirectPurchaseController.php';
+        $controller = new DirectPurchaseController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'add':
+                $controller->add();
+                break;
+            case 'edit':
+                $controller->edit();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'delete':
+                $controller->delete();
+                break;
+            case 'product_search':
+                $controller->productSearch();
+                break;
+            case 'return_list':
+                $controller->returnList();
+                break;
+            case 'return_add':
+                $controller->returnAdd();
+                break;
+            case 'return_save':
+                $controller->returnSave();
+                break;
+            case 'return_delete':
+                $controller->returnDelete();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+
     case 'invoices':
         require_once 'controllers/InvoicesController.php';
         $controller = new InvoicesController();
@@ -440,11 +480,26 @@ switch ($page) {
             case 'update_api_call':
                 $controller->updateApiCall();
                 break;
+            case 'vendor_product_fetch_payload':
+                $controller->vendorProductFetchPayload();
+                break;
             case 'import_api_call':
                 $controller->importApiCall();
                 break;
             case 'bulk_import':
                 $controller->bulkImportScreen();
+                break;
+            case 'bulk_label_print':
+                $controller->bulkLabelPrintUi();
+                break;
+            case 'bulk_label_print_generate':
+                $controller->bulkLabelPrintGenerate();
+                break;
+            case 'bulk_label_print_upload':
+                $controller->bulkLabelPrintUpload();
+                break;
+            case 'bulk_label_print_sample_csv':
+                $controller->bulkLabelPrintSampleCsv();
                 break;
             case 'bulk_import_sample_csv':
                 $controller->bulkImportSampleCsv();
@@ -464,8 +519,14 @@ switch ($page) {
             case 'bulk_import_process_batch':
                 $controller->bulkImportProcessBatch();
                 break;
+            case 'bulk_import_refetch_batch':
+                $controller->bulkImportRefetchBatch();
+                break;
             case 'bulk_import_retry':
                 $controller->bulkImportRetry();
+                break;
+            case 'bulk_import_delete_failed_rows':
+                $controller->bulkImportDeleteFailedRows();
                 break;
             case 'bulk_import_delete':
                 $controller->bulkImportDelete();
@@ -557,6 +618,11 @@ switch ($page) {
                 require_once 'controllers/ProductsController.php';
                 $controller = new ProductsController($conn);
                 $controller->saveStockAdjustment(); // This method will handle the POST data
+                break;
+            case 'update_stock_movement_location':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateStockMovementLocation();
                 break;
             case 'update_stock_limits':
                 require_once 'controllers/ProductsController.php';
@@ -913,6 +979,12 @@ switch ($page) {
                 break;
             case 'remove-custom-discount':
                 $controller->remove_custom_discount();
+                break;
+            case 'get-product-api':
+                $controller->getProductApi();
+                break;
+            case 'toggle_addon':
+                $controller->toggle_addon();
                 break;
             default:
                 $controller->index();

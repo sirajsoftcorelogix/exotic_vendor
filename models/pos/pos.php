@@ -358,38 +358,56 @@ class pos
         $category = trim((string)($filters['category'] ?? ''));
         $stockStatus = trim((string)($filters['stock_status'] ?? 'all'));
         $limit = isset($filters['limit']) ? (int)$filters['limit'] : 200;
+        $pageNo = isset($filters['page_no']) ? max(1, (int)$filters['page_no']) : 1;
         if ($limit < 1) {
             $limit = 200;
         }
-        if ($limit > 1000) {
-            $limit = 1000;
+        if ($limit > 500) {
+            $limit = 500;
+        }
+        $offset = ($pageNo - 1) * $limit;
+
+        if ($warehouseId <= 0) {
+            return [];
         }
 
-        $where = " WHERE sm.warehouse_id = ? AND sm_newer.id IS NULL AND p.is_active = 1 ";
+        // Get latest movement id per product for selected warehouse, then join movement row by PK.
+        // This avoids materializing full movement rows during GROUP BY and is generally faster.
+        $join = "
+            INNER JOIN (
+                SELECT product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE warehouse_id = ?
+                GROUP BY product_id
+            ) latest ON latest.product_id = p.id
+            INNER JOIN vp_stock_movements sm ON sm.id = latest.max_id
+        ";
+
+        $where = ' WHERE p.is_active = 1 ';
         $params = [$warehouseId];
-        $types = "i";
+        $types = 'i';
 
         if ($category !== '' && $category !== 'allProducts') {
-            $where .= " AND p.groupname = ? ";
+            $where .= ' AND p.groupname = ? ';
             $params[] = $category;
-            $types .= "s";
+            $types .= 's';
         }
 
         if ($search !== '') {
-            $where .= " AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ";
+            $where .= ' AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ';
             $like = '%' . $search . '%';
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
-            $types .= "sss";
+            $types .= 'sss';
         }
 
         if ($stockStatus === 'out') {
-            $where .= " AND sm.running_stock = 0 ";
+            $where .= ' AND sm.running_stock = 0 ';
         } elseif ($stockStatus === 'low') {
-            $where .= " AND sm.running_stock BETWEEN 1 AND 5 ";
+            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
         } elseif ($stockStatus === 'in') {
-            $where .= " AND sm.running_stock > 0 ";
+            $where .= ' AND sm.running_stock > 0 ';
         }
 
         $sql = "
@@ -399,31 +417,97 @@ class pos
                 p.sku,
                 p.title,
                 p.groupname,
+                COALESCE(NULLIF(TRIM(cat.display_name), ''), p.groupname) AS category_display,
                 p.size,
                 p.color,
                 p.image,
                 p.itemprice AS sell_price,
                 p.cost_price,
-                sm.running_stock AS stock_qty
-            FROM vp_stock_movements sm
-            LEFT JOIN vp_stock_movements sm_newer
-                ON sm.product_id = sm_newer.product_id
-               AND sm.warehouse_id = sm_newer.warehouse_id
-               AND sm.id < sm_newer.id
-            INNER JOIN vp_products p
-                ON p.id = sm.product_id
+                sm.running_stock AS stock_qty,
+                sm.location AS location
+            FROM vp_products p
+            $join
+            LEFT JOIN `category` cat ON cat.category = p.groupname
             $where
-            ORDER BY stock_qty ASC, p.title ASC
-            LIMIT $limit
+            ORDER BY sm.running_stock ASC, p.title ASC
+            LIMIT {$limit} OFFSET {$offset}
         ";
 
         $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
         $result = $stmt->get_result();
-        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
         $stmt->close();
 
         return $rows;
+    }
+
+    public function getStockReportCount(array $filters = []): int
+    {
+        $warehouseId = isset($filters['warehouse_id']) ? (int)$filters['warehouse_id'] : (isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0);
+        $search = trim((string)($filters['search'] ?? ''));
+        $category = trim((string)($filters['category'] ?? ''));
+        $stockStatus = trim((string)($filters['stock_status'] ?? 'all'));
+
+        if ($warehouseId <= 0) {
+            return 0;
+        }
+
+        $join = "
+            INNER JOIN (
+                SELECT product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE warehouse_id = ?
+                GROUP BY product_id
+            ) latest ON latest.product_id = p.id
+            INNER JOIN vp_stock_movements sm ON sm.id = latest.max_id
+        ";
+
+        $where = ' WHERE p.is_active = 1 ';
+        $params = [$warehouseId];
+        $types = 'i';
+
+        if ($category !== '' && $category !== 'allProducts') {
+            $where .= ' AND p.groupname = ? ';
+            $params[] = $category;
+            $types .= 's';
+        }
+        if ($search !== '') {
+            $where .= ' AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ';
+            $like = '%' . $search . '%';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $types .= 'sss';
+        }
+        if ($stockStatus === 'out') {
+            $where .= ' AND sm.running_stock = 0 ';
+        } elseif ($stockStatus === 'low') {
+            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
+        } elseif ($stockStatus === 'in') {
+            $where .= ' AND sm.running_stock > 0 ';
+        }
+
+        $sql = "
+            SELECT COUNT(*) AS cnt
+            FROM vp_products p
+            $join
+            $where
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return 0;
+        }
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $res = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int)($res['cnt'] ?? 0);
     }
 }

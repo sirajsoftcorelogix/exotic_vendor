@@ -569,7 +569,7 @@ function updateProductsStock(itemCode) {
     showPopup('Updating product stock. Please wait...');
     //const updateButton = document.getElementById('updateButton');
     //updateButton.disabled = true; // Disable button to prevent multiple clicks    
-    fetch(`index.php?page=products&action=update_api_call&itemCode=${itemCode}`)
+    fetch('index.php?page=products&action=update_api_call&itemCode=' + encodeURIComponent(itemCode))
         .then(response => response.json())
         .then(data => {
             //updateButton.disabled = false; // Re-enable button

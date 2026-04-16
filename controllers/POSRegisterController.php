@@ -97,9 +97,24 @@ class POSRegisterController
         global $conn;
         $usersModel = new User($conn);
 
+        $sessionWh = (int) ($_SESSION['warehouse_id'] ?? 0);
+        // Match helpers/html_helpers.php hasPermission(): admin is role_id == 1 (loose, handles string "1").
+        $isAdmin = isset($_SESSION['user']['role_id']) && $_SESSION['user']['role_id'] == 1;
+
+        $reportWh = $sessionWh;
+        if ($isAdmin && isset($_GET['warehouse_id'])) {
+            $reqWh = (int) $_GET['warehouse_id'];
+            if ($reqWh > 0) {
+                $check = $usersModel->getWarehouseById($reqWh);
+                if (!empty($check['id'])) {
+                    $reportWh = $reqWh;
+                }
+            }
+        }
+
         $warehouseName = 'No Warehouse';
-        if (!empty($_SESSION['warehouse_id'])) {
-            $warehouse = $usersModel->getWarehouseById($_SESSION['warehouse_id']);
+        if ($reportWh > 0) {
+            $warehouse = $usersModel->getWarehouseById($reportWh);
             $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
         }
 
@@ -108,16 +123,33 @@ class POSRegisterController
             'category' => $_GET['category'] ?? 'allProducts',
             'stock_status' => $_GET['stock_status'] ?? 'all',
             'limit' => $_GET['limit'] ?? 200,
+            'page_no' => isset($_GET['page_no']) ? max(1, (int)$_GET['page_no']) : 1,
+            'warehouse_id' => $reportWh,
         ];
 
         $categories = ['allProducts' => 'All Products'] + getCategories();
+        $totalRows = $this->pos->getStockReportCount($filters);
         $rows = $this->pos->getStockReport($filters);
+        $limit = (int)($filters['limit'] ?? 200);
+        $pageNo = (int)($filters['page_no'] ?? 1);
+        $totalPages = $limit > 0 ? (int)ceil($totalRows / $limit) : 1;
+        if ($totalPages < 1) {
+            $totalPages = 1;
+        }
+
+        $warehouses = $isAdmin ? $usersModel->getAllWarehouses() : [];
 
         renderTemplate('views/pos_register/stock_report.php', [
             'warehouse_name' => $warehouseName,
             'categories' => $categories,
             'filters' => $filters,
-            'rows' => $rows
+            'rows' => $rows,
+            'page_no' => $pageNo,
+            'limit' => $limit,
+            'total_rows' => $totalRows,
+            'total_pages' => $totalPages,
+            'can_change_warehouse' => $isAdmin,
+            'warehouses' => $warehouses,
         ]);
     }
 
@@ -194,74 +226,138 @@ class POSRegisterController
         echo json_encode($response);
         exit;
     }
-   public function productsAjax()
-{
-    $pageNo  = $_GET['page_no'] ?? 1;
-    $perPage = $_GET['per_page'] ?? 12;
+    public function productsAjax()
+    {
+        $pageNo  = $_GET['page_no'] ?? 1;
+        $perPage = $_GET['per_page'] ?? 12;
 
-    $start  = ($pageNo - 1) * $perPage;
-    $length = $perPage;
+        $start  = ($pageNo - 1) * $perPage;
+        $length = $perPage;
 
-    $searchValue = $_GET['search']['value'] ?? '';
+        $searchValue = $_GET['search']['value'] ?? '';
 
-    $category    = $_GET['category'] ?? '';
-    $productName = $_GET['product_name'] ?? '';
-    $productCode = $_GET['product_code'] ?? '';
+        $category    = $_GET['category'] ?? '';
+        $productName = $_GET['product_name'] ?? '';
+        $productCode = $_GET['product_code'] ?? '';
 
-    $minPrice = $_GET['min_price'] ?? '';
-    $maxPrice = $_GET['max_price'] ?? '';
+        $minPrice = $_GET['min_price'] ?? '';
+        $maxPrice = $_GET['max_price'] ?? '';
 
-    // SORT
-    $sortBy = $_GET['sort_by'] ?? '';
+        // SORT
+        $sortBy = $_GET['sort_by'] ?? '';
 
-    switch ($sortBy) {
-        case 'price_low_high':
-            $orderColumn = 'itemprice';
-            $orderDir = 'asc';
-            break;
+        switch ($sortBy) {
+            case 'price_low_high':
+                $orderColumn = 'itemprice';
+                $orderDir = 'asc';
+                break;
 
-        case 'price_high_low':
-            $orderColumn = 'itemprice';
-            $orderDir = 'desc';
-            break;
+            case 'price_high_low':
+                $orderColumn = 'itemprice';
+                $orderDir = 'desc';
+                break;
 
-        case 'name_asc':
-            $orderColumn = 'title';
-            $orderDir = 'asc';
-            break;
+            case 'name_asc':
+                $orderColumn = 'title';
+                $orderDir = 'asc';
+                break;
 
-        case 'name_desc':
-            $orderColumn = 'title';
-            $orderDir = 'desc';
-            break;
+            case 'name_desc':
+                $orderColumn = 'title';
+                $orderDir = 'desc';
+                break;
 
-        default:
-            $orderColumn = 'title';
-            $orderDir = 'asc';
+            default:
+                $orderColumn = 'title';
+                $orderDir = 'asc';
+        }
+
+        $result = $this->pos->getProductsDataTable(
+            $start,
+            $length,
+            $searchValue,
+            $productName,
+            $orderColumn,
+            $orderDir,
+            $category,
+            $productCode,
+            $minPrice,
+            $maxPrice
+        );
+
+        echo json_encode([
+            'data' => $result['data'],
+            'recordsTotal' => $result['recordsTotal'],
+            'recordsFiltered' => $result['recordsFiltered'],
+            'current_page' => $pageNo,
+            'total_pages' => ceil($result['recordsFiltered'] / $length)
+        ]);
+        exit;
+    }
+    function cleanValue($value)
+    {
+        if (!$value) return '';
+
+        // remove anything starting with (uuid OR (HTTP
+        $value = preg_replace('/\((uuid|HTTP).*$/', '', $value);
+
+        return trim($value);
+    }
+    function fixImageUrl($path)
+    {
+        if (!$path) return '';
+
+        //  already full URL
+        if (strpos($path, 'http') === 0) {
+            return $path;
+        }
+
+        //  relative path → convert to CDN
+        return 'https://cdn.exoticindia.com' . $path;
+    }
+    public function getProductApi()
+    {
+        $code = $_GET['code'] ?? '';
+
+        if (empty($code)) {
+            echo json_encode(['status' => false]);
+            exit;
+        }
+
+        $res = $this->exotic_api_call('/product/code', 'GET', ['code' => $code]);
+
+        $data = $res['data'] ?? [];
+        // echo '<pre>'; print_r($data['addon_options']); exit;
+        $product = [
+            'item_code' => $code,
+            'title' => $data['name'] ?? '',
+            'image' => (!empty($data['image']))
+                ? ('https://cdn.exoticindia.com' . $data['image'])
+                : '',
+            'price' => $data['price'] ?? 0,
+
+            'material' => $this->cleanValue($data['material'] ?? ''),
+            'size' => $this->cleanValue($data['size'] ?? ''),
+            'color' => $this->cleanValue($data['color'] ?? ''),
+
+            //  NEW FIELDS
+            'stock_qty' => $data['stock'] ?? 0,
+            'maincategory' => $data['maincategory'] ?? '',
+            'dimensions' => $this->cleanValue($data['dimensions'] ?? ''),
+            'weight' => $data['product_weight_kg'] ?? '',
+
+            'addon_options' => $data['addon_options'] ?? []
+        ];
+
+        //  IMPORTANT: clear buffer
+        ob_clean();
+
+        header('Content-Type: application/json');
+
+        echo json_encode(['data' => $product]);
+        exit;
     }
 
-    $result = $this->pos->getProductsDataTable(
-        $start,
-        $length,
-        $searchValue,
-        $productName,
-        $orderColumn,
-        $orderDir,
-        $category,
-        $productCode,
-        $minPrice,
-        $maxPrice
-    );
-
-    echo json_encode([
-        'data' => $result['data'],
-        'recordsTotal' => $result['recordsTotal'],
-        'recordsFiltered' => $result['recordsFiltered'],
-        'current_page' => $pageNo,
-        'total_pages' => ceil($result['recordsFiltered'] / $length)
-    ]);
-    exit;
-}
     /**
      * Proxy: Add to cart (Exotic India API)
      */
@@ -450,7 +546,6 @@ class POSRegisterController
         $items = [];
         $subtotal = 0;
         $shipping_total = 0;
-
         if (!empty($data['cartitems'])) {
 
             foreach ($data['cartitems'] as $item) {
@@ -460,8 +555,50 @@ class POSRegisterController
                 $shipping = $shipping_per_unit * (int)$item['quantity'];
                 // $expressSelected = $item['express_shipping_chosen'] ?? false;
                 $expressSelected = $item['express_shipping_chosen'] ?? false;
+                $addons = [];
+
+                if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
+                    foreach ($item['addons_selected'] as $ad) {
+
+                        $cartEntry = '';
+
+                        if (stripos($ad['name'], 'Express') !== false) {
+                            $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $ad['value'];
+                        } else {
+                            $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $ad['value'];
+                        }
+
+                        $addons[] = [
+                            'name' => $ad['name'] ?? '',
+                            'value' => (float)($ad['value'] ?? 0),
+                            'cart_entry' => $cartEntry
+                        ];
+                    }
+                }
+
+                /*  FIXED HERE */
+                // $selectedEntries = [];
+
+                // BUILD SELECTED ADDON ENTRIES
+                $selectedEntries = [];
+                foreach ($addons as $a) {
+                    $selectedEntries[] = $a['cart_entry'];
+                }
+
+                // ALWAYS DEFINE THIS
+                $all_addons = [];
+
+                // FETCH FROM PRODUCT API
+                $productRes = $this->exotic_api_call('/product/code', 'GET', [
+                    'code' => $item['code']
+                ]);
+
+                if (!empty($productRes['data']['addon_options']['default_options'])) {
+                    $all_addons = $productRes['data']['addon_options']['default_options'];
+                }
 
                 $items[] = [
+                    'item_code' => $item['code'],
                     'cartref' => $item['cartref'],
                     'name' => $item['name'],
                     'imageurl' => $item['imageurl'],
@@ -471,28 +608,32 @@ class POSRegisterController
                     'shipping_per_unit' => $shipping_per_unit,
                     'shipping_title' => $item['express_shipping_option']['title'] ?? '',
                     'shipping_longtitle' => $item['express_shipping_option']['longtitle'] ?? '',
-                    'express_selected' => $expressSelected
+                    'express_selected' => $expressSelected,
+                    'addons' => $addons,
+                    'all_addons' => $all_addons, //  NOW ALWAYS ARRAY
+                    'selected_entries' => $selectedEntries
                 ];
 
                 $subtotal += ((float)$item['price'] * (int)$item['quantity']);
-                // echo $expressSelected;
-                // exit;
+
                 // Add shipping only if selected
                 if ($expressSelected) {
                     $shipping_total += $shipping;
                 }
             }
         }
+
         $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
         $discount = (float)($data['couponreduction'] ?? 0);
         $gst = (float)($data['gstamount'] ?? 0);
         $custom_discount = (float)($data['customreduction'] ?? 0);
+        // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
         $total_discount = $discount + $custom_discount;
 
         $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
 
-        $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
-
+        // $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
+        $grand_total = (float)($data['totalamount'] ?? 0);
         return [
             'items' => $items,
             'subtotal' => $subtotal,
@@ -514,6 +655,34 @@ class POSRegisterController
         $variation = trim($_POST['variation'] ?? '');
         $options   = $_POST['options'] ?? '';
         $buyNow    = false;
+        $optionsArray = $_POST['options'] ?? [];
+        $toggleOption = $_POST['toggle_option'] ?? '';
+        $checked      = $_POST['checked'] ?? 0;
+        // ensure array
+        if (!is_array($optionsArray)) {
+            $optionsArray = [];
+        }
+
+        // ✅ ADD / REMOVE LOGIC
+        if (!empty($toggleOption)) {
+
+            if ($checked) {
+                // ADD
+                if (!in_array($toggleOption, $optionsArray)) {
+                    $optionsArray[] = $toggleOption;
+                }
+            } else {
+                // REMOVE
+                $optionsArray = array_filter($optionsArray, function ($opt) use ($toggleOption) {
+                    return $opt !== $toggleOption;
+                });
+            }
+        }
+
+        // ✅ FINAL OPTIONS STRING
+        if (!empty($optionsArray)) {
+            $postArray['options'] = implode(',', $optionsArray);
+        }
         // echo '<pre>';
         // print_r($options);
         // exit;
@@ -560,10 +729,65 @@ class POSRegisterController
         $postData = http_build_query($postArray);
 
         $result = $this->exotic_api_call('/cart/add', 'POST', [], $postData);
-
+        // echo '<pre>';
+        // print_r($result);
+        // exit;
         if (empty($result['data']['cartref'])) {
             $_SESSION['cart_error'] = $result['data']['error'] ?? 'Cart add failed';
         }
+
+        header("Location: ?page=pos_register");
+        exit;
+    }
+    public function toggle_addon()
+    {
+        $cartref = $_POST['cartref'] ?? '';
+        $addonEntry = $_POST['addon_entry'] ?? '';
+
+        if (!$cartref || !$addonEntry) {
+            header("Location: ?page=pos_register");
+            exit;
+        }
+
+        $cartData = $this->get_cart();
+
+        $currentOptions = [];
+        $itemCode = '';
+        $qty = 1;
+
+        foreach ($cartData['items'] as $item) {
+
+            if ($item['cartref'] == $cartref) {
+
+                $itemCode = $item['item_code'] ?? '';
+                $qty = $item['quantity'] ?? 1;
+
+                if (!empty($item['addons'])) {
+                    foreach ($item['addons'] as $ad) {
+                        $currentOptions[] = $ad['cart_entry'];
+                    }
+                }
+            }
+        }
+
+        // TOGGLE
+        if (in_array($addonEntry, $currentOptions)) {
+            $currentOptions = array_diff($currentOptions, [$addonEntry]);
+        } else {
+            $currentOptions[] = $addonEntry;
+        }
+
+        // BUILD STRING
+        $optionsStr = implode('|', $currentOptions);
+
+        // CALL API (IMPORTANT FIX)
+        $postData = http_build_query([
+            'code' => $itemCode,
+            'qty' => $qty,
+            'options' => $optionsStr
+        ]);
+
+        $this->exotic_api_call('/cart/add', 'POST', [], $postData);
 
         header("Location: ?page=pos_register");
         exit;

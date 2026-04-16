@@ -34,6 +34,9 @@ class OrdersController {
         if (!empty($_GET['item_code'])) {
             $filters['item_code'] = $_GET['item_code'];            
         }
+        if (!empty($_GET['sku'])) {
+            $filters['sku'] = $_GET['sku'];
+        }
         if (!empty($_GET['order_from']) && !empty($_GET['order_till'])) {
             $filters['order_from'] = $_GET['order_from'];
             $filters['order_till'] = $_GET['order_till'];
@@ -1623,6 +1626,10 @@ class OrdersController {
 
             // Build shipping address
             $firstOrder = $order_info;
+            $ship_country_raw = strtoupper(trim((string)($firstOrder['shipping_country'] ?? '')));
+            $domestic_codes = ['', 'IN', 'IND'];
+            $is_international = $ship_country_raw !== '' && !in_array($ship_country_raw, $domestic_codes, true);
+
             $shipping_address = '';
             if (!empty($firstOrder['shipping_address_line1'])) {
                 $shipping_address = htmlspecialchars($firstOrder['shipping_address_line1']);
@@ -1675,6 +1682,8 @@ class OrdersController {
                 'customer_name' => htmlspecialchars($order_info['first_name'] ?? '') . ' ' . htmlspecialchars($order_info['last_name'] ?? ''),
                 'customer_id' => htmlspecialchars($order_info['customer_id'] ?? ''),
                 'shipping_address' => $shipping_address,
+                'shipping_country' => $ship_country_raw,
+                'is_international' => $is_international,
                 'items_html' => $items_html
             ]);
             exit;
