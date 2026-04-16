@@ -48,6 +48,21 @@ class pos
         $params = [];
         $types  = "";
 
+        // Show only sellable rows in POS:
+        // (a) stock > 0 in current warehouse OR (b) permanently available.
+        $where .= " AND (
+            p.permanently_available = 1
+            OR EXISTS (
+                SELECT 1
+                FROM vp_stock_movements smx
+                WHERE smx.product_id = p.id
+                  AND smx.warehouse_id = ?
+                  AND smx.running_stock > 0
+            )
+        ) ";
+        $params[] = (int)$warehouseId;
+        $types .= "i";
+
         // CATEGORY
         if (!empty($category) && $category != 'allProducts') {
             $where .= " AND p.groupname = ? ";
