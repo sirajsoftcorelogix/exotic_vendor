@@ -33,7 +33,15 @@ class pos
         string $stockFilter = ''
     ): array {
 
-        $warehouseId = $_SESSION['warehouse_id'] ?? 0;
+        $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+
+        if ($warehouseId <= 0) {
+            return [
+                'recordsTotal'    => 0,
+                'recordsFiltered' => 0,
+                'data'            => [],
+            ];
+        }
 
         /* ================= TOTAL PRODUCTS ================= */
         $totalSql = "SELECT COUNT(*) FROM vp_products WHERE is_active = 1";
@@ -131,6 +139,13 @@ class pos
 
         $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
 
+        $orderExpr = 'p.' . $orderColumn;
+        if ($orderColumn === 'stock_qty') {
+            $orderExpr = 'COALESCE(sx.running_stock, 0)';
+        } elseif ($orderColumn === 'price') {
+            $orderExpr = 'p.itemprice';
+        }
+
         /* ================= COUNT FILTERED ================= */
         $countSql = "
     SELECT COUNT(*)
@@ -177,7 +192,7 @@ class pos
     FROM vp_products p
     $stockJoin
     $where
-    ORDER BY p.$orderColumn $orderDir
+    ORDER BY $orderExpr $orderDir
     LIMIT ?, ?
     ";
 

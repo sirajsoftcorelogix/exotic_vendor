@@ -708,6 +708,12 @@ data-code="${p.item_code}">
     const scrollHeight = this.scrollHeight;
     const containerHeight = $(this).innerHeight();
 
+    // If content does not overflow, scrollTop+height === scrollHeight and this would
+    // fire forever, hammering products-ajax and stalling the page.
+    if (scrollHeight <= containerHeight + 20) {
+      return;
+    }
+
     if (scrollTop + containerHeight >= scrollHeight - 150) {
       if (!isLoading && hasMore) {
         fetchProducts(currentPage + 1, true);
