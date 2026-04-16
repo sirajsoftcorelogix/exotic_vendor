@@ -375,7 +375,7 @@ class pos
         // Avoid LEFT JOIN sm_newer ... IS NULL — that join explodes on busy SKUs and causes gateway timeouts.
         $join = "
             INNER JOIN (
-                SELECT sm1.product_id, sm1.running_stock AS stock_qty
+                SELECT sm1.product_id, sm1.running_stock AS stock_qty, sm1.location
                 FROM vp_stock_movements sm1
                 INNER JOIN (
                     SELECT product_id, MAX(id) AS max_id
@@ -426,7 +426,8 @@ class pos
                 p.image,
                 p.itemprice AS sell_price,
                 p.cost_price,
-                sm.stock_qty AS stock_qty
+                sm.stock_qty AS stock_qty,
+                sm.location AS location
             FROM vp_products p
             $join
             LEFT JOIN `category` cat ON cat.category = p.groupname
