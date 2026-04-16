@@ -43,6 +43,34 @@
             <label for="insurance_charge" class="block text-gray-700 form-label text-sm">Insurance Charge</label>
             <input type="number" name="insurance_charge" id="insurance_charge" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
         </div>
+        <div>
+            <label for="shipping_bill_number" class="block text-gray-700 form-label text-sm">Shipping Bill Number</label>
+            <input type="text" name="shipping_bill_number" id="shipping_bill_number" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="shipping_bill_date" class="block text-gray-700 form-label text-sm">Shipping Bill Date</label>
+            <input type="date" name="shipping_bill_date" id="shipping_bill_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="shipping_port" class="block text-gray-700 form-label text-sm">Shipping Port Code</label>
+            <input type="text" name="shipping_port" id="shipping_port" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="shipping_ref_clm" class="block text-gray-700 form-label text-sm">Shipping Ref CLM</label>
+            <input type="text" name="shipping_ref_clm" id="shipping_ref_clm" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="shipping_currency" class="block text-gray-700 form-label text-sm">Shipping Currency</label>
+            <input type="text" name="shipping_currency" id="shipping_currency" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="shipping_country_code" class="block text-gray-700 form-label text-sm">Shipping Country Code</label>
+            <input type="text" name="shipping_country_code" id="shipping_country_code" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="shipping_exp_duty" class="block text-gray-700 form-label text-sm">Shipping Exp Duty</label>
+            <input type="number" name="shipping_exp_duty" id="shipping_exp_duty" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
     </div>
     <?php } ?>
     <div class="flex flex-col md:flex-row justify-between mb-8">    
@@ -320,7 +348,7 @@
     </div>
 
     <!-- Form Actions -->
-    <div class="mt-8 flex justify-end space-x-4">
+    <div class="mt-8 flex justify-end space-x-4 form-actions">
         <a href="<?php echo base_url('?page=orders&action=list'); ?>" class="px-6 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">Cancel</a>
         <button type="button" onclick="previewInvoice()" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Preview</button>
         <button type="submit" id="createInvoiceButton" class="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600">Create Invoice</button>
@@ -726,11 +754,27 @@ document.getElementById('create_invoice').addEventListener('submit', function(e)
         if (data.success) {
             submitBtn.disabled = false;
             submitBtn.innerHTML = 'Create Invoice';
-            // if (window.showGlobalToast) {
-            //     window.showGlobalToast('Invoice created successfully!', 'success');
-            // } else {
-            //     alert('Invoice created successfully!');
-            // }
+            
+            // Check if IRN generation failed
+            if (data.irn_generated === false && data.irn_error_message) {
+                // Show IRN error message and regenerate button
+                showAlert('Invoice created but IRN generation failed: ' + data.irn_error_message, 'warning');
+                
+                // Add regenerate IRN button
+                const regenerateBtn = document.createElement('span');
+                regenerateBtn.innerHTML = 'Regenerate IRN';
+                regenerateBtn.className = 'ml-4 bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded';
+                regenerateBtn.onclick = function() {
+                    regenerateIrn(data.invoice_id);
+                };
+                
+                // Find the alert container and add the button
+                const alertContainer = document.querySelector('.form-actions') || document.body;
+                alertContainer.appendChild(regenerateBtn);
+                
+                return; // Don't proceed with PDF generation and redirect
+            }
+            
             localStorage.removeItem('selected_po_orders');
             showAlert('Invoice created successfully!', 'success');
             //dispatch after success
@@ -1014,5 +1058,72 @@ function createAndDispatch() {
         alert('An error occurred while creating invoice and dispatching');
     });
    
+}
+
+// Function to regenerate IRN
+function regenerateIrn(invoiceId) {
+    const regenerateBtn = document.querySelector('button[onclick*="regenerateIrn"]');
+    if (regenerateBtn) {
+        regenerateBtn.disabled = true;
+        regenerateBtn.innerHTML = 'Regenerating...';
+    }
+    
+    fetch('<?php echo base_url('?page=invoices&action=regenerate_irn'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'invoice_id=' + invoiceId
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('IRN regenerated successfully!', 'success');
+            // Remove the regenerate button
+            if (regenerateBtn) {
+                regenerateBtn.remove();
+            }
+            // Proceed with normal flow (PDF generation and redirect)
+            setTimeout(() => {
+                fetch('<?php echo base_url('?page=invoices&action=generate_pdf'); ?>', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({invoice_id: invoiceId})
+                })
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'invoice_' + invoiceId + '.pdf';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                    
+                    // Redirect to orders list
+                    setTimeout(() => {
+                        window.location.href = '<?php echo base_url('?page=orders&action=list'); ?>';
+                    }, 1000);
+                })
+                .catch(err => {
+                    console.error('PDF generation error:', err);
+                    window.location.href = '<?php echo base_url('?page=orders&action=list'); ?>';
+                });
+            }, 1000);
+        } else {
+            showAlert('IRN regeneration failed: ' + data.message, 'error');
+            if (regenerateBtn) {
+                regenerateBtn.disabled = false;
+                regenerateBtn.innerHTML = 'Regenerate IRN';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('Network error occurred during IRN regeneration', 'error');
+        if (regenerateBtn) {
+            regenerateBtn.disabled = false;
+            regenerateBtn.innerHTML = 'Regenerate IRN';
+        }
+    });
 }
 </script>

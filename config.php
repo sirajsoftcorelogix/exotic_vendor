@@ -58,7 +58,7 @@ return [
     'subscription_key' => 'AL6x9c9S1b7g8h9S7C',
     'gstin' => '07AGAPA5363L002',
     'company_name' => 'EXOTIC INDIA ART PVT LTD',
-    'app_key' => 'f8c4e2d1a9b3c5e7f9a1b3c5e7f9a1b3', // 32-character unique ID
+    'app_key' => 'ZEtrRXA3UWRZalZqT2xtZ3IwOElFa0ZXNnRIazdUSGQ=', // encripted AppKey (Base64 encoded)
     'force_refresh_access_token' => true, // Refresh token 10 minutes before expiry
     'auto_generate_ewaybill' => true, // Auto-generate E-Way Bill when IRN is generated
     'ewaybill_transport_mode' => 'ROAD', // ROAD, RAIL, AIR, SHIP

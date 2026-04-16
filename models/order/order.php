@@ -623,7 +623,7 @@ class Order{
     }
 	
     public function getOrderItems($searchTerm) {
-        $sql = "SELECT * FROM vp_orders WHERE status = 'pending' AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
+        $sql = "SELECT * FROM vp_orders WHERE status = 'pending' AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?) LIMIT 50";
         $stmt = $this->db->prepare($sql);
         $searchTerm = "%{$searchTerm}%";
         $stmt->bind_param('sss', $searchTerm, $searchTerm, $searchTerm);
