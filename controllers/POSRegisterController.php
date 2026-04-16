@@ -232,7 +232,8 @@ class POSRegisterController
         $perPage = $_GET['per_page'] ?? 12;
 
         $start  = ($pageNo - 1) * $perPage;
-        $length = $perPage;
+        // Fastest POS: fetch one extra row to decide has_more (avoid COUNT(*))
+        $length = $perPage + 1;
 
         $searchValue = $_GET['search']['value'] ?? '';
 
@@ -285,12 +286,17 @@ class POSRegisterController
             $maxPrice
         );
 
+        $rows = $result['data'] ?? [];
+        $hasMore = count($rows) > (int)$perPage;
+        if ($hasMore) {
+            $rows = array_slice($rows, 0, (int)$perPage);
+        }
+
         echo json_encode([
-            'data' => $result['data'],
-            'recordsTotal' => $result['recordsTotal'],
-            'recordsFiltered' => $result['recordsFiltered'],
+            'data' => $rows,
             'current_page' => $pageNo,
-            'total_pages' => ceil($result['recordsFiltered'] / $length)
+            'has_more' => $hasMore,
+            'per_page' => (int)$perPage
         ]);
         exit;
     }

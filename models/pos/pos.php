@@ -35,14 +35,6 @@ class pos
 
         $warehouseId = $_SESSION['warehouse_id'] ?? 0;
 
-        /* ================= TOTAL PRODUCTS ================= */
-        $totalSql = "SELECT COUNT(*) FROM vp_products WHERE is_active = 1";
-        $totalStmt = $this->db->prepare($totalSql);
-        $totalStmt->execute();
-        $totalStmt->bind_result($recordsTotal);
-        $totalStmt->fetch();
-        $totalStmt->close();
-
         /* ================= FILTERS ================= */
         $where  = " WHERE p.is_active = 1 ";
         $params = [];
@@ -130,26 +122,6 @@ class pos
         AND newer.id > sm.id
     ";
 
-        /* ================= COUNT FILTERED ================= */
-        $countSql = "
-    SELECT COUNT(*)
-    $stockFrom
-    $where
-    ";
-
-        $countStmt = $this->db->prepare($countSql);
-
-        $countTypes = $types;
-        $countParams = $params;
-
-        if ($countTypes !== '') {
-            $countStmt->bind_param($countTypes, ...$countParams);
-        }
-        $countStmt->execute();
-        $countStmt->bind_result($recordsFiltered);
-        $countStmt->fetch();
-        $countStmt->close();
-
         /* ================= DATA QUERY ================= */
         $dataSql = "
     SELECT
@@ -191,8 +163,6 @@ class pos
         $dataStmt->close();
 
         return [
-            'recordsTotal'    => (int) $recordsTotal,
-            'recordsFiltered' => (int) $recordsFiltered,
             'data'            => $rows
         ];
     }

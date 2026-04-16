@@ -361,7 +361,9 @@ data-code="${p.item_code}">
         const rows = res.data || [];
         currentPage = requestedPage;
 
-        if (res.total_pages != null) {
+        if (res.has_more != null) {
+          hasMore = !!res.has_more;
+        } else if (res.total_pages != null) {
           hasMore = currentPage < parseInt(res.total_pages, 10);
         } else {
           hasMore = rows.length === perPage;
