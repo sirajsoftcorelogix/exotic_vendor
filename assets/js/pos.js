@@ -337,7 +337,8 @@ data-code="${p.item_code}">
     const minPrice = $('#minPrice').val();
     const maxPrice = $('#maxPrice').val();
     const stockFilter = $('#stockFilter').val();
-    const productCode = $('#searchCode').val();
+    // Search input matches by SKU and/or product name
+    const productCode = $('#searchName').val();
     const productName = $('#searchName').val();
     const requestedPage = page;
 
@@ -521,11 +522,104 @@ data-code="${p.item_code}">
     $('#modal_options').val(optionsStr);
   });
   let searchTimeout = null;
-  $('#searchCode, #searchName').on('keyup change', function () {
+  const $searchName = $('#searchName');
+  const $skuSuggest = $('#skuSuggest');
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  function hideSuggest() {
+    $skuSuggest.addClass('hidden').empty();
+  }
+
+  function renderSuggest(rows) {
+    if (!rows || rows.length === 0) {
+      hideSuggest();
+      return;
+    }
+
+    const html = rows.slice(0, 12).map(function (p) {
+      const sku = p.item_code || p.code || '';
+      const title = p.title || p.name || '';
+      const stock = (p.stock_qty != null) ? p.stock_qty : '';
+      return `
+        <button type="button"
+          class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-start justify-between gap-3"
+          data-sku="${escapeHtml(sku)}">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-slate-800 truncate">${escapeHtml(sku)}</div>
+            <div class="text-[11px] text-slate-500 truncate">${escapeHtml(title)}</div>
+          </div>
+          <div class="text-[11px] text-slate-400 whitespace-nowrap">${stock !== '' ? ('Stock: ' + escapeHtml(stock)) : ''}</div>
+        </button>
+      `;
+    }).join('');
+
+    $skuSuggest.html(html).removeClass('hidden');
+  }
+
+  let suggestTimeout = null;
+  function fetchSuggest(term) {
+    const t = String(term || '').trim();
+    if (t.length < 2) {
+      hideSuggest();
+      return;
+    }
+
+    clearTimeout(suggestTimeout);
+    suggestTimeout = setTimeout(function () {
+      $.ajax({
+        url: '?page=pos_register&action=products-ajax',
+        type: 'GET',
+        dataType: 'json',
+        data: {
+          page_no: 1,
+          per_page: 12,
+          category: currentCategory,
+          product_code: t,
+          product_name: t,
+          sort_by: '',
+          min_price: '',
+          max_price: ''
+        },
+        success: function (res) {
+          renderSuggest(res.data || []);
+        },
+        error: function () {
+          hideSuggest();
+        }
+      });
+    }, 150);
+  }
+
+  $skuSuggest.on('click', 'button[data-sku]', function () {
+    const sku = $(this).data('sku');
+    if (!sku) return;
+    $searchName.val(sku);
+    hideSuggest();
+    resetAndLoad();
+  });
+
+  $searchName.on('blur', function () {
+    // allow click selection before hiding
+    setTimeout(hideSuggest, 150);
+  });
+
+  $searchName.on('keydown', function (e) {
+    if (e.key === 'Escape') hideSuggest();
+    if (e.key === 'Enter') hideSuggest();
+  });
+
+  $searchName.on('keyup change', function () {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(function () {
       resetAndLoad();
     }, 400);
+
+    fetchSuggest($searchName.val());
   });
 
   $scrollWrapper.on('scroll', function () {
