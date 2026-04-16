@@ -480,9 +480,6 @@
         </div>
 
       <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
-        <div class="bg-gray-50 px-3 py-2 border-b border-gray-200">
-          <h4 class="text-sm font-semibold text-gray-700">Running Stock by Warehouse &amp; Location</h4>
-        </div>
         <div class="overflow-x-auto">
           <table class="min-w-full text-sm">
             <thead class="bg-gray-100">
