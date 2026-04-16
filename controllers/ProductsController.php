@@ -3948,6 +3948,10 @@ class ProductsController {
             $data = json_decode($json, true);
 
             if (!$data) throw new Exception('Invalid JSON');
+            $sessionUserId = (int)($_SESSION['user']['id'] ?? 0);
+            if ($sessionUserId <= 0) {
+                throw new Exception('Invalid session user.');
+            }
 
             // Fetch current product details to get SKU, Item Code, Size, Color
             $product = $productModel->getProduct($data['product_id']);
@@ -3962,7 +3966,7 @@ class ProductsController {
                 'color'         => $product['color'],
                 'quantity'      => (int)$data['quantity'],
                 'reason'        => $data['reason'],
-                'user_id'       => (int)$data['user_id'],
+                'update_by_user'=> $sessionUserId,
                 'movement_type' => $data['type'],
                 'warehouse_id'  => $data['warehouse_id'],
                 'location'      => $data['location']
