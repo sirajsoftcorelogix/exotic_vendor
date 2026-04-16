@@ -524,6 +524,9 @@ data-code="${p.item_code}">
   let searchTimeout = null;
   const $searchName = $('#searchName');
   const $skuSuggest = $('#skuSuggest');
+  const $searchErr = $('#posSkuSearchError');
+  const skuSearchBase = '?page=products&action=search_product';
+  let activeSuggestRequest = 0;
 
   function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, function (c) {
@@ -532,7 +535,20 @@ data-code="${p.item_code}">
   }
 
   function hideSuggest() {
+    $searchName.attr('aria-expanded', 'false');
     $skuSuggest.addClass('hidden').empty();
+  }
+
+  function hideSearchError() {
+    if ($searchErr.length) {
+      $searchErr.addClass('hidden').text('');
+    }
+  }
+
+  function showSearchError(msg) {
+    if ($searchErr.length) {
+      $searchErr.text(msg || 'No product found with this SKU.').removeClass('hidden');
+    }
   }
 
   function renderSuggest(rows) {
@@ -542,22 +558,24 @@ data-code="${p.item_code}">
     }
 
     const html = rows.slice(0, 12).map(function (p) {
-      const sku = p.item_code || p.code || '';
+      const sku = p.sku || p.item_code || p.code || '';
+      const itemCode = p.item_code || p.itemcode || '';
       const title = p.title || p.name || '';
-      const stock = (p.stock_qty != null) ? p.stock_qty : '';
+      const trimmedTitle = title.length > 72 ? (title.slice(0, 69) + '...') : title;
       return `
         <button type="button"
-          class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-start justify-between gap-3"
-          data-sku="${escapeHtml(sku)}">
+          class="w-full text-left px-3 py-2 hover:bg-slate-50 transition border-b border-slate-100 last:border-0"
+          data-sku="${escapeHtml(sku)}"
+          data-item-code="${escapeHtml(itemCode)}">
           <div class="min-w-0">
             <div class="text-xs font-semibold text-slate-800 truncate">${escapeHtml(sku)}</div>
-            <div class="text-[11px] text-slate-500 truncate">${escapeHtml(title)}</div>
+            <div class="text-[11px] text-slate-500 truncate">${escapeHtml(itemCode)}${trimmedTitle ? (' · ' + escapeHtml(trimmedTitle)) : ''}</div>
           </div>
-          <div class="text-[11px] text-slate-400 whitespace-nowrap">${stock !== '' ? ('Stock: ' + escapeHtml(stock)) : ''}</div>
         </button>
       `;
     }).join('');
 
+    $searchName.attr('aria-expanded', 'true');
     $skuSuggest.html(html).removeClass('hidden');
   }
 
@@ -571,34 +589,34 @@ data-code="${p.item_code}">
 
     clearTimeout(suggestTimeout);
     suggestTimeout = setTimeout(function () {
-      $.ajax({
-        url: '?page=pos_register&action=products-ajax',
-        type: 'GET',
-        dataType: 'json',
-        data: {
-          page_no: 1,
-          per_page: 12,
-          category: currentCategory,
-          product_code: t,
-          product_name: t,
-          sort_by: '',
-          min_price: '',
-          max_price: ''
-        },
-        success: function (res) {
-          renderSuggest(res.data || []);
-        },
-        error: function () {
+      const reqId = ++activeSuggestRequest;
+      fetch(skuSearchBase + '&q=' + encodeURIComponent(t), {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (reqId !== activeSuggestRequest) return;
+          if (data && data.success && Array.isArray(data.products)) {
+            renderSuggest(data.products);
+            return;
+          }
           hideSuggest();
-        }
-      });
-    }, 150);
+        })
+        .catch(function () {
+          if (reqId !== activeSuggestRequest) return;
+          hideSuggest();
+        });
+    }, 280);
   }
 
   $skuSuggest.on('click', 'button[data-sku]', function () {
-    const sku = $(this).data('sku');
-    if (!sku) return;
-    $searchName.val(sku);
+    const sku = ($(this).data('sku') || '').toString();
+    const itemCode = ($(this).data('item-code') || '').toString();
+    const selected = sku || itemCode;
+    if (!selected) return;
+    hideSearchError();
+    $searchName.val(selected);
     hideSuggest();
     resetAndLoad();
   });
@@ -609,11 +627,44 @@ data-code="${p.item_code}">
   });
 
   $searchName.on('keydown', function (e) {
-    if (e.key === 'Escape') hideSuggest();
-    if (e.key === 'Enter') hideSuggest();
+    if (e.key === 'Escape') {
+      hideSuggest();
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      hideSuggest();
+      hideSearchError();
+      const q = String($searchName.val() || '').trim();
+      if (q.length < 1) {
+        showSearchError('Enter a SKU.');
+        return;
+      }
+      fetch(skuSearchBase + '&q=' + encodeURIComponent(q) + '&exact=1', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.success && data.product) {
+            const sku = (data.product.sku != null ? String(data.product.sku) : '');
+            const itemCode = (data.product.item_code != null ? String(data.product.item_code) : '');
+            const selected = sku || itemCode || q;
+            $searchName.val(selected);
+            hideSearchError();
+            resetAndLoad();
+            return;
+          }
+          showSearchError((data && data.message) ? data.message : 'No product found with this SKU.');
+        })
+        .catch(function () {
+          showSearchError('Could not verify SKU. Try again.');
+        });
+    }
   });
 
   $searchName.on('keyup change', function () {
+    hideSearchError();
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(function () {
       resetAndLoad();

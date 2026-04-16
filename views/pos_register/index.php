@@ -10,11 +10,15 @@
           class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-orange-500 outline-none"
           placeholder="Search product by Name or SKU"
           id="searchName"
-          autocomplete="off" />
+          autocomplete="off"
+          aria-autocomplete="list"
+          aria-controls="skuSuggest"
+          aria-expanded="false" />
         <div
           id="skuSuggest"
           class="absolute left-0 right-0 top-full z-[9999] mt-1 hidden max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
         </div>
+        <p id="posSkuSearchError" class="hidden mt-2 text-xs font-medium text-red-600"></p>
       </div>
 
       <!-- Right -->
