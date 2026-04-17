@@ -253,12 +253,26 @@ class InvoicesController
                 'usd_export_rate' => isset($_POST['usd_export_rate']) ? floatval($_POST['usd_export_rate']) : 0,
                 'ap_cost' => isset($_POST['ap_cost']) ? floatval($_POST['ap_cost']) : 0,
                 'freight_charge' => isset($_POST['freight_charge']) ? floatval($_POST['freight_charge']) : 0,
-                'insurance_charge' => isset($_POST['insurance_charge']) ? floatval($_POST['insurance_charge']) : 0
+                'insurance_charge' => isset($_POST['insurance_charge']) ? floatval($_POST['insurance_charge']) : 0,
+                'shipping_bill_number' => isset($_POST['shipping_bill_number']) ? trim($_POST['shipping_bill_number']) : '',
+                'shipping_bill_date' => isset($_POST['shipping_bill_date']) ? trim($_POST['shipping_bill_date']) : '',
+                'shipping_port' => isset($_POST['shipping_port']) ? trim($_POST['shipping_port']) : '',
+                'shipping_ref_clm' => isset($_POST['shipping_ref_clm']) ? trim($_POST['shipping_ref_clm']) : '',
+                'shipping_currency' => isset($_POST['shipping_currency']) ? trim($_POST['shipping_currency']) : '',
+                'shipping_country_code' => isset($_POST['shipping_country_code']) ? trim($_POST['shipping_country_code']) : '',
+                'shipping_exp_duty' => isset($_POST['shipping_exp_duty']) ? floatval($_POST['shipping_exp_duty']) : 0
             ];
             $invoiceModel->insert_international_invoice_data($internationalData);
             
             // Generate Alankit IRN for international invoice
             $irn = $this->generateAlankitIrnForInvoice($invoiceId);
+            
+            // Get error message if IRN generation failed
+            $irnErrorMessage = '';
+            if (!$irn) {
+                $internationalRecord = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
+                $irnErrorMessage = $internationalRecord['irn_error_message'] ?? 'Failed to generate IRN';
+            }
         }
         //call irisirp api to generate irn
         //$this->generateIrnForInvoice($invoiceId);
@@ -281,9 +295,66 @@ class InvoicesController
             'items_created' => $itemCreated,
             'items_failed' => $itemsFailed,
             'stock_update' => $stockUpdate,
+            'irn_generated' => $irn ?? false,
+            'irn_error_message' => $irnErrorMessage ?? ''
         ]);
         exit;
     }
+
+    public function regenerateIrn()
+    {
+        is_login();
+        global $invoiceModel;
+        
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            $input = $_POST;
+        }
+        
+        $invoiceId = isset($input['invoice_id']) ? (int)$input['invoice_id'] : 0;
+        
+        if ($invoiceId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid invoice ID']);
+            exit;
+        }
+        
+        // Check if invoice exists and is international
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice || $invoice['currency'] === 'INR') {
+            echo json_encode(['success' => false, 'message' => 'Invoice not found or not international']);
+            exit;
+        }
+
+        $internationalFields = ['pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty'];
+        $internationalData = [];
+        foreach ($internationalFields as $field) {
+            if (isset($input[$field])) {
+                $value = $input[$field];
+                if (in_array($field, ['usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_exp_duty'])) {
+                    $internationalData[$field] = floatval($value);
+                } else {
+                    $internationalData[$field] = trim((string)$value);
+                }
+            }
+        }
+
+        if (!empty($internationalData)) {
+            $invoiceModel->updateInvoiceInternational($invoiceId, $internationalData);
+        }
+        
+        // Attempt to regenerate IRN
+        $irn = $this->generateAlankitIrnForInvoice($invoiceId);
+        
+        if ($irn) {
+            echo json_encode(['success' => true, 'message' => 'IRN generated successfully']);
+        } else {
+            $internationalRecord = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
+            $errorMessage = $internationalRecord['irn_error_message'] ?? 'Failed to generate IRN';
+            echo json_encode(['success' => false, 'message' => $errorMessage]);
+        }
+        exit;
+    }
+
     public function generateIrnForInvoice($invoiceId)
     {
         is_login();
@@ -345,7 +416,7 @@ class InvoicesController
      * @param array $invoiceData Invoice data
      * @return boolean
      */
-    public function generateAlankitIrnForInvoice($invoiceId)
+    public function generateAlankitIrnForInvoice_old($invoiceId)
     {
         global $invoiceModel, $commanModel;
 
@@ -398,8 +469,8 @@ class InvoicesController
             $shippingAddress = ($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '');
             $irnPayload = [
                 'invoice_number' => $invoice['invoice_number'] ?? '',
-                'invoice_date' => $invoice['invoice_date'] ?? date('Y-m-d'),
-                'seller_gstin' => $firm['gst'] ?? '',
+                'invoice_date' => $invoice['invoice_date'] ? date('Y-m-d', strtotime($invoice['invoice_date'])) : date('Y-m-d'),
+                'seller_gstin' => '07AGAPA5363L002',
                 'seller_name' => $firm['firm_name'] ?? '',
                 'seller_address' => $firm['address'] ?? '',
                 'seller_city' => $firm['city'] ?? '',
@@ -409,7 +480,7 @@ class InvoicesController
                 'seller_phone' => $firm['phone'] ?? '',
                 'seller_state_code' => $firm['state_code'] ?? '',
                 'seller_country' => 'IN',
-                'buyer_name' => $customer['first_name'] . ' ' . $customer['last_name'] ?? '',
+                'buyer_name' => ($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''),
                 'buyer_address' => $buyerAddress,
                 'buyer_city' => trim($customer['city']) ?? $customer['city'] ?? '',
                 'buyer_state' => trim($customer['state']) ?? $customer['state'] ?? '',
@@ -511,6 +582,217 @@ class InvoicesController
             return false;
         }
     }
+    public function generateAlankitIrnForInvoice($invoiceId){
+        global $invoiceModel, $commanModel;
+
+        try {
+            // Get full invoice details
+            $invoice = $invoiceModel->getInvoiceById($invoiceId);
+            $items = $invoiceModel->getInvoiceItems($invoiceId);
+            $internationalData = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
+            //print_r($internationalData);
+            if (!$invoice || empty($items)) {
+                error_log("Alankit IRN: Missing invoice or items for invoice #$invoiceId");
+                return false;
+            }
+
+            // Get customer and firm details
+            $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
+            $firm = $commanModel->getRecordById('firm_details', 1);
+
+            if (!$customer || !$firm) {
+                error_log("Alankit IRN: Missing customer or firm details for invoice #$invoiceId");
+                return false;
+            }
+            require_once 'models/invoice/AlankitIrnNew.php';
+
+            // Get Alankit API credentials from config
+            $config = include 'config.php';
+            $alankitConfig = $config['alankit'] ?? [];
+
+            //authenticate 
+            $alankitClient = new AlankitIrnNew(
+                $alankitConfig['username'],
+                $alankitConfig['password'],
+                $alankitConfig['subscription_key'],
+                $alankitConfig['app_key'],
+                $alankitConfig['gstin'],
+                $alankitConfig['force_refresh_access_token'] ?? true
+            );
+            //fetch customer from vp_customers form email and phone
+            $customer_info = $commanModel->getRecordById('vp_customers', $invoice['customer_id'] ?? 0);
+
+            // Prepare line items
+            $lineItems = [];
+            foreach ($items as $idx => $item) {
+                $lineItems[] = [
+                    'item_number' => $idx + 1,
+                    'item_code' => $item['item_code'] ?? '',
+                    'item_name' => $item['item_name'] ?? '',
+                    'description' => $item['description'] ?? '',
+                    'hsn' => $item['hsn'] ?? '',
+                    'quantity' => $item['quantity'] ?? 0,
+                    'unit' => 'PCS',
+                    'unit_price' => $item['unit_price'] ?? 0,
+                    'amount' => ($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0),
+                    'tax_rate' => $item['tax_rate'] ?? 0,
+                    'sgst' => $item['sgst'] ?? 0,
+                    'cgst' => $item['cgst'] ?? 0,
+                    'igst' => $item['igst'] ?? 0,
+                    'tax_amount' => $item['tax_amount'] ?? 0,
+                    'total' => $item['line_total'] ?? 0
+                ];
+            }
+
+            // Prepare Alankit IRN payload
+            // invoice_number spleet with - and take last part as invoice number for IRN
+            $invoiceNumberParts = explode('-', $invoice['invoice_number'] ?? '');
+            $invoiceNumber = end($invoiceNumberParts);
+            $buyerAddress = ($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? '');
+            $shippingAddress = ($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '');
+
+            // Set buyer and shipping details for direct export
+            $isDirectExport = (trim($customer['country'] ?? '') !== 'IN');
+            $buyerGstin = $isDirectExport ? 'URP' : ($customer['gstin'] ?? '');
+            $buyerStateCode = $isDirectExport ? '96' : (trim($customer['state_code'] ?? '') ?: $customer['state_code'] ?? '');
+            $buyerPincode = $isDirectExport ? '999999' : (trim($customer['zipcode'] ?? '') ?: $customer['zipcode'] ?? '');
+            $shippingState = $isDirectExport ? '96' : (trim($shippingAddress) ? $customer['shipping_state'] ?? '' : $customer['state'] ?? '');
+            $shippingPincode = $isDirectExport ? '999999' : (trim($shippingAddress) ? $customer['shipping_zipcode'] ?? '' : $customer['zipcode'] ?? '');
+            
+            $irnPayload = [
+                'invoice_number' => $invoice['invoice_number'] ?? '',
+                'invoice_date' => $invoice['invoice_date'] ?? date('Y-m-d'),
+                'seller_gstin' => $alankitConfig['gstin'] ?? '07AGAPA5363L002',
+                'seller_name' => $firm['firm_name'] ?? '',
+                'seller_address' => $firm['address'] ?? '',
+                'seller_city' => $firm['city'] ?? '',
+                'seller_state' => $firm['state'] ?? '',                
+                'seller_pincode' => $firm['pin'],
+                'seller_email' => $firm['email'] ?? '',
+                'seller_phone' => $firm['phone'] ?? '',
+                'seller_state_code' => $firm['state_code'] ?? '',
+                'seller_country' => 'IN',
+                'buyer_name' => $customer['first_name'] . ' ' . $customer['last_name'] ?? '',
+                'buyer_address' => $buyerAddress,
+                'buyer_city' => trim($customer['city']) ?? $customer['city'] ?? '',
+                'buyer_state' => trim($customer['state']) ?? $customer['state'] ?? '',
+                'buyer_country' => trim($customer['country']) ?? $customer['country'] ?? 'IN',
+                'buyer_pincode' => $buyerPincode,
+                'buyer_state_code' => $buyerStateCode,
+                'buyer_email' => $customer_info['email'] ?? '',
+                'buyer_phone' => $customer_info['phone'] ?? '',
+                'buyer_gstin' => $buyerGstin,
+                'shipping_name' => $customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? '',
+                'shipping_address' => trim($shippingAddress) ? $shippingAddress : $buyerAddress,
+                'shipping_city' => trim($shippingAddress) ? $customer['shipping_city'] : $customer['city'] ?? '',
+                'shipping_state' => $shippingState,
+                'shipping_country' => trim($shippingAddress) ? $customer['shipping_country'] : $customer['country'] ?? 'IN',
+                'shipping_pincode' => $shippingPincode,
+                'currency' => $invoice['currency'] ?? 'INR',
+                'line_items' => $lineItems,
+                'subtotal' => $invoice['subtotal'] ?? 0,
+                'tax_amount' => $invoice['tax_amount'] ?? 0,
+                'discount_amount' => $invoice['discount_amount'] ?? 0,
+                'total_amount' => $invoice['total_amount'] ?? 0,
+                'notes' => $internationalData['final_destination'] ?? '',
+                'reference_number' => $invoice['invoice_number'] ?? '',
+                'pos' => ($customer['country'] != 'IN') ? '96' : $customer['shipping_state_code'] ?? $customer['state_code'], // Place of supply state code (example)
+                'buyer_type' => 'export', // Type of buyer for SupTyp determination
+                'has_payment' => true, // Whether payment is included
+                'shipping_bill_number' => empty($internationalData['shipping_bill_number']) ? "'" . rand(100000, 999999) . "'" : $internationalData['shipping_bill_number'],
+                'shipping_bill_date' => empty($internationalData['shipping_bill_date']) ? date('d/m/Y') : $internationalData['shipping_bill_date'],
+                'shipping_port_code' => empty($internationalData['shipping_port']) ? 'INABG1' : $internationalData['shipping_port'],
+                'shipping_ref_clm' => empty($internationalData['shipping_ref_clm']) ? 'N' : $internationalData['shipping_ref_clm'],
+                'shipping_currency' => empty($internationalData['shipping_currency']) ? 'AED' : $internationalData['shipping_currency'],
+                'shipping_country_code' => empty($internationalData['shipping_country_code']) ? 'AE' : $internationalData['shipping_country_code'],
+                'shipping_exp_duty' => empty($internationalData['shipping_exp_duty']) ? 0 : (float)($internationalData['shipping_exp_duty'])
+
+            ];
+           // echo '<br><br><pre>';
+            // print_r($irnPayload);
+            $authreq = $alankitClient->authRequest();
+            // call api request to auth
+            // Prepare request with encrypted data
+            $data = [
+                "Data" => $authreq
+            ];
+            //echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
+            $authdata = $alankitClient->sendRequest('AUTH_ENDPOINT', $data, false);
+            
+            if (!$authdata || !isset($authdata['Data']['AuthToken'])) {
+                error_log("Alankit IRN: Authentication failed for invoice #$invoiceId. Response: " . json_encode($authdata));
+                return false;
+            }
+            
+            $accessToken = $authdata['Data']['AuthToken'];
+            $sek = $authdata['Data']['Sek'];
+            //echo "sek: $sek <br>";
+            $apkey = $alankitConfig['app_key'];
+            //echo "Alankit IRN: Authentication successful, accessToken #$accessToken. Access token obtained.\n";
+            $decryptedSek = $alankitClient->decryptSek($sek, $apkey);
+                // Encrypt IRN payload using SEK
+                $payload = $alankitClient->prepareIrnPayload($irnPayload);
+                //echo '<br><br>'.json_encode($payload).'<br><br>';
+                $payloadreq = base64_encode(json_encode($payload));
+                //$pyload = "ewogICAgIlZlcnNpb24iOiAiMS4xIiwKICAgICJUcmFuRHRscyI6IHsKICAgICAgICAiVGF4U2NoIjogIkdTVCIsCiAgICAgICAgIlN1cFR5cCI6ICJCMkIiLAogICAgICAgICJSZWdSZXYiOiAiWSIsCiAgICAgICAgIkVjbUdzdGluIjogbnVsbCwKICAgICAgICAiSWdzdE9uSW50cmEiOiAiTiIKICAgIH0sCiAgICAiRG9jRHRscyI6IHsKICAgICAgICAiVHlwIjogIklOViIsCiAgICAgICAgIk5vIjogInRlc3QwOTA0MjAyNiIsCiAgICAgICAgIkR0IjogIjA5LzA0LzIwMjYiCiAgICB9LAogICAgIlNlbGxlckR0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjA3QUdBUEE1MzYzTDAwMiIsCiAgICAgICAgIkxnbE5tIjogIk5JQyBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJOSUMgSW5kdXN0cmllcyIsCiAgICAgICAgIkFkZHIxIjogIjV0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJHQU5ESElOQUdBUiIsCiAgICAgICAgIlBpbiI6IDExMDA1NSwKICAgICAgICAiU3RjZCI6ICIwNyIsCiAgICAgICAgIlBoIjogIjkwMDAwMDAwMDAiLAogICAgICAgICJFbSI6ICJhYmNAZ21haWwuY29tIgogICAgfSwKICAgICJCdXllckR0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjI5QVdHUFY3MTA3QjFaMSIsCiAgICAgICAgIkxnbE5tIjogIlhZWiBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJYWVogSW5kdXN0cmllcyIsCiAgICAgICAgIlBvcyI6ICIxMiIsCiAgICAgICAgIkFkZHIxIjogIjd0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJHQU5ESElOQUdBUiIsCiAgICAgICAgIlBpbiI6IDU2MjE2MCwKICAgICAgICAiU3RjZCI6ICIyOSIsCiAgICAgICAgIlBoIjogIjkxMTExMTExMTExIiwKICAgICAgICAiRW0iOiAieHl6QHlhaG9vLmNvbSIKICAgIH0sCiAgICAiRGlzcER0bHMiOiB7CiAgICAgICAgIk5tIjogIkFCQyBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJBZGRyMSI6ICI3dGggYmxvY2ssIGt1dmVtcHUgbGF5b3V0IiwKICAgICAgICAiQWRkcjIiOiAia3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJMb2MiOiAiQmFuYWdhbG9yZSIsCiAgICAgICAgIlBpbiI6IDU2MjE2MCwKICAgICAgICAiU3RjZCI6ICIyOSIKICAgIH0sCiAgICAiU2hpcER0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjI5QVdHUFY3MTA3QjFaMSIsCiAgICAgICAgIkxnbE5tIjogIkNCRSBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkFkZHIxIjogIjd0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJCYW5hZ2Fsb3JlIiwKICAgICAgICAiUGluIjogNTYyMTYwLAogICAgICAgICJTdGNkIjogIjI5IgogICAgfSwKICAgICJJdGVtTGlzdCI6IFsKICAgICAgICB7CiAgICAgICAgICAgICJTbE5vIjogIjEiLAogICAgICAgICAgICAiUHJkRGVzYyI6ICJSaWNlIiwKICAgICAgICAgICAgIklzU2VydmMiOiAiTiIsCiAgICAgICAgICAgICJIc25DZCI6ICIxMDAxIiwKICAgICAgICAgICAgIkJhcmNkZSI6ICIxMjM0NTYiLAogICAgICAgICAgICAiUXR5IjogMTAwLjM0NSwKICAgICAgICAgICAgIkZyZWVRdHkiOiAxMCwKICAgICAgICAgICAgIlVuaXQiOiAiQkFHIiwKICAgICAgICAgICAgIlVuaXRQcmljZSI6IDk5LjU0NSwKICAgICAgICAgICAgIlRvdEFtdCI6IDk5ODguODQsCiAgICAgICAgICAgICJEaXNjb3VudCI6IDEwLAogICAgICAgICAgICAiUHJlVGF4VmFsIjogMSwKICAgICAgICAgICAgIkFzc0FtdCI6IDk5NzguODQsCiAgICAgICAgICAgICJHc3RSdCI6IDEyLAogICAgICAgICAgICAiSWdzdEFtdCI6IDExOTcuNDYsCiAgICAgICAgICAgICJDZ3N0QW10IjogMCwKICAgICAgICAgICAgIlNnc3RBbXQiOiAwLAogICAgICAgICAgICAiQ2VzUnQiOiA1LAogICAgICAgICAgICAiQ2VzQW10IjogNDk4Ljk0LAogICAgICAgICAgICAiQ2VzTm9uQWR2bEFtdCI6IDEwLAogICAgICAgICAgICAiU3RhdGVDZXNSdCI6IDEyLAogICAgICAgICAgICAiU3RhdGVDZXNBbXQiOiAxMTk3LjQ2LAogICAgICAgICAgICAiU3RhdGVDZXNOb25BZHZsQW10IjogNSwKICAgICAgICAgICAgIk90aENocmciOiAxMCwKICAgICAgICAgICAgIlRvdEl0ZW1WYWwiOiAxMjg5Ny43LAogICAgICAgICAgICAiT3JkTGluZVJlZiI6ICIzMjU2IiwKICAgICAgICAgICAgIk9yZ0NudHJ5IjogIkFHIiwKICAgICAgICAgICAgIlByZFNsTm8iOiAiMTIzNDUiLAogICAgICAgICAgICAiQmNoRHRscyI6IHsKICAgICAgICAgICAgICAgICJObSI6ICIxMjM0NTYiLAogICAgICAgICAgICAgICAgIkV4cER0IjogIjAxLzA4LzIwMjMiLAogICAgICAgICAgICAgICAgIldyRHQiOiAiMDEvMDkvMjAyMyIKICAgICAgICAgICAgfSwKICAgICAgICAgICAgIkF0dHJpYkR0bHMiOiBbCiAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgIk5tIjogIlJpY2UiLAogICAgICAgICAgICAgICAgICAgICJWYWwiOiAiMTAwMDAiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIF0KICAgICAgICB9CiAgICBdLAogICAgIlZhbER0bHMiOiB7CiAgICAgICAgIkFzc1ZhbCI6IDk5NzguODQsCiAgICAgICAgIkNnc3RWYWwiOiAwLAogICAgICAgICJTZ3N0VmFsIjogMCwKICAgICAgICAiSWdzdFZhbCI6IDExOTcuNDYsCiAgICAgICAgIkNlc1ZhbCI6IDUwOC45NCwKICAgICAgICAiU3RDZXNWYWwiOiAxMjAyLjQ2LAogICAgICAgICJEaXNjb3VudCI6IDEwLAogICAgICAgICJPdGhDaHJnIjogMjAsCiAgICAgICAgIlJuZE9mZkFtdCI6IDAuMywKICAgICAgICAiVG90SW52VmFsIjogMTI5MDgsCiAgICAgICAgIlRvdEludlZhbEZjIjogMTI4OTcuNwogICAgfSwKICAgICJQYXlEdGxzIjogewogICAgICAgICJObSI6ICJBQkNERSIsCiAgICAgICAgIkFjY0RldCI6ICI1Njk3Mzg5NzEzMjEwIiwKICAgICAgICAiTW9kZSI6ICJDYXNoIiwKICAgICAgICAiRmluSW5zQnIiOiAiU0JJTjExMDAwIiwKICAgICAgICAiUGF5VGVybSI6ICIxMDAiLAogICAgICAgICJQYXlJbnN0ciI6ICJHaWZ0IiwKICAgICAgICAiQ3JUcm4iOiAidGVzdCIsCiAgICAgICAgIkRpckRyIjogInRlc3QiLAogICAgICAgICJDckRheSI6IDEwMCwKICAgICAgICAiUGFpZEFtdCI6IDEwMDAwLAogICAgICAgICJQYXltdER1ZSI6IDUwMDAKICAgIH0sCiAgICAiUmVmRHRscyI6IHsKICAgICAgICAiSW52Um0iOiAiVEVTVCIsCiAgICAgICAgIkRvY1BlcmREdGxzIjogewogICAgICAgICAgICAiSW52U3REdCI6ICIwMS8wOC8yMDIzIiwKICAgICAgICAgICAgIkludkVuZER0IjogIjAxLzA5LzIwMjMiCiAgICAgICAgfSwKICAgICAgICAiUHJlY0RvY0R0bHMiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICJJbnZObyI6ICJET0MvMDAyIiwKICAgICAgICAgICAgICAgICJJbnZEdCI6ICIwMS8wOC8yMDIzIiwKICAgICAgICAgICAgICAgICJPdGhSZWZObyI6ICIxMjM0NTYiCiAgICAgICAgICAgIH0KICAgICAgICBdLAogICAgICAgICJDb250ckR0bHMiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICJSZWNBZHZSZWZyIjogIkRvYy8wMDMiLAogICAgICAgICAgICAgICAgIlJlY0FkdkR0IjogIjAxLzA4LzIwMjMiLAogICAgICAgICAgICAgICAgIlRlbmRSZWZyIjogIkFiYzAwMSIsCiAgICAgICAgICAgICAgICAiQ29udHJSZWZyIjogIkNvMTIzIiwKICAgICAgICAgICAgICAgICJFeHRSZWZyIjogIllvNDU2IiwKICAgICAgICAgICAgICAgICJQcm9qUmVmciI6ICJEb2MtNDU2IiwKICAgICAgICAgICAgICAgICJQT1JlZnIiOiAiRG9jLTc4OSIsCiAgICAgICAgICAgICAgICAiUE9SZWZEdCI6ICIwMS8wOC8yMDIzIgogICAgICAgICAgICB9CiAgICAgICAgXQogICAgfSwKICAgICJBZGRsRG9jRHRscyI6IFsKICAgICAgICB7CiAgICAgICAgICAgICJVcmwiOiAiaHR0cHM6Ly9laW52LWFwaXNhbmRib3gubmljLmluIiwKICAgICAgICAgICAgIkRvY3MiOiAiVGVzdCBEb2MiLAogICAgICAgICAgICAiSW5mbyI6ICJEb2N1bWVudCBUZXN0IgogICAgICAgIH0KICAgIF0sCiAgICAiRXhwRHRscyI6IHsKICAgICAgICAiU2hpcEJObyI6ICJBLTI0OCIsCiAgICAgICAgIlNoaXBCRHQiOiAiMDEvMDgvMjAyMyIsCiAgICAgICAgIlBvcnQiOiAiSU5BQkcxIiwKICAgICAgICAiUmVmQ2xtIjogIk4iLAogICAgICAgICJGb3JDdXIiOiAiQUVEIiwKICAgICAgICAiQ250Q29kZSI6ICJBRSIsCiAgICAgICAgIkV4cER1dHkiOiBudWxsCiAgICB9LAogICAgIkV3YkR0bHMiOiB7CiAgICAgICAgIlRyYW5zSWQiOiAiMTJBV0dQVjcxMDdCMVoxIiwKICAgICAgICAiVHJhbnNOYW1lIjogIlhZWiBFWFBPUlRTIiwKICAgICAgICAiRGlzdGFuY2UiOiAxMDAsCiAgICAgICAgIlRyYW5zRG9jTm8iOiAiRE9DMDEiLAogICAgICAgICJUcmFuc0RvY0R0IjogIjA0LzA0LzIwMjQiLAogICAgICAgICJWZWhObyI6ICJrYTEyMzQ1NiIsCiAgICAgICAgIlZlaFR5cGUiOiAiUiIsCiAgICAgICAgIlRyYW5zTW9kZSI6ICIxIgogICAgfQp9";
+                $encryptedPayload = $alankitClient->encryptBySymmetricKey($payloadreq, $decryptedSek);
+                if (!$encryptedPayload) {
+                    error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
+                    return false;
+                }
+                //echo '<br><br>'.$encryptedPayload.'<br><br>';
+                // Send IRN generation request with encrypted payload
+                //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
+                $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);
+                //echo "Alankit IRN: IRN generation response of irn #$invoiceId\n";
+                //print_r($irnResponse);
+                //decrypt response
+                if ($irnResponse && isset($irnResponse['Data'])) {
+                    $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
+                    $irnResponse = json_decode($decryptedResponse, true);
+                    //echo "Alankit IRN: IRN generation response decrypted for invoice #$invoiceId\n";
+                    //print_r($irnResponse);
+                } else {
+                    error_log("Alankit IRN: No response data received for invoice #$invoiceId");
+                    //$irnResponse = null;
+                }
+
+                if ($irnResponse && isset($irnResponse['Status']) && $irnResponse['Status'] === 'ACT') {
+                    // Update invoice with IRN details and store payloads for audit trail
+                    $updateData = [
+                        'irn' => $irnResponse['Irn'] ?? null,
+                        'ack_number' => $irnResponse['AckNo'] ?? null,
+                        'ack_date' => $irnResponse['AckDt'] ? date('Y-m-d H:i:s', strtotime($irnResponse['AckDt'])) : null,
+                        'signed_invoice' => $irnResponse['SignedInvoice'] ?? null,
+                        'qrcode_string' => $irnResponse['SignedQRCode'] ?? null,
+                        'irn_status' => 'generated',
+                        'request_payload' => json_encode($irnPayload),
+                        'response_payload' => json_encode($irnResponse)
+                    ];
+    
+                    // Update invoice international table with IRN details
+                    $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+    
+                    error_log("Alankit IRN generated successfully for invoice #$invoiceId: " . ($irnResponse['irn'] ?? 'No IRN'));
+                    return true;
+                } else {
+                    // Store request and error response for debugging
+                    $updateData = [
+                        'irn_status' => 'failed',
+                        'request_payload' => json_encode($payload),
+                        'response_payload' => json_encode($irnResponse ?? ['error' => 'No response received']),
+                        'irn_error_message' => json_encode($irnResponse['ErrorDetails'] ?? 'Unknown error')
+                    ];
+                    
+                    $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+                    error_log("Alankit IRN generation failed for invoice #$invoiceId: " . ($irnResponse['message'] ?? 'Unknown error'));
+                    return false;
+                }           
+        } catch (Exception $e) {
+            error_log("Alankit IRN Exception for invoice #$invoiceId: " . $e->getMessage());
+            return false;
+        }
+    }
 
     public function view()
     {
@@ -525,6 +807,10 @@ class InvoicesController
 
         $invoice = $invoiceModel->getInvoiceById($id);
         $items = $invoiceModel->getInvoiceItems($id);
+        $internationalData = null;
+        if ($invoice && $invoice['currency'] !== 'INR') {
+            $internationalData = $invoiceModel->getInternationalInvoiceByInvoiceId($id);
+        }
 
         if (!$invoice) {
             echo '<p>Invoice not found.</p>';
@@ -533,7 +819,8 @@ class InvoicesController
 
         $data = [
             'invoice' => $invoice,
-            'items' => $items
+            'items' => $items,
+            'internationalData' => $internationalData
         ];
 
         renderTemplate('views/invoices/view.php', $data, 'Invoice Details');

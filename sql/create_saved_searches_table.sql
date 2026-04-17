@@ -392,3 +392,9 @@ ALTER TABLE `vp_users` ADD COLUMN `is_deleted` TINYINT(1) NOT NULL DEFAULT 0 AFT
 ALTER TABLE `vp_invoices_international` ADD `request_payload` TEXT NULL AFTER `qrcode_string`, ADD `response_payload` TEXT NULL AFTER `request_payload`;
 
 ALTER TABLE `firm_details` ADD `state_code` INT NULL AFTER `pin`, ADD `email` VARCHAR(100) NULL AFTER `state_code`;
+ALTER TABLE `vp_invoices_international` ADD `export_type` VARCHAR(50) NULL AFTER `final_destination`, ADD `port_code` VARCHAR(20) NULL AFTER `port_of_loading`, ADD `shipping_bill_code` VARCHAR(20) NULL AFTER `port_of_discharge`, ADD `shipping_bill_date` DATE NULL AFTER `shipping_bill_code`, ADD `shipping_bill_number` VARCHAR(50) NULL AFTER `shipping_bill_date`, ADD `shipping_bill_port` VARCHAR(100) NULL AFTER `shipping_bill_number`, ADD `shipping_bill_country_code` VARCHAR(10) NULL AFTER `shipping_bill_port`, ADD `shipping_exp_duty` DECIMAL(15,2) NULL DEFAULT 0.00 AFTER `shipping_bill_country_code`;
+ALTER TABLE vp_invoices_international
+ADD COLUMN shipping_port VARCHAR(255) DEFAULT '',
+ADD COLUMN shipping_ref_clm VARCHAR(255) DEFAULT '',
+ADD COLUMN shipping_currency VARCHAR(10) DEFAULT '',
+ADD COLUMN shipping_country_code VARCHAR(10) DEFAULT '';
