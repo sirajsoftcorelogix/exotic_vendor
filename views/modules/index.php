@@ -1,6 +1,6 @@
 <?php
 if (!function_exists('modules_list_query')) {
-    function modules_list_query($search, $status_filter, array $extra = []) {
+    function modules_list_query($search, $status_filter, $parent_filter = '', array $extra = []) {
         $params = array_merge([
             'page' => 'modules',
             'action' => 'list',
@@ -11,12 +11,28 @@ if (!function_exists('modules_list_query')) {
         if (($status_filter ?? '') !== '') {
             $params['status_filter'] = $status_filter;
         }
+        if (($parent_filter ?? '') !== '') {
+            $params['parent_filter'] = $parent_filter;
+        }
         return http_build_query($params);
     }
 }
 $total_records = (int) ($totalRecords ?? 0);
 $range_from = $total_records > 0 ? (($page_no - 1) * $limit + 1) : 0;
 $range_to = $total_records > 0 ? min($page_no * $limit, $total_records) : 0;
+$parent_filter = $parent_filter ?? '';
+$has_list_filters = ($search ?? '') !== '' || ($status_filter ?? '') !== '' || $parent_filter !== '';
+$parent_filter_summary = '';
+if ($parent_filter === '0') {
+    $parent_filter_summary = 'Top-level only';
+} elseif ($parent_filter !== '' && isset($parent_menus)) {
+    foreach ($parent_menus as $_pm) {
+        if ((string) $_pm['id'] === (string) $parent_filter) {
+            $parent_filter_summary = (string) ($_pm['module_name'] ?? '');
+            break;
+        }
+    }
+}
 ?>
 <div class="max-w-7xl mx-auto space-y-6">
     <div class="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white px-5 py-4 shadow-sm">
@@ -25,33 +41,89 @@ $range_to = $total_records > 0 ? min($page_no * $limit, $total_records) : 0;
     </div>
 
     <div class="flex flex-col gap-4 lg:flex-row lg:items-stretch lg:justify-between lg:gap-6">
-        <div class="bg-white rounded-xl shadow-md border border-slate-100 p-4 flex-grow min-w-0">
-            <form method="get" id="filterForm">
+        <div class="bg-white rounded-xl shadow-md border border-slate-100 p-5 flex-grow min-w-0">
+            <form method="get" id="filterForm" class="space-y-4" autocomplete="off">
                 <input type="hidden" name="page" value="modules">
                 <input type="hidden" name="action" value="list">
-                <div class="flex flex-wrap items-end gap-3">
-                    <div class="flex items-center gap-2 text-slate-600 shrink-0">
-                        <svg class="shrink-0 opacity-70" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <path d="M14 1H1L5.5 6.5V12L8.5 14V6.5L14 1Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                        </svg>
-                        <span class="font-medium text-sm">Filters</span>
+                <input type="hidden" name="page_no" value="1">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <h2 class="text-sm font-semibold text-slate-900">Find modules</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Search matches display name, page slug, action, or parent label. <span class="text-slate-600">Parent and status refilter immediately</span>; use <strong class="font-medium text-slate-700">Apply</strong> or <strong class="font-medium text-slate-700">Enter</strong> after editing the search box.</p>
                     </div>
-                    <div class="relative min-w-[200px] max-w-full sm:max-w-sm flex-grow">
-                        <label for="modules_search" class="sr-only">Search by module name</label>
-                        <input id="modules_search" type="text" name="search_text" placeholder="Search by name" class="custom-input w-full h-[38px] rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" value="<?php echo htmlspecialchars($search ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+                    <div class="sm:col-span-2 lg:col-span-5 space-y-1.5">
+                        <label for="modules_search" class="text-xs font-semibold text-slate-600">Search</label>
+                        <div class="relative">
+                            <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            </span>
+                            <input id="modules_search" type="search" name="search_text" enterkeyhint="search"
+                                placeholder="Name, slug, action, parent…"
+                                class="custom-input w-full min-h-[42px] rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30"
+                                value="<?php echo htmlspecialchars($search ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
                     </div>
-                    <div class="relative">
-                        <label for="status_filter" class="sr-only">Status</label>
-                        <select class="custom-select h-[38px] min-w-[148px] rounded-lg border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" name="status_filter" id="status_filter">
-                            <option value="">All statuses</option>
-                            <option value="1" <?php echo (($status_filter ?? '') === '1') ? 'selected' : '' ?>>Active</option>
-                            <option value="0" <?php echo (($status_filter ?? '') === '0') ? 'selected' : '' ?>>Inactive</option>
+                    <div class="space-y-1.5 lg:col-span-4">
+                        <label for="parent_filter" class="text-xs font-semibold text-slate-600">Parent menu</label>
+                        <select id="parent_filter" name="parent_filter" class="custom-select w-full min-h-[42px] rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30">
+                            <option value="" <?= $parent_filter === '' ? 'selected' : '' ?>>All modules</option>
+                            <option value="0" <?= $parent_filter === '0' ? 'selected' : '' ?>>Top-level only</option>
+                            <?php if (!empty($parent_menus)): ?>
+                                <?php foreach ($parent_menus as $pmenu): ?>
+                                    <option value="<?= (int) $pmenu['id'] ?>" <?= ((string) $parent_filter === (string) $pmenu['id']) ? 'selected' : '' ?>><?= htmlspecialchars($pmenu['module_name'], ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </select>
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <input type="submit" value="Search" class="h-[38px] min-w-[100px] rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold px-4 transition cursor-pointer">
-                        <input type="button" value="Clear" class="h-[38px] min-w-[100px] rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold px-4 transition cursor-pointer" onclick="document.getElementById('filterForm').reset();window.location='?page=modules&action=list';">
+                    <div class="space-y-1.5 lg:col-span-3">
+                        <span class="text-xs font-semibold text-slate-600">Status</span>
+                        <div class="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="Filter by status">
+                            <?php
+                            $st = (string)($status_filter ?? '');
+                            ?>
+                            <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900' ?>">
+                                <input type="radio" name="status_filter" value="" class="sr-only" <?= $st === '' ? 'checked' : '' ?>> All
+                            </label>
+                            <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '1' ? 'bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-200' : 'text-slate-600 hover:text-slate-900' ?>">
+                                <input type="radio" name="status_filter" value="1" class="sr-only" <?= $st === '1' ? 'checked' : '' ?>> Active
+                            </label>
+                            <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '0' ? 'bg-white text-slate-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:text-slate-900' ?>">
+                                <input type="radio" name="status_filter" value="0" class="sr-only" <?= $st === '0' ? 'checked' : '' ?>> Inactive
+                            </label>
+                        </div>
                     </div>
+                </div>
+                <div class="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                    <div class="flex flex-wrap gap-2">
+                        <button type="submit" class="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-slate-800 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2">
+                            <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            Apply filters
+                        </button>
+                        <a href="?page=modules&amp;action=list" class="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">Clear all</a>
+                    </div>
+                    <?php if ($has_list_filters): ?>
+                        <p class="text-xs text-slate-600">
+                            <span class="font-medium text-slate-700">Applied:</span>
+                            <?php if (($search ?? '') !== ''): ?>
+                                <?php
+                                $__q = (string)($search ?? '');
+                                $__short = strlen($__q) > 48 ? substr($__q, 0, 48) . '…' : $__q;
+                                ?>
+                                <span class="ml-1 inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 font-medium text-indigo-900 ring-1 ring-indigo-100">“<?= htmlspecialchars($__short, ENT_QUOTES, 'UTF-8') ?>”</span>
+                            <?php endif; ?>
+                            <?php if ($parent_filter !== ''): ?>
+                                <span class="ml-1 inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-800 ring-1 ring-slate-200/80"><?= htmlspecialchars($parent_filter_summary !== '' ? $parent_filter_summary : 'Parent #' . $parent_filter, ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                            <?php if (($status_filter ?? '') === '1'): ?>
+                                <span class="ml-1 inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 font-medium text-emerald-900 ring-1 ring-emerald-100">Active</span>
+                            <?php elseif (($status_filter ?? '') === '0'): ?>
+                                <span class="ml-1 inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-800 ring-1 ring-slate-200/80">Inactive</span>
+                            <?php endif; ?>
+                            <a class="ml-2 text-indigo-600 underline decoration-indigo-200 underline-offset-2 hover:text-indigo-800" href="?page=modules&amp;action=list">Reset</a>
+                        </p>
+                    <?php endif; ?>
                 </div>
             </form>
         </div>
@@ -163,7 +235,7 @@ $range_to = $total_records > 0 ? min($page_no * $limit, $total_records) : 0;
         if ($total_pages < 1) {
             $total_pages = 1;
         }
-        $pagination_base = modules_list_query($search ?? '', $status_filter ?? '', []);
+        $pagination_base = modules_list_query($search ?? '', $status_filter ?? '', $parent_filter ?? '', []);
     ?>
 	<?php if ($total_records > 0): ?>
         <div class="bg-white rounded-xl shadow-md border border-slate-100 p-4">
@@ -175,13 +247,13 @@ $range_to = $total_records > 0 ? min($page_no * $limit, $total_records) : 0;
                     <?php if ($total_pages > 1): ?>
                     <span class="text-slate-500 hidden sm:inline">Page</span>
                     <button type="button" class="p-2 rounded-full hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none <?= $page_no <= 1 ? 'opacity-40 pointer-events-none' : '' ?>">
-                        <a class="page-link block text-slate-700" <?php if ($page_no > 1): ?>href="?<?= htmlspecialchars(modules_list_query($search ?? '', $status_filter ?? '', ['page_no' => $page_no - 1, 'limit' => $limit]), ENT_QUOTES, 'UTF-8') ?>"<?php else: ?>href="#" aria-disabled="true"<?php endif ?> tabindex="-1" title="Previous page">
+                        <a class="page-link block text-slate-700" <?php if ($page_no > 1): ?>href="?<?= htmlspecialchars(modules_list_query($search ?? '', $status_filter ?? '', $parent_filter ?? '', ['page_no' => $page_no - 1, 'limit' => $limit]), ENT_QUOTES, 'UTF-8') ?>"<?php else: ?>href="#" aria-disabled="true"<?php endif ?> tabindex="-1" title="Previous page">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                         </a>
                     </button>
                     <span id="page-number" class="inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-full bg-slate-900 text-white text-sm font-semibold shadow-sm tabular-nums"><?= (int) $page_no ?></span>
                     <button type="button" class="p-2 rounded-full hover:bg-slate-100 <?= $page_no >= $total_pages ? 'opacity-40 pointer-events-none' : '' ?>">
-                        <a class="page-link block text-slate-700" <?php if ($page_no < $total_pages): ?>href="?<?= htmlspecialchars(modules_list_query($search ?? '', $status_filter ?? '', ['page_no' => $page_no + 1, 'limit' => $limit]), ENT_QUOTES, 'UTF-8') ?>"<?php else: ?>href="#" aria-disabled="true"<?php endif ?> tabindex="-1" title="Next page">
+                        <a class="page-link block text-slate-700" <?php if ($page_no < $total_pages): ?>href="?<?= htmlspecialchars(modules_list_query($search ?? '', $status_filter ?? '', $parent_filter ?? '', ['page_no' => $page_no + 1, 'limit' => $limit]), ENT_QUOTES, 'UTF-8') ?>"<?php else: ?>href="#" aria-disabled="true"<?php endif ?> tabindex="-1" title="Next page">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                         </a>
                     </button>
@@ -357,6 +429,23 @@ $range_to = $total_records > 0 ? min($page_no * $limit, $total_records) : 0;
             }
         });
     });
+
+    // List filters: changing parent or status reloads results (search uses Apply / Enter).
+    (function () {
+        const listForm = document.getElementById('filterForm');
+        if (!listForm) return;
+        const parentSel = document.getElementById('parent_filter');
+        if (parentSel) {
+            parentSel.addEventListener('change', function () {
+                listForm.requestSubmit();
+            });
+        }
+        listForm.querySelectorAll('input[name="status_filter"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                listForm.requestSubmit();
+            });
+        });
+    })();
 
     // Toggle menu visibility
     function toggleMenu(button) {

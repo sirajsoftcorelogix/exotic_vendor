@@ -12,12 +12,13 @@ class ModulesController {
         global $modulesModel;
         $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
         $status_filter = isset($_GET['status_filter']) ? trim($_GET['status_filter']) : '';
+        $parent_filter = isset($_GET['parent_filter']) ? trim((string) $_GET['parent_filter']) : '';
         
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Users per page, default 5
         $limit = in_array($limit, [5, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
 
-        $pt_data = $modulesModel->getAll($page_no, $limit, $search, $status_filter);
+        $pt_data = $modulesModel->getAll($page_no, $limit, $search, $status_filter, $parent_filter);
         $p_menus = $modulesModel->getAllParentMenus();
         $data = [
             'modules_data' => $pt_data["modules"],
@@ -30,6 +31,7 @@ class ModulesController {
             'limit'        => $limit,
             'totalRecords' => $pt_data["totalRecords"],
             'status_filter'=> $status_filter,
+            'parent_filter' => $parent_filter,
         ];
         
         renderTemplate('views/modules/index.php', $data, 'Manage Modules');

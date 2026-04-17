@@ -4,7 +4,7 @@ class Modules {
     public function __construct($db) {
         $this->conn = $db;
     }
-    public function getAll($page = 1, $limit = 10, $search = '', $status_filter = '') {
+    public function getAll($page = 1, $limit = 10, $search = '', $status_filter = '', $parent_filter = '') {
 		$page = (int)$page;
         if ($page < 1) $page = 1;
 
@@ -13,26 +13,32 @@ class Modules {
 
         // calculate offset
         $offset = ($page - 1) * $limit;
-		$where = "";
-        
-		if (!empty($search) && !empty($status_filter)) {
-            $searchEsc = $this->conn->real_escape_string($search);
-            $statusEsc = $this->conn->real_escape_string($status_filter);
-            $where = "WHERE m.module_name LIKE('%$searchEsc%') AND m.active = '$statusEsc'";
-        } else {
-            if (!empty($search)) {
-                $searchEsc = $this->conn->real_escape_string($search);
-                $where = "WHERE m.module_name LIKE('%$searchEsc%')";
-            }
 
-            if (!empty($status_filter)) {
-                $statusEsc = $this->conn->real_escape_string($status_filter);
-                $where = "WHERE m.active = '$statusEsc'";
+        $conditions = [];
+        if ($search !== '') {
+            $s = $this->conn->real_escape_string($search);
+            $conditions[] = "(m.module_name LIKE '%$s%' OR m.slug LIKE '%$s%' OR m.`action` LIKE '%$s%' OR p.module_name LIKE '%$s%')";
+        }
+        if ($status_filter !== '') {
+            $statusEsc = $this->conn->real_escape_string($status_filter);
+            $conditions[] = "m.active = '$statusEsc'";
+        }
+        if ($parent_filter !== '') {
+            if ($parent_filter === '0') {
+                $conditions[] = 'm.parent_id = 0';
+            } else {
+                $pid = (int) $parent_filter;
+                if ($pid > 0) {
+                    $conditions[] = 'm.parent_id = ' . $pid;
+                }
             }
         }
 
-		// total records
-        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM modules m $where");
+        $where = $conditions !== [] ? 'WHERE ' . implode(' AND ', $conditions) : '';
+
+		// total records (same join as list so search can match parent name)
+        $fromJoin = 'FROM modules m LEFT JOIN modules p ON m.parent_id = p.id';
+        $resultCount = $this->conn->query("SELECT COUNT(*) AS total $fromJoin $where");
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'];
 
@@ -40,8 +46,7 @@ class Modules {
 
         // fetch data (parent menu name via self-join)
         $sql = "SELECT m.*, p.module_name AS parent_display_name
-                FROM modules m
-                LEFT JOIN modules p ON m.parent_id = p.id
+                $fromJoin
                 $where
                 ORDER BY m.parent_id ASC, m.module_name ASC
                 LIMIT $limit OFFSET $offset";
