@@ -468,7 +468,7 @@ class product
                 $product['itemcode'] = $itemcode;
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
+                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ? WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
                     $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
@@ -536,8 +536,8 @@ class product
                         $updated_at,
                         $sku,
                         $product['itemcode'],
-                        $color,
-                        $size
+                        $size,
+                        $color
                     );
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
@@ -608,7 +608,7 @@ class product
                 if (isset($product['variations'])) {
                     foreach ($product['variations'] as $variation) {
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
-                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
+                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ? WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                         if ($stmt) {
                             // $title = isset($product['title']) ? $product['title'] : '';
                             $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
@@ -676,8 +676,8 @@ class product
                                 $updated_at,
                                 $sku,
                                 $product['itemcode'],
-                                $color,
-                                $size
+                                $size,
+                                $color
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
