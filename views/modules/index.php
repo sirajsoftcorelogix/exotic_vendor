@@ -120,19 +120,13 @@ if ($parent_filter === '0') {
                     </select>
                 </div>
                 <div class="lg:col-span-3">
-                    <span class="block text-xs font-semibold text-gray-600 mb-1">Status</span>
-                    <div class="flex rounded-lg border border-gray-200 bg-gray-50 p-0.5" role="group" aria-label="Filter by status">
-                        <?php $st = (string)($status_filter ?? ''); ?>
-                        <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900' ?>">
-                            <input type="radio" name="status_filter" value="" class="sr-only" <?= $st === '' ? 'checked' : '' ?>> All
-                        </label>
-                        <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '1' ? 'bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-200' : 'text-gray-600 hover:text-gray-900' ?>">
-                            <input type="radio" name="status_filter" value="1" class="sr-only" <?= $st === '1' ? 'checked' : '' ?>> Active
-                        </label>
-                        <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '0' ? 'bg-white text-gray-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-600 hover:text-gray-900' ?>">
-                            <input type="radio" name="status_filter" value="0" class="sr-only" <?= $st === '0' ? 'checked' : '' ?>> Inactive
-                        </label>
-                    </div>
+                    <label for="status_filter" class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+                    <?php $st = (string)($status_filter ?? ''); ?>
+                    <select id="status_filter" name="status_filter" class="w-full min-h-[42px] px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" aria-label="Filter by status">
+                        <option value="" <?= $st === '' ? 'selected' : '' ?>>All statuses</option>
+                        <option value="1" <?= $st === '1' ? 'selected' : '' ?>>Active</option>
+                        <option value="0" <?= $st === '0' ? 'selected' : '' ?>>Inactive</option>
+                    </select>
                 </div>
             </div>
             <div class="mt-5 flex flex-wrap items-center gap-3">
@@ -497,11 +491,12 @@ if ($parent_filter === '0') {
                 listForm.requestSubmit();
             });
         }
-        listForm.querySelectorAll('input[name="status_filter"]').forEach(function (radio) {
-            radio.addEventListener('change', function () {
+        const statusSel = document.getElementById('status_filter');
+        if (statusSel) {
+            statusSel.addEventListener('change', function () {
                 listForm.requestSubmit();
             });
-        });
+        }
     })();
 
     // Toggle menu visibility
