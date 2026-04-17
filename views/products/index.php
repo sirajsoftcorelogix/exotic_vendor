@@ -207,7 +207,6 @@
                     <th class="p-4 w-12"><input type="checkbox" id="selectAll" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"></th>
                     <th class="px-6 py-3">SKU Details</th>
                     <th class="px-6 py-3">Product Details</th>
-                    <th class="px-6 py-3">S & F Sum</th>
                     <th class="px-6 py-3">Inventory Overview</th>
                     <th class="px-6 py-3">Price</th>
                     <th class="px-6 py-3 text-right">Recommended Action</th>
@@ -266,14 +265,6 @@
                                     </a>
                                 </div>
                             </div>
-                        </div>
-                    </td>
-
-                    <!-- S & F Sum -->
-                    <td class="px-6 py-4 whitespace-nowrap align-top">
-                        <div class="flex flex-col space-y-1">
-                            <span class="typo-sf-column">₹<?php echo $product['itemprice']; ?></span>
-                            <!-- <a href="javascript:void(0);" class="sfdetails typo-sf-column text-details-link mt-1">details</a> -->
                         </div>
                     </td>
 
