@@ -727,9 +727,79 @@ document.addEventListener('DOMContentLoaded', function() {
     updateGSTFields(gstType);
 });
 
+// Validate international section before submitting
+function validateInternationalSection() {
+    const internationalSection = document.getElementById('internationalSection');
+    if (!internationalSection || getComputedStyle(internationalSection).display === 'none') {
+        return true;
+    }
+
+    const requiredFields = [
+        {id: 'pre_carriage_by', label: 'Pre Carriage By'},
+        {id: 'port_of_loading', label: 'Port of Loading'},
+        {id: 'port_of_discharge', label: 'Port of Discharge'},
+        {id: 'country_of_origin', label: 'Country of Origin'},
+        {id: 'country_of_final_destination', label: 'Country of Final Destination'},
+        {id: 'final_destination', label: 'Final Destination'},
+        {id: 'usd_export_rate', label: 'USD Export Rate'},
+        {id: 'shipping_bill_number', label: 'Shipping Bill Number'},
+        {id: 'shipping_bill_date', label: 'Shipping Bill Date'},
+        {id: 'shipping_port', label: 'Shipping Port Code'},
+        {id: 'shipping_ref_clm', label: 'Shipping Ref CLM'},
+        {id: 'shipping_currency', label: 'Shipping Currency'},
+        {id: 'shipping_country_code', label: 'Shipping Country Code'},
+        {id: 'shipping_exp_duty', label: 'Shipping Exp Duty'}
+    ];
+
+    for (const fieldInfo of requiredFields) {
+        const field = document.getElementById(fieldInfo.id);
+        if (!field || String(field.value).trim() === '') {
+            const message = fieldInfo.label + ' is required for international invoices';
+            if (window.showAlert) {
+                showAlert(message, 'error');
+            } else {
+                alert(message);
+            }
+            field?.focus();
+            return false;
+        }
+    }
+
+    const usdExportRate = parseFloat(document.getElementById('usd_export_rate').value);
+    if (isNaN(usdExportRate) || usdExportRate <= 0) {
+        const message = 'USD Export Rate must be a valid positive number';
+        if (window.showAlert) {
+            showAlert(message, 'error');
+        } else {
+            alert(message);
+        }
+        document.getElementById('usd_export_rate').focus();
+        return false;
+    }
+
+    const shippingExpDuty = parseFloat(document.getElementById('shipping_exp_duty').value);
+    if (isNaN(shippingExpDuty) || shippingExpDuty < 0) {
+        const message = 'Shipping Exp Duty must be a valid number';
+        if (window.showAlert) {
+            showAlert(message, 'error');
+        } else {
+            alert(message);
+        }
+        document.getElementById('shipping_exp_duty').focus();
+        return false;
+    }
+
+    return true;
+}
+
 // Form submission
 document.getElementById('create_invoice').addEventListener('submit', function(e) {
     e.preventDefault();
+
+    if (!validateInternationalSection()) {
+        return;
+    }
+
     const formData = new FormData(this);
     // Disable button and show loading state
     const submitBtn = document.getElementById('createInvoiceButton');
@@ -1067,11 +1137,32 @@ function regenerateIrn(invoiceId) {
         regenerateBtn.disabled = true;
         regenerateBtn.innerHTML = 'Regenerating...';
     }
-    
+
+    const payload = {
+        invoice_id: invoiceId,
+        pre_carriage_by: document.getElementById('pre_carriage_by')?.value.trim() || '',
+        port_of_loading: document.getElementById('port_of_loading')?.value.trim() || '',
+        port_of_discharge: document.getElementById('port_of_discharge')?.value.trim() || '',
+        country_of_origin: document.getElementById('country_of_origin')?.value.trim() || '',
+        country_of_final_destination: document.getElementById('country_of_final_destination')?.value.trim() || '',
+        final_destination: document.getElementById('final_destination')?.value.trim() || '',
+        usd_export_rate: document.getElementById('usd_export_rate')?.value.trim() || '',
+        ap_cost: document.getElementById('ap_cost')?.value.trim() || '',
+        freight_charge: document.getElementById('freight_charge')?.value.trim() || '',
+        insurance_charge: document.getElementById('insurance_charge')?.value.trim() || '',
+        shipping_bill_number: document.getElementById('shipping_bill_number')?.value.trim() || '',
+        shipping_bill_date: document.getElementById('shipping_bill_date')?.value.trim() || '',
+        shipping_port: document.getElementById('shipping_port')?.value.trim() || '',
+        shipping_ref_clm: document.getElementById('shipping_ref_clm')?.value.trim() || '',
+        shipping_currency: document.getElementById('shipping_currency')?.value.trim() || '',
+        shipping_country_code: document.getElementById('shipping_country_code')?.value.trim() || '',
+        shipping_exp_duty: document.getElementById('shipping_exp_duty')?.value.trim() || ''
+    };
+
     fetch('<?php echo base_url('?page=invoices&action=regenerate_irn'); ?>', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'invoice_id=' + invoiceId
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
     })
     .then(response => response.json())
     .then(data => {

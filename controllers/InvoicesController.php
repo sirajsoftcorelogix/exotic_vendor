@@ -306,7 +306,12 @@ class InvoicesController
         is_login();
         global $invoiceModel;
         
-        $invoiceId = isset($_POST['invoice_id']) ? (int)$_POST['invoice_id'] : 0;
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            $input = $_POST;
+        }
+        
+        $invoiceId = isset($input['invoice_id']) ? (int)$input['invoice_id'] : 0;
         
         if ($invoiceId <= 0) {
             echo json_encode(['success' => false, 'message' => 'Invalid invoice ID']);
@@ -318,6 +323,23 @@ class InvoicesController
         if (!$invoice || $invoice['currency'] === 'INR') {
             echo json_encode(['success' => false, 'message' => 'Invoice not found or not international']);
             exit;
+        }
+
+        $internationalFields = ['pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty'];
+        $internationalData = [];
+        foreach ($internationalFields as $field) {
+            if (isset($input[$field])) {
+                $value = $input[$field];
+                if (in_array($field, ['usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_exp_duty'])) {
+                    $internationalData[$field] = floatval($value);
+                } else {
+                    $internationalData[$field] = trim((string)$value);
+                }
+            }
+        }
+
+        if (!empty($internationalData)) {
+            $invoiceModel->updateInvoiceInternational($invoiceId, $internationalData);
         }
         
         // Attempt to regenerate IRN
