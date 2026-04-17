@@ -186,8 +186,6 @@ endforeach;
                                         class="section-value"><?php echo $item['itemprice']; ?></span></p>
                                 <p><span class="section-title">Final Price : </span><span
                                         class="section-value"><?php echo $item['finalprice']; ?></span></p>
-                                <p><span class="section-title">Cost Price : </span><span
-                                        class="section-value"><?php echo $item['cost_price']; ?></span></p>
                                 <p><span class="section-title">Currency : </span><span 
                                         class="section-value"><?php echo $item['currency']; ?></span></p>
                                 <p><span class="section-title">item Total : </span><span 

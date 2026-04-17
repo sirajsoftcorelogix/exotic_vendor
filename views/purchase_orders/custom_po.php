@@ -192,7 +192,7 @@
                 <!-- <td class="p-4">Nos</td> -->
                 <td class="p-1">
                     <div class="flex items-center space-x-2">
-                        <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="<?php echo $data[0]['rate'] ?? ''; ?>" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
+                        <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="<?php echo isset($data[0]['rate']) && $data[0]['rate'] !== '' && $data[0]['rate'] !== null ? htmlspecialchars((string) $data[0]['rate']) : htmlspecialchars((string) ($data[0]['cost_price'] ?? '')); ?>" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
                         <!-- <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
                         <label for="gst_inclusive">GST inclusive</label> -->
                         
@@ -575,7 +575,7 @@ function fetchOrderItems(query) {
                                 data-item-code="${item.item_code}"
                                 data-color="${item.color}"
                                 data-size="${item.size}"
-                                data-cost-price="${item.cost_price}"
+                                data-cost-price="${item.cost_price != null && item.cost_price !== '' ? item.cost_price : ''}"
                                 data-itemprice="${item.itemprice}"
                                 data-local-stock="${item.local_stock}"
                                 data-leadtime="${item.leadtime}"
@@ -665,7 +665,7 @@ function addSelectOrderListeners() {
 
                                             <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value popup-size">${size}</span>
 
-                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value popup-cost_price">${cost_price}</span>
+                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value popup-cost-price">${cost_price}</span>
 
                                             <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value popup-itemprice">${itemprice}</span>
 
@@ -722,6 +722,12 @@ function addSelectOrderListeners() {
                 </td>
             `;
             poTable.appendChild(tr);
+
+            const rateInp = tr.querySelector('input[name="rate[]"]');
+            if (rateInp && cost_price !== null && cost_price !== '') {
+                const n = parseFloat(cost_price);
+                if (!isNaN(n)) rateInp.value = n.toFixed(2);
+            }
 
             // Add event listeners for new inputs
             tr.querySelectorAll('.gst, .quantity, .amount').forEach(input => {
@@ -866,9 +872,11 @@ function fillRowFromProduct(tr, item) {
     const gstEl = tr.querySelector('input[name="gst[]"]');
     if (gstEl) gstEl.value = (item.gst !== undefined) ? item.gst : gstEl.value || 0;
 
-    // Rate
     const rateEl = tr.querySelector('input[name="rate[]"]');
-    if (rateEl && item.cost_price !== undefined) rateEl.value = parseFloat(item.cost_price).toFixed(2);
+    if (rateEl && item.cost_price !== undefined && item.cost_price !== null && item.cost_price !== '') {
+        const n = parseFloat(item.cost_price);
+        if (!isNaN(n)) rateEl.value = n.toFixed(2);
+    }
 
     // Order id / product id
     const orderIdHidden = tr.querySelector('input[name="product_id[]"]');

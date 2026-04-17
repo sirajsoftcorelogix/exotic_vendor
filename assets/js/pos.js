@@ -233,9 +233,6 @@ $(function () {
       html += addRow('Price', `₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
     }
 
-    if (isMeaningful(p.cost_price)) {
-      html += addRow('Cost Price', `₹ ${Number(p.cost_price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
     //  DIMENSIONS
     if (isMeaningful(p.dimensions)) {
       html += addRow('Dimensions', p.dimensions);

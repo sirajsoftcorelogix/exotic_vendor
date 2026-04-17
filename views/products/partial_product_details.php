@@ -52,8 +52,7 @@ $countries = country_array();
                             <?php if (!empty($item['size'])): ?>
                                 <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['size']; ?></span>
                             <?php endif; ?>
-                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['cost_price'] ? "₹".$item['cost_price'] : 'N/A'; ?></span>
-
+                           
                             <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['itemprice'] ? "₹".$item['itemprice'] : 'N/A'; ?></span>
 
                             <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['local_stock'] ?? 'N/A'; ?></span>

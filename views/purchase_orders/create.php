@@ -154,7 +154,7 @@
                 <!-- <td class="p-4">Nos</td> -->
                 <td class="p-1">
                     <div class="flex items-center space-x-2">
-                        <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
+                        <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="<?php echo isset($item['rate']) && $item['rate'] !== '' && $item['rate'] !== null ? htmlspecialchars((string)$item['rate']) : htmlspecialchars((string)($item['cost_price'] ?? '')); ?>" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
                         <!-- <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
                         <label for="gst_inclusive">GST inclusive</label> -->
                         
@@ -510,7 +510,7 @@ function fetchOrderItems(query) {
                                 data-item-code="${item.item_code}"
                                 data-color="${item.color}"
                                 data-size="${item.size}"
-                                data-cost-price="${item.cost_price}"
+                                data-cost-price="${item.cost_price != null && item.cost_price !== '' ? item.cost_price : ''}"
                                 data-itemprice="${item.itemprice}"
                                 data-local-stock="${item.local_stock}"
                                 data-leadtime="${item.leadtime}"
@@ -656,6 +656,12 @@ function addSelectOrderListeners() {
                 </td>
             `;
             poTable.appendChild(tr);
+
+            const rateInp = tr.querySelector('input[name="rate[]"]');
+            if (rateInp && cost_price !== null && cost_price !== '') {
+                const n = parseFloat(cost_price);
+                if (!isNaN(n)) rateInp.value = n.toFixed(2);
+            }
 
             // Add event listeners for new inputs
             tr.querySelectorAll('.gst, .quantity, .amount').forEach(input => {
