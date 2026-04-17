@@ -146,15 +146,15 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
     <div class="overflow-x-auto">
       <table class="min-w-full text-left">
-        <thead>
+        <thead class="sticky top-0 z-10">
           <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
             <th class="px-5 py-3.5 whitespace-nowrap">Image</th>
-            <th class="px-5 py-3.5 whitespace-nowrap">Item code</th>
             <th class="px-5 py-3.5 whitespace-nowrap">SKU</th>
-            <th class="px-5 py-3.5 min-w-[14rem]">Title</th>
             <th class="px-5 py-3.5 whitespace-nowrap">Category</th>
+            <th class="px-5 py-3.5 whitespace-nowrap">Location</th>
             <th class="px-5 py-3.5 whitespace-nowrap">Stock</th>
             <th class="px-5 py-3.5 whitespace-nowrap text-right">Sell price</th>
+            <th class="px-5 py-3.5 min-w-[15rem]">Title</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -175,21 +175,40 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
               <?php
                 $qty = (int)($r['stock_qty'] ?? 0);
                 $imgUrl = $r['image'] ?: 'https://dummyimage.com/256x256/e5e7eb/6b7280&text=No+Image';
+                $categoryKey = (string)($r['groupname'] ?? '');
+                $rawCategory = (string)($r['category_display'] ?? $categoryKey);
+                $fallbackCategory = ucwords(strtolower(str_replace(['_', '-'], ' ', $rawCategory)));
+                $categoryLabel = (string)($categories[$categoryKey] ?? $fallbackCategory);
               ?>
-              <tr class="hover:bg-amber-50/40 transition-colors">
+              <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors">
                 <td class="px-5 py-4 align-top">
                   <img
                     src="<?= htmlspecialchars($imgUrl) ?>"
                     data-full-img="<?= htmlspecialchars($imgUrl) ?>"
-                    class="h-10 w-10 rounded object-cover bg-slate-100 cursor-pointer hover:opacity-90 transition"
+                    class="h-10 w-10 rounded-lg object-cover bg-slate-100 cursor-pointer hover:opacity-90 ring-1 ring-gray-200 transition"
                     alt="Product image"
                     loading="lazy"
                     onclick="openStockReportImage(this)">
                 </td>
-                <td class="px-5 py-4 align-top font-mono text-sm font-semibold text-gray-900"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
-                <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars($r['sku'] ?? '') ?></td>
-                <td class="px-5 py-4 align-top text-sm text-gray-800"><?= htmlspecialchars($r['title'] ?? '') ?></td>
-                <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars((string)($r['category_display'] ?? $r['groupname'] ?? '')) ?></td>
+                <td class="px-5 py-4 align-top text-sm">
+                  <a
+                    href="<?= htmlspecialchars('?page=products&action=detail&id=' . (int)($r['id'] ?? 0)) ?>"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-amber-700 hover:text-amber-800 hover:underline font-medium"
+                  >
+                    <?= htmlspecialchars((string)($r['sku'] ?? $r['item_code'] ?? '')) ?>
+                  </a>
+                  
+                </td>
+                <td class="px-5 py-4 align-top text-sm text-gray-700"><?= htmlspecialchars($categoryLabel) ?></td>
+                <td class="px-5 py-4 align-top text-sm text-gray-700">
+                  <?php if (trim((string)($r['location'] ?? '')) !== ''): ?>
+                    <?= htmlspecialchars((string)($r['location'] ?? '')) ?>
+                  <?php else: ?>
+                    <span class="inline-flex rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-500">N/A</span>
+                  <?php endif; ?>
+                </td>
                 <td class="px-5 py-4 align-top">
                   <?php if ($qty <= 0): ?>
                     <span class="inline-flex rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">Out (0)</span>
@@ -199,7 +218,8 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                     <span class="inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
                   <?php endif; ?>
                 </td>
-                <td class="px-5 py-4 align-top text-sm text-right font-medium text-gray-900 tabular-nums"><?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
+                <td class="px-5 py-4 align-top text-sm text-right font-semibold text-gray-900 tabular-nums">₹<?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
+                <td class="px-5 py-4 align-top text-sm text-gray-800 max-w-[15rem] break-words leading-snug"><?= htmlspecialchars($r['title'] ?? '') ?></td>
               </tr>
             <?php endforeach; ?>
           <?php endif; ?>

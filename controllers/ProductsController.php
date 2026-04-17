@@ -3838,6 +3838,7 @@ class ProductsController {
             $order['variants'] = $itemCode !== '' ? $productModel->getVariantsByItemCode($itemCode) : [];
             $order['warehouses'] = $productModel->getAllWarehouses();
             $order['stock_movements'] = $productModel->get_stock_movements($id);
+            $order['warehouse_location_stock'] = $productModel->getLatestRunningStockByWarehouseLocation((int)$id);
             if (!headers_sent()) {
                 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
                 header('Pragma: no-cache');
@@ -3948,6 +3949,10 @@ class ProductsController {
             $data = json_decode($json, true);
 
             if (!$data) throw new Exception('Invalid JSON');
+            $sessionUserId = (int)($_SESSION['user']['id'] ?? 0);
+            if ($sessionUserId <= 0) {
+                throw new Exception('Invalid session user.');
+            }
 
             // Fetch current product details to get SKU, Item Code, Size, Color
             $product = $productModel->getProduct($data['product_id']);
@@ -3962,13 +3967,33 @@ class ProductsController {
                 'color'         => $product['color'],
                 'quantity'      => (int)$data['quantity'],
                 'reason'        => $data['reason'],
-                'user_id'       => (int)$data['user_id'],
+                'update_by_user'=> $sessionUserId,
                 'movement_type' => $data['type'],
                 'warehouse_id'  => $data['warehouse_id'],
                 'location'      => $data['location']
             ];
 
             $result = $productModel->insertStockMovement($insertData);
+
+            // Push latest stock to frontend/vendor API after local stock adjustment succeeds.
+            if (!empty($result['success'])) {
+                $freshProduct = $productModel->getProduct($insertData['product_id']);
+                if ($freshProduct) {
+                    $vendorSync = $this->syncProductStockToVendorFrontend($freshProduct, $insertData);
+                    $result['vendor_sync'] = $vendorSync;
+                    if (empty($vendorSync['success'])) {
+                        $existingMessage = isset($result['message']) ? (string)$result['message'] : 'Stock updated.';
+                        $syncMessage = isset($vendorSync['message']) ? (string)$vendorSync['message'] : 'Vendor sync failed.';
+                        $result['message'] = $existingMessage . ' ' . $syncMessage;
+                    }
+                } else {
+                    $result['vendor_sync'] = [
+                        'success' => false,
+                        'message' => 'Stock updated locally, but could not reload product for vendor sync.'
+                    ];
+                }
+            }
+
             echo json_encode($result);
 
         } catch (Exception $e) {
@@ -3976,6 +4001,100 @@ class ProductsController {
         }
         exit;
     }
+    public function updateStockMovementLocation() {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json');
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            if (!is_array($data)) {
+                throw new Exception('Invalid request payload.');
+            }
+            $movementId = (int)($data['movement_id'] ?? 0);
+            $productId = (int)($data['product_id'] ?? 0);
+            $location = trim((string)($data['location'] ?? ''));
+            if ($movementId <= 0 || $productId <= 0) {
+                throw new Exception('Invalid movement/product reference.');
+            }
+            $result = $productModel->updateStockMovementLocation($movementId, $productId, $location);
+            echo json_encode($result);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * Update frontend stock using vendor product/modify API.
+     */
+    private function syncProductStockToVendorFrontend(array $product, array $movement): array
+    {
+        $itemCode = trim((string)($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
+        }
+
+        $size = trim((string)($product['size'] ?? ''));
+        $color = trim((string)($product['color'] ?? ''));
+        $qty = (int)($movement['quantity'] ?? 0);
+        $movementType = strtoupper(trim((string)($movement['movement_type'] ?? '')));
+        $positiveTypes = ['IN', 'TRANSFER_IN', 'OPENING_STOCK'];
+        $signedDelta = in_array($movementType, $positiveTypes, true) ? $qty : (-1 * $qty);
+
+        $url = 'https://www.exoticindia.com/vendor-api/product/modify'
+            . '?itemcode=' . urlencode($itemCode)
+            . '&size=' . urlencode($size)
+            . '&color=' . urlencode($color);
+
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+        $postData = [
+            'local_stock_delta' => $signedDelta,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false) {
+            return ['success' => false, 'message' => 'Vendor API request failed: ' . $curlErr];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            return [
+                'success' => ($httpCode >= 200 && $httpCode < 300),
+                'message' => ($httpCode >= 200 && $httpCode < 300)
+                    ? 'Vendor stock sync completed.'
+                    : 'Vendor API returned non-JSON response.',
+                'http_code' => $httpCode,
+                'raw_response' => $response,
+            ];
+        }
+
+        $apiSuccess = isset($decoded['success']) ? (bool)$decoded['success'] : ($httpCode >= 200 && $httpCode < 300);
+        return [
+            'success' => $apiSuccess,
+            'message' => $decoded['message'] ?? ($apiSuccess ? 'Vendor stock sync completed.' : 'Vendor stock sync failed.'),
+            'http_code' => $httpCode,
+            'response' => $decoded,
+        ];
+    }
+
     public function updateStockLimits() {
         is_login();
         global $productModel;
@@ -4534,7 +4653,7 @@ class ProductsController {
             }
         }
 
-        $pageTitle = $transfer ? 'Edit stock transfer' : 'Bulk stock transfer';
+        $pageTitle = $transfer ? 'Edit stock transfer' : 'Stock Transfer';
 
         $transferGrnCount = 0;
         if ($transfer_id > 0 && $transfer) {

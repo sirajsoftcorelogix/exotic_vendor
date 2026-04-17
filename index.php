@@ -616,6 +616,11 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->saveStockAdjustment(); // This method will handle the POST data
                 break;
+            case 'update_stock_movement_location':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateStockMovementLocation();
+                break;
             case 'update_stock_limits':
                 require_once 'controllers/ProductsController.php';
                 $controller = new ProductsController($conn);
@@ -974,6 +979,9 @@ switch ($page) {
                 break;
             case 'get-product-api':
                 $controller->getProductApi();
+                break;
+            case 'product-availability':
+                $controller->productAvailability();
                 break;
             case 'toggle_addon':
                 $controller->toggle_addon();

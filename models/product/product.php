@@ -38,15 +38,28 @@ class product
         $prev = mysqli_character_set_name($this->db);
         $needCompat = $prev !== false && stripos((string) $prev, 'utf8mb4') !== false;
         if ($needCompat) {
-            if (!$this->db->set_charset('utf8mb3')) {
-                $this->db->set_charset('utf8');
+            try {
+                $ok = $this->db->set_charset('utf8mb3');
+            } catch (\mysqli_sql_exception $e) {
+                $ok = false;
+            }
+            if (!$ok) {
+                try {
+                    $this->db->set_charset('utf8');
+                } catch (\mysqli_sql_exception $e) {
+                    // keep existing charset if neither is supported
+                }
             }
         }
         try {
             return $stmt->execute();
         } finally {
             if ($needCompat && $prev !== false && $prev !== '') {
-                $this->db->set_charset($prev);
+                try {
+                    $this->db->set_charset($prev);
+                } catch (\mysqli_sql_exception $e) {
+                    // ignore restore failure; statement execution already completed
+                }
             }
         }
     }
@@ -422,6 +435,7 @@ class product
                     continue;
                 }
                 $product['itemcode'] = $itemcode;
+                $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                 if ($stmt) {
@@ -459,7 +473,7 @@ class product
                     $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
                     $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                     $hsn = self::vendorApiHsn($product);
-                    $updated_at = date('Y-m-d H:i:s');
+                    $updated_at = $now;
                     $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 6);
                     $stmt->bind_param(
                         $bt,
@@ -499,6 +513,63 @@ class product
                     }
                     if ($stmt->error) {
                         return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+                    }
+                    // If there is no matching row (common when variants aren't pre-created), insert it.
+                    if ($stmt->affected_rows < 1) {
+                        $exists = $this->findByItemCodeSizeColor($product['itemcode'], $size, $color);
+                        if (!$exists) {
+                            $img = (string)($product['image'] ?? '');
+                            $insertId = $this->createProduct([
+                                'item_code' => $product['itemcode'],
+                                'sku' => (string)$sku,
+                                'size' => (string)$size,
+                                'color' => (string)$color,
+                                'title' => (string)($product['title'] ?? ''),
+                                'image' => $img,
+                                'local_stock' => (float)$localStock,
+                                'itemprice' => (float)$price,
+                                'finalprice' => (float)$price,
+                                'groupname' => (string)($product['groupname'] ?? ''),
+                                'material' => (string)($product['material'] ?? ''),
+                                'cost_price' => (float)($product['cp'] ?? 0),
+                                'gst' => (float)($product['gst'] ?? 0),
+                                'hsn' => (string)$hsn,
+                                'description' => (string)($product['snippet_description'] ?? ($product['description'] ?? '')),
+                                'asin' => (string)$asin,
+                                'upc' => (string)$upc,
+                                'location' => (string)$location,
+                                'fba_in' => (int)$fba_in,
+                                'fba_us' => (int)$fba_us,
+                                'leadtime' => (int)$leadtime,
+                                'instock_leadtime' => (int)$instock_leadtime,
+                                'permanently_available' => (int)$permanently_available,
+                                'numsold' => (int)$numsold,
+                                'numsold_india' => (int)$numsold_india,
+                                'numsold_global' => (int)$numsold_global,
+                                'lastsold' => (int)$lastsold,
+                                'vendor' => (string)$vendor,
+                                'shippingfee' => (float)$shippingfee,
+                                'sourcingfee' => (float)$sourcingfee,
+                                'price' => (float)$price,
+                                'price_india' => (float)$price_india,
+                                'price_india_suggested' => (float)$price_india_suggested,
+                                'mrp_india' => (float)$mrp_india,
+                                'permanent_discount' => (float)$permanent_discount,
+                                'discount_global' => (float)$discount_global,
+                                'discount_india' => (float)$discount_india,
+                                'product_weight' => (float)($product['product_weight'] ?? 0),
+                                'product_weight_unit' => (string)($product['product_weight_unit'] ?? ''),
+                                'prod_height' => (float)($product['prod_height'] ?? 0),
+                                'prod_width' => (float)($product['prod_width'] ?? 0),
+                                'prod_length' => (float)($product['prod_length'] ?? 0),
+                                'length_unit' => (string)($product['length_unit'] ?? ''),
+                                'created_at' => $now,
+                                'updated_at' => $now,
+                            ]);
+                            if ($insertId) {
+                                $updatedCount++;
+                            }
+                        }
                     }
                     $stmt->close();
                 }
@@ -541,7 +612,7 @@ class product
                             $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
                             $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                             $hsn = self::vendorApiHsn($product);
-                            $updated_at = date('Y-m-d H:i:s');
+                            $updated_at = $now;
                             $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 6);
                             $stmt->bind_param(
                                 $bt,
@@ -580,6 +651,63 @@ class product
                             }
                             if ($stmt->error) {
                                 return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+                            }
+                            // Same as parent row: insert variation if it doesn't exist yet.
+                            if ($stmt->affected_rows < 1) {
+                                $exists = $this->findByItemCodeSizeColor($product['itemcode'], $size, $color);
+                                if (!$exists) {
+                                    $img = (string)($variation['image'] ?? ($product['image'] ?? ''));
+                                    $insertId = $this->createProduct([
+                                        'item_code' => $product['itemcode'],
+                                        'sku' => (string)$sku,
+                                        'size' => (string)$size,
+                                        'color' => (string)$color,
+                                        'title' => (string)($product['title'] ?? ''),
+                                        'image' => $img,
+                                        'local_stock' => (float)$localStock,
+                                        'itemprice' => (float)$price,
+                                        'finalprice' => (float)$price,
+                                        'groupname' => (string)($product['groupname'] ?? ''),
+                                        'material' => (string)($product['material'] ?? ''),
+                                        'cost_price' => (float)($variation['cp'] ?? ($product['cp'] ?? 0)),
+                                        'gst' => (float)($variation['gst'] ?? ($product['gst'] ?? 0)),
+                                        'hsn' => (string)$hsn,
+                                        'description' => (string)($product['snippet_description'] ?? ($product['description'] ?? '')),
+                                        'asin' => (string)$asin,
+                                        'upc' => (string)$upc,
+                                        'location' => (string)$location,
+                                        'fba_in' => (int)$fba_in,
+                                        'fba_us' => (int)$fba_us,
+                                        'leadtime' => (int)$leadtime,
+                                        'instock_leadtime' => (int)$instock_leadtime,
+                                        'permanently_available' => (int)$permanently_available,
+                                        'numsold' => (int)$numsold,
+                                        'numsold_india' => (int)$numsold_india,
+                                        'numsold_global' => (int)$numsold_global,
+                                        'lastsold' => (int)$lastsold,
+                                        'vendor' => (string)$vendor,
+                                        'shippingfee' => (float)$shippingfee,
+                                        'sourcingfee' => (float)$sourcingfee,
+                                        'price' => (float)$price,
+                                        'price_india' => (float)($variation['price_india'] ?? ($product['price_india'] ?? 0)),
+                                        'price_india_suggested' => (float)($variation['price_india_suggested'] ?? ($product['price_india_suggested'] ?? 0)),
+                                        'mrp_india' => (float)($variation['mrp_india'] ?? ($product['mrp_india'] ?? 0)),
+                                        'permanent_discount' => (float)($variation['permanent_discount'] ?? ($product['permanent_discount'] ?? 0)),
+                                        'discount_global' => (float)($variation['discount_global'] ?? ($product['discount_global'] ?? 0)),
+                                        'discount_india' => (float)($variation['discount_india'] ?? ($product['discount_india'] ?? 0)),
+                                        'product_weight' => (float)($variation['product_weight'] ?? ($product['product_weight'] ?? 0)),
+                                        'product_weight_unit' => (string)($variation['product_weight_unit'] ?? ($product['product_weight_unit'] ?? '')),
+                                        'prod_height' => (float)($variation['prod_height'] ?? ($product['prod_height'] ?? 0)),
+                                        'prod_width' => (float)($variation['prod_width'] ?? ($product['prod_width'] ?? 0)),
+                                        'prod_length' => (float)($variation['prod_length'] ?? ($product['prod_length'] ?? 0)),
+                                        'length_unit' => (string)($variation['length_unit'] ?? ($product['length_unit'] ?? '')),
+                                        'created_at' => $now,
+                                        'updated_at' => $now,
+                                    ]);
+                                    if ($insertId) {
+                                        $updatedCount++;
+                                    }
+                                }
                             }
                             $stmt->close();
                         }
@@ -2142,9 +2270,10 @@ class product
     public function stock_history($sku, $limit = 100, $offset = 0, $productId = 0)
     {
         // Join exotic_address and match by sku OR product_id (migration-safe).
-        $sql = "SELECT sm.*, ea.address_title AS warehouse_name
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name, u.name AS updated_by_name
                 FROM vp_stock_movements sm
                 LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id
+                LEFT JOIN vp_users u ON sm.update_by_user = u.id
                 WHERE (sm.sku = ? OR sm.product_id = ?)
                 ORDER BY sm.created_at DESC
                 LIMIT ? OFFSET ?";
@@ -2186,8 +2315,16 @@ class product
             ];
         }
         if ($rt === 'MANUAL' && ($mt === 'IN' || $mt === 'OUT')) {
+            $manualByName = trim((string)($row['updated_by_name'] ?? ''));
+            if ($manualByName === '' && !empty($row['update_by_user'])) {
+                $manualByName = 'User #' . (int)$row['update_by_user'];
+            }
+            $ledgerLabel = 'Stock adjustment';
+            if ($manualByName !== '') {
+                $ledgerLabel .= ' (' . $manualByName . ')';
+            }
             return [
-                'ledger_type' => 'Stock adjustment',
+                'ledger_type' => $ledgerLabel,
                 'icon' => 'fa-sliders-h',
                 'text_color_class' => $mt === 'IN' ? 'text-green-600' : 'text-red-600',
             ];
@@ -2321,13 +2458,16 @@ class product
                 ? (string)$data['ref_type']
                 : 'MANUAL';
             $ref_id = array_key_exists('ref_id', $data) ? (string)$data['ref_id'] : '0';
+            $updatedByUser = isset($data['update_by_user'])
+                ? (int)$data['update_by_user']
+                : (isset($data['user_id']) ? (int)$data['user_id'] : 0);
 
             $insertStmt->bind_param(
                 'isssssssiiisss', 
                 $data['product_id'], $data['sku'], $data['item_code'], 
                 $data['size'], $data['color'], $data['warehouse_id'], 
                 $data['location'], $data['movement_type'], $adj_qty, 
-                $new_stock, $data['user_id'], $ref_type, $ref_id, $data['reason']
+                $new_stock, $updatedByUser, $ref_type, $ref_id, $data['reason']
             );
 
             if (!$insertStmt->execute()) {
@@ -2421,9 +2561,10 @@ class product
             $whereSql = 'WHERE ' . implode(' AND ', $where);
         }
 
-        $sql = "SELECT sm.*, ea.address_title AS warehouse_name 
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name, u.name AS updated_by_name
                 FROM vp_stock_movements sm 
                 LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id 
+                LEFT JOIN vp_users u ON sm.update_by_user = u.id
                 $whereSql 
                 ORDER BY sm.created_at DESC 
                 LIMIT ? OFFSET ?";
@@ -2547,6 +2688,60 @@ class product
         $stmt->execute();
         $result = $stmt->get_result();
         return $result ? $result->fetch_assoc() : null;
+    }
+    public function getLatestRunningStockByWarehouseLocation($productId)
+    {
+        $sql = "SELECT 
+                    sm.id AS movement_id,
+                    sm.warehouse_id,
+                    COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
+                    sm.location,
+                    sm.running_stock,
+                    sm.updated_at,
+                    sm.created_at
+                FROM vp_stock_movements sm
+                INNER JOIN (
+                    SELECT warehouse_id, COALESCE(NULLIF(TRIM(location), ''), '__EMPTY__') AS location_key, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE product_id = ?
+                    GROUP BY warehouse_id, COALESCE(NULLIF(TRIM(location), ''), '__EMPTY__')
+                ) latest ON latest.max_id = sm.id
+                LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
+                WHERE sm.product_id = ?
+                ORDER BY ea.address_title ASC, sm.location ASC";
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+        $pid = (int)$productId;
+        $stmt->bind_param('ii', $pid, $pid);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+    public function updateStockMovementLocation($movementId, $productId, $location)
+    {
+        $sql = "UPDATE vp_stock_movements 
+                SET location = ?, updated_at = NOW()
+                WHERE id = ? AND product_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+        $movementId = (int)$movementId;
+        $productId = (int)$productId;
+        $location = trim((string)$location);
+        $stmt->bind_param('sii', $location, $movementId, $productId);
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
+        }
+        if ($stmt->affected_rows < 1) {
+            return ['success' => false, 'message' => 'No stock movement row updated.'];
+        }
+        return ['success' => true, 'message' => 'Location updated successfully.'];
     }
     public function setProductLimits($productId, $minStock, $maxStock){
         $sql = "UPDATE vp_products 

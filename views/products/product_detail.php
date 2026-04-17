@@ -478,6 +478,48 @@
             </div>
           </div>
         </div>
+
+      <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="p-2 border text-left">Warehouse</th>
+                <th class="p-2 border text-left">Location</th>
+                <th class="p-2 border text-right">Running Stock</th>
+                <th class="p-2 border text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if (!empty($products['warehouse_location_stock']) && is_array($products['warehouse_location_stock'])): ?>
+                <?php foreach ($products['warehouse_location_stock'] as $ws): ?>
+                  <tr>
+                    <td class="p-2 border"><?php echo htmlspecialchars((string)($ws['warehouse_name'] ?? '')); ?></td>
+                    <td class="p-2 border"><?php echo htmlspecialchars((string)($ws['location'] ?? '')); ?></td>
+                    <td class="p-2 border text-right font-semibold"><?php echo htmlspecialchars((string)($ws['running_stock'] ?? '0')); ?></td>
+                    <td class="p-2 border text-center">
+                      <button
+                        type="button"
+                        class="px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                        data-movement-id="<?php echo (int)($ws['movement_id'] ?? 0); ?>"
+                        data-product-id="<?php echo (int)($products['id'] ?? 0); ?>"
+                        data-warehouse="<?php echo htmlspecialchars((string)($ws['warehouse_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                        data-location="<?php echo htmlspecialchars((string)($ws['location'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                        onclick="openStockLocationModal(this)">
+                        <i class="fas fa-pen"></i>
+                      </button>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php else: ?>
+                <tr>
+                  <td colspan="4" class="p-3 border text-center text-gray-500">No warehouse/location stock rows found.</td>
+                </tr>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
   </div>
 
   <!-- Price -->
@@ -798,6 +840,23 @@
   </div>
 </div>
 <!--Stock Adjustment Card Ends -->
+<div id="stockLocationModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+  <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-5 relative">
+    <button type="button" onclick="closeStockLocationModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-700">✕</button>
+    <h3 class="text-base font-semibold text-gray-800 mb-3">Update Stock Location</h3>
+    <p id="stockLocationModalWarehouse" class="text-sm text-gray-600 mb-2"></p>
+    <input type="hidden" id="stockLocationMovementId" value="">
+    <input type="hidden" id="stockLocationProductId" value="">
+    <div class="mb-4">
+      <label for="stockLocationInput" class="block text-sm font-medium text-gray-600 mb-1">Location</label>
+      <input id="stockLocationInput" type="text" class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+    </div>
+    <div class="flex justify-end gap-2">
+      <button type="button" onclick="closeStockLocationModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100">Cancel</button>
+      <button type="button" onclick="submitStockLocationUpdate()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">Save</button>
+    </div>
+  </div>
+</div>
 <div id="profileStatusModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
   <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-5 relative">
     <button type="button" onclick="closeProfileStatusModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-700">✕</button>
@@ -892,6 +951,51 @@
   }
   function closeStockModal() {
     document.getElementById('stockModal').classList.add('hidden');
+  }
+  function openStockLocationModal(btn) {
+    if (!btn) return;
+    const movementId = btn.getAttribute('data-movement-id') || '';
+    const productId = btn.getAttribute('data-product-id') || '';
+    const warehouse = btn.getAttribute('data-warehouse') || '';
+    const location = btn.getAttribute('data-location') || '';
+    document.getElementById('stockLocationMovementId').value = movementId;
+    document.getElementById('stockLocationProductId').value = productId;
+    document.getElementById('stockLocationInput').value = location;
+    document.getElementById('stockLocationModalWarehouse').textContent = warehouse ? ('Warehouse: ' + warehouse) : '';
+    document.getElementById('stockLocationModal').classList.remove('hidden');
+  }
+  function closeStockLocationModal() {
+    document.getElementById('stockLocationModal').classList.add('hidden');
+  }
+  function submitStockLocationUpdate() {
+    const movementId = parseInt(document.getElementById('stockLocationMovementId').value || '0', 10);
+    const productId = parseInt(document.getElementById('stockLocationProductId').value || '0', 10);
+    const location = document.getElementById('stockLocationInput').value || '';
+    if (!movementId || !productId) {
+      showProfileStatusModal('Invalid stock movement selected.', 'error', false);
+      return;
+    }
+    fetch('index.php?page=products&action=update_stock_movement_location', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        movement_id: movementId,
+        product_id: productId,
+        location: location
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && data.success) {
+        closeStockLocationModal();
+        showProfileStatusModal('Location updated successfully.', 'success', true);
+      } else {
+        showProfileStatusModal('Update failed: ' + ((data && data.message) ? data.message : 'Unknown error'), 'error', false);
+      }
+    })
+    .catch(() => {
+      showProfileStatusModal('Error while updating location.', 'error', false);
+    });
   }
 function openImagePopup(imageUrl) {
     const popup = document.getElementById('imagePopup');
