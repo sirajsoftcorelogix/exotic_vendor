@@ -35,14 +35,6 @@ class pos
 
         $warehouseId = $_SESSION['warehouse_id'] ?? 0;
 
-        /* ================= TOTAL PRODUCTS ================= */
-        $totalSql = "SELECT COUNT(*) FROM vp_products WHERE is_active = 1";
-        $totalStmt = $this->db->prepare($totalSql);
-        $totalStmt->execute();
-        $totalStmt->bind_result($recordsTotal);
-        $totalStmt->fetch();
-        $totalStmt->close();
-
         /* ================= FILTERS ================= */
         $where  = " WHERE p.is_active = 1 ";
         $params = [];
@@ -63,7 +55,7 @@ class pos
             $types .= "ss";
         }
 
-        // PRODUCT CODE (NEW)
+        // PRODUCT CODE
         if ($productCode !== '') {
             $where .= " AND p.item_code LIKE ? ";
             $params[] = "%{$productCode}%";
@@ -78,7 +70,7 @@ class pos
             $types .= "ss";
         }
 
-        // PRICE FILTER (NEW)
+        // PRICE FILTER
         if ($minPrice !== '') {
             $where .= " AND p.itemprice >= ? ";
             $params[] = $minPrice;
@@ -91,25 +83,10 @@ class pos
             $types .= "d";
         }
 
-        if (!empty($category) && $category != 'allProducts') {
-            $where .= " AND p.groupname = ? ";
-            $params[] = $category;
-            $types .= "s";
-        }
-
-        if ($productName !== '') {
-            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ?) ";
-            $params[] = "%{$productName}%";
-            $params[] = "%{$productName}%";
-            $types .= "ss";
-        }
-
-        if ($searchValue !== '') {
-            $where .= " AND (p.item_code LIKE ? OR p.title LIKE ?) ";
-            $params[] = "%{$searchValue}%";
-            $params[] = "%{$searchValue}%";
-            $types .= "ss";
-        }
+        // Latest movement per (product_id, warehouse_id): no newer row with higher id.
+        $where .= " AND sm.warehouse_id = ? AND newer.id IS NULL AND sm.running_stock > 0 ";
+        $params[] = (int)$warehouseId;
+        $types .= "i";
 
         /* ================= ORDER ================= */
         $allowedColumns = [
@@ -129,34 +106,21 @@ class pos
 
         $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
 
-        /* ================= COUNT FILTERED ================= */
-        $countSql = "
-    SELECT COUNT(*)
+        $orderExpr = 'p.' . $orderColumn;
+        if ($orderColumn === 'stock_qty') {
+            $orderExpr = 'sm.running_stock';
+        } elseif ($orderColumn === 'price') {
+            $orderExpr = 'p.itemprice';
+        }
+
+        $stockFrom = "
     FROM vp_products p
-    JOIN (
-        SELECT sm1.product_id, sm1.running_stock
-        FROM vp_stock_movements sm1
-        JOIN (
-            SELECT product_id, MAX(id) AS max_id
-            FROM vp_stock_movements
-            WHERE warehouse_id = ?
-            GROUP BY product_id
-        ) latest ON latest.max_id = sm1.id
-        WHERE sm1.running_stock > 0
-    ) sm ON sm.product_id = p.id
-    $where
+    INNER JOIN vp_stock_movements sm ON sm.product_id = p.id
+    LEFT JOIN vp_stock_movements newer
+        ON newer.product_id = sm.product_id
+        AND newer.warehouse_id = sm.warehouse_id
+        AND newer.id > sm.id
     ";
-
-        $countStmt = $this->db->prepare($countSql);
-
-        $countTypes = "i" . $types;
-        $countParams = array_merge([$warehouseId], $params);
-
-        $countStmt->bind_param($countTypes, ...$countParams);
-        $countStmt->execute();
-        $countStmt->bind_result($recordsFiltered);
-        $countStmt->fetch();
-        $countStmt->close();
 
         /* ================= DATA QUERY ================= */
         $dataSql = "
@@ -180,27 +144,16 @@ class pos
         p.cost_price,
         sm.running_stock AS stock_qty,
         p.itemprice AS price
-    FROM vp_products p
-    JOIN (
-        SELECT sm1.product_id, sm1.running_stock
-        FROM vp_stock_movements sm1
-        JOIN (
-            SELECT product_id, MAX(id) AS max_id
-            FROM vp_stock_movements
-            WHERE warehouse_id = ?
-            GROUP BY product_id
-        ) latest ON latest.max_id = sm1.id
-        WHERE sm1.running_stock > 0
-    ) sm ON sm.product_id = p.id
+    $stockFrom
     $where
-    ORDER BY p.$orderColumn $orderDir
+    ORDER BY $orderExpr $orderDir
     LIMIT ?, ?
     ";
 
         $dataStmt = $this->db->prepare($dataSql);
 
-        $dataTypes = "i" . $types . "ii";
-        $dataParams = array_merge([$warehouseId], $params, [$start, $length]);
+        $dataTypes = $types . "ii";
+        $dataParams = array_merge($params, [$start, $length]);
 
         $dataStmt->bind_param($dataTypes, ...$dataParams);
         $dataStmt->execute();
@@ -210,8 +163,6 @@ class pos
         $dataStmt->close();
 
         return [
-            'recordsTotal'    => (int) $recordsTotal,
-            'recordsFiltered' => (int) $recordsFiltered,
             'data'            => $rows
         ];
     }
@@ -371,19 +322,18 @@ class pos
             return [];
         }
 
-        // Get latest movement id per product for selected warehouse, then join movement row by PK.
-        // This avoids materializing full movement rows during GROUP BY and is generally faster.
+        // Latest movement row per product in selected warehouse (anti-join).
         $join = "
-            INNER JOIN (
-                SELECT product_id, MAX(id) AS max_id
-                FROM vp_stock_movements
-                WHERE warehouse_id = ?
-                GROUP BY product_id
-            ) latest ON latest.product_id = p.id
-            INNER JOIN vp_stock_movements sm ON sm.id = latest.max_id
+            INNER JOIN vp_stock_movements sm
+                ON sm.product_id = p.id
+                AND sm.warehouse_id = ?
+            LEFT JOIN vp_stock_movements newer
+                ON newer.product_id = sm.product_id
+                AND newer.warehouse_id = sm.warehouse_id
+                AND newer.id > sm.id
         ";
 
-        $where = ' WHERE p.is_active = 1 ';
+        $where = ' WHERE p.is_active = 1 AND newer.id IS NULL ';
         $params = [$warehouseId];
         $types = 'i';
 
@@ -458,16 +408,16 @@ class pos
         }
 
         $join = "
-            INNER JOIN (
-                SELECT product_id, MAX(id) AS max_id
-                FROM vp_stock_movements
-                WHERE warehouse_id = ?
-                GROUP BY product_id
-            ) latest ON latest.product_id = p.id
-            INNER JOIN vp_stock_movements sm ON sm.id = latest.max_id
+            INNER JOIN vp_stock_movements sm
+                ON sm.product_id = p.id
+                AND sm.warehouse_id = ?
+            LEFT JOIN vp_stock_movements newer
+                ON newer.product_id = sm.product_id
+                AND newer.warehouse_id = sm.warehouse_id
+                AND newer.id > sm.id
         ";
 
-        $where = ' WHERE p.is_active = 1 ';
+        $where = ' WHERE p.is_active = 1 AND newer.id IS NULL ';
         $params = [$warehouseId];
         $types = 'i';
 

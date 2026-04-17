@@ -232,7 +232,8 @@ class POSRegisterController
         $perPage = $_GET['per_page'] ?? 12;
 
         $start  = ($pageNo - 1) * $perPage;
-        $length = $perPage;
+        // Fastest POS: fetch one extra row to decide has_more (avoid COUNT(*))
+        $length = $perPage + 1;
 
         $searchValue = $_GET['search']['value'] ?? '';
 
@@ -285,12 +286,17 @@ class POSRegisterController
             $maxPrice
         );
 
+        $rows = $result['data'] ?? [];
+        $hasMore = count($rows) > (int)$perPage;
+        if ($hasMore) {
+            $rows = array_slice($rows, 0, (int)$perPage);
+        }
+
         echo json_encode([
-            'data' => $result['data'],
-            'recordsTotal' => $result['recordsTotal'],
-            'recordsFiltered' => $result['recordsFiltered'],
+            'data' => $rows,
             'current_page' => $pageNo,
-            'total_pages' => ceil($result['recordsFiltered'] / $length)
+            'has_more' => $hasMore,
+            'per_page' => (int)$perPage
         ]);
         exit;
     }
@@ -355,6 +361,135 @@ class POSRegisterController
         header('Content-Type: application/json');
 
         echo json_encode(['data' => $product]);
+        exit;
+    }
+
+    /**
+     * Check product stock in current warehouse and alternatives.
+     * Accepts product_id (preferred) or item_code/sku via `q`.
+     */
+    public function productAvailability()
+    {
+        global $conn;
+        header('Content-Type: application/json');
+
+        $productId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+        $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+        $currentWarehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+
+        if ($productId <= 0 && $q === '') {
+            echo json_encode(['success' => false, 'message' => 'Missing product identifier.']);
+            exit;
+        }
+
+        if ($productId <= 0) {
+            $sql = "SELECT id, item_code, sku, title
+                    FROM vp_products
+                    WHERE is_active = 1 AND (sku = ? OR item_code = ?)
+                    ORDER BY id ASC
+                    LIMIT 1";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                echo json_encode(['success' => false, 'message' => 'Could not prepare product query.']);
+                exit;
+            }
+            $stmt->bind_param('ss', $q, $q);
+            $stmt->execute();
+            $product = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if (!$product) {
+                echo json_encode(['success' => false, 'message' => 'Product not found.']);
+                exit;
+            }
+            $productId = (int)$product['id'];
+        } else {
+            $stmt = $conn->prepare("SELECT id, item_code, sku, title FROM vp_products WHERE id = ? LIMIT 1");
+            if (!$stmt) {
+                echo json_encode(['success' => false, 'message' => 'Could not prepare product query.']);
+                exit;
+            }
+            $stmt->bind_param('i', $productId);
+            $stmt->execute();
+            $product = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if (!$product) {
+                echo json_encode(['success' => false, 'message' => 'Product not found.']);
+                exit;
+            }
+        }
+
+        $stockSql = "
+            SELECT sm.warehouse_id,
+                   COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
+                   sm.running_stock AS stock_qty
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT warehouse_id, product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE product_id = ?
+                GROUP BY warehouse_id, product_id
+            ) latest ON latest.max_id = sm.id
+            LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
+            WHERE sm.product_id = ?
+            ORDER BY warehouse_name ASC";
+
+        $stockStmt = $conn->prepare($stockSql);
+        if (!$stockStmt) {
+            echo json_encode(['success' => false, 'message' => 'Could not prepare stock query.']);
+            exit;
+        }
+        $stockStmt->bind_param('ii', $productId, $productId);
+        $stockStmt->execute();
+        $rows = $stockStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stockStmt->close();
+
+        $currentWarehouse = null;
+        $alternativeWarehouses = [];
+        foreach ($rows as $row) {
+            $wid = (int)($row['warehouse_id'] ?? 0);
+            $stockQty = (float)($row['stock_qty'] ?? 0);
+            $entry = [
+                'warehouse_id' => $wid,
+                'warehouse_name' => (string)($row['warehouse_name'] ?? ''),
+                'stock_qty' => $stockQty,
+            ];
+            if ($wid === $currentWarehouseId) {
+                $currentWarehouse = $entry;
+            } elseif ($stockQty > 0) {
+                $alternativeWarehouses[] = $entry;
+            }
+        }
+
+        if ($currentWarehouse === null) {
+            $currentWarehouse = [
+                'warehouse_id' => $currentWarehouseId,
+                'warehouse_name' => 'Current Store',
+                'stock_qty' => 0,
+            ];
+        }
+
+        $currentAvailable = ((float)$currentWarehouse['stock_qty']) > 0;
+        $message = '';
+        if (!$currentAvailable && !empty($alternativeWarehouses)) {
+            $altNames = array_values(array_filter(array_map(static function ($w) {
+                return trim((string)($w['warehouse_name'] ?? ''));
+            }, $alternativeWarehouses)));
+            $message = 'Product not available in this store, but you still can create an order from another store (' . implode(', ', $altNames) . ')';
+        }
+
+        echo json_encode([
+            'success' => true,
+            'product' => [
+                'id' => (int)$product['id'],
+                'item_code' => (string)($product['item_code'] ?? ''),
+                'sku' => (string)($product['sku'] ?? ''),
+                'title' => (string)($product['title'] ?? ''),
+            ],
+            'current_warehouse' => $currentWarehouse,
+            'current_available' => $currentAvailable,
+            'alternative_warehouses' => $alternativeWarehouses,
+            'message' => $message,
+        ]);
         exit;
     }
 
