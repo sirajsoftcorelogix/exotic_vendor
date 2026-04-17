@@ -137,7 +137,6 @@
                     $orderLink = base_url('index.php?order_number=' . $pl['order_number']); // adjust id field
                 }
 
-                $cost = isset($pl['cost_price']) ? '₹' . number_format((float)$pl['cost_price']) : '';
                 $status = str_replace("_", " ", $pl['status']) ?? '';
                 $agent_name = $pl['agent_name'] ?? '';
                 $date_added = $pl['date_added_readable'] ?? ($pl['date_added'] ? date('d M Y', strtotime($pl['date_added'])) : '');

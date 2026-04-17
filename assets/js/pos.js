@@ -133,6 +133,13 @@ $(function () {
     if (p && p.addon_options && Array.isArray(p.addon_options.default_options)) {
       addons = p.addon_options.default_options;
     }
+    if (p.express_shipping_option && p.express_shipping_option.price) {
+      addons.push({
+        title: p.express_shipping_option.title || 'Express Shipping',
+        price: p.express_shipping_option.price,
+        cart_entry: p.express_shipping_option.cart_entry || ''
+      });
+    }
 
     if (addons.length > 0) {
 
@@ -226,9 +233,6 @@ $(function () {
       html += addRow('Price', `₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
     }
 
-    if (isMeaningful(p.cost_price)) {
-      html += addRow('Cost Price', `₹ ${Number(p.cost_price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
     //  DIMENSIONS
     if (isMeaningful(p.dimensions)) {
       html += addRow('Dimensions', p.dimensions);
@@ -337,7 +341,8 @@ data-code="${p.item_code}">
     const minPrice = $('#minPrice').val();
     const maxPrice = $('#maxPrice').val();
     const stockFilter = $('#stockFilter').val();
-    const productCode = $('#searchCode').val();
+    // Search input matches by SKU and/or product name
+    const productCode = $('#searchName').val();
     const productName = $('#searchName').val();
     const requestedPage = page;
 
@@ -360,7 +365,9 @@ data-code="${p.item_code}">
         const rows = res.data || [];
         currentPage = requestedPage;
 
-        if (res.total_pages != null) {
+        if (res.has_more != null) {
+          hasMore = !!res.has_more;
+        } else if (res.total_pages != null) {
           hasMore = currentPage < parseInt(res.total_pages, 10);
         } else {
           hasMore = rows.length === perPage;
@@ -430,7 +437,10 @@ data-code="${p.item_code}">
 
     let code = $(this).data('code');
     if (!code) return;
-
+    openProductModalByCode(code);
+  });
+  function openProductModalByCode(code) {
+    if (!code) return;
     openModal();
 
     //  CACHE HIT
@@ -449,17 +459,38 @@ data-code="${p.item_code}">
       data: { code: code },
       dataType: 'json',
       success: function (res) {
-
         let p = res.data || {};
-
         //  SAVE CACHE
         productApiCache[code] = p;
-
         //  USE EXISTING MODAL FUNCTION
         renderProductModal(p, code);
       }
     });
-  });
+  }
+  function checkAvailabilityAndMaybeOpen(product) {
+    if (!product) return;
+    const productId = product.id != null ? String(product.id) : '';
+    const itemCode = product.item_code != null ? String(product.item_code) : '';
+    const sku = product.sku != null ? String(product.sku) : '';
+    const codeForPopup = itemCode || sku;
+    if (!codeForPopup) return;
+    const url = '?page=pos_register&action=product-availability'
+      + (productId ? ('&product_id=' + encodeURIComponent(productId)) : ('&q=' + encodeURIComponent(itemCode || sku)));
+    fetch(url, {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.success && data.current_available === false && data.message) {
+          alert(data.message);
+          openProductModalByCode(codeForPopup);
+        }
+      })
+      .catch(function () {
+        // keep search flow functional even if availability endpoint fails
+      });
+  }
   function renderModalData(p) {
 
     $('#pmTitle').text(p.title || 'Product');
@@ -500,32 +531,191 @@ data-code="${p.item_code}">
     }
   }
   //  HANDLE ADDON SELECTION
-  $(document).on('change', '.addon-checkbox', function () {
+  // $(document).on('change', '.addon-checkbox', function () {
 
+  //   let selected = [];
+
+  //   $('.addon-checkbox:checked').each(function () {
+  //     let entry = $(this).data('entry');
+
+  //     if (entry) {
+  //       selected.push(entry);
+  //     }
+  //   });
+
+  //   //  JOIN WITH PIPE
+  //   let optionsStr = selected.join('|');
+
+  //   console.log("FINAL OPTIONS:", optionsStr);
+
+  //   //  SET HIDDEN INPUT
+  //   $('#modal_options').val(optionsStr);
+  // });
+  $(document).on('change', '.addon-checkbox', function () {
     let selected = [];
 
     $('.addon-checkbox:checked').each(function () {
-      let entry = $(this).data('entry');
-
-      if (entry) {
-        selected.push(entry);
-      }
+        selected.push($(this).data('entry'));
     });
 
-    //  JOIN WITH PIPE
-    let optionsStr = selected.join('|');
-
-    console.log("FINAL OPTIONS:", optionsStr);
-
-    //  SET HIDDEN INPUT
-    $('#modal_options').val(optionsStr);
-  });
+    $('#modal_options').val(selected.join('|'));
+});
   let searchTimeout = null;
-  $('#searchCode, #searchName').on('keyup change', function () {
+  const $searchName = $('#searchName');
+  const $skuSuggest = $('#skuSuggest');
+  const $searchErr = $('#posSkuSearchError');
+  const skuSearchBase = '?page=products&action=search_product';
+  let activeSuggestRequest = 0;
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  function hideSuggest() {
+    $searchName.attr('aria-expanded', 'false');
+    $skuSuggest.addClass('hidden').empty();
+  }
+
+  function hideSearchError() {
+    if ($searchErr.length) {
+      $searchErr.addClass('hidden').text('');
+    }
+  }
+
+  function showSearchError(msg) {
+    if ($searchErr.length) {
+      $searchErr.text(msg || 'No product found with this SKU.').removeClass('hidden');
+    }
+  }
+
+  function renderSuggest(rows) {
+    if (!rows || rows.length === 0) {
+      hideSuggest();
+      return;
+    }
+
+    const html = rows.slice(0, 12).map(function (p) {
+      const sku = p.sku || p.item_code || p.code || '';
+      const itemCode = p.item_code || p.itemcode || '';
+      const title = p.title || p.name || '';
+      const trimmedTitle = title.length > 72 ? (title.slice(0, 69) + '...') : title;
+      return `
+        <button type="button"
+          class="w-full text-left px-3 py-2 hover:bg-slate-50 transition border-b border-slate-100 last:border-0"
+          data-sku="${escapeHtml(sku)}"
+          data-item-code="${escapeHtml(itemCode)}">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-slate-800 truncate">${escapeHtml(sku)}</div>
+            <div class="text-[11px] text-slate-500 truncate">${escapeHtml(itemCode)}${trimmedTitle ? (' · ' + escapeHtml(trimmedTitle)) : ''}</div>
+          </div>
+        </button>
+      `;
+    }).join('');
+
+    $searchName.attr('aria-expanded', 'true');
+    $skuSuggest.html(html).removeClass('hidden');
+  }
+
+  let suggestTimeout = null;
+  function fetchSuggest(term) {
+    const t = String(term || '').trim();
+    if (t.length < 2) {
+      hideSuggest();
+      return;
+    }
+
+    clearTimeout(suggestTimeout);
+    suggestTimeout = setTimeout(function () {
+      const reqId = ++activeSuggestRequest;
+      fetch(skuSearchBase + '&q=' + encodeURIComponent(t), {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (reqId !== activeSuggestRequest) return;
+          if (data && data.success && Array.isArray(data.products)) {
+            renderSuggest(data.products);
+            return;
+          }
+          hideSuggest();
+        })
+        .catch(function () {
+          if (reqId !== activeSuggestRequest) return;
+          hideSuggest();
+        });
+    }, 280);
+  }
+
+  $skuSuggest.on('click', 'button[data-sku]', function () {
+    const sku = ($(this).data('sku') || '').toString();
+    const itemCode = ($(this).data('item-code') || '').toString();
+    const selected = sku || itemCode;
+    if (!selected) return;
+    hideSearchError();
+    $searchName.val(selected);
+    hideSuggest();
+    resetAndLoad();
+    checkAvailabilityAndMaybeOpen({
+      id: '',
+      sku: sku,
+      item_code: itemCode
+    });
+  });
+
+  $searchName.on('blur', function () {
+    // allow click selection before hiding
+    setTimeout(hideSuggest, 150);
+  });
+
+  $searchName.on('keydown', function (e) {
+    if (e.key === 'Escape') {
+      hideSuggest();
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      hideSuggest();
+      hideSearchError();
+      const q = String($searchName.val() || '').trim();
+      if (q.length < 1) {
+        showSearchError('Enter a SKU.');
+        return;
+      }
+      fetch(skuSearchBase + '&q=' + encodeURIComponent(q) + '&exact=1', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.success && data.product) {
+            const sku = (data.product.sku != null ? String(data.product.sku) : '');
+            const itemCode = (data.product.item_code != null ? String(data.product.item_code) : '');
+            const selected = sku || itemCode || q;
+            $searchName.val(selected);
+            hideSearchError();
+            resetAndLoad();
+            checkAvailabilityAndMaybeOpen(data.product);
+            return;
+          }
+          showSearchError((data && data.message) ? data.message : 'No product found with this SKU.');
+        })
+        .catch(function () {
+          showSearchError('Could not verify SKU. Try again.');
+        });
+    }
+  });
+
+  $searchName.on('keyup change', function () {
+    hideSearchError();
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(function () {
       resetAndLoad();
     }, 400);
+
+    fetchSuggest($searchName.val());
   });
 
   $scrollWrapper.on('scroll', function () {

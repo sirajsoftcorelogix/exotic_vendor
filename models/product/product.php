@@ -38,15 +38,28 @@ class product
         $prev = mysqli_character_set_name($this->db);
         $needCompat = $prev !== false && stripos((string) $prev, 'utf8mb4') !== false;
         if ($needCompat) {
-            if (!$this->db->set_charset('utf8mb3')) {
-                $this->db->set_charset('utf8');
+            try {
+                $ok = $this->db->set_charset('utf8mb3');
+            } catch (\mysqli_sql_exception $e) {
+                $ok = false;
+            }
+            if (!$ok) {
+                try {
+                    $this->db->set_charset('utf8');
+                } catch (\mysqli_sql_exception $e) {
+                    // keep existing charset if neither is supported
+                }
             }
         }
         try {
             return $stmt->execute();
         } finally {
             if ($needCompat && $prev !== false && $prev !== '') {
-                $this->db->set_charset($prev);
+                try {
+                    $this->db->set_charset($prev);
+                } catch (\mysqli_sql_exception $e) {
+                    // ignore restore failure; statement execution already completed
+                }
             }
         }
     }
@@ -140,25 +153,32 @@ class product
 
         $search = "";
         if (!empty($filters['item_code'])) {
-            $search .= "AND vp_products.item_code like '%" . $filters['item_code'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['item_code']);
+            $search .= "AND vp_products.item_code like '%" . $v . "%'";
         }
         if (!empty($filters['title'])) {
-            $search .= "AND vp_products.title like '%" . $filters['title'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['title']);
+            $search .= "AND vp_products.title like '%" . $v . "%'";
         }
         if (!empty($filters['vendor_name'])) {
-            $search .= "AND vp_products.vendor like '%" . $filters['vendor_name'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['vendor_name']);
+            $search .= "AND vp_products.vendor like '%" . $v . "%'";
         }
         if (!empty($filters['groupname'])) {
-            $search .= "AND vp_products.groupname like '%" . $filters['groupname'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['groupname']);
+            $search .= "AND vp_products.groupname like '%" . $v . "%'";
         }
         if (!empty($filters['sku'])) {
-            $search .= "AND vp_products.sku like '%" . $filters['sku'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['sku']);
+            $search .= "AND vp_products.sku like '%" . $v . "%'";
         }
         if (!empty($filters['size'])) {
-            $search .= "AND vp_products.size like '%" . $filters['size'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['size']);
+            $search .= "AND vp_products.size like '%" . $v . "%'";
         }
         if (!empty($filters['color'])) {
-            $search .= "AND vp_products.color like '%" . $filters['color'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['color']);
+            $search .= "AND vp_products.color like '%" . $v . "%'";
         }
         if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
             $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
@@ -174,7 +194,7 @@ class product
             }
         }
         if (!empty($filters['marketplace'])) {
-            $mp = $filters['marketplace'];
+            $mp = $this->db->real_escape_string((string) $filters['marketplace']);
             if ($this->vpProductsHasColumn('marketplace_vendor')) {
                 $search .= "AND vp_products.marketplace_vendor like '%" . $mp . "%'";
             } elseif ($this->vpProductsHasColumn('marketplace')) {
@@ -196,25 +216,32 @@ class product
     {
         $search = "";
         if (!empty($filters['item_code'])) {
-            $search .= "AND vp_products.item_code like '%" . $filters['item_code'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['item_code']);
+            $search .= "AND vp_products.item_code like '%" . $v . "%'";
         }
         if (!empty($filters['title'])) {
-            $search .= "AND vp_products.title like '%" . $filters['title'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['title']);
+            $search .= "AND vp_products.title like '%" . $v . "%'";
         }
         if (!empty($filters['vendor_name'])) {
-            $search .= "AND vp_products.vendor like '%" . $filters['vendor_name'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['vendor_name']);
+            $search .= "AND vp_products.vendor like '%" . $v . "%'";
         }
         if (!empty($filters['groupname'])) {
-            $search .= "AND vp_products.groupname like '%" . $filters['groupname'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['groupname']);
+            $search .= "AND vp_products.groupname like '%" . $v . "%'";
         }
         if (!empty($filters['sku'])) {
-            $search .= "AND vp_products.sku like '%" . $filters['sku'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['sku']);
+            $search .= "AND vp_products.sku like '%" . $v . "%'";
         }
         if (!empty($filters['size'])) {
-            $search .= "AND vp_products.size like '%" . $filters['size'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['size']);
+            $search .= "AND vp_products.size like '%" . $v . "%'";
         }
         if (!empty($filters['color'])) {
-            $search .= "AND vp_products.color like '%" . $filters['color'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['color']);
+            $search .= "AND vp_products.color like '%" . $v . "%'";
         }
         if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
             $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
@@ -230,7 +257,7 @@ class product
             }
         }
         if (!empty($filters['marketplace'])) {
-            $mp = $filters['marketplace'];
+            $mp = $this->db->real_escape_string((string) $filters['marketplace']);
             if ($this->vpProductsHasColumn('marketplace_vendor')) {
                 $search .= "AND vp_products.marketplace_vendor like '%" . $mp . "%'";
             } elseif ($this->vpProductsHasColumn('marketplace')) {
@@ -422,6 +449,7 @@ class product
                     continue;
                 }
                 $product['itemcode'] = $itemcode;
+                $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                 if ($stmt) {
@@ -459,7 +487,7 @@ class product
                     $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
                     $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                     $hsn = self::vendorApiHsn($product);
-                    $updated_at = date('Y-m-d H:i:s');
+                    $updated_at = $now;
                     $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 6);
                     $stmt->bind_param(
                         $bt,
@@ -499,6 +527,63 @@ class product
                     }
                     if ($stmt->error) {
                         return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+                    }
+                    // If there is no matching row (common when variants aren't pre-created), insert it.
+                    if ($stmt->affected_rows < 1) {
+                        $exists = $this->findByItemCodeSizeColor($product['itemcode'], $size, $color);
+                        if (!$exists) {
+                            $img = (string)($product['image'] ?? '');
+                            $insertId = $this->createProduct([
+                                'item_code' => $product['itemcode'],
+                                'sku' => (string)$sku,
+                                'size' => (string)$size,
+                                'color' => (string)$color,
+                                'title' => (string)($product['title'] ?? ''),
+                                'image' => $img,
+                                'local_stock' => (float)$localStock,
+                                'itemprice' => (float)$price,
+                                'finalprice' => (float)$price,
+                                'groupname' => (string)($product['groupname'] ?? ''),
+                                'material' => (string)($product['material'] ?? ''),
+                                'cost_price' => (float)($product['cp'] ?? 0),
+                                'gst' => (float)($product['gst'] ?? 0),
+                                'hsn' => (string)$hsn,
+                                'description' => (string)($product['snippet_description'] ?? ($product['description'] ?? '')),
+                                'asin' => (string)$asin,
+                                'upc' => (string)$upc,
+                                'location' => (string)$location,
+                                'fba_in' => (int)$fba_in,
+                                'fba_us' => (int)$fba_us,
+                                'leadtime' => (int)$leadtime,
+                                'instock_leadtime' => (int)$instock_leadtime,
+                                'permanently_available' => (int)$permanently_available,
+                                'numsold' => (int)$numsold,
+                                'numsold_india' => (int)$numsold_india,
+                                'numsold_global' => (int)$numsold_global,
+                                'lastsold' => (int)$lastsold,
+                                'vendor' => (string)$vendor,
+                                'shippingfee' => (float)$shippingfee,
+                                'sourcingfee' => (float)$sourcingfee,
+                                'price' => (float)$price,
+                                'price_india' => (float)$price_india,
+                                'price_india_suggested' => (float)$price_india_suggested,
+                                'mrp_india' => (float)$mrp_india,
+                                'permanent_discount' => (float)$permanent_discount,
+                                'discount_global' => (float)$discount_global,
+                                'discount_india' => (float)$discount_india,
+                                'product_weight' => (float)($product['product_weight'] ?? 0),
+                                'product_weight_unit' => (string)($product['product_weight_unit'] ?? ''),
+                                'prod_height' => (float)($product['prod_height'] ?? 0),
+                                'prod_width' => (float)($product['prod_width'] ?? 0),
+                                'prod_length' => (float)($product['prod_length'] ?? 0),
+                                'length_unit' => (string)($product['length_unit'] ?? ''),
+                                'created_at' => $now,
+                                'updated_at' => $now,
+                            ]);
+                            if ($insertId) {
+                                $updatedCount++;
+                            }
+                        }
                     }
                     $stmt->close();
                 }
@@ -541,7 +626,7 @@ class product
                             $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
                             $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                             $hsn = self::vendorApiHsn($product);
-                            $updated_at = date('Y-m-d H:i:s');
+                            $updated_at = $now;
                             $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 6);
                             $stmt->bind_param(
                                 $bt,
@@ -580,6 +665,63 @@ class product
                             }
                             if ($stmt->error) {
                                 return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+                            }
+                            // Same as parent row: insert variation if it doesn't exist yet.
+                            if ($stmt->affected_rows < 1) {
+                                $exists = $this->findByItemCodeSizeColor($product['itemcode'], $size, $color);
+                                if (!$exists) {
+                                    $img = (string)($variation['image'] ?? ($product['image'] ?? ''));
+                                    $insertId = $this->createProduct([
+                                        'item_code' => $product['itemcode'],
+                                        'sku' => (string)$sku,
+                                        'size' => (string)$size,
+                                        'color' => (string)$color,
+                                        'title' => (string)($product['title'] ?? ''),
+                                        'image' => $img,
+                                        'local_stock' => (float)$localStock,
+                                        'itemprice' => (float)$price,
+                                        'finalprice' => (float)$price,
+                                        'groupname' => (string)($product['groupname'] ?? ''),
+                                        'material' => (string)($product['material'] ?? ''),
+                                        'cost_price' => (float)($variation['cp'] ?? ($product['cp'] ?? 0)),
+                                        'gst' => (float)($variation['gst'] ?? ($product['gst'] ?? 0)),
+                                        'hsn' => (string)$hsn,
+                                        'description' => (string)($product['snippet_description'] ?? ($product['description'] ?? '')),
+                                        'asin' => (string)$asin,
+                                        'upc' => (string)$upc,
+                                        'location' => (string)$location,
+                                        'fba_in' => (int)$fba_in,
+                                        'fba_us' => (int)$fba_us,
+                                        'leadtime' => (int)$leadtime,
+                                        'instock_leadtime' => (int)$instock_leadtime,
+                                        'permanently_available' => (int)$permanently_available,
+                                        'numsold' => (int)$numsold,
+                                        'numsold_india' => (int)$numsold_india,
+                                        'numsold_global' => (int)$numsold_global,
+                                        'lastsold' => (int)$lastsold,
+                                        'vendor' => (string)$vendor,
+                                        'shippingfee' => (float)$shippingfee,
+                                        'sourcingfee' => (float)$sourcingfee,
+                                        'price' => (float)$price,
+                                        'price_india' => (float)($variation['price_india'] ?? ($product['price_india'] ?? 0)),
+                                        'price_india_suggested' => (float)($variation['price_india_suggested'] ?? ($product['price_india_suggested'] ?? 0)),
+                                        'mrp_india' => (float)($variation['mrp_india'] ?? ($product['mrp_india'] ?? 0)),
+                                        'permanent_discount' => (float)($variation['permanent_discount'] ?? ($product['permanent_discount'] ?? 0)),
+                                        'discount_global' => (float)($variation['discount_global'] ?? ($product['discount_global'] ?? 0)),
+                                        'discount_india' => (float)($variation['discount_india'] ?? ($product['discount_india'] ?? 0)),
+                                        'product_weight' => (float)($variation['product_weight'] ?? ($product['product_weight'] ?? 0)),
+                                        'product_weight_unit' => (string)($variation['product_weight_unit'] ?? ($product['product_weight_unit'] ?? '')),
+                                        'prod_height' => (float)($variation['prod_height'] ?? ($product['prod_height'] ?? 0)),
+                                        'prod_width' => (float)($variation['prod_width'] ?? ($product['prod_width'] ?? 0)),
+                                        'prod_length' => (float)($variation['prod_length'] ?? ($product['prod_length'] ?? 0)),
+                                        'length_unit' => (string)($variation['length_unit'] ?? ($product['length_unit'] ?? '')),
+                                        'created_at' => $now,
+                                        'updated_at' => $now,
+                                    ]);
+                                    if ($insertId) {
+                                        $updatedCount++;
+                                    }
+                                }
                             }
                             $stmt->close();
                         }

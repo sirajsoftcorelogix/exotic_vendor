@@ -281,18 +281,6 @@
     <div data-layer="HorizontalBorder" class="Horizontalborder w-[499.34px] h-20 left-[1px] top-[1px] absolute border-b border-gray-200">
       <div data-layer="Heading 2 → Price" class="Heading2Price w-14 h-7 left-[24.34px] top-[24px] absolute justify-center text-gray-900 text-lg font-bold font-['SansSerif'] leading-7">Price</div>
     </div>
-    <div data-layer="Background" class="Background w-96 h-14 left-[25px] top-[102px] absolute bg-gray-50 rounded-[10px]">
-      <div data-layer="Background" class="Background size-8 left-[12px] top-[12px] absolute bg-green-100 rounded-[10px]">
-        <div data-svg-wrapper data-layer="SVG" class="Svg left-[8px] top-[8px] absolute">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M8 1.33301V14.6663" stroke="#00A63E" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M11.3333 3.33301H6.33333C5.71449 3.33301 5.121 3.57884 4.68342 4.01643C4.24583 4.45401 4 5.0475 4 5.66634C4 6.28518 4.24583 6.87867 4.68342 7.31626C5.121 7.75384 5.71449 7.99967 6.33333 7.99967H9.66667C10.2855 7.99967 10.879 8.24551 11.3166 8.68309C11.7542 9.12068 12 9.71417 12 10.333C12 10.9518 11.7542 11.5453 11.3166 11.9829C10.879 12.4205 10.2855 12.6663 9.66667 12.6663H4" stroke="#00A63E" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-      </div>
-      <div data-layer="Cost Price" class="CostPrice w-20 h-5 left-[56.34px] top-[18px] absolute justify-center text-gray-700 text-sm font-normal font-['SansSerif'] leading-5">Cost Price</div>
-      <div data-layer="₹14534" class="14534 w-16 h-6 left-[375.34px] top-[16px] absolute text-right justify-center text-gray-900 text-base font-bold font-['SansSerif'] leading-6">₹14534</div>
-    </div>
     <div data-layer="Background" class="Background w-96 h-14 left-[25px] top-[174px] absolute bg-gray-50 rounded-[10px]">
       <div data-layer="Background" class="Background size-8 left-[12px] top-[12px] absolute bg-green-100 rounded-[10px]">
         <div data-svg-wrapper data-layer="SVG" class="Svg left-[8px] top-[8px] absolute">

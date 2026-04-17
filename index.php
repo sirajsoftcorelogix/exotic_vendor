@@ -983,6 +983,9 @@ switch ($page) {
             case 'get-product-api':
                 $controller->getProductApi();
                 break;
+            case 'product-availability':
+                $controller->productAvailability();
+                break;
             case 'toggle_addon':
                 $controller->toggle_addon();
                 break;
