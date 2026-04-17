@@ -16,30 +16,35 @@ class Modules {
 		$where = "";
         
 		if (!empty($search) && !empty($status_filter)) {
-            $search = $this->conn->real_escape_string($search);
-            $status_filter = $this->conn->real_escape_string($status_filter);
-            $where = "WHERE module_name LIKE('%$search%') AND active = '$status_filter'";
+            $searchEsc = $this->conn->real_escape_string($search);
+            $statusEsc = $this->conn->real_escape_string($status_filter);
+            $where = "WHERE m.module_name LIKE('%$searchEsc%') AND m.active = '$statusEsc'";
         } else {
             if (!empty($search)) {
-                $search = $this->conn->real_escape_string($search);
-                $where = "WHERE module_name LIKE('%$search%')";
+                $searchEsc = $this->conn->real_escape_string($search);
+                $where = "WHERE m.module_name LIKE('%$searchEsc%')";
             }
 
             if (!empty($status_filter)) {
-                $search = $this->conn->real_escape_string($status_filter);   
-                $where = "WHERE active = '$status_filter'";
+                $statusEsc = $this->conn->real_escape_string($status_filter);
+                $where = "WHERE m.active = '$statusEsc'";
             }
         }
 
 		// total records
-        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM modules $where");
+        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM modules m $where");
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'];
 
         $totalPages = ceil($totalRecords / $limit);
 
-        // fetch data
-        $sql = "SELECT * FROM modules $where LIMIT $limit OFFSET $offset";
+        // fetch data (parent menu name via self-join)
+        $sql = "SELECT m.*, p.module_name AS parent_display_name
+                FROM modules m
+                LEFT JOIN modules p ON m.parent_id = p.id
+                $where
+                ORDER BY m.parent_id ASC, m.module_name ASC
+                LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
         $data = [];

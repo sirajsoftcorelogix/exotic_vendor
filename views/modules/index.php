@@ -79,8 +79,12 @@ $range_to = $total_records > 0 ? min($page_no * $limit, $total_records) : 0;
                     <thead class="bg-slate-50/90">
                     <tr>
                         <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text w-12">#</th>
-                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text">Module</th>
-                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text w-32">Status</th>
+                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text min-w-[8rem]">Parent</th>
+                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text min-w-[10rem]">Display name</th>
+                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text min-w-[7rem]">Page</th>
+                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text min-w-[6rem]">Action</th>
+                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text w-24">Icon</th>
+                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text w-28">Status</th>
                         <th scope="col" class="px-4 sm:px-6 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text w-20">Actions</th>
                     </tr>
                     </thead>
@@ -89,17 +93,32 @@ $range_to = $total_records > 0 ? min($page_no * $limit, $total_records) : 0;
                         <?php foreach ($modules_data as $index => $tc): ?>
                             <?php
                             $isActive = (int)($tc['active'] ?? 0) === 1;
-                            $slug = (string)($tc['slug'] ?? '');
-                            $actionName = (string)($tc['action'] ?? '');
-                            $sub = array_filter([$slug, $actionName]);
-                            $subline = $sub ? implode(' · ', $sub) : '';
+                            $slug = trim((string)($tc['slug'] ?? ''));
+                            $actionName = trim((string)($tc['action'] ?? ''));
+                            $parentDisplay = trim((string)($tc['parent_display_name'] ?? ''));
+                            $iconHtml = trim((string)($tc['font_awesome_icon'] ?? ''));
                             ?>
                             <tr class="table-content-text transition hover:bg-slate-50/80">
                                 <td class="px-4 sm:px-6 py-3.5 whitespace-nowrap text-sm text-slate-500 tabular-nums"><?= (int) $index + 1 ?></td>
-                                <td class="px-4 sm:px-6 py-3.5 min-w-[12rem]">
-                                    <div class="text-sm font-medium text-slate-900"><?= htmlspecialchars($tc['module_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
-                                    <?php if ($subline !== ''): ?>
-                                        <div class="text-xs text-slate-500 mt-0.5 font-mono truncate max-w-md" title="<?= htmlspecialchars($subline, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($subline, ENT_QUOTES, 'UTF-8') ?></div>
+                                <td class="px-4 sm:px-6 py-3.5 text-sm text-slate-700 max-w-[14rem]">
+                                    <?php if ($parentDisplay !== ''): ?>
+                                        <span class="line-clamp-2 break-words" title="<?= htmlspecialchars($parentDisplay, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($parentDisplay, ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php else: ?>
+                                        <span class="text-slate-400" title="Top-level menu (no parent)">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="px-4 sm:px-6 py-3.5 text-sm font-medium text-slate-900 min-w-[10rem] max-w-xs break-words"><?= htmlspecialchars($tc['module_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                                <td class="px-4 sm:px-6 py-3.5 text-sm font-mono text-slate-800">
+                                    <?= $slug !== '' ? htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') : '<span class="text-slate-400">—</span>' ?>
+                                </td>
+                                <td class="px-4 sm:px-6 py-3.5 text-sm text-slate-800">
+                                    <?= $actionName !== '' ? htmlspecialchars($actionName, ENT_QUOTES, 'UTF-8') : '<span class="text-slate-400">—</span>' ?>
+                                </td>
+                                <td class="px-4 sm:px-6 py-3.5 text-center align-middle">
+                                    <?php if ($iconHtml !== ''): ?>
+                                        <span class="inline-flex items-center justify-center text-slate-600 text-lg leading-none [&_i]:text-base" aria-hidden="true"><?= $iconHtml ?></span>
+                                    <?php else: ?>
+                                        <span class="text-slate-400 text-sm">—</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-4 sm:px-6 py-3.5 whitespace-nowrap">
@@ -124,7 +143,7 @@ $range_to = $total_records > 0 ? min($page_no * $limit, $total_records) : 0;
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="4" class="px-6 py-16 text-center">
+                            <td colspan="8" class="px-6 py-16 text-center">
                                 <div class="flex flex-col items-center justify-center gap-2 text-slate-500">
                                     <svg class="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
                                     <p class="text-sm font-medium text-slate-700">No modules match your filters</p>
