@@ -153,25 +153,32 @@ class product
 
         $search = "";
         if (!empty($filters['item_code'])) {
-            $search .= "AND vp_products.item_code like '%" . $filters['item_code'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['item_code']);
+            $search .= "AND vp_products.item_code like '%" . $v . "%'";
         }
         if (!empty($filters['title'])) {
-            $search .= "AND vp_products.title like '%" . $filters['title'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['title']);
+            $search .= "AND vp_products.title like '%" . $v . "%'";
         }
         if (!empty($filters['vendor_name'])) {
-            $search .= "AND vp_products.vendor like '%" . $filters['vendor_name'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['vendor_name']);
+            $search .= "AND vp_products.vendor like '%" . $v . "%'";
         }
         if (!empty($filters['groupname'])) {
-            $search .= "AND vp_products.groupname like '%" . $filters['groupname'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['groupname']);
+            $search .= "AND vp_products.groupname like '%" . $v . "%'";
         }
         if (!empty($filters['sku'])) {
-            $search .= "AND vp_products.sku like '%" . $filters['sku'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['sku']);
+            $search .= "AND vp_products.sku like '%" . $v . "%'";
         }
         if (!empty($filters['size'])) {
-            $search .= "AND vp_products.size like '%" . $filters['size'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['size']);
+            $search .= "AND vp_products.size like '%" . $v . "%'";
         }
         if (!empty($filters['color'])) {
-            $search .= "AND vp_products.color like '%" . $filters['color'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['color']);
+            $search .= "AND vp_products.color like '%" . $v . "%'";
         }
         if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
             $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
@@ -187,7 +194,7 @@ class product
             }
         }
         if (!empty($filters['marketplace'])) {
-            $mp = $filters['marketplace'];
+            $mp = $this->db->real_escape_string((string) $filters['marketplace']);
             if ($this->vpProductsHasColumn('marketplace_vendor')) {
                 $search .= "AND vp_products.marketplace_vendor like '%" . $mp . "%'";
             } elseif ($this->vpProductsHasColumn('marketplace')) {
@@ -209,25 +216,32 @@ class product
     {
         $search = "";
         if (!empty($filters['item_code'])) {
-            $search .= "AND vp_products.item_code like '%" . $filters['item_code'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['item_code']);
+            $search .= "AND vp_products.item_code like '%" . $v . "%'";
         }
         if (!empty($filters['title'])) {
-            $search .= "AND vp_products.title like '%" . $filters['title'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['title']);
+            $search .= "AND vp_products.title like '%" . $v . "%'";
         }
         if (!empty($filters['vendor_name'])) {
-            $search .= "AND vp_products.vendor like '%" . $filters['vendor_name'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['vendor_name']);
+            $search .= "AND vp_products.vendor like '%" . $v . "%'";
         }
         if (!empty($filters['groupname'])) {
-            $search .= "AND vp_products.groupname like '%" . $filters['groupname'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['groupname']);
+            $search .= "AND vp_products.groupname like '%" . $v . "%'";
         }
         if (!empty($filters['sku'])) {
-            $search .= "AND vp_products.sku like '%" . $filters['sku'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['sku']);
+            $search .= "AND vp_products.sku like '%" . $v . "%'";
         }
         if (!empty($filters['size'])) {
-            $search .= "AND vp_products.size like '%" . $filters['size'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['size']);
+            $search .= "AND vp_products.size like '%" . $v . "%'";
         }
         if (!empty($filters['color'])) {
-            $search .= "AND vp_products.color like '%" . $filters['color'] . "%'";
+            $v = $this->db->real_escape_string((string) $filters['color']);
+            $search .= "AND vp_products.color like '%" . $v . "%'";
         }
         if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
             $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
@@ -243,7 +257,7 @@ class product
             }
         }
         if (!empty($filters['marketplace'])) {
-            $mp = $filters['marketplace'];
+            $mp = $this->db->real_escape_string((string) $filters['marketplace']);
             if ($this->vpProductsHasColumn('marketplace_vendor')) {
                 $search .= "AND vp_products.marketplace_vendor like '%" . $mp . "%'";
             } elseif ($this->vpProductsHasColumn('marketplace')) {
