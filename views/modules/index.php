@@ -371,6 +371,11 @@ if ($parent_filter === '0') {
                         </div>
                         <div class="pt-4 grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
 							<div>
+								<label class="text-sm font-medium text-gray-700" for="addSortOrder">Sort order</label>
+								<input type="number" class="form-input w-full mt-1" name="addSortOrder" id="addSortOrder" min="0" step="1" value="0" placeholder="0" />
+								<p class="text-xs text-gray-500 mt-1 leading-snug">Within the same parent, lower numbers list first.</p>
+							</div>
+							<div>
 								<label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
 								<select class="form-input w-full mt-1" required name="addStatus" id="addStatus">
 									<option value="1">Active</option>
@@ -442,6 +447,11 @@ if ($parent_filter === '0') {
                             </div>
                         </div>
                         <div class="pt-4 grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
+							<div>
+								<label class="text-sm font-medium text-gray-700" for="editSortOrder">Sort order</label>
+								<input type="number" class="form-input w-full mt-1" name="editSortOrder" id="editSortOrder" min="0" step="1" value="0" placeholder="0" />
+								<p class="text-xs text-gray-500 mt-1 leading-snug">Within the same parent, lower numbers list first.</p>
+							</div>
 							<div>
 								<label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
 								<select class="form-input w-full mt-1" required name="editStatus" id="editStatus">
@@ -728,6 +738,10 @@ if ($parent_filter === '0') {
             document.getElementById("editAction").value   = datas.action;
             document.getElementById("editFontAwesomeIcon").value = (datas.font_awesome_icon !== null) ? unescapeString(datas.font_awesome_icon) : '';
             document.getElementById("editStatus").value = datas.active;
+            var soEl = document.getElementById("editSortOrder");
+            if (soEl) {
+                soEl.value = (datas.sort_order !== undefined && datas.sort_order !== null && datas.sort_order !== '') ? String(datas.sort_order) : '0';
+            }
 
             popupWrapperEdit.classList.remove('hidden');
             setTimeout(() => {

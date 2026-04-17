@@ -73,10 +73,14 @@ class Modules {
         $addModuleName = $this->conn->real_escape_string($data['addModuleName']);
         $addSlug = $this->conn->real_escape_string($data['addSlug']);
         $addAction = $this->conn->real_escape_string($data['addAction']);
+        $addSortOrder = isset($data['addSortOrder']) ? (int) $data['addSortOrder'] : 0;
+        if ($addSortOrder < 0) {
+            $addSortOrder = 0;
+        }
         
-        $sql = "INSERT INTO modules (parent_id, module_name, slug, `action`, font_awesome_icon, active, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO modules (parent_id, module_name, slug, `action`, font_awesome_icon, active, sort_order, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('issssii', $addParentMenu, $addModuleName, $addSlug, $addAction, $icon, $data['addStatus'], $_SESSION["user"]["id"]);
+        $stmt->bind_param('issssiii', $addParentMenu, $addModuleName, $addSlug, $addAction, $icon, $data['addStatus'], $addSortOrder, $_SESSION["user"]["id"]);
 
         if ($stmt->execute()) {
             $module_id = $this->conn->insert_id;
@@ -141,16 +145,21 @@ class Modules {
         $editModuleName = $this->conn->real_escape_string($data['editModuleName']);
         $editSlug = $this->conn->real_escape_string($data['editSlug']);
         $editAction = $this->conn->real_escape_string($data['editAction']);
+        $editSortOrder = isset($data['editSortOrder']) ? (int) $data['editSortOrder'] : 0;
+        if ($editSortOrder < 0) {
+            $editSortOrder = 0;
+        }
 
-        $sql = "UPDATE modules SET parent_id = ?, module_name = ?, slug = ?, action = ?, font_awesome_icon = ?, active = ?, user_id = ? WHERE id = ?";
+        $sql = "UPDATE modules SET parent_id = ?, module_name = ?, slug = ?, `action` = ?, font_awesome_icon = ?, active = ?, sort_order = ?, user_id = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('issssiii',
+        $stmt->bind_param('issssiiii',
             $editParentMenu,
             $editModuleName,
             $editSlug,
             $editAction,
             $icon,
             $data['editStatus'],
+            $editSortOrder,
             $_SESSION["user"]["id"],
             $id
         );
@@ -227,9 +236,14 @@ class Modules {
         }
     }
 	public function getRecord($id) {
-        $result = $this->conn->query("SELECT id, parent_id, module_name, slug, 'action', font_awesome_icon, active 
-                      FROM modules 
-                      WHERE id = $id");
+        $id = (int) $id;
+        if ($id < 1) {
+            return json_encode(['status' => 'error', 'message' => 'Invalid ID.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        $stmt = $this->conn->prepare('SELECT id, parent_id, module_name, slug, `action`, font_awesome_icon, active, IFNULL(sort_order, 0) AS sort_order FROM modules WHERE id = ? LIMIT 1');
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
         $row = $result->fetch_assoc();
 
         return json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
