@@ -630,14 +630,14 @@ class POSRegisterController
         $custom_discount = (float)($data['customreduction'] ?? 0);
         // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
         $total_discount = $discount + $custom_discount;
-
+     $final_subtotal = $subtotal - $total_discount;
         $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
 
         // $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
         $grand_total = (float)($data['totalamount'] ?? 0);
         return [
             'items' => $items,
-            'subtotal' => $subtotal,
+            'subtotal' => $final_subtotal,
             'shipping_total' => $shipping_total,
             'gst' => $gst,
             'discount' => $discount,
