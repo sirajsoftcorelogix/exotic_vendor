@@ -2013,7 +2013,11 @@ class ProductsController {
         if ($productId <= 0) {
             return 'Invalid product id for stock movement.';
         }
-        $sku = trim($importSku) !== '' ? trim($importSku) : ((string)($product['sku'] ?? ''));
+        // Use canonical product SKU from vp_products only.
+        $sku = trim((string)($product['sku'] ?? ''));
+        if ($sku === '') {
+            return 'SKU is missing for stock movement.';
+        }
         $size = trim($importSize);
         $color = trim($importColor);
         $loc = trim($stockLocation);
@@ -2128,7 +2132,11 @@ class ProductsController {
             return 'Invalid product id for stock update.';
         }
 
-        $sku = trim($importSku) !== '' ? trim($importSku) : ((string)($product['sku'] ?? ''));
+        // Use canonical product SKU from vp_products only.
+        $sku = trim((string)($product['sku'] ?? ''));
+        if ($sku === '') {
+            return 'SKU is missing for stock update.';
+        }
         $size = trim($importSize);
         $color = trim($importColor);
         $loc = trim($stockLocation);
