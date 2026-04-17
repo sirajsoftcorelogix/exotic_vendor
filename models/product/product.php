@@ -100,6 +100,23 @@ class product
         return trim((string)($masterRow['hsn'] ?? ''));
     }
 
+    /**
+     * Vendor product/fetch returns image as a relative path (e.g. textiles-12-2025/ca0118.webp).
+     * Match bulk import: persist full CDN URL so listing/detail img src works.
+     */
+    public static function vendorApiImageStorageValue($image): string
+    {
+        $image = trim(str_replace('\\', '/', (string)$image));
+        if ($image === '') {
+            return '';
+        }
+        if (preg_match('#^https?://#i', $image)) {
+            return $image;
+        }
+
+        return 'https://cdn.exoticindia.com/images/products/original/' . ltrim($image, '/');
+    }
+
     public static function normalizeVendorProductFetchItems(array $data): array
     {
         if ($data === []) {
@@ -461,7 +478,7 @@ class product
                     // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                     // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
                     // $description = isset($product['description']) ? $product['description'] : '';
-                    $image = (string)($product['image'] ?? '');
+                    $image = self::vendorApiImageStorageValue($product['image'] ?? '');
                     // $stockQuantity = isset($product['stock_quantity']) ? (int)$product['stock_quantity'] : 0;
                     $asin = isset($product['asin']) ? $product['asin'] : '';
                     $localStock = isset($product['local_stock']) ? (int)$product['local_stock'] : 0;
@@ -533,7 +550,7 @@ class product
                     if ($stmt->affected_rows < 1) {
                         $exists = $this->findByItemCodeSizeColor($product['itemcode'], $size, $color);
                         if (!$exists) {
-                            $img = (string)($product['image'] ?? '');
+                            $img = self::vendorApiImageStorageValue($product['image'] ?? '');
                             $insertId = $this->createProduct([
                                 'item_code' => $product['itemcode'],
                                 'sku' => (string)$sku,
@@ -601,7 +618,7 @@ class product
                             // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                             // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
                             // $description = isset($product['description']) ? $product['description'] : '';
-                            $image = (string)($variation['image'] ?? ($product['image'] ?? ''));
+                            $image = self::vendorApiImageStorageValue($variation['image'] ?? ($product['image'] ?? ''));
                             // $stockQuantity = isset($product['stock_quantity']) ? (int)$product['stock_quantity'] : 0;
                             $asin = isset($variation['asin']) ? $variation['asin'] : '';
                             $localStock = isset($variation['local_stock']) ? (int)$variation['local_stock'] : 0;
@@ -672,7 +689,7 @@ class product
                             if ($stmt->affected_rows < 1) {
                                 $exists = $this->findByItemCodeSizeColor($product['itemcode'], $size, $color);
                                 if (!$exists) {
-                                    $img = (string)($variation['image'] ?? ($product['image'] ?? ''));
+                                    $img = self::vendorApiImageStorageValue($variation['image'] ?? ($product['image'] ?? ''));
                                     $insertId = $this->createProduct([
                                         'item_code' => $product['itemcode'],
                                         'sku' => (string)$sku,
