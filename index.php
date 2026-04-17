@@ -626,6 +626,11 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->updateStockLimits();
                 break;
+            case 'update_permanently_available':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updatePermanentlyAvailable();
+                break;
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;

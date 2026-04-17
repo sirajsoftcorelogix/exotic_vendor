@@ -34,108 +34,140 @@ if ($parent_filter === '0') {
     }
 }
 ?>
-<div class="max-w-7xl mx-auto space-y-6">
-    <div class="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white px-5 py-4 shadow-sm">
-        <h1 class="text-xl font-semibold text-slate-900 tracking-tight">Menu modules</h1>
-        <p class="mt-1 text-sm text-slate-600">Configure portal navigation items, slugs, and access structure.</p>
-    </div>
-
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-stretch lg:justify-between lg:gap-6">
-        <div class="bg-white rounded-xl shadow-md border border-slate-100 p-5 flex-grow min-w-0">
-            <form method="get" id="filterForm" class="space-y-4" autocomplete="off">
-                <input type="hidden" name="page" value="modules">
-                <input type="hidden" name="action" value="list">
-                <input type="hidden" name="page_no" value="1">
-                <div class="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                        <h2 class="text-sm font-semibold text-slate-900">Find modules</h2>
-                        <p class="text-xs text-slate-500 mt-0.5">Search matches display name, page slug, action, or parent label. <span class="text-slate-600">Parent and status refilter immediately</span>; use <strong class="font-medium text-slate-700">Apply</strong> or <strong class="font-medium text-slate-700">Enter</strong> after editing the search box.</p>
-                    </div>
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <!-- Page header (aligned with stock transfer history) -->
+    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04]">
+        <div class="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-sky-200/15 blur-2xl" aria-hidden="true"></div>
+        <div class="relative px-5 py-7 sm:px-8 sm:py-9 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+            <div class="min-w-0 max-w-3xl">
+                <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+                        <i class="fas fa-layer-group text-[11px]" aria-hidden="true"></i>
+                    </span>
+                    <span>Portal · Navigation</span>
                 </div>
-                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
-                    <div class="sm:col-span-2 lg:col-span-5 space-y-1.5">
-                        <label for="modules_search" class="text-xs font-semibold text-slate-600">Search</label>
-                        <div class="relative">
-                            <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                            </span>
-                            <input id="modules_search" type="search" name="search_text" enterkeyhint="search"
-                                placeholder="Name, slug, action, parent…"
-                                class="custom-input w-full min-h-[42px] rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30"
-                                value="<?php echo htmlspecialchars($search ?? '', ENT_QUOTES, 'UTF-8') ?>">
-                        </div>
-                    </div>
-                    <div class="space-y-1.5 lg:col-span-4">
-                        <label for="parent_filter" class="text-xs font-semibold text-slate-600">Parent menu</label>
-                        <select id="parent_filter" name="parent_filter" class="custom-select w-full min-h-[42px] rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30">
-                            <option value="" <?= $parent_filter === '' ? 'selected' : '' ?>>All modules</option>
-                            <option value="0" <?= $parent_filter === '0' ? 'selected' : '' ?>>Top-level only</option>
-                            <?php if (!empty($parent_menus)): ?>
-                                <?php foreach ($parent_menus as $pmenu): ?>
-                                    <option value="<?= (int) $pmenu['id'] ?>" <?= ((string) $parent_filter === (string) $pmenu['id']) ? 'selected' : '' ?>><?= htmlspecialchars($pmenu['module_name'], ENT_QUOTES, 'UTF-8') ?></option>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </select>
-                    </div>
-                    <div class="space-y-1.5 lg:col-span-3">
-                        <span class="text-xs font-semibold text-slate-600">Status</span>
-                        <div class="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="Filter by status">
-                            <?php
-                            $st = (string)($status_filter ?? '');
-                            ?>
-                            <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900' ?>">
-                                <input type="radio" name="status_filter" value="" class="sr-only" <?= $st === '' ? 'checked' : '' ?>> All
-                            </label>
-                            <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '1' ? 'bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-200' : 'text-slate-600 hover:text-slate-900' ?>">
-                                <input type="radio" name="status_filter" value="1" class="sr-only" <?= $st === '1' ? 'checked' : '' ?>> Active
-                            </label>
-                            <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '0' ? 'bg-white text-slate-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:text-slate-900' ?>">
-                                <input type="radio" name="status_filter" value="0" class="sr-only" <?= $st === '0' ? 'checked' : '' ?>> Inactive
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                    <div class="flex flex-wrap gap-2">
-                        <button type="submit" class="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-slate-800 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2">
-                            <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                            Apply filters
-                        </button>
-                        <a href="?page=modules&amp;action=list" class="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">Clear all</a>
-                    </div>
-                    <?php if ($has_list_filters): ?>
-                        <p class="text-xs text-slate-600">
-                            <span class="font-medium text-slate-700">Applied:</span>
-                            <?php if (($search ?? '') !== ''): ?>
-                                <?php
-                                $__q = (string)($search ?? '');
-                                $__short = strlen($__q) > 48 ? substr($__q, 0, 48) . '…' : $__q;
-                                ?>
-                                <span class="ml-1 inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 font-medium text-indigo-900 ring-1 ring-indigo-100">“<?= htmlspecialchars($__short, ENT_QUOTES, 'UTF-8') ?>”</span>
-                            <?php endif; ?>
-                            <?php if ($parent_filter !== ''): ?>
-                                <span class="ml-1 inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-800 ring-1 ring-slate-200/80"><?= htmlspecialchars($parent_filter_summary !== '' ? $parent_filter_summary : 'Parent #' . $parent_filter, ENT_QUOTES, 'UTF-8') ?></span>
-                            <?php endif; ?>
-                            <?php if (($status_filter ?? '') === '1'): ?>
-                                <span class="ml-1 inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 font-medium text-emerald-900 ring-1 ring-emerald-100">Active</span>
-                            <?php elseif (($status_filter ?? '') === '0'): ?>
-                                <span class="ml-1 inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-800 ring-1 ring-slate-200/80">Inactive</span>
-                            <?php endif; ?>
-                            <a class="ml-2 text-indigo-600 underline decoration-indigo-200 underline-offset-2 hover:text-indigo-800" href="?page=modules&amp;action=list">Reset</a>
-                        </p>
-                    <?php endif; ?>
-                </div>
-            </form>
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
+                    Menu <span class="text-amber-800">modules</span>
+                </h1>
+                <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+                    Configure vendor portal menu entries, URL slugs, route actions, and sidebar icons—in one place.
+                </p>
+            </div>
+            <div class="flex shrink-0 lg:pl-4 lg:self-center">
+                <button type="button" id="open-vendor-popup-btn"
+                    class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap w-full sm:w-auto"
+                    title="Add a new module">
+                    <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
+                    Add module
+                </button>
+            </div>
         </div>
-        <button type="button" class="shrink-0 h-[48px] px-5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold inline-flex items-center justify-center gap-2 shadow-md transition self-start lg:self-stretch lg:h-auto min-w-[140px]" id="open-vendor-popup-btn" title="Add a new module">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-            </svg>
-            Add module
-        </button>
     </div>
 
-    <div class="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
+    <style>
+        #modules-list-filters > summary { list-style: none; }
+        #modules-list-filters > summary::-webkit-details-marker { display: none; }
+        #modules-list-filters[open] > summary { border-bottom: 1px solid rgba(251, 243, 219, 0.85); }
+        #modules-list-filters:not([open]) .mlf-label-open { display: none; }
+        #modules-list-filters[open] .mlf-label-closed { display: none; }
+        #modules-list-filters[open] .mlf-chevron { transform: rotate(180deg); }
+    </style>
+    <details id="modules-list-filters" class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]" <?= $has_list_filters ? 'open' : ''; ?>>
+        <summary class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 flex items-center justify-between gap-4 cursor-pointer">
+            <div class="flex items-center gap-3 min-w-0">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
+                    <i class="fas fa-filter text-sm" aria-hidden="true"></i>
+                </span>
+                <div class="min-w-0">
+                    <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
+                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Match name, slug, action, or parent. Parent and status apply on change; use Apply or Enter for text search.</p>
+                </div>
+            </div>
+            <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
+                <span class="mlf-label-closed">Show</span>
+                <span class="mlf-label-open">Hide</span>
+                <i class="mlf-chevron fas fa-chevron-down text-[10px] transition-transform duration-200" aria-hidden="true"></i>
+            </span>
+        </summary>
+        <form method="get" id="filterForm" class="p-5" autocomplete="off">
+            <input type="hidden" name="page" value="modules">
+            <input type="hidden" name="action" value="list">
+            <input type="hidden" name="page_no" value="1">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-x-5 gap-y-4 lg:items-end">
+                <div class="sm:col-span-2 lg:col-span-5">
+                    <label for="modules_search" class="block text-xs font-semibold text-gray-600 mb-1">Search</label>
+                    <div class="relative">
+                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                            <i class="fas fa-search text-sm opacity-80" aria-hidden="true"></i>
+                        </span>
+                        <input id="modules_search" type="search" name="search_text" enterkeyhint="search"
+                            placeholder="Name, slug, action, parent…"
+                            class="w-full min-h-[42px] rounded-lg border border-gray-300 bg-white pl-10 pr-3 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
+                            value="<?php echo htmlspecialchars($search ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                    </div>
+                </div>
+                <div class="lg:col-span-4">
+                    <label for="parent_filter" class="block text-xs font-semibold text-gray-600 mb-1">Parent menu</label>
+                    <select id="parent_filter" name="parent_filter" class="w-full min-h-[42px] px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="" <?= $parent_filter === '' ? 'selected' : '' ?>>All modules</option>
+                        <option value="0" <?= $parent_filter === '0' ? 'selected' : '' ?>>Top-level only</option>
+                        <?php if (!empty($parent_menus)): ?>
+                            <?php foreach ($parent_menus as $pmenu): ?>
+                                <option value="<?= (int) $pmenu['id'] ?>" <?= ((string) $parent_filter === (string) $pmenu['id']) ? 'selected' : '' ?>><?= htmlspecialchars($pmenu['module_name'], ENT_QUOTES, 'UTF-8') ?></option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <div class="lg:col-span-3">
+                    <span class="block text-xs font-semibold text-gray-600 mb-1">Status</span>
+                    <div class="flex rounded-lg border border-gray-200 bg-gray-50 p-0.5" role="group" aria-label="Filter by status">
+                        <?php $st = (string)($status_filter ?? ''); ?>
+                        <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900' ?>">
+                            <input type="radio" name="status_filter" value="" class="sr-only" <?= $st === '' ? 'checked' : '' ?>> All
+                        </label>
+                        <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '1' ? 'bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-200' : 'text-gray-600 hover:text-gray-900' ?>">
+                            <input type="radio" name="status_filter" value="1" class="sr-only" <?= $st === '1' ? 'checked' : '' ?>> Active
+                        </label>
+                        <label class="flex-1 cursor-pointer rounded-md px-2 py-2 text-center text-xs font-medium transition <?= $st === '0' ? 'bg-white text-gray-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-600 hover:text-gray-900' ?>">
+                            <input type="radio" name="status_filter" value="0" class="sr-only" <?= $st === '0' ? 'checked' : '' ?>> Inactive
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-5 flex flex-wrap items-center gap-3">
+                <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
+                    <i class="fas fa-search text-xs opacity-90" aria-hidden="true"></i>
+                    Apply filters
+                </button>
+                <a href="?page=modules&amp;action=list" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition">
+                    Reset
+                </a>
+                <?php if ($has_list_filters): ?>
+                    <?php
+                    $__q = (string)($search ?? '');
+                    $__short = strlen($__q) > 48 ? substr($__q, 0, 48) . '…' : $__q;
+                    ?>
+                    <span class="text-xs text-gray-600 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span class="font-medium text-gray-700">Applied:</span>
+                        <?php if (($search ?? '') !== ''): ?>
+                            <span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 font-medium text-amber-950 ring-1 ring-amber-100">“<?= htmlspecialchars($__short, ENT_QUOTES, 'UTF-8') ?>”</span>
+                        <?php endif; ?>
+                        <?php if ($parent_filter !== ''): ?>
+                            <span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 font-medium text-gray-800 ring-1 ring-gray-200/80"><?= htmlspecialchars($parent_filter_summary !== '' ? $parent_filter_summary : 'Parent #' . $parent_filter, ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php endif; ?>
+                        <?php if (($status_filter ?? '') === '1'): ?>
+                            <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 font-medium text-emerald-900 ring-1 ring-emerald-100">Active</span>
+                        <?php elseif (($status_filter ?? '') === '0'): ?>
+                            <span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 font-medium text-gray-800 ring-1 ring-gray-200/80">Inactive</span>
+                        <?php endif; ?>
+                    </span>
+                <?php endif; ?>
+            </div>
+        </form>
+    </details>
+
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
         <div class="p-0 sm:p-0">
             <div id="deleteMsgBox" class="fixed inset-0 flex items-center justify-center bg-black/50 hidden z-50" role="alertdialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="showMessage">
                 <div class="bg-white rounded-xl shadow-xl w-[min(100%,400px)] mx-4 p-8 text-center">
@@ -147,20 +179,20 @@ if ($parent_filter === '0') {
                 </div>
             </div>
             <div class="overflow-x-auto table-container">
-                <table class="min-w-full divide-y divide-slate-200">
-                    <thead class="bg-slate-50/90">
-                    <tr>
-                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text w-12">#</th>
-                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text min-w-[8rem]">Parent</th>
-                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text min-w-[10rem]">Display name</th>
-                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text min-w-[7rem]">Page</th>
-                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text min-w-[6rem]">Action</th>
-                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text w-24">Icon</th>
-                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text w-28">Status</th>
-                        <th scope="col" class="px-4 sm:px-6 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider table-header-text w-20">Actions</th>
+                <table class="min-w-full text-left">
+                    <thead>
+                    <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">#</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap min-w-[8rem]">Parent</th>
+                        <th scope="col" class="px-5 py-3.5 min-w-[10rem]">Display name</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap min-w-[7rem]">Page</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap min-w-[6rem]">Action</th>
+                        <th scope="col" class="px-5 py-3.5 text-center w-24">Icon</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap w-28">Status</th>
+                        <th scope="col" class="px-5 py-3.5 text-right w-20"><span class="sr-only">Actions</span></th>
                     </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-slate-100">
+                    <tbody class="divide-y divide-gray-100">
                     <?php if (!empty($modules_data)): ?>
                         <?php foreach ($modules_data as $index => $tc): ?>
                             <?php
@@ -170,39 +202,39 @@ if ($parent_filter === '0') {
                             $parentDisplay = trim((string)($tc['parent_display_name'] ?? ''));
                             $iconHtml = trim((string)($tc['font_awesome_icon'] ?? ''));
                             ?>
-                            <tr class="table-content-text transition hover:bg-slate-50/80">
-                                <td class="px-4 sm:px-6 py-3.5 whitespace-nowrap text-sm text-slate-500 tabular-nums"><?= (int) $index + 1 ?></td>
-                                <td class="px-4 sm:px-6 py-3.5 text-sm text-slate-700 max-w-[14rem]">
+                            <tr class="table-content-text hover:bg-amber-50/40 transition-colors">
+                                <td class="px-5 py-4 align-top text-sm text-gray-600 tabular-nums whitespace-nowrap"><?= (int) $index + 1 ?></td>
+                                <td class="px-5 py-4 align-top text-sm text-gray-700 max-w-[14rem]">
                                     <?php if ($parentDisplay !== ''): ?>
                                         <span class="line-clamp-2 break-words" title="<?= htmlspecialchars($parentDisplay, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($parentDisplay, ENT_QUOTES, 'UTF-8') ?></span>
                                     <?php else: ?>
-                                        <span class="text-slate-400" title="Top-level menu (no parent)">—</span>
+                                        <span class="text-gray-400" title="Top-level menu (no parent)">—</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-4 sm:px-6 py-3.5 text-sm font-medium text-slate-900 min-w-[10rem] max-w-xs break-words"><?= htmlspecialchars($tc['module_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                                <td class="px-4 sm:px-6 py-3.5 text-sm font-mono text-slate-800">
-                                    <?= $slug !== '' ? htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') : '<span class="text-slate-400">—</span>' ?>
+                                <td class="px-5 py-4 align-top text-sm font-semibold text-gray-900 min-w-[10rem] max-w-xs break-words"><?= htmlspecialchars($tc['module_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                                <td class="px-5 py-4 align-top text-sm font-mono text-gray-900">
+                                    <?= $slug !== '' ? htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') : '<span class="text-gray-400">—</span>' ?>
                                 </td>
-                                <td class="px-4 sm:px-6 py-3.5 text-sm text-slate-800">
-                                    <?= $actionName !== '' ? htmlspecialchars($actionName, ENT_QUOTES, 'UTF-8') : '<span class="text-slate-400">—</span>' ?>
+                                <td class="px-5 py-4 align-top text-sm text-gray-800">
+                                    <?= $actionName !== '' ? htmlspecialchars($actionName, ENT_QUOTES, 'UTF-8') : '<span class="text-gray-400">—</span>' ?>
                                 </td>
-                                <td class="px-4 sm:px-6 py-3.5 text-center align-middle">
+                                <td class="px-5 py-4 align-middle text-center">
                                     <?php if ($iconHtml !== ''): ?>
-                                        <span class="inline-flex items-center justify-center text-slate-600 text-lg leading-none [&_i]:text-base" aria-hidden="true"><?= $iconHtml ?></span>
+                                        <span class="inline-flex items-center justify-center text-gray-600 text-lg leading-none [&_i]:text-base" aria-hidden="true"><?= $iconHtml ?></span>
                                     <?php else: ?>
-                                        <span class="text-slate-400 text-sm">—</span>
+                                        <span class="text-gray-400 text-sm">—</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-4 sm:px-6 py-3.5 whitespace-nowrap">
+                                <td class="px-5 py-4 align-top whitespace-nowrap">
                                     <?php if ($isActive): ?>
-                                        <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/15">Active</span>
+                                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset bg-amber-50 text-amber-900 ring-amber-600/25">Active</span>
                                     <?php else: ?>
-                                        <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10">Inactive</span>
+                                        <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-500/20">Inactive</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-4 sm:px-6 py-3.5 whitespace-nowrap text-sm font-medium text-right">
+                                <td class="px-5 py-4 align-middle text-right whitespace-nowrap text-sm font-medium">
                                     <div class="menu-wrapper inline-flex justify-end">
-                                        <button type="button" class="menu-button rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800" onclick="toggleMenu(this)" aria-haspopup="true" aria-expanded="false" aria-label="Row actions">
+                                        <button type="button" class="menu-button rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800" onclick="toggleMenu(this)" aria-haspopup="true" aria-expanded="false" aria-label="Row actions">
                                             &#x22EE;
                                         </button>
                                         <ul class="menu-popup text-left">
@@ -215,11 +247,17 @@ if ($parent_filter === '0') {
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="8" class="px-6 py-16 text-center">
-                                <div class="flex flex-col items-center justify-center gap-2 text-slate-500">
-                                    <svg class="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-                                    <p class="text-sm font-medium text-slate-700">No modules match your filters</p>
-                                    <p class="text-xs text-slate-500 max-w-sm">Try another search or clear filters. Add a module with the button above.</p>
+                            <td colspan="8" class="px-5 py-16 text-center">
+                                <div class="mx-auto flex max-w-sm flex-col items-center">
+                                    <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
+                                        <i class="fas fa-inbox" aria-hidden="true"></i>
+                                    </span>
+                                    <p class="text-base font-medium text-gray-900">No modules match</p>
+                                    <p class="mt-1 text-sm text-gray-500">Try adjusting filters or add a module.</p>
+                                    <button type="button" onclick="document.getElementById('open-vendor-popup-btn')?.click()" class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-amber-700 hover:text-amber-800">
+                                        <i class="fas fa-plus-circle" aria-hidden="true"></i>
+                                        New module
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -238,34 +276,34 @@ if ($parent_filter === '0') {
         $pagination_base = modules_list_query($search ?? '', $status_filter ?? '', $parent_filter ?? '', []);
     ?>
 	<?php if ($total_records > 0): ?>
-        <div class="bg-white rounded-xl shadow-md border border-slate-100 p-4">
-            <div class="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 text-sm text-slate-600">
-                <p class="tabular-nums order-2 sm:order-1">
-                    Showing <span class="font-medium text-slate-800"><?= (int) $range_from ?></span>–<span class="font-medium text-slate-800"><?= (int) $range_to ?></span> of <span class="font-medium text-slate-800"><?= (int) $total_records ?></span>
-                </p>
-                <div class="flex flex-wrap items-center justify-center gap-3 order-1 sm:order-2">
-                    <?php if ($total_pages > 1): ?>
-                    <span class="text-slate-500 hidden sm:inline">Page</span>
-                    <button type="button" class="p-2 rounded-full hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none <?= $page_no <= 1 ? 'opacity-40 pointer-events-none' : '' ?>">
-                        <a class="page-link block text-slate-700" <?php if ($page_no > 1): ?>href="?<?= htmlspecialchars(modules_list_query($search ?? '', $status_filter ?? '', $parent_filter ?? '', ['page_no' => $page_no - 1, 'limit' => $limit]), ENT_QUOTES, 'UTF-8') ?>"<?php else: ?>href="#" aria-disabled="true"<?php endif ?> tabindex="-1" title="Previous page">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                        </a>
-                    </button>
-                    <span id="page-number" class="inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-full bg-slate-900 text-white text-sm font-semibold shadow-sm tabular-nums"><?= (int) $page_no ?></span>
-                    <button type="button" class="p-2 rounded-full hover:bg-slate-100 <?= $page_no >= $total_pages ? 'opacity-40 pointer-events-none' : '' ?>">
-                        <a class="page-link block text-slate-700" <?php if ($page_no < $total_pages): ?>href="?<?= htmlspecialchars(modules_list_query($search ?? '', $status_filter ?? '', $parent_filter ?? '', ['page_no' => $page_no + 1, 'limit' => $limit]), ENT_QUOTES, 'UTF-8') ?>"<?php else: ?>href="#" aria-disabled="true"<?php endif ?> tabindex="-1" title="Next page">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                        </a>
-                    </button>
-                    <?php endif; ?>
-                    <div class="relative flex items-center gap-2 border-l border-slate-200 pl-3 ml-1">
-                        <label for="rows-per-page" class="text-slate-500 whitespace-nowrap">Rows</label>
-                        <select id="rows-per-page" name="limit" class="custom-select rounded-lg border border-slate-300 text-slate-900 text-sm py-1.5 pl-2 pr-8 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 bg-white min-w-[4.5rem]" data-query-base="<?= htmlspecialchars($pagination_base, ENT_QUOTES, 'UTF-8') ?>" onchange="location.href='?' + this.getAttribute('data-query-base') + '&page_no=1&limit=' + encodeURIComponent(this.value);">
-                            <?php foreach ([5, 20, 50, 100] as $opt): ?>
-                                <option value="<?= (int) $opt ?>" <?= (int) $opt === (int) $limit ? 'selected' : '' ?>><?= (int) $opt ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+        <div class="mt-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-4 shadow-sm">
+            <p class="text-sm text-gray-600 tabular-nums">
+                Showing <span class="font-medium text-gray-900"><?= (int) $range_from ?></span>
+                –
+                <span class="font-medium text-gray-900"><?= (int) $range_to ?></span>
+                of <span class="font-medium text-gray-900"><?= number_format((int) $total_records) ?></span>
+            </p>
+            <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
+                <?php if ($total_pages > 1): ?>
+                <nav class="flex flex-wrap items-center gap-2" aria-label="Pagination">
+                    <a href="?<?= htmlspecialchars(modules_list_query($search ?? '', $status_filter ?? '', $parent_filter ?? '', ['page_no' => 1, 'limit' => $limit]), ENT_QUOTES, 'UTF-8') ?>"
+                        class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?= $page_no <= 1 ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' ?>">First</a>
+                    <a href="?<?= htmlspecialchars(modules_list_query($search ?? '', $status_filter ?? '', $parent_filter ?? '', ['page_no' => max(1, $page_no - 1), 'limit' => $limit]), ENT_QUOTES, 'UTF-8') ?>"
+                        class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?= $page_no <= 1 ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' ?>">Previous</a>
+                    <span class="px-3 py-1.5 text-sm text-gray-700 tabular-nums">Page <?= (int) $page_no ?> / <?= (int) $total_pages ?></span>
+                    <a href="?<?= htmlspecialchars(modules_list_query($search ?? '', $status_filter ?? '', $parent_filter ?? '', ['page_no' => min($total_pages, $page_no + 1), 'limit' => $limit]), ENT_QUOTES, 'UTF-8') ?>"
+                        class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?= $page_no >= $total_pages ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' ?>">Next</a>
+                    <a href="?<?= htmlspecialchars(modules_list_query($search ?? '', $status_filter ?? '', $parent_filter ?? '', ['page_no' => $total_pages, 'limit' => $limit]), ENT_QUOTES, 'UTF-8') ?>"
+                        class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?= $page_no >= $total_pages ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' ?>">Last</a>
+                </nav>
+                <?php endif; ?>
+                <div class="flex items-center gap-2 border-t border-gray-100 pt-3 sm:border-t-0 sm:pt-0 sm:border-l sm:border-gray-200 sm:pl-4">
+                    <label for="rows-per-page" class="text-xs font-semibold text-gray-600 whitespace-nowrap">Rows per page</label>
+                    <select id="rows-per-page" name="limit" class="rounded-lg border border-gray-300 bg-white text-gray-900 text-sm py-1.5 pl-2 pr-8 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 min-w-[4.5rem]" data-query-base="<?= htmlspecialchars($pagination_base, ENT_QUOTES, 'UTF-8') ?>" onchange="location.href='?' + this.getAttribute('data-query-base') + '&page_no=1&limit=' + encodeURIComponent(this.value);">
+                        <?php foreach ([5, 20, 50, 100] as $opt): ?>
+                            <option value="<?= (int) $opt ?>" <?= (int) $opt === (int) $limit ? 'selected' : '' ?>><?= (int) $opt ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
         </div>

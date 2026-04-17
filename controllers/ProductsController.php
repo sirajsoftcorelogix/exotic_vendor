@@ -475,6 +475,7 @@ class ProductsController {
 
     public function importApiCall($manualCodes = null) {
         global $productModel;
+        global $conn;
         $t0 = microtime(true);
         $internalCall = ($manualCodes !== null);
         $importTiming = function (int $reqCodes, float $apiMs = 0.0, ?int $apiParentItems = null, ?int $dbWrites = null) use ($t0): array {
@@ -697,6 +698,17 @@ class ProductsController {
             if ($id) {
                 $created++;
                 $createdIdsByCode[$code][] = (int)$id;
+                if (isset($conn) && $conn instanceof mysqli) {
+                    $this->recordVendorApiImportOpeningStock(
+                        $conn,
+                        (int)$id,
+                        trim((string)($item['sku'] ?? '')),
+                        (string)($item['item_code'] ?? ''),
+                        trim((string)($item['size'] ?? '')),
+                        trim((string)($item['color'] ?? '')),
+                        (int)($item['local_stock'] ?? 0)
+                    );
+                }
             }
             else $failed[] = $code;
             }
@@ -765,6 +777,17 @@ class ProductsController {
                         if ($id) {
                             $created++;
                             $createdIdsByCode[$variantItem['item_code']][] = (int)$id;
+                            if (isset($conn) && $conn instanceof mysqli) {
+                                $this->recordVendorApiImportOpeningStock(
+                                    $conn,
+                                    (int)$id,
+                                    trim((string)($variantItem['sku'] ?? '')),
+                                    (string)($variantItem['item_code'] ?? ''),
+                                    trim((string)($variantItem['size'] ?? '')),
+                                    trim((string)($variantItem['color'] ?? '')),
+                                    (int)($variantItem['local_stock'] ?? 0)
+                                );
+                            }
                         }
                         else $failed[] = $variantItem['item_code'];
                     }
@@ -1988,6 +2011,127 @@ class ProductsController {
     }
 
     /**
+     * Stock movement location label from exotic_address (address_title for warehouse_id).
+     */
+    private function getWarehouseLocationLabel(mysqli $conn, int $warehouseId): string {
+        if ($warehouseId <= 0) {
+            return '-';
+        }
+        $stmt = $conn->prepare('SELECT address_title FROM exotic_address WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return '-';
+        }
+        $stmt->bind_param('i', $warehouseId);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return '-';
+        }
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        $t = trim((string)($row['address_title'] ?? ''));
+        return $t !== '' ? $t : '-';
+    }
+
+    /**
+     * Default warehouse for vendor API import: session warehouse if valid, else first active exotic_address by id.
+     */
+    private function resolveDefaultImportWarehouseId(mysqli $conn): int {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
+        }
+        $wid = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($wid <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $wid = (int)$_SESSION['user']['warehouse_id'];
+        }
+        if ($wid > 0) {
+            $chk = $conn->prepare('SELECT id FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1');
+            if ($chk) {
+                $chk->bind_param('i', $wid);
+                if ($chk->execute()) {
+                    $row = $chk->get_result()->fetch_assoc();
+                    $chk->close();
+                    if ($row) {
+                        return $wid;
+                    }
+                } else {
+                    $chk->close();
+                }
+            }
+        }
+        $r = @mysqli_query($conn, 'SELECT id FROM exotic_address WHERE is_active = 1 ORDER BY id ASC LIMIT 1');
+        if ($r && ($row = mysqli_fetch_assoc($r))) {
+            return (int)$row['id'];
+        }
+        return 0;
+    }
+
+    /**
+     * OPENING_STOCK when a product is first created via vendor API import (single-mode).
+     */
+    private function recordVendorApiImportOpeningStock(
+        mysqli $conn,
+        int $productId,
+        string $sku,
+        string $itemCode,
+        string $size,
+        string $color,
+        int $qty
+    ): void {
+        if ($productId <= 0 || $qty <= 0) {
+            return;
+        }
+        $sku = trim($sku);
+        if ($sku === '') {
+            return;
+        }
+        $warehouseId = $this->resolveDefaultImportWarehouseId($conn);
+        if ($warehouseId <= 0) {
+            return;
+        }
+        $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
+        $reason = 'Opening stock from vendor API import';
+        $refType = 'VendorImport';
+        $userId = 0;
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
+        }
+        if (!empty($_SESSION['user']['id'])) {
+            $userId = (int)$_SESSION['user']['id'];
+        }
+
+        $this->ensureVpStockMovementsOpeningStockEnum($conn);
+
+        $ins = $conn->prepare("INSERT INTO vp_stock_movements
+            (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
+        if (!$ins) {
+            error_log('recordVendorApiImportOpeningStock: prepare failed ' . $conn->error);
+            return;
+        }
+        $runningStock = $qty;
+        $ins->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
+        if (!$ins->execute()) {
+            $msg = $ins->error;
+            $ins->close();
+            $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
+                (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
+            if (!$ins2) {
+                error_log('recordVendorApiImportOpeningStock: insert failed ' . $msg);
+                return;
+            }
+            $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
+            if (!$ins2->execute()) {
+                error_log('recordVendorApiImportOpeningStock: fallback insert failed ' . $ins2->error);
+            }
+            $ins2->close();
+            return;
+        }
+        $ins->close();
+    }
+
+    /**
      * @return string|null Error message, or null on success
      */
     private function bulkImportApplyOpeningStock(
@@ -2022,7 +2166,7 @@ class ProductsController {
         $color = trim($importColor);
         $loc = trim($stockLocation);
         if ($loc === '') {
-            $loc = '-';
+            $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
         }
         $qty = max(0, (int)$openingQty);
         $runningStock = $qty; // new opening line baseline
@@ -2141,7 +2285,7 @@ class ProductsController {
         $color = trim($importColor);
         $loc = trim($stockLocation);
         if ($loc === '') {
-            $loc = '-';
+            $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
         }
         $targetQty = max(0, (int)$targetQty);
         $refType = 'EgreenRefetch';
@@ -4136,6 +4280,139 @@ class ProductsController {
         }
         exit;
     }
+
+    public function updatePermanentlyAvailable() {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            if (!is_array($data) || empty($data['product_id'])) {
+                throw new Exception('Invalid data received');
+            }
+            $productId = (int)$data['product_id'];
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+            $newVal = isset($data['permanently_available']) ? (int)$data['permanently_available'] : -1;
+            if ($newVal !== 0 && $newVal !== 1) {
+                throw new Exception('permanently_available must be 0 or 1');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+            $current = (int)($product['permanently_available'] ?? 0);
+            if ($current === $newVal) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'No change.',
+                    'permanently_available' => $newVal,
+                    'vendor_sync' => ['success' => true, 'message' => 'Skipped (already set).'],
+                ]);
+                exit;
+            }
+
+            $ok = $productModel->setProductPermanentlyAvailable($productId, $newVal);
+            if (!$ok) {
+                throw new Exception('Could not update permanently_available');
+            }
+
+            $fresh = $productModel->getProduct($productId);
+            $vendorSync = $fresh ? $this->syncPermanentlyAvailableToVendorFrontend($fresh, $newVal) : [
+                'success' => false,
+                'message' => 'Updated locally but could not reload product for vendor sync.',
+            ];
+
+            $message = 'Permanently Available updated.';
+            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+                $message .= ' ' . $vendorSync['message'];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'permanently_available' => $newVal,
+                'vendor_sync' => $vendorSync,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * Set permanently_available on frontend via vendor product/modify API.
+     */
+    private function syncPermanentlyAvailableToVendorFrontend(array $product, int $value): array
+    {
+        $itemCode = trim((string)($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
+        }
+
+        $size = trim((string)($product['size'] ?? ''));
+        $color = trim((string)($product['color'] ?? ''));
+        $flag = $value ? 1 : 0;
+
+        $url = 'https://www.exoticindia.com/vendor-api/product/modify'
+            . '?itemcode=' . urlencode($itemCode)
+            . '&size=' . urlencode($size)
+            . '&color=' . urlencode($color);
+
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+        $postData = [
+            'permanently_available' => $flag,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false) {
+            return ['success' => false, 'message' => 'Vendor API request failed: ' . $curlErr];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            return [
+                'success' => ($httpCode >= 200 && $httpCode < 300),
+                'message' => ($httpCode >= 200 && $httpCode < 300)
+                    ? 'Vendor sync completed.'
+                    : 'Vendor API returned non-JSON response.',
+                'http_code' => $httpCode,
+                'raw_response' => $response,
+            ];
+        }
+
+        $apiSuccess = isset($decoded['success']) ? (bool)$decoded['success'] : ($httpCode >= 200 && $httpCode < 300);
+        return [
+            'success' => $apiSuccess,
+            'message' => $decoded['message'] ?? ($apiSuccess ? 'Vendor permanently_available sync completed.' : 'Vendor sync failed.'),
+            'http_code' => $httpCode,
+            'response' => $decoded,
+        ];
+    }
+
     public function saveProductNotes() {
         is_login();
         global $productModel;

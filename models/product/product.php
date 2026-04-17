@@ -2772,5 +2772,18 @@ class product
         $stmt->bind_param('iii', $minStock, $maxStock, $productId);
 
         return $stmt->execute();
-    } 
+    }
+
+    public function setProductPermanentlyAvailable($productId, $permanentlyAvailable)
+    {
+        $productId = (int)$productId;
+        $flag = ((int)$permanentlyAvailable) ? 1 : 0;
+        $sql = 'UPDATE vp_products SET permanently_available = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ii', $flag, $productId);
+        return $stmt->execute();
+    }
 }
