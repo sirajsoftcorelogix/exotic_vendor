@@ -351,7 +351,8 @@ class POSRegisterController
             'maincategory' => $data['maincategory'] ?? '',
             'dimensions' => $this->cleanValue($data['dimensions'] ?? ''),
             'weight' => $data['product_weight_kg'] ?? '',
-
+            'express_shipping_cost' => $data['express_shipping_cost'] ?? 0,
+            'express_shipping_option' => $data['express_shipping_option'] ?? null,
             'addon_options' => $data['addon_options'] ?? []
         ];
 
@@ -641,7 +642,7 @@ class POSRegisterController
             'x-api-appplayerid: POS-Web-Terminal',
             'x-api-countrycode: IN',
             'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
-            'User-Agent: ExoticPOS-Web/1.0'
+            'User-Agent: ExoticPOS/1.0'
         ];
 
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -764,14 +765,14 @@ class POSRegisterController
         $custom_discount = (float)($data['customreduction'] ?? 0);
         // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
         $total_discount = $discount + $custom_discount;
-
+     $final_subtotal = $subtotal - $total_discount; 
         $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
 
         // $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
         $grand_total = (float)($data['totalamount'] ?? 0);
-        return [
+        return [ 
             'items' => $items,
-            'subtotal' => $subtotal,
+            'subtotal' => $final_subtotal,
             'shipping_total' => $shipping_total,
             'gst' => $gst,
             'discount' => $discount,

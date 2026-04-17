@@ -133,6 +133,13 @@ $(function () {
     if (p && p.addon_options && Array.isArray(p.addon_options.default_options)) {
       addons = p.addon_options.default_options;
     }
+    if (p.express_shipping_option && p.express_shipping_option.price) {
+      addons.push({
+        title: p.express_shipping_option.title || 'Express Shipping',
+        price: p.express_shipping_option.price,
+        cart_entry: p.express_shipping_option.cart_entry || ''
+      });
+    }
 
     if (addons.length > 0) {
 
@@ -527,26 +534,35 @@ data-code="${p.item_code}">
     }
   }
   //  HANDLE ADDON SELECTION
-  $(document).on('change', '.addon-checkbox', function () {
+  // $(document).on('change', '.addon-checkbox', function () {
 
+  //   let selected = [];
+
+  //   $('.addon-checkbox:checked').each(function () {
+  //     let entry = $(this).data('entry');
+
+  //     if (entry) {
+  //       selected.push(entry);
+  //     }
+  //   });
+
+  //   //  JOIN WITH PIPE
+  //   let optionsStr = selected.join('|');
+
+  //   console.log("FINAL OPTIONS:", optionsStr);
+
+  //   //  SET HIDDEN INPUT
+  //   $('#modal_options').val(optionsStr);
+  // });
+  $(document).on('change', '.addon-checkbox', function () {
     let selected = [];
 
     $('.addon-checkbox:checked').each(function () {
-      let entry = $(this).data('entry');
-
-      if (entry) {
-        selected.push(entry);
-      }
+        selected.push($(this).data('entry'));
     });
 
-    //  JOIN WITH PIPE
-    let optionsStr = selected.join('|');
-
-    console.log("FINAL OPTIONS:", optionsStr);
-
-    //  SET HIDDEN INPUT
-    $('#modal_options').val(optionsStr);
-  });
+    $('#modal_options').val(selected.join('|'));
+});
   let searchTimeout = null;
   const $searchName = $('#searchName');
   const $skuSuggest = $('#skuSuggest');
