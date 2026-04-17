@@ -48,7 +48,7 @@ class Modules {
         $sql = "SELECT m.*, p.module_name AS parent_display_name
                 $fromJoin
                 $where
-                ORDER BY m.parent_id ASC, m.module_name ASC
+                ORDER BY m.parent_id ASC, m.sort_order ASC, m.module_name ASC
                 LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 

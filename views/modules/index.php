@@ -185,6 +185,7 @@ if ($parent_filter === '0') {
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">#</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap min-w-[8rem]">Parent</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[10rem]">Display name</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap text-right w-24" title="Menu order within parent">Sort order</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap min-w-[7rem]">Page</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap min-w-[6rem]">Action</th>
                         <th scope="col" class="px-5 py-3.5 text-center w-24">Icon</th>
@@ -201,6 +202,7 @@ if ($parent_filter === '0') {
                             $actionName = trim((string)($tc['action'] ?? ''));
                             $parentDisplay = trim((string)($tc['parent_display_name'] ?? ''));
                             $iconHtml = trim((string)($tc['font_awesome_icon'] ?? ''));
+                            $sortOrder = array_key_exists('sort_order', $tc) ? (int) $tc['sort_order'] : null;
                             ?>
                             <tr class="table-content-text hover:bg-amber-50/40 transition-colors">
                                 <td class="px-5 py-4 align-top text-sm text-gray-600 tabular-nums whitespace-nowrap"><?= (int) $index + 1 ?></td>
@@ -212,6 +214,13 @@ if ($parent_filter === '0') {
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm font-semibold text-gray-900 min-w-[10rem] max-w-xs break-words"><?= htmlspecialchars($tc['module_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                                <td class="px-5 py-4 align-top text-sm text-gray-800 tabular-nums text-right whitespace-nowrap">
+                                    <?php if ($sortOrder !== null): ?>
+                                        <span class="inline-flex min-w-[2rem] justify-end font-medium text-gray-900"><?= $sortOrder ?></span>
+                                    <?php else: ?>
+                                        <span class="text-gray-400">—</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="px-5 py-4 align-top text-sm font-mono text-gray-900">
                                     <?= $slug !== '' ? htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') : '<span class="text-gray-400">—</span>' ?>
                                 </td>
@@ -247,7 +256,7 @@ if ($parent_filter === '0') {
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="8" class="px-5 py-16 text-center">
+                            <td colspan="9" class="px-5 py-16 text-center">
                                 <div class="mx-auto flex max-w-sm flex-col items-center">
                                     <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                         <i class="fas fa-inbox" aria-hidden="true"></i>
