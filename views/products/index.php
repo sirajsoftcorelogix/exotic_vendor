@@ -700,7 +700,6 @@ document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
     //         //     <p><strong>Item Price:</strong> ₹${data.itemprice}</p>
     //         //     <p><strong>Final Price:</strong> ₹${data.finalprice}</p>
     //         //     <p><strong>Shipping Fee:</strong> ₹${data.shipping_fee}</p>            
-    //         //     <p><strong>Cost price:</strong> ₹${data.cost_price}</p>                
     //         // `;
     //         // modalContent.innerHTML = content;
     //         modalContent.innerHTML = '<p>Loading...</p>'; // Show loading indicator

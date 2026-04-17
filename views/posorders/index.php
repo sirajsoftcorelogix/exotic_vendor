@@ -1122,10 +1122,6 @@
                                 <span class="text-gray-600" id="final_price">00</span>
                             </div>
                             <div>
-                                <label for="cost_price" class="text-sm font-bold text-gray-700">Cost Price: </label>
-                                <span class="text-gray-600" id="cost_price">00</span>
-                            </div>
-                            <div>
                                 <label for="currency" class="text-sm font-bold text-gray-700">Currency: </label>
                                 <span class="text-gray-600" id="currency">00</span>
                             </div>
