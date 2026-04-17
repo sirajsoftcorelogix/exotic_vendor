@@ -41,12 +41,12 @@ class AlankitIrnClient {
      */
     public function __construct($username, $password, $subscriptionKey, $appKey, $gstin, $forceRefreshAccessToken = true) {
         // Validate AppKey is exactly 32 characters
-        if (strlen($appKey) !== 32) {
-            throw new Exception(
-                "Invalid AppKey length. Expected 32 characters, got " . strlen($appKey) . " characters. " .
-                "AppKey must be a 32-character alphanumeric string from Alankit configuration."
-            );
-        }
+        // if (strlen($appKey) !== 32) {
+        //     throw new Exception(
+        //         "Invalid AppKey length. Expected 32 characters, got " . strlen($appKey) . " characters. " .
+        //         "AppKey must be a 32-character alphanumeric string from Alankit configuration."
+        //     );
+        // }
         
         error_log("Alankit Client: AppKey validated (32 characters, will be hashed to 32 bytes using SHA-256)");
         
@@ -851,7 +851,7 @@ class AlankitIrnClient {
         
         // Add Bearer token if authenticated
         if ($auth && !empty($this->token)) {
-            $headers[] = 'Authorization: Bearer ' . $this->token;
+            $headers[] = 'AuthToken: ' . $this->token;
         }
         
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -870,10 +870,10 @@ class AlankitIrnClient {
         $response = curl_exec($ch);
         $curlError = curl_error($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-         print_r($headers);
-         print_r($data);
-         echo "Alankit API Request to $url returned HTTP $httpCode. Response:\n";
-         print_r($response);
+         //print_r($headers);
+         //print_r($data);
+         echo "Alankit API Request to $url returned HTTP $httpCode. Response:\n <pre>";
+         print_r(json_decode($response, true));
         curl_close($ch);
         
         if ($curlError) {

@@ -389,6 +389,9 @@ switch ($page) {
             case 'generate_pdf':
                 $controller->generatePdf();
                 break;
+            case 'regenerate_irn':
+                $controller->regenerateIrn();
+                break;
             case 'download_busy_xml':
                 $controller->downloadBusyXml();
                 break;

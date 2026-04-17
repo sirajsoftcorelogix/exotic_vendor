@@ -247,7 +247,7 @@ class Invoice {
         return false;
     }
     public function getInternationalInvoiceByInvoiceId($invoice_id) {
-        $sql = "SELECT * FROM vp_international_invoices WHERE invoice_id = ?";
+        $sql = "SELECT * FROM vp_invoices_international WHERE invoice_id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
 
@@ -260,7 +260,7 @@ class Invoice {
         return null;
     }
     public function updateInvoice($invoice_id, $data) {
-        $sql = "UPDATE vp_international_invoices SET irn = ?, ack_number = ?, ack_date = ?, signed_invoice = ?, qrcode_string = ?, irn_status = ?, updated_at = NOW() WHERE invoice_id = ?";
+        $sql = "UPDATE vp_invoices_international SET irn = ?, ack_number = ?, ack_date = ?, signed_invoice = ?, qrcode_string = ?, irn_status = ?, updated_at = NOW() WHERE invoice_id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 

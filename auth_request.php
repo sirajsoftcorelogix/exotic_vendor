@@ -1,0 +1,34 @@
+<?php 
+// $RequestPayload ;
+
+
+$RequestPayload = '{
+    "UserName":"AL001",
+    "Password":"Alankit@123",
+    "AppKey":"ZEtrRXA3UWRZalZqT2xtZ3IwOElFa0ZXNnRIazdUSGQ=",
+    "ForceRefreshAccessToken": true
+}';
+
+
+// $publicKey ;
+
+
+$publicKey = '-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArxd93uLDs8HTPqcSPpxZ
+rf0Dc29r3iPp0a8filjAyeX4RAH6lWm9qFt26CcE8ESYtmo1sVtswvs7VH4Bjg/F
+DlRpd+MnAlXuxChij8/vjyAwE71ucMrmZhxM8rOSfPML8fniZ8trr3I4R2o4xWh6
+no/xTUtZ02/yUEXbphw3DEuefzHEQnEF+quGji9pvGnPO6Krmnri9H4WPY0ysPQQ
+Qd82bUZCk9XdhSZcW/am8wBulYokITRMVHlbRXqu1pOFmQMO5oSpyZU3pXbsx+Ox
+IOc4EDX0WMa9aH4+snt18WAXVGwF2B4fmBk7AtmkFzrTmbpmyVqA3KO2IjzMZPw0
+hQIDAQAB
+-----END PUBLIC KEY-----';
+
+
+$Base64RequestPayload = base64_encode(  $RequestPayload  );
+
+$data =  $Base64RequestPayload;
+  
+openssl_public_encrypt($data, $encryptedData, $publicKey);
+  
+echo base64_encode($encryptedData);  
+?>

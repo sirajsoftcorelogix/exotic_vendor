@@ -219,13 +219,13 @@ class Invoice {
         return null;
     }
     public function insert_international_invoice_data($data) {
-        $sql = "INSERT INTO vp_invoices_international (invoice_id, pre_carriage_by, port_of_loading, port_of_discharge, country_of_origin, country_of_final_destination, final_destination, usd_export_rate, ap_cost, freight_charge, insurance_charge, irn, qrcode_string) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_invoices_international (invoice_id, pre_carriage_by, port_of_loading, port_of_discharge, country_of_origin, country_of_final_destination, final_destination, usd_export_rate, ap_cost, freight_charge, insurance_charge, shipping_bill_number, shipping_bill_date, shipping_port, shipping_ref_clm, shipping_currency, shipping_country_code, shipping_exp_duty, irn, qrcode_string) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
         $stmt->bind_param(
-            'issssssddddss',
+            'issssssddddssssssdss',
             $data['invoice_id'],
             $data['pre_carriage_by'],
             $data['port_of_loading'],
@@ -237,6 +237,13 @@ class Invoice {
             $data['ap_cost'],
             $data['freight_charge'],
             $data['insurance_charge'],
+            $data['shipping_bill_number'],
+            $data['shipping_bill_date'],
+            $data['shipping_port_code'],
+            $data['shipping_ref_clm'],
+            $data['shipping_currency'],
+            $data['shipping_country_code'],
+            $data['shipping_exp_duty'],
             $data['irn'],
             $data['qrcode_string']
         );
@@ -259,9 +266,9 @@ class Invoice {
         }
         return null;
     }
-    public function updateInvoice($invoice_id, $data) {
+    public function updateInvoiceInternational($invoice_id, $data) {
         // Build dynamic UPDATE query based on provided fields
-        $allowedFields = ['irn', 'ack_number', 'ack_date', 'signed_invoice', 'qrcode_string', 'irn_status', 'request_payload', 'response_payload'];
+        $allowedFields = ['pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty', 'irn', 'ack_number', 'ack_date', 'signed_invoice', 'qrcode_string', 'irn_status', 'request_payload', 'response_payload', 'irn_error_message'];
         $updateFields = [];
         $bindParams = [];
         $bindTypes = '';
