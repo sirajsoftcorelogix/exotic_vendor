@@ -100,6 +100,50 @@ class product
         return trim((string)($masterRow['hsn'] ?? ''));
     }
 
+    /**
+     * Catalog image paths sometimes use alternate-angle filenames (e.g. ca0118_a02.webp) that 404 on CDN
+     * while the master file (ca0118.webp) in the same folder returns 200.
+     */
+    public static function normalizeProductCatalogImageUrl(string $pathOrUrl): string
+    {
+        $s = trim(str_replace('\\', '/', $pathOrUrl));
+        if ($s === '') {
+            return '';
+        }
+
+        return (string)preg_replace('#_a\d+(?=\.[^./]+$)#i', '', $s);
+    }
+
+    /**
+     * Vendor product/fetch returns image as a relative path (e.g. textiles-12-2025/ca0118.webp).
+     * Match bulk import: persist full CDN URL so listing/detail img src works.
+     */
+    public static function vendorApiImageStorageValue($image): string
+    {
+        $image = trim(str_replace('\\', '/', (string)$image));
+        if ($image === '') {
+            return '';
+        }
+        $image = self::normalizeProductCatalogImageUrl($image);
+        if ($image === '') {
+            return '';
+        }
+        if (preg_match('#^https?://#i', $image)) {
+            return $image;
+        }
+
+        return 'https://cdn.exoticindia.com/images/products/original/' . ltrim($image, '/');
+    }
+
+    private function applyCatalogImageNormalizeToProductRow(array &$row): void
+    {
+        if (!array_key_exists('image', $row)) {
+            return;
+        }
+        // Same rules as API sync: relative catalog paths → full cdn.exoticindia.com URL for <img src>.
+        $row['image'] = self::vendorApiImageStorageValue((string)$row['image']);
+    }
+
     public static function normalizeVendorProductFetchItems(array $data): array
     {
         if ($data === []) {
@@ -143,7 +187,12 @@ class product
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result ? $result->fetch_assoc() : null;
+        $row = $result ? $result->fetch_assoc() : null;
+        if ($row) {
+            $this->applyCatalogImageNormalizeToProductRow($row);
+        }
+
+        return $row;
     }
     public function getAllProducts($limit, $offset, $filters = [])
     {
@@ -210,7 +259,13 @@ class product
         $stmt->bind_param('ii', $limit, $offset);
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        foreach ($rows as &$row) {
+            $this->applyCatalogImageNormalizeToProductRow($row);
+        }
+        unset($row);
+
+        return $rows;
     }
     public function countAllProducts($filters = [])
     {
@@ -451,7 +506,7 @@ class product
                 $product['itemcode'] = $itemcode;
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
+                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ? WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
                     $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
@@ -461,7 +516,7 @@ class product
                     // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                     // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
                     // $description = isset($product['description']) ? $product['description'] : '';
-                    // $image = isset($product['image']) ? $product['image'] : '';
+                    $image = self::vendorApiImageStorageValue($product['image'] ?? '');
                     // $stockQuantity = isset($product['stock_quantity']) ? (int)$product['stock_quantity'] : 0;
                     $asin = isset($product['asin']) ? $product['asin'] : '';
                     $localStock = isset($product['local_stock']) ? (int)$product['local_stock'] : 0;
@@ -488,7 +543,7 @@ class product
                     $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                     $hsn = self::vendorApiHsn($product);
                     $updated_at = $now;
-                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 6);
+                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 7);
                     $stmt->bind_param(
                         $bt,
                         $asin,
@@ -515,11 +570,12 @@ class product
                         $discount_global,
                         $discount_india,
                         $hsn,
+                        $image,
                         $updated_at,
                         $sku,
                         $product['itemcode'],
-                        $color,
-                        $size
+                        $size,
+                        $color
                     );
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
@@ -532,7 +588,7 @@ class product
                     if ($stmt->affected_rows < 1) {
                         $exists = $this->findByItemCodeSizeColor($product['itemcode'], $size, $color);
                         if (!$exists) {
-                            $img = (string)($product['image'] ?? '');
+                            $img = self::vendorApiImageStorageValue($product['image'] ?? '');
                             $insertId = $this->createProduct([
                                 'item_code' => $product['itemcode'],
                                 'sku' => (string)$sku,
@@ -590,7 +646,7 @@ class product
                 if (isset($product['variations'])) {
                     foreach ($product['variations'] as $variation) {
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
-                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
+                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ? WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                         if ($stmt) {
                             // $title = isset($product['title']) ? $product['title'] : '';
                             $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
@@ -600,7 +656,7 @@ class product
                             // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                             // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
                             // $description = isset($product['description']) ? $product['description'] : '';
-                            // $image = isset($product['image']) ? $product['image'] : '';
+                            $image = self::vendorApiImageStorageValue($variation['image'] ?? ($product['image'] ?? ''));
                             // $stockQuantity = isset($product['stock_quantity']) ? (int)$product['stock_quantity'] : 0;
                             $asin = isset($variation['asin']) ? $variation['asin'] : '';
                             $localStock = isset($variation['local_stock']) ? (int)$variation['local_stock'] : 0;
@@ -627,7 +683,7 @@ class product
                             $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                             $hsn = self::vendorApiHsn($product);
                             $updated_at = $now;
-                            $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 6);
+                            $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 7);
                             $stmt->bind_param(
                                 $bt,
                                 $asin,
@@ -654,11 +710,12 @@ class product
                                 $discount_global,
                                 $discount_india,
                                 $hsn,
+                                $image,
                                 $updated_at,
                                 $sku,
                                 $product['itemcode'],
-                                $color,
-                                $size
+                                $size,
+                                $color
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
@@ -670,7 +727,7 @@ class product
                             if ($stmt->affected_rows < 1) {
                                 $exists = $this->findByItemCodeSizeColor($product['itemcode'], $size, $color);
                                 if (!$exists) {
-                                    $img = (string)($variation['image'] ?? ($product['image'] ?? ''));
+                                    $img = self::vendorApiImageStorageValue($variation['image'] ?? ($product['image'] ?? ''));
                                     $insertId = $this->createProduct([
                                         'item_code' => $product['itemcode'],
                                         'sku' => (string)$sku,
@@ -2772,5 +2829,18 @@ class product
         $stmt->bind_param('iii', $minStock, $maxStock, $productId);
 
         return $stmt->execute();
-    } 
+    }
+
+    public function setProductPermanentlyAvailable($productId, $permanentlyAvailable)
+    {
+        $productId = (int)$productId;
+        $flag = ((int)$permanentlyAvailable) ? 1 : 0;
+        $sql = 'UPDATE vp_products SET permanently_available = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ii', $flag, $productId);
+        return $stmt->execute();
+    }
 }

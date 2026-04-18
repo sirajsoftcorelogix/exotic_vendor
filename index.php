@@ -629,6 +629,11 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->updateStockLimits();
                 break;
+            case 'update_permanently_available':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updatePermanentlyAvailable();
+                break;
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
@@ -732,6 +737,30 @@ switch ($page) {
                 break;
             case 'getDetails':
                 $controller->getDetails();
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+    case 'locations':
+        require_once 'controllers/LocationsController.php';
+        $controller = new LocationsController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'updateRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+                break;
             default:
                 $controller->index();
                 break;

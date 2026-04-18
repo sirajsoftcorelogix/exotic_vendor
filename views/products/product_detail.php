@@ -448,14 +448,17 @@
             </button>
           </div>
 
-          <div class="flex items-center justify-between border border-emerald-100 rounded-lg p-3 bg-emerald-50">
+          <div class="flex items-center justify-between border border-emerald-100 rounded-lg p-3 bg-emerald-50 relative">
             <div>
               <p class="text-sm text-gray-500">Permanently Available</p>
-              <p class="text-lg font-semibold text-emerald-700 leading-tight"><?php echo htmlspecialchars($permanentlyAvailableText); ?></p>
+              <p id="permaAvailableDisplay" class="text-lg font-semibold text-emerald-700 leading-tight"><?php echo htmlspecialchars($permanentlyAvailableText); ?></p>
             </div>
             <div class="bg-emerald-100 text-emerald-700 h-8 w-8 rounded-md flex items-center justify-center text-sm">
                <i class="fas fa-check"></i>
             </div>
+            <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-emerald-700" onclick="openPermaAvailableModal()" title="Edit Permanently Available">
+              <i class="fas fa-pencil-alt text-[10px]"></i>
+            </button>
           </div>
 
           <div class="flex items-center justify-between border border-indigo-100 rounded-lg p-3 bg-indigo-50">
@@ -756,6 +759,24 @@
         <div class="flex justify-end gap-3 mt-6">
             <button onclick="closeMinMaxModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
             <button onclick="submitMinMaxUpdate()" class="px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600">Update Limits</button>
+        </div>
+    </div>
+</div>
+<div id="permaAvailableModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="closePermaAvailableModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Permanently Available</h2>
+        <p class="text-sm text-gray-500 mb-4">Updates this variant in the portal and syncs to the storefront API (same as stock adjustments).</p>
+        <div>
+            <label for="input_permanently_available" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
+            <select id="input_permanently_available" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                <option value="1" <?php echo $permanentlyAvailableVal === 1 ? 'selected' : ''; ?>>Yes</option>
+                <option value="0" <?php echo $permanentlyAvailableVal !== 1 ? 'selected' : ''; ?>>No</option>
+            </select>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closePermaAvailableModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitPermanentlyAvailableUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
         </div>
     </div>
 </div>
@@ -1227,6 +1248,49 @@ function submitMinMaxUpdate() {
         } else {
             alert('❌ Failed: ' + res.message);
         }
+    });
+}
+
+function openPermaAvailableModal() {
+    document.getElementById('permaAvailableModal').classList.remove('hidden');
+}
+
+function closePermaAvailableModal() {
+    document.getElementById('permaAvailableModal').classList.add('hidden');
+}
+
+function submitPermanentlyAvailableUpdate() {
+    const sel = document.getElementById('input_permanently_available');
+    const val = parseInt(sel && sel.value ? sel.value : '0', 10);
+    fetch('index.php?page=products&action=update_permanently_available', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+            permanently_available: val
+        })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        if (res && res.success) {
+            closePermaAvailableModal();
+            var disp = document.getElementById('permaAvailableDisplay');
+            if (disp && res.permanently_available !== undefined) {
+                disp.textContent = (parseInt(res.permanently_available, 10) === 1) ? 'Yes' : 'No';
+            }
+            var msg = (res.message) ? res.message : 'Updated.';
+            var vs = res.vendor_sync;
+            if (vs && vs.success === false && vs.message) {
+                showProfileStatusModal(msg, 'error', false);
+            } else {
+                showProfileStatusModal(msg, 'success', true);
+            }
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Update failed.', 'error', false);
+        }
+    })
+    .catch(function () {
+        showProfileStatusModal('An error occurred while saving.', 'error', false);
     });
 }
 </script>

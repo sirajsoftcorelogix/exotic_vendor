@@ -4,7 +4,7 @@ class Modules {
     public function __construct($db) {
         $this->conn = $db;
     }
-    public function getAll($page = 1, $limit = 10, $search = '', $status_filter = '') {
+    public function getAll($page = 1, $limit = 10, $search = '', $status_filter = '', $parent_filter = '') {
 		$page = (int)$page;
         if ($page < 1) $page = 1;
 
@@ -13,33 +13,43 @@ class Modules {
 
         // calculate offset
         $offset = ($page - 1) * $limit;
-		$where = "";
-        
-		if (!empty($search) && !empty($status_filter)) {
-            $search = $this->conn->real_escape_string($search);
-            $status_filter = $this->conn->real_escape_string($status_filter);
-            $where = "WHERE module_name LIKE('%$search%') AND active = '$status_filter'";
-        } else {
-            if (!empty($search)) {
-                $search = $this->conn->real_escape_string($search);
-                $where = "WHERE module_name LIKE('%$search%')";
-            }
 
-            if (!empty($status_filter)) {
-                $search = $this->conn->real_escape_string($status_filter);   
-                $where = "WHERE active = '$status_filter'";
+        $conditions = [];
+        if ($search !== '') {
+            $s = $this->conn->real_escape_string($search);
+            $conditions[] = "(m.module_name LIKE '%$s%' OR m.slug LIKE '%$s%' OR m.`action` LIKE '%$s%' OR p.module_name LIKE '%$s%')";
+        }
+        if ($status_filter !== '') {
+            $statusEsc = $this->conn->real_escape_string($status_filter);
+            $conditions[] = "m.active = '$statusEsc'";
+        }
+        if ($parent_filter !== '') {
+            if ($parent_filter === '0') {
+                $conditions[] = 'm.parent_id = 0';
+            } else {
+                $pid = (int) $parent_filter;
+                if ($pid > 0) {
+                    $conditions[] = 'm.parent_id = ' . $pid;
+                }
             }
         }
 
-		// total records
-        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM modules $where");
+        $where = $conditions !== [] ? 'WHERE ' . implode(' AND ', $conditions) : '';
+
+		// total records (same join as list so search can match parent name)
+        $fromJoin = 'FROM modules m LEFT JOIN modules p ON m.parent_id = p.id';
+        $resultCount = $this->conn->query("SELECT COUNT(*) AS total $fromJoin $where");
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'];
 
         $totalPages = ceil($totalRecords / $limit);
 
-        // fetch data
-        $sql = "SELECT * FROM modules $where LIMIT $limit OFFSET $offset";
+        // fetch data (parent menu name via self-join)
+        $sql = "SELECT m.*, p.module_name AS parent_display_name
+                $fromJoin
+                $where
+                ORDER BY m.parent_id ASC, m.sort_order ASC, m.module_name ASC
+                LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
         $data = [];
@@ -63,10 +73,14 @@ class Modules {
         $addModuleName = $this->conn->real_escape_string($data['addModuleName']);
         $addSlug = $this->conn->real_escape_string($data['addSlug']);
         $addAction = $this->conn->real_escape_string($data['addAction']);
+        $addSortOrder = isset($data['addSortOrder']) ? (int) $data['addSortOrder'] : 0;
+        if ($addSortOrder < 0) {
+            $addSortOrder = 0;
+        }
         
-        $sql = "INSERT INTO modules (parent_id, module_name, slug, `action`, font_awesome_icon, active, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO modules (parent_id, module_name, slug, `action`, font_awesome_icon, active, sort_order, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('issssii', $addParentMenu, $addModuleName, $addSlug, $addAction, $icon, $data['addStatus'], $_SESSION["user"]["id"]);
+        $stmt->bind_param('issssiii', $addParentMenu, $addModuleName, $addSlug, $addAction, $icon, $data['addStatus'], $addSortOrder, $_SESSION["user"]["id"]);
 
         if ($stmt->execute()) {
             $module_id = $this->conn->insert_id;
@@ -131,16 +145,21 @@ class Modules {
         $editModuleName = $this->conn->real_escape_string($data['editModuleName']);
         $editSlug = $this->conn->real_escape_string($data['editSlug']);
         $editAction = $this->conn->real_escape_string($data['editAction']);
+        $editSortOrder = isset($data['editSortOrder']) ? (int) $data['editSortOrder'] : 0;
+        if ($editSortOrder < 0) {
+            $editSortOrder = 0;
+        }
 
-        $sql = "UPDATE modules SET parent_id = ?, module_name = ?, slug = ?, action = ?, font_awesome_icon = ?, active = ?, user_id = ? WHERE id = ?";
+        $sql = "UPDATE modules SET parent_id = ?, module_name = ?, slug = ?, `action` = ?, font_awesome_icon = ?, active = ?, sort_order = ?, user_id = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('issssiii',
+        $stmt->bind_param('issssiiii',
             $editParentMenu,
             $editModuleName,
             $editSlug,
             $editAction,
             $icon,
             $data['editStatus'],
+            $editSortOrder,
             $_SESSION["user"]["id"],
             $id
         );
@@ -217,9 +236,14 @@ class Modules {
         }
     }
 	public function getRecord($id) {
-        $result = $this->conn->query("SELECT id, parent_id, module_name, slug, 'action', font_awesome_icon, active 
-                      FROM modules 
-                      WHERE id = $id");
+        $id = (int) $id;
+        if ($id < 1) {
+            return json_encode(['status' => 'error', 'message' => 'Invalid ID.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        $stmt = $this->conn->prepare('SELECT id, parent_id, module_name, slug, `action`, font_awesome_icon, active, IFNULL(sort_order, 0) AS sort_order FROM modules WHERE id = ? LIMIT 1');
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
         $row = $result->fetch_assoc();
 
         return json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

@@ -1463,7 +1463,7 @@ class Inbounding {
     }
     public function stock_data($id) {
         // 1. Fetch the main record using a prepared statement
-        $sql = "SELECT Item_code, sku, quantity_received, color, size, ware_house_code FROM vp_inbound WHERE id = ?";
+        $sql = "SELECT Item_code, sku, quantity_received, color, size, ware_house_code, store_location FROM vp_inbound WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $id); 
         $stmt->execute();
@@ -1478,7 +1478,7 @@ class Inbounding {
         $main_inbound[0]['product_id'] = $this->getProductBysku($main_inbound[0]['sku']);
 
         // 2. Fetch variations linked to this inbound ID
-        $sql_var = "SELECT quantity_received, color, size, sku FROM vp_variations WHERE it_id = ?";
+        $sql_var = "SELECT quantity_received, color, size, sku, store_location FROM vp_variations WHERE it_id = ?";
         $stmt1 = $this->conn->prepare($sql_var);
         $stmt1->bind_param("i", $id);
         $stmt1->execute();
@@ -1487,10 +1487,16 @@ class Inbounding {
         if ($var_inbound) {
             $parent_wh_code = $main_inbound[0]['ware_house_code'];
             $parent_item_code = $main_inbound[0]['Item_code'];
+            $parent_store_location = trim((string)($main_inbound[0]['store_location'] ?? ''));
 
             foreach ($var_inbound as $value) {
                 // Get the ID directly using the variation's SKU
                 $variation_product_id = $this->getProductBysku($value['sku']);
+
+                $var_store = trim((string)($value['store_location'] ?? ''));
+                if ($var_store === '') {
+                    $var_store = $parent_store_location;
+                }
 
                 $main_inbound[] = [
                     'Item_code'         => $parent_item_code,
@@ -1499,6 +1505,7 @@ class Inbounding {
                     'color'             => $value['color'],
                     'size'              => $value['size'],
                     'ware_house_code' => !empty($parent_wh_code) ? $parent_wh_code : 1,
+                    'store_location'  => $var_store,
                     'product_id'        => $variation_product_id,
                 ];
             }
@@ -1517,12 +1524,13 @@ class Inbounding {
                     size, 
                     color, 
                     warehouse_id, 
+                    location,
                     movement_type, 
                     quantity, 
                     running_stock, 
                     ref_type, 
                     ref_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         $stmt = $this->conn->prepare($sql);
 
@@ -1530,6 +1538,28 @@ class Inbounding {
         $movement_type = 'IN';
         $ref_type      = 'GRN';
         $ref_id        = 0;
+        // Warehouse from inbound form (first row = parent record): use for default location label
+        $inboundWarehouseId = isset($data[0]['ware_house_code']) ? (int)$data[0]['ware_house_code'] : 0;
+        if ($inboundWarehouseId <= 0) {
+            $inboundWarehouseId = 1;
+        }
+        $defaultLocationLabel = '-';
+        $addrStmt0 = $this->conn->prepare('SELECT address_title FROM exotic_address WHERE id = ? LIMIT 1');
+        if ($addrStmt0) {
+            $addrStmt0->bind_param('i', $inboundWarehouseId);
+            if ($addrStmt0->execute()) {
+                $ar0 = $addrStmt0->get_result()->fetch_assoc();
+                $t0 = trim((string)($ar0['address_title'] ?? ''));
+                if ($t0 !== '') {
+                    $defaultLocationLabel = $t0;
+                }
+            }
+            $addrStmt0->close();
+        }
+
+        // Bind types for INSERT (same every row): i, s×4, i, s×2, i×2, s, i
+        $movementBindTypes = 'i' . str_repeat('s', 4) . 'i' . str_repeat('s', 2) . str_repeat('i', 2) . 's' . 'i';
+
         // 3. Loop through your data array
         foreach ($data as $row) {
             // Mapping array keys to variables
@@ -1538,7 +1568,10 @@ class Inbounding {
             $item_code    = $row['Item_code'] ?? '';
             $size         = $row['size'] ?? '';
             $color        = $row['color'] ?? '';
-            $warehouse_id = isset($row['ware_house_code']) ? (int)$row['ware_house_code'] : 1;
+            $warehouse_id = isset($row['ware_house_code']) ? (int)$row['ware_house_code'] : 0;
+            if ($warehouse_id <= 0) {
+                $warehouse_id = $inboundWarehouseId;
+            }
             $quantity     = isset($row['quantity_received']) ? (int)$row['quantity_received'] : 0;
             $running      = $quantity; // Per your requirement
 
@@ -1554,20 +1587,24 @@ class Inbounding {
                 continue;
             }
 
-            // 4. Bind parameters 
-            // i = integer, s = string
+            // Prefer store location from inbound (same as form); fallback to warehouse address title
+            $storeLoc = trim((string)($row['store_location'] ?? ''));
+            $location = $storeLoc !== '' ? $storeLoc : $defaultLocationLabel;
+
+            // 4. Bind parameters
             $stmt->bind_param(
-                "issssssiisi", 
-                $product_id, 
-                $sku, 
-                $item_code, 
-                $size, 
-                $color, 
-                $warehouse_id, 
-                $movement_type, 
-                $quantity, 
-                $running, 
-                $ref_type, 
+                $movementBindTypes,
+                $product_id,
+                $sku,
+                $item_code,
+                $size,
+                $color,
+                $warehouse_id,
+                $location,
+                $movement_type,
+                $quantity,
+                $running,
+                $ref_type,
                 $ref_id
             );
 
