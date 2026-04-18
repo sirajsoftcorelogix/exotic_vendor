@@ -1782,6 +1782,8 @@ class InboundingController {
     }
     public function inbound_product_publish(){
         is_login();
+        @set_time_limit(300);
+        @ini_set('max_execution_time', '300');
         if (ob_get_level() === 0) {
             ob_start();
         }

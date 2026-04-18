@@ -1484,6 +1484,32 @@ class Inbounding {
         return trim((string)(($row['item_code'] ?? $row['Item_code'] ?? '')));
     }
 
+    /** @var string|null Exact column name as stored in MySQL (e.g. Item_code vs item_code) */
+    private static ?string $vpStockMovementsItemCodeColumn = null;
+
+    /**
+     * vp_stock_movements item-code column may be created as Item_code or item_code.
+     * INSERT must use the same spelling or strict servers leave the NOT NULL column unset.
+     */
+    private function resolveVpStockMovementsItemCodeColumn(): string {
+        if (self::$vpStockMovementsItemCodeColumn !== null) {
+            return self::$vpStockMovementsItemCodeColumn;
+        }
+        self::$vpStockMovementsItemCodeColumn = 'item_code';
+        $res = @$this->conn->query('SHOW COLUMNS FROM vp_stock_movements');
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $field = isset($row['Field']) ? (string) $row['Field'] : '';
+                if ($field !== '' && strcasecmp($field, 'item_code') === 0) {
+                    self::$vpStockMovementsItemCodeColumn = $field;
+                    break;
+                }
+            }
+            $res->free();
+        }
+        return self::$vpStockMovementsItemCodeColumn;
+    }
+
     public function stock_data($id) {
         // 1. Fetch the main record using a prepared statement
         $sql = "SELECT Item_code, sku, quantity_received, color, size, ware_house_code, store_location FROM vp_inbound WHERE id = ?";
@@ -1546,10 +1572,12 @@ class Inbounding {
         if (empty($data) || !is_array($data)) {
             return false;
         }
+        $itemCodeColumn = $this->resolveVpStockMovementsItemCodeColumn();
+        $itemCodeColumnSql = '`' . str_replace('`', '``', $itemCodeColumn) . '`';
         $sql = "INSERT INTO vp_stock_movements (
                     product_id, 
                     sku, 
-                    item_code, 
+                    {$itemCodeColumnSql}, 
                     size, 
                     color, 
                     warehouse_id, 
