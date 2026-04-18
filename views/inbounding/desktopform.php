@@ -880,7 +880,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-2 pb-3 bg-white w-full">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Receipt:</legend>
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-[50px]">        
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-[50px]">        
                     <div class="flex flex-col">
                         <span class="text-[11px] font-bold text-[#222] mb-[3px]">Gate Entry Date & Time:</span>
                         <span class="text-xs text-[#444]">
@@ -918,19 +918,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 ?> 
                                 <option value="<?php echo $value1['id']; ?>" <?php echo $isSelected; ?>>
                                     <?php echo $value1['name']; ?>
-                                </option>
-                            <?php } ?>
-                        </select>
-                    </div>
-                    <div class="flex flex-col">
-                        <span class="text-[11px] font-bold text-[#222] mb-[3px]">Vendor:</span>
-                        <select name="vendor_code" id="vendor_code" placeholder="Select Vendor...">
-                            <option value="">Select Vendor</option>
-                            <?php foreach ($data['vendors'] as $key4 => $value4) { 
-                                $isSelected = (isset($data['form2']['vendor_code']) && $data['form2']['vendor_code'] == $value4['id']) ? 'selected' : '';
-                            ?>
-                                <option value="<?php echo $value4['id']; ?>" <?php echo $isSelected; ?>>
-                                    <?php echo htmlspecialchars($value4['vendor_name'] ?? ''); ?>
                                 </option>
                             <?php } ?>
                         </select>
@@ -1281,6 +1268,19 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                    value="<?php echo !empty($data['form2']['invoice_no']) ? $data['form2']['invoice_no'] : ''; ?>">
                         </div>
                     </div>
+                </div>
+                <div class="mt-4 pt-4 border-t border-[#eee]">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]" for="vendor_code">Vendor:</label>
+                    <select name="vendor_code" id="vendor_code" class="w-full max-w-xl h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Vendor...">
+                        <option value="">Select Vendor</option>
+                        <?php foreach ($data['vendors'] as $key4 => $value4) {
+                            $isSelected = (isset($data['form2']['vendor_code']) && $data['form2']['vendor_code'] == $value4['id']) ? 'selected' : '';
+                        ?>
+                            <option value="<?php echo $value4['id']; ?>" <?php echo $isSelected; ?>>
+                                <?php echo htmlspecialchars($value4['vendor_name'] ?? ''); ?>
+                            </option>
+                        <?php } ?>
+                    </select>
                 </div>
             </fieldset>
         </div>
