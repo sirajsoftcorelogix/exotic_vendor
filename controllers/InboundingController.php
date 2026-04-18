@@ -1285,7 +1285,11 @@ class InboundingController {
             'size'                => $_POST['size'] ?? '',
             'color'               => $_POST['color'] ?? '',
             'quantity_received'   => (int) ($_POST['quantity_received'] ?? 0),
-            'permanently_available' => (strtoupper($_POST['permanently_available'] ?? '') === 'Y') ? '1' : '0',
+            'permanently_available' => in_array(
+                strtoupper(trim((string) ($_POST['permanently_available'] ?? '0'))),
+                ['1', 'Y', 'TRUE'],
+                true
+            ) ? '1' : '0',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
             'marketplace'         => $_POST['marketplace'] ?? ' ',
