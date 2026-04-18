@@ -101,6 +101,20 @@ class product
     }
 
     /**
+     * Catalog image paths sometimes use alternate-angle filenames (e.g. ca0118_a02.webp) that 404 on CDN
+     * while the master file (ca0118.webp) in the same folder returns 200.
+     */
+    public static function normalizeProductCatalogImageUrl(string $pathOrUrl): string
+    {
+        $s = trim(str_replace('\\', '/', $pathOrUrl));
+        if ($s === '') {
+            return '';
+        }
+
+        return (string)preg_replace('#_a\d+(?=\.[^./]+$)#i', '', $s);
+    }
+
+    /**
      * Vendor product/fetch returns image as a relative path (e.g. textiles-12-2025/ca0118.webp).
      * Match bulk import: persist full CDN URL so listing/detail img src works.
      */
@@ -110,11 +124,24 @@ class product
         if ($image === '') {
             return '';
         }
+        $image = self::normalizeProductCatalogImageUrl($image);
+        if ($image === '') {
+            return '';
+        }
         if (preg_match('#^https?://#i', $image)) {
             return $image;
         }
 
         return 'https://cdn.exoticindia.com/images/products/original/' . ltrim($image, '/');
+    }
+
+    private function applyCatalogImageNormalizeToProductRow(array &$row): void
+    {
+        if (!array_key_exists('image', $row)) {
+            return;
+        }
+        // Same rules as API sync: relative catalog paths → full cdn.exoticindia.com URL for <img src>.
+        $row['image'] = self::vendorApiImageStorageValue((string)$row['image']);
     }
 
     public static function normalizeVendorProductFetchItems(array $data): array
@@ -160,7 +187,12 @@ class product
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result ? $result->fetch_assoc() : null;
+        $row = $result ? $result->fetch_assoc() : null;
+        if ($row) {
+            $this->applyCatalogImageNormalizeToProductRow($row);
+        }
+
+        return $row;
     }
     public function getAllProducts($limit, $offset, $filters = [])
     {
@@ -227,7 +259,13 @@ class product
         $stmt->bind_param('ii', $limit, $offset);
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        foreach ($rows as &$row) {
+            $this->applyCatalogImageNormalizeToProductRow($row);
+        }
+        unset($row);
+
+        return $rows;
     }
     public function countAllProducts($filters = [])
     {
