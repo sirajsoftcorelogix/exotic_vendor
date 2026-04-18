@@ -599,45 +599,114 @@ class vendor {
     }
 
     /**
-     * HTTP GET vendor-api/products/vendorlist for a groupname; returns normalized rows or error detail.
+     * Vendorlist API — many backends return 400 on GET and expect POST JSON instead.
+     * Tries several request shapes and returns the first HTTP 200/201 with parseable JSON.
      */
     public function fetchVendorlistFromApi(string $groupname, string $apiBaseUrl = 'https://www.exoticindia.com'): array {
         $groupname = trim($groupname);
         if ($groupname === '') {
             return ['success' => false, 'message' => 'groupname is required.', 'rows' => []];
         }
-        $url = rtrim($apiBaseUrl, '/') . '/vendor-api/products/vendorlist?groupname=' . rawurlencode($groupname);
-        $headers = [
+
+        $base = rtrim($apiBaseUrl, '/') . '/vendor-api/products/vendorlist';
+
+        $headerJson = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
             'Accept: application/json',
             'Content-Type: application/json',
-            'User-Agent: VendorPortalVendorlistImport/1.0',
+            'User-Agent: VendorPortalVendorlistImport/1.1',
         ];
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_CONNECTTIMEOUT => 15,
-            CURLOPT_TIMEOUT => 120,
-            CURLOPT_SSL_VERIFYPEER => false,
-        ]);
-        $response = curl_exec($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $cerr = curl_error($ch);
-        curl_close($ch);
-        if ($response === false) {
-            return ['success' => false, 'message' => 'cURL error: ' . $cerr, 'rows' => [], 'http_code' => $httpCode];
+        $headerForm = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json',
+            'Content-Type: application/x-www-form-urlencoded',
+            'User-Agent: VendorPortalVendorlistImport/1.1',
+        ];
+        $headerGet = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json',
+            'User-Agent: VendorPortalVendorlistImport/1.1',
+        ];
+
+        $attempts = [
+            ['label' => 'GET ?groupname=', 'method' => 'GET', 'url' => $base . '?groupname=' . rawurlencode($groupname), 'headers' => $headerGet, 'body' => null],
+            ['label' => 'GET ?groupName=', 'method' => 'GET', 'url' => $base . '?groupName=' . rawurlencode($groupname), 'headers' => $headerGet, 'body' => null],
+            ['label' => 'POST JSON {groupname}', 'method' => 'POST', 'url' => $base, 'headers' => $headerJson, 'body' => json_encode(['groupname' => $groupname], JSON_UNESCAPED_UNICODE)],
+            ['label' => 'POST JSON {groupName}', 'method' => 'POST', 'url' => $base, 'headers' => $headerJson, 'body' => json_encode(['groupName' => $groupname], JSON_UNESCAPED_UNICODE)],
+            ['label' => 'POST form groupname', 'method' => 'POST', 'url' => $base, 'headers' => $headerForm, 'body' => http_build_query(['groupname' => $groupname])],
+            ['label' => 'POST form groupName', 'method' => 'POST', 'url' => $base, 'headers' => $headerForm, 'body' => http_build_query(['groupName' => $groupname])],
+        ];
+
+        $lastHttp = 0;
+        $lastRaw = '';
+        $lastUrl = '';
+        $lastLabel = '';
+
+        foreach ($attempts as $att) {
+            $ch = curl_init($att['url']);
+            $opts = [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => $att['headers'],
+                CURLOPT_CONNECTTIMEOUT => 15,
+                CURLOPT_TIMEOUT => 120,
+                CURLOPT_SSL_VERIFYPEER => false,
+            ];
+            if ($att['method'] === 'POST') {
+                $opts[CURLOPT_POST] = true;
+                $opts[CURLOPT_POSTFIELDS] = $att['body'];
+            }
+            curl_setopt_array($ch, $opts);
+            $response = curl_exec($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $cerr = curl_error($ch);
+            curl_close($ch);
+
+            $lastHttp = $httpCode;
+            $lastUrl = $att['url'];
+            $lastLabel = $att['label'];
+
+            if ($response === false) {
+                $lastRaw = $cerr !== '' ? $cerr : '(empty curl response)';
+                continue;
+            }
+
+            $lastRaw = $response;
+            if ($httpCode !== 200 && $httpCode !== 201) {
+                continue;
+            }
+
+            $decoded = json_decode($response, true);
+            if ($decoded === null && json_last_error() !== JSON_ERROR_NONE) {
+                continue;
+            }
+            $rows = $this->normalizeVendorlistApiResponse($decoded);
+            return [
+                'success' => true,
+                'message' => 'OK',
+                'rows' => $rows,
+                'attempt_used' => $lastLabel,
+                'http_code' => $httpCode,
+            ];
         }
-        if ($httpCode !== 200 && $httpCode !== 201) {
-            return ['success' => false, 'message' => 'HTTP ' . $httpCode, 'rows' => [], 'raw' => $response];
+
+        $rawSnippet = $lastRaw;
+        if (strlen($rawSnippet) > 4000) {
+            $rawSnippet = substr($rawSnippet, 0, 4000) . '…';
         }
-        $decoded = json_decode($response, true);
-        if ($decoded === null && json_last_error() !== JSON_ERROR_NONE) {
-            return ['success' => false, 'message' => 'Invalid JSON: ' . json_last_error_msg(), 'rows' => []];
-        }
-        $rows = $this->normalizeVendorlistApiResponse($decoded);
-        return ['success' => true, 'message' => 'OK', 'rows' => $rows];
+
+        return [
+            'success' => false,
+            'message' => 'All request variants failed. Last: HTTP ' . $lastHttp . ' (' . $lastLabel . ')',
+            'rows' => [],
+            'http_code' => $lastHttp,
+            'request_url' => $lastUrl,
+            'attempt_used' => $lastLabel,
+            'raw' => $rawSnippet,
+            'hint' => 'If HTTP 400 persists, confirm with API owners: exact method (GET vs POST), parameter name (groupname vs groupName), and whether group slug must match catalog (not display name). Response body is in raw.',
+        ];
     }
 
     /**
@@ -689,7 +758,18 @@ class vendor {
     public function importVendorlistForGroup(string $groupname, bool $dryRun = true, string $apiBaseUrl = 'https://www.exoticindia.com'): array {
         $fetch = $this->fetchVendorlistFromApi($groupname, $apiBaseUrl);
         if (!$fetch['success']) {
-            return ['success' => false, 'message' => $fetch['message'], 'inserted' => 0, 'updated' => 0, 'skipped' => 0];
+            return [
+                'success' => false,
+                'message' => $fetch['message'],
+                'inserted' => 0,
+                'updated' => 0,
+                'skipped' => 0,
+                'http_code' => $fetch['http_code'] ?? null,
+                'request_url' => $fetch['request_url'] ?? null,
+                'attempt_used' => $fetch['attempt_used'] ?? null,
+                'raw' => $fetch['raw'] ?? null,
+                'hint' => $fetch['hint'] ?? null,
+            ];
         }
         $rows = $fetch['rows'];
         if ($dryRun) {
@@ -701,6 +781,7 @@ class vendor {
                 'skipped' => 0,
                 'total_api_rows' => count($rows),
                 'dry_run' => true,
+                'attempt_used' => $fetch['attempt_used'] ?? null,
             ];
         }
         $inserted = 0;
@@ -727,6 +808,7 @@ class vendor {
             'skipped' => $skipped,
             'total_api_rows' => count($rows),
             'dry_run' => $dryRun,
+            'attempt_used' => $fetch['attempt_used'] ?? null,
         ];
     }
 }
