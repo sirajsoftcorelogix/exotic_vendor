@@ -1,5 +1,8 @@
 <?php
 class vendor {
+    /** Stamped on vp_vendors rows created/updated from vendor-api/products/vendorlist import */
+    public const VENDORLIST_IMPORT_USER_ID = 1000;
+
     private $conn;
     public function __construct($conn) {
         $this->conn = $conn;
@@ -555,6 +558,176 @@ class vendor {
             }
         }
         return ['success' => true, 'message' => 'Vendor codes updated successfully.'];
+    }
+
+    /**
+     * Normalize vendorlist API JSON into rows: [['remote_id' => string, 'name' => string], ...]
+     */
+    public function normalizeVendorlistApiResponse($decoded): array {
+        $out = [];
+        if (!is_array($decoded)) {
+            return $out;
+        }
+        $list = null;
+        if (isset($decoded['data']) && is_array($decoded['data'])) {
+            $list = $decoded['data'];
+        } elseif (isset($decoded['vendors']) && is_array($decoded['vendors'])) {
+            $list = $decoded['vendors'];
+        } elseif (isset($decoded['items']) && is_array($decoded['items'])) {
+            $list = $decoded['items'];
+        } elseif ($decoded !== [] && array_keys($decoded) === range(0, count($decoded) - 1)) {
+            $list = $decoded;
+        }
+        if ($list === null) {
+            return $out;
+        }
+        foreach ($list as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $rid = $row['id'] ?? $row['vendor_id'] ?? $row['vendorId'] ?? null;
+            $name = $row['name'] ?? $row['vendor_name'] ?? $row['vendorName'] ?? '';
+            if ($rid === null || trim((string) $name) === '') {
+                continue;
+            }
+            $out[] = [
+                'remote_id' => substr((string) $rid, 0, 30),
+                'name' => substr(trim((string) $name), 0, 150),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * HTTP GET vendor-api/products/vendorlist for a groupname; returns normalized rows or error detail.
+     */
+    public function fetchVendorlistFromApi(string $groupname, string $apiBaseUrl = 'https://www.exoticindia.com'): array {
+        $groupname = trim($groupname);
+        if ($groupname === '') {
+            return ['success' => false, 'message' => 'groupname is required.', 'rows' => []];
+        }
+        $url = rtrim($apiBaseUrl, '/') . '/vendor-api/products/vendorlist?groupname=' . rawurlencode($groupname);
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json',
+            'Content-Type: application/json',
+            'User-Agent: VendorPortalVendorlistImport/1.0',
+        ];
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_CONNECTTIMEOUT => 15,
+            CURLOPT_TIMEOUT => 120,
+            CURLOPT_SSL_VERIFYPEER => false,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $cerr = curl_error($ch);
+        curl_close($ch);
+        if ($response === false) {
+            return ['success' => false, 'message' => 'cURL error: ' . $cerr, 'rows' => [], 'http_code' => $httpCode];
+        }
+        if ($httpCode !== 200 && $httpCode !== 201) {
+            return ['success' => false, 'message' => 'HTTP ' . $httpCode, 'rows' => [], 'raw' => $response];
+        }
+        $decoded = json_decode($response, true);
+        if ($decoded === null && json_last_error() !== JSON_ERROR_NONE) {
+            return ['success' => false, 'message' => 'Invalid JSON: ' . json_last_error_msg(), 'rows' => []];
+        }
+        $rows = $this->normalizeVendorlistApiResponse($decoded);
+        return ['success' => true, 'message' => 'OK', 'rows' => $rows];
+    }
+
+    /**
+     * Insert or update one vendor keyed by vendor_code + groupname; always sets user_id = VENDORLIST_IMPORT_USER_ID (1000).
+     */
+    public function upsertVendorFromVendorlist(string $remoteVendorId, string $vendorName, string $groupname): array {
+        $remoteVendorId = substr(trim($remoteVendorId), 0, 30);
+        $vendorName = substr(trim($vendorName), 0, 150);
+        $groupname = substr(trim($groupname), 0, 100);
+        if ($remoteVendorId === '' || $vendorName === '') {
+            return ['action' => 'skip', 'reason' => 'empty id or name'];
+        }
+        $uid = self::VENDORLIST_IMPORT_USER_ID;
+
+        $find = $this->conn->prepare(
+            'SELECT id FROM vp_vendors WHERE vendor_code = ? AND (groupname <=> ?)'
+        );
+        $find->bind_param('ss', $remoteVendorId, $groupname);
+        $find->execute();
+        $res = $find->get_result();
+        $existing = $res ? $res->fetch_assoc() : null;
+        $find->close();
+
+        if ($existing) {
+            $upd = $this->conn->prepare(
+                'UPDATE vp_vendors SET vendor_name = ?, user_id = ?, groupname = ?, is_active = \'active\' WHERE id = ?'
+            );
+            $vid = (int) $existing['id'];
+            $upd->bind_param('sisi', $vendorName, $uid, $groupname, $vid);
+            if ($upd->execute()) {
+                return ['action' => 'updated', 'id' => $vid];
+            }
+            return ['action' => 'error', 'message' => $upd->error];
+        }
+
+        $ins = $this->conn->prepare(
+            'INSERT INTO vp_vendors (vendor_code, vendor_name, groupname, user_id, is_active, country) VALUES (?, ?, ?, ?, \'active\', \'India\')'
+        );
+        $ins->bind_param('sssi', $remoteVendorId, $vendorName, $groupname, $uid);
+        if ($ins->execute()) {
+            return ['action' => 'inserted', 'id' => (int) $this->conn->insert_id];
+        }
+        return ['action' => 'error', 'message' => $ins->error];
+    }
+
+    /**
+     * Fetch vendorlist for groupname and upsert all rows with user_id = 1000.
+     */
+    public function importVendorlistForGroup(string $groupname, bool $dryRun = true, string $apiBaseUrl = 'https://www.exoticindia.com'): array {
+        $fetch = $this->fetchVendorlistFromApi($groupname, $apiBaseUrl);
+        if (!$fetch['success']) {
+            return ['success' => false, 'message' => $fetch['message'], 'inserted' => 0, 'updated' => 0, 'skipped' => 0];
+        }
+        $rows = $fetch['rows'];
+        if ($dryRun) {
+            return [
+                'success' => true,
+                'message' => 'Dry run — no database writes.',
+                'inserted' => 0,
+                'updated' => 0,
+                'skipped' => 0,
+                'total_api_rows' => count($rows),
+                'dry_run' => true,
+            ];
+        }
+        $inserted = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+        foreach ($rows as $r) {
+            $ret = $this->upsertVendorFromVendorlist($r['remote_id'], $r['name'], $groupname);
+            if (($ret['action'] ?? '') === 'inserted') {
+                $inserted++;
+            } elseif (($ret['action'] ?? '') === 'updated') {
+                $updated++;
+            } elseif (($ret['action'] ?? '') === 'skip') {
+                $skipped++;
+            } else {
+                $errors[] = $ret['message'] ?? json_encode($ret);
+            }
+        }
+        return [
+            'success' => empty($errors),
+            'message' => empty($errors) ? 'Done' : implode('; ', array_slice($errors, 0, 5)),
+            'inserted' => $inserted,
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'total_api_rows' => count($rows),
+            'dry_run' => $dryRun,
+        ];
     }
 }
 ?>
