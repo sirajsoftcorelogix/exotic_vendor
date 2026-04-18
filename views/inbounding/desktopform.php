@@ -1261,26 +1261,26 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </div>
                         </div>
                     </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Invoice Number:</label>
-                        <div class="flex flex-col justify-center">
+                    <div class="flex-1 flex flex-col gap-4 justify-start">
+                        <div class="w-full">
+                            <label class="block text-xs font-bold text-[#222] mb-[5px]">Invoice Number:</label>
                             <input type="text" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="invoice_no" 
                                    value="<?php echo !empty($data['form2']['invoice_no']) ? $data['form2']['invoice_no'] : ''; ?>">
                         </div>
+                        <div class="w-full">
+                            <label class="block text-xs font-bold text-[#222] mb-[5px]" for="vendor_code">Vendor:</label>
+                            <select name="vendor_code" id="vendor_code" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Vendor...">
+                                <option value="">Select Vendor</option>
+                                <?php foreach ($data['vendors'] as $key4 => $value4) {
+                                    $isSelected = (isset($data['form2']['vendor_code']) && $data['form2']['vendor_code'] == $value4['id']) ? 'selected' : '';
+                                ?>
+                                    <option value="<?php echo $value4['id']; ?>" <?php echo $isSelected; ?>>
+                                        <?php echo htmlspecialchars($value4['vendor_name'] ?? ''); ?>
+                                    </option>
+                                <?php } ?>
+                            </select>
+                        </div>
                     </div>
-                </div>
-                <div class="mt-4 pt-4 border-t border-[#eee]">
-                    <label class="block text-xs font-bold text-[#222] mb-[5px]" for="vendor_code">Vendor:</label>
-                    <select name="vendor_code" id="vendor_code" class="w-full max-w-xl h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Vendor...">
-                        <option value="">Select Vendor</option>
-                        <?php foreach ($data['vendors'] as $key4 => $value4) {
-                            $isSelected = (isset($data['form2']['vendor_code']) && $data['form2']['vendor_code'] == $value4['id']) ? 'selected' : '';
-                        ?>
-                            <option value="<?php echo $value4['id']; ?>" <?php echo $isSelected; ?>>
-                                <?php echo htmlspecialchars($value4['vendor_name'] ?? ''); ?>
-                            </option>
-                        <?php } ?>
-                    </select>
                 </div>
             </fieldset>
         </div>
