@@ -1482,13 +1482,23 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     </form>
 </div>
 <div id="publishConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[80]">
-    <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
-        <h3 class="text-lg font-bold mb-2 text-gray-800">Publish Product?</h3>
-        <p class="text-sm text-gray-600 mb-6">Are you sure you want to publish this product?</p>
-        <div class="flex gap-3 justify-center">
-            <button type="button" onclick="closePublishPopup()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
-            
-            <button type="button" onclick="triggerPublishController()" class="bg-[#28a745] text-white px-6 py-2 rounded text-sm font-semibold hover:bg-[#218838] transition shadow-md">Yes, Publish</button>
+    <div class="bg-white p-6 rounded-md w-[90%] max-w-[420px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
+        <div id="publishConfirmIdle">
+            <h3 class="text-lg font-bold mb-2 text-gray-800">Publish Product?</h3>
+            <p class="text-sm text-gray-600 mb-3">This saves the form, then calls the catalog API and imports the product. It often takes <strong>30 seconds to a few minutes</strong>—keep this tab open.</p>
+            <p class="text-xs text-gray-500 mb-6">Are you sure you want to publish now?</p>
+            <div class="flex gap-3 justify-center">
+                <button type="button" id="publishCancelBtn" onclick="closePublishPopup()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
+                <button type="button" id="publishConfirmBtn" onclick="triggerPublishController()" class="bg-[#28a745] text-white px-6 py-2 rounded text-sm font-semibold hover:bg-[#218838] transition shadow-md">Yes, Publish</button>
+            </div>
+        </div>
+        <div id="publishConfirmBusy" class="hidden flex flex-col items-center gap-3 py-2">
+            <svg class="animate-spin h-10 w-10 text-[#28a745]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-sm font-semibold text-gray-800">Saving &amp; publishing…</p>
+            <p class="text-xs text-gray-600 leading-relaxed px-1">Talking to the remote catalog and refreshing local stock. Do not close this page until you see a success or error message.</p>
         </div>
     </div>
 </div>
@@ -2394,18 +2404,34 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+    function resetPublishPopup() {
+        const idle = document.getElementById('publishConfirmIdle');
+        const busy = document.getElementById('publishConfirmBusy');
+        const confirmBtn = document.getElementById('publishConfirmBtn');
+        const cancelBtn = document.getElementById('publishCancelBtn');
+        if (idle) idle.classList.remove('hidden');
+        if (busy) busy.classList.add('hidden');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Yes, Publish';
+        }
+        if (cancelBtn) cancelBtn.disabled = false;
+    }
     function openPublishPopup() {
+        resetPublishPopup();
         const popup = document.getElementById('publishConfirmPopup');
         if(popup) {
             popup.classList.remove('hidden');
         } else {
             console.error("Popup element 'publishConfirmPopup' not found!");
         }
-    }function closePublishPopup() {
+    }
+    function closePublishPopup() {
         const popup = document.getElementById('publishConfirmPopup');
         if(popup) {
             popup.classList.add('hidden');
         }
+        resetPublishPopup();
     }
     // 1. New function to bridge Validation and Publishing
     function handlePublishClick() {
@@ -2525,9 +2551,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData(form);
         const recordId = new URLSearchParams(window.location.search).get('id');
 
-        const confirmBtn = document.querySelector('#publishConfirmPopup button:last-child');
-        confirmBtn.innerText = "Saving & Publishing...";
-        confirmBtn.disabled = true;
+        const idle = document.getElementById('publishConfirmIdle');
+        const busy = document.getElementById('publishConfirmBusy');
+        const confirmBtn = document.getElementById('publishConfirmBtn');
+        const cancelBtn = document.getElementById('publishCancelBtn');
+        if (idle) idle.classList.add('hidden');
+        if (busy) busy.classList.remove('hidden');
+        if (confirmBtn) confirmBtn.disabled = true;
+        if (cancelBtn) cancelBtn.disabled = true;
 
         // First: Save the current form data so changes aren't lost
         fetch(form.action + '&save_action=generate', {
@@ -2604,6 +2635,9 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             closePublishPopup();
             Swal.fire({ icon: 'error', title: 'Error', text: 'Publishing failed: ' + error.message });
+        })
+        .finally(() => {
+            resetPublishPopup();
         });
     }
 
