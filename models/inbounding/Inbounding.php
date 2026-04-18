@@ -1461,6 +1461,29 @@ class Inbounding {
 
         return null;
     }
+
+    /**
+     * Resolve item code for stock movement rows (vp_stock_movements.item_code may be NOT NULL).
+     */
+    private function getItemCodeByProductId(int $productId): string {
+        if ($productId <= 0) {
+            return '';
+        }
+        $stmt = $this->conn->prepare('SELECT item_code FROM vp_products WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('i', $productId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        if (!$row) {
+            return '';
+        }
+        return trim((string)(($row['item_code'] ?? $row['Item_code'] ?? '')));
+    }
+
     public function stock_data($id) {
         // 1. Fetch the main record using a prepared statement
         $sql = "SELECT Item_code, sku, quantity_received, color, size, ware_house_code, store_location FROM vp_inbound WHERE id = ?";
@@ -1473,6 +1496,12 @@ class Inbounding {
         if (empty($main_inbound)) {
             return []; 
         }
+
+        // mysqli may return Item_code or item_code depending on driver / server — normalize for downstream use
+        foreach ($main_inbound as &$normRow) {
+            $normRow['Item_code'] = trim((string)(($normRow['Item_code'] ?? $normRow['item_code'] ?? '')));
+        }
+        unset($normRow);
 
         // Lookup the product_id for the parent record using its SKU
         $main_inbound[0]['product_id'] = $this->getProductBysku($main_inbound[0]['sku']);
@@ -1536,8 +1565,8 @@ class Inbounding {
 
         // 2. Define static defaults
         $movement_type = 'IN';
-        $ref_type      = 'GRN';
-        $ref_id        = 0;
+        $ref_type      = 'INBOUND';
+        $ref_id        = '0';
         // Warehouse from inbound form (first row = parent record): use for default location label
         $inboundWarehouseId = isset($data[0]['ware_house_code']) ? (int)$data[0]['ware_house_code'] : 0;
         if ($inboundWarehouseId <= 0) {
@@ -1557,15 +1586,14 @@ class Inbounding {
             $addrStmt0->close();
         }
 
-        // Bind types for INSERT (same every row): i, s×4, i, s×2, i×2, s, i
-        $movementBindTypes = 'i' . str_repeat('s', 4) . 'i' . str_repeat('s', 2) . str_repeat('i', 2) . 's' . 'i';
+        // Bind types for INSERT (same every row): i, s×4, i, s×2, i×2, s, s — ref_id is varchar in vp_stock_movements
+        $movementBindTypes = 'i' . str_repeat('s', 4) . 'i' . str_repeat('s', 2) . str_repeat('i', 2) . 's' . 's';
 
         // 3. Loop through your data array
         foreach ($data as $row) {
             // Mapping array keys to variables
             $product_id   = isset($row['product_id']) ? (int)$row['product_id'] : 0;
             $sku          = $row['sku'] ?? '';
-            $item_code    = $row['Item_code'] ?? '';
             $size         = $row['size'] ?? '';
             $color        = $row['color'] ?? '';
             $warehouse_id = isset($row['ware_house_code']) ? (int)$row['ware_house_code'] : 0;
@@ -1574,6 +1602,8 @@ class Inbounding {
             }
             $quantity     = isset($row['quantity_received']) ? (int)$row['quantity_received'] : 0;
             $running      = $quantity; // Per your requirement
+
+            $item_code = trim((string)(($row['Item_code'] ?? $row['item_code'] ?? '')));
 
             // Recover missing product_id using SKU/item code.
             if ($product_id <= 0 && $sku !== '') {
@@ -1586,6 +1616,11 @@ class Inbounding {
                 error_log("Skipping stock movement row: missing product_id for sku={$sku}, item_code={$item_code}");
                 continue;
             }
+
+            if ($item_code === '') {
+                $item_code = $this->getItemCodeByProductId($product_id);
+            }
+            // vp_stock_movements.item_code is nullable — still insert when missing
 
             // Prefer store location from inbound (same as form); fallback to warehouse address title
             $storeLoc = trim((string)($row['store_location'] ?? ''));
