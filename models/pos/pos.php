@@ -117,7 +117,7 @@ class pos
         $stockFrom = "
     FROM vp_products p
     INNER JOIN (
-        SELECT sm1.product_id, sm1.running_stock
+        SELECT sm1.product_id, sm1.running_stock, sm1.location
         FROM vp_stock_movements sm1
         INNER JOIN (
             SELECT product_id, MAX(id) AS max_id
@@ -153,6 +153,7 @@ class pos
         p.length_unit,
         p.cost_price,
         sm.running_stock AS stock_qty,
+        sm.location AS warehouse_location,
         p.itemprice AS price
     $stockFrom
     $where
