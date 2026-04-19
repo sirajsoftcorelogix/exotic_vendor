@@ -214,6 +214,13 @@
           <?php unset($_SESSION['cart_success']); ?>
         <?php endif; ?>
 
+        <?php if (!empty($_SESSION['cart_error'])): ?>
+          <div class="text-red-600 text-xs mb-2 px-4">
+            <?= htmlspecialchars((string)$_SESSION['cart_error']) ?>
+          </div>
+          <?php unset($_SESSION['cart_error']); ?>
+        <?php endif; ?>
+
         <div class="px-4 py-3 space-y-4 text-[12px]">
 
           <!-- PRODUCTS -->
@@ -547,12 +554,17 @@
 
   <!-- modal box -->
   <div class="relative mx-auto mt-10 w-[95%] max-w-3xl rounded-2xl bg-white shadow-xl">
-    <div class="flex items-center justify-between border-b px-5 py-3">
-      <div class="text-sm font-semibold text-gray-800" id="pmTitle">Product</div>
+    <div class="flex items-start justify-between gap-3 border-b px-5 py-3">
+      <h2
+        id="pmTitle"
+        class="min-w-0 flex-1 text-left text-sm font-semibold text-gray-900 leading-snug line-clamp-3 break-words">
+        Product
+      </h2>
 
       <button
+        type="button"
         id="productModalClose"
-        class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
+        class="shrink-0 rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
         ✕
       </button>
     </div>
@@ -588,8 +600,9 @@
           <div class="mt-6 flex flex-wrap items-center justify-end gap-2">
 
             <!-- Qty control -->
-            <div class="mr-auto flex items-center gap-2">
+            <div class="mr-auto flex items-center gap-2 flex-wrap">
               <label class="text-xs text-gray-600">Qty</label>
+              <span id="pmQtyMaxHint" class="text-[10px] text-gray-500"></span>
 
               <div class="flex items-center border border-gray-200 rounded-lg overflow-hidden">
                 <button
@@ -635,6 +648,11 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <div id="pmSiblingSkusWrapper" class="hidden mt-5 border-t border-gray-100 pt-4">
+        <div class="text-xs font-semibold text-gray-700 mb-2">Other variants (same item code)</div>
+        <div id="pmSiblingSkus" class="flex flex-wrap gap-2"></div>
       </div>
     </div>
   </div>

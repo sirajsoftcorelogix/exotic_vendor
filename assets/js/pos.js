@@ -99,6 +99,69 @@ $(function () {
     return wtu ? `${wt} ${wtu}` : wt;
   }
 
+  function siblingHtmlEscape(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderSiblingSkusBlock(rows) {
+    const $wrap = $('#pmSiblingSkusWrapper');
+    const $list = $('#pmSiblingSkus');
+    if (!$wrap.length || !$list.length) return;
+    const list = Array.isArray(rows)
+      ? rows.filter(function (r) {
+        return r && String(r.sku || '').trim() !== '';
+      })
+      : [];
+    if (!list.length) {
+      $wrap.addClass('hidden');
+      $list.empty();
+      return;
+    }
+    $wrap.removeClass('hidden');
+    let html = '';
+    list.forEach(function (s) {
+      const sku = String(s.sku || '').trim();
+      const title = String(s.title || '').replace(/\s+/g, ' ').trim();
+      const st = s.stock_qty != null && s.stock_qty !== '' ? s.stock_qty : '-';
+      html += `<button type="button" class="pm-sibling-sku-link inline-flex max-w-full flex-col items-start rounded-lg border border-orange-100 bg-orange-50/80 px-2.5 py-1.5 text-left text-[10px] hover:bg-orange-100 transition text-orange-900" data-sibling-sku="${siblingHtmlEscape(sku)}">`;
+      html += `<span class="font-semibold">${siblingHtmlEscape(sku)}</span>`;
+      html += `<span class="text-gray-600 line-clamp-2">${siblingHtmlEscape(title)}</span>`;
+      html += `<span class="text-[9px] text-gray-500 mt-0.5">Stock: ${siblingHtmlEscape(String(st))}</span>`;
+      html += '</button>';
+    });
+    $list.html(html);
+  }
+
+  function loadSiblingSkusForProduct(p) {
+    if (Array.isArray(p.sibling_skus)) {
+      renderSiblingSkusBlock(p.sibling_skus);
+      return;
+    }
+    if (isMeaningful(p.item_code) && getLookupCode(p)) {
+      $.ajax({
+        url: '?page=pos_register&action=sibling-skus',
+        type: 'GET',
+        dataType: 'json',
+        data: {
+          item_code: String(p.item_code).trim(),
+          exclude_sku: getLookupCode(p)
+        }
+      })
+        .done(function (res) {
+          renderSiblingSkusBlock(res.data || []);
+        })
+        .fail(function () {
+          renderSiblingSkusBlock([]);
+        });
+      return;
+    }
+    renderSiblingSkusBlock([]);
+  }
+
   function addRow(label, value) {
     return `
       <div class="text-gray-600">${label}</div>
@@ -120,6 +183,8 @@ $(function () {
   const $pmQtyVal = $('#pmQtyVal');
 
   let activeModalKey = null;
+  /** When set from `stock_qty`, qty controls cannot exceed this (warehouse running stock). */
+  let modalWarehouseMaxQty = null;
 
   function openModal() {
     $modal.removeClass('hidden');
@@ -130,31 +195,91 @@ $(function () {
     $modal.addClass('hidden');
     $('body').removeClass('overflow-hidden');
     activeModalKey = null;
+    modalWarehouseMaxQty = null;
+    $('#pmQtyMaxHint').text('');
+    $('#pmSiblingSkus').empty();
+    $('#pmSiblingSkusWrapper').addClass('hidden');
   }
 
   $overlay.on('click', closeModal);
   $close.on('click', closeModal);
   $closeBtn.on('click', closeModal);
+
+  function updateModalQtyUiState() {
+    const max = modalWarehouseMaxQty;
+    const q = getModalQty();
+    const $submit = $('#productModal').find('form[action*="cart-add"] button[type="submit"]');
+
+    if (typeof max === 'number' && max === 0) {
+      $submit.prop('disabled', true).addClass('opacity-50');
+      $pmQtyInc.prop('disabled', true);
+      $pmQtyDec.prop('disabled', true);
+    } else if (typeof max === 'number' && max > 0) {
+      $submit.prop('disabled', false).removeClass('opacity-50');
+      $pmQtyInc.prop('disabled', q >= max);
+      $pmQtyDec.prop('disabled', q <= 1);
+    } else {
+      $submit.prop('disabled', false).removeClass('opacity-50');
+      $pmQtyInc.prop('disabled', false);
+      $pmQtyDec.prop('disabled', q <= 1);
+    }
+  }
+
   function setModalQty(qty) {
-    const q = Math.max(1, parseInt(qty || 1, 10));
+    let raw = qty;
+    if (typeof raw === 'string') raw = parseInt(raw, 10);
+    let q = Number.isFinite(raw) ? raw : NaN;
+    const max = modalWarehouseMaxQty;
 
-    $pmQtyVal.text(q);
+    if (typeof max === 'number' && max >= 0) {
+      if (max === 0) {
+        q = 0;
+      } else {
+        if (!Number.isFinite(q) || q < 1) q = 1;
+        q = Math.min(q, max);
+      }
+    } else if (!Number.isFinite(q) || q < 1) {
+      q = 1;
+    }
 
-    // IMPORTANT: update hidden field
+    $pmQtyVal.text(String(q));
     $('#modal_qty').val(q);
-
+    updateModalQtyUiState();
   }
 
   function getModalQty() {
-    return Math.max(1, parseInt($pmQtyVal.text() || '1', 10));
+    const n = parseInt(String($pmQtyVal.text()).trim(), 10);
+    return Number.isFinite(n) ? n : 1;
   }
 
   $pmQtyDec.on('click', function () {
+    const max = modalWarehouseMaxQty;
+    if (typeof max === 'number' && max === 0) return;
     setModalQty(getModalQty() - 1);
   });
 
   $pmQtyInc.on('click', function () {
-    setModalQty(getModalQty() + 1);
+    const max = modalWarehouseMaxQty;
+    const cur = getModalQty();
+    if (typeof max === 'number' && max > 0 && cur >= max) return;
+    setModalQty(cur + 1);
+  });
+
+  $('#productModal').find('form[action*="cart-add"]').on('submit', function (e) {
+    const max = modalWarehouseMaxQty;
+    const q = parseInt(String($('#modal_qty').val()), 10);
+    const qtyNum = Number.isFinite(q) ? q : 0;
+    if (typeof max === 'number' && max >= 0) {
+      if (max === 0 || qtyNum > max) {
+        e.preventDefault();
+        alert(
+          max === 0
+            ? 'Out of stock in this warehouse.'
+            : 'Maximum quantity available is ' + max + '.'
+        );
+        return false;
+      }
+    }
   });
 
   function renderProductModal(p, key) {
@@ -170,8 +295,26 @@ $(function () {
     $('#pmImage').attr('src', imgSrc).attr('alt', title || 'Product');
     $('#modal_product_code').val(getLookupCode(p) || String(p.code || p.id || ''));
 
-    //  SET QTY
-    setModalQty(1);
+    const sqRaw = p.stock_qty;
+    modalWarehouseMaxQty = null;
+    if (sqRaw !== null && sqRaw !== undefined && String(sqRaw).trim() !== '') {
+      const n = Number(sqRaw);
+      if (!Number.isNaN(n)) {
+        modalWarehouseMaxQty = Math.max(0, Math.floor(n));
+      }
+    }
+    const $hint = $('#pmQtyMaxHint');
+    if ($hint.length) {
+      $hint.text(
+        modalWarehouseMaxQty !== null && modalWarehouseMaxQty >= 0
+          ? modalWarehouseMaxQty > 0
+            ? `(max ${modalWarehouseMaxQty})`
+            : '(out of stock)'
+          : ''
+      );
+    }
+
+    setModalQty(modalWarehouseMaxQty === 0 ? 0 : 1);
 
     // SET VARIATION (FINAL FIX)
     let size = (p.size && p.size !== '0') ? String(p.size).trim() : '';
@@ -279,8 +422,8 @@ $(function () {
       badges.push(`<span class="rounded-md bg-gray-100 px-2 py-1 text-[10px] text-gray-700 capitalize">${p.maincategory}</span>`);
     }
 
-    //  STOCK
-    if (isMeaningful(p.stock_qty)) {
+    //  STOCK (include 0 — isMeaningful treats 0 as empty)
+    if (p.stock_qty != null && String(p.stock_qty).trim() !== '' && !Number.isNaN(Number(p.stock_qty))) {
       badges.push(`<span class="rounded-md bg-green-100 px-2 py-1 text-[10px] text-green-700">Stock: ${p.stock_qty}</span>`);
     }
 
@@ -311,17 +454,22 @@ $(function () {
     if (isMeaningful(p.material)) {
       html += addRow('Material', String(p.material).replace(/\s+/g, ' ').trim());
     }
-    if (isMeaningful(p.hsn)) {
-      html += addRow('HSN', String(p.hsn).trim());
-    }
 
     if (!html) {
       html = `<div class="col-span-3 text-xs text-gray-500">No additional details available.</div>`;
     }
 
     $('#pmDetails').html(html);
-    setModalQty(1);
+
+    loadSiblingSkusForProduct(p);
   }
+
+  $(document).on('click', '.pm-sibling-sku-link', function (e) {
+    e.preventDefault();
+    const sku = $(this).attr('data-sibling-sku');
+    if (!sku) return;
+    openProductModalByCode(String(sku));
+  });
 
   // ────────────────────────────────────────────────
   // PRODUCTS RENDERING + FETCH (unchanged)

@@ -371,6 +371,173 @@ class POSRegisterController
         return '';
     }
 
+    private function resolveVpProductIdByCode($conn, string $code): int
+    {
+        if ($code === '' || !$conn) {
+            return 0;
+        }
+        $stmt = $conn->prepare(
+            'SELECT id FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('ss', $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return !empty($row['id']) ? (int)$row['id'] : 0;
+    }
+
+    /** Latest running_stock for one SKU at one warehouse (same basis as POS product grid). */
+    private function getWarehouseStockForProductId($conn, int $productId, int $warehouseId): float
+    {
+        if ($productId <= 0 || $warehouseId <= 0 || !$conn) {
+            return 0.0;
+        }
+        $sql = '
+            SELECT sm.running_stock
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE warehouse_id = ?
+                GROUP BY product_id
+            ) latest ON latest.product_id = sm.product_id AND latest.max_id = sm.id
+            WHERE sm.warehouse_id = ? AND sm.product_id = ?
+            LIMIT 1';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return 0.0;
+        }
+        $stmt->bind_param('iii', $warehouseId, $warehouseId, $productId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row || !array_key_exists('running_stock', $row)) {
+            return 0.0;
+        }
+
+        return (float)$row['running_stock'];
+    }
+
+    /**
+     * @return string|null Error message, or null if OK / validation skipped (no VP row / no warehouse).
+     */
+    private function validateQtyAgainstWarehouse($conn, string $code, int $qty): ?string
+    {
+        if ($qty < 1) {
+            return null;
+        }
+        $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            return null;
+        }
+        $pid = $this->resolveVpProductIdByCode($conn, trim($code));
+        if ($pid <= 0) {
+            return null;
+        }
+        $avail = $this->getWarehouseStockForProductId($conn, $pid, $warehouseId);
+        $maxAllowed = (int)floor($avail);
+        if ($qty > $maxAllowed) {
+            return 'Quantity cannot exceed available stock in this warehouse (' . $maxAllowed . ' available).';
+        }
+
+        return null;
+    }
+
+    /**
+     * Other VP rows with the same item_code (excluding the opened variant), with warehouse stock when available.
+     *
+     * @return array<int, array{id:int, sku:string, title:string, stock_qty:float|int}>
+     */
+    private function fetchSiblingSkusByItemCode($conn, string $itemCode, string $excludeSku, int $warehouseId): array
+    {
+        if ($itemCode === '' || !$conn || $excludeSku === '') {
+            return [];
+        }
+
+        if ($warehouseId <= 0) {
+            $sql = 'SELECT id, sku, title, 0 AS stock_qty
+                    FROM vp_products
+                    WHERE is_active = 1 AND item_code = ? AND sku <> ?
+                    ORDER BY sku ASC';
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                return [];
+            }
+            $stmt->bind_param('ss', $itemCode, $excludeSku);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $out = [];
+            while ($row = $res->fetch_assoc()) {
+                $out[] = [
+                    'id' => (int)($row['id'] ?? 0),
+                    'sku' => (string)($row['sku'] ?? ''),
+                    'title' => (string)($row['title'] ?? ''),
+                    'stock_qty' => (float)($row['stock_qty'] ?? 0),
+                ];
+            }
+            $stmt->close();
+
+            return $out;
+        }
+
+        $sql = '
+            SELECT p.id, p.sku, p.title, COALESCE(sm.running_stock, 0) AS stock_qty
+            FROM vp_products p
+            LEFT JOIN (
+                SELECT sm1.product_id, sm1.running_stock
+                FROM vp_stock_movements sm1
+                INNER JOIN (
+                    SELECT product_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE warehouse_id = ?
+                    GROUP BY product_id
+                ) latest ON latest.product_id = sm1.product_id AND latest.max_id = sm1.id
+                WHERE sm1.warehouse_id = ?
+            ) sm ON sm.product_id = p.id
+            WHERE p.is_active = 1 AND p.item_code = ? AND p.sku <> ?
+            ORDER BY p.sku ASC';
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('iiss', $warehouseId, $warehouseId, $itemCode, $excludeSku);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $out = [];
+        while ($row = $res->fetch_assoc()) {
+            $out[] = [
+                'id' => (int)($row['id'] ?? 0),
+                'sku' => (string)($row['sku'] ?? ''),
+                'title' => (string)($row['title'] ?? ''),
+                'stock_qty' => (float)($row['stock_qty'] ?? 0),
+            ];
+        }
+        $stmt->close();
+
+        return $out;
+    }
+
+    public function siblingSkusAjax(): void
+    {
+        ob_clean();
+        header('Content-Type: application/json');
+
+        $itemCode = isset($_GET['item_code']) ? trim((string)$_GET['item_code']) : '';
+        $excludeSku = isset($_GET['exclude_sku']) ? trim((string)$_GET['exclude_sku']) : '';
+        global $conn;
+        $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+
+        echo json_encode([
+            'data' => $this->fetchSiblingSkusByItemCode($conn, $itemCode, $excludeSku, $warehouseId),
+        ]);
+        exit;
+    }
+
     public function getProductApi()
     {
         $code = isset($_GET['code']) ? trim((string)$_GET['code']) : '';
@@ -387,7 +554,7 @@ class POSRegisterController
         $dbRow = [];
         if (!empty($conn)) {
             $stmt = $conn->prepare(
-                'SELECT item_code, sku, image, material, size, color, hsn,
+                'SELECT id, item_code, sku, title, image, material, size, color, hsn,
                         product_weight, product_weight_unit,
                         prod_height, prod_width, prod_length, length_unit
                  FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
@@ -452,12 +619,25 @@ class POSRegisterController
         $dbPw = isset($dbRow['product_weight']) ? trim((string)$dbRow['product_weight']) : '';
         $dbPwu = isset($dbRow['product_weight_unit']) ? trim((string)$dbRow['product_weight_unit']) : '';
 
+        $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        $vpId = isset($dbRow['id']) ? (int)$dbRow['id'] : 0;
+        if ($vpId > 0 && $warehouseId > 0) {
+            $stockQtyOut = $this->getWarehouseStockForProductId($conn, $vpId, $warehouseId);
+        } else {
+            $stockQtyOut = $data['stock'] ?? 0;
+        }
+
+        $siblingSkus = [];
+        if ($dbItemCode !== '') {
+            $siblingSkus = $this->fetchSiblingSkusByItemCode($conn, $dbItemCode, trim($code), $warehouseId);
+        }
+
         // echo '<pre>'; print_r($data['addon_options']); exit;
         $product = [
             'requested_code' => $code,
             'item_code' => $dbItemCode,
             'sku' => $dbSku,
-            'title' => $data['name'] ?? '',
+            'title' => $this->mergeProductTextField($data['name'] ?? '', $dbRow['title'] ?? ''),
             'image' => $imageResolved,
             'price' => $data['price'] ?? 0,
 
@@ -466,8 +646,8 @@ class POSRegisterController
             'color' => $this->mergeProductTextField($data['color'] ?? '', $dbRow['color'] ?? ''),
             'hsn' => $this->mergeProductTextField($data['hsn'] ?? '', $dbRow['hsn'] ?? ''),
 
-            //  NEW FIELDS
-            'stock_qty' => $data['stock'] ?? 0,
+            //  NEW FIELDS (warehouse running stock when VP row + session warehouse match POS grid)
+            'stock_qty' => $stockQtyOut,
             'maincategory' => $data['maincategory'] ?? '',
             'dimensions' => $dimensionsMerged,
             'weight' => $wKgApi,
@@ -479,7 +659,8 @@ class POSRegisterController
             'length_unit' => $dbLu,
             'express_shipping_cost' => $data['express_shipping_cost'] ?? 0,
             'express_shipping_option' => $data['express_shipping_option'] ?? null,
-            'addon_options' => $data['addon_options'] ?? []
+            'addon_options' => $data['addon_options'] ?? [],
+            'sibling_skus' => $siblingSkus,
         ];
 
         //  IMPORTANT: clear buffer
@@ -953,6 +1134,15 @@ class POSRegisterController
             exit;
         }
 
+        global $conn;
+        $qtyInt = max(1, (int)$qty);
+        $stockErr = $this->validateQtyAgainstWarehouse($conn, trim((string)$code), $qtyInt);
+        if ($stockErr !== null) {
+            $_SESSION['cart_error'] = $stockErr;
+            header("Location: ?page=pos_register");
+            exit;
+        }
+
         $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
         $coupon  = '';
 
@@ -965,7 +1155,7 @@ class POSRegisterController
         $postArray = [
             'buynow'   => $buyNow ? 1 : 0,
             'code'     => trim($code),
-            'qty'      => max(1, (int)$qty),
+            'qty'      => $qtyInt,
             'discountcoupondetails' => $coupon,
             'giftvoucherdetails'    => $voucher
         ];
@@ -1057,7 +1247,25 @@ class POSRegisterController
     public function change_qty()
     {
         $cartref = $_POST['cartref'] ?? '';
-        $qty = $_POST['newqty'] ?? 1;
+        $qty = (int)($_POST['newqty'] ?? 1);
+
+        $cartData = $this->get_cart();
+        $itemCode = '';
+        foreach ($cartData['items'] ?? [] as $item) {
+            if (($item['cartref'] ?? '') === $cartref) {
+                $itemCode = trim((string)($item['item_code'] ?? ''));
+                break;
+            }
+        }
+        if ($itemCode !== '') {
+            global $conn;
+            $stockErr = $this->validateQtyAgainstWarehouse($conn, $itemCode, $qty);
+            if ($stockErr !== null) {
+                $_SESSION['cart_error'] = $stockErr;
+                header("Location: ?page=pos_register");
+                exit;
+            }
+        }
 
         $this->exotic_api_call('/cart/modifyqty', 'GET', [
             'cartid' => $cartref,
