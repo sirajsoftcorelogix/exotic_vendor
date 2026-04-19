@@ -311,16 +311,56 @@ class POSRegisterController
     }
     function fixImageUrl($path)
     {
-        if (!$path) return '';
+        if ($path === null || $path === '') {
+            return '';
+        }
 
-        //  already full URL
+        $path = trim((string)$path);
+        if ($path === '') {
+            return '';
+        }
+        // Protocol-relative URL
+        if (strpos($path, '//') === 0) {
+            return 'https:' . $path;
+        }
+        // Already absolute
         if (strpos($path, 'http') === 0) {
             return $path;
         }
 
-        //  relative path → convert to CDN
-        return 'https://cdn.exoticindia.com' . $path;
+        // Relative path → CDN (ensure single slash join)
+        $suffix = $path[0] === '/' ? $path : '/' . $path;
+        return 'https://cdn.exoticindia.com' . $suffix;
     }
+
+    /**
+     * Product API sometimes returns fields at the root or under a nested "data" object.
+     */
+    private function unwrapProductApiResponse(array $data): array
+    {
+        if (!empty($data['data']) && is_array($data['data'])) {
+            $inner = $data['data'];
+            unset($data['data']);
+            // Wrapper keys first; nested product object wins on conflicts (non-empty image/name).
+            return array_merge($data, $inner);
+        }
+        return $data;
+    }
+
+    /** First usable image path/URL from a /product/code JSON payload. */
+    private function pickRawImageFromProductApiArray(array $data): string
+    {
+        foreach (['image', 'image_url', 'thumbnail', 'thumb', 'imageurl'] as $k) {
+            if (!empty($data[$k]) && is_string($data[$k])) {
+                $v = trim($data[$k]);
+                if ($v !== '') {
+                    return $v;
+                }
+            }
+        }
+        return '';
+    }
+
     public function getProductApi()
     {
         $code = isset($_GET['code']) ? trim((string)$_GET['code']) : '';
@@ -333,9 +373,10 @@ class POSRegisterController
         global $conn;
         $dbItemCode = '';
         $dbSku = '';
+        $dbImageRaw = '';
         if (!empty($conn)) {
             $stmt = $conn->prepare(
-                'SELECT item_code, sku FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+                'SELECT item_code, sku, image FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
             );
             if ($stmt) {
                 $stmt->bind_param('ss', $code, $code);
@@ -345,22 +386,44 @@ class POSRegisterController
                 if ($row) {
                     $dbItemCode = trim((string)($row['item_code'] ?? ''));
                     $dbSku = trim((string)($row['sku'] ?? ''));
+                    $dbImageRaw = trim((string)($row['image'] ?? ''));
                 }
             }
         }
 
         $res = $this->exotic_api_call('/product/code', 'GET', ['code' => $code]);
 
-        $data = $res['data'] ?? [];
+        $data = $this->unwrapProductApiResponse($res['data'] ?? []);
+        $apiImageRaw = $this->pickRawImageFromProductApiArray($data);
+        $imageResolved = $this->fixImageUrl($apiImageRaw);
+        $imageFromDb = $this->fixImageUrl($dbImageRaw);
+
+        if ($imageResolved === '' && $imageFromDb !== '') {
+            $imageResolved = $imageFromDb;
+        }
+
+        // Variant SKU may return no image from upstream; retry with base item_code.
+        if (
+            $imageResolved === ''
+            && $dbItemCode !== ''
+            && strcasecmp($dbItemCode, $code) !== 0
+        ) {
+            $res2 = $this->exotic_api_call('/product/code', 'GET', ['code' => $dbItemCode]);
+            $data2 = $this->unwrapProductApiResponse($res2['data'] ?? []);
+            $imageResolved = $this->fixImageUrl($this->pickRawImageFromProductApiArray($data2));
+        }
+
+        if ($imageResolved === '' && $imageFromDb !== '') {
+            $imageResolved = $imageFromDb;
+        }
+
         // echo '<pre>'; print_r($data['addon_options']); exit;
         $product = [
             'requested_code' => $code,
             'item_code' => $dbItemCode,
             'sku' => $dbSku,
             'title' => $data['name'] ?? '',
-            'image' => (!empty($data['image']))
-                ? ('https://cdn.exoticindia.com' . $data['image'])
-                : '',
+            'image' => $imageResolved,
             'price' => $data['price'] ?? 0,
 
             'material' => $this->cleanValue($data['material'] ?? ''),
