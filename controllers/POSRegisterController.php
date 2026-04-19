@@ -323,11 +323,30 @@ class POSRegisterController
     }
     public function getProductApi()
     {
-        $code = $_GET['code'] ?? '';
+        $code = isset($_GET['code']) ? trim((string)$_GET['code']) : '';
 
-        if (empty($code)) {
+        if ($code === '') {
             echo json_encode(['status' => false]);
             exit;
+        }
+
+        global $conn;
+        $dbItemCode = '';
+        $dbSku = '';
+        if (!empty($conn)) {
+            $stmt = $conn->prepare(
+                'SELECT item_code, sku FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('ss', $code, $code);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($row) {
+                    $dbItemCode = trim((string)($row['item_code'] ?? ''));
+                    $dbSku = trim((string)($row['sku'] ?? ''));
+                }
+            }
         }
 
         $res = $this->exotic_api_call('/product/code', 'GET', ['code' => $code]);
@@ -335,7 +354,9 @@ class POSRegisterController
         $data = $res['data'] ?? [];
         // echo '<pre>'; print_r($data['addon_options']); exit;
         $product = [
-            'item_code' => $code,
+            'requested_code' => $code,
+            'item_code' => $dbItemCode,
+            'sku' => $dbSku,
             'title' => $data['name'] ?? '',
             'image' => (!empty($data['image']))
                 ? ('https://cdn.exoticindia.com' . $data['image'])
