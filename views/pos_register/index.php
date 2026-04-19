@@ -631,6 +631,7 @@
             <form method="POST" action="?page=pos_register&action=cart-add">
               <!-- <input type="hidden" name="action" value="add_to_cart"> -->
               <input type="hidden" name="code" id="modal_product_code">
+              <input type="hidden" name="stock_check_code" id="modal_stock_check_code" value="">
               <input type="hidden" name="qty" id="modal_qty" value="1">
               <input type="hidden" name="options" id="modal_options">
               <input type="hidden" name="variation" id="modal_variation">

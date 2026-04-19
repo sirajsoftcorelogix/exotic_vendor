@@ -1136,7 +1136,11 @@ class POSRegisterController
 
         global $conn;
         $qtyInt = max(1, (int)$qty);
-        $stockErr = $this->validateQtyAgainstWarehouse($conn, trim((string)$code), $qtyInt);
+        $stockLookup = trim((string)($_POST['stock_check_code'] ?? ''));
+        if ($stockLookup === '') {
+            $stockLookup = trim((string)$code);
+        }
+        $stockErr = $this->validateQtyAgainstWarehouse($conn, $stockLookup, $qtyInt);
         if ($stockErr !== null) {
             $_SESSION['cart_error'] = $stockErr;
             header("Location: ?page=pos_register");
