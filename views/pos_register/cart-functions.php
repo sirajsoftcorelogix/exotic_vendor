@@ -93,7 +93,14 @@ function get_cart()
                 'express_selected' => $expressSelected
             ];
 
-            $subtotal += ((float)$item['price'] * (int)$item['quantity']);
+            $addonsSumPerUnit = 0.0;
+            if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
+                foreach ($item['addons_selected'] as $ad) {
+                    $addonsSumPerUnit += (float)($ad['value'] ?? 0);
+                }
+            }
+            $unitLine = (float)$item['price'] + $addonsSumPerUnit;
+            $subtotal += $unitLine * (int)$item['quantity'];
             // echo $expressSelected;
             // exit;
             // Add shipping only if selected
