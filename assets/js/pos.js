@@ -40,11 +40,14 @@ $(function () {
     return (p.id != null && p.id !== '') ? `id:${p.id}` : `code:${p.item_code || ''}`;
   }
 
-  /** Prefer full variant SKU when present (e.g. ITEM--blue); fallback to item_code. */
+  /** Prefer full variant SKU when present (e.g. ITEM--blue); fallback to item_code; then API-only code. */
   function getLookupCode(p) {
+    if (!p) return '';
     const sku = p.sku != null ? String(p.sku).trim() : '';
     if (sku !== '') return sku;
-    return p.item_code != null ? String(p.item_code).trim() : '';
+    const ic = p.item_code != null ? String(p.item_code).trim() : '';
+    if (ic !== '') return ic;
+    return p.requested_code != null ? String(p.requested_code).trim() : '';
   }
 
   function isMeaningful(val) {
@@ -123,7 +126,7 @@ $(function () {
 
     const imgSrc = p.image || 'https://dummyimage.com/500x500/e5e7eb/6b7280&text=No+Image';
     $('#pmImage').attr('src', imgSrc).attr('alt', title || 'Product');
-    $('#modal_product_code').val(p.item_code || p.sku || p.code || p.id || '');
+    $('#modal_product_code').val(getLookupCode(p) || String(p.code || p.id || ''));
 
     //  SET QTY
     setModalQty(1);
@@ -212,14 +215,21 @@ $(function () {
 
 
     const badges = [];
+    const icRaw = isMeaningful(p.item_code) ? String(p.item_code).trim() : '';
+    const skuRaw = isMeaningful(p.sku) ? String(p.sku).trim() : '';
 
-    if (isMeaningful(p.item_code)) {
-      badges.push(`<span class="rounded-md bg-orange-100 px-2 py-1 text-[10px] text-orange-700">Code: ${p.item_code}</span>`);
-    }
-
-    // SKU = same as code (your API)
-    if (isMeaningful(p.item_code)) {
-      badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${p.item_code}</span>`);
+    if (icRaw && skuRaw && icRaw !== skuRaw) {
+      badges.push(`<span class="rounded-md bg-orange-100 px-2 py-1 text-[10px] text-orange-700">Item code: ${icRaw}</span>`);
+      badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${skuRaw}</span>`);
+    } else if (skuRaw) {
+      badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${skuRaw}</span>`);
+    } else if (icRaw) {
+      badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${icRaw}</span>`);
+    } else {
+      const fallback = getLookupCode(p);
+      if (fallback) {
+        badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${fallback}</span>`);
+      }
     }
 
     //  MAIN CATEGORY (RIGHT SIDE STYLE)
@@ -511,7 +521,7 @@ data-code="${lookupCode}">
         <div>Color</div><div>:</div><div>${p.color || '-'}</div>
     `);
 
-    $('#modal_product_code').val(p.item_code || p.sku || '');
+    $('#modal_product_code').val(getLookupCode(p));
 
     // ADDONS
     let addonsHtml = '';
