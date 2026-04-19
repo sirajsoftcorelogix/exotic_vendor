@@ -548,7 +548,8 @@
   TEST PRINT
 </a> -->
 <!-- Product Modal -->
-<div id="productModal" class="fixed inset-0 z-[9999] hidden">
+<div id="productModal" class="fixed inset-0 z-[9999] hidden"
+     data-pos-warehouse="<?= htmlspecialchars((string)($warehouse_name ?? ''), ENT_QUOTES, 'UTF-8') ?>">
   <!-- overlay -->
   <div id="productModalOverlay" class="absolute inset-0 bg-black/50"></div>
 
