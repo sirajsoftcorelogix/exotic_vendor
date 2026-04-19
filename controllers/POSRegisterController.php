@@ -357,6 +357,46 @@ class POSRegisterController
         return trim((string)$dbRaw);
     }
 
+    /** First positive amount from named keys on an API payload (same keys used elsewhere for catalog sync). */
+    private function pickPositivePriceFromApiArray(array $data): float
+    {
+        foreach (['price', 'itemprice', 'finalprice'] as $k) {
+            if (!array_key_exists($k, $data)) {
+                continue;
+            }
+            $v = $data[$k];
+            if ($v === null || $v === '') {
+                continue;
+            }
+            $f = (float)$v;
+            if ($f > 0) {
+                return $f;
+            }
+        }
+
+        return 0.0;
+    }
+
+    /** POS grid uses vp_products.itemprice; upstream often sends itemprice not price. */
+    private function mergeSellingPrice(array $apiData, array $dbRow): float
+    {
+        $fromApi = $this->pickPositivePriceFromApiArray($apiData);
+        if ($fromApi > 0) {
+            return $fromApi;
+        }
+        foreach (['itemprice', 'finalprice'] as $k) {
+            if (empty($dbRow[$k])) {
+                continue;
+            }
+            $f = (float)$dbRow[$k];
+            if ($f > 0) {
+                return $f;
+            }
+        }
+
+        return 0.0;
+    }
+
     /** First usable image path/URL from a /product/code JSON payload. */
     private function pickRawImageFromProductApiArray(array $data): string
     {
@@ -624,6 +664,7 @@ class POSRegisterController
         if (!empty($conn)) {
             $stmt = $conn->prepare(
                 'SELECT id, item_code, sku, title, image, material, size, color, hsn,
+                        itemprice, finalprice,
                         product_weight, product_weight_unit,
                         prod_height, prod_width, prod_length, length_unit
                  FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
@@ -653,6 +694,7 @@ class POSRegisterController
             $imageResolved = $imageFromDb;
         }
 
+        $data2 = null;
         // Variant SKU may return no image from upstream; retry with base item_code.
         if (
             $imageResolved === ''
@@ -666,6 +708,22 @@ class POSRegisterController
 
         if ($imageResolved === '' && $imageFromDb !== '') {
             $imageResolved = $imageFromDb;
+        }
+
+        $sellingPrice = $this->mergeSellingPrice($data, $dbRow);
+        if (
+            $sellingPrice <= 0
+            && $dbItemCode !== ''
+            && strcasecmp($dbItemCode, $code) !== 0
+        ) {
+            if ($data2 === null) {
+                $resPrice = $this->exotic_api_call('/product/code', 'GET', ['code' => $dbItemCode]);
+                $data2 = $this->unwrapProductApiResponse($resPrice['data'] ?? []);
+            }
+            $alt = $this->mergeSellingPrice($data2, $dbRow);
+            if ($alt > 0) {
+                $sellingPrice = $alt;
+            }
         }
 
         $dimApi = $this->cleanValue($data['dimensions'] ?? '');
@@ -733,7 +791,7 @@ class POSRegisterController
             'sku' => $dbSku,
             'title' => $this->mergeProductTextField($data['name'] ?? '', $dbRow['title'] ?? ''),
             'image' => $imageResolved,
-            'price' => $data['price'] ?? 0,
+            'price' => $sellingPrice,
 
             'material' => $this->mergeProductTextField($data['material'] ?? '', $dbRow['material'] ?? ''),
             'size' => $this->mergeProductTextField($data['size'] ?? '', $dbRow['size'] ?? ''),
