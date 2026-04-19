@@ -1214,7 +1214,13 @@ class POSRegisterController
                     'selected_entries' => $selectedEntries
                 ];
 
-                $subtotal += ((float)$item['price'] * (int)$item['quantity']);
+                // Subtotal = Σ ((unit item price + sum of addon prices per unit) × quantity)
+                $addonsSumPerUnit = 0.0;
+                foreach ($addons as $a) {
+                    $addonsSumPerUnit += (float)($a['value'] ?? 0);
+                }
+                $unitLine = (float)$item['price'] + $addonsSumPerUnit;
+                $subtotal += $unitLine * (int)$item['quantity'];
 
                 // Add shipping only if selected
                 if ($expressSelected) {
