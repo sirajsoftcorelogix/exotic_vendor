@@ -40,6 +40,13 @@ $(function () {
     return (p.id != null && p.id !== '') ? `id:${p.id}` : `code:${p.item_code || ''}`;
   }
 
+  /** Prefer full variant SKU when present (e.g. ITEM--blue); fallback to item_code. */
+  function getLookupCode(p) {
+    const sku = p.sku != null ? String(p.sku).trim() : '';
+    if (sku !== '') return sku;
+    return p.item_code != null ? String(p.item_code).trim() : '';
+  }
+
   function isMeaningful(val) {
     if (val === null || val === undefined) return false;
     const s = String(val).trim();
@@ -116,7 +123,7 @@ $(function () {
 
     const imgSrc = p.image || 'https://dummyimage.com/500x500/e5e7eb/6b7280&text=No+Image';
     $('#pmImage').attr('src', imgSrc).attr('alt', title || 'Product');
-    $('#modal_product_code').val(p.item_code || p.code || p.id || '');
+    $('#modal_product_code').val(p.item_code || p.sku || p.code || p.id || '');
 
     //  SET QTY
     setModalQty(1);
@@ -298,10 +305,11 @@ $(function () {
       const imgSrc = p.image || 'https://dummyimage.com/200x200/e5e7eb/6b7280&text=No+Image';
       const safeTitle = (p.title || 'Product').replace(/"/g, '&quot;');
 
+      const lookupCode = getLookupCode(p);
       const cardHtml = `
         <div class="product-card cursor-pointer rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition"
              data-pkey="${key}"
-data-code="${p.item_code}">
+data-code="${lookupCode}">
           <div class="bg-gray-50 p-2">
             <img src="${imgSrc}" alt="${safeTitle}"
                  class="mx-auto h-56 lg:h-52 xl:h-48 object-contain" />
@@ -314,7 +322,7 @@ data-code="${p.item_code}">
 
             <div class="mt-2 flex items-center gap-1 whitespace-nowrap">
               <span class="rounded-md bg-orange-100 px-1.5 py-0.5 text-[9px] text-orange-700">
-                ${p.item_code || ''}
+                ${lookupCode || ''}
               </span>
               <span class="rounded-md bg-green-100 px-1.5 py-0.5 text-[9px] text-green-700">
                 Stock : ${p.stock_qty != null ? p.stock_qty : '-'}
@@ -472,10 +480,10 @@ data-code="${p.item_code}">
     const productId = product.id != null ? String(product.id) : '';
     const itemCode = product.item_code != null ? String(product.item_code) : '';
     const sku = product.sku != null ? String(product.sku) : '';
-    const codeForPopup = itemCode || sku;
+    const codeForPopup = sku || itemCode;
     if (!codeForPopup) return;
     const url = '?page=pos_register&action=product-availability'
-      + (productId ? ('&product_id=' + encodeURIComponent(productId)) : ('&q=' + encodeURIComponent(itemCode || sku)));
+      + (productId ? ('&product_id=' + encodeURIComponent(productId)) : ('&q=' + encodeURIComponent(codeForPopup)));
     fetch(url, {
       credentials: 'same-origin',
       headers: { 'Accept': 'application/json' }
@@ -503,7 +511,7 @@ data-code="${p.item_code}">
         <div>Color</div><div>:</div><div>${p.color || '-'}</div>
     `);
 
-    $('#modal_product_code').val(p.item_code || '');
+    $('#modal_product_code').val(p.item_code || p.sku || '');
 
     // ADDONS
     let addonsHtml = '';
