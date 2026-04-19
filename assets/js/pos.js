@@ -62,6 +62,59 @@ $(function () {
     return p.requested_code != null ? String(p.requested_code).trim() : '';
   }
 
+  function escapeRegExpStr(s) {
+    return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Main-site cart expects parent item_code + variation "size:color" for multi-SKU parents.
+   * Single-SKU rows use full SKU as code with empty variation.
+   */
+  function resolveCartPayload(p) {
+    const lookup = getLookupCode(p) || String(p.code || '').trim();
+    const icRaw = String(p.item_code || '').trim();
+
+    let size =
+      p.size != null && String(p.size).trim() !== '' && String(p.size).trim() !== '0'
+        ? String(p.size).trim()
+        : '';
+    let color =
+      p.color != null && String(p.color).trim() !== '' && String(p.color).trim() !== '0'
+        ? String(p.color).trim()
+        : '';
+
+    const multiVariant = icRaw !== '' && lookup !== '' && lookup !== icRaw;
+
+    if (!color && icRaw && lookup) {
+      try {
+        const re = new RegExp('^' + escapeRegExpStr(icRaw) + '--(.+)$', 'i');
+        const m = lookup.match(re);
+        if (m) color = m[1].trim();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
+    let variation = '';
+    if (!size && color) variation = ':' + color;
+    else if (size && !color) variation = size + ':';
+    else if (size && color) variation = size + ':' + color;
+
+    if (!variation && color) variation = ':' + color;
+
+    let cartCode = multiVariant ? icRaw : lookup;
+    let variationOut = variation;
+
+    if (multiVariant && !variationOut) {
+      cartCode = lookup;
+      variationOut = '';
+    }
+
+    const stockCheckCode = lookup || icRaw || cartCode;
+
+    return { cartCode, variation: variationOut, stockCheckCode };
+  }
+
   function isMeaningful(val) {
     if (val === null || val === undefined) return false;
     const s = String(val).trim();
@@ -193,6 +246,7 @@ $(function () {
     $('#pmQtyMaxHint').text('');
     $('#pmSiblingSkus').empty();
     $('#pmSiblingSkusWrapper').addClass('hidden');
+    $('#modal_stock_check_code').val('');
   }
 
   $overlay.on('click', closeModal);
@@ -287,7 +341,6 @@ $(function () {
       fixModalImageSrc(p.image) ||
       'https://dummyimage.com/500x500/e5e7eb/6b7280&text=No+Image';
     $('#pmImage').attr('src', imgSrc).attr('alt', title || 'Product');
-    $('#modal_product_code').val(getLookupCode(p) || String(p.code || p.id || ''));
 
     const sqRaw = p.stock_qty;
     modalWarehouseMaxQty = null;
@@ -310,11 +363,6 @@ $(function () {
 
     setModalQty(modalWarehouseMaxQty === 0 ? 0 : 1);
 
-    // SET VARIATION (FINAL FIX)
-    let size = (p.size && p.size !== '0') ? String(p.size).trim() : '';
-    let color = (p.color && p.color !== '0') ? String(p.color).trim() : '';
-
-    let variation = '';
     //  ADDONS UI (FINAL CLEAN)
 
     let addons = [];
@@ -375,23 +423,11 @@ $(function () {
       $('#pmAddonsWrapper').addClass('hidden');
       $('#pmAddons').html('');
     }
-    // build variation properly
-    if (!size && color) {
-      variation = ':' + color;
-    } else if (size && !color) {
-      variation = size + ':';
-    } else if (size && color) {
-      variation = size + ':' + color;
-    }
 
-    // fallback (VERY IMPORTANT for your case)
-    if (!variation && p.color) {
-      variation = ':' + p.color;
-    }
-
-    // final set
-    $('#modal_variation').val(variation);
-
+    const cp = resolveCartPayload(p);
+    $('#modal_product_code').val(cp.cartCode || String(p.code || p.id || ''));
+    $('#modal_variation').val(cp.variation);
+    $('#modal_stock_check_code').val(cp.stockCheckCode);
 
     const badges = [];
     const icRaw = isMeaningful(p.item_code) ? String(p.item_code).trim() : '';
@@ -700,13 +736,15 @@ data-code="${lookupCode}">
         <div>Color</div><div>:</div><div>${p.color || '-'}</div>
     `);
 
-    $('#modal_product_code').val(getLookupCode(p));
+    const cpMd = resolveCartPayload(p);
+    $('#modal_product_code').val(cpMd.cartCode || String(p.code || ''));
+    $('#modal_variation').val(cpMd.variation);
+    $('#modal_stock_check_code').val(cpMd.stockCheckCode);
 
     // ADDONS
     let addonsHtml = '';
 
     if (p.addon_options) {
-      alert("sdsdsdsd")
       p.addon_options.default_options.forEach(opt => {
         addonsHtml += `
                 <label class="flex justify-between border px-3 py-2 rounded-lg">
