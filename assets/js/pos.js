@@ -71,6 +71,34 @@ $(function () {
     return true;
   }
 
+  /** API `dimensions` string, or L × W × H from VP columns. */
+  function formatMeasurementLine(p) {
+    if (!p) return '';
+    if (isMeaningful(p.dimensions)) return String(p.dimensions).replace(/\s+/g, ' ').trim();
+    const h = isMeaningful(p.prod_height) ? String(p.prod_height).trim() : '';
+    const w = isMeaningful(p.prod_width) ? String(p.prod_width).trim() : '';
+    const l = isMeaningful(p.prod_length) ? String(p.prod_length).trim() : '';
+    const u = isMeaningful(p.length_unit) ? String(p.length_unit).trim() : '';
+    const parts = [h, w, l].filter(Boolean);
+    if (!parts.length) return '';
+    const line = `${parts.join(' × ')}${u ? ' ' + u : ''}`;
+    return line.trim();
+  }
+
+  /** Prefer API kg; else VP `product_weight` + unit. */
+  function formatWeightLine(p) {
+    if (!p) return '';
+    if (isMeaningful(p.weight)) {
+      const w = String(p.weight).trim();
+      if (/kg|g|gram|lb|oz|mt|ton|ml|l\b/i.test(w)) return w;
+      return `${w} kg`;
+    }
+    const wt = isMeaningful(p.product_weight) ? String(p.product_weight).trim() : '';
+    const wtu = isMeaningful(p.product_weight_unit) ? String(p.product_weight_unit).trim() : '';
+    if (!wt) return '';
+    return wtu ? `${wt} ${wtu}` : wt;
+  }
+
   function addRow(label, value) {
     return `
       <div class="text-gray-600">${label}</div>
@@ -264,32 +292,27 @@ $(function () {
       html += addRow('Price', `₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
     }
 
-    //  DIMENSIONS
-    if (isMeaningful(p.dimensions)) {
-      html += addRow('Dimensions', p.dimensions);
+    const measurementLine = formatMeasurementLine(p);
+    if (measurementLine) {
+      html += addRow('Measurements', measurementLine);
     }
 
-    //  WEIGHT
-    if (isMeaningful(p.weight)) {
-      html += addRow('Weight', p.weight + ' kg');
+    const weightLine = formatWeightLine(p);
+    if (weightLine) {
+      html += addRow('Weight', weightLine);
     }
-    if (isMeaningful(p.hsn)) html += addRow('HSN', p.hsn);
-    if (isMeaningful(p.color)) html += addRow('Color', p.color);
-    if (isMeaningful(p.size)) html += addRow('Size', p.size);
-    if (isMeaningful(p.material)) html += addRow('Material', p.material);
 
-    const wt = isMeaningful(p.product_weight) ? p.product_weight : null;
-    const wtu = isMeaningful(p.product_weight_unit) ? p.product_weight_unit : '';
-    if (wt) html += addRow('Weight', `${wt} ${wtu}`.trim());
-
-    const h = isMeaningful(p.prod_height) ? p.prod_height : null;
-    const w = isMeaningful(p.prod_width) ? p.prod_width : null;
-    const l = isMeaningful(p.prod_length) ? p.prod_length : null;
-    const dimUnit = isMeaningful(p.length_unit) ? p.length_unit : '';
-
-    if (h || w || l) {
-      const parts = [h, w, l].filter(v => isMeaningful(v));
-      html += addRow('Dimensions', `${parts.join(' × ')} ${dimUnit}`.trim());
+    if (isMeaningful(p.size)) {
+      html += addRow('Size', String(p.size).replace(/\s+/g, ' ').trim());
+    }
+    if (isMeaningful(p.color)) {
+      html += addRow('Color', String(p.color).replace(/\s+/g, ' ').trim());
+    }
+    if (isMeaningful(p.material)) {
+      html += addRow('Material', String(p.material).replace(/\s+/g, ' ').trim());
+    }
+    if (isMeaningful(p.hsn)) {
+      html += addRow('HSN', String(p.hsn).trim());
     }
 
     if (!html) {

@@ -347,6 +347,16 @@ class POSRegisterController
         return $data;
     }
 
+    /** Prefer cleaned API text; fallback to VP row when upstream is empty. */
+    private function mergeProductTextField($apiRaw, $dbRaw): string
+    {
+        $fromApi = $this->cleanValue(is_string($apiRaw) ? $apiRaw : '');
+        if ($fromApi !== '') {
+            return $fromApi;
+        }
+        return trim((string)$dbRaw);
+    }
+
     /** First usable image path/URL from a /product/code JSON payload. */
     private function pickRawImageFromProductApiArray(array $data): string
     {
@@ -374,9 +384,13 @@ class POSRegisterController
         $dbItemCode = '';
         $dbSku = '';
         $dbImageRaw = '';
+        $dbRow = [];
         if (!empty($conn)) {
             $stmt = $conn->prepare(
-                'SELECT item_code, sku, image FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+                'SELECT item_code, sku, image, material, size, color, hsn,
+                        product_weight, product_weight_unit,
+                        prod_height, prod_width, prod_length, length_unit
+                 FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
             );
             if ($stmt) {
                 $stmt->bind_param('ss', $code, $code);
@@ -384,6 +398,7 @@ class POSRegisterController
                 $row = $stmt->get_result()->fetch_assoc();
                 $stmt->close();
                 if ($row) {
+                    $dbRow = $row;
                     $dbItemCode = trim((string)($row['item_code'] ?? ''));
                     $dbSku = trim((string)($row['sku'] ?? ''));
                     $dbImageRaw = trim((string)($row['image'] ?? ''));
@@ -417,6 +432,26 @@ class POSRegisterController
             $imageResolved = $imageFromDb;
         }
 
+        $dimApi = $this->cleanValue($data['dimensions'] ?? '');
+        $dbH = isset($dbRow['prod_height']) ? trim((string)$dbRow['prod_height']) : '';
+        $dbW = isset($dbRow['prod_width']) ? trim((string)$dbRow['prod_width']) : '';
+        $dbL = isset($dbRow['prod_length']) ? trim((string)$dbRow['prod_length']) : '';
+        $dbLu = isset($dbRow['length_unit']) ? trim((string)$dbRow['length_unit']) : '';
+        $builtDbDims = '';
+        if ($dbH !== '' || $dbW !== '' || $dbL !== '') {
+            $builtDbDims = implode(' × ', array_filter([$dbH, $dbW, $dbL], static function ($x) {
+                return trim((string)$x) !== '';
+            }));
+            if ($builtDbDims !== '' && $dbLu !== '') {
+                $builtDbDims .= ' ' . $dbLu;
+            }
+        }
+        $dimensionsMerged = $dimApi !== '' ? $dimApi : $builtDbDims;
+
+        $wKgApi = trim((string)($data['product_weight_kg'] ?? ''));
+        $dbPw = isset($dbRow['product_weight']) ? trim((string)$dbRow['product_weight']) : '';
+        $dbPwu = isset($dbRow['product_weight_unit']) ? trim((string)$dbRow['product_weight_unit']) : '';
+
         // echo '<pre>'; print_r($data['addon_options']); exit;
         $product = [
             'requested_code' => $code,
@@ -426,15 +461,22 @@ class POSRegisterController
             'image' => $imageResolved,
             'price' => $data['price'] ?? 0,
 
-            'material' => $this->cleanValue($data['material'] ?? ''),
-            'size' => $this->cleanValue($data['size'] ?? ''),
-            'color' => $this->cleanValue($data['color'] ?? ''),
+            'material' => $this->mergeProductTextField($data['material'] ?? '', $dbRow['material'] ?? ''),
+            'size' => $this->mergeProductTextField($data['size'] ?? '', $dbRow['size'] ?? ''),
+            'color' => $this->mergeProductTextField($data['color'] ?? '', $dbRow['color'] ?? ''),
+            'hsn' => $this->mergeProductTextField($data['hsn'] ?? '', $dbRow['hsn'] ?? ''),
 
             //  NEW FIELDS
             'stock_qty' => $data['stock'] ?? 0,
             'maincategory' => $data['maincategory'] ?? '',
-            'dimensions' => $this->cleanValue($data['dimensions'] ?? ''),
-            'weight' => $data['product_weight_kg'] ?? '',
+            'dimensions' => $dimensionsMerged,
+            'weight' => $wKgApi,
+            'product_weight' => $dbPw,
+            'product_weight_unit' => $dbPwu,
+            'prod_height' => $dbH,
+            'prod_width' => $dbW,
+            'prod_length' => $dbL,
+            'length_unit' => $dbLu,
             'express_shipping_cost' => $data['express_shipping_cost'] ?? 0,
             'express_shipping_option' => $data['express_shipping_option'] ?? null,
             'addon_options' => $data['addon_options'] ?? []
