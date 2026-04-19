@@ -652,7 +652,6 @@
       </div>
 
       <div id="pmSiblingSkusWrapper" class="hidden mt-5 border-t border-gray-100 pt-4">
-        <div class="text-xs font-semibold text-gray-700 mb-2">Other variants (same item code)</div>
         <div id="pmSiblingSkus" class="flex flex-wrap gap-2"></div>
       </div>
     </div>
