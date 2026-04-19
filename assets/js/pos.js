@@ -125,13 +125,7 @@ $(function () {
     let html = '';
     list.forEach(function (s) {
       const sku = String(s.sku || '').trim();
-      const title = String(s.title || '').replace(/\s+/g, ' ').trim();
-      const st = s.stock_qty != null && s.stock_qty !== '' ? s.stock_qty : '-';
-      html += `<button type="button" class="pm-sibling-sku-link inline-flex max-w-full flex-col items-start rounded-lg border border-orange-100 bg-orange-50/80 px-2.5 py-1.5 text-left text-[10px] hover:bg-orange-100 transition text-orange-900" data-sibling-sku="${siblingHtmlEscape(sku)}">`;
-      html += `<span class="font-semibold">${siblingHtmlEscape(sku)}</span>`;
-      html += `<span class="text-gray-600 line-clamp-2">${siblingHtmlEscape(title)}</span>`;
-      html += `<span class="text-[9px] text-gray-500 mt-0.5">Stock: ${siblingHtmlEscape(String(st))}</span>`;
-      html += '</button>';
+      html += `<button type="button" class="pm-sibling-sku-link inline-flex items-center rounded-lg border border-orange-100 bg-orange-50/80 px-2.5 py-1.5 text-left text-[10px] font-semibold text-orange-900 hover:bg-orange-100 transition" data-sibling-sku="${siblingHtmlEscape(sku)}">${siblingHtmlEscape(sku)}</button>`;
     });
     $list.html(html);
   }
