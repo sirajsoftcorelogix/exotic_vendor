@@ -513,34 +513,44 @@ $(function () {
     if (!$wrap.length) return;
     $wrap.empty();
     let lines = 0;
+
+    const whName = String($('#productModal').data('posWarehouse') || '').trim();
+
+    // Current POS warehouse (session) — matches Stock badge qty
     if (
-      p.total_qty_available != null &&
-      String(p.total_qty_available).trim() !== '' &&
-      !Number.isNaN(Number(p.total_qty_available))
+      p.stock_qty != null &&
+      String(p.stock_qty).trim() !== '' &&
+      !Number.isNaN(Number(p.stock_qty))
     ) {
+      const label =
+        whName !== '' ? 'Total Qty at (' + whName + '): ' : 'Total Qty: ';
       $wrap.append(
         $('<div/>').append(
-          $('<span/>').text('Total (all warehouses): '),
-          $('<span class="font-semibold text-gray-800"/>').text(fmtFloorQty(p.total_qty_available))
+          $('<span/>').text(label),
+          $('<span class="font-semibold text-gray-800"/>').text(fmtFloorQty(p.stock_qty))
         )
       );
       lines++;
     }
+
+    // Default warehouse from exotic_address.is_default
     if (
       p.default_store_qty != null &&
       String(p.default_store_qty).trim() !== '' &&
       !Number.isNaN(Number(p.default_store_qty))
     ) {
       const dn = p.default_store_name ? String(p.default_store_name).trim() : '';
-      const label = dn ? 'Qty at default store (' + dn + '): ' : 'Qty at default store: ';
-      $wrap.append(
-        $('<div/>').append(
-          $('<span/>').text(label),
-          $('<span class="font-semibold text-gray-800"/>').text(fmtFloorQty(p.default_store_qty))
-        )
-      );
-      lines++;
+      if (dn !== '') {
+        $wrap.append(
+          $('<div/>').append(
+            $('<span/>').text('Qty at (' + dn + '): '),
+            $('<span class="font-semibold text-gray-800"/>').text(fmtFloorQty(p.default_store_qty))
+          )
+        );
+        lines++;
+      }
     }
+
     $wrap.toggleClass('hidden', lines === 0);
   }
 
