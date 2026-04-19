@@ -124,6 +124,15 @@ $(function () {
     return true;
   }
 
+  /** Money amount for display (includes 0; isMeaningful hides zero). */
+  function hasDisplayablePrice(val) {
+    if (val === null || val === undefined) return false;
+    const s = String(val).trim();
+    if (s === '' || s.toLowerCase() === 'n/a') return false;
+    const n = Number(s);
+    return !Number.isNaN(n);
+  }
+
   /** API `dimensions` string, or L × W × H from VP columns. */
   function formatMeasurementLine(p) {
     if (!p) return '';
@@ -469,7 +478,7 @@ $(function () {
 
     let html = '';
 
-    if (isMeaningful(p.price)) {
+    if (hasDisplayablePrice(p.price)) {
       html += addRow('Price', `₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
     }
 
@@ -607,14 +616,11 @@ data-code="${lookupCode}">
               ${(p.title || '').replace(/\s+/g, ' ').trim()}
             </div>
 
-            <div class="mt-2 flex items-center gap-1 whitespace-nowrap">
+            <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
               <span class="rounded-md bg-orange-100 px-1.5 py-0.5 text-[9px] text-orange-700">
                 ${lookupCode || ''}
               </span>
-              <span class="rounded-md bg-green-100 px-1.5 py-0.5 text-[9px] text-green-700">
-                Stock : ${p.stock_qty != null ? p.stock_qty : '-'}
-              </span>
-              <span class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[9px] text-gray-700">
+              <span class="text-base font-semibold tracking-tight text-gray-900">
                 ${formatPrice(p.price)}
               </span>
             </div>
