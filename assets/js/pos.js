@@ -514,7 +514,9 @@ $(function () {
     $wrap.empty();
     let lines = 0;
 
-    const whName = String($('#productModal').data('posWarehouse') || '').trim();
+    const whName = String(
+      p.current_warehouse_name || $('#productModal').data('posWarehouse') || ''
+    ).trim();
 
     // Current POS warehouse (session) — matches Stock badge qty
     if (

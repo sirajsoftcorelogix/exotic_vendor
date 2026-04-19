@@ -689,6 +689,16 @@ class POSRegisterController
         $dbPwu = isset($dbRow['product_weight_unit']) ? trim((string)$dbRow['product_weight_unit']) : '';
 
         $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        $currentWarehouseName = '';
+        if ($warehouseId > 0 && !empty($conn)) {
+            require_once 'models/user/user.php';
+            $usersModel = new User($conn);
+            $whRow = $usersModel->getWarehouseById($warehouseId);
+            if (!empty($whRow)) {
+                $currentWarehouseName = trim((string)($whRow['address_title'] ?? ''));
+            }
+        }
+
         $vpId = isset($dbRow['id']) ? (int)$dbRow['id'] : 0;
         $warehouseLocationOut = '';
         if ($vpId > 0 && $warehouseId > 0) {
@@ -734,6 +744,7 @@ class POSRegisterController
             'stock_qty' => $stockQtyOut,
             'warehouse_location' => $warehouseLocationOut,
             'total_qty_available' => $totalQtyAllWarehouses,
+            'current_warehouse_name' => $currentWarehouseName,
             'default_store_qty' => $defaultStoreQty,
             'default_store_name' => $defaultStoreName,
             'maincategory' => $data['maincategory'] ?? '',
