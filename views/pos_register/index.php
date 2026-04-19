@@ -600,31 +600,34 @@
           <div class="mt-6 flex flex-wrap items-center justify-end gap-2">
 
             <!-- Qty control -->
-            <div class="mr-auto flex items-center gap-2 flex-wrap">
-              <label class="text-xs text-gray-600">Qty</label>
-              <span id="pmQtyMaxHint" class="text-[10px] text-gray-500"></span>
+            <div class="mr-auto flex flex-col items-start gap-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <label class="text-xs text-gray-600">Qty</label>
+                <span id="pmQtyMaxHint" class="text-[10px] text-gray-500"></span>
 
-              <div class="flex items-center border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  type="button"
-                  id="pmQtyDec"
-                  class="h-9 w-9 text-slate-600 hover:bg-gray-50">
-                  −
-                </button>
+                <div class="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    id="pmQtyDec"
+                    class="h-9 w-9 text-slate-600 hover:bg-gray-50">
+                    −
+                  </button>
 
-                <span
-                  id="pmQtyVal"
-                  class="h-9 w-10 flex items-center justify-center font-semibold text-sm">
-                  1
-                </span>
+                  <span
+                    id="pmQtyVal"
+                    class="h-9 w-10 flex items-center justify-center font-semibold text-sm">
+                    1
+                  </span>
 
-                <button
-                  type="button"
-                  id="pmQtyInc"
-                  class="h-9 w-9 text-slate-600 hover:bg-gray-50">
-                  +
-                </button>
+                  <button
+                    type="button"
+                    id="pmQtyInc"
+                    class="h-9 w-9 text-slate-600 hover:bg-gray-50">
+                    +
+                  </button>
+                </div>
               </div>
+              <div id="pmQtySummary" class="hidden mt-0.5 max-w-[280px] space-y-0.5 text-[10px] leading-snug text-gray-600"></div>
             </div>
 
 

@@ -254,6 +254,7 @@ $(function () {
     $('#pmSiblingSkus').empty();
     $('#pmSiblingSkusWrapper').addClass('hidden');
     $('#modal_stock_check_code').val('');
+    $('#pmQtySummary').empty().addClass('hidden');
   }
 
   $overlay.on('click', closeModal);
@@ -486,24 +487,6 @@ $(function () {
       html += addRow('Location', String(p.warehouse_location).replace(/\s+/g, ' ').trim());
     }
 
-    if (
-      p.total_qty_available != null &&
-      String(p.total_qty_available).trim() !== '' &&
-      !Number.isNaN(Number(p.total_qty_available))
-    ) {
-      html += addRow('Total qty (all warehouses)', fmtFloorQty(p.total_qty_available));
-    }
-
-    if (
-      p.default_store_qty != null &&
-      String(p.default_store_qty).trim() !== '' &&
-      !Number.isNaN(Number(p.default_store_qty))
-    ) {
-      const dn = p.default_store_name ? String(p.default_store_name).trim() : '';
-      const val = fmtFloorQty(p.default_store_qty) + (dn ? ' — ' + dn : '');
-      html += addRow('Qty at default store', val);
-    }
-
     if (isMeaningful(p.size)) {
       html += addRow('Size', String(p.size).replace(/\s+/g, ' ').trim());
     }
@@ -520,7 +503,45 @@ $(function () {
 
     $('#pmDetails').html(html);
 
+    renderQtySummaryUnderInput(p);
+
     loadSiblingSkusForProduct(p);
+  }
+
+  function renderQtySummaryUnderInput(p) {
+    const $wrap = $('#pmQtySummary');
+    if (!$wrap.length) return;
+    $wrap.empty();
+    let lines = 0;
+    if (
+      p.total_qty_available != null &&
+      String(p.total_qty_available).trim() !== '' &&
+      !Number.isNaN(Number(p.total_qty_available))
+    ) {
+      $wrap.append(
+        $('<div/>').append(
+          $('<span/>').text('Total (all warehouses): '),
+          $('<span class="font-semibold text-gray-800"/>').text(fmtFloorQty(p.total_qty_available))
+        )
+      );
+      lines++;
+    }
+    if (
+      p.default_store_qty != null &&
+      String(p.default_store_qty).trim() !== '' &&
+      !Number.isNaN(Number(p.default_store_qty))
+    ) {
+      const dn = p.default_store_name ? String(p.default_store_name).trim() : '';
+      const label = dn ? 'Qty at default store (' + dn + '): ' : 'Qty at default store: ';
+      $wrap.append(
+        $('<div/>').append(
+          $('<span/>').text(label),
+          $('<span class="font-semibold text-gray-800"/>').text(fmtFloorQty(p.default_store_qty))
+        )
+      );
+      lines++;
+    }
+    $wrap.toggleClass('hidden', lines === 0);
   }
 
   $(document).on('click', '.pm-sibling-sku-link', function (e) {
