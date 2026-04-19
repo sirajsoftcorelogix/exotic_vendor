@@ -602,7 +602,11 @@
 
             <!-- Qty control -->
             <div class="mr-auto flex flex-col items-start gap-1">
-              <div class="flex items-center gap-2 flex-wrap">
+              <div class="flex items-center gap-3 flex-wrap">
+                <span
+                  id="pmModalPrice"
+                  class="hidden shrink-0 text-lg font-bold text-gray-900 tabular-nums tracking-tight"
+                  aria-live="polite"></span>
                 <label class="text-xs text-gray-600">Qty</label>
                 <span id="pmQtyMaxHint" class="text-[10px] text-gray-500"></span>
 

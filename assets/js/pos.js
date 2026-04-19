@@ -264,6 +264,7 @@ $(function () {
     $('#pmSiblingSkusWrapper').addClass('hidden');
     $('#modal_stock_check_code').val('');
     $('#pmQtySummary').empty().addClass('hidden');
+    $('#pmModalPrice').addClass('hidden').text('');
   }
 
   $overlay.on('click', closeModal);
@@ -478,10 +479,6 @@ $(function () {
 
     let html = '';
 
-    if (hasDisplayablePrice(p.price)) {
-      html += addRow('Price', `₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
-
     const measurementLine = formatMeasurementLine(p);
     if (measurementLine) {
       html += addRow('Measurements', measurementLine);
@@ -511,6 +508,22 @@ $(function () {
     }
 
     $('#pmDetails').html(html);
+
+    const $pmPrice = $('#pmModalPrice');
+    if ($pmPrice.length) {
+      if (hasDisplayablePrice(p.price)) {
+        $pmPrice
+          .removeClass('hidden')
+          .text(
+            `₹ ${Number(p.price).toLocaleString('en-IN', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}`
+          );
+      } else {
+        $pmPrice.addClass('hidden').text('');
+      }
+    }
 
     renderQtySummaryUnderInput(p);
 
@@ -753,6 +766,7 @@ data-code="${lookupCode}">
     //  LOADING STATE
     $('#pmTitle').text('Loading...');
     $('#pmDetails').html('Loading...');
+    $('#pmModalPrice').addClass('hidden').text('');
 
     $.ajax({
       url: '?page=pos_register&action=get-product-api',
