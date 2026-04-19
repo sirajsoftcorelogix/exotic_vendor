@@ -390,14 +390,19 @@ class POSRegisterController
         return !empty($row['id']) ? (int)$row['id'] : 0;
     }
 
-    /** Latest running_stock for one SKU at one warehouse (same basis as POS product grid). */
-    private function getWarehouseStockForProductId($conn, int $productId, int $warehouseId): float
+    /**
+     * Latest movement row for product + warehouse (same join as POS stock): qty + bin/shelf location.
+     *
+     * @return array{running_stock: float, location: string}
+     */
+    private function getWarehouseStockSnapshotForProductId($conn, int $productId, int $warehouseId): array
     {
+        $empty = ['running_stock' => 0.0, 'location' => ''];
         if ($productId <= 0 || $warehouseId <= 0 || !$conn) {
-            return 0.0;
+            return $empty;
         }
         $sql = '
-            SELECT sm.running_stock
+            SELECT sm.running_stock, sm.location
             FROM vp_stock_movements sm
             INNER JOIN (
                 SELECT product_id, MAX(id) AS max_id
@@ -409,17 +414,26 @@ class POSRegisterController
             LIMIT 1';
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
-            return 0.0;
+            return $empty;
         }
         $stmt->bind_param('iii', $warehouseId, $warehouseId, $productId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         if (!$row || !array_key_exists('running_stock', $row)) {
-            return 0.0;
+            return $empty;
         }
 
-        return (float)$row['running_stock'];
+        return [
+            'running_stock' => (float)$row['running_stock'],
+            'location' => trim((string)($row['location'] ?? '')),
+        ];
+    }
+
+    /** Latest running_stock for one SKU at one warehouse (same basis as POS product grid). */
+    private function getWarehouseStockForProductId($conn, int $productId, int $warehouseId): float
+    {
+        return $this->getWarehouseStockSnapshotForProductId($conn, $productId, $warehouseId)['running_stock'];
     }
 
     /**
@@ -621,8 +635,11 @@ class POSRegisterController
 
         $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
         $vpId = isset($dbRow['id']) ? (int)$dbRow['id'] : 0;
+        $warehouseLocationOut = '';
         if ($vpId > 0 && $warehouseId > 0) {
-            $stockQtyOut = $this->getWarehouseStockForProductId($conn, $vpId, $warehouseId);
+            $snap = $this->getWarehouseStockSnapshotForProductId($conn, $vpId, $warehouseId);
+            $stockQtyOut = $snap['running_stock'];
+            $warehouseLocationOut = $snap['location'];
         } else {
             $stockQtyOut = $data['stock'] ?? 0;
         }
@@ -648,6 +665,7 @@ class POSRegisterController
 
             //  NEW FIELDS (warehouse running stock when VP row + session warehouse match POS grid)
             'stock_qty' => $stockQtyOut,
+            'warehouse_location' => $warehouseLocationOut,
             'maincategory' => $data['maincategory'] ?? '',
             'dimensions' => $dimensionsMerged,
             'weight' => $wKgApi,

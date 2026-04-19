@@ -475,6 +475,10 @@ $(function () {
       html += addRow('Weight', weightLine);
     }
 
+    if (isMeaningful(p.warehouse_location)) {
+      html += addRow('Location', String(p.warehouse_location).replace(/\s+/g, ' ').trim());
+    }
+
     if (isMeaningful(p.size)) {
       html += addRow('Size', String(p.size).replace(/\s+/g, ' ').trim());
     }
