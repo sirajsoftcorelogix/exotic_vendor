@@ -444,6 +444,51 @@ class POSRegisterController
         return $sum;
     }
 
+    /**
+     * Express shipping is billed as an add-on in the UI but cart/retrieve may omit it from addons_selected;
+     * merge per-unit express cost into the addon sum without double-counting catalog / addons rows.
+     */
+    private function mergeExpressShippingIntoAddonUnitSum(
+        float $addonsSumPerUnit,
+        array $addons,
+        array $selectedEntries,
+        array $allAddons,
+        bool $expressSelected,
+        float $shippingPerUnit
+    ): float {
+        if (!$expressSelected || $shippingPerUnit <= 0) {
+            return $addonsSumPerUnit;
+        }
+
+        $expressCounted = 0.0;
+        foreach ($addons as $a) {
+            if (stripos((string)($a['name'] ?? ''), 'Express') !== false) {
+                $expressCounted += (float)($a['value'] ?? 0);
+            }
+        }
+        foreach ($allAddons as $opt) {
+            if (stripos((string)($opt['title'] ?? ''), 'express') === false) {
+                continue;
+            }
+            $ce = trim((string)($opt['cart_entry'] ?? ''));
+            if ($ce === '') {
+                continue;
+            }
+            foreach ($selectedEntries as $se) {
+                if (strcasecmp($ce, trim((string)$se)) === 0) {
+                    $expressCounted += (float)($opt['price'] ?? 0);
+                    break;
+                }
+            }
+        }
+
+        if ($expressCounted < $shippingPerUnit - 0.0001) {
+            return $addonsSumPerUnit + ($shippingPerUnit - $expressCounted);
+        }
+
+        return $addonsSumPerUnit;
+    }
+
     /** First usable image path/URL from a /product/code JSON payload. */
     private function pickRawImageFromProductApiArray(array $data): string
     {
@@ -1278,6 +1323,14 @@ class POSRegisterController
                 if ($addonsSumPerUnit <= 0 && $selectedEntries !== [] && $all_addons !== []) {
                     $addonsSumPerUnit = $this->sumAddonPricesFromCatalogMatches($selectedEntries, $all_addons);
                 }
+                $addonsSumPerUnit = $this->mergeExpressShippingIntoAddonUnitSum(
+                    $addonsSumPerUnit,
+                    $addons,
+                    $selectedEntries,
+                    $all_addons,
+                    (bool)$expressSelected,
+                    $shipping_per_unit
+                );
                 $unitLine = (float)$item['price'] + $addonsSumPerUnit;
                 $subtotal += $unitLine * (int)$item['quantity'];
 
