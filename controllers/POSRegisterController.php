@@ -436,6 +436,61 @@ class POSRegisterController
         return $this->getWarehouseStockSnapshotForProductId($conn, $productId, $warehouseId)['running_stock'];
     }
 
+    /** Sum of latest running_stock per warehouse for this product (all locations). */
+    private function getTotalStockAcrossWarehouses($conn, int $productId): float
+    {
+        if ($productId <= 0 || !$conn) {
+            return 0.0;
+        }
+        $sql = '
+            SELECT COALESCE(SUM(sm.running_stock), 0) AS t
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT warehouse_id, product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE product_id = ?
+                GROUP BY warehouse_id, product_id
+            ) latest ON sm.warehouse_id = latest.warehouse_id
+                AND sm.product_id = latest.product_id
+                AND sm.id = latest.max_id
+            WHERE sm.product_id = ?';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return 0.0;
+        }
+        $stmt->bind_param('ii', $productId, $productId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return isset($row['t']) ? (float)$row['t'] : 0.0;
+    }
+
+    /** Default warehouse row from exotic_address (POS / GRN “default store”). */
+    private function getDefaultWarehouseRow($conn): ?array
+    {
+        if (!$conn) {
+            return null;
+        }
+        $stmt = $conn->prepare(
+            'SELECT id, address_title FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (empty($row['id'])) {
+            return null;
+        }
+
+        return [
+            'id' => (int)$row['id'],
+            'address_title' => trim((string)($row['address_title'] ?? '')),
+        ];
+    }
+
     /**
      * @return string|null Error message, or null if OK / validation skipped (no VP row / no warehouse).
      */
@@ -649,6 +704,18 @@ class POSRegisterController
             $siblingSkus = $this->fetchSiblingSkusByItemCode($conn, $dbItemCode, trim($code), $warehouseId);
         }
 
+        $totalQtyAllWarehouses = null;
+        $defaultStoreQty = null;
+        $defaultStoreName = '';
+        if ($vpId > 0) {
+            $totalQtyAllWarehouses = $this->getTotalStockAcrossWarehouses($conn, $vpId);
+            $defWh = $this->getDefaultWarehouseRow($conn);
+            if ($defWh !== null) {
+                $defaultStoreName = $defWh['address_title'];
+                $defaultStoreQty = $this->getWarehouseStockSnapshotForProductId($conn, $vpId, (int)$defWh['id'])['running_stock'];
+            }
+        }
+
         // echo '<pre>'; print_r($data['addon_options']); exit;
         $product = [
             'requested_code' => $code,
@@ -666,6 +733,9 @@ class POSRegisterController
             //  NEW FIELDS (warehouse running stock when VP row + session warehouse match POS grid)
             'stock_qty' => $stockQtyOut,
             'warehouse_location' => $warehouseLocationOut,
+            'total_qty_available' => $totalQtyAllWarehouses,
+            'default_store_qty' => $defaultStoreQty,
+            'default_store_name' => $defaultStoreName,
             'maincategory' => $data['maincategory'] ?? '',
             'dimensions' => $dimensionsMerged,
             'weight' => $wKgApi,

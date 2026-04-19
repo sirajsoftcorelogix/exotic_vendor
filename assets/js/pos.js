@@ -138,6 +138,13 @@ $(function () {
     return line.trim();
   }
 
+  function fmtFloorQty(n) {
+    if (n === null || n === undefined || String(n).trim() === '') return '';
+    const x = Number(n);
+    if (Number.isNaN(x)) return '';
+    return String(Math.floor(x));
+  }
+
   /** Prefer API kg; else VP `product_weight` + unit. */
   function formatWeightLine(p) {
     if (!p) return '';
@@ -477,6 +484,24 @@ $(function () {
 
     if (isMeaningful(p.warehouse_location)) {
       html += addRow('Location', String(p.warehouse_location).replace(/\s+/g, ' ').trim());
+    }
+
+    if (
+      p.total_qty_available != null &&
+      String(p.total_qty_available).trim() !== '' &&
+      !Number.isNaN(Number(p.total_qty_available))
+    ) {
+      html += addRow('Total qty (all warehouses)', fmtFloorQty(p.total_qty_available));
+    }
+
+    if (
+      p.default_store_qty != null &&
+      String(p.default_store_qty).trim() !== '' &&
+      !Number.isNaN(Number(p.default_store_qty))
+    ) {
+      const dn = p.default_store_name ? String(p.default_store_name).trim() : '';
+      const val = fmtFloorQty(p.default_store_qty) + (dn ? ' — ' + dn : '');
+      html += addRow('Qty at default store', val);
     }
 
     if (isMeaningful(p.size)) {
