@@ -397,6 +397,53 @@ class POSRegisterController
         return 0.0;
     }
 
+    /**
+     * Addon list from /product/code (unwrapped), including express row for cart_entry matching.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function productApiAddonCatalogList(array $productApiResult): array
+    {
+        $data = $this->unwrapProductApiResponse($productApiResult['data'] ?? []);
+        $opts = [];
+        if (!empty($data['addon_options']['default_options']) && is_array($data['addon_options']['default_options'])) {
+            $opts = $data['addon_options']['default_options'];
+        }
+        if (!empty($data['express_shipping_option']['price'])) {
+            $eso = $data['express_shipping_option'];
+            $opts[] = [
+                'title' => $eso['title'] ?? '',
+                'price' => (float)($eso['price'] ?? 0),
+                'cart_entry' => trim((string)($eso['cart_entry'] ?? '')),
+            ];
+        }
+
+        return $opts;
+    }
+
+    /**
+     * Sum addon unit prices by matching selected cart_entry strings to catalog rows (same as POS modal).
+     */
+    private function sumAddonPricesFromCatalogMatches(array $selectedEntries, array $catalogAddons): float
+    {
+        $sum = 0.0;
+        foreach ($selectedEntries as $se) {
+            $se = trim((string)$se);
+            if ($se === '') {
+                continue;
+            }
+            foreach ($catalogAddons as $opt) {
+                $ce = trim((string)($opt['cart_entry'] ?? ''));
+                if ($ce !== '' && strcasecmp($ce, $se) === 0) {
+                    $sum += (float)($opt['price'] ?? 0);
+                    break;
+                }
+            }
+        }
+
+        return $sum;
+    }
+
     /** First usable image path/URL from a /product/code JSON payload. */
     private function pickRawImageFromProductApiArray(array $data): string
     {
@@ -1156,46 +1203,55 @@ class POSRegisterController
                 // $expressSelected = $item['express_shipping_chosen'] ?? false;
                 $expressSelected = $item['express_shipping_chosen'] ?? false;
                 $addons = [];
+                $selectedEntries = [];
 
                 if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
                     foreach ($item['addons_selected'] as $ad) {
+                        if (!is_array($ad)) {
+                            continue;
+                        }
 
-                        $cartEntry = '';
+                        $amt = 0.0;
+                        foreach (['value', 'price', 'amount'] as $k) {
+                            if (isset($ad[$k]) && $ad[$k] !== '' && is_numeric($ad[$k])) {
+                                $amt = (float)$ad[$k];
+                                break;
+                            }
+                        }
 
-                        if (stripos($ad['name'], 'Express') !== false) {
-                            $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $ad['value'];
-                        } else {
-                            $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $ad['value'];
+                        $cartEntry = trim((string)($ad['cart_entry'] ?? ''));
+                        if ($cartEntry === '') {
+                            if (stripos((string)($ad['name'] ?? ''), 'Express') !== false) {
+                                $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $amt;
+                            } else {
+                                $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amt;
+                            }
                         }
 
                         $addons[] = [
                             'name' => $ad['name'] ?? '',
-                            'value' => (float)($ad['value'] ?? 0),
-                            'cart_entry' => $cartEntry
+                            'value' => $amt,
+                            'cart_entry' => $cartEntry,
                         ];
+                        $selectedEntries[] = $cartEntry;
                     }
                 }
 
-                /*  FIXED HERE */
-                // $selectedEntries = [];
-
-                // BUILD SELECTED ADDON ENTRIES
-                $selectedEntries = [];
-                foreach ($addons as $a) {
-                    $selectedEntries[] = $a['cart_entry'];
+                $optStr = trim((string)($item['options'] ?? ''));
+                if ($optStr !== '') {
+                    foreach (explode('|', $optStr) as $chunk) {
+                        $chunk = trim($chunk);
+                        if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
+                            $selectedEntries[] = $chunk;
+                        }
+                    }
                 }
 
-                // ALWAYS DEFINE THIS
-                $all_addons = [];
-
-                // FETCH FROM PRODUCT API
                 $productRes = $this->exotic_api_call('/product/code', 'GET', [
                     'code' => $item['code']
                 ]);
 
-                if (!empty($productRes['data']['addon_options']['default_options'])) {
-                    $all_addons = $productRes['data']['addon_options']['default_options'];
-                }
+                $all_addons = $this->productApiAddonCatalogList($productRes);
 
                 $items[] = [
                     'item_code' => $item['code'],
@@ -1218,6 +1274,9 @@ class POSRegisterController
                 $addonsSumPerUnit = 0.0;
                 foreach ($addons as $a) {
                     $addonsSumPerUnit += (float)($a['value'] ?? 0);
+                }
+                if ($addonsSumPerUnit <= 0 && $selectedEntries !== [] && $all_addons !== []) {
+                    $addonsSumPerUnit = $this->sumAddonPricesFromCatalogMatches($selectedEntries, $all_addons);
                 }
                 $unitLine = (float)$item['price'] + $addonsSumPerUnit;
                 $subtotal += $unitLine * (int)$item['quantity'];

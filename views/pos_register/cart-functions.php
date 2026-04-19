@@ -1,6 +1,59 @@
 <?php
 // cart-functions.php
 
+/** Align with POSRegisterController::unwrapProductApiResponse */
+function cart_unwrap_product_api_payload(array $data): array
+{
+    if (!empty($data['data']) && is_array($data['data'])) {
+        $inner = $data['data'];
+        unset($data['data']);
+
+        return array_merge($data, $inner);
+    }
+
+    return $data;
+}
+
+/** Catalog rows for matching cart_entry → price (incl. express shipping row when present). */
+function cart_product_addon_catalog(array $productApiResult): array
+{
+    $data = cart_unwrap_product_api_payload($productApiResult['data'] ?? []);
+    $opts = [];
+    if (!empty($data['addon_options']['default_options']) && is_array($data['addon_options']['default_options'])) {
+        $opts = $data['addon_options']['default_options'];
+    }
+    if (!empty($data['express_shipping_option']['price'])) {
+        $eso = $data['express_shipping_option'];
+        $opts[] = [
+            'title' => $eso['title'] ?? '',
+            'price' => (float)($eso['price'] ?? 0),
+            'cart_entry' => trim((string)($eso['cart_entry'] ?? '')),
+        ];
+    }
+
+    return $opts;
+}
+
+function cart_sum_addon_prices_from_catalog(array $selectedEntries, array $catalogAddons): float
+{
+    $sum = 0.0;
+    foreach ($selectedEntries as $se) {
+        $se = trim((string)$se);
+        if ($se === '') {
+            continue;
+        }
+        foreach ($catalogAddons as $opt) {
+            $ce = trim((string)($opt['cart_entry'] ?? ''));
+            if ($ce !== '' && strcasecmp($ce, $se) === 0) {
+                $sum += (float)($opt['price'] ?? 0);
+                break;
+            }
+        }
+    }
+
+    return $sum;
+}
+
 function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null)
 {
     // echo "<pre>";
@@ -94,11 +147,52 @@ function get_cart()
             ];
 
             $addonsSumPerUnit = 0.0;
+            $selectedEntries = [];
+
             if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
                 foreach ($item['addons_selected'] as $ad) {
-                    $addonsSumPerUnit += (float)($ad['value'] ?? 0);
+                    if (!is_array($ad)) {
+                        continue;
+                    }
+                    $amt = 0.0;
+                    foreach (['value', 'price', 'amount'] as $k) {
+                        if (isset($ad[$k]) && $ad[$k] !== '' && is_numeric($ad[$k])) {
+                            $amt = (float)$ad[$k];
+                            break;
+                        }
+                    }
+                    $addonsSumPerUnit += $amt;
+
+                    $cartEntry = trim((string)($ad['cart_entry'] ?? ''));
+                    if ($cartEntry === '') {
+                        if (stripos((string)($ad['name'] ?? ''), 'Express') !== false) {
+                            $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $amt;
+                        } else {
+                            $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amt;
+                        }
+                    }
+                    $selectedEntries[] = $cartEntry;
                 }
             }
+
+            $optStr = trim((string)($item['options'] ?? ''));
+            if ($optStr !== '') {
+                foreach (explode('|', $optStr) as $chunk) {
+                    $chunk = trim($chunk);
+                    if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
+                        $selectedEntries[] = $chunk;
+                    }
+                }
+            }
+
+            if ($addonsSumPerUnit <= 0 && $selectedEntries !== []) {
+                $productRes = exotic_api_call('/product/code', 'GET', ['code' => $item['code']]);
+                $catalog = cart_product_addon_catalog($productRes);
+                if ($catalog !== []) {
+                    $addonsSumPerUnit = cart_sum_addon_prices_from_catalog($selectedEntries, $catalog);
+                }
+            }
+
             $unitLine = (float)$item['price'] + $addonsSumPerUnit;
             $subtotal += $unitLine * (int)$item['quantity'];
             // echo $expressSelected;
