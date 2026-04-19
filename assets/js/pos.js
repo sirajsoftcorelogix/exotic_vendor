@@ -24,6 +24,18 @@ $(function () {
     });
   }
 
+  /** Match POSRegisterController::fixImageUrl — relative paths must hit CDN, not the portal origin. */
+  function fixModalImageSrc(path) {
+    if (path == null || path === '') return '';
+    const s = String(path).trim();
+    if (!s) return '';
+    if (/^https?:\/\//i.test(s)) return s;
+    if (s.indexOf('//') === 0) return 'https:' + s;
+    return s.indexOf('/') === 0
+      ? 'https://cdn.exoticindia.com' + s
+      : 'https://cdn.exoticindia.com/' + s;
+  }
+
   function showLoader(show) {
     if (show) {
       if (!$('#productsLoader').length) {
@@ -124,7 +136,9 @@ $(function () {
     const title = (p.title || '').replace(/\s+/g, ' ').trim();
     $('#pmTitle').text(title || 'Product');
 
-    const imgSrc = p.image || 'https://dummyimage.com/500x500/e5e7eb/6b7280&text=No+Image';
+    const imgSrc =
+      fixModalImageSrc(p.image) ||
+      'https://dummyimage.com/500x500/e5e7eb/6b7280&text=No+Image';
     $('#pmImage').attr('src', imgSrc).attr('alt', title || 'Product');
     $('#modal_product_code').val(getLookupCode(p) || String(p.code || p.id || ''));
 
@@ -512,7 +526,7 @@ data-code="${lookupCode}">
   function renderModalData(p) {
 
     $('#pmTitle').text(p.title || 'Product');
-    $('#pmImage').attr('src', p.image || '');
+    $('#pmImage').attr('src', fixModalImageSrc(p.image) || '');
 
     $('#pmDetails').html(`
         <div>Price</div><div>:</div><div>₹ ${p.price || 0}</div>
