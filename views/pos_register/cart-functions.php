@@ -54,6 +54,47 @@ function cart_sum_addon_prices_from_catalog(array $selectedEntries, array $catal
     return $sum;
 }
 
+function cart_merge_express_into_addon_unit_sum(
+    float $addonsSumPerUnit,
+    array $addons,
+    array $selectedEntries,
+    array $allAddons,
+    bool $expressSelected,
+    float $shippingPerUnit
+): float {
+    if (!$expressSelected || $shippingPerUnit <= 0) {
+        return $addonsSumPerUnit;
+    }
+
+    $expressCounted = 0.0;
+    foreach ($addons as $a) {
+        if (stripos((string)($a['name'] ?? ''), 'Express') !== false) {
+            $expressCounted += (float)($a['value'] ?? 0);
+        }
+    }
+    foreach ($allAddons as $opt) {
+        if (stripos((string)($opt['title'] ?? ''), 'express') === false) {
+            continue;
+        }
+        $ce = trim((string)($opt['cart_entry'] ?? ''));
+        if ($ce === '') {
+            continue;
+        }
+        foreach ($selectedEntries as $se) {
+            if (strcasecmp($ce, trim((string)$se)) === 0) {
+                $expressCounted += (float)($opt['price'] ?? 0);
+                break;
+            }
+        }
+    }
+
+    if ($expressCounted < $shippingPerUnit - 0.0001) {
+        return $addonsSumPerUnit + ($shippingPerUnit - $expressCounted);
+    }
+
+    return $addonsSumPerUnit;
+}
+
 function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null)
 {
     // echo "<pre>";
@@ -146,8 +187,10 @@ function get_cart()
                 'express_selected' => $expressSelected
             ];
 
+            $addons = [];
             $addonsSumPerUnit = 0.0;
             $selectedEntries = [];
+            $catalog = [];
 
             if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
                 foreach ($item['addons_selected'] as $ad) {
@@ -171,6 +214,11 @@ function get_cart()
                             $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amt;
                         }
                     }
+                    $addons[] = [
+                        'name' => $ad['name'] ?? '',
+                        'value' => $amt,
+                        'cart_entry' => $cartEntry,
+                    ];
                     $selectedEntries[] = $cartEntry;
                 }
             }
@@ -192,6 +240,20 @@ function get_cart()
                     $addonsSumPerUnit = cart_sum_addon_prices_from_catalog($selectedEntries, $catalog);
                 }
             }
+
+            if ($catalog === [] && $expressSelected && $shipping_per_unit > 0) {
+                $productRes = exotic_api_call('/product/code', 'GET', ['code' => $item['code']]);
+                $catalog = cart_product_addon_catalog($productRes);
+            }
+
+            $addonsSumPerUnit = cart_merge_express_into_addon_unit_sum(
+                $addonsSumPerUnit,
+                $addons,
+                $selectedEntries,
+                $catalog,
+                (bool)$expressSelected,
+                $shipping_per_unit
+            );
 
             $unitLine = (float)$item['price'] + $addonsSumPerUnit;
             $subtotal += $unitLine * (int)$item['quantity'];
