@@ -665,7 +665,8 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       if (obj && obj.parse_error) {
         meta.textContent = 'Non-JSON response (see raw_body_preview)';
       } else if (obj && obj.http_code != null && !obj.message_only) {
-        meta.textContent = 'HTTP ' + obj.http_code + ' · POST /order/create (Exotic India API)';
+        meta.textContent = (obj.triggered_from === 'payment_modal' ? 'Payment popup · ' : '') +
+          'HTTP ' + obj.http_code + ' · POST /order/create (Exotic India API)';
       } else if (obj && obj.http_status != null) {
         meta.textContent = 'HTTP ' + obj.http_status + ' · response was not JSON';
       } else {
@@ -691,6 +692,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
   if (btn) btn.addEventListener('click', openModal);
   if (closeBtn) closeBtn.addEventListener('click', closeModal);
   if (overlay) overlay.addEventListener('click', closeModal);
+  window.openOrderCreateApiResponseModal = openModal;
 })();
 </script>
 <!-- <a
@@ -1072,6 +1074,19 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           class="w-full mt-1 border rounded-lg px-3 py-2 text-sm h-24"></textarea>
       </div>
 
+      <!-- Last order create API (filled after Confirm Order calls POST /order/create) -->
+      <div id="paymentModalOrderApiPanel" class="hidden rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[11px] font-semibold text-slate-800">Order create API (this attempt)</span>
+          <button type="button" id="paymentModalOrderApiFullBtn"
+            class="text-[11px] text-orange-700 font-medium hover:underline shrink-0">
+            Full JSON
+          </button>
+        </div>
+        <p class="text-[10px] text-slate-500">Request and response from Exotic India <code class="bg-slate-200 px-1 rounded">POST /order/create</code> after you click Confirm Order.</p>
+        <pre id="paymentModalOrderApiPre" class="max-h-48 overflow-auto text-[10px] leading-snug rounded border border-slate-200 bg-white p-2 font-mono whitespace-pre-wrap break-words"></pre>
+      </div>
+
     </div>
 
 
@@ -1346,15 +1361,46 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 </script>
 <script>
   function openPaymentModal() {
+    var apiPanel = document.getElementById("paymentModalOrderApiPanel");
+    var apiPre = document.getElementById("paymentModalOrderApiPre");
+    if (apiPanel) {
+      apiPanel.classList.add("hidden");
+    }
+    if (apiPre) {
+      apiPre.textContent = "";
+    }
     document.getElementById("paymentModal").classList.remove("hidden");
   }
 
   function closePaymentModal() {
     document.getElementById("paymentModal").classList.add("hidden");
   }
+
+  function showPaymentModalOrderApiRecord(debug) {
+    var panel = document.getElementById("paymentModalOrderApiPanel");
+    var pre = document.getElementById("paymentModalOrderApiPre");
+    if (!panel || !pre) {
+      return;
+    }
+    try {
+      pre.textContent = JSON.stringify(debug, null, 2);
+    } catch (e) {
+      pre.textContent = String(debug);
+    }
+    panel.classList.remove("hidden");
+  }
 </script>
 <script>
   document.addEventListener("DOMContentLoaded", function() {
+
+    var fullOrderApiBtn = document.getElementById("paymentModalOrderApiFullBtn");
+    if (fullOrderApiBtn) {
+      fullOrderApiBtn.addEventListener("click", function () {
+        if (typeof window.openOrderCreateApiResponseModal === "function") {
+          window.openOrderCreateApiResponseModal();
+        }
+      });
+    }
 
     document.getElementById("placeOrderBtn").addEventListener("click", function() {
 
@@ -1468,20 +1514,26 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       .then(function (wrapped) {
         if (wrapped.parseError) {
           console.error("create-order: not JSON (status " + wrapped.res.status + ")", wrapped.raw.slice(0, 800));
+          var parseDbg = {
+            triggered_from: "payment_modal",
+            parse_error: true,
+            http_status: wrapped.res.status,
+            raw_body_preview: wrapped.raw.slice(0, 12000)
+          };
           if (typeof window.setOrderCreateApiDebugPayload === "function") {
-            window.setOrderCreateApiDebugPayload({
-              parse_error: true,
-              http_status: wrapped.res.status,
-              raw_body_preview: wrapped.raw.slice(0, 12000)
-            });
+            window.setOrderCreateApiDebugPayload(parseDbg);
           }
-          showToast("Server did not return JSON. Open \"order create API\" link below for the raw response.", "red");
+          showPaymentModalOrderApiRecord(parseDbg);
+          showToast("Server did not return JSON. See Order create API in this window or use Full JSON.", "red");
           return;
         }
 
         var data = wrapped.data;
         if (data.order_api_debug && typeof window.setOrderCreateApiDebugPayload === "function") {
           window.setOrderCreateApiDebugPayload(data.order_api_debug);
+          if (!data.success) {
+            showPaymentModalOrderApiRecord(data.order_api_debug);
+          }
         }
 
         if (data.success) {
