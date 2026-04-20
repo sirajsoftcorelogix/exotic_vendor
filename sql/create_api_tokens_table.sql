@@ -14,3 +14,5 @@ CREATE TABLE IF NOT EXISTS `order_api_tokens` (
 
 -- Create index for faster token lookups
 CREATE INDEX idx_token_active ON `order_api_tokens`(`token`, `is_active`);
+
+ALTER TABLE `vp_vendors` ADD `vendor_id` INT NULL AFTER `id`;
