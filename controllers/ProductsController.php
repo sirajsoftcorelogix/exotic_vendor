@@ -1586,12 +1586,18 @@ class ProductsController {
             return 'item_code';
         }
         $resLower = @mysqli_query($conn, "SHOW COLUMNS FROM vp_stock_movements LIKE 'item_code'");
-        if ($resLower && mysqli_num_rows($resLower) > 0) {
-            return 'item_code';
+        if ($resLower && ($row = mysqli_fetch_assoc($resLower))) {
+            $field = trim((string)($row['Field'] ?? ''));
+            if ($field !== '') {
+                return $field;
+            }
         }
         $resUpper = @mysqli_query($conn, "SHOW COLUMNS FROM vp_stock_movements LIKE 'Item_code'");
-        if ($resUpper && mysqli_num_rows($resUpper) > 0) {
-            return 'Item_code';
+        if ($resUpper && ($row = mysqli_fetch_assoc($resUpper))) {
+            $field = trim((string)($row['Field'] ?? ''));
+            if ($field !== '') {
+                return $field;
+            }
         }
         return 'item_code';
     }
