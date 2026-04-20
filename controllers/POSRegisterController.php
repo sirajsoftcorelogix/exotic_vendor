@@ -357,6 +357,30 @@ class POSRegisterController
         return trim((string)$dbRaw);
     }
 
+    /** GST % for POS: prefer API gst_rate / gst_percent / gst, else vp_products.gst. */
+    private function mergeGstPercentField(array $apiData, array $dbRow): string
+    {
+        foreach (['gst_rate', 'gst_percent', 'gst'] as $k) {
+            if (!array_key_exists($k, $apiData)) {
+                continue;
+            }
+            $v = $apiData[$k];
+            if ($v === null || $v === '') {
+                continue;
+            }
+            if (is_string($v)) {
+                $v = preg_replace('/\s*%?\s*$/', '', trim($v));
+            }
+            if (is_numeric($v)) {
+                $f = (float)$v;
+
+                return $f == (int)$f ? (string)(int)$f : rtrim(rtrim(sprintf('%.4f', $f), '0'), '.');
+            }
+        }
+
+        return trim((string)($dbRow['gst'] ?? ''));
+    }
+
     /** First positive amount from named keys on an API payload (same keys used elsewhere for catalog sync). */
     private function pickPositivePriceFromApiArray(array $data): float
     {
@@ -787,7 +811,7 @@ class POSRegisterController
         $dbRow = [];
         if (!empty($conn)) {
             $stmt = $conn->prepare(
-                'SELECT id, item_code, sku, title, image, material, size, color, hsn,
+                'SELECT id, item_code, sku, title, image, material, size, color, hsn, gst,
                         price_india, price_india_suggested, itemprice, finalprice,
                         product_weight, product_weight_unit,
                         prod_height, prod_width, prod_length, length_unit
@@ -921,6 +945,7 @@ class POSRegisterController
             'size' => $this->mergeProductTextField($data['size'] ?? '', $dbRow['size'] ?? ''),
             'color' => $this->mergeProductTextField($data['color'] ?? '', $dbRow['color'] ?? ''),
             'hsn' => $this->mergeProductTextField($data['hsn'] ?? '', $dbRow['hsn'] ?? ''),
+            'gst_percent' => $this->mergeGstPercentField($data, $dbRow),
 
             //  NEW FIELDS (warehouse running stock when VP row + session warehouse match POS grid)
             'stock_qty' => $stockQtyOut,

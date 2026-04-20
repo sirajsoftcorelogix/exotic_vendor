@@ -124,6 +124,18 @@ $(function () {
     return true;
   }
 
+  function formatGstPercentForModal(raw) {
+    if (raw === null || raw === undefined) return '';
+    const s = String(raw).trim();
+    if (s === '' || s.toLowerCase() === 'n/a') return '';
+    const n = Number(s);
+    if (!Number.isNaN(n)) {
+      if (n === 0) return '0%';
+      return (Number.isInteger(n) ? String(n) : String(n)) + '%';
+    }
+    return s;
+  }
+
   /** Money amount for display (includes 0; isMeaningful hides zero). */
   function hasDisplayablePrice(val) {
     if (val === null || val === undefined) return false;
@@ -491,6 +503,15 @@ $(function () {
 
     if (isMeaningful(p.warehouse_location)) {
       html += addRow('Location', String(p.warehouse_location).replace(/\s+/g, ' ').trim());
+    }
+
+    if (isMeaningful(p.hsn)) {
+      html += addRow('HSN Code', String(p.hsn).replace(/\s+/g, ' ').trim());
+    }
+
+    const gstPct = formatGstPercentForModal(p.gst_percent);
+    if (gstPct !== '') {
+      html += addRow('GST %', gstPct);
     }
 
     if (isMeaningful(p.size)) {
