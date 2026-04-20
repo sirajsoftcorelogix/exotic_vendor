@@ -43,11 +43,11 @@ global $domain, $root_path, $page, $action, $conn;
 <!-- Header Component -->
 <!-- Updated with bottom border -->
 
-<?php include 'views/layouts/left_menu.php'; ?>
-<div class="flex-1 flex flex-col overflow-hidden">
-	<?php require_once 'header.php'; ?>
+<?php include __DIR__ . '/left_menu.php'; ?>
+<div class="flex-1 flex min-h-0 flex-col overflow-hidden">
+	<?php require_once __DIR__ . '/header.php'; ?>
 	<!-- End Top Navbar -->
-	<main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100">
+	<main class="flex-1 min-h-0 overflow-x-hidden overflow-y-auto bg-gray-100">
 	<?= $content ?? '' ?>
 	</main>
 	
