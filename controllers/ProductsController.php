@@ -1578,6 +1578,24 @@ class ProductsController {
         @mysqli_query($conn, "ALTER TABLE vp_stock_movements MODIFY COLUMN movement_type ENUM('IN','OUT','TRANSFER_IN','TRANSFER_OUT','OPENING_STOCK') NOT NULL");
     }
 
+    /**
+     * vp_stock_movements item-code column may be present as item_code or Item_code.
+     */
+    private function resolveVpStockMovementsItemCodeColumn($conn): string {
+        if (!$conn) {
+            return 'item_code';
+        }
+        $resLower = @mysqli_query($conn, "SHOW COLUMNS FROM vp_stock_movements LIKE 'item_code'");
+        if ($resLower && mysqli_num_rows($resLower) > 0) {
+            return 'item_code';
+        }
+        $resUpper = @mysqli_query($conn, "SHOW COLUMNS FROM vp_stock_movements LIKE 'Item_code'");
+        if ($resUpper && mysqli_num_rows($resUpper) > 0) {
+            return 'Item_code';
+        }
+        return 'item_code';
+    }
+
     private function parseBulkQtyFromRaw(string $raw): int {
         $x = str_replace([',', ' '], '', trim($raw));
         if ($x === '' || !is_numeric($x)) {
@@ -2101,9 +2119,10 @@ class ProductsController {
         }
 
         $this->ensureVpStockMovementsOpeningStockEnum($conn);
+        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
 
         $ins = $conn->prepare("INSERT INTO vp_stock_movements
-            (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+            (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
             VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
         if (!$ins) {
             error_log('recordVendorApiImportOpeningStock: prepare failed ' . $conn->error);
@@ -2115,7 +2134,7 @@ class ProductsController {
             $msg = $ins->error;
             $ins->close();
             $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
-                (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
             if (!$ins2) {
                 error_log('recordVendorApiImportOpeningStock: insert failed ' . $msg);
@@ -2172,13 +2191,14 @@ class ProductsController {
         $runningStock = $qty; // new opening line baseline
         $reason = 'Migration From Egreen';
         $refType = 'Egreen';
+        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
 
         // Re-import: remove prior bulk opening lines for this variant/warehouse, then insert a fresh movement.
         if (!$conn->begin_transaction()) {
             return 'Could not start transaction for stock movement.';
         }
         $del = $conn->prepare("DELETE FROM vp_stock_movements
-            WHERE product_id = ? AND warehouse_id = ? AND item_code = ?
+            WHERE product_id = ? AND warehouse_id = ? AND `{$itemCodeCol}` = ?
               AND movement_type = 'OPENING_STOCK' AND ref_type = 'Egreen'
               AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
               AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?");
@@ -2196,7 +2216,7 @@ class ProductsController {
         $del->close();
 
         $ins = $conn->prepare("INSERT INTO vp_stock_movements
-            (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+            (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
             VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
         if (!$ins) {
             return 'Could not prepare stock movement insert.';
@@ -2208,7 +2228,7 @@ class ProductsController {
 
             // Fallback for schemas where ref_id is NOT NULL.
             $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
-                (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
             if (!$ins2) {
                 $conn->rollback();
@@ -2290,6 +2310,7 @@ class ProductsController {
         $targetQty = max(0, (int)$targetQty);
         $refType = 'EgreenRefetch';
         $refId = 'import_item:' . (int)$importItemId;
+        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
 
         if (!$conn->begin_transaction()) {
             return 'Could not start transaction for stock update.';
@@ -2297,7 +2318,7 @@ class ProductsController {
 
         $latestStmt = $conn->prepare("SELECT running_stock
             FROM vp_stock_movements
-            WHERE product_id = ? AND warehouse_id = ? AND item_code = ?
+            WHERE product_id = ? AND warehouse_id = ? AND `{$itemCodeCol}` = ?
               AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
               AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
             ORDER BY id DESC
@@ -2319,7 +2340,7 @@ class ProductsController {
         if (!$latestRow) {
             $reason = 'Opening stock set from API ReUpload';
             $ins = $conn->prepare("INSERT INTO vp_stock_movements
-                (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, ?, ?, ?)");
             if (!$ins) {
                 $conn->rollback();
@@ -2341,7 +2362,7 @@ class ProductsController {
                 $qty = abs($delta);
                 $reason = 'Stock adjusted from API ReUpload';
                 $insAdj = $conn->prepare("INSERT INTO vp_stock_movements
-                    (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                    (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 if (!$insAdj) {
                     $conn->rollback();

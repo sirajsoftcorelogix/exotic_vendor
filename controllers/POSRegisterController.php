@@ -1504,7 +1504,8 @@ class POSRegisterController
             'grand_total' => $grand_total,
             'checkoutdata' => $data['checkoutdata'] ?? '',
             'codcharges' => $codcharges,
-            'currency' => $data['fx_type'] ?? 'INR',
+            // POS register is INR billing; do not inherit API fx_type (can return USD/$).
+            'currency' => 'INR',
             'cart_api_http_code' => (int)($res['code'] ?? 0),
             'cart_api_body' => $data,
             'cart_api_request' => $cartApiRequestMeta,
@@ -1773,14 +1774,26 @@ class POSRegisterController
         global $conn;
 
         header('Content-Type: application/json');
-        $paymentType = 'offline';
-        /* ================= PAYMENT TYPE ================= */
-        // $paymentType = $_POST['payment_type'] ?? 'cod';
+        $allowedPaymentTypes = [
+            'offline',
+            'cod',
+            'razorpay',
+            'cc',
+            'bank_transfer',
+            'pos_machine',
+            'specialpay',
+            'cheque',
+            'demand_draft',
+        ];
+        $paymentType = $_POST['payment_type'] ?? 'offline';
+        if (!in_array($paymentType, $allowedPaymentTypes, true)) {
+            $paymentType = 'offline';
+        }
+        $paymentStage = $_POST['payment_stage'] ?? 'final';
+        if (!in_array($paymentStage, ['final', 'partial', 'advance'], true)) {
+            $paymentStage = 'final';
+        }
         $note = $_POST['note'] ?? '';
-
-        // if (!in_array($paymentType, ['cod', 'razorpay', 'offline', 'cc'])) {
-        //     $paymentType = 'offline';
-        // }
 
         $transactionId = $_POST['transaction_id'] ?? '';
 
@@ -1954,8 +1967,6 @@ class POSRegisterController
             $orderNumber = $result['data']['orderid'];
             $warehouseId = $_SESSION['warehouse_id'];
             $userId = $_SESSION['user']['id'];
-            $paymentStage = $_POST['payment_stage'];
-            $paymentType = $_POST['payment_type'];
             $amount = $_POST['amount'];
             $transactionId = $_POST['transaction_id'];
             $note = $_POST['note'];

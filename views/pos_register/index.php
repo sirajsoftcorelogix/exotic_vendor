@@ -909,25 +909,25 @@
           </select>
         </div>
 
-        <!-- Payment Mode
+        <!-- Payment Mode -->
         <div>
           <label class="text-xs text-gray-600">Payment Mode</label>
 
           <select name="payment_type" id="payment_mode"
             class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
 
-            <option value="offline">Offline</option>
-            <option value="cod">Cash</option>
-            <option value="bank_transfer">Bank Transfer</option>
-            <option value="pos_machine">POS Machine</option>
-            <option value="razorpay">Razorpay</option>
-            <option value="specialpay">SpecialPay</option>
+            <option value="offline">Cash / Counter</option>
+            <option value="cc">Card</option>
+            <option value="razorpay">Razorpay / UPI</option>
+            <option value="cod">COD (pay on delivery)</option>
+            <option value="bank_transfer">Bank transfer</option>
+            <option value="pos_machine">POS machine</option>
+            <option value="specialpay">Special pay</option>
             <option value="cheque">Cheque</option>
-            <option value="demand_draft">Demand Draft</option>
+            <option value="demand_draft">Demand draft</option>
 
           </select>
-        </div> -->
-        <input type="hidden" name="payment_type" id="payment_mode" value="offline">
+        </div>
 
         <!-- Payment Date -->
         <div>
