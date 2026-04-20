@@ -12,11 +12,13 @@ class POSRegisterController
         $this->pos     = new pos($conn);
     }
 
-    /** Drop buffered output (e.g. notices from bootstrap) so JSON-only responses stay valid. */
+    /**
+     * Discard all output buffers (bootstrap whitespace, nested ob_start, notices) so JSON is the only body.
+     */
     private function clearBufferedHttpOutput(): void
     {
-        if (ob_get_level() > 0) {
-            ob_clean();
+        while (ob_get_level() > 0) {
+            ob_end_clean();
         }
     }
 

@@ -1438,16 +1438,18 @@
         customerData[key] = value;
       });
 
-      fetch("?page=pos_register&action=add-customer", {
+      fetch("index.php?page=pos_register&action=add-customer", {
           method: "POST",
+          credentials: "same-origin",
           body: formData
         })
         .then(function (res) {
           return res.text().then(function (text) {
             try {
-              return JSON.parse(text);
+              var cleaned = text.replace(/^\uFEFF/, "").trim();
+              return JSON.parse(cleaned);
             } catch (err) {
-              console.error("add-customer: not JSON", text);
+              console.error("add-customer: not JSON (status " + res.status + ")", text.slice(0, 800));
               throw new Error("Server did not return JSON. Check network tab / PHP errors.");
             }
           });

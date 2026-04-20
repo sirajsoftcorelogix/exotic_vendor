@@ -35,4 +35,3 @@ require_once 'helpers/html_helpers.php';
 // Optionally include more common setup like error reporting, timezone, etc.
 $domain = "http://" . $_SERVER['SERVER_NAME'] . ':8080/';
 $root_path = $_SERVER['DOCUMENT_ROOT'];
-?>
