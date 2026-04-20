@@ -1347,14 +1347,27 @@ class POSRegisterController
         global $conn;
         $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
         $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
-        $res = $this->exotic_api_call(
-            '/cart/retrieve',
-            'GET',
-            [
-                'discountcoupondetails' => $coupon,
-                'giftvoucherdetails' => $voucher
-            ]
-        );
+        $cartRetrieveQuery = [
+            'discountcoupondetails' => $coupon,
+            'giftvoucherdetails' => $voucher,
+        ];
+        $res = $this->exotic_api_call('/cart/retrieve', 'GET', $cartRetrieveQuery);
+
+        $cartRetrieveUrl = 'https://www.exoticindia.com/api/cart/retrieve?' . http_build_query($cartRetrieveQuery);
+
+        $cartApiRequestMeta = [
+            'method' => 'GET',
+            'url' => $cartRetrieveUrl,
+            'query_params' => $cartRetrieveQuery,
+            'headers' => [
+                'x-api-key' => '(redacted)',
+                'x-api-deviceid' => 'POS-Store_1',
+                'x-api-appplayerid' => 'POS-Web-Terminal',
+                'x-api-countrycode' => 'IN',
+                'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
+                'User-Agent' => 'ExoticPOS/1.0',
+            ],
+        ];
 
         $data = $res['data'] ?? [];
 
@@ -1494,6 +1507,7 @@ class POSRegisterController
             'currency' => $data['fx_type'] ?? 'INR',
             'cart_api_http_code' => (int)($res['code'] ?? 0),
             'cart_api_body' => $data,
+            'cart_api_request' => $cartApiRequestMeta,
         ];
     }
 
