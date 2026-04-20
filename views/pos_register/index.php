@@ -1,4 +1,7 @@
 <div class="min-h-screen">
+  <script>
+    window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
+  </script>
   <a href="test_create_order_static();"></a>
   <!-- ===== TOP BAR ===== -->
   <header class="border-b bg-white">
@@ -179,8 +182,6 @@
 
               </option>
 
-              </option>
-
             <?php endforeach; ?>
 
           </select>
@@ -191,6 +192,10 @@
           </button>
 
 
+        </div>
+        <div class="mt-2 text-[11px] text-slate-600 space-y-0.5">
+          <div id="selectedCustomerName" class="font-semibold text-slate-800">Walk-in Customer</div>
+          <div id="selectedCustomerPhone" class="text-slate-500">-</div>
         </div>
 
       </div>
@@ -1265,11 +1270,19 @@
 
     document.getElementById("placeOrderBtn").addEventListener("click", function() {
 
-      let customerId = document.getElementById("customerSelect").value;
+      var fromSelect = typeof jQuery !== "undefined" ? jQuery("#customerSelect").val() : document.getElementById("customerSelect").value;
+      if (Array.isArray(fromSelect)) {
+        fromSelect = fromSelect[0] || "";
+      }
+      var customerId = (fromSelect && String(fromSelect)) || (window.POS_SESSION_CUSTOMER_ID && String(window.POS_SESSION_CUSTOMER_ID)) || "";
 
       if (!customerId) {
         showToast("⚠ Please select customer first", "red");
-        document.getElementById("customerSelect").focus();
+        if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
+          jQuery("#customerSelect").select2("open");
+        } else {
+          document.getElementById("customerSelect").focus();
+        }
         return;
       }
 
@@ -1339,7 +1352,11 @@
     formData.append("amount", paymentAmount);
     formData.append("transaction_id", transactionId);
     formData.append("note", note);
-    formData.append("customer_id", $('#customerSelect').val());
+    var cid = $('#customerSelect').val();
+    if (Array.isArray(cid)) {
+      cid = cid[0];
+    }
+    formData.append("customer_id", cid || window.POS_SESSION_CUSTOMER_ID || "");
 
     fetch("?page=pos_register&action=create-order", {
         method: "POST",
@@ -1463,17 +1480,28 @@
           var select = document.getElementById("customerSelect");
           if (!select) return;
 
-          var option = document.createElement("option");
-          option.value = data.customer.id;
-          option.textContent = data.customer.name + " (" + data.customer.phone + ")";
-          option.setAttribute("data-name", data.customer.name || "");
-          option.setAttribute("data-phone", data.customer.phone || "");
+          var idStr = String(data.customer.id);
+          var label = (data.customer.name || "") + " (" + (data.customer.phone || "") + ")";
+          window.POS_SESSION_CUSTOMER_ID = idStr;
 
-          select.appendChild(option);
-          select.value = String(data.customer.id);
-
-          if (window.jQuery && jQuery.fn.select2 && jQuery(select).data("select2")) {
-            jQuery(select).trigger("change");
+          if (window.jQuery && jQuery.fn.select2) {
+            var $s = jQuery(select);
+            var opt = new Option(label, idStr, true, true);
+            opt.setAttribute("data-name", data.customer.name || "");
+            opt.setAttribute("data-phone", data.customer.phone || "");
+            opt.setAttribute("data-email", data.customer.email || "");
+            $s.append(opt);
+            $s.val(idStr).trigger("change");
+          } else {
+            var option = document.createElement("option");
+            option.value = idStr;
+            option.textContent = label;
+            option.setAttribute("data-name", data.customer.name || "");
+            option.setAttribute("data-phone", data.customer.phone || "");
+            option.setAttribute("data-email", data.customer.email || "");
+            select.appendChild(option);
+            select.value = idStr;
+            select.dispatchEvent(new Event("change", { bubbles: true }));
           }
 
           showToast("✓ Customer saved", "green");
@@ -1490,25 +1518,32 @@
 <script>
   document.getElementById("customerSelect").addEventListener("change", function() {
 
-    let id = this.value
+    var id = this.value;
+    window.POS_SESSION_CUSTOMER_ID = id ? String(id) : "";
 
-    fetch("?page=pos_register&action=set-customer", {
+    fetch("index.php?page=pos_register&action=set-customer", {
       method: "POST",
+      credentials: "same-origin",
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: "customer_id=" + id
-    })
+      body: "customer_id=" + encodeURIComponent(id)
+    });
 
-    let selected = this.options[this.selectedIndex]
+    var selected = this.options[this.selectedIndex];
+    var name = selected ? selected.getAttribute("data-name") : null;
+    var phone = selected ? selected.getAttribute("data-phone") : null;
 
-    let name = selected.getAttribute("data-name")
-    let phone = selected.getAttribute("data-phone")
+    var nameEl = document.getElementById("selectedCustomerName");
+    var phoneEl = document.getElementById("selectedCustomerPhone");
+    if (nameEl) {
+      nameEl.textContent = name || "Walk-in Customer";
+    }
+    if (phoneEl) {
+      phoneEl.textContent = phone || "-";
+    }
 
-    document.getElementById("selectedCustomerName").innerText = name || "Walk-in Customer"
-    document.getElementById("selectedCustomerPhone").innerText = phone || "-"
-
-  })
+  });
 </script>
 
 <script>
@@ -1565,7 +1600,8 @@
 <script>
   $(document).ready(function() {
 
-    $('#customerSelect').select2({
+    var $cust = $('#customerSelect');
+    $cust.select2({
       placeholder: "Search Customer",
       allowClear: true,
       width: '100%',
@@ -1601,6 +1637,17 @@
       templateResult: formatCustomer,
       templateSelection: formatCustomerSelection
     });
+
+    $cust.on("select2:clear", function() {
+      window.POS_SESSION_CUSTOMER_ID = "";
+    });
+
+    var initialVal = $cust.val();
+    if (initialVal) {
+      $cust.trigger("change");
+    } else if (window.POS_SESSION_CUSTOMER_ID) {
+      $cust.val(String(window.POS_SESSION_CUSTOMER_ID)).trigger("change");
+    }
 
   });
 
