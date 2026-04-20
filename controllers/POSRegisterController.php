@@ -1356,6 +1356,45 @@ class POSRegisterController
         return ['data' => json_decode($response, true) ?: [], 'code' => $httpCode];
     }
 
+    /**
+     * Debug payload for POS "Order create API" modal (matches cart API debug shape).
+     */
+    private function buildOrderCreateApiDebug(array $queryParams, array $postData, array $apiResult): array
+    {
+        $url = 'https://www.exoticindia.com/api/order/create';
+        if ($queryParams !== []) {
+            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($queryParams);
+        }
+
+        $bodyForLog = $postData;
+        if (!empty($bodyForLog['cardnumber'])) {
+            $bodyForLog['cardnumber'] = '(redacted)';
+        }
+        if (!empty($bodyForLog['card_cvv'])) {
+            $bodyForLog['card_cvv'] = '(redacted)';
+        }
+
+        return [
+            'timestamp' => date('c'),
+            'request' => [
+                'method' => 'POST',
+                'url' => $url,
+                'query_params' => $queryParams,
+                'post_body' => $bodyForLog,
+                'headers' => [
+                    'x-api-key' => '(redacted)',
+                    'x-api-deviceid' => 'POS-Store_1',
+                    'x-api-appplayerid' => 'POS-Web-Terminal',
+                    'x-api-countrycode' => 'IN',
+                    'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
+                    'User-Agent' => 'ExoticPOS',
+                ],
+            ],
+            'http_code' => (int)($apiResult['code'] ?? 0),
+            'response' => $apiResult['data'] ?? [],
+        ];
+    }
+
 
     public function get_cart()
     {
@@ -1789,7 +1828,7 @@ class POSRegisterController
         global $conn;
 
         $this->clearBufferedHttpOutput();
-        header('Content-Type: application/json');
+        header('Content-Type: application/json; charset=utf-8');
         $allowedPaymentTypes = [
             'offline',
             'cod',
@@ -1961,21 +2000,25 @@ class POSRegisterController
         ], $billing, $shipping, $razorpay, $card);
 
         $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
+        $orderCreateQuery = ['discountcoupondetails' => $coupon];
 
         /* ================= API CALL ================= */
         $result = $this->exotic_api_call(
             '/order/create',
             'POST',
-            ['discountcoupondetails' => $coupon],
+            $orderCreateQuery,
             $postData
         );
+
+        $orderApiDebug = $this->buildOrderCreateApiDebug($orderCreateQuery, $postData, $result);
+        $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
 
         if (empty($result['data']['orderid'])) {
             echo json_encode([
                 "success" => false,
                 "message" => "Order API failed",
-                "api" => $result
-            ]);
+                "order_api_debug" => $orderApiDebug,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         } else {
             $orderId = $result['data']['orderid'];
@@ -2029,8 +2072,9 @@ class POSRegisterController
         // echo '<pre>'; print_r($result); exit;
         echo json_encode([
             "success" => true,
-            "orderid" => $result['data']['orderid']
-        ]);
+            "orderid" => $result['data']['orderid'],
+            "order_api_debug" => $orderApiDebug,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     public function add_customer()
