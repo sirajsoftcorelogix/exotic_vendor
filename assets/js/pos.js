@@ -514,6 +514,13 @@ $(function () {
       html += addRow('GST %', gstPct);
     }
 
+    if (hasDisplayablePrice(p.mrp)) {
+      html += addRow(
+        'MRP',
+        `₹ ${Number(p.mrp).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      );
+    }
+
     if (isMeaningful(p.size)) {
       html += addRow('Size', String(p.size).replace(/\s+/g, ' ').trim());
     }

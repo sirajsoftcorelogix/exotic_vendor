@@ -381,6 +381,30 @@ class POSRegisterController
         return trim((string)($dbRow['gst'] ?? ''));
     }
 
+    /** India MRP (₹): prefer API keys, then vp_products.mrp_india. */
+    private function mergeMrpRupee(array $apiData, array $dbRow): float
+    {
+        foreach (['mrp_india', 'mrp', 'max_retail_price', 'list_price', 'mrp_inr'] as $k) {
+            if (!array_key_exists($k, $apiData)) {
+                continue;
+            }
+            $v = $apiData[$k];
+            if ($v === null || $v === '') {
+                continue;
+            }
+            if (is_numeric($v)) {
+                $f = (float)$v;
+                if ($f > 0) {
+                    return $f;
+                }
+            }
+        }
+
+        $db = isset($dbRow['mrp_india']) ? (float)$dbRow['mrp_india'] : 0.0;
+
+        return $db > 0 ? $db : 0.0;
+    }
+
     /** First positive amount from named keys on an API payload (same keys used elsewhere for catalog sync). */
     private function pickPositivePriceFromApiArray(array $data): float
     {
@@ -812,7 +836,7 @@ class POSRegisterController
         if (!empty($conn)) {
             $stmt = $conn->prepare(
                 'SELECT id, item_code, sku, title, image, material, size, color, hsn, gst,
-                        price_india, price_india_suggested, itemprice, finalprice,
+                        price_india, price_india_suggested, itemprice, finalprice, mrp_india,
                         product_weight, product_weight_unit,
                         prod_height, prod_width, prod_length, length_unit
                  FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
@@ -932,6 +956,14 @@ class POSRegisterController
             }
         }
 
+        $mrpOut = $this->mergeMrpRupee($data, $dbRow);
+        if ($mrpOut <= 0 && $data2 !== null) {
+            $altMrp = $this->mergeMrpRupee($data2, $dbRow);
+            if ($altMrp > 0) {
+                $mrpOut = $altMrp;
+            }
+        }
+
         // echo '<pre>'; print_r($data['addon_options']); exit;
         $product = [
             'requested_code' => $code,
@@ -946,6 +978,7 @@ class POSRegisterController
             'color' => $this->mergeProductTextField($data['color'] ?? '', $dbRow['color'] ?? ''),
             'hsn' => $this->mergeProductTextField($data['hsn'] ?? '', $dbRow['hsn'] ?? ''),
             'gst_percent' => $this->mergeGstPercentField($data, $dbRow),
+            'mrp' => $mrpOut,
 
             //  NEW FIELDS (warehouse running stock when VP row + session warehouse match POS grid)
             'stock_qty' => $stockQtyOut,
