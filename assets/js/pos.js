@@ -24,6 +24,18 @@ $(function () {
     });
   }
 
+  /** Match POSRegisterController::fixImageUrl — relative paths must hit CDN, not the portal origin. */
+  function fixModalImageSrc(path) {
+    if (path == null || path === '') return '';
+    const s = String(path).trim();
+    if (!s) return '';
+    if (/^https?:\/\//i.test(s)) return s;
+    if (s.indexOf('//') === 0) return 'https:' + s;
+    return s.indexOf('/') === 0
+      ? 'https://cdn.exoticindia.com' + s
+      : 'https://cdn.exoticindia.com/' + s;
+  }
+
   function showLoader(show) {
     if (show) {
       if (!$('#productsLoader').length) {
@@ -40,6 +52,69 @@ $(function () {
     return (p.id != null && p.id !== '') ? `id:${p.id}` : `code:${p.item_code || ''}`;
   }
 
+  /** Prefer full variant SKU when present (e.g. ITEM--blue); fallback to item_code; then API-only code. */
+  function getLookupCode(p) {
+    if (!p) return '';
+    const sku = p.sku != null ? String(p.sku).trim() : '';
+    if (sku !== '') return sku;
+    const ic = p.item_code != null ? String(p.item_code).trim() : '';
+    if (ic !== '') return ic;
+    return p.requested_code != null ? String(p.requested_code).trim() : '';
+  }
+
+  function escapeRegExpStr(s) {
+    return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Main-site cart expects parent item_code + variation "size:color" for multi-SKU parents.
+   * Single-SKU rows use full SKU as code with empty variation.
+   */
+  function resolveCartPayload(p) {
+    const lookup = getLookupCode(p) || String(p.code || '').trim();
+    const icRaw = String(p.item_code || '').trim();
+
+    let size =
+      p.size != null && String(p.size).trim() !== '' && String(p.size).trim() !== '0'
+        ? String(p.size).trim()
+        : '';
+    let color =
+      p.color != null && String(p.color).trim() !== '' && String(p.color).trim() !== '0'
+        ? String(p.color).trim()
+        : '';
+
+    const multiVariant = icRaw !== '' && lookup !== '' && lookup !== icRaw;
+
+    if (!color && icRaw && lookup) {
+      try {
+        const re = new RegExp('^' + escapeRegExpStr(icRaw) + '--(.+)$', 'i');
+        const m = lookup.match(re);
+        if (m) color = m[1].trim();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
+    let variation = '';
+    if (!size && color) variation = ':' + color;
+    else if (size && !color) variation = size + ':';
+    else if (size && color) variation = size + ':' + color;
+
+    if (!variation && color) variation = ':' + color;
+
+    let cartCode = multiVariant ? icRaw : lookup;
+    let variationOut = variation;
+
+    if (multiVariant && !variationOut) {
+      cartCode = lookup;
+      variationOut = '';
+    }
+
+    const stockCheckCode = lookup || icRaw || cartCode;
+
+    return { cartCode, variation: variationOut, stockCheckCode };
+  }
+
   function isMeaningful(val) {
     if (val === null || val === undefined) return false;
     const s = String(val).trim();
@@ -47,6 +122,119 @@ $(function () {
     const n = Number(s);
     if (!Number.isNaN(n) && n === 0) return false;
     return true;
+  }
+
+  function formatGstPercentForModal(raw) {
+    if (raw === null || raw === undefined) return '';
+    const s = String(raw).trim();
+    if (s === '' || s.toLowerCase() === 'n/a') return '';
+    const n = Number(s);
+    if (!Number.isNaN(n)) {
+      if (n === 0) return '0%';
+      return (Number.isInteger(n) ? String(n) : String(n)) + '%';
+    }
+    return s;
+  }
+
+  /** Money amount for display (includes 0; isMeaningful hides zero). */
+  function hasDisplayablePrice(val) {
+    if (val === null || val === undefined) return false;
+    const s = String(val).trim();
+    if (s === '' || s.toLowerCase() === 'n/a') return false;
+    const n = Number(s);
+    return !Number.isNaN(n);
+  }
+
+  /** API `dimensions` string, or L × W × H from VP columns. */
+  function formatMeasurementLine(p) {
+    if (!p) return '';
+    if (isMeaningful(p.dimensions)) return String(p.dimensions).replace(/\s+/g, ' ').trim();
+    const h = isMeaningful(p.prod_height) ? String(p.prod_height).trim() : '';
+    const w = isMeaningful(p.prod_width) ? String(p.prod_width).trim() : '';
+    const l = isMeaningful(p.prod_length) ? String(p.prod_length).trim() : '';
+    const u = isMeaningful(p.length_unit) ? String(p.length_unit).trim() : '';
+    const parts = [h, w, l].filter(Boolean);
+    if (!parts.length) return '';
+    const line = `${parts.join(' × ')}${u ? ' ' + u : ''}`;
+    return line.trim();
+  }
+
+  function fmtFloorQty(n) {
+    if (n === null || n === undefined || String(n).trim() === '') return '';
+    const x = Number(n);
+    if (Number.isNaN(x)) return '';
+    return String(Math.floor(x));
+  }
+
+  /** Prefer API kg; else VP `product_weight` + unit. */
+  function formatWeightLine(p) {
+    if (!p) return '';
+    if (isMeaningful(p.weight)) {
+      const w = String(p.weight).trim();
+      if (/kg|g|gram|lb|oz|mt|ton|ml|l\b/i.test(w)) return w;
+      return `${w} kg`;
+    }
+    const wt = isMeaningful(p.product_weight) ? String(p.product_weight).trim() : '';
+    const wtu = isMeaningful(p.product_weight_unit) ? String(p.product_weight_unit).trim() : '';
+    if (!wt) return '';
+    return wtu ? `${wt} ${wtu}` : wt;
+  }
+
+  function siblingHtmlEscape(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderSiblingSkusBlock(rows) {
+    const $wrap = $('#pmSiblingSkusWrapper');
+    const $list = $('#pmSiblingSkus');
+    if (!$wrap.length || !$list.length) return;
+    const list = Array.isArray(rows)
+      ? rows.filter(function (r) {
+        return r && String(r.sku || '').trim() !== '';
+      })
+      : [];
+    if (!list.length) {
+      $wrap.addClass('hidden');
+      $list.empty();
+      return;
+    }
+    $wrap.removeClass('hidden');
+    let html = '';
+    list.forEach(function (s) {
+      const sku = String(s.sku || '').trim();
+      html += `<button type="button" class="pm-sibling-sku-link inline-flex items-center rounded-lg border border-orange-100 bg-orange-50/80 px-2.5 py-1.5 text-left text-[10px] font-semibold text-orange-900 hover:bg-orange-100 transition" data-sibling-sku="${siblingHtmlEscape(sku)}">${siblingHtmlEscape(sku)}</button>`;
+    });
+    $list.html(html);
+  }
+
+  function loadSiblingSkusForProduct(p) {
+    if (Array.isArray(p.sibling_skus)) {
+      renderSiblingSkusBlock(p.sibling_skus);
+      return;
+    }
+    if (isMeaningful(p.item_code) && getLookupCode(p)) {
+      $.ajax({
+        url: '?page=pos_register&action=sibling-skus',
+        type: 'GET',
+        dataType: 'json',
+        data: {
+          item_code: String(p.item_code).trim(),
+          exclude_sku: getLookupCode(p)
+        }
+      })
+        .done(function (res) {
+          renderSiblingSkusBlock(res.data || []);
+        })
+        .fail(function () {
+          renderSiblingSkusBlock([]);
+        });
+      return;
+    }
+    renderSiblingSkusBlock([]);
   }
 
   function addRow(label, value) {
@@ -70,6 +258,8 @@ $(function () {
   const $pmQtyVal = $('#pmQtyVal');
 
   let activeModalKey = null;
+  /** When set from `stock_qty`, qty controls cannot exceed this (warehouse running stock). */
+  let modalWarehouseMaxQty = null;
 
   function openModal() {
     $modal.removeClass('hidden');
@@ -80,31 +270,94 @@ $(function () {
     $modal.addClass('hidden');
     $('body').removeClass('overflow-hidden');
     activeModalKey = null;
+    modalWarehouseMaxQty = null;
+    $('#pmQtyMaxHint').text('');
+    $('#pmSiblingSkus').empty();
+    $('#pmSiblingSkusWrapper').addClass('hidden');
+    $('#modal_stock_check_code').val('');
+    $('#pmQtySummary').empty().addClass('hidden');
+    $('#pmModalPrice').addClass('hidden').text('');
   }
 
   $overlay.on('click', closeModal);
   $close.on('click', closeModal);
   $closeBtn.on('click', closeModal);
+
+  function updateModalQtyUiState() {
+    const max = modalWarehouseMaxQty;
+    const q = getModalQty();
+    const $submit = $('#productModal').find('form[action*="cart-add"] button[type="submit"]');
+
+    if (typeof max === 'number' && max === 0) {
+      $submit.prop('disabled', true).addClass('opacity-50');
+      $pmQtyInc.prop('disabled', true);
+      $pmQtyDec.prop('disabled', true);
+    } else if (typeof max === 'number' && max > 0) {
+      $submit.prop('disabled', false).removeClass('opacity-50');
+      $pmQtyInc.prop('disabled', q >= max);
+      $pmQtyDec.prop('disabled', q <= 1);
+    } else {
+      $submit.prop('disabled', false).removeClass('opacity-50');
+      $pmQtyInc.prop('disabled', false);
+      $pmQtyDec.prop('disabled', q <= 1);
+    }
+  }
+
   function setModalQty(qty) {
-    const q = Math.max(1, parseInt(qty || 1, 10));
+    let raw = qty;
+    if (typeof raw === 'string') raw = parseInt(raw, 10);
+    let q = Number.isFinite(raw) ? raw : NaN;
+    const max = modalWarehouseMaxQty;
 
-    $pmQtyVal.text(q);
+    if (typeof max === 'number' && max >= 0) {
+      if (max === 0) {
+        q = 0;
+      } else {
+        if (!Number.isFinite(q) || q < 1) q = 1;
+        q = Math.min(q, max);
+      }
+    } else if (!Number.isFinite(q) || q < 1) {
+      q = 1;
+    }
 
-    // IMPORTANT: update hidden field
+    $pmQtyVal.text(String(q));
     $('#modal_qty').val(q);
-
+    updateModalQtyUiState();
   }
 
   function getModalQty() {
-    return Math.max(1, parseInt($pmQtyVal.text() || '1', 10));
+    const n = parseInt(String($pmQtyVal.text()).trim(), 10);
+    return Number.isFinite(n) ? n : 1;
   }
 
   $pmQtyDec.on('click', function () {
+    const max = modalWarehouseMaxQty;
+    if (typeof max === 'number' && max === 0) return;
     setModalQty(getModalQty() - 1);
   });
 
   $pmQtyInc.on('click', function () {
-    setModalQty(getModalQty() + 1);
+    const max = modalWarehouseMaxQty;
+    const cur = getModalQty();
+    if (typeof max === 'number' && max > 0 && cur >= max) return;
+    setModalQty(cur + 1);
+  });
+
+  $('#productModal').find('form[action*="cart-add"]').on('submit', function (e) {
+    const max = modalWarehouseMaxQty;
+    const q = parseInt(String($('#modal_qty').val()), 10);
+    const qtyNum = Number.isFinite(q) ? q : 0;
+    if (typeof max === 'number' && max >= 0) {
+      if (max === 0 || qtyNum > max) {
+        e.preventDefault();
+        alert(
+          max === 0
+            ? 'Out of stock in this warehouse.'
+            : 'Maximum quantity available is ' + max + '.'
+        );
+        return false;
+      }
+    }
   });
 
   function renderProductModal(p, key) {
@@ -114,18 +367,32 @@ $(function () {
     const title = (p.title || '').replace(/\s+/g, ' ').trim();
     $('#pmTitle').text(title || 'Product');
 
-    const imgSrc = p.image || 'https://dummyimage.com/500x500/e5e7eb/6b7280&text=No+Image';
+    const imgSrc =
+      fixModalImageSrc(p.image) ||
+      'https://dummyimage.com/500x500/e5e7eb/6b7280&text=No+Image';
     $('#pmImage').attr('src', imgSrc).attr('alt', title || 'Product');
-    $('#modal_product_code').val(p.item_code || p.code || p.id || '');
 
-    //  SET QTY
-    setModalQty(1);
+    const sqRaw = p.stock_qty;
+    modalWarehouseMaxQty = null;
+    if (sqRaw !== null && sqRaw !== undefined && String(sqRaw).trim() !== '') {
+      const n = Number(sqRaw);
+      if (!Number.isNaN(n)) {
+        modalWarehouseMaxQty = Math.max(0, Math.floor(n));
+      }
+    }
+    const $hint = $('#pmQtyMaxHint');
+    if ($hint.length) {
+      $hint.text(
+        modalWarehouseMaxQty !== null && modalWarehouseMaxQty >= 0
+          ? modalWarehouseMaxQty > 0
+            ? `(max ${modalWarehouseMaxQty})`
+            : '(out of stock)'
+          : ''
+      );
+    }
 
-    // SET VARIATION (FINAL FIX)
-    let size = (p.size && p.size !== '0') ? String(p.size).trim() : '';
-    let color = (p.color && p.color !== '0') ? String(p.color).trim() : '';
+    setModalQty(modalWarehouseMaxQty === 0 ? 0 : 1);
 
-    let variation = '';
     //  ADDONS UI (FINAL CLEAN)
 
     let addons = [];
@@ -186,33 +453,28 @@ $(function () {
       $('#pmAddonsWrapper').addClass('hidden');
       $('#pmAddons').html('');
     }
-    // build variation properly
-    if (!size && color) {
-      variation = ':' + color;
-    } else if (size && !color) {
-      variation = size + ':';
-    } else if (size && color) {
-      variation = size + ':' + color;
-    }
 
-    // fallback (VERY IMPORTANT for your case)
-    if (!variation && p.color) {
-      variation = ':' + p.color;
-    }
-
-    // final set
-    $('#modal_variation').val(variation);
-
+    const cp = resolveCartPayload(p);
+    $('#modal_product_code').val(cp.cartCode || String(p.code || p.id || ''));
+    $('#modal_variation').val(cp.variation);
+    $('#modal_stock_check_code').val(cp.stockCheckCode);
 
     const badges = [];
+    const icRaw = isMeaningful(p.item_code) ? String(p.item_code).trim() : '';
+    const skuRaw = isMeaningful(p.sku) ? String(p.sku).trim() : '';
 
-    if (isMeaningful(p.item_code)) {
-      badges.push(`<span class="rounded-md bg-orange-100 px-2 py-1 text-[10px] text-orange-700">Code: ${p.item_code}</span>`);
-    }
-
-    // SKU = same as code (your API)
-    if (isMeaningful(p.item_code)) {
-      badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${p.item_code}</span>`);
+    if (icRaw && skuRaw && icRaw !== skuRaw) {
+      badges.push(`<span class="rounded-md bg-orange-100 px-2 py-1 text-[10px] text-orange-700">Item code: ${icRaw}</span>`);
+      badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${skuRaw}</span>`);
+    } else if (skuRaw) {
+      badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${skuRaw}</span>`);
+    } else if (icRaw) {
+      badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${icRaw}</span>`);
+    } else {
+      const fallback = getLookupCode(p);
+      if (fallback) {
+        badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${fallback}</span>`);
+      }
     }
 
     //  MAIN CATEGORY (RIGHT SIDE STYLE)
@@ -220,8 +482,8 @@ $(function () {
       badges.push(`<span class="rounded-md bg-gray-100 px-2 py-1 text-[10px] text-gray-700 capitalize">${p.maincategory}</span>`);
     }
 
-    //  STOCK
-    if (isMeaningful(p.stock_qty)) {
+    //  STOCK (include 0 — isMeaningful treats 0 as empty)
+    if (p.stock_qty != null && String(p.stock_qty).trim() !== '' && !Number.isNaN(Number(p.stock_qty))) {
       badges.push(`<span class="rounded-md bg-green-100 px-2 py-1 text-[10px] text-green-700">Stock: ${p.stock_qty}</span>`);
     }
 
@@ -229,36 +491,44 @@ $(function () {
 
     let html = '';
 
-    if (isMeaningful(p.price)) {
-      html += addRow('Price', `₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    const measurementLine = formatMeasurementLine(p);
+    if (measurementLine) {
+      html += addRow('Measurements', measurementLine);
     }
 
-    //  DIMENSIONS
-    if (isMeaningful(p.dimensions)) {
-      html += addRow('Dimensions', p.dimensions);
+    const weightLine = formatWeightLine(p);
+    if (weightLine) {
+      html += addRow('Weight', weightLine);
     }
 
-    //  WEIGHT
-    if (isMeaningful(p.weight)) {
-      html += addRow('Weight', p.weight + ' kg');
+    if (isMeaningful(p.warehouse_location)) {
+      html += addRow('Location', String(p.warehouse_location).replace(/\s+/g, ' ').trim());
     }
-    if (isMeaningful(p.hsn)) html += addRow('HSN', p.hsn);
-    if (isMeaningful(p.color)) html += addRow('Color', p.color);
-    if (isMeaningful(p.size)) html += addRow('Size', p.size);
-    if (isMeaningful(p.material)) html += addRow('Material', p.material);
 
-    const wt = isMeaningful(p.product_weight) ? p.product_weight : null;
-    const wtu = isMeaningful(p.product_weight_unit) ? p.product_weight_unit : '';
-    if (wt) html += addRow('Weight', `${wt} ${wtu}`.trim());
+    if (isMeaningful(p.hsn)) {
+      html += addRow('HSN Code', String(p.hsn).replace(/\s+/g, ' ').trim());
+    }
 
-    const h = isMeaningful(p.prod_height) ? p.prod_height : null;
-    const w = isMeaningful(p.prod_width) ? p.prod_width : null;
-    const l = isMeaningful(p.prod_length) ? p.prod_length : null;
-    const dimUnit = isMeaningful(p.length_unit) ? p.length_unit : '';
+    const gstPct = formatGstPercentForModal(p.gst_percent);
+    if (gstPct !== '') {
+      html += addRow('GST %', gstPct);
+    }
 
-    if (h || w || l) {
-      const parts = [h, w, l].filter(v => isMeaningful(v));
-      html += addRow('Dimensions', `${parts.join(' × ')} ${dimUnit}`.trim());
+    if (hasDisplayablePrice(p.mrp)) {
+      html += addRow(
+        'MRP',
+        `₹ ${Number(p.mrp).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      );
+    }
+
+    if (isMeaningful(p.size)) {
+      html += addRow('Size', String(p.size).replace(/\s+/g, ' ').trim());
+    }
+    if (isMeaningful(p.color)) {
+      html += addRow('Color', String(p.color).replace(/\s+/g, ' ').trim());
+    }
+    if (isMeaningful(p.material)) {
+      html += addRow('Material', String(p.material).replace(/\s+/g, ' ').trim());
     }
 
     if (!html) {
@@ -266,8 +536,82 @@ $(function () {
     }
 
     $('#pmDetails').html(html);
-    setModalQty(1);
+
+    const $pmPrice = $('#pmModalPrice');
+    if ($pmPrice.length) {
+      if (hasDisplayablePrice(p.price)) {
+        $pmPrice
+          .removeClass('hidden')
+          .text(
+            `₹ ${Number(p.price).toLocaleString('en-IN', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}`
+          );
+      } else {
+        $pmPrice.addClass('hidden').text('');
+      }
+    }
+
+    renderQtySummaryUnderInput(p);
+
+    loadSiblingSkusForProduct(p);
   }
+
+  function renderQtySummaryUnderInput(p) {
+    const $wrap = $('#pmQtySummary');
+    if (!$wrap.length) return;
+    $wrap.empty();
+    let lines = 0;
+
+    const whName = String(
+      p.current_warehouse_name || $('#productModal').data('posWarehouse') || ''
+    ).trim();
+
+    // Current POS warehouse (session) — matches Stock badge qty
+    if (
+      p.stock_qty != null &&
+      String(p.stock_qty).trim() !== '' &&
+      !Number.isNaN(Number(p.stock_qty))
+    ) {
+      const label =
+        whName !== '' ? 'Total Qty at (' + whName + '): ' : 'Total Qty: ';
+      $wrap.append(
+        $('<div/>').append(
+          $('<span/>').text(label),
+          $('<span class="font-semibold text-gray-800"/>').text(fmtFloorQty(p.stock_qty))
+        )
+      );
+      lines++;
+    }
+
+    // Default warehouse from exotic_address.is_default
+    if (
+      p.default_store_qty != null &&
+      String(p.default_store_qty).trim() !== '' &&
+      !Number.isNaN(Number(p.default_store_qty))
+    ) {
+      const dn = p.default_store_name ? String(p.default_store_name).trim() : '';
+      if (dn !== '') {
+        $wrap.append(
+          $('<div/>').append(
+            $('<span/>').text('Qty at (' + dn + '): '),
+            $('<span class="font-semibold text-gray-800"/>').text(fmtFloorQty(p.default_store_qty))
+          )
+        );
+        lines++;
+      }
+    }
+
+    $wrap.toggleClass('hidden', lines === 0);
+  }
+
+  $(document).on('click', '.pm-sibling-sku-link', function (e) {
+    e.preventDefault();
+    const sku = $(this).attr('data-sibling-sku');
+    if (!sku) return;
+    openProductModalByCode(String(sku));
+  });
 
   // ────────────────────────────────────────────────
   // PRODUCTS RENDERING + FETCH (unchanged)
@@ -298,10 +642,11 @@ $(function () {
       const imgSrc = p.image || 'https://dummyimage.com/200x200/e5e7eb/6b7280&text=No+Image';
       const safeTitle = (p.title || 'Product').replace(/"/g, '&quot;');
 
+      const lookupCode = getLookupCode(p);
       const cardHtml = `
         <div class="product-card cursor-pointer rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition"
              data-pkey="${key}"
-data-code="${p.item_code}">
+data-code="${lookupCode}">
           <div class="bg-gray-50 p-2">
             <img src="${imgSrc}" alt="${safeTitle}"
                  class="mx-auto h-56 lg:h-52 xl:h-48 object-contain" />
@@ -312,14 +657,11 @@ data-code="${p.item_code}">
               ${(p.title || '').replace(/\s+/g, ' ').trim()}
             </div>
 
-            <div class="mt-2 flex items-center gap-1 whitespace-nowrap">
+            <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
               <span class="rounded-md bg-orange-100 px-1.5 py-0.5 text-[9px] text-orange-700">
-                ${p.item_code || ''}
+                ${lookupCode || ''}
               </span>
-              <span class="rounded-md bg-green-100 px-1.5 py-0.5 text-[9px] text-green-700">
-                Stock : ${p.stock_qty != null ? p.stock_qty : '-'}
-              </span>
-              <span class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[9px] text-gray-700">
+              <span class="text-base font-semibold tracking-tight text-gray-900">
                 ${formatPrice(p.price)}
               </span>
             </div>
@@ -452,6 +794,7 @@ data-code="${p.item_code}">
     //  LOADING STATE
     $('#pmTitle').text('Loading...');
     $('#pmDetails').html('Loading...');
+    $('#pmModalPrice').addClass('hidden').text('');
 
     $.ajax({
       url: '?page=pos_register&action=get-product-api',
@@ -472,10 +815,10 @@ data-code="${p.item_code}">
     const productId = product.id != null ? String(product.id) : '';
     const itemCode = product.item_code != null ? String(product.item_code) : '';
     const sku = product.sku != null ? String(product.sku) : '';
-    const codeForPopup = itemCode || sku;
+    const codeForPopup = sku || itemCode;
     if (!codeForPopup) return;
     const url = '?page=pos_register&action=product-availability'
-      + (productId ? ('&product_id=' + encodeURIComponent(productId)) : ('&q=' + encodeURIComponent(itemCode || sku)));
+      + (productId ? ('&product_id=' + encodeURIComponent(productId)) : ('&q=' + encodeURIComponent(codeForPopup)));
     fetch(url, {
       credentials: 'same-origin',
       headers: { 'Accept': 'application/json' }
@@ -494,7 +837,7 @@ data-code="${p.item_code}">
   function renderModalData(p) {
 
     $('#pmTitle').text(p.title || 'Product');
-    $('#pmImage').attr('src', p.image || '');
+    $('#pmImage').attr('src', fixModalImageSrc(p.image) || '');
 
     $('#pmDetails').html(`
         <div>Price</div><div>:</div><div>₹ ${p.price || 0}</div>
@@ -503,13 +846,15 @@ data-code="${p.item_code}">
         <div>Color</div><div>:</div><div>${p.color || '-'}</div>
     `);
 
-    $('#modal_product_code').val(p.item_code || '');
+    const cpMd = resolveCartPayload(p);
+    $('#modal_product_code').val(cpMd.cartCode || String(p.code || ''));
+    $('#modal_variation').val(cpMd.variation);
+    $('#modal_stock_check_code').val(cpMd.stockCheckCode);
 
     // ADDONS
     let addonsHtml = '';
 
     if (p.addon_options) {
-      alert("sdsdsdsd")
       p.addon_options.default_options.forEach(opt => {
         addonsHtml += `
                 <label class="flex justify-between border px-3 py-2 rounded-lg">

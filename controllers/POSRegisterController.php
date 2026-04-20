@@ -311,49 +311,727 @@ class POSRegisterController
     }
     function fixImageUrl($path)
     {
-        if (!$path) return '';
+        if ($path === null || $path === '') {
+            return '';
+        }
 
-        //  already full URL
+        $path = trim((string)$path);
+        if ($path === '') {
+            return '';
+        }
+        // Protocol-relative URL
+        if (strpos($path, '//') === 0) {
+            return 'https:' . $path;
+        }
+        // Already absolute
         if (strpos($path, 'http') === 0) {
             return $path;
         }
 
-        //  relative path → convert to CDN
-        return 'https://cdn.exoticindia.com' . $path;
+        // Relative path → CDN (ensure single slash join)
+        $suffix = $path[0] === '/' ? $path : '/' . $path;
+        return 'https://cdn.exoticindia.com' . $suffix;
     }
+
+    /**
+     * Product API sometimes returns fields at the root or under a nested "data" object.
+     */
+    private function unwrapProductApiResponse(array $data): array
+    {
+        if (!empty($data['data']) && is_array($data['data'])) {
+            $inner = $data['data'];
+            unset($data['data']);
+            // Wrapper keys first; nested product object wins on conflicts (non-empty image/name).
+            return array_merge($data, $inner);
+        }
+        return $data;
+    }
+
+    /** Prefer cleaned API text; fallback to VP row when upstream is empty. */
+    private function mergeProductTextField($apiRaw, $dbRaw): string
+    {
+        $fromApi = $this->cleanValue(is_string($apiRaw) ? $apiRaw : '');
+        if ($fromApi !== '') {
+            return $fromApi;
+        }
+        return trim((string)$dbRaw);
+    }
+
+    /** GST % for POS: prefer API gst_rate / gst_percent / gst, else vp_products.gst. */
+    private function mergeGstPercentField(array $apiData, array $dbRow): string
+    {
+        foreach (['gst_rate', 'gst_percent', 'gst'] as $k) {
+            if (!array_key_exists($k, $apiData)) {
+                continue;
+            }
+            $v = $apiData[$k];
+            if ($v === null || $v === '') {
+                continue;
+            }
+            if (is_string($v)) {
+                $v = preg_replace('/\s*%?\s*$/', '', trim($v));
+            }
+            if (is_numeric($v)) {
+                $f = (float)$v;
+
+                return $f == (int)$f ? (string)(int)$f : rtrim(rtrim(sprintf('%.4f', $f), '0'), '.');
+            }
+        }
+
+        return trim((string)($dbRow['gst'] ?? ''));
+    }
+
+    /** India MRP (₹): prefer API keys, then vp_products.mrp_india. */
+    private function mergeMrpRupee(array $apiData, array $dbRow): float
+    {
+        foreach (['mrp_india', 'mrp', 'max_retail_price', 'list_price', 'mrp_inr'] as $k) {
+            if (!array_key_exists($k, $apiData)) {
+                continue;
+            }
+            $v = $apiData[$k];
+            if ($v === null || $v === '') {
+                continue;
+            }
+            if (is_numeric($v)) {
+                $f = (float)$v;
+                if ($f > 0) {
+                    return $f;
+                }
+            }
+        }
+
+        $db = isset($dbRow['mrp_india']) ? (float)$dbRow['mrp_india'] : 0.0;
+
+        return $db > 0 ? $db : 0.0;
+    }
+
+    /** Resolved GST percent for pricing (same rules as gst_percent label). Returns 0 when unknown. */
+    private function resolveGstPercentAsNumber(array $apiData, array $dbRow): float
+    {
+        $s = trim($this->mergeGstPercentField($apiData, $dbRow));
+        if ($s === '') {
+            return 0.0;
+        }
+        $n = (float)$s;
+
+        return $n > 0 ? $n : 0.0;
+    }
+
+    /** Multiply unit price by (1 + GST%/100); base is treated as taxable value when GST % is present. */
+    private function applyGstInclusiveToUnitPrice(float $base, array $dbRow, array $apiData = []): float
+    {
+        if ($base <= 0) {
+            return $base;
+        }
+        $pct = $this->resolveGstPercentAsNumber($apiData, $dbRow);
+        if ($pct <= 0) {
+            return $base;
+        }
+
+        return round($base * (1 + $pct / 100), 2);
+    }
+
+    /** First positive amount from named keys on an API payload (same keys used elsewhere for catalog sync). */
+    private function pickPositivePriceFromApiArray(array $data): float
+    {
+        foreach (['price_india', 'price_india_suggested', 'price', 'itemprice', 'finalprice'] as $k) {
+            if (!array_key_exists($k, $data)) {
+                continue;
+            }
+            $v = $data[$k];
+            if ($v === null || $v === '') {
+                continue;
+            }
+            $f = (float)$v;
+            if ($f > 0) {
+                return $f;
+            }
+        }
+
+        return 0.0;
+    }
+
+    /** POS uses India retail when present (vp_products.price_india), else API / itemprice. */
+    private function mergeSellingPrice(array $apiData, array $dbRow): float
+    {
+        $fromApi = $this->pickPositivePriceFromApiArray($apiData);
+        if ($fromApi > 0) {
+            return $fromApi;
+        }
+        foreach (['price_india', 'price_india_suggested', 'finalprice', 'itemprice'] as $k) {
+            if (empty($dbRow[$k])) {
+                continue;
+            }
+            $f = (float)$dbRow[$k];
+            if ($f > 0) {
+                return $f;
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * India retail unit price from vp_products for a cart/API product code (sku or item_code).
+     */
+    private function resolveIndiaSellPriceFromVp($conn, string $code): float
+    {
+        if ($code === '' || !$conn) {
+            return 0.0;
+        }
+        $stmt = $conn->prepare(
+            'SELECT price_india, price_india_suggested, finalprice, itemprice, gst
+             FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return 0.0;
+        }
+        $stmt->bind_param('ss', $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) {
+            return 0.0;
+        }
+        foreach (['price_india', 'price_india_suggested', 'finalprice', 'itemprice'] as $k) {
+            $f = (float)($row[$k] ?? 0);
+            if ($f > 0) {
+                return $this->applyGstInclusiveToUnitPrice($f, $row, []);
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Addon list from /product/code (unwrapped), including express row for cart_entry matching.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function productApiAddonCatalogList(array $productApiResult): array
+    {
+        $data = $this->unwrapProductApiResponse($productApiResult['data'] ?? []);
+        $opts = [];
+        if (!empty($data['addon_options']['default_options']) && is_array($data['addon_options']['default_options'])) {
+            $opts = $data['addon_options']['default_options'];
+        }
+        if (!empty($data['express_shipping_option']['price'])) {
+            $eso = $data['express_shipping_option'];
+            $opts[] = [
+                'title' => $eso['title'] ?? '',
+                'price' => (float)($eso['price'] ?? 0),
+                'cart_entry' => trim((string)($eso['cart_entry'] ?? '')),
+            ];
+        }
+
+        return $opts;
+    }
+
+    /**
+     * Sum addon unit prices by matching selected cart_entry strings to catalog rows (same as POS modal).
+     */
+    private function sumAddonPricesFromCatalogMatches(array $selectedEntries, array $catalogAddons): float
+    {
+        $sum = 0.0;
+        foreach ($selectedEntries as $se) {
+            $se = trim((string)$se);
+            if ($se === '') {
+                continue;
+            }
+            foreach ($catalogAddons as $opt) {
+                $ce = trim((string)($opt['cart_entry'] ?? ''));
+                if ($ce !== '' && strcasecmp($ce, $se) === 0) {
+                    $sum += (float)($opt['price'] ?? 0);
+                    break;
+                }
+            }
+        }
+
+        return $sum;
+    }
+
+    /**
+     * Express shipping is billed as an add-on in the UI but cart/retrieve may omit it from addons_selected;
+     * merge per-unit express cost into the addon sum without double-counting catalog / addons rows.
+     */
+    private function mergeExpressShippingIntoAddonUnitSum(
+        float $addonsSumPerUnit,
+        array $addons,
+        array $selectedEntries,
+        array $allAddons,
+        bool $expressSelected,
+        float $shippingPerUnit
+    ): float {
+        if (!$expressSelected || $shippingPerUnit <= 0) {
+            return $addonsSumPerUnit;
+        }
+
+        $expressCounted = 0.0;
+        foreach ($addons as $a) {
+            if (stripos((string)($a['name'] ?? ''), 'Express') !== false) {
+                $expressCounted += (float)($a['value'] ?? 0);
+            }
+        }
+        foreach ($allAddons as $opt) {
+            if (stripos((string)($opt['title'] ?? ''), 'express') === false) {
+                continue;
+            }
+            $ce = trim((string)($opt['cart_entry'] ?? ''));
+            if ($ce === '') {
+                continue;
+            }
+            foreach ($selectedEntries as $se) {
+                if (strcasecmp($ce, trim((string)$se)) === 0) {
+                    $expressCounted += (float)($opt['price'] ?? 0);
+                    break;
+                }
+            }
+        }
+
+        if ($expressCounted < $shippingPerUnit - 0.0001) {
+            return $addonsSumPerUnit + ($shippingPerUnit - $expressCounted);
+        }
+
+        return $addonsSumPerUnit;
+    }
+
+    /** First usable image path/URL from a /product/code JSON payload. */
+    private function pickRawImageFromProductApiArray(array $data): string
+    {
+        foreach (['image', 'image_url', 'thumbnail', 'thumb', 'imageurl'] as $k) {
+            if (!empty($data[$k]) && is_string($data[$k])) {
+                $v = trim($data[$k]);
+                if ($v !== '') {
+                    return $v;
+                }
+            }
+        }
+        return '';
+    }
+
+    private function resolveVpProductIdByCode($conn, string $code): int
+    {
+        if ($code === '' || !$conn) {
+            return 0;
+        }
+        $stmt = $conn->prepare(
+            'SELECT id FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('ss', $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return !empty($row['id']) ? (int)$row['id'] : 0;
+    }
+
+    /**
+     * Latest movement row for product + warehouse (same join as POS stock): qty + bin/shelf location.
+     *
+     * @return array{running_stock: float, location: string}
+     */
+    private function getWarehouseStockSnapshotForProductId($conn, int $productId, int $warehouseId): array
+    {
+        $empty = ['running_stock' => 0.0, 'location' => ''];
+        if ($productId <= 0 || $warehouseId <= 0 || !$conn) {
+            return $empty;
+        }
+        $sql = '
+            SELECT sm.running_stock, sm.location
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE warehouse_id = ?
+                GROUP BY product_id
+            ) latest ON latest.product_id = sm.product_id AND latest.max_id = sm.id
+            WHERE sm.warehouse_id = ? AND sm.product_id = ?
+            LIMIT 1';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return $empty;
+        }
+        $stmt->bind_param('iii', $warehouseId, $warehouseId, $productId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row || !array_key_exists('running_stock', $row)) {
+            return $empty;
+        }
+
+        return [
+            'running_stock' => (float)$row['running_stock'],
+            'location' => trim((string)($row['location'] ?? '')),
+        ];
+    }
+
+    /** Latest running_stock for one SKU at one warehouse (same basis as POS product grid). */
+    private function getWarehouseStockForProductId($conn, int $productId, int $warehouseId): float
+    {
+        return $this->getWarehouseStockSnapshotForProductId($conn, $productId, $warehouseId)['running_stock'];
+    }
+
+    /** Sum of latest running_stock per warehouse for this product (all locations). */
+    private function getTotalStockAcrossWarehouses($conn, int $productId): float
+    {
+        if ($productId <= 0 || !$conn) {
+            return 0.0;
+        }
+        $sql = '
+            SELECT COALESCE(SUM(sm.running_stock), 0) AS t
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT warehouse_id, product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE product_id = ?
+                GROUP BY warehouse_id, product_id
+            ) latest ON sm.warehouse_id = latest.warehouse_id
+                AND sm.product_id = latest.product_id
+                AND sm.id = latest.max_id
+            WHERE sm.product_id = ?';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return 0.0;
+        }
+        $stmt->bind_param('ii', $productId, $productId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return isset($row['t']) ? (float)$row['t'] : 0.0;
+    }
+
+    /** Default warehouse row from exotic_address (POS / GRN “default store”). */
+    private function getDefaultWarehouseRow($conn): ?array
+    {
+        if (!$conn) {
+            return null;
+        }
+        $stmt = $conn->prepare(
+            'SELECT id, address_title FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (empty($row['id'])) {
+            return null;
+        }
+
+        return [
+            'id' => (int)$row['id'],
+            'address_title' => trim((string)($row['address_title'] ?? '')),
+        ];
+    }
+
+    /**
+     * @return string|null Error message, or null if OK / validation skipped (no VP row / no warehouse).
+     */
+    private function validateQtyAgainstWarehouse($conn, string $code, int $qty): ?string
+    {
+        if ($qty < 1) {
+            return null;
+        }
+        $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            return null;
+        }
+        $pid = $this->resolveVpProductIdByCode($conn, trim($code));
+        if ($pid <= 0) {
+            return null;
+        }
+        $avail = $this->getWarehouseStockForProductId($conn, $pid, $warehouseId);
+        $maxAllowed = (int)floor($avail);
+        if ($qty > $maxAllowed) {
+            return 'Quantity cannot exceed available stock in this warehouse (' . $maxAllowed . ' available).';
+        }
+
+        return null;
+    }
+
+    /**
+     * Other VP rows with the same item_code (excluding the opened variant), with warehouse stock when available.
+     *
+     * @return array<int, array{id:int, sku:string, title:string, stock_qty:float|int}>
+     */
+    private function fetchSiblingSkusByItemCode($conn, string $itemCode, string $excludeSku, int $warehouseId): array
+    {
+        if ($itemCode === '' || !$conn || $excludeSku === '') {
+            return [];
+        }
+
+        if ($warehouseId <= 0) {
+            $sql = 'SELECT id, sku, title, 0 AS stock_qty
+                    FROM vp_products
+                    WHERE is_active = 1 AND item_code = ? AND sku <> ?
+                    ORDER BY sku ASC';
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                return [];
+            }
+            $stmt->bind_param('ss', $itemCode, $excludeSku);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $out = [];
+            while ($row = $res->fetch_assoc()) {
+                $out[] = [
+                    'id' => (int)($row['id'] ?? 0),
+                    'sku' => (string)($row['sku'] ?? ''),
+                    'title' => (string)($row['title'] ?? ''),
+                    'stock_qty' => (float)($row['stock_qty'] ?? 0),
+                ];
+            }
+            $stmt->close();
+
+            return $out;
+        }
+
+        $sql = '
+            SELECT p.id, p.sku, p.title, COALESCE(sm.running_stock, 0) AS stock_qty
+            FROM vp_products p
+            LEFT JOIN (
+                SELECT sm1.product_id, sm1.running_stock
+                FROM vp_stock_movements sm1
+                INNER JOIN (
+                    SELECT product_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE warehouse_id = ?
+                    GROUP BY product_id
+                ) latest ON latest.product_id = sm1.product_id AND latest.max_id = sm1.id
+                WHERE sm1.warehouse_id = ?
+            ) sm ON sm.product_id = p.id
+            WHERE p.is_active = 1 AND p.item_code = ? AND p.sku <> ?
+            ORDER BY p.sku ASC';
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('iiss', $warehouseId, $warehouseId, $itemCode, $excludeSku);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $out = [];
+        while ($row = $res->fetch_assoc()) {
+            $out[] = [
+                'id' => (int)($row['id'] ?? 0),
+                'sku' => (string)($row['sku'] ?? ''),
+                'title' => (string)($row['title'] ?? ''),
+                'stock_qty' => (float)($row['stock_qty'] ?? 0),
+            ];
+        }
+        $stmt->close();
+
+        return $out;
+    }
+
+    public function siblingSkusAjax(): void
+    {
+        ob_clean();
+        header('Content-Type: application/json');
+
+        $itemCode = isset($_GET['item_code']) ? trim((string)$_GET['item_code']) : '';
+        $excludeSku = isset($_GET['exclude_sku']) ? trim((string)$_GET['exclude_sku']) : '';
+        global $conn;
+        $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+
+        echo json_encode([
+            'data' => $this->fetchSiblingSkusByItemCode($conn, $itemCode, $excludeSku, $warehouseId),
+        ]);
+        exit;
+    }
+
     public function getProductApi()
     {
-        $code = $_GET['code'] ?? '';
+        $code = isset($_GET['code']) ? trim((string)$_GET['code']) : '';
 
-        if (empty($code)) {
+        if ($code === '') {
             echo json_encode(['status' => false]);
             exit;
         }
 
+        global $conn;
+        $dbItemCode = '';
+        $dbSku = '';
+        $dbImageRaw = '';
+        $dbRow = [];
+        if (!empty($conn)) {
+            $stmt = $conn->prepare(
+                'SELECT id, item_code, sku, title, image, material, size, color, hsn, gst,
+                        price_india, price_india_suggested, itemprice, finalprice, mrp_india,
+                        product_weight, product_weight_unit,
+                        prod_height, prod_width, prod_length, length_unit
+                 FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('ss', $code, $code);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($row) {
+                    $dbRow = $row;
+                    $dbItemCode = trim((string)($row['item_code'] ?? ''));
+                    $dbSku = trim((string)($row['sku'] ?? ''));
+                    $dbImageRaw = trim((string)($row['image'] ?? ''));
+                }
+            }
+        }
+
         $res = $this->exotic_api_call('/product/code', 'GET', ['code' => $code]);
 
-        $data = $res['data'] ?? [];
+        $data = $this->unwrapProductApiResponse($res['data'] ?? []);
+        $apiImageRaw = $this->pickRawImageFromProductApiArray($data);
+        $imageResolved = $this->fixImageUrl($apiImageRaw);
+        $imageFromDb = $this->fixImageUrl($dbImageRaw);
+
+        if ($imageResolved === '' && $imageFromDb !== '') {
+            $imageResolved = $imageFromDb;
+        }
+
+        $data2 = null;
+        // Variant SKU may return no image from upstream; retry with base item_code.
+        if (
+            $imageResolved === ''
+            && $dbItemCode !== ''
+            && strcasecmp($dbItemCode, $code) !== 0
+        ) {
+            $res2 = $this->exotic_api_call('/product/code', 'GET', ['code' => $dbItemCode]);
+            $data2 = $this->unwrapProductApiResponse($res2['data'] ?? []);
+            $imageResolved = $this->fixImageUrl($this->pickRawImageFromProductApiArray($data2));
+        }
+
+        if ($imageResolved === '' && $imageFromDb !== '') {
+            $imageResolved = $imageFromDb;
+        }
+
+        $sellingPrice = $this->mergeSellingPrice($data, $dbRow);
+        if (
+            $sellingPrice <= 0
+            && $dbItemCode !== ''
+            && strcasecmp($dbItemCode, $code) !== 0
+        ) {
+            if ($data2 === null) {
+                $resPrice = $this->exotic_api_call('/product/code', 'GET', ['code' => $dbItemCode]);
+                $data2 = $this->unwrapProductApiResponse($resPrice['data'] ?? []);
+            }
+            $alt = $this->mergeSellingPrice($data2, $dbRow);
+            if ($alt > 0) {
+                $sellingPrice = $alt;
+            }
+        }
+
+        $gstApiForSell = $data;
+        if ($this->resolveGstPercentAsNumber($data, $dbRow) <= 0 && $data2 !== null) {
+            $gstApiForSell = $data2;
+        }
+        $sellingPrice = $this->applyGstInclusiveToUnitPrice($sellingPrice, $dbRow, $gstApiForSell);
+
+        $dimApi = $this->cleanValue($data['dimensions'] ?? '');
+        $dbH = isset($dbRow['prod_height']) ? trim((string)$dbRow['prod_height']) : '';
+        $dbW = isset($dbRow['prod_width']) ? trim((string)$dbRow['prod_width']) : '';
+        $dbL = isset($dbRow['prod_length']) ? trim((string)$dbRow['prod_length']) : '';
+        $dbLu = isset($dbRow['length_unit']) ? trim((string)$dbRow['length_unit']) : '';
+        $builtDbDims = '';
+        if ($dbH !== '' || $dbW !== '' || $dbL !== '') {
+            $builtDbDims = implode(' × ', array_filter([$dbH, $dbW, $dbL], static function ($x) {
+                return trim((string)$x) !== '';
+            }));
+            if ($builtDbDims !== '' && $dbLu !== '') {
+                $builtDbDims .= ' ' . $dbLu;
+            }
+        }
+        $dimensionsMerged = $dimApi !== '' ? $dimApi : $builtDbDims;
+
+        $wKgApi = trim((string)($data['product_weight_kg'] ?? ''));
+        $dbPw = isset($dbRow['product_weight']) ? trim((string)$dbRow['product_weight']) : '';
+        $dbPwu = isset($dbRow['product_weight_unit']) ? trim((string)$dbRow['product_weight_unit']) : '';
+
+        $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        $currentWarehouseName = '';
+        if ($warehouseId > 0 && !empty($conn)) {
+            require_once 'models/user/user.php';
+            $usersModel = new User($conn);
+            $whRow = $usersModel->getWarehouseById($warehouseId);
+            if (!empty($whRow)) {
+                $currentWarehouseName = trim((string)($whRow['address_title'] ?? ''));
+            }
+        }
+
+        $vpId = isset($dbRow['id']) ? (int)$dbRow['id'] : 0;
+        $warehouseLocationOut = '';
+        if ($vpId > 0 && $warehouseId > 0) {
+            $snap = $this->getWarehouseStockSnapshotForProductId($conn, $vpId, $warehouseId);
+            $stockQtyOut = $snap['running_stock'];
+            $warehouseLocationOut = $snap['location'];
+        } else {
+            $stockQtyOut = $data['stock'] ?? 0;
+        }
+
+        $siblingSkus = [];
+        if ($dbItemCode !== '') {
+            $siblingSkus = $this->fetchSiblingSkusByItemCode($conn, $dbItemCode, trim($code), $warehouseId);
+        }
+
+        $totalQtyAllWarehouses = null;
+        $defaultStoreQty = null;
+        $defaultStoreName = '';
+        if ($vpId > 0) {
+            $totalQtyAllWarehouses = $this->getTotalStockAcrossWarehouses($conn, $vpId);
+            $defWh = $this->getDefaultWarehouseRow($conn);
+            if ($defWh !== null) {
+                $defaultStoreName = $defWh['address_title'];
+                $defaultStoreQty = $this->getWarehouseStockSnapshotForProductId($conn, $vpId, (int)$defWh['id'])['running_stock'];
+            }
+        }
+
+        $mrpOut = $this->mergeMrpRupee($data, $dbRow);
+        if ($mrpOut <= 0 && $data2 !== null) {
+            $altMrp = $this->mergeMrpRupee($data2, $dbRow);
+            if ($altMrp > 0) {
+                $mrpOut = $altMrp;
+            }
+        }
+
         // echo '<pre>'; print_r($data['addon_options']); exit;
         $product = [
-            'item_code' => $code,
-            'title' => $data['name'] ?? '',
-            'image' => (!empty($data['image']))
-                ? ('https://cdn.exoticindia.com' . $data['image'])
-                : '',
-            'price' => $data['price'] ?? 0,
+            'requested_code' => $code,
+            'item_code' => $dbItemCode,
+            'sku' => $dbSku,
+            'title' => $this->mergeProductTextField($data['name'] ?? '', $dbRow['title'] ?? ''),
+            'image' => $imageResolved,
+            'price' => $sellingPrice,
 
-            'material' => $this->cleanValue($data['material'] ?? ''),
-            'size' => $this->cleanValue($data['size'] ?? ''),
-            'color' => $this->cleanValue($data['color'] ?? ''),
+            'material' => $this->mergeProductTextField($data['material'] ?? '', $dbRow['material'] ?? ''),
+            'size' => $this->mergeProductTextField($data['size'] ?? '', $dbRow['size'] ?? ''),
+            'color' => $this->mergeProductTextField($data['color'] ?? '', $dbRow['color'] ?? ''),
+            'hsn' => $this->mergeProductTextField($data['hsn'] ?? '', $dbRow['hsn'] ?? ''),
+            'gst_percent' => $this->mergeGstPercentField($data, $dbRow),
+            'mrp' => $mrpOut,
 
-            //  NEW FIELDS
-            'stock_qty' => $data['stock'] ?? 0,
+            //  NEW FIELDS (warehouse running stock when VP row + session warehouse match POS grid)
+            'stock_qty' => $stockQtyOut,
+            'warehouse_location' => $warehouseLocationOut,
+            'total_qty_available' => $totalQtyAllWarehouses,
+            'current_warehouse_name' => $currentWarehouseName,
+            'default_store_qty' => $defaultStoreQty,
+            'default_store_name' => $defaultStoreName,
             'maincategory' => $data['maincategory'] ?? '',
-            'dimensions' => $this->cleanValue($data['dimensions'] ?? ''),
-            'weight' => $data['product_weight_kg'] ?? '',
+            'dimensions' => $dimensionsMerged,
+            'weight' => $wKgApi,
+            'product_weight' => $dbPw,
+            'product_weight_unit' => $dbPwu,
+            'prod_height' => $dbH,
+            'prod_width' => $dbW,
+            'prod_length' => $dbL,
+            'length_unit' => $dbLu,
             'express_shipping_cost' => $data['express_shipping_cost'] ?? 0,
             'express_shipping_option' => $data['express_shipping_option'] ?? null,
-            'addon_options' => $data['addon_options'] ?? []
+            'addon_options' => $data['addon_options'] ?? [],
+            'sibling_skus' => $siblingSkus,
         ];
 
         //  IMPORTANT: clear buffer
@@ -642,7 +1320,7 @@ class POSRegisterController
             'x-api-appplayerid: POS-Web-Terminal',
             'x-api-countrycode: IN',
             'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
-            'User-Agent: ExoticPOS/1.0'
+            'User-Agent: ExoticPOS'
         ];
 
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -666,16 +1344,30 @@ class POSRegisterController
 
     public function get_cart()
     {
+        global $conn;
         $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
         $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
-        $res = $this->exotic_api_call(
-            '/cart/retrieve',
-            'GET',
-            [
-                'discountcoupondetails' => $coupon,
-                'giftvoucherdetails' => $voucher
-            ]
-        );
+        $cartRetrieveQuery = [
+            'discountcoupondetails' => $coupon,
+            'giftvoucherdetails' => $voucher,
+        ];
+        $res = $this->exotic_api_call('/cart/retrieve', 'GET', $cartRetrieveQuery);
+
+        $cartRetrieveUrl = 'https://www.exoticindia.com/api/cart/retrieve?' . http_build_query($cartRetrieveQuery);
+
+        $cartApiRequestMeta = [
+            'method' => 'GET',
+            'url' => $cartRetrieveUrl,
+            'query_params' => $cartRetrieveQuery,
+            'headers' => [
+                'x-api-key' => '(redacted)',
+                'x-api-deviceid' => 'POS-Store_1',
+                'x-api-appplayerid' => 'POS-Web-Terminal',
+                'x-api-countrycode' => 'IN',
+                'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
+                'User-Agent' => 'ExoticPOS',
+            ],
+        ];
 
         $data = $res['data'] ?? [];
 
@@ -692,45 +1384,60 @@ class POSRegisterController
                 // $expressSelected = $item['express_shipping_chosen'] ?? false;
                 $expressSelected = $item['express_shipping_chosen'] ?? false;
                 $addons = [];
+                $selectedEntries = [];
 
                 if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
                     foreach ($item['addons_selected'] as $ad) {
+                        if (!is_array($ad)) {
+                            continue;
+                        }
 
-                        $cartEntry = '';
+                        $amt = 0.0;
+                        foreach (['value', 'price', 'amount'] as $k) {
+                            if (isset($ad[$k]) && $ad[$k] !== '' && is_numeric($ad[$k])) {
+                                $amt = (float)$ad[$k];
+                                break;
+                            }
+                        }
 
-                        if (stripos($ad['name'], 'Express') !== false) {
-                            $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $ad['value'];
-                        } else {
-                            $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $ad['value'];
+                        $cartEntry = trim((string)($ad['cart_entry'] ?? ''));
+                        if ($cartEntry === '') {
+                            if (stripos((string)($ad['name'] ?? ''), 'Express') !== false) {
+                                $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $amt;
+                            } else {
+                                $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amt;
+                            }
                         }
 
                         $addons[] = [
                             'name' => $ad['name'] ?? '',
-                            'value' => (float)($ad['value'] ?? 0),
-                            'cart_entry' => $cartEntry
+                            'value' => $amt,
+                            'cart_entry' => $cartEntry,
                         ];
+                        $selectedEntries[] = $cartEntry;
                     }
                 }
 
-                /*  FIXED HERE */
-                // $selectedEntries = [];
-
-                // BUILD SELECTED ADDON ENTRIES
-                $selectedEntries = [];
-                foreach ($addons as $a) {
-                    $selectedEntries[] = $a['cart_entry'];
+                $optStr = trim((string)($item['options'] ?? ''));
+                if ($optStr !== '') {
+                    foreach (explode('|', $optStr) as $chunk) {
+                        $chunk = trim($chunk);
+                        if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
+                            $selectedEntries[] = $chunk;
+                        }
+                    }
                 }
 
-                // ALWAYS DEFINE THIS
-                $all_addons = [];
-
-                // FETCH FROM PRODUCT API
                 $productRes = $this->exotic_api_call('/product/code', 'GET', [
                     'code' => $item['code']
                 ]);
 
-                if (!empty($productRes['data']['addon_options']['default_options'])) {
-                    $all_addons = $productRes['data']['addon_options']['default_options'];
+                $all_addons = $this->productApiAddonCatalogList($productRes);
+
+                $unitBase = (float)$item['price'];
+                $vpIndia = $this->resolveIndiaSellPriceFromVp($conn, trim((string)$item['code']));
+                if ($vpIndia > 0) {
+                    $unitBase = $vpIndia;
                 }
 
                 $items[] = [
@@ -738,7 +1445,7 @@ class POSRegisterController
                     'cartref' => $item['cartref'],
                     'name' => $item['name'],
                     'imageurl' => $item['imageurl'],
-                    'price' => (float)$item['price'],
+                    'price' => $unitBase,
                     'quantity' => (int)$item['quantity'],
                     'shipping' => $shipping,
                     'shipping_per_unit' => $shipping_per_unit,
@@ -750,7 +1457,24 @@ class POSRegisterController
                     'selected_entries' => $selectedEntries
                 ];
 
-                $subtotal += ((float)$item['price'] * (int)$item['quantity']);
+                // Subtotal = Σ ((unit item price + sum of addon prices per unit) × quantity)
+                $addonsSumPerUnit = 0.0;
+                foreach ($addons as $a) {
+                    $addonsSumPerUnit += (float)($a['value'] ?? 0);
+                }
+                if ($addonsSumPerUnit <= 0 && $selectedEntries !== [] && $all_addons !== []) {
+                    $addonsSumPerUnit = $this->sumAddonPricesFromCatalogMatches($selectedEntries, $all_addons);
+                }
+                $addonsSumPerUnit = $this->mergeExpressShippingIntoAddonUnitSum(
+                    $addonsSumPerUnit,
+                    $addons,
+                    $selectedEntries,
+                    $all_addons,
+                    (bool)$expressSelected,
+                    $shipping_per_unit
+                );
+                $unitLine = $unitBase + $addonsSumPerUnit;
+                $subtotal += $unitLine * (int)$item['quantity'];
 
                 // Add shipping only if selected
                 if ($expressSelected) {
@@ -770,7 +1494,7 @@ class POSRegisterController
 
         // $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
         $grand_total = (float)($data['totalamount'] ?? 0);
-        return [ 
+        return [
             'items' => $items,
             'subtotal' => $final_subtotal,
             'shipping_total' => $shipping_total,
@@ -780,7 +1504,11 @@ class POSRegisterController
             'grand_total' => $grand_total,
             'checkoutdata' => $data['checkoutdata'] ?? '',
             'codcharges' => $codcharges,
-            'currency' => $data['fx_type'] ?? 'INR'
+            // POS register is INR billing; do not inherit API fx_type (can return USD/$).
+            'currency' => 'INR',
+            'cart_api_http_code' => (int)($res['code'] ?? 0),
+            'cart_api_body' => $data,
+            'cart_api_request' => $cartApiRequestMeta,
         ];
     }
 
@@ -827,6 +1555,19 @@ class POSRegisterController
             exit;
         }
 
+        global $conn;
+        $qtyInt = max(1, (int)$qty);
+        $stockLookup = trim((string)($_POST['stock_check_code'] ?? ''));
+        if ($stockLookup === '') {
+            $stockLookup = trim((string)$code);
+        }
+        $stockErr = $this->validateQtyAgainstWarehouse($conn, $stockLookup, $qtyInt);
+        if ($stockErr !== null) {
+            $_SESSION['cart_error'] = $stockErr;
+            header("Location: ?page=pos_register");
+            exit;
+        }
+
         $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
         $coupon  = '';
 
@@ -839,7 +1580,7 @@ class POSRegisterController
         $postArray = [
             'buynow'   => $buyNow ? 1 : 0,
             'code'     => trim($code),
-            'qty'      => max(1, (int)$qty),
+            'qty'      => $qtyInt,
             'discountcoupondetails' => $coupon,
             'giftvoucherdetails'    => $voucher
         ];
@@ -931,7 +1672,25 @@ class POSRegisterController
     public function change_qty()
     {
         $cartref = $_POST['cartref'] ?? '';
-        $qty = $_POST['newqty'] ?? 1;
+        $qty = (int)($_POST['newqty'] ?? 1);
+
+        $cartData = $this->get_cart();
+        $itemCode = '';
+        foreach ($cartData['items'] ?? [] as $item) {
+            if (($item['cartref'] ?? '') === $cartref) {
+                $itemCode = trim((string)($item['item_code'] ?? ''));
+                break;
+            }
+        }
+        if ($itemCode !== '') {
+            global $conn;
+            $stockErr = $this->validateQtyAgainstWarehouse($conn, $itemCode, $qty);
+            if ($stockErr !== null) {
+                $_SESSION['cart_error'] = $stockErr;
+                header("Location: ?page=pos_register");
+                exit;
+            }
+        }
 
         $this->exotic_api_call('/cart/modifyqty', 'GET', [
             'cartid' => $cartref,
@@ -1015,14 +1774,26 @@ class POSRegisterController
         global $conn;
 
         header('Content-Type: application/json');
-        $paymentType = 'offline';
-        /* ================= PAYMENT TYPE ================= */
-        // $paymentType = $_POST['payment_type'] ?? 'cod';
+        $allowedPaymentTypes = [
+            'offline',
+            'cod',
+            'razorpay',
+            'cc',
+            'bank_transfer',
+            'pos_machine',
+            'specialpay',
+            'cheque',
+            'demand_draft',
+        ];
+        $paymentType = $_POST['payment_type'] ?? 'offline';
+        if (!in_array($paymentType, $allowedPaymentTypes, true)) {
+            $paymentType = 'offline';
+        }
+        $paymentStage = $_POST['payment_stage'] ?? 'final';
+        if (!in_array($paymentStage, ['final', 'partial', 'advance'], true)) {
+            $paymentStage = 'final';
+        }
         $note = $_POST['note'] ?? '';
-
-        // if (!in_array($paymentType, ['cod', 'razorpay', 'offline', 'cc'])) {
-        //     $paymentType = 'offline';
-        // }
 
         $transactionId = $_POST['transaction_id'] ?? '';
 
@@ -1196,8 +1967,6 @@ class POSRegisterController
             $orderNumber = $result['data']['orderid'];
             $warehouseId = $_SESSION['warehouse_id'];
             $userId = $_SESSION['user']['id'];
-            $paymentStage = $_POST['payment_stage'];
-            $paymentType = $_POST['payment_type'];
             $amount = $_POST['amount'];
             $transactionId = $_POST['transaction_id'];
             $note = $_POST['note'];

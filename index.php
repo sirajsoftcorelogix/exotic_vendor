@@ -1015,6 +1015,9 @@ switch ($page) {
             case 'get-product-api':
                 $controller->getProductApi();
                 break;
+            case 'sibling-skus':
+                $controller->siblingSkusAjax();
+                break;
             case 'product-availability':
                 $controller->productAvailability();
                 break;

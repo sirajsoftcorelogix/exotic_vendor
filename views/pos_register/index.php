@@ -214,6 +214,13 @@
           <?php unset($_SESSION['cart_success']); ?>
         <?php endif; ?>
 
+        <?php if (!empty($_SESSION['cart_error'])): ?>
+          <div class="text-red-600 text-xs mb-2 px-4">
+            <?= htmlspecialchars((string)$_SESSION['cart_error']) ?>
+          </div>
+          <?php unset($_SESSION['cart_error']); ?>
+        <?php endif; ?>
+
         <div class="px-4 py-3 space-y-4 text-[12px]">
 
           <!-- PRODUCTS -->
@@ -518,13 +525,20 @@
           <!-- ACTION -->
           <button id="applyCustomDiscountBtn"
             class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold">
-            Apply Cart Discount
+            Apply Cash Discount
           </button>
 
           <button
             onclick="openPaymentModal()"
             class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold hover:bg-orange-700">
             Proceed to Payment
+          </button>
+
+          <button
+            type="button"
+            id="btnOpenCartApiModal"
+            class="mt-2 w-full text-center text-[11px] text-slate-500 hover:text-slate-800 underline decoration-slate-400">
+            View Cart API request &amp; response
           </button>
 
         </div>
@@ -534,6 +548,58 @@
 
   </main>
 </div>
+
+<!-- Cart API debug (decoded JSON from GET /cart/retrieve) -->
+<div id="cartApiResponseModal" class="fixed inset-0 z-[10000] hidden">
+  <div id="cartApiResponseOverlay" class="absolute inset-0 bg-black/50"></div>
+  <div class="relative mx-auto mt-8 w-[95%] max-w-4xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[88vh]">
+    <div class="flex items-center justify-between gap-3 border-b px-4 py-3 shrink-0">
+      <h2 class="text-sm font-semibold text-gray-900">Cart API request &amp; response</h2>
+      <button type="button" id="cartApiResponseClose" class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100">
+        ✕
+      </button>
+    </div>
+    <div class="px-4 py-3 overflow-auto text-xs leading-relaxed">
+      <p class="text-[11px] text-slate-500 mb-2">
+        <span class="font-medium text-slate-700">HTTP <?= (int)($cartData['cart_api_http_code'] ?? 0) ?></span>
+        · Same request the POS used for <code class="bg-slate-100 px-1 rounded">GET /cart/retrieve</code>
+      </p>
+      <pre id="cartApiResponsePre" class="whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-200 p-3 font-mono text-[11px] text-slate-800"><?= htmlspecialchars(
+          json_encode(
+              [
+                  'request' => $cartData['cart_api_request'] ?? [],
+                  'http_code' => $cartData['cart_api_http_code'] ?? null,
+                  'response' => $cartData['cart_api_body'] ?? [],
+              ],
+              JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+          ),
+          ENT_QUOTES,
+          'UTF-8'
+      ) ?></pre>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var modal = document.getElementById('cartApiResponseModal');
+  var btn = document.getElementById('btnOpenCartApiModal');
+  var closeBtn = document.getElementById('cartApiResponseClose');
+  var overlay = document.getElementById('cartApiResponseOverlay');
+  function openCartApiModal() {
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeCartApiModal() {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+  if (btn) btn.addEventListener('click', openCartApiModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeCartApiModal);
+  if (overlay) overlay.addEventListener('click', closeCartApiModal);
+})();
+</script>
 <!-- <a
   href="/?page=posinvoice&action=generate_pdf&invoice_id=49"
   target="_blank"
@@ -541,18 +607,24 @@
   TEST PRINT
 </a> -->
 <!-- Product Modal -->
-<div id="productModal" class="fixed inset-0 z-[9999] hidden">
+<div id="productModal" class="fixed inset-0 z-[9999] hidden"
+     data-pos-warehouse="<?= htmlspecialchars((string)($warehouse_name ?? ''), ENT_QUOTES, 'UTF-8') ?>">
   <!-- overlay -->
   <div id="productModalOverlay" class="absolute inset-0 bg-black/50"></div>
 
   <!-- modal box -->
   <div class="relative mx-auto mt-10 w-[95%] max-w-3xl rounded-2xl bg-white shadow-xl">
-    <div class="flex items-center justify-between border-b px-5 py-3">
-      <div class="text-sm font-semibold text-gray-800" id="pmTitle">Product</div>
+    <div class="flex items-start justify-between gap-3 border-b px-5 py-3">
+      <h2
+        id="pmTitle"
+        class="min-w-0 flex-1 text-left text-sm font-semibold text-gray-900 leading-snug line-clamp-3 break-words">
+        Product
+      </h2>
 
       <button
+        type="button"
         id="productModalClose"
-        class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
+        class="shrink-0 rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
         ✕
       </button>
     </div>
@@ -588,36 +660,45 @@
           <div class="mt-6 flex flex-wrap items-center justify-end gap-2">
 
             <!-- Qty control -->
-            <div class="mr-auto flex items-center gap-2">
-              <label class="text-xs text-gray-600">Qty</label>
-
-              <div class="flex items-center border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  type="button"
-                  id="pmQtyDec"
-                  class="h-9 w-9 text-slate-600 hover:bg-gray-50">
-                  −
-                </button>
-
+            <div class="mr-auto flex flex-col items-start gap-1">
+              <div class="flex items-center gap-3 flex-wrap">
                 <span
-                  id="pmQtyVal"
-                  class="h-9 w-10 flex items-center justify-center font-semibold text-sm">
-                  1
-                </span>
+                  id="pmModalPrice"
+                  class="hidden shrink-0 text-lg font-bold text-gray-900 tabular-nums tracking-tight"
+                  aria-live="polite"></span>
+                <label class="text-xs text-gray-600">Qty</label>
+                <span id="pmQtyMaxHint" class="text-[10px] text-gray-500"></span>
 
-                <button
-                  type="button"
-                  id="pmQtyInc"
-                  class="h-9 w-9 text-slate-600 hover:bg-gray-50">
-                  +
-                </button>
+                <div class="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    id="pmQtyDec"
+                    class="h-9 w-9 text-slate-600 hover:bg-gray-50">
+                    −
+                  </button>
+
+                  <span
+                    id="pmQtyVal"
+                    class="h-9 w-10 flex items-center justify-center font-semibold text-sm">
+                    1
+                  </span>
+
+                  <button
+                    type="button"
+                    id="pmQtyInc"
+                    class="h-9 w-9 text-slate-600 hover:bg-gray-50">
+                    +
+                  </button>
+                </div>
               </div>
+              <div id="pmQtySummary" class="hidden mt-0.5 max-w-[280px] space-y-0.5 text-[10px] leading-snug text-gray-600"></div>
             </div>
 
 
             <form method="POST" action="?page=pos_register&action=cart-add">
               <!-- <input type="hidden" name="action" value="add_to_cart"> -->
               <input type="hidden" name="code" id="modal_product_code">
+              <input type="hidden" name="stock_check_code" id="modal_stock_check_code" value="">
               <input type="hidden" name="qty" id="modal_qty" value="1">
               <input type="hidden" name="options" id="modal_options">
               <input type="hidden" name="variation" id="modal_variation">
@@ -635,6 +716,10 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <div id="pmSiblingSkusWrapper" class="hidden mt-5 border-t border-gray-100 pt-4">
+        <div id="pmSiblingSkus" class="flex flex-wrap gap-2"></div>
       </div>
     </div>
   </div>
@@ -824,25 +909,25 @@
           </select>
         </div>
 
-        <!-- Payment Mode
+        <!-- Payment Mode -->
         <div>
           <label class="text-xs text-gray-600">Payment Mode</label>
 
           <select name="payment_type" id="payment_mode"
             class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
 
-            <option value="offline">Offline</option>
-            <option value="cod">Cash</option>
-            <option value="bank_transfer">Bank Transfer</option>
-            <option value="pos_machine">POS Machine</option>
-            <option value="razorpay">Razorpay</option>
-            <option value="specialpay">SpecialPay</option>
+            <option value="offline">Cash / Counter</option>
+            <option value="cc">Card</option>
+            <option value="razorpay">Razorpay / UPI</option>
+            <option value="cod">COD (pay on delivery)</option>
+            <option value="bank_transfer">Bank transfer</option>
+            <option value="pos_machine">POS machine</option>
+            <option value="specialpay">Special pay</option>
             <option value="cheque">Cheque</option>
-            <option value="demand_draft">Demand Draft</option>
+            <option value="demand_draft">Demand draft</option>
 
           </select>
-        </div> -->
-        <input type="hidden" name="payment_type" id="payment_mode" value="offline">
+        </div>
 
         <!-- Payment Date -->
         <div>
@@ -923,7 +1008,7 @@
 
   <div class="relative mx-auto mt-40 w-[95%] max-w-md rounded-2xl bg-white shadow-xl p-5">
 
-    <h2 class="text-lg font-semibold mb-4">Apply Discount</h2>
+    <h2 class="text-lg font-semibold mb-4">Apply Cash Discount</h2>
 
     <!-- TYPE -->
     <div class="mb-3">
@@ -937,9 +1022,8 @@
 
     <!-- VALUE -->
     <div class="mb-4">
-      <label class="text-xs text-gray-600">Value</label>
       <input type="number" id="discount_value"
-        class="w-full mt-1 border rounded-lg px-3 py-2 text-sm"
+        class="w-full border rounded-lg px-3 py-2 text-sm"
         placeholder="Enter value">
     </div>
 
@@ -1525,10 +1609,22 @@
 </script>
 
 <script>
+  function updateDiscountPlaceholder() {
+    const typeEl = document.getElementById("discount_type");
+    const valueEl = document.getElementById("discount_value");
+    if (!typeEl || !valueEl) return;
+
+    valueEl.placeholder = typeEl.value === "percent" ? "Enter percentage" : "Enter amount";
+  }
+
   // OPEN MODAL
   document.getElementById("applyCustomDiscountBtn").addEventListener("click", function() {
     document.getElementById("discountModal").classList.remove("hidden");
+    updateDiscountPlaceholder();
   });
+
+  document.getElementById("discount_type").addEventListener("change", updateDiscountPlaceholder);
+  updateDiscountPlaceholder();
 
   function closeDiscountModal() {
     document.getElementById("discountModal").classList.add("hidden");

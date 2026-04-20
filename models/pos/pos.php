@@ -49,44 +49,47 @@ class pos
 
         // PRODUCT NAME
         if ($productName !== '') {
-            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ?) ";
+            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ? OR p.sku LIKE ?) ";
             $params[] = "%{$productName}%";
             $params[] = "%{$productName}%";
-            $types .= "ss";
+            $params[] = "%{$productName}%";
+            $types .= "sss";
         }
 
         // PRODUCT CODE
         if ($productCode !== '') {
-            $where .= " AND p.item_code LIKE ? ";
+            $where .= " AND (p.item_code LIKE ? OR p.sku LIKE ?) ";
             $params[] = "%{$productCode}%";
-            $types .= "s";
+            $params[] = "%{$productCode}%";
+            $types .= "ss";
         }
 
         // GLOBAL SEARCH
         if ($searchValue !== '') {
-            $where .= " AND (p.item_code LIKE ? OR p.title LIKE ?) ";
+            $where .= " AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ";
             $params[] = "%{$searchValue}%";
             $params[] = "%{$searchValue}%";
-            $types .= "ss";
+            $params[] = "%{$searchValue}%";
+            $types .= "sss";
         }
 
-        // PRICE FILTER
+        // List price: India base × (1 + GST%) when vp_products.gst is set
+        $baseSell = 'IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice)';
+        $sellPriceExpr = "({$baseSell} * (1 + IFNULL(p.gst, 0) / 100))";
         if ($minPrice !== '') {
-            $where .= " AND p.itemprice >= ? ";
+            $where .= " AND {$sellPriceExpr} >= ? ";
             $params[] = $minPrice;
             $types .= "d";
         }
 
         if ($maxPrice !== '') {
-            $where .= " AND p.itemprice <= ? ";
+            $where .= " AND {$sellPriceExpr} <= ? ";
             $params[] = $maxPrice;
             $types .= "d";
         }
 
-        // Latest movement per (product_id, warehouse_id): no newer row with higher id.
-        $where .= " AND sm.warehouse_id = ? AND newer.id IS NULL AND sm.running_stock > 0 ";
-        $params[] = (int)$warehouseId;
-        $types .= "i";
+        // Show only in-stock products in current warehouse.
+        $where .= " AND sm.running_stock > 0 ";
 
         /* ================= ORDER ================= */
         $allowedColumns = [
@@ -110,16 +113,25 @@ class pos
         if ($orderColumn === 'stock_qty') {
             $orderExpr = 'sm.running_stock';
         } elseif ($orderColumn === 'price') {
-            $orderExpr = 'p.itemprice';
+            $orderExpr = $sellPriceExpr;
         }
 
         $stockFrom = "
     FROM vp_products p
-    INNER JOIN vp_stock_movements sm ON sm.product_id = p.id
-    LEFT JOIN vp_stock_movements newer
-        ON newer.product_id = sm.product_id
-        AND newer.warehouse_id = sm.warehouse_id
-        AND newer.id > sm.id
+    INNER JOIN (
+        SELECT sm1.product_id, sm1.running_stock, sm1.location
+        FROM vp_stock_movements sm1
+        INNER JOIN (
+            SELECT product_id, MAX(id) AS max_id
+            FROM vp_stock_movements
+            WHERE warehouse_id = ?
+            GROUP BY product_id
+        ) latest
+            ON latest.product_id = sm1.product_id
+            AND latest.max_id = sm1.id
+        WHERE sm1.warehouse_id = ?
+    ) sm
+        ON sm.product_id = p.id
     ";
 
         /* ================= DATA QUERY ================= */
@@ -143,7 +155,8 @@ class pos
         p.length_unit,
         p.cost_price,
         sm.running_stock AS stock_qty,
-        p.itemprice AS price
+        sm.location AS warehouse_location,
+        (IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) * (1 + IFNULL(p.gst, 0) / 100)) AS price
     $stockFrom
     $where
     ORDER BY $orderExpr $orderDir
@@ -152,8 +165,8 @@ class pos
 
         $dataStmt = $this->db->prepare($dataSql);
 
-        $dataTypes = $types . "ii";
-        $dataParams = array_merge($params, [$start, $length]);
+        $dataTypes = "ii" . $types . "ii";
+        $dataParams = array_merge([(int)$warehouseId, (int)$warehouseId], $params, [$start, $length]);
 
         $dataStmt->bind_param($dataTypes, ...$dataParams);
         $dataStmt->execute();
@@ -322,20 +335,26 @@ class pos
             return [];
         }
 
-        // Latest movement row per product in selected warehouse (anti-join).
+        // Latest movement row per product in selected warehouse using MAX(id) subquery.
         $join = "
-            INNER JOIN vp_stock_movements sm
-                ON sm.product_id = p.id
-                AND sm.warehouse_id = ?
-            LEFT JOIN vp_stock_movements newer
-                ON newer.product_id = sm.product_id
-                AND newer.warehouse_id = sm.warehouse_id
-                AND newer.id > sm.id
+            INNER JOIN (
+                SELECT sm1.product_id, sm1.running_stock, sm1.location
+                FROM vp_stock_movements sm1
+                INNER JOIN (
+                    SELECT product_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE warehouse_id = ?
+                    GROUP BY product_id
+                ) latest
+                    ON latest.product_id = sm1.product_id
+                    AND latest.max_id = sm1.id
+                WHERE sm1.warehouse_id = ?
+            ) sm ON sm.product_id = p.id
         ";
 
-        $where = ' WHERE p.is_active = 1 AND newer.id IS NULL ';
-        $params = [$warehouseId];
-        $types = 'i';
+        $where = ' WHERE p.is_active = 1 ';
+        $params = [$warehouseId, $warehouseId];
+        $types = 'ii';
 
         if ($category !== '' && $category !== 'allProducts') {
             $where .= ' AND p.groupname = ? ';
@@ -371,7 +390,7 @@ class pos
                 p.size,
                 p.color,
                 p.image,
-                p.itemprice AS sell_price,
+                (IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) * (1 + IFNULL(p.gst, 0) / 100)) AS sell_price,
                 p.cost_price,
                 sm.running_stock AS stock_qty,
                 sm.location AS location
@@ -408,18 +427,24 @@ class pos
         }
 
         $join = "
-            INNER JOIN vp_stock_movements sm
-                ON sm.product_id = p.id
-                AND sm.warehouse_id = ?
-            LEFT JOIN vp_stock_movements newer
-                ON newer.product_id = sm.product_id
-                AND newer.warehouse_id = sm.warehouse_id
-                AND newer.id > sm.id
+            INNER JOIN (
+                SELECT sm1.product_id, sm1.running_stock
+                FROM vp_stock_movements sm1
+                INNER JOIN (
+                    SELECT product_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE warehouse_id = ?
+                    GROUP BY product_id
+                ) latest
+                    ON latest.product_id = sm1.product_id
+                    AND latest.max_id = sm1.id
+                WHERE sm1.warehouse_id = ?
+            ) sm ON sm.product_id = p.id
         ";
 
-        $where = ' WHERE p.is_active = 1 AND newer.id IS NULL ';
-        $params = [$warehouseId];
-        $types = 'i';
+        $where = ' WHERE p.is_active = 1 ';
+        $params = [$warehouseId, $warehouseId];
+        $types = 'ii';
 
         if ($category !== '' && $category !== 'allProducts') {
             $where .= ' AND p.groupname = ? ';

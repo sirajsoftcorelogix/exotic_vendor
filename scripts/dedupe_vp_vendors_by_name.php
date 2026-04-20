@@ -1,8 +1,12 @@
 <?php
 /**
  * Find duplicate vp_vendors rows (same vendor_name after trim + case-insensitive match).
+ * Also lists "placeholder" vendor_name values: city / state / country / empty / digits (see
+ * scripts/inc/vp_vendor_placeholder_rules.php). Geo-like names with email or phone are skipped.
  *
- * Writes only to vp_vendors: --execute deletes duplicate rows and keeps the lowest id per name.
+ * Writes only to vp_vendors:
+ *   --execute                      delete duplicate name rows (keep lowest id).
+ *   --execute --remove-placeholders also DELETE rows whose vendor_name matches placeholder rules.
  *
  * Short-code clusters (e.g. AD1, AD4): report only via --prefix-report — not merged unless names match.
  *
@@ -11,6 +15,7 @@
  *   php scripts/dedupe_vp_vendors_by_name.php
  *   php scripts/dedupe_vp_vendors_by_name.php --prefix-report
  *   php scripts/dedupe_vp_vendors_by_name.php --execute
+ *   php scripts/dedupe_vp_vendors_by_name.php --execute --remove-placeholders
  */
 declare(strict_types=1);
 
@@ -39,6 +44,8 @@ if (!is_file($configPath)) {
     dedupe_fail('Missing config.php at ' . $configPath);
 }
 
+require_once __DIR__ . '/inc/vp_vendor_placeholder_rules.php';
+
 /** @var array $config */
 $config = require $configPath;
 
@@ -49,10 +56,15 @@ if (!is_array($dbCfg) || empty($dbCfg['host']) || empty($dbCfg['name'])) {
 
 $argv = $_SERVER['argv'] ?? [];
 $execute = in_array('--execute', $argv, true);
+$removePlaceholders = in_array('--remove-placeholders', $argv, true);
 $prefixReport = in_array('--prefix-report', $argv, true);
 
+if ($removePlaceholders && !$execute) {
+    dedupe_fail('--remove-placeholders requires --execute');
+}
+
 if (in_array('--merge', $argv, true) || in_array('--table-only', $argv, true)) {
-    dedupe_fail('Obsolete flags: this script only DELETEs from vp_vendors. Use: php scripts/dedupe_vp_vendors_by_name.php --execute');
+    dedupe_fail('Obsolete flags: use --execute and optionally --remove-placeholders.');
 }
 
 try {
@@ -72,21 +84,58 @@ try {
 }
 
 $res = $conn->query(
-    'SELECT id, vendor_name FROM vp_vendors ORDER BY id ASC'
+    'SELECT id, vendor_name, vendor_email, vendor_phone, alt_phone, city, state FROM vp_vendors ORDER BY id ASC'
 );
 $byKey = [];
+$allRows = [];
 while ($row = $res->fetch_assoc()) {
     $name = (string) ($row['vendor_name'] ?? '');
     $key = mb_strtolower(trim($name), 'UTF-8');
+    $entry = [
+        'id' => (int) $row['id'],
+        'vendor_name' => $name,
+        'vendor_email' => (string) ($row['vendor_email'] ?? ''),
+        'vendor_phone' => (string) ($row['vendor_phone'] ?? ''),
+        'alt_phone' => (string) ($row['alt_phone'] ?? ''),
+        'city' => (string) ($row['city'] ?? ''),
+        'state' => (string) ($row['state'] ?? ''),
+    ];
+    $allRows[] = $entry;
     if (!isset($byKey[$key])) {
         $byKey[$key] = [];
     }
-    $byKey[$key][] = [
-        'id' => (int) $row['id'],
-        'vendor_name' => $name,
-    ];
+    $byKey[$key][] = $entry;
 }
 $res->free();
+
+$placeholders = [];
+$geoSkippedContact = 0;
+foreach ($allRows as $entry) {
+    $base = classify_placeholder_vendor_name($entry['vendor_name']);
+    if ($base !== null && ($base['reason'] ?? '') === 'geo_blocklist'
+        && vp_vendor_row_has_meaningful_contact(
+            $entry['vendor_email'],
+            $entry['vendor_phone'],
+            $entry['alt_phone']
+        )) {
+        $geoSkippedContact++;
+    }
+    $c = classify_placeholder_vendor_name_respecting_contact(
+        $entry['vendor_name'],
+        $entry['vendor_email'],
+        $entry['vendor_phone'],
+        $entry['alt_phone']
+    );
+    if ($c !== null) {
+        $placeholders[] = [
+            'id' => $entry['id'],
+            'vendor_name' => $entry['vendor_name'],
+            'city' => $entry['city'],
+            'state' => $entry['state'],
+            'reason' => $c['reason'],
+        ];
+    }
+}
 
 $dups = [];
 foreach ($byKey as $key => $list) {
@@ -110,6 +159,24 @@ foreach ($dups as $g) {
         . (isset($g['note']) ? ' [' . $g['note'] . ']' : '')
         . "\n";
 }
+
+$nPh = count($placeholders);
+echo "\n--- Placeholder / geo-like vendor_name (city, state, country, empty, digits, etc.) ---\n";
+echo "Matched {$nPh} row(s) (rules in scripts/inc/vp_vendor_placeholder_rules.php).\n";
+if ($geoSkippedContact > 0) {
+    echo "Skipped {$geoSkippedContact} geo/city/state name row(s) that have email or phone.\n";
+}
+if ($nPh > 0) {
+    $showPh = array_slice($placeholders, 0, 120);
+    foreach ($showPh as $p) {
+        echo '  id=' . $p['id'] . ' name="' . $p['vendor_name'] . '" reason=' . $p['reason']
+            . ' city="' . $p['city'] . '" state="' . $p['state'] . "\"\n";
+    }
+    if ($nPh > 120) {
+        echo '  … plus ' . ($nPh - 120) . " more\n";
+    }
+}
+echo "To flag these only (inactive + note), use: php scripts/clean_vp_vendors_placeholder_names.php --execute --soft\n";
 
 if ($prefixReport) {
     echo "\n--- Prefix clusters (letters+digits only, same letter prefix, e.g. AD1 vs AD4) ---\n";
@@ -154,7 +221,9 @@ if ($prefixReport) {
 }
 
 if (!$execute) {
-    echo "\nDRY RUN — no writes. Modifies only vp_vendors: --execute\n";
+    echo "\nDRY RUN — no writes. vp_vendors only:\n";
+    echo "  --execute                          remove duplicate names (keep lowest id)\n";
+    echo "  --execute --remove-placeholders    also DELETE rows matching placeholder rules above\n";
     $conn->close();
     exit(0);
 }
@@ -191,8 +260,40 @@ foreach ($dups as $g) {
     }
 }
 
-echo "\nDONE: {$mergedGroups} duplicate group(s); removed {$removed} extra vp_vendors row(s). "
+echo "\nDONE (dedupe): {$mergedGroups} duplicate group(s); removed {$removed} extra vp_vendors row(s). "
     . "Canonical id per group = lowest id.\n";
+
+if ($removePlaceholders) {
+    $conn->begin_transaction();
+    try {
+        $phRes = $conn->query(
+            'SELECT id, vendor_name, vendor_email, vendor_phone, alt_phone FROM vp_vendors ORDER BY id ASC'
+        );
+        $delPh = 0;
+        while ($pr = $phRes->fetch_assoc()) {
+            $vid = (int) $pr['id'];
+            if (classify_placeholder_vendor_name_respecting_contact(
+                (string) ($pr['vendor_name'] ?? ''),
+                isset($pr['vendor_email']) ? (string) $pr['vendor_email'] : null,
+                isset($pr['vendor_phone']) ? (string) $pr['vendor_phone'] : null,
+                isset($pr['alt_phone']) ? (string) $pr['alt_phone'] : null
+            ) === null) {
+                continue;
+            }
+            $conn->query('DELETE FROM vp_vendors WHERE id = ' . $vid . ' LIMIT 1');
+            $delPh += $conn->affected_rows;
+        }
+        $phRes->free();
+        $conn->commit();
+        echo "DONE (placeholders): removed {$delPh} vp_vendors row(s) matching placeholder/geo rules.\n";
+    } catch (Throwable $e) {
+        $conn->rollback();
+        dedupe_fail(
+            'Placeholder DELETE failed (MySQL may enforce FKs from other tables onto these ids). '
+            . $e->getMessage()
+        );
+    }
+}
 
 $conn->close();
 exit(0);

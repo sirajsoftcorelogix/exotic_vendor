@@ -1,6 +1,135 @@
 <?php
 // cart-functions.php
 
+/** Align with POSRegisterController::unwrapProductApiResponse */
+function cart_unwrap_product_api_payload(array $data): array
+{
+    if (!empty($data['data']) && is_array($data['data'])) {
+        $inner = $data['data'];
+        unset($data['data']);
+
+        return array_merge($data, $inner);
+    }
+
+    return $data;
+}
+
+/** Catalog rows for matching cart_entry → price (incl. express shipping row when present). */
+function cart_product_addon_catalog(array $productApiResult): array
+{
+    $data = cart_unwrap_product_api_payload($productApiResult['data'] ?? []);
+    $opts = [];
+    if (!empty($data['addon_options']['default_options']) && is_array($data['addon_options']['default_options'])) {
+        $opts = $data['addon_options']['default_options'];
+    }
+    if (!empty($data['express_shipping_option']['price'])) {
+        $eso = $data['express_shipping_option'];
+        $opts[] = [
+            'title' => $eso['title'] ?? '',
+            'price' => (float)($eso['price'] ?? 0),
+            'cart_entry' => trim((string)($eso['cart_entry'] ?? '')),
+        ];
+    }
+
+    return $opts;
+}
+
+function cart_sum_addon_prices_from_catalog(array $selectedEntries, array $catalogAddons): float
+{
+    $sum = 0.0;
+    foreach ($selectedEntries as $se) {
+        $se = trim((string)$se);
+        if ($se === '') {
+            continue;
+        }
+        foreach ($catalogAddons as $opt) {
+            $ce = trim((string)($opt['cart_entry'] ?? ''));
+            if ($ce !== '' && strcasecmp($ce, $se) === 0) {
+                $sum += (float)($opt['price'] ?? 0);
+                break;
+            }
+        }
+    }
+
+    return $sum;
+}
+
+function cart_merge_express_into_addon_unit_sum(
+    float $addonsSumPerUnit,
+    array $addons,
+    array $selectedEntries,
+    array $allAddons,
+    bool $expressSelected,
+    float $shippingPerUnit
+): float {
+    if (!$expressSelected || $shippingPerUnit <= 0) {
+        return $addonsSumPerUnit;
+    }
+
+    $expressCounted = 0.0;
+    foreach ($addons as $a) {
+        if (stripos((string)($a['name'] ?? ''), 'Express') !== false) {
+            $expressCounted += (float)($a['value'] ?? 0);
+        }
+    }
+    foreach ($allAddons as $opt) {
+        if (stripos((string)($opt['title'] ?? ''), 'express') === false) {
+            continue;
+        }
+        $ce = trim((string)($opt['cart_entry'] ?? ''));
+        if ($ce === '') {
+            continue;
+        }
+        foreach ($selectedEntries as $se) {
+            if (strcasecmp($ce, trim((string)$se)) === 0) {
+                $expressCounted += (float)($opt['price'] ?? 0);
+                break;
+            }
+        }
+    }
+
+    if ($expressCounted < $shippingPerUnit - 0.0001) {
+        return $addonsSumPerUnit + ($shippingPerUnit - $expressCounted);
+    }
+
+    return $addonsSumPerUnit;
+}
+
+/** India retail unit price from vp_products (matches POSRegisterController). */
+function cart_resolve_india_price_from_vp($mysqli, string $code): float
+{
+    if ($code === '' || !$mysqli) {
+        return 0.0;
+    }
+    $stmt = $mysqli->prepare(
+        'SELECT price_india, price_india_suggested, finalprice, itemprice, gst
+         FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+    );
+    if (!$stmt) {
+        return 0.0;
+    }
+    $stmt->bind_param('ss', $code, $code);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$row) {
+        return 0.0;
+    }
+    foreach (['price_india', 'price_india_suggested', 'finalprice', 'itemprice'] as $k) {
+        $f = (float)($row[$k] ?? 0);
+        if ($f > 0) {
+            $pct = (float)($row['gst'] ?? 0);
+            if ($pct > 0) {
+                return round($f * (1 + $pct / 100), 2);
+            }
+
+            return $f;
+        }
+    }
+
+    return 0.0;
+}
+
 function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null)
 {
     // echo "<pre>";
@@ -32,7 +161,7 @@ function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = n
         'x-api-appplayerid: POS-Web-Terminal',
         'x-api-countrycode: IN',
         'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
-        'User-Agent: ExoticPOS-Web/1.0'
+        'User-Agent: ExoticPOS'
     ];
 
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -53,6 +182,7 @@ function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = n
 
 function get_cart()
 {
+    global $conn;
     $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
 
     $res = exotic_api_call(
@@ -80,11 +210,87 @@ function get_cart()
             // $expressSelected = $item['express_shipping_chosen'] ?? false;
             $expressSelected = $item['express_shipping_chosen'] ?? false;
 
+            $unitBase = (float)$item['price'];
+            if (!empty($conn)) {
+                $vpIndia = cart_resolve_india_price_from_vp($conn, trim((string)$item['code']));
+                if ($vpIndia > 0) {
+                    $unitBase = $vpIndia;
+                }
+            }
+
+            $addons = [];
+            $addonsSumPerUnit = 0.0;
+            $selectedEntries = [];
+            $catalog = [];
+
+            if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
+                foreach ($item['addons_selected'] as $ad) {
+                    if (!is_array($ad)) {
+                        continue;
+                    }
+                    $amt = 0.0;
+                    foreach (['value', 'price', 'amount'] as $k) {
+                        if (isset($ad[$k]) && $ad[$k] !== '' && is_numeric($ad[$k])) {
+                            $amt = (float)$ad[$k];
+                            break;
+                        }
+                    }
+                    $addonsSumPerUnit += $amt;
+
+                    $cartEntry = trim((string)($ad['cart_entry'] ?? ''));
+                    if ($cartEntry === '') {
+                        if (stripos((string)($ad['name'] ?? ''), 'Express') !== false) {
+                            $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $amt;
+                        } else {
+                            $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amt;
+                        }
+                    }
+                    $addons[] = [
+                        'name' => $ad['name'] ?? '',
+                        'value' => $amt,
+                        'cart_entry' => $cartEntry,
+                    ];
+                    $selectedEntries[] = $cartEntry;
+                }
+            }
+
+            $optStr = trim((string)($item['options'] ?? ''));
+            if ($optStr !== '') {
+                foreach (explode('|', $optStr) as $chunk) {
+                    $chunk = trim($chunk);
+                    if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
+                        $selectedEntries[] = $chunk;
+                    }
+                }
+            }
+
+            if ($addonsSumPerUnit <= 0 && $selectedEntries !== []) {
+                $productRes = exotic_api_call('/product/code', 'GET', ['code' => $item['code']]);
+                $catalog = cart_product_addon_catalog($productRes);
+                if ($catalog !== []) {
+                    $addonsSumPerUnit = cart_sum_addon_prices_from_catalog($selectedEntries, $catalog);
+                }
+            }
+
+            if ($catalog === [] && $expressSelected && $shipping_per_unit > 0) {
+                $productRes = exotic_api_call('/product/code', 'GET', ['code' => $item['code']]);
+                $catalog = cart_product_addon_catalog($productRes);
+            }
+
+            $addonsSumPerUnit = cart_merge_express_into_addon_unit_sum(
+                $addonsSumPerUnit,
+                $addons,
+                $selectedEntries,
+                $catalog,
+                (bool)$expressSelected,
+                $shipping_per_unit
+            );
+
             $items[] = [
                 'cartref' => $item['cartref'],
                 'name' => $item['name'],
                 'imageurl' => $item['imageurl'],
-                'price' => (float)$item['price'],
+                'price' => $unitBase,
                 'quantity' => (int)$item['quantity'],
                 'shipping' => $shipping,
                 'shipping_per_unit' => $shipping_per_unit,
@@ -93,7 +299,8 @@ function get_cart()
                 'express_selected' => $expressSelected
             ];
 
-            $subtotal += ((float)$item['price'] * (int)$item['quantity']);
+            $unitLine = $unitBase + $addonsSumPerUnit;
+            $subtotal += $unitLine * (int)$item['quantity'];
             // echo $expressSelected;
             // exit;
             // Add shipping only if selected
