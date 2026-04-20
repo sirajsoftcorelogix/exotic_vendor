@@ -811,5 +811,95 @@ class vendor {
             'attempt_used' => $fetch['attempt_used'] ?? null,
         ];
     }
+    public function saveVendorsFromAPI($vendors){
+        if (!is_array($vendors) || empty($vendors)) {
+            return ['success' => false, 'message' => 'Invalid vendors data'];
+        }
+        
+        $inserted = 0;
+        $updated = 0;
+        $errors = [];
+        
+        foreach ($vendors as $groupname => $vendorList) {
+            if (!is_array($vendorList)) {
+                continue;
+            }
+            
+            foreach ($vendorList as $vendor) {
+                $vendorId = $vendor['id'] ?? null;
+                $vendorName = $vendor['name'] ?? null;
+                
+                if ($vendorId === null || $vendorName === null) {
+                    continue;
+                }
+                
+                $vendorId = substr(trim((string)$vendorId), 0, 30);
+                $vendorName = substr(trim((string)$vendorName), 0, 150);
+                $groupname = substr(trim((string)$groupname), 0, 100);
+                
+                // Check if vendor exists by vendor_name
+                $checkStmt = $this->conn->prepare('SELECT id FROM vp_vendors WHERE vendor_name = ?');
+                $checkStmt->bind_param('s', $vendorName);
+                $checkStmt->execute();
+                $result = $checkStmt->get_result();
+                $existing = $result ? $result->fetch_assoc() : null;
+                $checkStmt->close();
+                
+                if ($existing) {
+                    // Get the existing groupname
+                    $existingId = (int)$existing['id'];
+                    $getGroupStmt = $this->conn->prepare('SELECT groupname FROM vp_vendors WHERE id = ?');
+                    $getGroupStmt->bind_param('i', $existingId);
+                    $getGroupStmt->execute();
+                    $groupRes = $getGroupStmt->get_result();
+                    $groupRow = $groupRes->fetch_assoc();
+                    $getGroupStmt->close();
+                    
+                    $existingGroupname = !empty($groupRow['groupname']) ? trim($groupRow['groupname']) : '';
+                    
+                    // Append new groupname with comma separator if not already present
+                    if (!empty($existingGroupname)) {
+                        $groupnames = array_map('trim', explode(',', $existingGroupname));
+                        if (!in_array($groupname, $groupnames)) {
+                            $newGroupname = $existingGroupname . ',' . $groupname;
+                        } else {
+                            $newGroupname = $existingGroupname;
+                        }
+                    } else {
+                        $newGroupname = $groupname;
+                    }
+                    
+                    // Update vendor_id and groupname if vendor_name exists
+                    $updateStmt = $this->conn->prepare('UPDATE vp_vendors SET vendor_id = ?, groupname = ? WHERE id = ?');
+                    $updateStmt->bind_param('sss', $vendorId, $newGroupname, $existingId);
+                    if ($updateStmt->execute()) {
+                        $updated++;
+                    } else {
+                        $errors[] = 'Update failed for ' . $vendorName . ': ' . $updateStmt->error;
+                    }
+                    $updateStmt->close();
+                } else {
+                    // Insert if vendor_name doesn't exist
+                    $insertStmt = $this->conn->prepare('INSERT INTO vp_vendors (vendor_id, vendor_name, groupname, country, is_active) VALUES (?, ?, ?, \'India\', \'active\')');
+                    $insertStmt->bind_param('sss', $vendorId, $vendorName, $groupname);
+                    if ($insertStmt->execute()) {
+                        $inserted++;
+                    } else {
+                        $errors[] = 'Insert failed for ' . $vendorName . ': ' . $insertStmt->error;
+                    }
+                    $insertStmt->close();
+                }
+            }
+        }
+        
+        return [
+            'success' => empty($errors),
+            'message' => empty($errors) ? 'Done' : implode('; ', array_slice($errors, 0, 5)),
+            'inserted' => $inserted,
+            'updated' => $updated,
+            'total' => $inserted + $updated,
+            'error_count' => count($errors)
+        ];
+    }
 }
 ?>

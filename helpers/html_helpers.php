@@ -816,3 +816,18 @@ function currencySymbol($code)
 		'GBP' => '£'
 	][$code] ?? $code;
 }
+function getCategoryFromTable()
+{
+	// Fetch active roles
+	global $conn;
+	$sql = "SELECT id, name
+				FROM category 
+				WHERE is_active = 1 AND parent_id=0
+				ORDER BY name ASC";
+	$result = $conn->query($sql);
+	$categories = array();
+	while ($row = $result->fetch_assoc()) {
+		$categories[$row['id']] = $row['name'];
+	}
+	return $categories;
+}
