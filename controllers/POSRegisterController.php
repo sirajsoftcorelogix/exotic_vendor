@@ -1353,13 +1353,21 @@ class POSRegisterController
 
         curl_close($ch);
 
-        return ['data' => json_decode($response, true) ?: [], 'code' => $httpCode];
+        $body = (string)$response;
+        $decoded = json_decode($body, true);
+        $data = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : [];
+
+        return [
+            'data' => $data,
+            'code' => $httpCode,
+            'raw' => $body,
+        ];
     }
 
     /**
      * Debug payload for POS "Order create API" modal (matches cart API debug shape).
      */
-    private function buildOrderCreateApiDebug(array $queryParams, array $postData, array $apiResult): array
+    private function buildOrderCreateApiDebug(array $queryParams, array $postData, array $apiResult, array $posContext = []): array
     {
         $url = 'https://www.exoticindia.com/api/order/create';
         if ($queryParams !== []) {
@@ -1374,8 +1382,19 @@ class POSRegisterController
             $bodyForLog['card_cvv'] = '(redacted)';
         }
 
-        return [
+        $raw = (string)($apiResult['raw'] ?? '');
+        $parsed = $apiResult['data'] ?? [];
+        $rawPreview = '';
+        if ($raw !== '' && $parsed === []) {
+            $rawPreview = function_exists('mb_substr')
+                ? mb_substr($raw, 0, 8000, 'UTF-8')
+                : substr($raw, 0, 8000);
+        }
+
+        $out = [
             'timestamp' => date('c'),
+            'triggered_from' => 'payment_modal',
+            'payment_modal' => $posContext,
             'request' => [
                 'method' => 'POST',
                 'url' => $url,
@@ -1391,8 +1410,13 @@ class POSRegisterController
                 ],
             ],
             'http_code' => (int)($apiResult['code'] ?? 0),
-            'response' => $apiResult['data'] ?? [],
+            'response' => is_array($parsed) ? $parsed : [],
         ];
+        if ($rawPreview !== '') {
+            $out['response_raw_preview'] = $rawPreview;
+        }
+
+        return $out;
     }
 
 
@@ -2010,7 +2034,19 @@ class POSRegisterController
             $postData
         );
 
-        $orderApiDebug = $this->buildOrderCreateApiDebug($orderCreateQuery, $postData, $result);
+        $orderApiDebug = $this->buildOrderCreateApiDebug(
+            $orderCreateQuery,
+            $postData,
+            $result,
+            [
+                'payment_type' => $paymentType,
+                'payment_stage' => $paymentStage,
+                'amount' => $_POST['amount'] ?? '',
+                'transaction_id' => $transactionId,
+                'customer_id' => (int)$customerId,
+                'note' => $note,
+            ]
+        );
         $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
 
         if (empty($result['data']['orderid'])) {
