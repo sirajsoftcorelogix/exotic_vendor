@@ -1481,7 +1481,7 @@ class POSRegisterController
 
         // $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
         $grand_total = (float)($data['totalamount'] ?? 0);
-        return [ 
+        return [
             'items' => $items,
             'subtotal' => $final_subtotal,
             'shipping_total' => $shipping_total,
@@ -1491,7 +1491,9 @@ class POSRegisterController
             'grand_total' => $grand_total,
             'checkoutdata' => $data['checkoutdata'] ?? '',
             'codcharges' => $codcharges,
-            'currency' => $data['fx_type'] ?? 'INR'
+            'currency' => $data['fx_type'] ?? 'INR',
+            'cart_api_http_code' => (int)($res['code'] ?? 0),
+            'cart_api_body' => $data,
         ];
     }
 
