@@ -405,6 +405,32 @@ class POSRegisterController
         return $db > 0 ? $db : 0.0;
     }
 
+    /** Resolved GST percent for pricing (same rules as gst_percent label). Returns 0 when unknown. */
+    private function resolveGstPercentAsNumber(array $apiData, array $dbRow): float
+    {
+        $s = trim($this->mergeGstPercentField($apiData, $dbRow));
+        if ($s === '') {
+            return 0.0;
+        }
+        $n = (float)$s;
+
+        return $n > 0 ? $n : 0.0;
+    }
+
+    /** Multiply unit price by (1 + GST%/100); base is treated as taxable value when GST % is present. */
+    private function applyGstInclusiveToUnitPrice(float $base, array $dbRow, array $apiData = []): float
+    {
+        if ($base <= 0) {
+            return $base;
+        }
+        $pct = $this->resolveGstPercentAsNumber($apiData, $dbRow);
+        if ($pct <= 0) {
+            return $base;
+        }
+
+        return round($base * (1 + $pct / 100), 2);
+    }
+
     /** First positive amount from named keys on an API payload (same keys used elsewhere for catalog sync). */
     private function pickPositivePriceFromApiArray(array $data): float
     {
@@ -454,7 +480,7 @@ class POSRegisterController
             return 0.0;
         }
         $stmt = $conn->prepare(
-            'SELECT price_india, price_india_suggested, finalprice, itemprice
+            'SELECT price_india, price_india_suggested, finalprice, itemprice, gst
              FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
         );
         if (!$stmt) {
@@ -470,7 +496,7 @@ class POSRegisterController
         foreach (['price_india', 'price_india_suggested', 'finalprice', 'itemprice'] as $k) {
             $f = (float)($row[$k] ?? 0);
             if ($f > 0) {
-                return $f;
+                return $this->applyGstInclusiveToUnitPrice($f, $row, []);
             }
         }
 
@@ -897,6 +923,12 @@ class POSRegisterController
                 $sellingPrice = $alt;
             }
         }
+
+        $gstApiForSell = $data;
+        if ($this->resolveGstPercentAsNumber($data, $dbRow) <= 0 && $data2 !== null) {
+            $gstApiForSell = $data2;
+        }
+        $sellingPrice = $this->applyGstInclusiveToUnitPrice($sellingPrice, $dbRow, $gstApiForSell);
 
         $dimApi = $this->cleanValue($data['dimensions'] ?? '');
         $dbH = isset($dbRow['prod_height']) ? trim((string)$dbRow['prod_height']) : '';

@@ -102,7 +102,7 @@ function cart_resolve_india_price_from_vp($mysqli, string $code): float
         return 0.0;
     }
     $stmt = $mysqli->prepare(
-        'SELECT price_india, price_india_suggested, finalprice, itemprice
+        'SELECT price_india, price_india_suggested, finalprice, itemprice, gst
          FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
     );
     if (!$stmt) {
@@ -118,6 +118,11 @@ function cart_resolve_india_price_from_vp($mysqli, string $code): float
     foreach (['price_india', 'price_india_suggested', 'finalprice', 'itemprice'] as $k) {
         $f = (float)($row[$k] ?? 0);
         if ($f > 0) {
+            $pct = (float)($row['gst'] ?? 0);
+            if ($pct > 0) {
+                return round($f * (1 + $pct / 100), 2);
+            }
+
             return $f;
         }
     }

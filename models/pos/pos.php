@@ -73,8 +73,9 @@ class pos
             $types .= "sss";
         }
 
-        // Price filter: India sell (price_india) when set, else itemprice
-        $sellPriceExpr = 'IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice)';
+        // List price: India base × (1 + GST%) when vp_products.gst is set
+        $baseSell = 'IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice)';
+        $sellPriceExpr = "({$baseSell} * (1 + IFNULL(p.gst, 0) / 100))";
         if ($minPrice !== '') {
             $where .= " AND {$sellPriceExpr} >= ? ";
             $params[] = $minPrice;
@@ -112,7 +113,7 @@ class pos
         if ($orderColumn === 'stock_qty') {
             $orderExpr = 'sm.running_stock';
         } elseif ($orderColumn === 'price') {
-            $orderExpr = 'IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice)';
+            $orderExpr = $sellPriceExpr;
         }
 
         $stockFrom = "
@@ -155,7 +156,7 @@ class pos
         p.cost_price,
         sm.running_stock AS stock_qty,
         sm.location AS warehouse_location,
-        IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) AS price
+        (IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) * (1 + IFNULL(p.gst, 0) / 100)) AS price
     $stockFrom
     $where
     ORDER BY $orderExpr $orderDir
@@ -389,7 +390,7 @@ class pos
                 p.size,
                 p.color,
                 p.image,
-                IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) AS sell_price,
+                (IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) * (1 + IFNULL(p.gst, 0) / 100)) AS sell_price,
                 p.cost_price,
                 sm.running_stock AS stock_qty,
                 sm.location AS location
