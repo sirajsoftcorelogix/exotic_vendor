@@ -728,9 +728,9 @@
 <!-- CUSTOMER MODAL -->
 <div id="customerModal" class="fixed inset-0 z-[9999] hidden">
 
-  <div class="absolute inset-0 bg-black/40" onclick="closeCustomerModal()"></div>
+  <div class="absolute inset-0 z-0 bg-black/40" onclick="closeCustomerModal()"></div>
 
-  <div class="relative mx-auto mt-10 w-[95%] max-w-2xl rounded-2xl bg-white shadow-xl max-h-[85vh] flex flex-col">
+  <div class="relative z-10 mx-auto mt-10 w-[95%] max-w-2xl rounded-2xl bg-white shadow-xl max-h-[85vh] flex flex-col">
 
     <!-- HEADER -->
     <div class="flex items-center justify-between border-b px-5 py-3">
@@ -753,7 +753,7 @@
 
         <div>
           <label class="text-gray-500">Last Name</label>
-          <input name="last_name" required class="w-full border rounded px-2 py-1.5">
+          <input name="last_name" class="w-full border rounded px-2 py-1.5" placeholder="Optional">
         </div>
 
         <div>
@@ -1419,44 +1419,69 @@
     document.getElementById("customerModal").classList.add("hidden")
   }
   let customerData = {};
-  document.getElementById("customerForm").addEventListener("submit", function(e) {
+  document.addEventListener("DOMContentLoaded", function () {
+    var customerForm = document.getElementById("customerForm");
+    if (!customerForm) return;
 
-    e.preventDefault();
+    customerForm.addEventListener("submit", function (e) {
+      e.preventDefault();
 
-    let formData = new FormData(this);
+      if (!customerForm.checkValidity()) {
+        customerForm.reportValidity();
+        return;
+      }
 
-    /* STORE FORM DATA */
-    customerData = {};
-    formData.forEach((value, key) => {
-      customerData[key] = value;
-    });
+      var formData = new FormData(customerForm);
 
-    fetch("?page=pos_register&action=add-customer", {
-        method: "POST",
-        body: formData
-      })
-      .then(res => res.json())
-      .then(data => {
-
-        if (data.success) {
-
-          let select = document.getElementById("customerSelect");
-
-          let option = document.createElement("option");
-
-          option.value = data.customer.id;
-          option.text = data.customer.name + " (" + data.customer.phone + ")";
-
-          select.appendChild(option);
-
-          select.value = data.customer.id;
-
-          closeCustomerModal();
-
-        }
-
+      customerData = {};
+      formData.forEach(function (value, key) {
+        customerData[key] = value;
       });
 
+      fetch("?page=pos_register&action=add-customer", {
+          method: "POST",
+          body: formData
+        })
+        .then(function (res) {
+          return res.text().then(function (text) {
+            try {
+              return JSON.parse(text);
+            } catch (err) {
+              console.error("add-customer: not JSON", text);
+              throw new Error("Server did not return JSON. Check network tab / PHP errors.");
+            }
+          });
+        })
+        .then(function (data) {
+          if (!data.success) {
+            showToast(data.message || "Could not save customer", "red");
+            return;
+          }
+
+          var select = document.getElementById("customerSelect");
+          if (!select) return;
+
+          var option = document.createElement("option");
+          option.value = data.customer.id;
+          option.textContent = data.customer.name + " (" + data.customer.phone + ")";
+          option.setAttribute("data-name", data.customer.name || "");
+          option.setAttribute("data-phone", data.customer.phone || "");
+
+          select.appendChild(option);
+          select.value = String(data.customer.id);
+
+          if (window.jQuery && jQuery.fn.select2 && jQuery(select).data("select2")) {
+            jQuery(select).trigger("change");
+          }
+
+          showToast("✓ Customer saved", "green");
+          closeCustomerModal();
+        })
+        .catch(function (err) {
+          console.error(err);
+          showToast(err.message || "Save customer failed", "red");
+        });
+    });
   });
 </script>
 

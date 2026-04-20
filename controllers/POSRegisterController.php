@@ -2021,6 +2021,8 @@ class POSRegisterController
     {
         global $conn;
 
+        header('Content-Type: application/json; charset=utf-8');
+
         $first = $_POST['first_name'] ?? '';
         $last  = $_POST['last_name'] ?? '';
         $phone = $_POST['mobile'] ?? '';
@@ -2040,10 +2042,33 @@ class POSRegisterController
         INSERT INTO vp_customers (name,email,phone)
         VALUES (?,?,?)
     ");
+        if (!$stmt) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Database error (prepare): " . $conn->error
+            ]);
+            exit;
+        }
         $stmt->bind_param("sss", $name, $email, $phone);
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Could not save customer: " . $stmt->error
+            ]);
+            $stmt->close();
+            exit;
+        }
 
-        $id = $stmt->insert_id;
+        $id = (int)$stmt->insert_id;
+        $stmt->close();
+
+        if ($id <= 0) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Customer was not created (no insert id)."
+            ]);
+            exit;
+        }
 
         /*  STORE FULL BILLING + SHIPPING IN SESSION */
         $_SESSION['pos_customer_id'] = $id;
