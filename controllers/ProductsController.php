@@ -2235,7 +2235,7 @@ class ProductsController {
             // Some production schemas still enforce legacy `Item_code` explicitly.
             if (stripos($msg, "Field 'Item_code' doesn't have a default value") !== false && $itemCodeCol !== 'Item_code') {
                 $insLegacy = $conn->prepare("INSERT INTO vp_stock_movements
-                    (product_id, sku, `Item_code`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                    (product_id, sku, `item_code`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
                     VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
                 if ($insLegacy) {
                     $insLegacy->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
