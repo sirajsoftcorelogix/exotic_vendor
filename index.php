@@ -134,6 +134,9 @@ switch ($page) {
             case 'UpdateVendorCode':
                 $controller->UpdateVendorCode();
                 break;
+            case 'fetchAllVendors':
+                $controller->fetchAllVendors();
+                break;
             default:
                 $controller->index();
                 break;

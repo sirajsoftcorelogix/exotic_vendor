@@ -491,5 +491,41 @@ class VendorsController {
         echo json_encode($result);
         exit;
     }
+    public function fetchAllVendors(){
+        global $vendorsModel;
+        $categories = getCategoryFromTable();
+        $groupname = reset($categories); // Get the first category name
+        $apivendors = [];
+        foreach($categories as $groupname) {
+        $url = 'https://www.exoticindia.com/vendor-api/product/vendorlist?groupname=' . urlencode($groupname);
+        
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded'
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        $response = curl_exec($ch);
+        $error = curl_error($ch);
+        curl_close($ch);
+        
+        if ($response === false) {
+            echo json_encode(['status' => 'error', 'message' => 'API request failed: ' . $error]);
+            exit;
+        }
+        
+        $result = json_decode($response, true);
+        //echo "Group: " . $groupname . "\n";
+        //print_array($result);
+        $apivendors[$groupname] = $result['vendors'] ?? [];
+        }
+        //print_array($apivendors);
+        $result = $vendorsModel->saveVendorsFromAPI($apivendors);
+        echo json_encode($result);
+        exit;
+    }
 }
 ?>
