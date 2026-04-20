@@ -1008,7 +1008,7 @@
 
   <div class="relative mx-auto mt-40 w-[95%] max-w-md rounded-2xl bg-white shadow-xl p-5">
 
-    <h2 class="text-lg font-semibold mb-4">Apply Discount</h2>
+    <h2 class="text-lg font-semibold mb-4">Apply Cash Discount</h2>
 
     <!-- TYPE -->
     <div class="mb-3">
@@ -1022,9 +1022,8 @@
 
     <!-- VALUE -->
     <div class="mb-4">
-      <label class="text-xs text-gray-600">Value</label>
       <input type="number" id="discount_value"
-        class="w-full mt-1 border rounded-lg px-3 py-2 text-sm"
+        class="w-full border rounded-lg px-3 py-2 text-sm"
         placeholder="Enter value">
     </div>
 
@@ -1610,10 +1609,22 @@
 </script>
 
 <script>
+  function updateDiscountPlaceholder() {
+    const typeEl = document.getElementById("discount_type");
+    const valueEl = document.getElementById("discount_value");
+    if (!typeEl || !valueEl) return;
+
+    valueEl.placeholder = typeEl.value === "percent" ? "Enter percentage" : "Enter amount";
+  }
+
   // OPEN MODAL
   document.getElementById("applyCustomDiscountBtn").addEventListener("click", function() {
     document.getElementById("discountModal").classList.remove("hidden");
+    updateDiscountPlaceholder();
   });
+
+  document.getElementById("discount_type").addEventListener("change", updateDiscountPlaceholder);
+  updateDiscountPlaceholder();
 
   function closeDiscountModal() {
     document.getElementById("discountModal").classList.add("hidden");
