@@ -12,6 +12,14 @@ class POSRegisterController
         $this->pos     = new pos($conn);
     }
 
+    /** Drop buffered output (e.g. notices from bootstrap) so JSON-only responses stay valid. */
+    private function clearBufferedHttpOutput(): void
+    {
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+    }
+
     public function index()
     {
         // slug => label
@@ -222,6 +230,7 @@ class POSRegisterController
             'total_pages'     => $totalPages,
         ];
 
+        $this->clearBufferedHttpOutput();
         header('Content-Type: application/json');
         echo json_encode($response);
         exit;
@@ -292,6 +301,8 @@ class POSRegisterController
             $rows = array_slice($rows, 0, (int)$perPage);
         }
 
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'data' => $rows,
             'current_page' => $pageNo,
@@ -831,7 +842,7 @@ class POSRegisterController
 
     public function siblingSkusAjax(): void
     {
-        ob_clean();
+        $this->clearBufferedHttpOutput();
         header('Content-Type: application/json');
 
         $itemCode = isset($_GET['item_code']) ? trim((string)$_GET['item_code']) : '';
@@ -850,6 +861,8 @@ class POSRegisterController
         $code = isset($_GET['code']) ? trim((string)$_GET['code']) : '';
 
         if ($code === '') {
+            $this->clearBufferedHttpOutput();
+            header('Content-Type: application/json');
             echo json_encode(['status' => false]);
             exit;
         }
@@ -1034,8 +1047,7 @@ class POSRegisterController
             'sibling_skus' => $siblingSkus,
         ];
 
-        //  IMPORTANT: clear buffer
-        ob_clean();
+        $this->clearBufferedHttpOutput();
 
         header('Content-Type: application/json');
 
@@ -1050,6 +1062,7 @@ class POSRegisterController
     public function productAvailability()
     {
         global $conn;
+        $this->clearBufferedHttpOutput();
         header('Content-Type: application/json');
 
         $productId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
@@ -1773,6 +1786,7 @@ class POSRegisterController
     {
         global $conn;
 
+        $this->clearBufferedHttpOutput();
         header('Content-Type: application/json');
         $allowedPaymentTypes = [
             'offline',
@@ -2021,6 +2035,7 @@ class POSRegisterController
     {
         global $conn;
 
+        $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
 
         $first = $_POST['first_name'] ?? '';
@@ -2099,6 +2114,8 @@ class POSRegisterController
             unset($_SESSION['pos_customer_id']);
         }
 
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode(["success" => true]);
         exit;
     }
@@ -2120,6 +2137,8 @@ class POSRegisterController
         $type  = $_POST['type'] ?? 'fixed';
 
         if ($value <= 0) {
+            $this->clearBufferedHttpOutput();
+            header('Content-Type: application/json; charset=utf-8');
             echo json_encode(["success" => false, "message" => "Invalid discount"]);
             exit;
         }
@@ -2140,6 +2159,8 @@ class POSRegisterController
             ['custom_reduce' => $value]
         );
 
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode(["success" => true]);
         exit;
     }
