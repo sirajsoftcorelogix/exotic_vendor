@@ -73,15 +73,16 @@ class pos
             $types .= "sss";
         }
 
-        // PRICE FILTER
+        // Price filter: India sell (price_india) when set, else itemprice
+        $sellPriceExpr = 'IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice)';
         if ($minPrice !== '') {
-            $where .= " AND p.itemprice >= ? ";
+            $where .= " AND {$sellPriceExpr} >= ? ";
             $params[] = $minPrice;
             $types .= "d";
         }
 
         if ($maxPrice !== '') {
-            $where .= " AND p.itemprice <= ? ";
+            $where .= " AND {$sellPriceExpr} <= ? ";
             $params[] = $maxPrice;
             $types .= "d";
         }
@@ -111,7 +112,7 @@ class pos
         if ($orderColumn === 'stock_qty') {
             $orderExpr = 'sm.running_stock';
         } elseif ($orderColumn === 'price') {
-            $orderExpr = 'p.itemprice';
+            $orderExpr = 'IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice)';
         }
 
         $stockFrom = "
@@ -154,7 +155,7 @@ class pos
         p.cost_price,
         sm.running_stock AS stock_qty,
         sm.location AS warehouse_location,
-        p.itemprice AS price
+        IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) AS price
     $stockFrom
     $where
     ORDER BY $orderExpr $orderDir
@@ -388,7 +389,7 @@ class pos
                 p.size,
                 p.color,
                 p.image,
-                p.itemprice AS sell_price,
+                IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) AS sell_price,
                 p.cost_price,
                 sm.running_stock AS stock_qty,
                 sm.location AS location

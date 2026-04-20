@@ -360,7 +360,7 @@ class POSRegisterController
     /** First positive amount from named keys on an API payload (same keys used elsewhere for catalog sync). */
     private function pickPositivePriceFromApiArray(array $data): float
     {
-        foreach (['price', 'itemprice', 'finalprice'] as $k) {
+        foreach (['price_india', 'price_india_suggested', 'price', 'itemprice', 'finalprice'] as $k) {
             if (!array_key_exists($k, $data)) {
                 continue;
             }
@@ -377,18 +377,50 @@ class POSRegisterController
         return 0.0;
     }
 
-    /** POS grid uses vp_products.itemprice; upstream often sends itemprice not price. */
+    /** POS uses India retail when present (vp_products.price_india), else API / itemprice. */
     private function mergeSellingPrice(array $apiData, array $dbRow): float
     {
         $fromApi = $this->pickPositivePriceFromApiArray($apiData);
         if ($fromApi > 0) {
             return $fromApi;
         }
-        foreach (['itemprice', 'finalprice'] as $k) {
+        foreach (['price_india', 'price_india_suggested', 'finalprice', 'itemprice'] as $k) {
             if (empty($dbRow[$k])) {
                 continue;
             }
             $f = (float)$dbRow[$k];
+            if ($f > 0) {
+                return $f;
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * India retail unit price from vp_products for a cart/API product code (sku or item_code).
+     */
+    private function resolveIndiaSellPriceFromVp($conn, string $code): float
+    {
+        if ($code === '' || !$conn) {
+            return 0.0;
+        }
+        $stmt = $conn->prepare(
+            'SELECT price_india, price_india_suggested, finalprice, itemprice
+             FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return 0.0;
+        }
+        $stmt->bind_param('ss', $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) {
+            return 0.0;
+        }
+        foreach (['price_india', 'price_india_suggested', 'finalprice', 'itemprice'] as $k) {
+            $f = (float)($row[$k] ?? 0);
             if ($f > 0) {
                 return $f;
             }
@@ -756,7 +788,7 @@ class POSRegisterController
         if (!empty($conn)) {
             $stmt = $conn->prepare(
                 'SELECT id, item_code, sku, title, image, material, size, color, hsn,
-                        itemprice, finalprice,
+                        price_india, price_india_suggested, itemprice, finalprice,
                         product_weight, product_weight_unit,
                         prod_height, prod_width, prod_length, length_unit
                  FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
@@ -1222,6 +1254,7 @@ class POSRegisterController
 
     public function get_cart()
     {
+        global $conn;
         $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
         $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
         $res = $this->exotic_api_call(
@@ -1298,12 +1331,18 @@ class POSRegisterController
 
                 $all_addons = $this->productApiAddonCatalogList($productRes);
 
+                $unitBase = (float)$item['price'];
+                $vpIndia = $this->resolveIndiaSellPriceFromVp($conn, trim((string)$item['code']));
+                if ($vpIndia > 0) {
+                    $unitBase = $vpIndia;
+                }
+
                 $items[] = [
                     'item_code' => $item['code'],
                     'cartref' => $item['cartref'],
                     'name' => $item['name'],
                     'imageurl' => $item['imageurl'],
-                    'price' => (float)$item['price'],
+                    'price' => $unitBase,
                     'quantity' => (int)$item['quantity'],
                     'shipping' => $shipping,
                     'shipping_per_unit' => $shipping_per_unit,
@@ -1331,7 +1370,7 @@ class POSRegisterController
                     (bool)$expressSelected,
                     $shipping_per_unit
                 );
-                $unitLine = (float)$item['price'] + $addonsSumPerUnit;
+                $unitLine = $unitBase + $addonsSumPerUnit;
                 $subtotal += $unitLine * (int)$item['quantity'];
 
                 // Add shipping only if selected

@@ -95,6 +95,36 @@ function cart_merge_express_into_addon_unit_sum(
     return $addonsSumPerUnit;
 }
 
+/** India retail unit price from vp_products (matches POSRegisterController). */
+function cart_resolve_india_price_from_vp($mysqli, string $code): float
+{
+    if ($code === '' || !$mysqli) {
+        return 0.0;
+    }
+    $stmt = $mysqli->prepare(
+        'SELECT price_india, price_india_suggested, finalprice, itemprice
+         FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+    );
+    if (!$stmt) {
+        return 0.0;
+    }
+    $stmt->bind_param('ss', $code, $code);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$row) {
+        return 0.0;
+    }
+    foreach (['price_india', 'price_india_suggested', 'finalprice', 'itemprice'] as $k) {
+        $f = (float)($row[$k] ?? 0);
+        if ($f > 0) {
+            return $f;
+        }
+    }
+
+    return 0.0;
+}
+
 function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null)
 {
     // echo "<pre>";
@@ -147,6 +177,7 @@ function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = n
 
 function get_cart()
 {
+    global $conn;
     $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
 
     $res = exotic_api_call(
@@ -174,18 +205,13 @@ function get_cart()
             // $expressSelected = $item['express_shipping_chosen'] ?? false;
             $expressSelected = $item['express_shipping_chosen'] ?? false;
 
-            $items[] = [
-                'cartref' => $item['cartref'],
-                'name' => $item['name'],
-                'imageurl' => $item['imageurl'],
-                'price' => (float)$item['price'],
-                'quantity' => (int)$item['quantity'],
-                'shipping' => $shipping,
-                'shipping_per_unit' => $shipping_per_unit,
-                'shipping_title' => $item['express_shipping_option']['title'] ?? '',
-                'shipping_longtitle' => $item['express_shipping_option']['longtitle'] ?? '',
-                'express_selected' => $expressSelected
-            ];
+            $unitBase = (float)$item['price'];
+            if (!empty($conn)) {
+                $vpIndia = cart_resolve_india_price_from_vp($conn, trim((string)$item['code']));
+                if ($vpIndia > 0) {
+                    $unitBase = $vpIndia;
+                }
+            }
 
             $addons = [];
             $addonsSumPerUnit = 0.0;
@@ -255,7 +281,20 @@ function get_cart()
                 $shipping_per_unit
             );
 
-            $unitLine = (float)$item['price'] + $addonsSumPerUnit;
+            $items[] = [
+                'cartref' => $item['cartref'],
+                'name' => $item['name'],
+                'imageurl' => $item['imageurl'],
+                'price' => $unitBase,
+                'quantity' => (int)$item['quantity'],
+                'shipping' => $shipping,
+                'shipping_per_unit' => $shipping_per_unit,
+                'shipping_title' => $item['express_shipping_option']['title'] ?? '',
+                'shipping_longtitle' => $item['express_shipping_option']['longtitle'] ?? '',
+                'express_selected' => $expressSelected
+            ];
+
+            $unitLine = $unitBase + $addonsSumPerUnit;
             $subtotal += $unitLine * (int)$item['quantity'];
             // echo $expressSelected;
             // exit;
