@@ -392,6 +392,7 @@
 
 <!-- JavaScript to handle popup and form submission -->
 <script>
+(function () {
     const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
     const popupWrapper = document.getElementById('popup-wrapper');
     const modalSlider = document.getElementById('modal-slider');
@@ -399,6 +400,7 @@
     const closeVendorPopupBtn = document.getElementById('close-vendor-popup-btn');
 
     function openVendorPopup() {
+        if (!popupWrapper || !modalSlider) return;
         popupWrapper.classList.remove('hidden');
         setTimeout(() => {
             modalSlider.classList.remove('translate-x-full');
@@ -406,20 +408,25 @@
     }
 
     function closeVendorPopup() {
+        if (!modalSlider) return;
         modalSlider.classList.add('translate-x-full');
     }
 
-    modalSlider.addEventListener('transitionend', (event) => {
-        if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
-            popupWrapper.classList.add('hidden');
-        }
-    });
+    if (modalSlider && popupWrapper) {
+        modalSlider.addEventListener('transitionend', (event) => {
+            if (event.target !== modalSlider) return;
+            if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
+                popupWrapper.classList.add('hidden');
+            }
+        });
+    }
 
-    openVendorPopupBtn.addEventListener('click', openVendorPopup);
-    cancelVendorBtn.addEventListener('click', closeVendorPopup);
-    closeVendorPopupBtn.addEventListener('click', closeVendorPopup);
+    if (openVendorPopupBtn) openVendorPopupBtn.addEventListener('click', openVendorPopup);
+    if (cancelVendorBtn) cancelVendorBtn.addEventListener('click', closeVendorPopup);
+    if (closeVendorPopupBtn) closeVendorPopupBtn.addEventListener('click', closeVendorPopup);
 
-    document.getElementById('addUserForm').onsubmit = function(e) {
+    const addUserForm = document.getElementById('addUserForm');
+    if (addUserForm) addUserForm.onsubmit = function(e) {
         e.preventDefault();
         var form = new FormData(this);
         var params = new URLSearchParams(form).toString();
@@ -530,33 +537,35 @@
                     option.selected = teamArr.map(String).includes(String(option.value));
                 });
 
-                // Initialize Select2
-                $(document).ready(function() {
-                    $('#editTeam').select2({
+                var $editTeam = $('#editTeam');
+                if ($editTeam.length && !$editTeam.data('select2')) {
+                    $editTeam.select2({
                         placeholder: "Select Teams",
                         allowClear: true,
                         width: '400',
                         closeOnSelect: false
                     });
-                });
+                }
 
-                popupWrapperEdit.classList.remove('hidden');
+                if (popupWrapperEdit) popupWrapperEdit.classList.remove('hidden');
                 setTimeout(() => {
-                    modalSliderEdit.classList.remove('translate-x-full');
-                     const warehouseSelect = document.getElementById("editWarehouse");
-                warehouseSelect.value = String(user.warehouse_id);
+                    if (modalSliderEdit) modalSliderEdit.classList.remove('translate-x-full');
+                    const warehouseSelect = document.getElementById("editWarehouse");
+                    if (warehouseSelect) warehouseSelect.value = String(user.warehouse_id);
                 }, 10);
             });
     }
+    window.openEditModal = openEditModal;
 
     function closeVendorPopupEdit() {
-        modalSliderEdit.classList.add('translate-x-full');
+        if (modalSliderEdit) modalSliderEdit.classList.add('translate-x-full');
     }
 
-    closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);
-    cancelVendorBtnEdit.addEventListener('click', closeVendorPopupEdit);
+    if (closeVendorPopupBtnEdit) closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);
+    if (cancelVendorBtnEdit) cancelVendorBtnEdit.addEventListener('click', closeVendorPopupEdit);
 
-    document.getElementById('editUserForm').onsubmit = function(e) {
+    const editUserForm = document.getElementById('editUserForm');
+    if (editUserForm) editUserForm.onsubmit = function(e) {
         e.preventDefault();
         var form = new FormData(this);
         var params = new URLSearchParams(form).toString();
@@ -586,11 +595,15 @@
             });
     };
     $(document).ready(function() {
-        $('#team').select2({
-            placeholder: "Select Teams",
-            allowClear: true,
-            width: '400',
-            closeOnSelect: false
-        });
+        var $team = $('#team');
+        if ($team.length && !$team.data('select2')) {
+            $team.select2({
+                placeholder: "Select Teams",
+                allowClear: true,
+                width: '400',
+                closeOnSelect: false
+            });
+        }
     });
+})();
 </script>
