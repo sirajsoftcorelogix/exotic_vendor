@@ -2232,22 +2232,65 @@ class ProductsController {
             $msg = $ins->error;
             $ins->close();
 
-            // Fallback for schemas where ref_id is NOT NULL.
-            $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
-                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
-            if (!$ins2) {
-                $conn->rollback();
-                return 'Stock movement insert failed: ' . $msg;
+            // Some production schemas still enforce legacy `Item_code` explicitly.
+            if (stripos($msg, "Field 'Item_code' doesn't have a default value") !== false && $itemCodeCol !== 'Item_code') {
+                $insLegacy = $conn->prepare("INSERT INTO vp_stock_movements
+                    (product_id, sku, `Item_code`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
+                if ($insLegacy) {
+                    $insLegacy->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
+                    if ($insLegacy->execute()) {
+                        $insLegacy->close();
+                        $ins = null;
+                    } else {
+                        $msg = $insLegacy->error;
+                        $insLegacy->close();
+                    }
+                }
             }
-            $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-            if (!$ins2->execute()) {
-                $msg2 = $ins2->error;
-                $ins2->close();
-                $conn->rollback();
-                return 'Stock movement insert failed: ' . $msg2;
+
+            if ($ins === null) {
+                // Legacy retry succeeded.
+            } else {
+
+                // Fallback for schemas where ref_id is NOT NULL.
+                $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
+                    (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
+                if (!$ins2) {
+                    $conn->rollback();
+                    return 'Stock movement insert failed: ' . $msg;
+                }
+                $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
+                if (!$ins2->execute()) {
+                    $msg2 = $ins2->error;
+                    $ins2->close();
+
+                    // Legacy fallback with explicit Item_code + non-NULL ref_id.
+                    if (stripos($msg2, "Field 'Item_code' doesn't have a default value") !== false && $itemCodeCol !== 'Item_code') {
+                        $ins2Legacy = $conn->prepare("INSERT INTO vp_stock_movements
+                            (product_id, sku, `Item_code`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
+                        if ($ins2Legacy) {
+                            $ins2Legacy->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
+                            if ($ins2Legacy->execute()) {
+                                $ins2Legacy->close();
+                                $ins2 = null;
+                            } else {
+                                $msg2 = $ins2Legacy->error;
+                                $ins2Legacy->close();
+                            }
+                        }
+                    }
+
+                    if ($ins2 !== null) {
+                        $conn->rollback();
+                        return 'Stock movement insert failed: ' . $msg2;
+                    }
+                } else {
+                    $ins2->close();
+                }
             }
-            $ins2->close();
         } else {
             $ins->close();
         }
