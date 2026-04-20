@@ -1320,7 +1320,7 @@ class POSRegisterController
             'x-api-appplayerid: POS-Web-Terminal',
             'x-api-countrycode: IN',
             'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
-            'User-Agent: ExoticPOS/1.0'
+            'User-Agent: ExoticPOS'
         ];
 
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1365,7 +1365,7 @@ class POSRegisterController
                 'x-api-appplayerid' => 'POS-Web-Terminal',
                 'x-api-countrycode' => 'IN',
                 'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
-                'User-Agent' => 'ExoticPOS/1.0',
+                'User-Agent' => 'ExoticPOS',
             ],
         ];
 
