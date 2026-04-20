@@ -21,7 +21,7 @@
                 <input
                     type="text"
                     name="search_text"
-                    value="<?php echo htmlspecialchars($data['search'] ?? ''); ?>"
+                    value="<?php echo htmlspecialchars($search ?? ''); ?>"
                     placeholder="Search by name, email or phone"
                     class="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-200">
             </div>
@@ -30,7 +30,7 @@
                 <select name="role_filter" id="role_filter" class="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-200">
                     <option value="">All Roles</option>
                     <?php foreach ($roles_list as $role): ?>
-                        <option value="<?php echo $role['id']; ?>" <?php echo (($data['role_filter'] ?? '') == $role['id']) ? "selected" : "" ?>>
+                        <option value="<?php echo $role['id']; ?>" <?php echo (($role_filter ?? '') == $role['id']) ? "selected" : "" ?>>
                             <?php echo htmlspecialchars($role['role_name']); ?>
                         </option>
                     <?php endforeach; ?>
@@ -40,8 +40,8 @@
             <div class="lg:col-span-2">
                 <select name="status_filter" id="status_filter" class="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-200">
                     <option value="">All Status</option>
-                    <option value="1" <?php echo (($data['status_filter'] ?? '') === "1") ? "selected" : "" ?>>Active</option>
-                    <option value="0" <?php echo (($data['status_filter'] ?? '') === "0") ? "selected" : "" ?>>Inactive</option>
+                    <option value="1" <?php echo (($status_filter ?? '') === "1") ? "selected" : "" ?>>Active</option>
+                    <option value="0" <?php echo (($status_filter ?? '') === "0") ? "selected" : "" ?>>Inactive</option>
                 </select>
             </div>
 
@@ -77,9 +77,9 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100 bg-white">
                         <?php
-                        if (!empty($data['users'])) {
+                        if (!empty($users)) {
                             $i = 0;
-                            foreach ($data['users'] as $item):
+                            foreach ($users as $item):
                         ?>
                                 <tr class="text-sm text-gray-700 hover:bg-gray-50">
                                     <td class="whitespace-nowrap px-4 py-3"><?= (int)$item["id"] ?></td>
@@ -147,10 +147,10 @@
     </div>
     <!-- Pagination -->
     <?php
-    $page_no = $data["page_no"];
-    $limit = $data["limit"];
-    $total_records = $data["totalRecords"] ?? 0;
-    $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
+    $page_no = (int)($page_no ?? 1);
+    $limit = (int)($limit ?? 20);
+    $total_records = (int)($totalRecords ?? 0);
+    $total_pages = $limit > 0 ? (int)ceil($total_records / $limit) : 1;
     ?>
     <?php if ($total_pages > 1): ?>
         <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -176,7 +176,7 @@
                         id="rows-per-page"
                         class="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-700 focus:border-gray-500 focus:outline-none"
                         onchange="location.href='?page=users&action=list&page_no=1&limit=' + this.value;">
-                        <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                        <?php foreach ([5, 20, 50, 100] as $opt): ?>
                             <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>><?= $opt ?></option>
                         <?php endforeach; ?>
                     </select>
