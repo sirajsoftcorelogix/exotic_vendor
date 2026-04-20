@@ -534,6 +534,13 @@
             Proceed to Payment
           </button>
 
+          <button
+            type="button"
+            id="btnOpenCartApiModal"
+            class="mt-2 w-full text-center text-[11px] text-slate-500 hover:text-slate-800 underline decoration-slate-400">
+            View Cart API response
+          </button>
+
         </div>
       </div>
     </aside>
@@ -541,6 +548,58 @@
 
   </main>
 </div>
+
+<!-- Cart API debug (decoded JSON from GET /cart/retrieve) -->
+<div id="cartApiResponseModal" class="fixed inset-0 z-[10000] hidden">
+  <div id="cartApiResponseOverlay" class="absolute inset-0 bg-black/50"></div>
+  <div class="relative mx-auto mt-8 w-[95%] max-w-4xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[88vh]">
+    <div class="flex items-center justify-between gap-3 border-b px-4 py-3 shrink-0">
+      <h2 class="text-sm font-semibold text-gray-900">Cart API response</h2>
+      <button type="button" id="cartApiResponseClose" class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100">
+        ✕
+      </button>
+    </div>
+    <div class="px-4 py-3 overflow-auto text-xs leading-relaxed">
+      <p class="text-[11px] text-slate-500 mb-2">
+        <span class="font-medium text-slate-700">HTTP <?= (int)($cartData['cart_api_http_code'] ?? 0) ?></span>
+        · Decoded JSON body from <code class="bg-slate-100 px-1 rounded">/cart/retrieve</code>
+      </p>
+      <pre id="cartApiResponsePre" class="whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-200 p-3 font-mono text-[11px] text-slate-800"><?= htmlspecialchars(
+          json_encode(
+              [
+                  'http_code' => $cartData['cart_api_http_code'] ?? null,
+                  'endpoint' => 'GET https://www.exoticindia.com/api/cart/retrieve',
+                  'response' => $cartData['cart_api_body'] ?? [],
+              ],
+              JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+          ),
+          ENT_QUOTES,
+          'UTF-8'
+      ) ?></pre>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var modal = document.getElementById('cartApiResponseModal');
+  var btn = document.getElementById('btnOpenCartApiModal');
+  var closeBtn = document.getElementById('cartApiResponseClose');
+  var overlay = document.getElementById('cartApiResponseOverlay');
+  function openCartApiModal() {
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeCartApiModal() {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+  if (btn) btn.addEventListener('click', openCartApiModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeCartApiModal);
+  if (overlay) overlay.addEventListener('click', closeCartApiModal);
+})();
+</script>
 <!-- <a
   href="/?page=posinvoice&action=generate_pdf&invoice_id=49"
   target="_blank"
