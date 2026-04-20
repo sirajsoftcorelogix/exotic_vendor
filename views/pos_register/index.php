@@ -525,7 +525,7 @@
           <!-- ACTION -->
           <button id="applyCustomDiscountBtn"
             class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold">
-            Apply Cart Discount
+            Apply Cash Discount
           </button>
 
           <button
