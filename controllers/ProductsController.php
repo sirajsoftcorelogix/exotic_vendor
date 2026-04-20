@@ -2177,8 +2177,14 @@ class ProductsController {
         if ($productId <= 0) {
             return 'Invalid product id for stock movement.';
         }
-        // Use canonical product SKU from vp_products only.
+        // Prefer canonical SKU from vp_products; fallback to import/derived SKU when blank.
         $sku = trim((string)($product['sku'] ?? ''));
+        if ($sku === '') {
+            $sku = trim($importSku);
+        }
+        if ($sku === '') {
+            $sku = $this->buildBulkImportAutoSku($itemCode, $importSize, $importColor);
+        }
         if ($sku === '') {
             return 'SKU is missing for stock movement.';
         }
@@ -2297,8 +2303,14 @@ class ProductsController {
             return 'Invalid product id for stock update.';
         }
 
-        // Use canonical product SKU from vp_products only.
+        // Prefer canonical SKU from vp_products; fallback to import/derived SKU when blank.
         $sku = trim((string)($product['sku'] ?? ''));
+        if ($sku === '') {
+            $sku = trim($importSku);
+        }
+        if ($sku === '') {
+            $sku = $this->buildBulkImportAutoSku($itemCode, $importSize, $importColor);
+        }
         if ($sku === '') {
             return 'SKU is missing for stock update.';
         }
