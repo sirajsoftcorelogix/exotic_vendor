@@ -111,9 +111,7 @@ class Customer
         $sql = "SELECT * FROM vp_customers";
         $params = [];
         $types = "";
-        $where = ["name NOT LIKE ?"];
-        $params[] = "%****%";
-        $types .= "s";
+        $where = [];
 
         if (!empty($filters['search'])) {
             $where[] = "(name LIKE ? OR email LIKE ? OR phone LIKE ?)";
@@ -149,9 +147,7 @@ class Customer
         $sql = "SELECT COUNT(*) as total FROM vp_customers";
         $params = [];
         $types = "";
-        $where = ["name NOT LIKE ?"];
-        $params[] = "%****%";
-        $types .= "s";
+        $where = [];
 
         if (!empty($filters['search'])) {
             $where[] = "(name LIKE ? OR email LIKE ? OR phone LIKE ?)";

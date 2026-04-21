@@ -42,7 +42,6 @@ class POSRegisterController
         $categories = ['allProducts' => 'All Products'] + $categories;
 
         $customerModel = new Customer($conn);
-        // Enough rows for Select2 client-side search; exclude masked names via getAllCustomers filter.
         $customers = $customerModel->getAllCustomers(500, 0, []);
         // slug => svg icon
         $categoryIcons = [
