@@ -1706,7 +1706,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-    const apiUrl = '/index.php?page=inbounding&action=getItamcode';
+    const apiUrl = "<?php echo base_url('?page=inbounding&action=getItamcode'); ?>";
     const formElement = document.querySelector('form');
     const variantSelect = document.getElementById('variant_select');
     const wrapperSelect = document.getElementById('wrapper_select');
@@ -3943,7 +3943,7 @@ document.addEventListener('DOMContentLoaded', function() {
         itemGroupSelect.tomselect.on('change', function() {
             // ONLY sync when user manually changes the Group
             performFullSync();
-            updateVendorListBasedOnGroup(); // Also update vendor list when group changes
+            //updateVendorListBasedOnGroup(); // Also update vendor list when group changes
         });
     }
 
@@ -4024,7 +4024,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         option.value = vendor.vendor_id;
                         option.textContent = vendor.vendor_name;
                         vendorSelect.appendChild(option);
-                        //console.log('options:', option);
+                        console.log('options:', option);
                     });
                      
                     // If TomSelect is initialized, refresh it
@@ -4052,15 +4052,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Expose function globally so it can be called from other scripts
-    window.updateVendorListBasedOnGroup = updateVendorListBasedOnGroup;
+    //window.updateVendorListBasedOnGroup = updateVendorListBasedOnGroup;
 
-    // Hook into the group select change event
+    //Hook into the group select change event
     const groupSelect = document.getElementById('group_select');
     if (groupSelect) {
         groupSelect.addEventListener('change', updateVendorListBasedOnGroup);
-        if (groupSelect.tomselect) {
-            groupSelect.tomselect.on('change', updateVendorListBasedOnGroup);
-        }
+        // if (groupSelect.tomselect) {
+        //     groupSelect.tomselect.on('change', updateVendorListBasedOnGroup);
+        // }
     }
 });
 
