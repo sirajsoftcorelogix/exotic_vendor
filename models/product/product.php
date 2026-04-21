@@ -2,6 +2,8 @@
 class product
 {
     private $db;
+    /** @var string|null */
+    private $stockMovementItemCodeColumn = null;
     private $vpProductsCols = null;
     private function vpProductsHasColumn(string $col): bool
     {
@@ -506,6 +508,7 @@ class product
                 $product['itemcode'] = $itemcode;
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
+                $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($product['size'] ?? ''), (string)($product['color'] ?? ''));
                 $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ? WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
@@ -580,6 +583,16 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
+                        if ($existingBase && isset($existingBase['id'])) {
+                            $this->applyApiRefreshStockAdjustments(
+                                (int)$existingBase['id'],
+                                (string)$sku,
+                                (string)$product['itemcode'],
+                                (string)$size,
+                                (string)$color,
+                                (int)$localStock
+                            );
+                        }
                     }
                     if ($stmt->error) {
                         return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
@@ -646,6 +659,7 @@ class product
                 if (isset($product['variations'])) {
                     foreach ($product['variations'] as $variation) {
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
+                        $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($variation['size'] ?? ''), (string)($variation['color'] ?? ''));
                         $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ? WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                         if ($stmt) {
                             // $title = isset($product['title']) ? $product['title'] : '';
@@ -719,6 +733,16 @@ class product
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
+                                if ($existingBase && isset($existingBase['id'])) {
+                                    $this->applyApiRefreshStockAdjustments(
+                                        (int)$existingBase['id'],
+                                        (string)$sku,
+                                        (string)$product['itemcode'],
+                                        (string)$size,
+                                        (string)$color,
+                                        (int)$localStock
+                                    );
+                                }
                             }
                             if ($stmt->error) {
                                 return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
@@ -787,6 +811,160 @@ class product
             }
         }
         return ['success' => true, 'updated_count' => $updatedCount, 'message' => 'Products updated successfully.'];
+    }
+
+    private function resolveVpStockMovementsItemCodeColumn(): string
+    {
+        if (is_string($this->stockMovementItemCodeColumn) && $this->stockMovementItemCodeColumn !== '') {
+            return $this->stockMovementItemCodeColumn;
+        }
+        $fallback = 'item_code';
+        $res = $this->db->query('SHOW COLUMNS FROM vp_stock_movements');
+        if ($res) {
+            $preferred = ['item_code', 'itemcode', 'product_item_code', 'code'];
+            $existing = [];
+            while ($row = $res->fetch_assoc()) {
+                if (isset($row['Field'])) {
+                    $existing[strtolower((string)$row['Field'])] = (string)$row['Field'];
+                }
+            }
+            foreach ($preferred as $candidate) {
+                if (isset($existing[$candidate])) {
+                    $this->stockMovementItemCodeColumn = $existing[$candidate];
+                    return $this->stockMovementItemCodeColumn;
+                }
+            }
+        }
+        $this->stockMovementItemCodeColumn = $fallback;
+        return $this->stockMovementItemCodeColumn;
+    }
+
+    private function applyApiRefreshStockAdjustments(
+        int $productId,
+        string $sku,
+        string $itemCode,
+        string $size,
+        string $color,
+        int $apiLocalStock
+    ): void {
+        if ($productId <= 0 || $itemCode === '') {
+            return;
+        }
+
+        $size = trim($size);
+        $color = trim($color);
+        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn();
+        $safeItemCol = '`' . str_replace('`', '``', $itemCodeCol) . '`';
+
+        $latest = $this->db->prepare("SELECT running_stock, warehouse_id, location
+            FROM vp_stock_movements
+            WHERE product_id = ? AND {$safeItemCol} = ?
+              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
+              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
+            ORDER BY id DESC
+            LIMIT 1");
+        if (!$latest) {
+            return;
+        }
+        $latest->bind_param('isss', $productId, $itemCode, $size, $color);
+        if (!$latest->execute()) {
+            $latest->close();
+            return;
+        }
+        $latestRow = $latest->get_result()->fetch_assoc();
+        $latest->close();
+
+        $warehouseId = (int)($latestRow['warehouse_id'] ?? 1);
+        if ($warehouseId <= 0) {
+            $warehouseId = 1;
+        }
+        $location = trim((string)($latestRow['location'] ?? ''));
+        if ($location === '') {
+            $location = 'API refresh';
+        }
+
+        if (!$latestRow) {
+            $this->insertApiRefreshMovement(
+                $productId,
+                $sku,
+                $itemCode,
+                $size,
+                $color,
+                $warehouseId,
+                $location,
+                'OPENING_STOCK',
+                0,
+                0,
+                'API_REFRESH_BASELINE',
+                'Opening stock baseline created during API refresh'
+            );
+            $currentStock = 0;
+        } else {
+            $currentStock = (int)($latestRow['running_stock'] ?? 0);
+        }
+
+        $targetDelta = $apiLocalStock - $currentStock;
+        if ($targetDelta !== 0) {
+            $this->insertApiRefreshMovement(
+                $productId,
+                $sku,
+                $itemCode,
+                $size,
+                $color,
+                $warehouseId,
+                $location,
+                ($targetDelta > 0 ? 'IN' : 'OUT'),
+                abs($targetDelta),
+                $apiLocalStock,
+                'API_REFRESH',
+                'Stock adjusted from API refresh'
+            );
+        }
+    }
+
+    private function insertApiRefreshMovement(
+        int $productId,
+        string $sku,
+        string $itemCode,
+        string $size,
+        string $color,
+        int $warehouseId,
+        string $location,
+        string $movementType,
+        int $quantity,
+        int $runningStock,
+        string $refType,
+        string $reason
+    ): void {
+        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn();
+        $safeItemCol = '`' . str_replace('`', '``', $itemCodeCol) . '`';
+        $stmt = $this->db->prepare("INSERT INTO vp_stock_movements
+            (product_id, sku, {$safeItemCol}, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        if (!$stmt) {
+            return;
+        }
+        $refId = 'api_refresh:' . date('YmdHis');
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        $stmt->bind_param(
+            'issssissiisssi',
+            $productId,
+            $sku,
+            $itemCode,
+            $size,
+            $color,
+            $warehouseId,
+            $location,
+            $movementType,
+            $quantity,
+            $runningStock,
+            $refType,
+            $refId,
+            $reason,
+            $userId
+        );
+        $stmt->execute();
+        $stmt->close();
     }
     /**
      * Resolve a catalog row by item code and variant dimensions. Supports:
