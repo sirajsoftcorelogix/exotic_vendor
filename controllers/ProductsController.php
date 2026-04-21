@@ -991,7 +991,10 @@ class ProductsController {
                 $html = MgStoreLabel::renderPrintDocumentBatch($rows);
             }
         } catch (Throwable $e) {
-            error_log('bulk_label_print_generate: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            error_log(
+                'bulk_label_print_generate template=' . $template
+                . ' ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()
+            );
             echo json_encode([
                 'success' => false,
                 'message' => 'Could not build label output. If this continues, contact support with the time and template used.',

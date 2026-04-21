@@ -92,8 +92,13 @@ final class JewelryLabel
         $h = max(12.0, (float)($cfg['barcode_svg_bar_height'] ?? 28.0));
         $wFactor = max(1.0, (float)($cfg['barcode_svg_width_factor'] ?? 2.0));
 
-        $generator = new BarcodeGeneratorSVG();
-        $svg = $generator->getBarcode($payload, $generator::TYPE_CODE_128, $wFactor, $h);
+        try {
+            $generator = new BarcodeGeneratorSVG();
+            $svg = $generator->getBarcode($payload, $generator::TYPE_CODE_128, $wFactor, $h);
+        } catch (Throwable $e) {
+            $generator = new BarcodeGeneratorSVG();
+            $svg = $generator->getBarcode('-', $generator::TYPE_CODE_128, 2.0, $h);
+        }
 
         return 'data:image/svg+xml;base64,' . base64_encode($svg);
     }

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Picqer\Barcode\BarcodeGeneratorPNG;
+use Picqer\Barcode\BarcodeGeneratorSVG;
 
 /**
  * Textile label — 64 × 34 mm: location — print date, CODE128 (bars only), centered SKU row.
@@ -111,33 +112,63 @@ final class TextileLabel
     }
 
     /**
+     * ASCII-safe payload for Picqer CODE128 (avoids InvalidCharacterException).
+     */
+    private static function normalizeSkuForCode128(string $sku): string
+    {
+        if ($sku === '') {
+            return '0';
+        }
+        $conv = @iconv('UTF-8', 'ASCII//TRANSLIT', $sku);
+        if ($conv !== false && $conv !== '') {
+            $sku = $conv;
+        }
+        $sku = preg_replace('/[^\x20-\x7E]/', '', $sku);
+        $sku = trim((string)$sku);
+
+        return $sku !== '' ? $sku : '0';
+    }
+
+    /**
      * @param array<string, mixed>|null $config
      */
     public static function barcodeDataUri(array $data, ?array $config = null): string
     {
-        $vendorOk = self::loadVendor();
+        if (!self::loadVendor() || !class_exists(BarcodeGeneratorSVG::class)) {
+            return '';
+        }
         $cfg = self::config($config);
-        $code = self::barcodePayloadFromData($data);
+        $code = self::normalizeSkuForCode128(self::barcodePayloadFromData($data));
         $type = (string)($cfg['barcode_type'] ?? 'C128');
         $wFactor = max(1, (int)($cfg['barcode_width_factor'] ?? 1));
         $barH = max(8, (int)($cfg['barcode_height_px'] ?? 45));
-
-        if (!$vendorOk || !class_exists(BarcodeGeneratorPNG::class)) {
-            return '';
-        }
-
-        $generator = new BarcodeGeneratorPNG();
-        try {
-            $png = $generator->getBarcode($code, $type, $wFactor, $barH);
-        } catch (Throwable $e) {
-            $png = $generator->getBarcode('0', $type, $wFactor, $barH);
-        }
-
         $labelW = (float)($cfg['label_width_mm'] ?? 64);
         $padMm = (float)($cfg['padding_mm'] ?? 1.2);
-        $png = self::scaleBarcodePngToMaxWidth($png, $labelW, $padMm);
 
-        return 'data:image/png;base64,' . base64_encode($png);
+        $canPng = class_exists(BarcodeGeneratorPNG::class)
+            && (extension_loaded('imagick') || function_exists('imagecreate'));
+
+        if ($canPng) {
+            try {
+                $generator = new BarcodeGeneratorPNG();
+                $png = $generator->getBarcode($code, $type, $wFactor, $barH);
+                $png = self::scaleBarcodePngToMaxWidth($png, $labelW, $padMm);
+
+                return 'data:image/png;base64,' . base64_encode($png);
+            } catch (Throwable $e) {
+                // Hosts without a working GD/Imagick stack still hit PngRenderer; fall back to SVG.
+            }
+        }
+
+        try {
+            $svgGen = new BarcodeGeneratorSVG();
+            $svg = $svgGen->getBarcode($code, $type, (float)$wFactor, (float)$barH);
+        } catch (Throwable $e) {
+            $svgGen = new BarcodeGeneratorSVG();
+            $svg = $svgGen->getBarcode('0', $svgGen::TYPE_CODE_128, 2.0, (float)$barH);
+        }
+
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
     }
 
     /**
