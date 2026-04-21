@@ -1585,18 +1585,13 @@ class ProductsController {
         if (!$conn) {
             return 'item_code';
         }
-        $resLower = @mysqli_query($conn, "SHOW COLUMNS FROM vp_stock_movements LIKE 'item_code'");
-        if ($resLower && ($row = mysqli_fetch_assoc($resLower))) {
-            $field = trim((string)($row['Field'] ?? ''));
-            if ($field !== '') {
-                return $field;
-            }
-        }
-        $resUpper = @mysqli_query($conn, "SHOW COLUMNS FROM vp_stock_movements LIKE 'Item_code'");
-        if ($resUpper && ($row = mysqli_fetch_assoc($resUpper))) {
-            $field = trim((string)($row['Field'] ?? ''));
-            if ($field !== '') {
-                return $field;
+        $res = @mysqli_query($conn, "SHOW COLUMNS FROM vp_stock_movements");
+        if ($res) {
+            while ($row = mysqli_fetch_assoc($res)) {
+                $field = trim((string)($row['Field'] ?? ''));
+                if (strcasecmp($field, 'item_code') === 0) {
+                    return $field;
+                }
             }
         }
         return 'item_code';
@@ -2182,8 +2177,14 @@ class ProductsController {
         if ($productId <= 0) {
             return 'Invalid product id for stock movement.';
         }
-        // Use canonical product SKU from vp_products only.
+        // Prefer canonical SKU from vp_products; fallback to import/derived SKU when blank.
         $sku = trim((string)($product['sku'] ?? ''));
+        if ($sku === '') {
+            $sku = trim($importSku);
+        }
+        if ($sku === '') {
+            $sku = $this->buildBulkImportAutoSku($itemCode, $importSize, $importColor);
+        }
         if ($sku === '') {
             return 'SKU is missing for stock movement.';
         }
@@ -2225,72 +2226,29 @@ class ProductsController {
             (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
             VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
         if (!$ins) {
+            $conn->rollback();
             return 'Could not prepare stock movement insert.';
         }
         $ins->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
         if (!$ins->execute()) {
             $msg = $ins->error;
             $ins->close();
-
-            // Some production schemas still enforce legacy `Item_code` explicitly.
-            if (stripos($msg, "Field 'Item_code' doesn't have a default value") !== false && $itemCodeCol !== 'Item_code') {
-                $insLegacy = $conn->prepare("INSERT INTO vp_stock_movements
-                    (product_id, sku, `item_code`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
-                if ($insLegacy) {
-                    $insLegacy->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-                    if ($insLegacy->execute()) {
-                        $insLegacy->close();
-                        $ins = null;
-                    } else {
-                        $msg = $insLegacy->error;
-                        $insLegacy->close();
-                    }
-                }
+            // Fallback only for schemas where ref_id is NOT NULL.
+            $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
+                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
+            if (!$ins2) {
+                $conn->rollback();
+                return 'Stock movement insert failed: ' . $msg;
             }
-
-            if ($ins === null) {
-                // Legacy retry succeeded.
-            } else {
-
-                // Fallback for schemas where ref_id is NOT NULL.
-                $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
-                    (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
-                if (!$ins2) {
-                    $conn->rollback();
-                    return 'Stock movement insert failed: ' . $msg;
-                }
-                $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-                if (!$ins2->execute()) {
-                    $msg2 = $ins2->error;
-                    $ins2->close();
-
-                    // Legacy fallback with explicit Item_code + non-NULL ref_id.
-                    if (stripos($msg2, "Field 'Item_code' doesn't have a default value") !== false && $itemCodeCol !== 'Item_code') {
-                        $ins2Legacy = $conn->prepare("INSERT INTO vp_stock_movements
-                            (product_id, sku, `Item_code`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
-                        if ($ins2Legacy) {
-                            $ins2Legacy->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-                            if ($ins2Legacy->execute()) {
-                                $ins2Legacy->close();
-                                $ins2 = null;
-                            } else {
-                                $msg2 = $ins2Legacy->error;
-                                $ins2Legacy->close();
-                            }
-                        }
-                    }
-
-                    if ($ins2 !== null) {
-                        $conn->rollback();
-                        return 'Stock movement insert failed: ' . $msg2;
-                    }
-                } else {
-                    $ins2->close();
-                }
+            $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
+            if (!$ins2->execute()) {
+                $msg2 = $ins2->error;
+                $ins2->close();
+                $conn->rollback();
+                return 'Stock movement insert failed: ' . $msg2;
             }
+            $ins2->close();
         } else {
             $ins->close();
         }
@@ -2345,8 +2303,14 @@ class ProductsController {
             return 'Invalid product id for stock update.';
         }
 
-        // Use canonical product SKU from vp_products only.
+        // Prefer canonical SKU from vp_products; fallback to import/derived SKU when blank.
         $sku = trim((string)($product['sku'] ?? ''));
+        if ($sku === '') {
+            $sku = trim($importSku);
+        }
+        if ($sku === '') {
+            $sku = $this->buildBulkImportAutoSku($itemCode, $importSize, $importColor);
+        }
         if ($sku === '') {
             return 'SKU is missing for stock update.';
         }

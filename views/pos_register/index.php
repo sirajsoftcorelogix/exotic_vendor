@@ -1,4 +1,7 @@
 <div class="min-h-screen">
+  <script>
+    window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
+  </script>
   <a href="test_create_order_static();"></a>
   <!-- ===== TOP BAR ===== -->
   <header class="border-b bg-white">
@@ -179,8 +182,6 @@
 
               </option>
 
-              </option>
-
             <?php endforeach; ?>
 
           </select>
@@ -192,19 +193,16 @@
 
 
         </div>
+        <div class="mt-2 text-[11px] text-slate-600 space-y-0.5">
+          <div id="selectedCustomerName" class="font-semibold text-slate-800">Walk-in Customer</div>
+          <div id="selectedCustomerPhone" class="text-slate-500">-</div>
+        </div>
 
       </div>
       <div class="sticky top-4 rounded-2xl bg-white border shadow-sm overflow-hidden">
-
-        <!-- USER -->
         <div class="px-4 py-3 border-b">
-          <div class="text-sm font-semibold text-center">
-            <?= htmlspecialchars($_SESSION['user']['name'] ?? ' ') ?>
-          </div>
-
-          <div class="text-[11px] text-slate-500 text-center">
-            <?= htmlspecialchars($_SESSION['user']['phone'] ?? '') ?>
-          </div>
+          <div id="selectedCustomerNameCart" class="text-sm font-semibold text-center text-slate-800">Walk-in Customer</div>
+          <div id="selectedCustomerPhoneCart" class="text-[11px] text-slate-500 text-center">-</div>
         </div>
 
         <?php if (isset($_SESSION['cart_success'])): ?>
@@ -541,6 +539,13 @@
             View Cart API request &amp; response
           </button>
 
+          <button
+            type="button"
+            id="btnOpenOrderCreateApiModal"
+            class="mt-1 w-full text-center text-[11px] text-slate-500 hover:text-slate-800 underline decoration-slate-400">
+            View order create API request &amp; response
+          </button>
+
         </div>
       </div>
     </aside>
@@ -598,6 +603,89 @@
   if (btn) btn.addEventListener('click', openCartApiModal);
   if (closeBtn) closeBtn.addEventListener('click', closeCartApiModal);
   if (overlay) overlay.addEventListener('click', closeCartApiModal);
+})();
+</script>
+<?php
+$orderCreateApiDebugInitial = $_SESSION['pos_order_create_api_debug'] ?? null;
+$orderCreatePrePayload = $orderCreateApiDebugInitial ?: [
+    'message' => 'No order create API call recorded yet. Attempt "Proceed to Payment" to capture POST /order/create request and response here (including failed or non-JSON responses).',
+];
+$orderCreatePreJson = json_encode(
+    $orderCreatePrePayload,
+    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+);
+$orderCreateHttpMeta = $orderCreateApiDebugInitial
+    ? 'HTTP ' . (int)($orderCreateApiDebugInitial['http_code'] ?? 0) . ' · POST /order/create (Exotic India API)'
+    : '—';
+?>
+<!-- Order create API debug (POST /order/create) -->
+<div id="orderCreateApiResponseModal" class="fixed inset-0 z-[10000] hidden">
+  <div id="orderCreateApiResponseOverlay" class="absolute inset-0 bg-black/50"></div>
+  <div class="relative mx-auto mt-8 w-[95%] max-w-4xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[88vh]">
+    <div class="flex items-center justify-between gap-3 border-b px-4 py-3 shrink-0">
+      <h2 class="text-sm font-semibold text-gray-900">Order create API request &amp; response</h2>
+      <button type="button" id="orderCreateApiResponseClose" class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100">
+        ✕
+      </button>
+    </div>
+    <div class="px-4 py-3 overflow-auto text-xs leading-relaxed">
+      <p class="text-[11px] text-slate-500 mb-2">
+        <span id="orderCreateApiHttpMeta" class="font-medium text-slate-700"><?= htmlspecialchars($orderCreateHttpMeta, ENT_QUOTES, 'UTF-8') ?></span>
+        · Same payload the POS sends to <code class="bg-slate-100 px-1 rounded">POST /order/create</code>
+      </p>
+      <pre id="orderCreateApiResponsePre" class="whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-200 p-3 font-mono text-[11px] text-slate-800"><?= htmlspecialchars(
+          $orderCreatePreJson !== false ? $orderCreatePreJson : '{}',
+          ENT_QUOTES,
+          'UTF-8'
+      ) ?></pre>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  window.setOrderCreateApiDebugPayload = function (obj) {
+    window.POS_LAST_ORDER_CREATE_DEBUG = obj;
+    var pre = document.getElementById('orderCreateApiResponsePre');
+    var meta = document.getElementById('orderCreateApiHttpMeta');
+    if (pre) {
+      try {
+        pre.textContent = JSON.stringify(obj, null, 2);
+      } catch (e) {
+        pre.textContent = String(obj);
+      }
+    }
+    if (meta) {
+      if (obj && obj.parse_error) {
+        meta.textContent = 'Non-JSON response (see raw_body_preview)';
+      } else if (obj && obj.http_code != null && !obj.message_only) {
+        meta.textContent = (obj.triggered_from === 'payment_modal' ? 'Payment popup · ' : '') +
+          'HTTP ' + obj.http_code + ' · POST /order/create (Exotic India API)';
+      } else if (obj && obj.http_status != null) {
+        meta.textContent = 'HTTP ' + obj.http_status + ' · response was not JSON';
+      } else {
+        meta.textContent = '—';
+      }
+    }
+  };
+
+  var modal = document.getElementById('orderCreateApiResponseModal');
+  var btn = document.getElementById('btnOpenOrderCreateApiModal');
+  var closeBtn = document.getElementById('orderCreateApiResponseClose');
+  var overlay = document.getElementById('orderCreateApiResponseOverlay');
+  function openModal() {
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeModal() {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+  if (btn) btn.addEventListener('click', openModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (overlay) overlay.addEventListener('click', closeModal);
+  window.openOrderCreateApiResponseModal = openModal;
 })();
 </script>
 <!-- <a
@@ -728,9 +816,9 @@
 <!-- CUSTOMER MODAL -->
 <div id="customerModal" class="fixed inset-0 z-[9999] hidden">
 
-  <div class="absolute inset-0 bg-black/40" onclick="closeCustomerModal()"></div>
+  <div class="absolute inset-0 z-0 bg-black/40" onclick="closeCustomerModal()"></div>
 
-  <div class="relative mx-auto mt-10 w-[95%] max-w-2xl rounded-2xl bg-white shadow-xl max-h-[85vh] flex flex-col">
+  <div class="relative z-10 mx-auto mt-10 w-[95%] max-w-2xl rounded-2xl bg-white shadow-xl max-h-[85vh] flex flex-col">
 
     <!-- HEADER -->
     <div class="flex items-center justify-between border-b px-5 py-3">
@@ -753,7 +841,7 @@
 
         <div>
           <label class="text-gray-500">Last Name</label>
-          <input name="last_name" required class="w-full border rounded px-2 py-1.5">
+          <input name="last_name" class="w-full border rounded px-2 py-1.5" placeholder="Optional">
         </div>
 
         <div>
@@ -977,6 +1065,19 @@
           name="note"
           placeholder="Enter note"
           class="w-full mt-1 border rounded-lg px-3 py-2 text-sm h-24"></textarea>
+      </div>
+
+      <!-- Last order create API (filled after Confirm Order calls POST /order/create) -->
+      <div id="paymentModalOrderApiPanel" class="hidden rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[11px] font-semibold text-slate-800">Order create API (this attempt)</span>
+          <button type="button" id="paymentModalOrderApiFullBtn"
+            class="text-[11px] text-orange-700 font-medium hover:underline shrink-0">
+            Full JSON
+          </button>
+        </div>
+        <p class="text-[10px] text-slate-500">Request and response from Exotic India <code class="bg-slate-200 px-1 rounded">POST /order/create</code> after you click Confirm Order.</p>
+        <pre id="paymentModalOrderApiPre" class="max-h-48 overflow-auto text-[10px] leading-snug rounded border border-slate-200 bg-white p-2 font-mono whitespace-pre-wrap break-words"></pre>
       </div>
 
     </div>
@@ -1253,23 +1354,62 @@
 </script>
 <script>
   function openPaymentModal() {
+    var apiPanel = document.getElementById("paymentModalOrderApiPanel");
+    var apiPre = document.getElementById("paymentModalOrderApiPre");
+    if (apiPanel) {
+      apiPanel.classList.add("hidden");
+    }
+    if (apiPre) {
+      apiPre.textContent = "";
+    }
     document.getElementById("paymentModal").classList.remove("hidden");
   }
 
   function closePaymentModal() {
     document.getElementById("paymentModal").classList.add("hidden");
   }
+
+  function showPaymentModalOrderApiRecord(debug) {
+    var panel = document.getElementById("paymentModalOrderApiPanel");
+    var pre = document.getElementById("paymentModalOrderApiPre");
+    if (!panel || !pre) {
+      return;
+    }
+    try {
+      pre.textContent = JSON.stringify(debug, null, 2);
+    } catch (e) {
+      pre.textContent = String(debug);
+    }
+    panel.classList.remove("hidden");
+  }
 </script>
 <script>
   document.addEventListener("DOMContentLoaded", function() {
 
+    var fullOrderApiBtn = document.getElementById("paymentModalOrderApiFullBtn");
+    if (fullOrderApiBtn) {
+      fullOrderApiBtn.addEventListener("click", function () {
+        if (typeof window.openOrderCreateApiResponseModal === "function") {
+          window.openOrderCreateApiResponseModal();
+        }
+      });
+    }
+
     document.getElementById("placeOrderBtn").addEventListener("click", function() {
 
-      let customerId = document.getElementById("customerSelect").value;
+      var fromSelect = typeof jQuery !== "undefined" ? jQuery("#customerSelect").val() : document.getElementById("customerSelect").value;
+      if (Array.isArray(fromSelect)) {
+        fromSelect = fromSelect[0] || "";
+      }
+      var customerId = (fromSelect && String(fromSelect)) || (window.POS_SESSION_CUSTOMER_ID && String(window.POS_SESSION_CUSTOMER_ID)) || "";
 
       if (!customerId) {
         showToast("⚠ Please select customer first", "red");
-        document.getElementById("customerSelect").focus();
+        if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
+          jQuery("#customerSelect").select2("open");
+        } else {
+          document.getElementById("customerSelect").focus();
+        }
         return;
       }
 
@@ -1339,14 +1479,55 @@
     formData.append("amount", paymentAmount);
     formData.append("transaction_id", transactionId);
     formData.append("note", note);
-    formData.append("customer_id", $('#customerSelect').val());
+    var cid = $('#customerSelect').val();
+    if (Array.isArray(cid)) {
+      cid = cid[0];
+    }
+    formData.append("customer_id", cid || window.POS_SESSION_CUSTOMER_ID || "");
 
-    fetch("?page=pos_register&action=create-order", {
+    fetch("index.php?page=pos_register&action=create-order", {
         method: "POST",
+        credentials: "same-origin",
         body: formData
       })
-      .then(res => res.json())
-      .then(data => {
+      .then(function (res) {
+        return res.text().then(function (text) {
+          var cleaned = text.replace(/^\uFEFF/, "").trim();
+          try {
+            return { res: res, data: JSON.parse(cleaned), raw: cleaned, parseError: false };
+          } catch (e) {
+            return {
+              res: res,
+              parseError: true,
+              raw: cleaned
+            };
+          }
+        });
+      })
+      .then(function (wrapped) {
+        if (wrapped.parseError) {
+          console.error("create-order: not JSON (status " + wrapped.res.status + ")", wrapped.raw.slice(0, 800));
+          var parseDbg = {
+            triggered_from: "payment_modal",
+            parse_error: true,
+            http_status: wrapped.res.status,
+            raw_body_preview: wrapped.raw.slice(0, 12000)
+          };
+          if (typeof window.setOrderCreateApiDebugPayload === "function") {
+            window.setOrderCreateApiDebugPayload(parseDbg);
+          }
+          showPaymentModalOrderApiRecord(parseDbg);
+          showToast("Server did not return JSON. See Order create API in this window or use Full JSON.", "red");
+          return;
+        }
+
+        var data = wrapped.data;
+        if (data.order_api_debug && typeof window.setOrderCreateApiDebugPayload === "function") {
+          window.setOrderCreateApiDebugPayload(data.order_api_debug);
+          if (!data.success) {
+            showPaymentModalOrderApiRecord(data.order_api_debug);
+          }
+        }
 
         if (data.success) {
 
@@ -1361,6 +1542,10 @@
           showToast(data.message || "Order failed", "red");
         }
 
+      })
+      .catch(function (err) {
+        console.error(err);
+        showToast(err.message || "Order request failed", "red");
       });
 
   }
@@ -1419,69 +1604,117 @@
     document.getElementById("customerModal").classList.add("hidden")
   }
   let customerData = {};
-  document.getElementById("customerForm").addEventListener("submit", function(e) {
+  document.addEventListener("DOMContentLoaded", function () {
+    var customerForm = document.getElementById("customerForm");
+    if (!customerForm) return;
 
-    e.preventDefault();
+    customerForm.addEventListener("submit", function (e) {
+      e.preventDefault();
 
-    let formData = new FormData(this);
+      if (!customerForm.checkValidity()) {
+        customerForm.reportValidity();
+        return;
+      }
 
-    /* STORE FORM DATA */
-    customerData = {};
-    formData.forEach((value, key) => {
-      customerData[key] = value;
-    });
+      var formData = new FormData(customerForm);
 
-    fetch("?page=pos_register&action=add-customer", {
-        method: "POST",
-        body: formData
-      })
-      .then(res => res.json())
-      .then(data => {
-
-        if (data.success) {
-
-          let select = document.getElementById("customerSelect");
-
-          let option = document.createElement("option");
-
-          option.value = data.customer.id;
-          option.text = data.customer.name + " (" + data.customer.phone + ")";
-
-          select.appendChild(option);
-
-          select.value = data.customer.id;
-
-          closeCustomerModal();
-
-        }
-
+      customerData = {};
+      formData.forEach(function (value, key) {
+        customerData[key] = value;
       });
 
+      fetch("index.php?page=pos_register&action=add-customer", {
+          method: "POST",
+          credentials: "same-origin",
+          body: formData
+        })
+        .then(function (res) {
+          return res.text().then(function (text) {
+            try {
+              var cleaned = text.replace(/^\uFEFF/, "").trim();
+              return JSON.parse(cleaned);
+            } catch (err) {
+              console.error("add-customer: not JSON (status " + res.status + ")", text.slice(0, 800));
+              throw new Error("Server did not return JSON. Check network tab / PHP errors.");
+            }
+          });
+        })
+        .then(function (data) {
+          if (!data.success) {
+            showToast(data.message || "Could not save customer", "red");
+            return;
+          }
+
+          var select = document.getElementById("customerSelect");
+          if (!select) return;
+
+          var idStr = String(data.customer.id);
+          var label = (data.customer.name || "") + " (" + (data.customer.phone || "") + ")";
+          window.POS_SESSION_CUSTOMER_ID = idStr;
+
+          if (window.jQuery && jQuery.fn.select2) {
+            var $s = jQuery(select);
+            var opt = new Option(label, idStr, true, true);
+            opt.setAttribute("data-name", data.customer.name || "");
+            opt.setAttribute("data-phone", data.customer.phone || "");
+            opt.setAttribute("data-email", data.customer.email || "");
+            $s.append(opt);
+            $s.val(idStr).trigger("change");
+          } else {
+            var option = document.createElement("option");
+            option.value = idStr;
+            option.textContent = label;
+            option.setAttribute("data-name", data.customer.name || "");
+            option.setAttribute("data-phone", data.customer.phone || "");
+            option.setAttribute("data-email", data.customer.email || "");
+            select.appendChild(option);
+            select.value = idStr;
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+
+          showToast("✓ Customer saved", "green");
+          closeCustomerModal();
+        })
+        .catch(function (err) {
+          console.error(err);
+          showToast(err.message || "Save customer failed", "red");
+        });
+    });
   });
 </script>
 
 <script>
   document.getElementById("customerSelect").addEventListener("change", function() {
 
-    let id = this.value
+    var id = this.value;
+    window.POS_SESSION_CUSTOMER_ID = id ? String(id) : "";
 
-    fetch("?page=pos_register&action=set-customer", {
+    fetch("index.php?page=pos_register&action=set-customer", {
       method: "POST",
+      credentials: "same-origin",
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: "customer_id=" + id
-    })
+      body: "customer_id=" + encodeURIComponent(id)
+    });
 
-    let selected = this.options[this.selectedIndex]
+    var selected = this.options[this.selectedIndex];
+    var name = selected ? selected.getAttribute("data-name") : null;
+    var phone = selected ? selected.getAttribute("data-phone") : null;
 
-    let name = selected.getAttribute("data-name")
-    let phone = selected.getAttribute("data-phone")
+    var nameText = name || "Walk-in Customer";
+    var phoneText = phone || "-";
 
-    document.getElementById("selectedCustomerName").innerText = name || "Walk-in Customer"
-    document.getElementById("selectedCustomerPhone").innerText = phone || "-"
+    var nameEl = document.getElementById("selectedCustomerName");
+    var phoneEl = document.getElementById("selectedCustomerPhone");
+    var nameCartEl = document.getElementById("selectedCustomerNameCart");
+    var phoneCartEl = document.getElementById("selectedCustomerPhoneCart");
+    if (nameEl) nameEl.textContent = nameText;
+    if (phoneEl) phoneEl.textContent = phoneText;
+    if (nameCartEl) nameCartEl.textContent = nameText;
+    if (phoneCartEl) phoneCartEl.textContent = phoneText;
 
-  })
+  });
 </script>
 
 <script>
@@ -1538,7 +1771,8 @@
 <script>
   $(document).ready(function() {
 
-    $('#customerSelect').select2({
+    var $cust = $('#customerSelect');
+    $cust.select2({
       placeholder: "Search Customer",
       allowClear: true,
       width: '100%',
@@ -1574,6 +1808,17 @@
       templateResult: formatCustomer,
       templateSelection: formatCustomerSelection
     });
+
+    $cust.on("select2:clear", function() {
+      window.POS_SESSION_CUSTOMER_ID = "";
+    });
+
+    var initialVal = $cust.val();
+    if (initialVal) {
+      $cust.trigger("change");
+    } else if (window.POS_SESSION_CUSTOMER_ID) {
+      $cust.val(String(window.POS_SESSION_CUSTOMER_ID)).trigger("change");
+    }
 
   });
 

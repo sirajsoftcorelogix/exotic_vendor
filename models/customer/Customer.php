@@ -9,18 +9,14 @@ class Customer
     public function getCustomers($search = '', $state = '', $limit = 10, $offset = 0)
     {
         $sql = "SELECT 
-                    vc.*, 
-                    order_stats.total_order_amount,
-                    order_stats.last_purchase_date,
-                    latest_ord.currency,
-                    voi.state
+                    vc.*,
+                    COALESCE(SUM(o.finalprice), 0) AS total_order_amount,
+                    MAX(o.order_date) AS last_purchase_date,
+                    SUBSTRING_INDEX(GROUP_CONCAT(o.currency ORDER BY o.id DESC SEPARATOR ','), ',', 1) AS currency,
+                    SUBSTRING_INDEX(GROUP_CONCAT(voi.state ORDER BY o.id DESC SEPARATOR ','), ',', 1) AS state
                 FROM vp_customers AS vc
-                LEFT JOIN (
-                    SELECT customer_id, SUM(finalprice) AS total_order_amount, MAX(order_date) AS last_purchase_date, MAX(id) AS latest_order_id
-                    FROM vp_orders GROUP BY customer_id
-                ) AS order_stats ON vc.id = order_stats.customer_id
-                LEFT JOIN vp_orders AS latest_ord ON order_stats.latest_order_id = latest_ord.id
-                LEFT JOIN vp_order_info AS voi ON latest_ord.order_number = voi.order_number";
+                LEFT JOIN vp_orders AS o ON o.customer_id = vc.id
+                LEFT JOIN vp_order_info AS voi ON voi.order_number = o.order_number";
 
         // Build WHERE Clause
         $where = [];
@@ -65,11 +61,8 @@ class Customer
     {
         // --- FIX: Use DISTINCT to count unique customers only ---
         $sql = "SELECT COUNT(DISTINCT vc.id) as total FROM vp_customers AS vc
-                LEFT JOIN (
-                    SELECT customer_id, MAX(id) AS latest_order_id FROM vp_orders GROUP BY customer_id
-                ) AS order_stats ON vc.id = order_stats.customer_id
-                LEFT JOIN vp_orders AS latest_ord ON order_stats.latest_order_id = latest_ord.id
-                LEFT JOIN vp_order_info AS voi ON latest_ord.order_number = voi.order_number";
+                LEFT JOIN vp_orders AS o ON o.customer_id = vc.id
+                LEFT JOIN vp_order_info AS voi ON voi.order_number = o.order_number";
 
         $where = [];
         $params = [];
@@ -118,18 +111,23 @@ class Customer
         $sql = "SELECT * FROM vp_customers";
         $params = [];
         $types = "";
+        $where = [];
 
         if (!empty($filters['search'])) {
-            $sql .= " WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+            $where[] = "(name LIKE ? OR email LIKE ? OR phone LIKE ?)";
             $searchTerm = "%" . $filters['search'] . "%";
             array_push($params, $searchTerm, $searchTerm, $searchTerm);
             $types .= "sss";
         }
 
         if (!empty($filters['state'])) {
-            $sql .= " AND state = ?";
+            $where[] = "state = ?";
             $params[] = $filters['state'];
             $types .= "s";
+        }
+
+        if (!empty($where)) {
+            $sql .= " WHERE " . implode(" AND ", $where);
         }
 
         $sql .= " ORDER BY id DESC LIMIT ? OFFSET ?";
@@ -149,18 +147,23 @@ class Customer
         $sql = "SELECT COUNT(*) as total FROM vp_customers";
         $params = [];
         $types = "";
+        $where = [];
 
         if (!empty($filters['search'])) {
-            $sql .= " WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+            $where[] = "(name LIKE ? OR email LIKE ? OR phone LIKE ?)";
             $searchTerm = "%" . $filters['search'] . "%";
             array_push($params, $searchTerm, $searchTerm, $searchTerm);
             $types .= "sss";
         }
 
         if (!empty($filters['state'])) {
-            $sql .= " AND state = ?";
+            $where[] = "state = ?";
             $params[] = $filters['state'];
             $types .= "s";
+        }
+
+        if (!empty($where)) {
+            $sql .= " WHERE " . implode(" AND ", $where);
         }
 
         $stmt = $this->conn->prepare($sql);
@@ -261,25 +264,6 @@ class Customer
         return $stmt->get_result()->fetch_assoc();
     }
 
-    /** Links customers to a POS warehouse (plus implicit link via pos_payments). */
-    public function ensurePosCustomerWarehouseRegistry(): void
-    {
-        static $done = false;
-        if ($done) {
-            return;
-        }
-        $this->conn->query(
-            "CREATE TABLE IF NOT EXISTS pos_customer_warehouse (
-                customer_id INT UNSIGNED NOT NULL,
-                warehouse_id INT UNSIGNED NOT NULL,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (customer_id, warehouse_id),
-                KEY idx_pcw_wh (warehouse_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-        );
-        $done = true;
-    }
-
     /** Used when deleting a customer (cleans optional extended rows). */
     public function ensurePosCustomerDetailsTable(): void
     {
@@ -309,105 +293,7 @@ class Customer
         $done = true;
     }
 
-    /**
-     * Customers tied to this POS warehouse: registered in pos_customer_warehouse OR seen in pos_payments.
-     */
-    public function getPosCustomersForWarehouse(int $warehouseId, string $search, int $limit, int $offset): array
-    {
-        $this->ensurePosCustomerWarehouseRegistry();
-        $search = trim($search);
-        $params = [];
-        $types = '';
-        $searchSql = '';
-        if ($search !== '') {
-            $term = '%' . $search . '%';
-            $searchSql = ' AND (vc.name LIKE ? OR vc.email LIKE ? OR vc.phone LIKE ?) ';
-            $params = [$term, $term, $term];
-            $types = 'sss';
-        }
-
-        $sql = "SELECT 
-                    vc.id,
-                    vc.name,
-                    vc.email,
-                    vc.phone,
-                    COALESCE(SUM(o.finalprice), 0) AS total_order_amount,
-                    MAX(o.order_date) AS last_purchase_date,
-                    MAX(o.currency) AS currency,
-                    COUNT(DISTINCT o.order_number) AS order_count
-                FROM vp_customers vc
-                INNER JOIN (
-                    SELECT customer_id FROM pos_payments 
-                    WHERE warehouse_id = ? AND customer_id IS NOT NULL AND customer_id > 0
-                    UNION
-                    SELECT customer_id FROM pos_customer_warehouse WHERE warehouse_id = ?
-                ) AS scope ON scope.customer_id = vc.id
-                LEFT JOIN vp_orders o ON o.customer_id = vc.id AND o.warehouse_id = ?
-                WHERE 1=1
-                $searchSql
-                GROUP BY vc.id, vc.name, vc.email, vc.phone
-                ORDER BY vc.id DESC
-                LIMIT ? OFFSET ?";
-
-        array_unshift($params, $warehouseId, $warehouseId, $warehouseId);
-        $types = 'iii' . $types;
-        $params[] = $limit;
-        $params[] = $offset;
-        $types .= 'ii';
-
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) {
-            return [];
-        }
-        $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $stmt->close();
-        return $rows;
-    }
-
-    public function countPosCustomersForWarehouse(int $warehouseId, string $search): int
-    {
-        $this->ensurePosCustomerWarehouseRegistry();
-        $search = trim($search);
-        $params = [$warehouseId, $warehouseId];
-        $types = 'ii';
-        $searchSql = '';
-        if ($search !== '') {
-            $term = '%' . $search . '%';
-            $searchSql = ' AND (vc.name LIKE ? OR vc.email LIKE ? OR vc.phone LIKE ?) ';
-            $params[] = $term;
-            $params[] = $term;
-            $params[] = $term;
-            $types .= 'sss';
-        }
-
-        $sql = "SELECT COUNT(*) AS c FROM (
-                    SELECT vc.id
-                    FROM vp_customers vc
-                    INNER JOIN (
-                        SELECT customer_id FROM pos_payments 
-                        WHERE warehouse_id = ? AND customer_id IS NOT NULL AND customer_id > 0
-                        UNION
-                        SELECT customer_id FROM pos_customer_warehouse WHERE warehouse_id = ?
-                    ) AS scope ON scope.customer_id = vc.id
-                    WHERE 1=1
-                    $searchSql
-                    GROUP BY vc.id
-                ) t";
-
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) {
-            return 0;
-        }
-        $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        return (int)($row['c'] ?? 0);
-    }
-
-    /** All customers with purchase totals across all orders (admin list). */
+    /** All customers with purchase totals across all orders (customer list). */
     public function getAllCustomersWithPurchaseStats(string $search, int $limit, int $offset): array
     {
         $search = trim($search);
@@ -515,12 +401,6 @@ class Customer
             $stmt->execute();
             $stmt->close();
         }
-        $stmt = $this->conn->prepare('DELETE FROM pos_customer_warehouse WHERE customer_id = ?');
-        if ($stmt) {
-            $stmt->bind_param('i', $customerId);
-            $stmt->execute();
-            $stmt->close();
-        }
         $stmt = $this->conn->prepare('DELETE FROM vp_customers WHERE id = ?');
         if (!$stmt) {
             return ['success' => false, 'message' => 'Database error.'];
@@ -533,60 +413,4 @@ class Customer
             : ['success' => false, 'message' => 'Delete failed.'];
     }
 
-    public function isCustomerInPosWarehouse(int $customerId, int $warehouseId): bool
-    {
-        $this->ensurePosCustomerWarehouseRegistry();
-        $stmt = $this->conn->prepare(
-            'SELECT 1 FROM pos_customer_warehouse WHERE customer_id = ? AND warehouse_id = ? LIMIT 1'
-        );
-        if ($stmt) {
-            $stmt->bind_param('ii', $customerId, $warehouseId);
-            $stmt->execute();
-            $ok = $stmt->get_result()->num_rows > 0;
-            $stmt->close();
-            if ($ok) {
-                return true;
-            }
-        }
-        $stmt = $this->conn->prepare(
-            'SELECT 1 FROM pos_payments WHERE customer_id = ? AND warehouse_id = ? LIMIT 1'
-        );
-        if (!$stmt) {
-            return false;
-        }
-        $stmt->bind_param('ii', $customerId, $warehouseId);
-        $stmt->execute();
-        $ok = $stmt->get_result()->num_rows > 0;
-        $stmt->close();
-        return $ok;
-    }
-
-    /**
-     * Same visibility rules as customer list (admin = all, or POS scope when $adminFilterWarehouseId set;
-     * non-admin = session POS warehouse).
-     */
-    public function isCustomerViewableInListContext(
-        int $customerId,
-        bool $isAdmin,
-        int $warehouseId,
-        bool $customerAlreadyLoaded = false,
-        int $adminFilterWarehouseId = 0
-    ): bool {
-        if ($customerId <= 0) {
-            return false;
-        }
-        if (!$customerAlreadyLoaded && !$this->getCustomerById($customerId)) {
-            return false;
-        }
-        if ($isAdmin) {
-            if ($adminFilterWarehouseId > 0) {
-                return $this->isCustomerInPosWarehouse($customerId, $adminFilterWarehouseId);
-            }
-            return true;
-        }
-        if ($warehouseId > 0) {
-            return $this->isCustomerInPosWarehouse($customerId, $warehouseId);
-        }
-        return false;
-    }
 }

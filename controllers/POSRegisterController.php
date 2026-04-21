@@ -12,6 +12,16 @@ class POSRegisterController
         $this->pos     = new pos($conn);
     }
 
+    /**
+     * Discard all output buffers (bootstrap whitespace, nested ob_start, notices) so JSON is the only body.
+     */
+    private function clearBufferedHttpOutput(): void
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+    }
+
     public function index()
     {
         // slug => label
@@ -32,7 +42,7 @@ class POSRegisterController
         $categories = ['allProducts' => 'All Products'] + $categories;
 
         $customerModel = new Customer($conn);
-        $customers = $customerModel->getAllCustomers(100, 0, []);
+        $customers = $customerModel->getAllCustomers(500, 0, []);
         // slug => svg icon
         $categoryIcons = [
             'allProducts' => '
@@ -222,6 +232,7 @@ class POSRegisterController
             'total_pages'     => $totalPages,
         ];
 
+        $this->clearBufferedHttpOutput();
         header('Content-Type: application/json');
         echo json_encode($response);
         exit;
@@ -292,6 +303,8 @@ class POSRegisterController
             $rows = array_slice($rows, 0, (int)$perPage);
         }
 
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'data' => $rows,
             'current_page' => $pageNo,
@@ -831,7 +844,7 @@ class POSRegisterController
 
     public function siblingSkusAjax(): void
     {
-        ob_clean();
+        $this->clearBufferedHttpOutput();
         header('Content-Type: application/json');
 
         $itemCode = isset($_GET['item_code']) ? trim((string)$_GET['item_code']) : '';
@@ -850,6 +863,8 @@ class POSRegisterController
         $code = isset($_GET['code']) ? trim((string)$_GET['code']) : '';
 
         if ($code === '') {
+            $this->clearBufferedHttpOutput();
+            header('Content-Type: application/json');
             echo json_encode(['status' => false]);
             exit;
         }
@@ -1034,8 +1049,7 @@ class POSRegisterController
             'sibling_skus' => $siblingSkus,
         ];
 
-        //  IMPORTANT: clear buffer
-        ob_clean();
+        $this->clearBufferedHttpOutput();
 
         header('Content-Type: application/json');
 
@@ -1050,6 +1064,7 @@ class POSRegisterController
     public function productAvailability()
     {
         global $conn;
+        $this->clearBufferedHttpOutput();
         header('Content-Type: application/json');
 
         $productId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
@@ -1338,7 +1353,90 @@ class POSRegisterController
 
         curl_close($ch);
 
-        return ['data' => json_decode($response, true) ?: [], 'code' => $httpCode];
+        $body = (string)$response;
+        $decoded = json_decode($body, true);
+        $data = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : [];
+
+        return [
+            'data' => $data,
+            'code' => $httpCode,
+            'raw' => $body,
+        ];
+    }
+
+    /**
+     * Debug payload for POS "Order create API" modal (matches cart API debug shape).
+     */
+    private function buildOrderCreateApiDebug(array $queryParams, array $postData, array $apiResult, array $posContext = []): array
+    {
+        $url = 'https://www.exoticindia.com/api/order/create';
+        if ($queryParams !== []) {
+            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($queryParams);
+        }
+
+        $bodyForLog = $postData;
+        if (!empty($bodyForLog['cardnumber'])) {
+            $bodyForLog['cardnumber'] = '(redacted)';
+        }
+        if (!empty($bodyForLog['card_cvv'])) {
+            $bodyForLog['card_cvv'] = '(redacted)';
+        }
+
+        $raw = (string)($apiResult['raw'] ?? '');
+        $parsed = $apiResult['data'] ?? [];
+        $rawPreview = '';
+        if ($raw !== '' && $parsed === []) {
+            $rawPreview = function_exists('mb_substr')
+                ? mb_substr($raw, 0, 8000, 'UTF-8')
+                : substr($raw, 0, 8000);
+        }
+
+        $out = [
+            'timestamp' => date('c'),
+            'triggered_from' => 'payment_modal',
+            'payment_modal' => $posContext,
+            'request' => [
+                'method' => 'POST',
+                'url' => $url,
+                'query_params' => $queryParams,
+                'post_body' => $bodyForLog,
+                'headers' => [
+                    'x-api-key' => '(redacted)',
+                    'x-api-deviceid' => 'POS-Store_1',
+                    'x-api-appplayerid' => 'POS-Web-Terminal',
+                    'x-api-countrycode' => 'IN',
+                    'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
+                    'User-Agent' => 'ExoticPOS',
+                ],
+            ],
+            'http_code' => (int)($apiResult['code'] ?? 0),
+            'response' => is_array($parsed) ? $parsed : [],
+        ];
+        if ($rawPreview !== '') {
+            $out['response_raw_preview'] = $rawPreview;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Remove every line item from the Exotic India cart API (qty 0 per cartref), same as POS "Remove".
+     */
+    private function clearRemoteCartLines(array $items): void
+    {
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $cartref = trim((string)($item['cartref'] ?? ''));
+            if ($cartref === '') {
+                continue;
+            }
+            $this->exotic_api_call('/cart/modifyqty', 'GET', [
+                'cartid' => $cartref,
+                'newqty' => 0,
+            ]);
+        }
     }
 
 
@@ -1773,7 +1871,8 @@ class POSRegisterController
     {
         global $conn;
 
-        header('Content-Type: application/json');
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
         $allowedPaymentTypes = [
             'offline',
             'cod',
@@ -1945,21 +2044,37 @@ class POSRegisterController
         ], $billing, $shipping, $razorpay, $card);
 
         $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
+        $orderCreateQuery = ['discountcoupondetails' => $coupon];
 
         /* ================= API CALL ================= */
         $result = $this->exotic_api_call(
             '/order/create',
             'POST',
-            ['discountcoupondetails' => $coupon],
+            $orderCreateQuery,
             $postData
         );
+
+        $orderApiDebug = $this->buildOrderCreateApiDebug(
+            $orderCreateQuery,
+            $postData,
+            $result,
+            [
+                'payment_type' => $paymentType,
+                'payment_stage' => $paymentStage,
+                'amount' => $_POST['amount'] ?? '',
+                'transaction_id' => $transactionId,
+                'customer_id' => (int)$customerId,
+                'note' => $note,
+            ]
+        );
+        $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
 
         if (empty($result['data']['orderid'])) {
             echo json_encode([
                 "success" => false,
                 "message" => "Order API failed",
-                "api" => $result
-            ]);
+                "order_api_debug" => $orderApiDebug,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         } else {
             $orderId = $result['data']['orderid'];
@@ -2006,6 +2121,10 @@ class POSRegisterController
             $stmt->execute();
         }
 
+        $this->clearRemoteCartLines($cartData['items'] ?? []);
+        unset($_SESSION['gift_voucher']);
+        unset($_SESSION['cart_error']);
+
         unset($_SESSION['discount_coupon']);
         unset($_SESSION['pos_customer_form']);
         unset($_SESSION['pos_customer_id']);
@@ -2013,13 +2132,17 @@ class POSRegisterController
         // echo '<pre>'; print_r($result); exit;
         echo json_encode([
             "success" => true,
-            "orderid" => $result['data']['orderid']
-        ]);
+            "orderid" => $result['data']['orderid'],
+            "order_api_debug" => $orderApiDebug,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     public function add_customer()
     {
         global $conn;
+
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
 
         $first = $_POST['first_name'] ?? '';
         $last  = $_POST['last_name'] ?? '';
@@ -2040,10 +2163,79 @@ class POSRegisterController
         INSERT INTO vp_customers (name,email,phone)
         VALUES (?,?,?)
     ");
+        if (!$stmt) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Database error (prepare): " . $conn->error
+            ]);
+            exit;
+        }
         $stmt->bind_param("sss", $name, $email, $phone);
-        $stmt->execute();
+        try {
+            $executed = $stmt->execute();
+        } catch (\mysqli_sql_exception $e) {
+            $stmt->close();
+            $dup = str_contains($e->getMessage(), 'Duplicate entry')
+                || str_contains($e->getMessage(), 'unique_email_phone')
+                || $e->getSqlState() === '23000';
+            if ($dup) {
+                $lookup = $conn->prepare(
+                    'SELECT id, name, email, phone FROM vp_customers WHERE email = ? AND phone = ? LIMIT 1'
+                );
+                if ($lookup) {
+                    $lookup->bind_param('ss', $email, $phone);
+                    $lookup->execute();
+                    $existing = $lookup->get_result()->fetch_assoc();
+                    $lookup->close();
+                    if (!empty($existing['id'])) {
+                        $id = (int)$existing['id'];
+                        $_SESSION['pos_customer_id'] = $id;
+                        $_SESSION['pos_customer_form'] = $_POST;
+                        echo json_encode([
+                            'success' => true,
+                            'message' => 'This email and phone are already registered; using existing customer.',
+                            'customer' => [
+                                'id' => $id,
+                                'name' => $existing['name'] ?? $name,
+                                'phone' => $existing['phone'] ?? $phone,
+                                'email' => $existing['email'] ?? $email,
+                            ],
+                        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                        exit;
+                    }
+                }
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'A customer with this email and phone already exists.',
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not save customer: ' . $e->getMessage(),
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
 
-        $id = $stmt->insert_id;
+        if (!$executed) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Could not save customer: " . $stmt->error
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            $stmt->close();
+            exit;
+        }
+
+        $id = (int)$stmt->insert_id;
+        $stmt->close();
+
+        if ($id <= 0) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Customer was not created (no insert id)."
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
 
         /*  STORE FULL BILLING + SHIPPING IN SESSION */
         $_SESSION['pos_customer_id'] = $id;
@@ -2057,7 +2249,7 @@ class POSRegisterController
                 "phone" => $phone,
                 "email" => $email
             ]
-        ]);
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
         exit;
     }
@@ -2074,6 +2266,8 @@ class POSRegisterController
             unset($_SESSION['pos_customer_id']);
         }
 
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode(["success" => true]);
         exit;
     }
@@ -2095,6 +2289,8 @@ class POSRegisterController
         $type  = $_POST['type'] ?? 'fixed';
 
         if ($value <= 0) {
+            $this->clearBufferedHttpOutput();
+            header('Content-Type: application/json; charset=utf-8');
             echo json_encode(["success" => false, "message" => "Invalid discount"]);
             exit;
         }
@@ -2115,6 +2311,8 @@ class POSRegisterController
             ['custom_reduce' => $value]
         );
 
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode(["success" => true]);
         exit;
     }

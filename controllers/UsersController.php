@@ -251,7 +251,8 @@ class UsersController {
             
         ];
 
-        renderTemplate('views/users/index.php', $data, 'Users');
+        // View expects $data['…'] while renderTemplate extract() flattens keys; provide nested $data.
+        renderTemplate('views/users/index.php', array_merge($data, ['data' => $data]), 'Users');
     }
     public function addEditUser() {
         is_login();

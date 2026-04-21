@@ -154,7 +154,7 @@
                 <div class="flex items-center gap-4 text-sm text-gray-600">
                     <span>Page</span>
                     <button class="p-2 rounded-full hover:bg-gray-100 <?= $page_no <= 1 ? 'disabled' : '' ?>">
-                        <a class="page-link" <?php if (($page_no - 1) >= 1) { ?> href="?page=users&acton=list&page_no=<?= $page_no - 1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?> tabindex="-1">
+                        <a class="page-link" <?php if (($page_no - 1) >= 1) { ?> href="?page=users&action=list&page_no=<?= $page_no - 1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?> tabindex="-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                             </svg>
@@ -162,13 +162,13 @@
                     </button>
                     <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><?= $page_no ?></span>
                     <button class="p-2 rounded-full hover:bg-gray-100 <?= $page_no >= $total_pages ? 'disabled' : '' ?>">
-                        <a class="page-link" <?php if ($page_no < $total_pages) { ?> href="?page=users&acton=list&page_no=<?= $page_no + 1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?> tabindex="-1">
+                        <a class="page-link" <?php if ($page_no < $total_pages) { ?> href="?page=users&action=list&page_no=<?= $page_no + 1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?> tabindex="-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                             </svg></a>
                     </button>
                     <div class="relative">
-                        <select id="rows-per-page" class="custom-select bg-transparent border-b border-gray-300 text-gray-900 text-sm focus:ring-0 focus:border-gray-500 block w-full p-1" onchange="location.href='?page=users&acton=list&page_no=1&limit=' + this.value;">
+                        <select id="rows-per-page" class="custom-select bg-transparent border-b border-gray-300 text-gray-900 text-sm focus:ring-0 focus:border-gray-500 block w-full p-1" onchange="location.href='?page=users&action=list&page_no=1&limit=' + this.value;">
                             <?php foreach ([10, 20, 50, 100] as $opt): ?>
                                 <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
                                     <?= $opt ?>
