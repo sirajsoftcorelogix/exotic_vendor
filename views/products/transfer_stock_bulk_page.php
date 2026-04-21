@@ -436,8 +436,10 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         if (stockTransferNoticeRefreshApi) {
             if (refreshCodesPending.length > 0) {
                 stockTransferNoticeRefreshApi.classList.remove('hidden');
+                stockTransferNoticeRefreshApi.textContent = String(opts.refreshButtonLabel || 'Refresh from API');
             } else {
                 stockTransferNoticeRefreshApi.classList.add('hidden');
+                stockTransferNoticeRefreshApi.textContent = 'Refresh from API';
             }
         }
 
@@ -510,6 +512,8 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                             title: 'API Refresh Failed',
                             subtitle: 'Please fix the listed codes and retry.',
                             tone: 'error',
+                            refreshableCodes: refreshCodesPending,
+                            refreshButtonLabel: 'Retry Again',
                         });
                     }
                 })
@@ -518,6 +522,8 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                         title: 'API Refresh Failed',
                         subtitle: 'Please try again.',
                         tone: 'error',
+                        refreshableCodes: refreshCodesPending,
+                        refreshButtonLabel: 'Retry Again',
                     });
                 })
                 .finally(function () {
