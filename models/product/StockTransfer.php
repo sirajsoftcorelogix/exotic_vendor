@@ -2680,6 +2680,20 @@ class StockTransfer
             return ['success' => false, 'message' => 'No items to receive'];
         }
 
+        // Build total transferable quantity per SKU from transfer lines.
+        // Validation must be SKU-cumulative because GRN history is tracked by SKU.
+        $transferQtyBySku = [];
+        foreach (($transfer['items'] ?? []) as $tItem) {
+            $tSku = trim((string)($tItem['sku'] ?? ''));
+            if ($tSku === '') {
+                continue;
+            }
+            if (!isset($transferQtyBySku[$tSku])) {
+                $transferQtyBySku[$tSku] = 0;
+            }
+            $transferQtyBySku[$tSku] += (int)($tItem['transfer_qty'] ?? 0);
+        }
+
         // Ensure we have at least one item with received quantity > 0
         $hasReceived = false;
         foreach ($items as $item) {
@@ -2698,6 +2712,74 @@ class StockTransfer
         }
 
         $transferOrderNo = $transfer['transfer_order_no'];
+        $alreadyReceivedBySku = $this->getReceivedQtyByTransferSkuMap($transferId);
+
+        $transferItemProductIdMap = [];
+        foreach (($transfer['items'] ?? []) as $tItem) {
+            $tid = (int)($tItem['id'] ?? 0);
+            if ($tid > 0) {
+                $transferItemProductIdMap[$tid] = (int)($tItem['product_id'] ?? 0);
+            }
+        }
+
+        $skuCandidates = [];
+        $itemCodeCandidates = [];
+        foreach ($items as $inItem) {
+            $skuKey = trim((string)($inItem['sku'] ?? ''));
+            $itemCodeKey = trim((string)($inItem['item_code'] ?? ''));
+            if ($skuKey !== '') {
+                $skuCandidates[$skuKey] = true;
+            }
+            if ($itemCodeKey !== '') {
+                $itemCodeCandidates[$itemCodeKey] = true;
+            }
+        }
+
+        $productBySku = [];
+        $productByItemCode = [];
+        $skuList = array_keys($skuCandidates);
+        $itemCodeList = array_keys($itemCodeCandidates);
+        if (!empty($skuList) || !empty($itemCodeList)) {
+            $whereParts = [];
+            $types = '';
+            $params = [];
+
+            if (!empty($skuList)) {
+                $whereParts[] = 'sku IN (' . implode(',', array_fill(0, count($skuList), '?')) . ')';
+                $types .= str_repeat('s', count($skuList));
+                $params = array_merge($params, $skuList);
+            }
+            if (!empty($itemCodeList)) {
+                $whereParts[] = 'item_code IN (' . implode(',', array_fill(0, count($itemCodeList), '?')) . ')';
+                $types .= str_repeat('s', count($itemCodeList));
+                $params = array_merge($params, $itemCodeList);
+            }
+
+            $prodSql = 'SELECT id, sku, item_code, size, color FROM vp_products WHERE ' . implode(' OR ', $whereParts);
+            $prodStmt = $this->db->prepare($prodSql);
+            if ($prodStmt) {
+                $bind = [$types];
+                foreach ($params as $k => $v) {
+                    $bind[] = &$params[$k];
+                }
+                call_user_func_array([$prodStmt, 'bind_param'], $bind);
+                $prodStmt->execute();
+                $prodRes = $prodStmt->get_result();
+                if ($prodRes) {
+                    while ($prodRow = $prodRes->fetch_assoc()) {
+                        $psku = trim((string)($prodRow['sku'] ?? ''));
+                        $pitem = trim((string)($prodRow['item_code'] ?? ''));
+                        if ($psku !== '' && !isset($productBySku[$psku])) {
+                            $productBySku[$psku] = $prodRow;
+                        }
+                        if ($pitem !== '' && !isset($productByItemCode[$pitem])) {
+                            $productByItemCode[$pitem] = $prodRow;
+                        }
+                    }
+                }
+                $prodStmt->close();
+            }
+        }
 
         // Ensure required GRN tables exist in the database
         $this->ensureGrnTablesExist();
@@ -2713,6 +2795,7 @@ class StockTransfer
             }
 
             $firstGrnId = null;
+            $requestedInThisSaveBySku = [];
             foreach ($items as $item) {
                 $transferItemId = isset($item['transfer_item_id']) ? (int)$item['transfer_item_id'] : 0;
                 $sku = trim($item['sku'] ?? '');
@@ -2720,20 +2803,29 @@ class StockTransfer
                 $transferQty = isset($item['transfer_qty']) ? (int)$item['transfer_qty'] : 0;
                 $receivedQty = isset($item['received_qty']) ? (int)$item['received_qty'] : 0;
 
-                // Ensure we do not receive more than transferred; enforce max to prevent accidental over-add.
-                $alreadyReceived = $this->getReceivedQtyForTransferSku($transferId, $sku);
-                $remainingQty = max(0, $transferQty - $alreadyReceived);
+                // Ensure we do not receive more than transferred for this SKU across all lines and current save payload.
+                $alreadyReceived = (int)($alreadyReceivedBySku[$sku] ?? 0);
+                $transferQtyTotalForSku = isset($transferQtyBySku[$sku]) ? (int)$transferQtyBySku[$sku] : $transferQty;
+                $alreadyRequestedNow = (int)($requestedInThisSaveBySku[$sku] ?? 0);
+                $remainingQty = max(0, $transferQtyTotalForSku - $alreadyReceived - $alreadyRequestedNow);
 
                 if ($receivedQty > $remainingQty) {
                     $this->db->rollback();
                     return [
                         'success' => false,
-                        'message' => "Received quantity for SKU '{$sku}' exceeds remaining quantity ({$remainingQty} / {$transferQty})."
+                        'message' => "Received quantity for SKU '{$sku}' exceeds remaining quantity ({$remainingQty} / {$transferQtyTotalForSku})."
                     ];
                 }
 
                 if ($receivedQty > $transferQty) {
                     $receivedQty = $transferQty;
+                }
+
+                if ($sku !== '' && $receivedQty > 0) {
+                    if (!isset($requestedInThisSaveBySku[$sku])) {
+                        $requestedInThisSaveBySku[$sku] = 0;
+                    }
+                    $requestedInThisSaveBySku[$sku] += $receivedQty;
                 }
 
                 $qtyAcceptable = isset($item['qty_acceptable']) ? (int)$item['qty_acceptable'] : 0;
@@ -2755,22 +2847,15 @@ class StockTransfer
                     continue;
                 }
 
-                // Try to fill size/color from product details (if present)
+                // Try to fill size/color from prefetched product details (if present)
                 $size = '';
                 $color = '';
-                if ($sku !== '') {
-                    $prodStmt = $this->db->prepare('SELECT size, color FROM vp_products WHERE sku = ? LIMIT 1');
-                    if ($prodStmt) {
-                        $prodStmt->bind_param('s', $sku);
-                        $prodStmt->execute();
-                        $prodRes = $prodStmt->get_result();
-                        $prodRow = $prodRes->fetch_assoc();
-                        if ($prodRow) {
-                            $size = $prodRow['size'] ?? '';
-                            $color = $prodRow['color'] ?? '';
-                        }
-                        $prodStmt->close();
-                    }
+                if ($sku !== '' && isset($productBySku[$sku])) {
+                    $size = (string)($productBySku[$sku]['size'] ?? '');
+                    $color = (string)($productBySku[$sku]['color'] ?? '');
+                } elseif ($itemCode !== '' && isset($productByItemCode[$itemCode])) {
+                    $size = (string)($productByItemCode[$itemCode]['size'] ?? '');
+                    $color = (string)($productByItemCode[$itemCode]['color'] ?? '');
                 }
 
                 $itemStmt->bind_param(
@@ -2802,45 +2887,15 @@ class StockTransfer
                 // Determine product id (prefer transfer item product id)
                 $productId = 0;
                 if ($transferItemId) {
-                    $prodStmt = $this->db->prepare('SELECT product_id FROM vp_item_stock_transfer WHERE id = ? LIMIT 1');
-                    if ($prodStmt) {
-                        $prodStmt->bind_param('i', $transferItemId);
-                        $prodStmt->execute();
-                        $prodRes = $prodStmt->get_result();
-                        $prodRow = $prodRes->fetch_assoc();
-                        if ($prodRow) {
-                            $productId = (int)$prodRow['product_id'];
-                        }
-                        $prodStmt->close();
-                    }
+                    $productId = (int)($transferItemProductIdMap[$transferItemId] ?? 0);
                 }
 
                 if ($productId === 0 && $sku !== '') {
-                    $prodStmt = $this->db->prepare('SELECT id FROM vp_products WHERE sku = ? LIMIT 1');
-                    if ($prodStmt) {
-                        $prodStmt->bind_param('s', $sku);
-                        $prodStmt->execute();
-                        $prodRes = $prodStmt->get_result();
-                        $prodRow = $prodRes->fetch_assoc();
-                        if ($prodRow) {
-                            $productId = (int)$prodRow['id'];
-                        }
-                        $prodStmt->close();
-                    }
+                    $productId = (int)($productBySku[$sku]['id'] ?? 0);
                 }
 
                 if ($productId === 0 && $itemCode !== '') {
-                    $prodStmt = $this->db->prepare('SELECT id FROM vp_products WHERE item_code = ? LIMIT 1');
-                    if ($prodStmt) {
-                        $prodStmt->bind_param('s', $itemCode);
-                        $prodStmt->execute();
-                        $prodRes = $prodStmt->get_result();
-                        $prodRow = $prodRes->fetch_assoc();
-                        if ($prodRow) {
-                            $productId = (int)$prodRow['id'];
-                        }
-                        $prodStmt->close();
-                    }
+                    $productId = (int)($productByItemCode[$itemCode]['id'] ?? 0);
                 }
 
                 // Insert transfer in movement - add to destination warehouse

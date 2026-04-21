@@ -183,6 +183,52 @@ class StockTransferGrnController {
         header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . $tid);
     }
 
+    public function deleteBulk() {
+        is_login();
+
+        $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
+        $idsRaw = isset($_POST['grn_ids']) ? $_POST['grn_ids'] : [];
+        if (!is_array($idsRaw) || empty($idsRaw)) {
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No GRN rows selected for deletion']], 'Error');
+            return;
+        }
+
+        $grnIds = array_values(array_unique(array_filter(array_map('intval', $idsRaw), static function ($v) {
+            return $v > 0;
+        })));
+
+        if (empty($grnIds)) {
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No valid GRN IDs provided']], 'Error');
+            return;
+        }
+
+        $failedIds = [];
+        foreach ($grnIds as $grnId) {
+            $grn = $this->stockTransferModel->getTransferGrnById($grnId);
+            if (!$grn) {
+                $failedIds[] = $grnId;
+                continue;
+            }
+            if ($transferId > 0 && (int)($grn['transfer_id'] ?? 0) !== $transferId) {
+                $failedIds[] = $grnId;
+                continue;
+            }
+            if (!$this->stockTransferModel->deleteTransferGrn($grnId)) {
+                $failedIds[] = $grnId;
+            }
+        }
+
+        if (!empty($failedIds)) {
+            $suffix = implode(', ', $failedIds);
+            renderTemplate('views/errors/error.php', [
+                'message' => ['type' => 'error', 'text' => 'Some GRN rows could not be deleted: ' . $suffix],
+            ], 'Error');
+            return;
+        }
+
+        header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . $transferId);
+    }
+
     public function createPost() {
         is_login();
         header('Content-Type: application/json');

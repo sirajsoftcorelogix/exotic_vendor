@@ -55,6 +55,12 @@ if (!function_exists('grn_item_group_camel_case')) {
                 <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i>
                 Transfer history
             </a>
+            <button type="button" id="grnBulkDeleteBtn"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-300 bg-white text-red-700 text-sm font-semibold hover:bg-red-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled>
+                <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
+                Delete selected
+            </button>
             <?php if (!empty($transfer['id'])): ?>
                 <a href="?page=stock_transfer_grns&action=create&transfer_id=<?php echo (int) $transfer['id']; ?>"
                     class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-md shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
@@ -119,6 +125,8 @@ if (!function_exists('grn_item_group_camel_case')) {
             No GRN records found<?php echo !empty($transfer) ? ' for this transfer.' : '.'; ?>
         </div>
     <?php else: ?>
+        <form id="grnBulkDeleteForm" method="post" action="?page=stock_transfer_grns&action=delete_bulk">
+            <input type="hidden" name="transfer_id" value="<?php echo (int)$transferId; ?>">
         <?php
         $grnGroupOptions = [];
         foreach ($grns as $_grn) {
@@ -247,10 +255,13 @@ if (!function_exists('grn_item_group_camel_case')) {
                     </div>
                 </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full text-left text-sm">
+            <div class="overflow-x-auto pb-1">
+                <table class="min-w-[1280px] w-full text-left text-sm">
                     <thead class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <tr>
+                            <th class="px-3 py-3 whitespace-nowrap w-[3.25rem]">
+                                <input type="checkbox" id="grnBulkSelectAll" class="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500/50" title="Select all rows" />
+                            </th>
                             <th class="px-3 py-3 whitespace-nowrap w-[7.5rem]" title="Queue for label printing">Print</th>
                             <th class="px-4 py-3 whitespace-nowrap">GRN ID</th>
                             <th class="px-4 py-3 whitespace-nowrap">Item group</th>
@@ -262,7 +273,7 @@ if (!function_exists('grn_item_group_camel_case')) {
                             <th class="px-4 py-3 text-right whitespace-nowrap">Qty ok</th>
                             <th class="px-4 py-3 min-w-[8rem]">Remarks</th>
                             <th class="px-4 py-3 whitespace-nowrap">Created</th>
-                            <th class="px-4 py-3 whitespace-nowrap">Actions</th>
+                            <th class="px-4 py-3 whitespace-nowrap sticky right-0 bg-gray-50/95 z-10">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
@@ -318,6 +329,12 @@ if (!function_exists('grn_item_group_camel_case')) {
                                 data-item-code="<?php echo htmlspecialchars($codeNorm, ENT_QUOTES, 'UTF-8'); ?>"
                                 data-label-product-id="<?php echo $labelPid; ?>">
                                 <td class="px-3 py-3 align-middle">
+                                    <input type="checkbox"
+                                        class="grn-bulk-delete-cb h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500/50"
+                                        name="grn_ids[]"
+                                        value="<?php echo (int)$grn['id']; ?>" />
+                                </td>
+                                <td class="px-3 py-3 align-middle">
                                     <div class="flex items-center gap-2">
                                         <input type="checkbox" class="grn-label-cb h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500/50 shrink-0" <?php echo $labelResolvable ? 'checked' : 'disabled'; ?>
                                             <?php echo !$labelResolvable ? ' title="No matching product in catalog for this line"' : ''; ?> />
@@ -341,7 +358,7 @@ if (!function_exists('grn_item_group_camel_case')) {
                                 <td class="px-4 py-3 text-right tabular-nums"><?php echo (int) ($grn['qty_acceptable'] ?? 0); ?></td>
                                 <td class="px-4 py-3 text-gray-600 max-w-[14rem] truncate" title="<?php echo htmlspecialchars((string) ($grn['remarks'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($grn['remarks'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-600 whitespace-nowrap text-xs"><?php echo !empty($grn['created_at']) ? htmlspecialchars(date('j M Y H:i', strtotime($grn['created_at']))) : '—'; ?></td>
-                                <td class="px-4 py-3">
+                                <td class="px-4 py-3 sticky right-0 bg-white z-10">
                                     <?php
                                         $_delUrl = '?page=stock_transfer_grns&action=delete&grn_id=' . (int) $grn['id'] . '&transfer_id=' . urlencode((string) $transferId);
                                         $_delSku = trim((string) ($grn['sku'] ?? ''));
@@ -360,6 +377,7 @@ if (!function_exists('grn_item_group_camel_case')) {
                 </table>
             </div>
         </div>
+        </form>
     <?php endif; ?>
 </div>
 
@@ -408,6 +426,49 @@ if (!function_exists('grn_item_group_camel_case')) {
 
 <script>
 (function () {
+    var bulkForm = document.getElementById('grnBulkDeleteForm');
+    var bulkBtn = document.getElementById('grnBulkDeleteBtn');
+    var bulkSelectAll = document.getElementById('grnBulkSelectAll');
+
+    function bulkCheckboxes() {
+        return document.querySelectorAll('.grn-bulk-delete-cb');
+    }
+
+    function selectedBulkCount() {
+        var n = 0;
+        bulkCheckboxes().forEach(function (cb) { if (cb.checked) n++; });
+        return n;
+    }
+
+    function updateBulkDeleteButtonState() {
+        if (!bulkBtn) return;
+        var n = selectedBulkCount();
+        bulkBtn.disabled = n === 0;
+        bulkBtn.textContent = n > 0 ? ('Delete selected (' + n + ')') : 'Delete selected';
+    }
+
+    if (bulkSelectAll) {
+        bulkSelectAll.addEventListener('change', function () {
+            var on = !!bulkSelectAll.checked;
+            bulkCheckboxes().forEach(function (cb) { cb.checked = on; });
+            updateBulkDeleteButtonState();
+        });
+    }
+    bulkCheckboxes().forEach(function (cb) {
+        cb.addEventListener('change', updateBulkDeleteButtonState);
+    });
+    if (bulkBtn && bulkForm) {
+        bulkBtn.addEventListener('click', function () {
+            var n = selectedBulkCount();
+            if (n < 1) return;
+            if (!confirm('Delete ' + n + ' selected GRN row(s)? This action cannot be undone from this screen.')) {
+                return;
+            }
+            bulkForm.submit();
+        });
+    }
+    updateBulkDeleteButtonState();
+
     var modal = document.getElementById('grnDeleteModal');
     var metaIdEl = document.getElementById('grnDeleteMetaId');
     var metaSkuEl = document.getElementById('grnDeleteMetaSku');
