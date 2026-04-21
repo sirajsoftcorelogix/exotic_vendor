@@ -55,12 +55,6 @@ if (!function_exists('grn_item_group_camel_case')) {
                 <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i>
                 Transfer history
             </a>
-            <button type="button" id="grnBulkDeleteBtn"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-300 bg-white text-red-700 text-sm font-semibold hover:bg-red-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                disabled>
-                <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
-                Delete selected
-            </button>
             <?php if (!empty($transfer['id'])): ?>
                 <a href="?page=stock_transfer_grns&action=create&transfer_id=<?php echo (int) $transfer['id']; ?>"
                     class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-md shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
@@ -273,7 +267,17 @@ if (!function_exists('grn_item_group_camel_case')) {
                             <th class="px-4 py-3 text-right whitespace-nowrap">Qty ok</th>
                             <th class="px-4 py-3 min-w-[8rem]">Remarks</th>
                             <th class="px-4 py-3 whitespace-nowrap">Created</th>
-                            <th class="px-4 py-3 whitespace-nowrap sticky right-0 bg-gray-50/95 z-10">Actions</th>
+                            <th class="px-4 py-3 whitespace-nowrap sticky right-0 bg-gray-50/95 z-10">
+                                <div class="flex flex-col items-start gap-2">
+                                    <button type="button" id="grnBulkDeleteBtn"
+                                        class="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-300 bg-white text-red-700 text-[11px] font-semibold hover:bg-red-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                        disabled>
+                                        <i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
+                                        Delete selected
+                                    </button>
+                                    <span>Actions</span>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
