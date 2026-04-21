@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Picqer\Barcode\BarcodeGeneratorPNG;
+use Picqer\Barcode\BarcodeGeneratorSVG;
 
 /**
  * 100 × 12.9 mm jewelry label: left 47% — Code 128 barcode (SKU); text block row Color | Size | MRP; then SKU (full width, wraps).
@@ -70,16 +70,17 @@ final class JewelryLabel
     }
 
     /**
-     * Barcode payload is the SKU (Code 128). Empty SKU uses a minimal placeholder so bars still render.
+     * Code 128 payload from SKU; strips non-ASCII so Picqer never throws InvalidCharacterException.
      */
     public static function barcodePayloadFromData(array $data): string
     {
         $sku = trim((string)($data['sku'] ?? ''));
-        return $sku !== '' ? $sku : '-';
+
+        return self::normalizeSkuForCode128($sku);
     }
 
     /**
-     * PNG data URI for Code 128 encoding {@see barcodePayloadFromData()}.
+     * SVG data URI for Code 128 (no GD/Imagick required — PNG fails on hosts without GD).
      *
      * @param array<string, mixed>|null $config
      */
@@ -88,13 +89,31 @@ final class JewelryLabel
         self::loadVendor();
         $cfg = self::config($config);
         $payload = self::barcodePayloadFromData($data);
-        $hPx = max(20, (int)($cfg['barcode_height_px'] ?? 50));
-        $wFactor = max(1, (int)($cfg['barcode_width_factor'] ?? 2));
+        $h = max(12.0, (float)($cfg['barcode_svg_bar_height'] ?? 28.0));
+        $wFactor = max(1.0, (float)($cfg['barcode_svg_width_factor'] ?? 2.0));
 
-        $generator = new BarcodeGeneratorPNG();
-        $png = $generator->getBarcode($payload, $generator::TYPE_CODE_128, $wFactor, $hPx);
+        $generator = new BarcodeGeneratorSVG();
+        $svg = $generator->getBarcode($payload, $generator::TYPE_CODE_128, $wFactor, $h);
 
-        return 'data:image/png;base64,' . base64_encode($png);
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
+    }
+
+    /**
+     * Printable ASCII for Code 128 auto mode (best-effort transliteration).
+     */
+    private static function normalizeSkuForCode128(string $sku): string
+    {
+        if ($sku === '') {
+            return '-';
+        }
+        $conv = @iconv('UTF-8', 'ASCII//TRANSLIT', $sku);
+        if ($conv !== false && $conv !== '') {
+            $sku = $conv;
+        }
+        $sku = preg_replace('/[^\x20-\x7E]/', '', $sku);
+        $sku = trim((string)$sku);
+
+        return $sku !== '' ? $sku : '-';
     }
 
     /**

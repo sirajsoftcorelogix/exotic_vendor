@@ -12,10 +12,10 @@ return [
     'barcode_max_width_mm' => 44.0,
     /** Max printed height for the barcode bars (mm); clamped to label minus padding. */
     'barcode_max_height_mm' => 9.0,
-    /** Raster height passed to Picqer (px); higher = sharper when scaled on the label. */
-    'barcode_height_px' => 50,
-    /** Bar module width multiplier (Picqer widthFactor); 2–3 typical. */
-    'barcode_width_factor' => 2,
+    /** SVG bar height (Picqer user units); scales with label via CSS mm caps. */
+    'barcode_svg_bar_height' => 28.0,
+    /** SVG bar module width multiplier. */
+    'barcode_svg_width_factor' => 2.0,
     /** Body text (Color / Size / MRP / SKU labels and values) */
     'font_size_mm' => 1.85,
     'font_family' => 'Arial, Helvetica, sans-serif',

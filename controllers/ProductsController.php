@@ -982,20 +982,38 @@ class ProductsController {
             exit;
         }
 
-        if ($template === 'jewelry') {
-            $html = JewelryLabel::renderPrintDocumentBatch($rows);
-        } elseif ($template === 'textile') {
-            $html = TextileLabel::renderPrintDocumentBatch($rows);
-        } else {
-            $html = MgStoreLabel::renderPrintDocumentBatch($rows);
+        try {
+            if ($template === 'jewelry') {
+                $html = JewelryLabel::renderPrintDocumentBatch($rows);
+            } elseif ($template === 'textile') {
+                $html = TextileLabel::renderPrintDocumentBatch($rows);
+            } else {
+                $html = MgStoreLabel::renderPrintDocumentBatch($rows);
+            }
+        } catch (Throwable $e) {
+            error_log('bulk_label_print_generate: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not build label output. If this continues, contact support with the time and template used.',
+            ]);
+            exit;
         }
 
-        echo json_encode([
+        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+        }
+        $out = json_encode([
             'success' => true,
             'html' => $html,
             'total_labels' => count($rows),
             'missing_product_ids' => $missing,
-        ]);
+        ], $flags);
+        if ($out === false) {
+            echo json_encode(['success' => false, 'message' => 'Could not encode label data. Try fewer lines.']);
+            exit;
+        }
+        echo $out;
         exit;
     }
 
