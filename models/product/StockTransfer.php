@@ -1518,6 +1518,46 @@ class StockTransfer
         return isset($row['total_received']) ? (int)$row['total_received'] : 0;
     }
 
+    /**
+     * Get cumulative received qty per SKU for a transfer in one query.
+     *
+     * @param int $transferId
+     * @return array<string,int> sku => qty_received
+     */
+    public function getReceivedQtyByTransferSkuMap($transferId)
+    {
+        $transferId = (int)$transferId;
+        if ($transferId <= 0) {
+            return [];
+        }
+
+        $sql = "SELECT sku, SUM(qty_received) AS total_received
+                FROM vp_stock_transfer_grns
+                WHERE transfer_id = ?
+                  AND NULLIF(TRIM(IFNULL(sku, '')), '') IS NOT NULL
+                GROUP BY sku";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $transferId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $map = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $sku = trim((string)($row['sku'] ?? ''));
+                if ($sku === '') {
+                    continue;
+                }
+                $map[$sku] = (int)($row['total_received'] ?? 0);
+            }
+        }
+        $stmt->close();
+
+        return $map;
+    }
+
     public function updateTransferGrn($grnId, $data)
     {
         $grnId = (int)$grnId;
@@ -2221,24 +2261,50 @@ class StockTransfer
             }
             $itemStmt->close();
 
-            // Enrich each item with product details (for display in the GRN view)
-            $productStmt = $this->db->prepare("SELECT image, title, local_stock, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, material FROM vp_products WHERE sku = ? LIMIT 1");
-            foreach ($items as &$itemRow) {
-                $itemRow['product'] = null;
-                $sku = trim($itemRow['sku'] ?? '');
-                if ($sku && $productStmt) {
-                    $productStmt->bind_param('s', $sku);
-                    $productStmt->execute();
-                    $prodRes = $productStmt->get_result();
-                    $prodRow = $prodRes->fetch_assoc();
-                    if ($prodRow) {
-                        $itemRow['product'] = $prodRow;
-                    }
+            // Enrich each item with product details in one query (avoid N+1 on large transfers).
+            $productBySku = [];
+            $skus = [];
+            foreach ($items as $itemRow) {
+                $sku = trim((string)($itemRow['sku'] ?? ''));
+                if ($sku !== '') {
+                    $skus[$sku] = true;
                 }
             }
-            if ($productStmt) {
-                $productStmt->close();
+            $skuList = array_keys($skus);
+            if (!empty($skuList)) {
+                $placeholders = implode(',', array_fill(0, count($skuList), '?'));
+                $prodSql = "SELECT sku, image, title, local_stock, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, material
+                            FROM vp_products
+                            WHERE sku IN ($placeholders)";
+                $prodStmt = $this->db->prepare($prodSql);
+                if ($prodStmt) {
+                    $types = str_repeat('s', count($skuList));
+                    $bind = [$types];
+                    foreach ($skuList as $k => $v) {
+                        $bind[] = &$skuList[$k];
+                    }
+                    call_user_func_array([$prodStmt, 'bind_param'], $bind);
+                    $prodStmt->execute();
+                    $prodRes = $prodStmt->get_result();
+                    if ($prodRes) {
+                        while ($prodRow = $prodRes->fetch_assoc()) {
+                            $psku = trim((string)($prodRow['sku'] ?? ''));
+                            if ($psku !== '') {
+                                $productBySku[$psku] = $prodRow;
+                            }
+                        }
+                    }
+                    $prodStmt->close();
+                }
             }
+            foreach ($items as &$itemRow) {
+                $itemRow['product'] = null;
+                $sku = trim((string)($itemRow['sku'] ?? ''));
+                if ($sku !== '' && isset($productBySku[$sku])) {
+                    $itemRow['product'] = $productBySku[$sku];
+                }
+            }
+            unset($itemRow);
 
             $transfer['items'] = $items;
         } else {
