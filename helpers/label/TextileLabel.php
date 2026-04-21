@@ -125,8 +125,14 @@ final class TextileLabel
         }
         $sku = preg_replace('/[^\x20-\x7E]/', '', $sku);
         $sku = trim((string)$sku);
+        if ($sku === '') {
+            return '0';
+        }
+        if (strlen($sku) > 72) {
+            $sku = substr($sku, 0, 72);
+        }
 
-        return $sku !== '' ? $sku : '0';
+        return $sku;
     }
 
     /**
@@ -297,7 +303,12 @@ final class TextileLabel
         $h = (float)($cfg['label_height_mm'] ?? 34);
         $pages = '';
         foreach ($rows as $row) {
-            $pages .= '<div class="tl-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
+            try {
+                $pages .= '<div class="tl-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
+            } catch (Throwable $e) {
+                error_log('TextileLabel batch row: ' . $e->getMessage());
+                $pages .= '<div class="tl-page"><div class="tl-sheet" style="box-sizing:border-box;width:' . $w . 'mm;height:' . $h . 'mm;border:0.12mm solid #000;font-size:2mm;padding:1mm;">Label row skipped.</div></div>';
+            }
         }
         $title = 'Textile labels';
         return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'

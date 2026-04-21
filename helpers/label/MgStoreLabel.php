@@ -109,8 +109,14 @@ final class MgStoreLabel
         }
         $sku = preg_replace('/[^\x20-\x7E]/', '', $sku);
         $sku = trim((string)$sku);
+        if ($sku === '') {
+            return '0';
+        }
+        if (strlen($sku) > 72) {
+            $sku = substr($sku, 0, 72);
+        }
 
-        return $sku !== '' ? $sku : '0';
+        return $sku;
     }
 
     /**
@@ -301,7 +307,12 @@ final class MgStoreLabel
         $h = (float)($cfg['label_height_mm'] ?? 50);
         $pages = '';
         foreach ($rows as $row) {
-            $pages .= '<div class="mgs-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
+            try {
+                $pages .= '<div class="mgs-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
+            } catch (Throwable $e) {
+                error_log('MgStoreLabel batch row: ' . $e->getMessage());
+                $pages .= '<div class="mgs-page"><div class="mgs-sheet" style="box-sizing:border-box;width:' . $w . 'mm;height:' . $h . 'mm;border:0.15mm solid #000;font-size:2mm;padding:1mm;">Label row skipped.</div></div>';
+            }
         }
         $title = 'MG Road labels';
         return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'

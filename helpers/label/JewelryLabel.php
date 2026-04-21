@@ -117,8 +117,15 @@ final class JewelryLabel
         }
         $sku = preg_replace('/[^\x20-\x7E]/', '', $sku);
         $sku = trim((string)$sku);
+        if ($sku === '') {
+            return '-';
+        }
+        // Very long payloads explode SVG width / JSON size and can OOM; bars only encode a prefix.
+        if (strlen($sku) > 72) {
+            $sku = substr($sku, 0, 72);
+        }
 
-        return $sku !== '' ? $sku : '-';
+        return $sku;
     }
 
     /**
@@ -272,7 +279,12 @@ final class JewelryLabel
         $h = (float)($cfg['label_height_mm'] ?? 12.9);
         $pages = '';
         foreach ($rows as $row) {
-            $pages .= '<div class="jl-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
+            try {
+                $pages .= '<div class="jl-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
+            } catch (Throwable $e) {
+                error_log('JewelryLabel batch row: ' . $e->getMessage());
+                $pages .= '<div class="jl-page"><div class="jl-sheet" style="box-sizing:border-box;width:' . $w . 'mm;height:' . $h . 'mm;border:0.12mm solid #000;font-size:2mm;padding:1mm;">Label row skipped (print error).</div></div>';
+            }
         }
         $title = 'Jewelry labels';
         return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
