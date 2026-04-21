@@ -200,16 +200,9 @@
 
       </div>
       <div class="sticky top-4 rounded-2xl bg-white border shadow-sm overflow-hidden">
-
-        <!-- USER -->
         <div class="px-4 py-3 border-b">
-          <div class="text-sm font-semibold text-center">
-            <?= htmlspecialchars($_SESSION['user']['name'] ?? ' ') ?>
-          </div>
-
-          <div class="text-[11px] text-slate-500 text-center">
-            <?= htmlspecialchars($_SESSION['user']['phone'] ?? '') ?>
-          </div>
+          <div id="selectedCustomerNameCart" class="text-sm font-semibold text-center text-slate-800">Walk-in Customer</div>
+          <div id="selectedCustomerPhoneCart" class="text-[11px] text-slate-500 text-center">-</div>
         </div>
 
         <?php if (isset($_SESSION['cart_success'])): ?>
@@ -1709,14 +1702,17 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
     var name = selected ? selected.getAttribute("data-name") : null;
     var phone = selected ? selected.getAttribute("data-phone") : null;
 
+    var nameText = name || "Walk-in Customer";
+    var phoneText = phone || "-";
+
     var nameEl = document.getElementById("selectedCustomerName");
     var phoneEl = document.getElementById("selectedCustomerPhone");
-    if (nameEl) {
-      nameEl.textContent = name || "Walk-in Customer";
-    }
-    if (phoneEl) {
-      phoneEl.textContent = phone || "-";
-    }
+    var nameCartEl = document.getElementById("selectedCustomerNameCart");
+    var phoneCartEl = document.getElementById("selectedCustomerPhoneCart");
+    if (nameEl) nameEl.textContent = nameText;
+    if (phoneEl) phoneEl.textContent = phoneText;
+    if (nameCartEl) nameCartEl.textContent = nameText;
+    if (phoneCartEl) phoneCartEl.textContent = phoneText;
 
   });
 </script>
