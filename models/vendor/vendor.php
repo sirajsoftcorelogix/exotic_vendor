@@ -901,5 +901,17 @@ class vendor {
             'error_count' => count($errors)
         ];
     }
+    public function getVendorsByGroup($groupname) {
+        $sql = "SELECT id, vendor_id, vendor_name FROM vp_vendors WHERE FIND_IN_SET(?, groupname) > 0 AND is_active = 'active'";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('s', $groupname);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $vendors = [];
+        while ($row = $result->fetch_assoc()) {
+            $vendors[] = $row;
+        }
+        return $vendors;
+    }
 }
 ?>
