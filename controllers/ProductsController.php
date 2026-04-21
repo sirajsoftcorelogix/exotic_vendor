@@ -4943,8 +4943,9 @@ class ProductsController {
             }
             echo json_encode([
                 'success' => false,
-                'message' => 'Transfer qty exceeds source warehouse stock for: ' . implode('; ', $parts),
+                'message' => 'Insufficient stock in source warehouse for one or more items. Please reduce transfer quantity and try again.',
                 'insufficient_items' => $insufficient,
+                'details' => $parts,
             ]);
             exit;
         }
@@ -5329,8 +5330,9 @@ class ProductsController {
             }
             echo json_encode([
                 'success' => false,
-                'message' => 'Transfer qty exceeds source warehouse stock for: ' . implode('; ', $parts),
+                'message' => 'Insufficient stock in source warehouse for one or more items. Please reduce transfer quantity and try again.',
                 'insufficient_items' => $insufficient,
+                'details' => $parts,
             ]);
             exit;
         }

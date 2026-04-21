@@ -348,11 +348,22 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
 
 <div id="stockTransferNoticeModal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="stockTransferNoticeTitle">
     <div class="w-full max-w-md rounded-2xl bg-white shadow-2xl ring-1 ring-gray-900/10">
-        <div class="px-5 py-4 border-b border-gray-100">
-            <h3 id="stockTransferNoticeTitle" class="text-base font-semibold text-gray-900">Stock Transfer</h3>
+        <div class="px-5 py-4 border-b border-gray-100 flex items-start gap-3">
+            <span id="stockTransferNoticeIconWrap" class="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                <i id="stockTransferNoticeIcon" class="fas fa-exclamation-triangle text-sm" aria-hidden="true"></i>
+            </span>
+            <div class="min-w-0">
+                <h3 id="stockTransferNoticeTitle" class="text-base font-semibold text-gray-900">Stock Transfer Validation</h3>
+                <p id="stockTransferNoticeSubtitle" class="text-xs text-gray-500 mt-0.5">Please review and fix the highlighted issue.</p>
+            </div>
         </div>
         <div class="px-5 py-4">
             <p id="stockTransferNoticeMessage" class="text-sm text-gray-700 leading-relaxed"></p>
+            <div id="stockTransferNoticeListWrap" class="mt-3 hidden">
+                <div class="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+                    <ul id="stockTransferNoticeList" class="list-disc pl-5 space-y-1 text-sm text-amber-900"></ul>
+                </div>
+            </div>
         </div>
         <div class="px-5 py-4 border-t border-gray-100 flex justify-end">
             <button type="button" id="stockTransferNoticeOk" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">OK</button>
@@ -366,17 +377,75 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
 (function () {
     const stockTransferNoticeModal = document.getElementById('stockTransferNoticeModal');
     const stockTransferNoticeMessage = document.getElementById('stockTransferNoticeMessage');
+    const stockTransferNoticeTitle = document.getElementById('stockTransferNoticeTitle');
+    const stockTransferNoticeSubtitle = document.getElementById('stockTransferNoticeSubtitle');
+    const stockTransferNoticeListWrap = document.getElementById('stockTransferNoticeListWrap');
+    const stockTransferNoticeList = document.getElementById('stockTransferNoticeList');
+    const stockTransferNoticeIconWrap = document.getElementById('stockTransferNoticeIconWrap');
+    const stockTransferNoticeIcon = document.getElementById('stockTransferNoticeIcon');
     const stockTransferNoticeOk = document.getElementById('stockTransferNoticeOk');
 
-    function showTransferNotice(message) {
+    function showTransferNotice(message, opts) {
+        opts = opts || {};
         if (!stockTransferNoticeModal || !stockTransferNoticeMessage) {
             alert(message);
             return;
         }
+        if (stockTransferNoticeTitle) {
+            stockTransferNoticeTitle.textContent = String(opts.title || 'Stock Transfer Validation');
+        }
+        if (stockTransferNoticeSubtitle) {
+            stockTransferNoticeSubtitle.textContent = String(opts.subtitle || 'Please review and fix the issue below.');
+        }
         stockTransferNoticeMessage.textContent = String(message || 'Something went wrong.');
+
+        if (stockTransferNoticeList && stockTransferNoticeListWrap) {
+            stockTransferNoticeList.innerHTML = '';
+            const listItems = Array.isArray(opts.listItems) ? opts.listItems : [];
+            if (listItems.length > 0) {
+                listItems.forEach(function (text) {
+                    const li = document.createElement('li');
+                    li.textContent = String(text);
+                    stockTransferNoticeList.appendChild(li);
+                });
+                stockTransferNoticeListWrap.classList.remove('hidden');
+            } else {
+                stockTransferNoticeListWrap.classList.add('hidden');
+            }
+        }
+
+        if (stockTransferNoticeIconWrap && stockTransferNoticeIcon) {
+            const tone = String(opts.tone || 'warning');
+            stockTransferNoticeIconWrap.className = 'mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full';
+            if (tone === 'success') {
+                stockTransferNoticeIconWrap.classList.add('bg-emerald-100', 'text-emerald-700');
+                stockTransferNoticeIcon.className = 'fas fa-check-circle text-sm';
+            } else if (tone === 'error') {
+                stockTransferNoticeIconWrap.classList.add('bg-red-100', 'text-red-700');
+                stockTransferNoticeIcon.className = 'fas fa-times-circle text-sm';
+            } else {
+                stockTransferNoticeIconWrap.classList.add('bg-amber-100', 'text-amber-700');
+                stockTransferNoticeIcon.className = 'fas fa-exclamation-triangle text-sm';
+            }
+        }
+
         stockTransferNoticeModal.classList.remove('hidden');
         stockTransferNoticeModal.classList.add('flex');
         if (stockTransferNoticeOk) stockTransferNoticeOk.focus();
+    }
+
+    function formatInsufficientItems(insufficientItems) {
+        if (!Array.isArray(insufficientItems) || insufficientItems.length === 0) {
+            return [];
+        }
+        return insufficientItems.map(function (row) {
+            const sku = String(row.sku || '').trim();
+            const itemCode = String(row.item_code || '').trim();
+            const requested = parseInt(row.requested_qty || 0, 10);
+            const available = parseInt(row.available_qty || 0, 10);
+            const label = itemCode && itemCode !== sku ? (sku + ' (' + itemCode + ')') : sku;
+            return label + ': requested ' + requested + ', available ' + available;
+        });
     }
 
     function closeTransferNotice() {
@@ -861,11 +930,25 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             try {
                 const preview = await validateBulkStockPreview(gridData, fromSel.value, bulkEditTransferId);
                 if (!preview || preview.success !== true) {
-                    showTransferNotice((preview && preview.message) ? preview.message : 'Stock validation failed. Please review line quantities.');
+                    showTransferNotice(
+                        (preview && preview.message)
+                            ? preview.message
+                            : 'Stock validation failed. Please review line quantities.',
+                        {
+                            title: 'Insufficient Warehouse Stock',
+                            subtitle: 'One or more items do not have enough source stock.',
+                            tone: 'warning',
+                            listItems: formatInsufficientItems(preview && preview.insufficient_items),
+                        }
+                    );
                     return;
                 }
             } catch (err) {
-                showTransferNotice('Could not validate stock before submit: ' + err.message);
+                showTransferNotice('Could not validate stock before submit: ' + err.message, {
+                    title: 'Validation Error',
+                    subtitle: 'Please try again.',
+                    tone: 'error',
+                });
                 return;
             }
 
