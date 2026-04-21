@@ -668,6 +668,9 @@ switch ($page) {
             case 'validate_transfer_stock_bulk_preview':
                 $controller->validateTransferStockBulkPreview();
                 break;
+            case 'refresh_transfer_items_from_api':
+                $controller->refreshTransferItemsFromApiAjax();
+                break;
             case 'get_last_warehouse':
                 $controller->getLastWarehouse();
                 break;

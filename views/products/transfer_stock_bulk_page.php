@@ -366,6 +366,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             </div>
         </div>
         <div class="px-5 py-4 border-t border-gray-100 flex justify-end">
+            <button type="button" id="stockTransferNoticeRefreshApi" class="hidden mr-2 inline-flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">Refresh from API</button>
             <button type="button" id="stockTransferNoticeOk" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">OK</button>
         </div>
     </div>
@@ -383,7 +384,9 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     const stockTransferNoticeList = document.getElementById('stockTransferNoticeList');
     const stockTransferNoticeIconWrap = document.getElementById('stockTransferNoticeIconWrap');
     const stockTransferNoticeIcon = document.getElementById('stockTransferNoticeIcon');
+    const stockTransferNoticeRefreshApi = document.getElementById('stockTransferNoticeRefreshApi');
     const stockTransferNoticeOk = document.getElementById('stockTransferNoticeOk');
+    let refreshCodesPending = [];
 
     function showTransferNotice(message, opts) {
         opts = opts || {};
@@ -429,6 +432,15 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             }
         }
 
+        refreshCodesPending = Array.isArray(opts.refreshableCodes) ? opts.refreshableCodes : [];
+        if (stockTransferNoticeRefreshApi) {
+            if (refreshCodesPending.length > 0) {
+                stockTransferNoticeRefreshApi.classList.remove('hidden');
+            } else {
+                stockTransferNoticeRefreshApi.classList.add('hidden');
+            }
+        }
+
         stockTransferNoticeModal.classList.remove('hidden');
         stockTransferNoticeModal.classList.add('flex');
         if (stockTransferNoticeOk) stockTransferNoticeOk.focus();
@@ -456,6 +468,54 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
 
     if (stockTransferNoticeOk) {
         stockTransferNoticeOk.addEventListener('click', closeTransferNotice);
+    }
+    if (stockTransferNoticeRefreshApi) {
+        stockTransferNoticeRefreshApi.addEventListener('click', function () {
+            if (!Array.isArray(refreshCodesPending) || refreshCodesPending.length === 0) {
+                return;
+            }
+            const btn = stockTransferNoticeRefreshApi;
+            const previousLabel = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Refreshing...';
+
+            const fd = new FormData();
+            fd.append('item_codes_json', JSON.stringify(refreshCodesPending));
+            fetch(apiUrl('refresh_transfer_items_from_api'), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                body: fd
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res && res.success) {
+                        showTransferNotice(res.message || 'API refresh completed. Please submit again.', {
+                            title: 'API Refresh Completed',
+                            subtitle: 'Latest stock and product mapping were synced.',
+                            tone: 'success',
+                            listItems: [],
+                        });
+                    } else {
+                        showTransferNotice((res && res.message) ? res.message : 'API refresh failed.', {
+                            title: 'API Refresh Failed',
+                            subtitle: 'Please fix the listed codes and retry.',
+                            tone: 'error',
+                        });
+                    }
+                })
+                .catch(function (err) {
+                    showTransferNotice('API refresh failed: ' + err.message, {
+                        title: 'API Refresh Failed',
+                        subtitle: 'Please try again.',
+                        tone: 'error',
+                    });
+                })
+                .finally(function () {
+                    btn.disabled = false;
+                    btn.textContent = previousLabel;
+                });
+        });
     }
     if (stockTransferNoticeModal) {
         stockTransferNoticeModal.addEventListener('click', function (e) {
@@ -938,7 +998,10 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                             title: 'Insufficient Warehouse Stock',
                             subtitle: 'One or more items do not have enough source stock.',
                             tone: 'warning',
-                            listItems: formatInsufficientItems(preview && preview.insufficient_items),
+                            listItems: formatInsufficientItems(preview && preview.insufficient_items).length
+                                ? formatInsufficientItems(preview && preview.insufficient_items)
+                                : (Array.isArray(preview && preview.details) ? preview.details : []),
+                            refreshableCodes: Array.isArray(preview && preview.refreshable_item_codes) ? preview.refreshable_item_codes : [],
                         }
                     );
                     return;
@@ -979,7 +1042,13 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                     showTransferNotice(data.message || (isBulkEdit ? 'Stock transfer updated successfully.' : 'Stock transfer created successfully.'));
                     window.location.href = '?page=products&action=stock_transfer';
                 } else {
-                    showTransferNotice(data.message || 'Could not create transfer');
+                    showTransferNotice(data.message || 'Could not create transfer', {
+                        title: 'Stock Transfer Validation',
+                        subtitle: 'Please review and resolve the listed rows.',
+                        tone: 'warning',
+                        listItems: Array.isArray(data.details) ? data.details : formatInsufficientItems(data.insufficient_items),
+                        refreshableCodes: Array.isArray(data.refreshable_item_codes) ? data.refreshable_item_codes : [],
+                    });
                 }
             })
             .catch(function (err) {

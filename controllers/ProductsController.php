@@ -4829,6 +4829,7 @@ class ProductsController {
         }
 
         $normalizedItems = [];
+        $unresolvedItems = [];
         $itemCodesForRefresh = [];
         foreach ($data['items'] as $idx => $item) {
             $transfer_qty = (int)$item['transfer_qty'];
@@ -4856,14 +4857,13 @@ class ProductsController {
                     $debugIdentity[] = 'product_id: ' . $productId;
                 }
                 $details = empty($debugIdentity) ? 'no SKU/item_code/product_id provided' : implode(', ', $debugIdentity);
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Could not resolve SKU at line ' . $lineNo . ' (' . $details . ').',
+                $unresolvedItems[] = [
                     'line' => $lineNo,
                     'item_code' => $itemCode,
                     'product_id' => $productId,
-                ]);
-                exit;
+                    'details' => $details,
+                ];
+                continue;
             }
 
             $lineItemCode = trim((string)($item['item_code'] ?? ''));
@@ -4887,6 +4887,33 @@ class ProductsController {
                 $item['item_code'] = $lineItemCode;
             }
             $normalizedItems[] = $item;
+        }
+
+        if (!empty($unresolvedItems)) {
+            $lines = [];
+            $codes = [];
+            foreach ($unresolvedItems as $row) {
+                $lineText = 'Line ' . (int)$row['line'] . ': ';
+                if ($row['item_code'] !== '') {
+                    $lineText .= 'item code ' . $row['item_code'];
+                    $codes[] = $row['item_code'];
+                } else {
+                    $lineText .= 'item code missing';
+                }
+                if ((int)$row['product_id'] > 0) {
+                    $lineText .= ' (product ID ' . (int)$row['product_id'] . ')';
+                }
+                $lines[] = $lineText;
+            }
+            $uniqueCodes = array_values(array_unique(array_filter($codes)));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not resolve SKU for some rows. Please review the list below, then click "Refresh from API" to sync all item codes at once.',
+                'unresolved_items' => $unresolvedItems,
+                'details' => $lines,
+                'refreshable_item_codes' => $uniqueCodes,
+            ]);
+            exit;
         }
 
         if (!empty($itemCodesForRefresh)) {
@@ -5282,6 +5309,7 @@ class ProductsController {
 
         $requestedQtyBySku = [];
         $firstItemCodeBySku = [];
+        $unresolvedItems = [];
         foreach ($items as $item) {
             $qty = (int)($item['transfer_qty'] ?? 0);
             if ($qty <= 0) {
@@ -5297,6 +5325,10 @@ class ProductsController {
                 }
             }
             if ($sku === '') {
+                $unresolvedItems[] = [
+                    'item_code' => trim((string)($item['item_code'] ?? '')),
+                    'product_id' => (int)($item['product_id'] ?? 0),
+                ];
                 continue;
             }
 
@@ -5305,6 +5337,33 @@ class ProductsController {
                 $firstItemCodeBySku[$sku] = trim((string)($item['item_code'] ?? ''));
             }
             $requestedQtyBySku[$sku] += $qty;
+        }
+
+        if (!empty($unresolvedItems)) {
+            $lines = [];
+            $codes = [];
+            foreach ($unresolvedItems as $idx => $row) {
+                $lineText = 'Row ' . ($idx + 1) . ': ';
+                if ($row['item_code'] !== '') {
+                    $lineText .= 'item code ' . $row['item_code'];
+                    $codes[] = $row['item_code'];
+                } else {
+                    $lineText .= 'item code missing';
+                }
+                if ((int)$row['product_id'] > 0) {
+                    $lineText .= ' (product ID ' . (int)$row['product_id'] . ')';
+                }
+                $lines[] = $lineText;
+            }
+            $uniqueCodes = array_values(array_unique(array_filter($codes)));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not resolve SKU for some rows. Please review the list below, then click "Refresh from API" to sync all item codes at once.',
+                'unresolved_items' => $unresolvedItems,
+                'details' => $lines,
+                'refreshable_item_codes' => $uniqueCodes,
+            ]);
+            exit;
         }
 
         $insufficient = [];
@@ -5342,6 +5401,46 @@ class ProductsController {
         }
 
         echo json_encode(['success' => true, 'message' => 'Stock is available for all grid lines.']);
+        exit;
+    }
+
+    public function refreshTransferItemsFromApiAjax() {
+        is_login();
+        global $conn, $productModel;
+
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        $rawCodes = $_POST['item_codes_json'] ?? '[]';
+        $decoded = json_decode((string)$rawCodes, true);
+        if (!is_array($decoded)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid item code payload']);
+            exit;
+        }
+
+        $codes = array_values(array_unique(array_filter(array_map(static function ($v) {
+            return trim((string)$v);
+        }, $decoded))));
+
+        if (empty($codes)) {
+            echo json_encode(['success' => false, 'message' => 'No item codes provided for API refresh']);
+            exit;
+        }
+
+        $result = $this->refreshTransferItemsFromApi($codes, $productModel);
+        if (!$result['success']) {
+            echo json_encode(['success' => false, 'message' => $result['message']]);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'API refresh completed for ' . count($codes) . ' item code(s).',
+            'refreshed_codes' => $codes,
+        ]);
         exit;
     }
 
