@@ -88,12 +88,13 @@ class StockTransferGrnController {
         }
 
         // Cumulative qty already GRN'd for this SKU on this transfer (for remaining / caps in UI)
+        $receivedBySku = $this->stockTransferModel->getReceivedQtyByTransferSkuMap($transferId);
         if (!empty($transfer['items'])) {
             foreach ($transfer['items'] as &$item) {
                 $itemSku = trim($item['sku'] ?? '');
                 $item['already_received_on_transfer'] = 0;
                 if ($itemSku !== '' && $transferId > 0) {
-                    $item['already_received_on_transfer'] = (int)$this->stockTransferModel->getReceivedQtyForTransferSku($transferId, $itemSku);
+                    $item['already_received_on_transfer'] = (int)($receivedBySku[$itemSku] ?? 0);
                 }
                 $tq = (int)($item['transfer_qty'] ?? 0);
                 $item['remaining_to_receive'] = max(0, $tq - $item['already_received_on_transfer']);
