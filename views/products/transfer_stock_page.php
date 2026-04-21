@@ -263,6 +263,32 @@ if (empty($transferOrderNo)) {
     </div>
 </div>
 
+<div id="transferStockProcessingOverlay" class="fixed inset-0 z-[120] hidden flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm p-6" aria-hidden="true" aria-live="polite" role="status">
+    <div class="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl ring-1 ring-gray-900/10 text-center">
+        <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-orange-100 text-orange-700">
+            <i class="fas fa-truck-loading text-2xl animate-pulse" aria-hidden="true"></i>
+        </div>
+        <h2 class="text-lg font-semibold text-gray-900">Processing your stock transfer</h2>
+        <p class="mt-3 text-sm text-gray-600 leading-relaxed">This may take a while as stock and warehouse movements are updated. Please keep this tab open and do not refresh the page.</p>
+        <div class="mt-6 text-left">
+            <div class="relative h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
+                <div class="transfer-stock-progress-bar absolute top-0 bottom-0 w-[38%] rounded-full bg-gradient-to-r from-orange-500 via-orange-600 to-orange-500 shadow-sm"></div>
+            </div>
+            <p class="mt-2 text-center text-xs font-medium text-orange-900/80">Working on the server…</p>
+        </div>
+    </div>
+</div>
+<style>
+@keyframes transfer-stock-progress-sweep {
+    0% { left: -38%; }
+    100% { left: 100%; }
+}
+.transfer-stock-progress-bar {
+    left: -38%;
+    animation: transfer-stock-progress-sweep 2.2s ease-in-out infinite;
+}
+</style>
+
 <script>
     const transferNoticeModal = document.getElementById('transferNoticeModal');
     const transferNoticeMessage = document.getElementById('transferNoticeMessage');
@@ -292,6 +318,24 @@ if (empty($transferOrderNo)) {
         transferNoticeModal.addEventListener('click', function (e) {
             if (e.target === transferNoticeModal) closeTransferNotice();
         });
+    }
+
+    const transferStockProcessingOverlay = document.getElementById('transferStockProcessingOverlay');
+
+    function showTransferStockProcessingOverlay() {
+        if (!transferStockProcessingOverlay) return;
+        transferStockProcessingOverlay.setAttribute('aria-hidden', 'false');
+        transferStockProcessingOverlay.classList.remove('hidden');
+        transferStockProcessingOverlay.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function hideTransferStockProcessingOverlay() {
+        if (!transferStockProcessingOverlay) return;
+        transferStockProcessingOverlay.setAttribute('aria-hidden', 'true');
+        transferStockProcessingOverlay.classList.add('hidden');
+        transferStockProcessingOverlay.classList.remove('flex');
+        document.body.style.overflow = '';
     }
 
     // Warehouse address mapping and data
@@ -549,6 +593,8 @@ if (empty($transferOrderNo)) {
         }
 
         const formData = new FormData(document.getElementById('transferStockForm'));
+        showTransferStockProcessingOverlay();
+
         fetch(apiUrl('process_transfer_stock'), {
             method: 'POST',
             credentials: 'same-origin',
@@ -561,15 +607,16 @@ if (empty($transferOrderNo)) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showTransferNotice('Stock transfer submitted successfully!');
                 window.location.href = '?page=products&action=stock_transfer';
-            } else {
-                showTransferNotice('Error: ' + (data.message || 'Unknown error occurred'));
-                console.error('Transfer error:', data);
+                return;
             }
+            hideTransferStockProcessingOverlay();
+            showTransferNotice('Error: ' + (data.message || 'Unknown error occurred'));
+            console.error('Transfer error:', data);
         })
         .catch(error => {
             console.error('Error:', error);
+            hideTransferStockProcessingOverlay();
             showTransferNotice('An error occurred: ' + error.message);
         });
     });

@@ -372,6 +372,32 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     </div>
 </div>
 
+<div id="bulkTransferProcessingOverlay" class="fixed inset-0 z-[120] hidden flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm p-6" aria-hidden="true" aria-live="polite" role="status">
+    <div class="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl ring-1 ring-gray-900/10 text-center">
+        <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <i class="fas fa-truck-loading text-2xl animate-pulse" aria-hidden="true"></i>
+        </div>
+        <h2 class="text-lg font-semibold text-gray-900">Processing your stock transfer</h2>
+        <p class="mt-3 text-sm text-gray-600 leading-relaxed">Large transfers can take several minutes while we validate stock, sync data, and update movements. Please keep this tab open and do not refresh or close the browser.</p>
+        <div class="mt-6 text-left">
+            <div class="relative h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
+                <div class="bulk-transfer-progress-bar absolute top-0 bottom-0 w-[38%] rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 shadow-sm"></div>
+            </div>
+            <p class="mt-2 text-center text-xs font-medium text-amber-800/90">Working on the server…</p>
+        </div>
+    </div>
+</div>
+<style>
+@keyframes bulk-transfer-progress-sweep {
+    0% { left: -38%; }
+    100% { left: 100%; }
+}
+.bulk-transfer-progress-bar {
+    left: -38%;
+    animation: bulk-transfer-progress-sweep 2.2s ease-in-out infinite;
+}
+</style>
+
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
 <script>
@@ -387,6 +413,24 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     const stockTransferNoticeRefreshApi = document.getElementById('stockTransferNoticeRefreshApi');
     const stockTransferNoticeOk = document.getElementById('stockTransferNoticeOk');
     let refreshCodesPending = [];
+
+    const bulkTransferProcessingOverlay = document.getElementById('bulkTransferProcessingOverlay');
+
+    function showBulkTransferProcessingOverlay() {
+        if (!bulkTransferProcessingOverlay) return;
+        bulkTransferProcessingOverlay.setAttribute('aria-hidden', 'false');
+        bulkTransferProcessingOverlay.classList.remove('hidden');
+        bulkTransferProcessingOverlay.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function hideBulkTransferProcessingOverlay() {
+        if (!bulkTransferProcessingOverlay) return;
+        bulkTransferProcessingOverlay.setAttribute('aria-hidden', 'true');
+        bulkTransferProcessingOverlay.classList.add('hidden');
+        bulkTransferProcessingOverlay.classList.remove('flex');
+        document.body.style.overflow = '';
+    }
 
     function showTransferNotice(message, opts) {
         opts = opts || {};
@@ -1048,6 +1092,8 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             }
         }
 
+        showBulkTransferProcessingOverlay();
+
         fetch(apiUrl('process_transfer_stock_bulk'), {
             method: 'POST',
             credentials: 'same-origin',
@@ -1057,22 +1103,23 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.success) {
-                    showTransferNotice(data.message || (isBulkEdit ? 'Stock transfer updated successfully.' : 'Stock transfer created successfully.'));
                     window.location.href = '?page=products&action=stock_transfer';
-                } else {
-                    showTransferNotice(data.message || 'Could not create transfer', {
-                        title: 'Stock Transfer Validation',
-                        subtitle: 'Please review and resolve the listed rows.',
-                        tone: 'warning',
-                        listItems: clampNoticeList(
-                            Array.isArray(data.details) ? data.details : formatInsufficientItems(data.insufficient_items),
-                            20
-                        ),
-                        refreshableCodes: Array.isArray(data.refreshable_item_codes) ? data.refreshable_item_codes : [],
-                    });
+                    return;
                 }
+                hideBulkTransferProcessingOverlay();
+                showTransferNotice(data.message || 'Could not create transfer', {
+                    title: 'Stock Transfer Validation',
+                    subtitle: 'Please review and resolve the listed rows.',
+                    tone: 'warning',
+                    listItems: clampNoticeList(
+                        Array.isArray(data.details) ? data.details : formatInsufficientItems(data.insufficient_items),
+                        20
+                    ),
+                    refreshableCodes: Array.isArray(data.refreshable_item_codes) ? data.refreshable_item_codes : [],
+                });
             })
             .catch(function (err) {
+                hideBulkTransferProcessingOverlay();
                 showTransferNotice('Request failed: ' + err.message);
             });
     });
