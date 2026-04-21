@@ -824,7 +824,20 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         return rows;
     }
 
-    document.getElementById('bulkTransferForm').addEventListener('submit', function (e) {
+    function validateBulkStockPreview(rows, fromWarehouse, transferId) {
+        const fd = new FormData();
+        fd.append('from_warehouse', String(fromWarehouse || ''));
+        fd.append('transfer_id', String(transferId || 0));
+        fd.append('rows_json', JSON.stringify(rows || []));
+        return fetch(apiUrl('validate_transfer_stock_bulk_preview'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            body: fd
+        }).then(function (r) { return r.json(); });
+    }
+
+    document.getElementById('bulkTransferForm').addEventListener('submit', async function (e) {
         e.preventDefault();
         if (!fromSel.value || !toSel.value) {
             showTransferNotice('Please select source and destination warehouses.');
@@ -844,6 +857,18 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                 showTransferNotice('Add at least one row with a resolved product (search SKU and pick a match, or type an exact SKU) and quantity.');
                 return;
             }
+
+            try {
+                const preview = await validateBulkStockPreview(gridData, fromSel.value, bulkEditTransferId);
+                if (!preview || preview.success !== true) {
+                    showTransferNotice((preview && preview.message) ? preview.message : 'Stock validation failed. Please review line quantities.');
+                    return;
+                }
+            } catch (err) {
+                showTransferNotice('Could not validate stock before submit: ' + err.message);
+                return;
+            }
+
             document.getElementById('bulk_rows_json').value = JSON.stringify(gridData);
             fd.set('bulk_rows_json', JSON.stringify(gridData));
             if (bulkFile) {

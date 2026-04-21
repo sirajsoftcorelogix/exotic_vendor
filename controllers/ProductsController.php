@@ -4819,7 +4819,10 @@ class ProductsController {
                 foreach ($existingTransfer['items'] as $existingItem) {
                     $skuKey = trim($existingItem['sku'] ?? '');
                     if ($skuKey !== '') {
-                        $existingQtyBySku[$skuKey] = (int)$existingItem['transfer_qty'];
+                        if (!isset($existingQtyBySku[$skuKey])) {
+                            $existingQtyBySku[$skuKey] = 0;
+                        }
+                        $existingQtyBySku[$skuKey] += (int)$existingItem['transfer_qty'];
                     }
                 }
             }
@@ -4896,6 +4899,8 @@ class ProductsController {
         }
 
         $insufficient = [];
+        $requestedQtyBySku = [];
+        $alreadyFlaggedSku = [];
         foreach ($normalizedItems as $idx => $item) {
             $transfer_qty = (int)($item['transfer_qty'] ?? 0);
             if ($transfer_qty <= 0) {
@@ -4905,14 +4910,24 @@ class ProductsController {
             if ($sku === '') {
                 continue;
             }
+            if (!isset($requestedQtyBySku[$sku])) {
+                $requestedQtyBySku[$sku] = 0;
+            }
+            $requestedQtyBySku[$sku] += $transfer_qty;
+
+            // Validate cumulative qty per SKU so duplicate lines cannot bypass stock checks.
+            if (isset($alreadyFlaggedSku[$sku])) {
+                continue;
+            }
             $existingQty = $existingQtyBySku[$sku] ?? 0;
-            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $transfer_qty, $existingQty);
+            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $requestedQtyBySku[$sku], $existingQty);
             if (!$validation['valid']) {
+                $alreadyFlaggedSku[$sku] = true;
                 $insufficient[] = [
                     'line' => $idx + 1,
                     'sku' => $sku,
                     'item_code' => trim((string)($item['item_code'] ?? '')),
-                    'requested_qty' => $transfer_qty,
+                    'requested_qty' => (int)$requestedQtyBySku[$sku],
                     'available_qty' => (int)($validation['available'] ?? 0),
                 ];
             }
@@ -5205,6 +5220,123 @@ class ProductsController {
         $data['product_ids'] = implode(',', array_unique($ids));
 
         $this->validateAndSaveTransferRequest($data, $stockTransferModel, true);
+    }
+
+    public function validateTransferStockBulkPreview() {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $fromWarehouse = isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0;
+        if ($fromWarehouse <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Please select source warehouse']);
+            exit;
+        }
+
+        $rowsRaw = $_POST['rows_json'] ?? '[]';
+        $rows = json_decode((string)$rowsRaw, true);
+        if (!is_array($rows)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid grid data']);
+            exit;
+        }
+
+        $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
+        if (!empty($aggregated['errors'])) {
+            echo json_encode(['success' => false, 'message' => implode(' ', $aggregated['errors'])]);
+            exit;
+        }
+        $items = $aggregated['items'] ?? [];
+        if (empty($items)) {
+            echo json_encode(['success' => false, 'message' => 'No valid lines to validate']);
+            exit;
+        }
+
+        $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
+        $existingQtyBySku = [];
+        if ($transferId > 0) {
+            $existingTransfer = $stockTransferModel->getTransferById($transferId);
+            if ($existingTransfer && isset($existingTransfer['from_warehouse']) && (int)$existingTransfer['from_warehouse'] === $fromWarehouse) {
+                foreach (($existingTransfer['items'] ?? []) as $existingItem) {
+                    $existingSku = trim((string)($existingItem['sku'] ?? ''));
+                    if ($existingSku === '') {
+                        continue;
+                    }
+                    if (!isset($existingQtyBySku[$existingSku])) {
+                        $existingQtyBySku[$existingSku] = 0;
+                    }
+                    $existingQtyBySku[$existingSku] += (int)($existingItem['transfer_qty'] ?? 0);
+                }
+            }
+        }
+
+        $requestedQtyBySku = [];
+        $firstItemCodeBySku = [];
+        foreach ($items as $item) {
+            $qty = (int)($item['transfer_qty'] ?? 0);
+            if ($qty <= 0) {
+                continue;
+            }
+
+            $sku = trim((string)($item['sku'] ?? ''));
+            if ($sku === '') {
+                $resolved = $stockTransferModel->resolveProductForTransferItem($item);
+                $sku = trim((string)($resolved['sku'] ?? ''));
+                if ($sku !== '' && empty($item['item_code']) && !empty($resolved['item_code'])) {
+                    $item['item_code'] = (string)$resolved['item_code'];
+                }
+            }
+            if ($sku === '') {
+                continue;
+            }
+
+            if (!isset($requestedQtyBySku[$sku])) {
+                $requestedQtyBySku[$sku] = 0;
+                $firstItemCodeBySku[$sku] = trim((string)($item['item_code'] ?? ''));
+            }
+            $requestedQtyBySku[$sku] += $qty;
+        }
+
+        $insufficient = [];
+        foreach ($requestedQtyBySku as $sku => $requestedQty) {
+            $existingQty = (int)($existingQtyBySku[$sku] ?? 0);
+            $validation = $stockTransferModel->validateItemStock($sku, $fromWarehouse, (int)$requestedQty, $existingQty);
+            if (!($validation['valid'] ?? false)) {
+                $insufficient[] = [
+                    'sku' => $sku,
+                    'item_code' => (string)($firstItemCodeBySku[$sku] ?? ''),
+                    'requested_qty' => (int)$requestedQty,
+                    'available_qty' => (int)($validation['available'] ?? 0),
+                ];
+            }
+        }
+
+        if (!empty($insufficient)) {
+            $parts = [];
+            foreach ($insufficient as $row) {
+                $label = $row['sku'];
+                if ($row['item_code'] !== '') {
+                    $label .= ' (' . $row['item_code'] . ')';
+                }
+                $parts[] = $label . ' req:' . $row['requested_qty'] . ' avail:' . $row['available_qty'];
+            }
+            echo json_encode([
+                'success' => false,
+                'message' => 'Transfer qty exceeds source warehouse stock for: ' . implode('; ', $parts),
+                'insufficient_items' => $insufficient,
+            ]);
+            exit;
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Stock is available for all grid lines.']);
+        exit;
     }
 
     /**

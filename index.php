@@ -665,6 +665,9 @@ switch ($page) {
             case 'process_transfer_stock_bulk':
                 $controller->processTransferStockBulk();
                 break;
+            case 'validate_transfer_stock_bulk_preview':
+                $controller->validateTransferStockBulkPreview();
+                break;
             case 'get_last_warehouse':
                 $controller->getLastWarehouse();
                 break;
