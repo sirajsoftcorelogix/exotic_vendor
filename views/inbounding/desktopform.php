@@ -4024,7 +4024,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         option.value = vendor.vendor_id;
                         option.textContent = vendor.vendor_name;
                         vendorSelect.appendChild(option);
-                        console.log('options:', option);
+                        //console.log('options:', option);
                     });
                      
                     // If TomSelect is initialized, refresh it
