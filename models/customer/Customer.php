@@ -9,18 +9,14 @@ class Customer
     public function getCustomers($search = '', $state = '', $limit = 10, $offset = 0)
     {
         $sql = "SELECT 
-                    vc.*, 
-                    order_stats.total_order_amount,
-                    order_stats.last_purchase_date,
-                    latest_ord.currency,
-                    voi.state
+                    vc.*,
+                    COALESCE(SUM(o.finalprice), 0) AS total_order_amount,
+                    MAX(o.order_date) AS last_purchase_date,
+                    SUBSTRING_INDEX(GROUP_CONCAT(o.currency ORDER BY o.id DESC SEPARATOR ','), ',', 1) AS currency,
+                    SUBSTRING_INDEX(GROUP_CONCAT(voi.state ORDER BY o.id DESC SEPARATOR ','), ',', 1) AS state
                 FROM vp_customers AS vc
-                LEFT JOIN (
-                    SELECT customer_id, SUM(finalprice) AS total_order_amount, MAX(order_date) AS last_purchase_date, MAX(id) AS latest_order_id
-                    FROM vp_orders GROUP BY customer_id
-                ) AS order_stats ON vc.id = order_stats.customer_id
-                LEFT JOIN vp_orders AS latest_ord ON order_stats.latest_order_id = latest_ord.id
-                LEFT JOIN vp_order_info AS voi ON latest_ord.order_number = voi.order_number";
+                LEFT JOIN vp_orders AS o ON o.customer_id = vc.id
+                LEFT JOIN vp_order_info AS voi ON voi.order_number = o.order_number";
 
         // Build WHERE Clause
         $where = [];
@@ -65,11 +61,8 @@ class Customer
     {
         // --- FIX: Use DISTINCT to count unique customers only ---
         $sql = "SELECT COUNT(DISTINCT vc.id) as total FROM vp_customers AS vc
-                LEFT JOIN (
-                    SELECT customer_id, MAX(id) AS latest_order_id FROM vp_orders GROUP BY customer_id
-                ) AS order_stats ON vc.id = order_stats.customer_id
-                LEFT JOIN vp_orders AS latest_ord ON order_stats.latest_order_id = latest_ord.id
-                LEFT JOIN vp_order_info AS voi ON latest_ord.order_number = voi.order_number";
+                LEFT JOIN vp_orders AS o ON o.customer_id = vc.id
+                LEFT JOIN vp_order_info AS voi ON voi.order_number = o.order_number";
 
         $where = [];
         $params = [];
@@ -118,18 +111,25 @@ class Customer
         $sql = "SELECT * FROM vp_customers";
         $params = [];
         $types = "";
+        $where = ["name NOT LIKE ?"];
+        $params[] = "%****%";
+        $types .= "s";
 
         if (!empty($filters['search'])) {
-            $sql .= " WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+            $where[] = "(name LIKE ? OR email LIKE ? OR phone LIKE ?)";
             $searchTerm = "%" . $filters['search'] . "%";
             array_push($params, $searchTerm, $searchTerm, $searchTerm);
             $types .= "sss";
         }
 
         if (!empty($filters['state'])) {
-            $sql .= " AND state = ?";
+            $where[] = "state = ?";
             $params[] = $filters['state'];
             $types .= "s";
+        }
+
+        if (!empty($where)) {
+            $sql .= " WHERE " . implode(" AND ", $where);
         }
 
         $sql .= " ORDER BY id DESC LIMIT ? OFFSET ?";
@@ -149,18 +149,25 @@ class Customer
         $sql = "SELECT COUNT(*) as total FROM vp_customers";
         $params = [];
         $types = "";
+        $where = ["name NOT LIKE ?"];
+        $params[] = "%****%";
+        $types .= "s";
 
         if (!empty($filters['search'])) {
-            $sql .= " WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+            $where[] = "(name LIKE ? OR email LIKE ? OR phone LIKE ?)";
             $searchTerm = "%" . $filters['search'] . "%";
             array_push($params, $searchTerm, $searchTerm, $searchTerm);
             $types .= "sss";
         }
 
         if (!empty($filters['state'])) {
-            $sql .= " AND state = ?";
+            $where[] = "state = ?";
             $params[] = $filters['state'];
             $types .= "s";
+        }
+
+        if (!empty($where)) {
+            $sql .= " WHERE " . implode(" AND ", $where);
         }
 
         $stmt = $this->conn->prepare($sql);
