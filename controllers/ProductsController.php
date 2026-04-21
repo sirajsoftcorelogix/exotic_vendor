@@ -5065,8 +5065,8 @@ class ProductsController {
             'Content-Type: application/x-www-form-urlencoded',
         ];
 
-        // Keep query strings manageable for large code lists.
-        $chunks = array_chunk($codes, 80);
+        // Vendor fetch endpoint is stable with <= 50 codes/request (same as product-details flow).
+        $chunks = array_chunk($codes, 50);
         $allRows = [];
         $emptyResponseCodes = [];
         $failedChunks = 0;
