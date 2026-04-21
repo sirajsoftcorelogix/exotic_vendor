@@ -5059,40 +5059,63 @@ class ProductsController {
         if (empty($codes)) {
             return ['success' => true, 'message' => 'No item codes to refresh.'];
         }
-
-        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode(implode(',', $codes));
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
             'Content-Type: application/x-www-form-urlencoded',
         ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        $response = curl_exec($ch);
-        $curlErr = curl_error($ch);
-        curl_close($ch);
+        // Keep query strings manageable for large code lists.
+        $chunks = array_chunk($codes, 80);
+        $allRows = [];
+        $emptyResponseCodes = [];
+        $failedChunks = 0;
 
-        if ($response === false) {
-            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: ' . $curlErr];
+        foreach ($chunks as $chunk) {
+            $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode(implode(',', $chunk));
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            $response = curl_exec($ch);
+            $curlErr = curl_error($ch);
+            curl_close($ch);
+
+            if ($response === false) {
+                $failedChunks++;
+                continue;
+            }
+            $decoded = json_decode($response, true);
+            if (!is_array($decoded)) {
+                $failedChunks++;
+                continue;
+            }
+
+            $rows = product::normalizeVendorProductFetchItems($decoded);
+            if (empty($rows)) {
+                // Track sample item codes from empty-response chunks for user visibility.
+                $emptyResponseCodes = array_merge($emptyResponseCodes, $chunk);
+                continue;
+            }
+            $allRows = array_merge($allRows, $rows);
         }
-        $decoded = json_decode($response, true);
-        if (!is_array($decoded)) {
-            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: invalid response format.'];
+
+        if (empty($allRows)) {
+            $sample = implode(', ', array_slice(array_values(array_unique($emptyResponseCodes)), 0, 10));
+            $suffix = $sample !== '' ? ' Sample item code(s): ' . $sample : '';
+            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: no item rows returned for the submitted codes.' . $suffix];
         }
-        $rows = product::normalizeVendorProductFetchItems($decoded);
-        if (empty($rows)) {
-            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: no item rows returned.'];
-        }
-        $res = $productModel->updateProductFromApi($rows);
+
+        $res = $productModel->updateProductFromApi($allRows);
         if (!is_array($res) || empty($res['success'])) {
             $msg = is_array($res) ? (string)($res['message'] ?? 'Unknown API refresh error.') : 'Unknown API refresh error.';
             return ['success' => false, 'message' => 'Could not sync latest stock before transfer: ' . $msg];
         }
 
+        if ($failedChunks > 0) {
+            return ['success' => true, 'message' => 'Latest stock refreshed from API for available items. Some chunks failed; please retry refresh once.'];
+        }
         return ['success' => true, 'message' => 'Latest stock refreshed from API.'];
     }
 
