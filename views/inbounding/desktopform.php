@@ -3943,6 +3943,7 @@ document.addEventListener('DOMContentLoaded', function() {
         itemGroupSelect.tomselect.on('change', function() {
             // ONLY sync when user manually changes the Group
             performFullSync();
+            updateVendorListBasedOnGroup(); // Also update vendor list when group changes
         });
     }
 
@@ -3972,6 +3973,97 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- REMOVED: The "setTimeout(performFullSync, 200)" block ---
     // This ensures that on page load, your PHP database values are respected.
 });
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // Function to fetch vendors based on selected group by Hedayat
+    function updateVendorListBasedOnGroup() {
+        const groupSelect = document.getElementById('group_select');
+        const vendorSelect = document.getElementById('vendor_code');
+        
+        if (!groupSelect || !vendorSelect) return;
+
+        // Get the selected group value
+        let groupValue = '';
+        if (groupSelect.tomselect) {
+            groupValue = groupSelect.tomselect.getValue();
+        } else {
+            groupValue = groupSelect.value;
+        }
+
+        if (!groupValue) {
+            // Reset vendor list if no group selected
+            vendorSelect.innerHTML = '<option value="">Select Vendor</option>';
+            return;
+        }
+
+        // Call the API to fetch vendors for this group
+        fetch(`index.php?page=vendors&action=getAllVendors&groupname=${encodeURIComponent(groupValue)}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('API request failed');
+            return response.json();
+        })
+        .then(data => {
+            // Clear existing options except the placeholder
+            vendorSelect.innerHTML = '<option value="">Select Vendor</option>';
+            
+            // Check if data contains vendors
+            if (data) {
+                const vendors = data || [];
+                //console.log('Fetched Vendors:', vendors); // Debug log
+                if (Array.isArray(vendors) && vendors.length > 0) {
+                    // Add vendor options
+                    vendors.forEach(vendor => {
+                        const option = document.createElement('option');
+                        option.value = vendor.vendor_id;
+                        option.textContent = vendor.vendor_name;
+                        vendorSelect.appendChild(option);
+                        //console.log('options:', option);
+                    });
+                     
+                    // If TomSelect is initialized, refresh it
+                    if (vendorSelect.tomselect) {
+                        vendorSelect.tomselect.clearOptions();
+                        vendors.forEach(vendor => {
+                            vendorSelect.tomselect.addOption({
+                                value: vendor.vendor_id,
+                                text: vendor.vendor_name
+                            });
+                        });
+                    }
+                   
+                } else {
+                    vendorSelect.innerHTML = '<option value="">No vendors found</option>';
+                }
+            } else {
+                vendorSelect.innerHTML = '<option value="">No vendors available</option>';
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching vendors:', error);
+            vendorSelect.innerHTML = '<option value="">Error loading vendors</option>';
+        });
+    }
+
+    // Expose function globally so it can be called from other scripts
+    window.updateVendorListBasedOnGroup = updateVendorListBasedOnGroup;
+
+    // Hook into the group select change event
+    const groupSelect = document.getElementById('group_select');
+    if (groupSelect) {
+        groupSelect.addEventListener('change', updateVendorListBasedOnGroup);
+        if (groupSelect.tomselect) {
+            groupSelect.tomselect.on('change', updateVendorListBasedOnGroup);
+        }
+    }
+});
+
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {

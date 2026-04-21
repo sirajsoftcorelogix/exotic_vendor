@@ -527,5 +527,20 @@ class VendorsController {
         echo json_encode($result);
         exit;
     }
+    public function getAllVendors(){
+        global $vendorsModel;
+        $groupname = isset($_GET['groupname']) ? trim($_GET['groupname']) : '';
+        if(empty($groupname)) {
+            echo json_encode(['status' => 'error', 'message' => 'Group name is required.']);
+            exit;
+        }
+        //fetch category by groupname
+        //echo "Groupname received: " . $groupname; // Debugging line
+        $groupname = getGroupnameByCategory($groupname);
+        //echo "Mapped groupname: " . $groupname; // Debugging line
+        $vendors = $vendorsModel->getVendorsByGroup($groupname);
+        echo json_encode($vendors);
+        exit;
+    }
 }
 ?>

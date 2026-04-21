@@ -138,6 +138,9 @@ switch ($page) {
             case 'fetchAllVendors':
                 $controller->fetchAllVendors();
                 break;
+            case 'getAllVendors':
+                $controller->getAllVendors();
+                break;
             default:
                 $controller->index();
                 break;

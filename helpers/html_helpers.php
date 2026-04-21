@@ -831,3 +831,14 @@ function getCategoryFromTable()
 	}
 	return $categories;
 }
+function getGroupnameByCategory($category)
+{
+	global $conn;
+	$sql = "SELECT name FROM category WHERE category = $category AND is_active = 1 LIMIT 1";
+	$result = $conn->query($sql);
+	if ($result->num_rows > 0) {
+		$row = $result->fetch_assoc();
+		return $row['name'];
+	}
+	return null;
+}
