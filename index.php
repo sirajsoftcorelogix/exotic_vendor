@@ -960,6 +960,9 @@ switch ($page) {
             case 'delete':
                 $controller->delete();
                 break;
+            case 'delete_bulk':
+                $controller->deleteBulk();
+                break;
             default:
                 $controller->listGrns();
                 break;
