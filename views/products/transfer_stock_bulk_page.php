@@ -347,8 +347,8 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
 </div>
 
 <div id="stockTransferNoticeModal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="stockTransferNoticeTitle">
-    <div class="w-full max-w-md rounded-2xl bg-white shadow-2xl ring-1 ring-gray-900/10">
-        <div class="px-5 py-4 border-b border-gray-100 flex items-start gap-3">
+    <div class="w-full max-w-2xl rounded-2xl bg-white shadow-2xl ring-1 ring-gray-900/10 max-h-[85vh] flex flex-col">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-start gap-3 shrink-0">
             <span id="stockTransferNoticeIconWrap" class="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
                 <i id="stockTransferNoticeIcon" class="fas fa-exclamation-triangle text-sm" aria-hidden="true"></i>
             </span>
@@ -357,15 +357,15 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                 <p id="stockTransferNoticeSubtitle" class="text-xs text-gray-500 mt-0.5">Please review and fix the highlighted issue.</p>
             </div>
         </div>
-        <div class="px-5 py-4">
+        <div class="px-5 py-4 overflow-y-auto min-h-0">
             <p id="stockTransferNoticeMessage" class="text-sm text-gray-700 leading-relaxed"></p>
             <div id="stockTransferNoticeListWrap" class="mt-3 hidden">
                 <div class="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
-                    <ul id="stockTransferNoticeList" class="list-disc pl-5 space-y-1 text-sm text-amber-900"></ul>
+                    <ul id="stockTransferNoticeList" class="list-disc pl-5 space-y-1 text-sm text-amber-900 max-h-[42vh] overflow-y-auto pr-2"></ul>
                 </div>
             </div>
         </div>
-        <div class="px-5 py-4 border-t border-gray-100 flex justify-end">
+        <div class="px-5 py-4 border-t border-gray-100 flex justify-end shrink-0">
             <button type="button" id="stockTransferNoticeRefreshApi" class="hidden mr-2 inline-flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">Refresh from API</button>
             <button type="button" id="stockTransferNoticeOk" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">OK</button>
         </div>
@@ -458,6 +458,15 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             const label = itemCode && itemCode !== sku ? (sku + ' (' + itemCode + ')') : sku;
             return label + ': requested ' + requested + ', available ' + available;
         });
+    }
+
+    function clampNoticeList(listItems, maxItems) {
+        if (!Array.isArray(listItems)) return [];
+        const limit = Number.isFinite(maxItems) ? maxItems : 20;
+        if (listItems.length <= limit) return listItems;
+        const visible = listItems.slice(0, limit);
+        visible.push('...and ' + (listItems.length - limit) + ' more row(s).');
+        return visible;
     }
 
     function closeTransferNotice() {
@@ -998,9 +1007,12 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                             title: 'Insufficient Warehouse Stock',
                             subtitle: 'One or more items do not have enough source stock.',
                             tone: 'warning',
-                            listItems: formatInsufficientItems(preview && preview.insufficient_items).length
-                                ? formatInsufficientItems(preview && preview.insufficient_items)
-                                : (Array.isArray(preview && preview.details) ? preview.details : []),
+                            listItems: clampNoticeList(
+                                formatInsufficientItems(preview && preview.insufficient_items).length
+                                    ? formatInsufficientItems(preview && preview.insufficient_items)
+                                    : (Array.isArray(preview && preview.details) ? preview.details : []),
+                                20
+                            ),
                             refreshableCodes: Array.isArray(preview && preview.refreshable_item_codes) ? preview.refreshable_item_codes : [],
                         }
                     );
@@ -1046,7 +1058,10 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                         title: 'Stock Transfer Validation',
                         subtitle: 'Please review and resolve the listed rows.',
                         tone: 'warning',
-                        listItems: Array.isArray(data.details) ? data.details : formatInsufficientItems(data.insufficient_items),
+                        listItems: clampNoticeList(
+                            Array.isArray(data.details) ? data.details : formatInsufficientItems(data.insufficient_items),
+                            20
+                        ),
                         refreshableCodes: Array.isArray(data.refreshable_item_codes) ? data.refreshable_item_codes : [],
                     });
                 }
