@@ -4718,6 +4718,7 @@ class ProductsController {
      */
     private function validateAndSaveTransferRequest(array $data, $stockTransferModel, bool $wantsJson): void
     {
+        global $productModel;
         // Validate input
         $transfer_order_no = isset($data['transfer_order_no']) ? trim($data['transfer_order_no']) : '';
         $product_ids = isset($data['product_ids']) ? trim($data['product_ids']) : '';
@@ -4824,13 +4825,16 @@ class ProductsController {
             }
         }
 
-        foreach ($data['items'] as $item) {
+        $normalizedItems = [];
+        $itemCodesForRefresh = [];
+        foreach ($data['items'] as $idx => $item) {
             $transfer_qty = (int)$item['transfer_qty'];
             if ($transfer_qty <= 0) {
                 continue;
             }
 
             $sku = trim($item['sku'] ?? '');
+            $resolvedLine = null;
             if ($sku === '') {
                 $resolvedLine = $stockTransferModel->resolveProductForTransferItem($item);
                 if ($resolvedLine && !empty($resolvedLine['sku'])) {
@@ -4838,17 +4842,99 @@ class ProductsController {
                 }
             }
             if ($sku === '') {
-                echo json_encode(['success' => false, 'message' => 'Could not resolve SKU for at least one item line']);
+                $lineNo = (int)$idx + 1;
+                $itemCode = trim((string)($item['item_code'] ?? ''));
+                $productId = (int)($item['product_id'] ?? 0);
+                $debugIdentity = [];
+                if ($itemCode !== '') {
+                    $debugIdentity[] = 'item_code: ' . $itemCode;
+                }
+                if ($productId > 0) {
+                    $debugIdentity[] = 'product_id: ' . $productId;
+                }
+                $details = empty($debugIdentity) ? 'no SKU/item_code/product_id provided' : implode(', ', $debugIdentity);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Could not resolve SKU at line ' . $lineNo . ' (' . $details . ').',
+                    'line' => $lineNo,
+                    'item_code' => $itemCode,
+                    'product_id' => $productId,
+                ]);
                 exit;
             }
 
-            $existingQty = $existingQtyBySku[$sku] ?? 0;
-            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $transfer_qty, $existingQty);
-            if (!$validation['valid']) {
-                echo json_encode(['success' => false, 'message' => $validation['message']]);
+            $lineItemCode = trim((string)($item['item_code'] ?? ''));
+            if ($lineItemCode === '') {
+                if ($resolvedLine === null) {
+                    $resolvedLine = $stockTransferModel->resolveProductForTransferItem($item);
+                }
+                if ($resolvedLine && !empty($resolvedLine['item_code'])) {
+                    $lineItemCode = trim((string)$resolvedLine['item_code']);
+                }
+            }
+            if ($lineItemCode === '' && $resolvedLine && !empty($resolvedLine['item_code'])) {
+                $lineItemCode = trim((string)$resolvedLine['item_code']);
+            }
+            if ($lineItemCode !== '') {
+                $itemCodesForRefresh[strtoupper($lineItemCode)] = $lineItemCode;
+            }
+
+            $item['sku'] = $sku;
+            if ($lineItemCode !== '') {
+                $item['item_code'] = $lineItemCode;
+            }
+            $normalizedItems[] = $item;
+        }
+
+        if (!empty($itemCodesForRefresh)) {
+            $codes = array_values($itemCodesForRefresh);
+            $apiSync = $this->refreshTransferItemsFromApi($codes, $productModel);
+            if (!$apiSync['success']) {
+                echo json_encode(['success' => false, 'message' => $apiSync['message']]);
                 exit;
             }
         }
+
+        $insufficient = [];
+        foreach ($normalizedItems as $idx => $item) {
+            $transfer_qty = (int)($item['transfer_qty'] ?? 0);
+            if ($transfer_qty <= 0) {
+                continue;
+            }
+            $sku = trim((string)($item['sku'] ?? ''));
+            if ($sku === '') {
+                continue;
+            }
+            $existingQty = $existingQtyBySku[$sku] ?? 0;
+            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $transfer_qty, $existingQty);
+            if (!$validation['valid']) {
+                $insufficient[] = [
+                    'line' => $idx + 1,
+                    'sku' => $sku,
+                    'item_code' => trim((string)($item['item_code'] ?? '')),
+                    'requested_qty' => $transfer_qty,
+                    'available_qty' => (int)($validation['available'] ?? 0),
+                ];
+            }
+        }
+        if (!empty($insufficient)) {
+            $parts = [];
+            foreach ($insufficient as $row) {
+                $label = $row['sku'];
+                if ($row['item_code'] !== '') {
+                    $label .= ' (' . $row['item_code'] . ')';
+                }
+                $parts[] = $label . ' req:' . $row['requested_qty'] . ' avail:' . $row['available_qty'];
+            }
+            echo json_encode([
+                'success' => false,
+                'message' => 'Transfer qty exceeds source warehouse stock for: ' . implode('; ', $parts),
+                'insufficient_items' => $insufficient,
+            ]);
+            exit;
+        }
+
+        $data['items'] = $normalizedItems;
 
         // Handle E-Way Bill file upload/retain/remove
         $existingFile = isset($data['existing_eway_bill_file']) ? trim($data['existing_eway_bill_file']) : '';
@@ -4911,6 +4997,58 @@ class ProductsController {
 
         echo json_encode($result);
         exit;
+    }
+
+    /**
+     * Refresh vp_products stock from vendor API before transfer validation.
+     * updateProductFromApi() also aligns stock movement ledger with refreshed local stock.
+     *
+     * @param list<string> $itemCodes
+     * @return array{success:bool,message:string}
+     */
+    private function refreshTransferItemsFromApi(array $itemCodes, $productModel): array
+    {
+        $codes = array_values(array_unique(array_filter(array_map(static function ($v) {
+            return trim((string)$v);
+        }, $itemCodes))));
+        if (empty($codes)) {
+            return ['success' => true, 'message' => 'No item codes to refresh.'];
+        }
+
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode(implode(',', $codes));
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false) {
+            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: ' . $curlErr];
+        }
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: invalid response format.'];
+        }
+        $rows = product::normalizeVendorProductFetchItems($decoded);
+        if (empty($rows)) {
+            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: no item rows returned.'];
+        }
+        $res = $productModel->updateProductFromApi($rows);
+        if (!is_array($res) || empty($res['success'])) {
+            $msg = is_array($res) ? (string)($res['message'] ?? 'Unknown API refresh error.') : 'Unknown API refresh error.';
+            return ['success' => false, 'message' => 'Could not sync latest stock before transfer: ' . $msg];
+        }
+
+        return ['success' => true, 'message' => 'Latest stock refreshed from API.'];
     }
 
     public function getTransferStockBulkForm() {
