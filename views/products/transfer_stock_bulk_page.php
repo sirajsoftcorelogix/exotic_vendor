@@ -346,10 +346,54 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     <img id="bulkImageLightboxImg" alt="" class="max-h-[90vh] max-w-full object-contain rounded-lg shadow-2xl">
 </div>
 
+<div id="stockTransferNoticeModal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="stockTransferNoticeTitle">
+    <div class="w-full max-w-md rounded-2xl bg-white shadow-2xl ring-1 ring-gray-900/10">
+        <div class="px-5 py-4 border-b border-gray-100">
+            <h3 id="stockTransferNoticeTitle" class="text-base font-semibold text-gray-900">Stock Transfer</h3>
+        </div>
+        <div class="px-5 py-4">
+            <p id="stockTransferNoticeMessage" class="text-sm text-gray-700 leading-relaxed"></p>
+        </div>
+        <div class="px-5 py-4 border-t border-gray-100 flex justify-end">
+            <button type="button" id="stockTransferNoticeOk" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">OK</button>
+        </div>
+    </div>
+</div>
+
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
 <script>
 (function () {
+    const stockTransferNoticeModal = document.getElementById('stockTransferNoticeModal');
+    const stockTransferNoticeMessage = document.getElementById('stockTransferNoticeMessage');
+    const stockTransferNoticeOk = document.getElementById('stockTransferNoticeOk');
+
+    function showTransferNotice(message) {
+        if (!stockTransferNoticeModal || !stockTransferNoticeMessage) {
+            alert(message);
+            return;
+        }
+        stockTransferNoticeMessage.textContent = String(message || 'Something went wrong.');
+        stockTransferNoticeModal.classList.remove('hidden');
+        stockTransferNoticeModal.classList.add('flex');
+        if (stockTransferNoticeOk) stockTransferNoticeOk.focus();
+    }
+
+    function closeTransferNotice() {
+        if (!stockTransferNoticeModal) return;
+        stockTransferNoticeModal.classList.add('hidden');
+        stockTransferNoticeModal.classList.remove('flex');
+    }
+
+    if (stockTransferNoticeOk) {
+        stockTransferNoticeOk.addEventListener('click', closeTransferNotice);
+    }
+    if (stockTransferNoticeModal) {
+        stockTransferNoticeModal.addEventListener('click', function (e) {
+            if (e.target === stockTransferNoticeModal) closeTransferNotice();
+        });
+    }
+
     const warehouseData = {
         <?php foreach ($warehouses as $warehouse):
             $name = trim($warehouse['address_title'] ?? '');
@@ -537,11 +581,11 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                         if (data.success) {
                             window.location.reload();
                         } else {
-                            alert(data.message || 'Could not remove this line.');
+                            showTransferNotice(data.message || 'Could not remove this line.');
                         }
                     })
                     .catch(function () {
-                        alert('Could not remove this line. Check your connection and try again.');
+                        showTransferNotice('Could not remove this line. Check your connection and try again.');
                     });
             });
         }
@@ -783,11 +827,11 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     document.getElementById('bulkTransferForm').addEventListener('submit', function (e) {
         e.preventDefault();
         if (!fromSel.value || !toSel.value) {
-            alert('Please select source and destination warehouses.');
+            showTransferNotice('Please select source and destination warehouses.');
             return;
         }
         if (fromSel.value === toSel.value) {
-            alert('Source and destination warehouses must be different.');
+            showTransferNotice('Source and destination warehouses must be different.');
             return;
         }
 
@@ -797,7 +841,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         if (bulkMode.value === 'grid') {
             const gridData = collectGridRows();
             if (gridData.length === 0) {
-                alert('Add at least one row with a resolved product (search SKU and pick a match, or type an exact SKU) and quantity.');
+                showTransferNotice('Add at least one row with a resolved product (search SKU and pick a match, or type an exact SKU) and quantity.');
                 return;
             }
             document.getElementById('bulk_rows_json').value = JSON.stringify(gridData);
@@ -810,7 +854,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             document.getElementById('bulk_rows_json').value = '[]';
             fd.set('bulk_rows_json', '[]');
             if (!bulkFile.files || !bulkFile.files.length) {
-                alert('Please choose a spreadsheet file, or switch to the grid tab.');
+                showTransferNotice('Please choose a spreadsheet file, or switch to the grid tab.');
                 return;
             }
         }
@@ -824,14 +868,14 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.success) {
-                    alert(data.message || (isBulkEdit ? 'Stock transfer updated successfully.' : 'Stock transfer created successfully.'));
+                    showTransferNotice(data.message || (isBulkEdit ? 'Stock transfer updated successfully.' : 'Stock transfer created successfully.'));
                     window.location.href = '?page=products&action=stock_transfer';
                 } else {
-                    alert(data.message || 'Could not create transfer');
+                    showTransferNotice(data.message || 'Could not create transfer');
                 }
             })
             .catch(function (err) {
-                alert('Request failed: ' + err.message);
+                showTransferNotice('Request failed: ' + err.message);
             });
     });
 })();
