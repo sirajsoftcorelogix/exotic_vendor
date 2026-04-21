@@ -4824,7 +4824,7 @@ class ProductsController {
             }
         }
 
-        foreach ($data['items'] as $item) {
+        foreach ($data['items'] as $idx => $item) {
             $transfer_qty = (int)$item['transfer_qty'];
             if ($transfer_qty <= 0) {
                 continue;
@@ -4838,7 +4838,24 @@ class ProductsController {
                 }
             }
             if ($sku === '') {
-                echo json_encode(['success' => false, 'message' => 'Could not resolve SKU for at least one item line']);
+                $lineNo = (int)$idx + 1;
+                $itemCode = trim((string)($item['item_code'] ?? ''));
+                $productId = (int)($item['product_id'] ?? 0);
+                $debugIdentity = [];
+                if ($itemCode !== '') {
+                    $debugIdentity[] = 'item_code: ' . $itemCode;
+                }
+                if ($productId > 0) {
+                    $debugIdentity[] = 'product_id: ' . $productId;
+                }
+                $details = empty($debugIdentity) ? 'no SKU/item_code/product_id provided' : implode(', ', $debugIdentity);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Could not resolve SKU at line ' . $lineNo . ' (' . $details . ').',
+                    'line' => $lineNo,
+                    'item_code' => $itemCode,
+                    'product_id' => $productId,
+                ]);
                 exit;
             }
 
