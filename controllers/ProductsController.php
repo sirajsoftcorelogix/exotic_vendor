@@ -942,47 +942,47 @@ class ProductsController {
             exit;
         }
 
-        $rows = [];
-        $missing = [];
-        foreach ($items as $it) {
-            $pid = isset($it['id']) ? (int)$it['id'] : 0;
-            $qty = isset($it['qty']) ? (int)$it['qty'] : 1;
-            $qty = max(1, min(99, $qty));
-            if ($pid <= 0) {
-                continue;
-            }
-            $p = $productModel->getProduct($pid);
-            if (!$p || !is_array($p)) {
-                $missing[] = $pid;
-                continue;
-            }
-
-            if ($template === 'jewelry') {
-                require_once dirname(__DIR__) . '/helpers/label/JewelryLabel.php';
-                $labelRow = JewelryLabel::fromProductRow($p);
-            } elseif ($template === 'textile') {
-                require_once dirname(__DIR__) . '/helpers/label/TextileLabel.php';
-                $labelRow = TextileLabel::fromProductRow($p);
-            } else {
-                require_once dirname(__DIR__) . '/helpers/label/MgStoreLabel.php';
-                $labelRow = MgStoreLabel::fromProductRow($p);
-            }
-
-            for ($i = 0; $i < $qty; $i++) {
-                $rows[] = $labelRow;
-            }
-        }
-
-        if ($rows === []) {
-            $msg = 'No valid products found to print.';
-            if ($missing !== []) {
-                $msg .= ' Missing product IDs: ' . implode(', ', $missing);
-            }
-            echo json_encode(['success' => false, 'message' => $msg]);
-            exit;
-        }
-
         try {
+            $rows = [];
+            $missing = [];
+            foreach ($items as $it) {
+                $pid = isset($it['id']) ? (int)$it['id'] : 0;
+                $qty = isset($it['qty']) ? (int)$it['qty'] : 1;
+                $qty = max(1, min(99, $qty));
+                if ($pid <= 0) {
+                    continue;
+                }
+                $p = $productModel->getProduct($pid);
+                if (!$p || !is_array($p)) {
+                    $missing[] = $pid;
+                    continue;
+                }
+
+                if ($template === 'jewelry') {
+                    require_once dirname(__DIR__) . '/helpers/label/JewelryLabel.php';
+                    $labelRow = JewelryLabel::fromProductRow($p);
+                } elseif ($template === 'textile') {
+                    require_once dirname(__DIR__) . '/helpers/label/TextileLabel.php';
+                    $labelRow = TextileLabel::fromProductRow($p);
+                } else {
+                    require_once dirname(__DIR__) . '/helpers/label/MgStoreLabel.php';
+                    $labelRow = MgStoreLabel::fromProductRow($p);
+                }
+
+                for ($i = 0; $i < $qty; $i++) {
+                    $rows[] = $labelRow;
+                }
+            }
+
+            if ($rows === []) {
+                $msg = 'No valid products found to print.';
+                if ($missing !== []) {
+                    $msg .= ' Missing product IDs: ' . implode(', ', $missing);
+                }
+                echo json_encode(['success' => false, 'message' => $msg]);
+                exit;
+            }
+
             if ($template === 'jewelry') {
                 $html = JewelryLabel::renderPrintDocumentBatch($rows);
             } elseif ($template === 'textile') {
@@ -990,33 +990,36 @@ class ProductsController {
             } else {
                 $html = MgStoreLabel::renderPrintDocumentBatch($rows);
             }
-        } catch (Throwable $e) {
+
+            $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+            if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+                $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+            }
+            $out = json_encode([
+                'success' => true,
+                'html' => $html,
+                'total_labels' => count($rows),
+                'missing_product_ids' => $missing,
+            ], $flags);
+            if ($out === false) {
+                $je = json_last_error_msg();
+                throw new RuntimeException('JSON encode failed: ' . $je);
+            }
+            echo $out;
+        } catch (\Throwable $e) {
             error_log(
                 'bulk_label_print_generate template=' . $template
                 . ' ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()
             );
+            $hint = preg_replace('/[^\x20-\x7E]/', '', substr($e->getMessage(), 0, 240));
+            $hint = trim($hint);
             echo json_encode([
                 'success' => false,
                 'message' => 'Could not build label output. If this continues, contact support with the time and template used.',
-            ]);
-            exit;
+                'hint' => $hint !== '' ? $hint : get_class($e),
+                'template' => $template,
+            ], JSON_UNESCAPED_UNICODE);
         }
-
-        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
-        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
-            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
-        }
-        $out = json_encode([
-            'success' => true,
-            'html' => $html,
-            'total_labels' => count($rows),
-            'missing_product_ids' => $missing,
-        ], $flags);
-        if ($out === false) {
-            echo json_encode(['success' => false, 'message' => 'Could not encode label data. Try fewer lines.']);
-            exit;
-        }
-        echo $out;
         exit;
     }
 

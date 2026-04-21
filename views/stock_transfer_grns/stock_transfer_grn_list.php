@@ -865,7 +865,14 @@ if (!function_exists('grn_item_group_camel_case')) {
                 return;
             }
             if (!data || !data.success || !data.html) {
-                alert((data && data.message) ? data.message : 'Could not generate labels.');
+                var msg = (data && data.message) ? data.message : 'Could not generate labels.';
+                if (data && data.hint) {
+                    msg += '\n\n' + data.hint;
+                }
+                if (data && data.template) {
+                    msg += '\n(template: ' + data.template + ')';
+                }
+                alert(msg);
                 return;
             }
             openPrintHtmlInFrame(data.html);
