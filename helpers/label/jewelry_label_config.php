@@ -8,14 +8,14 @@ return [
     'label_height_mm' => 12.9,
     /** Inner inset from label edge */
     'padding_mm' => 0.6,
-    /**
-     * Max square side for the QR on the printed label (mm).
-     * Clamped to available height inside the label (padding). Lower = smaller QR vs text.
-     */
-    'qr_max_side_mm' => 10.0,
-    /** Endroid PNG size in pixels (higher = sharper when the printed QR is scaled in mm). */
-    'qr_builder_size_px' => 72,
-    'qr_margin' => 0,
+    /** Max printed width for the Code 128 image (mm); scales down long SKUs. */
+    'barcode_max_width_mm' => 44.0,
+    /** Max printed height for the barcode bars (mm); clamped to label minus padding. */
+    'barcode_max_height_mm' => 9.0,
+    /** Raster height passed to Picqer (px); higher = sharper when scaled on the label. */
+    'barcode_height_px' => 50,
+    /** Bar module width multiplier (Picqer widthFactor); 2–3 typical. */
+    'barcode_width_factor' => 2,
     /** Body text (Color / Size / MRP / SKU labels and values) */
     'font_size_mm' => 1.85,
     'font_family' => 'Arial, Helvetica, sans-serif',
