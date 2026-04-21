@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-use Picqer\Barcode\BarcodeGeneratorSVG;
+use Endroid\QrCode\QrCode;
+use Endroid\QrCode\Writer\PngWriter;
 
 /**
- * 100 × 12.9 mm jewelry label: left 47% — Code 128 barcode (SKU); text block row Color | Size | MRP; then SKU (full width, wraps).
+ * 100 × 12.9 mm jewelry label: left 47% — QR (SKU payload); text block row Color | Size | MRP; then SKU (full width, wraps).
  * Remainder blank for margin / peel. Use from controllers, models, or CLI.
  */
 final class JewelryLabel
@@ -70,78 +71,52 @@ final class JewelryLabel
     }
 
     /**
-     * Code 128 payload from SKU; strips non-ASCII so Picqer never throws InvalidCharacterException.
+     * QR payload is the SKU string (empty SKU uses placeholder so the symbol still renders).
      */
-    public static function barcodePayloadFromData(array $data): string
+    public static function qrPayloadFromData(array $data): string
     {
         $sku = trim((string)($data['sku'] ?? ''));
 
-        return self::normalizeSkuForCode128($sku);
+        return $sku !== '' ? $sku : '—';
     }
 
     /**
-     * SVG data URI for Code 128 (no GD/Imagick required — PNG fails on hosts without GD).
+     * PNG data URI for the QR encoding {@see qrPayloadFromData()}.
      *
      * @param array<string, mixed>|null $config
      */
-    public static function barcodeDataUri(array $data, ?array $config = null): string
+    public static function qrDataUri(array $data, ?array $config = null): string
     {
         self::loadVendor();
         $cfg = self::config($config);
-        $payload = self::barcodePayloadFromData($data);
-        $h = max(12.0, (float)($cfg['barcode_svg_bar_height'] ?? 28.0));
-        $wFactor = max(1.0, (float)($cfg['barcode_svg_width_factor'] ?? 2.0));
+        $payload = self::qrPayloadFromData($data);
+        $size = max(16, (int)($cfg['qr_builder_size_px'] ?? 72));
+        $margin = max(0, (int)($cfg['qr_margin'] ?? 0));
 
-        try {
-            $generator = new BarcodeGeneratorSVG();
-            $svg = $generator->getBarcode($payload, $generator::TYPE_CODE_128, $wFactor, $h);
-        } catch (Throwable $e) {
-            $generator = new BarcodeGeneratorSVG();
-            $svg = $generator->getBarcode('-', $generator::TYPE_CODE_128, 2.0, $h);
-        }
+        $qrCode = new QrCode(
+            data: $payload,
+            size: $size,
+            margin: $margin
+        );
+        $writer = new PngWriter();
+        $png = $writer->write($qrCode)->getString();
 
-        return 'data:image/svg+xml;base64,' . base64_encode($svg);
+        return 'data:image/png;base64,' . base64_encode($png);
     }
 
     /**
-     * Printable ASCII for Code 128 auto mode (best-effort transliteration).
-     */
-    private static function normalizeSkuForCode128(string $sku): string
-    {
-        if ($sku === '') {
-            return '-';
-        }
-        $conv = @iconv('UTF-8', 'ASCII//TRANSLIT', $sku);
-        if ($conv !== false && $conv !== '') {
-            $sku = $conv;
-        }
-        $sku = preg_replace('/[^\x20-\x7E]/', '', $sku);
-        $sku = trim((string)$sku);
-        if ($sku === '') {
-            return '-';
-        }
-        // Very long payloads explode SVG width / JSON size and can OOM; bars only encode a prefix.
-        if (strlen($sku) > 72) {
-            $sku = substr($sku, 0, 72);
-        }
-
-        return $sku;
-    }
-
-    /**
+     * Effective QR box side in mm (fits inside label minus padding).
+     *
      * @param array<string, mixed> $cfg
-     * @return array{max_width_mm: float, max_height_mm: float}
      */
-    public static function barcodeDisplayBoundsMm(array $cfg): array
+    public static function qrDisplaySideMm(array $cfg): float
     {
         $h = (float)($cfg['label_height_mm'] ?? 12.9);
         $pad = (float)($cfg['padding_mm'] ?? 0.6);
         $inner = max(1.0, $h - 2 * $pad);
-        $maxH = (float)($cfg['barcode_max_height_mm'] ?? 9.0);
-        $maxH = min($maxH, $inner);
-        $maxW = (float)($cfg['barcode_max_width_mm'] ?? 44.0);
+        $want = (float)($cfg['qr_max_side_mm'] ?? 10.0);
 
-        return ['max_width_mm' => max(8.0, $maxW), 'max_height_mm' => max(4.0, $maxH)];
+        return min($want, $inner);
     }
 
     /**
@@ -161,10 +136,8 @@ final class JewelryLabel
         $lh = (float)($cfg['line_height'] ?? 1.28);
         $textRowGapMm = (float)($cfg['text_block_row_gap_mm'] ?? 0.55);
 
-        $bounds = self::barcodeDisplayBoundsMm($cfg);
-        $barW = $bounds['max_width_mm'];
-        $barH = $bounds['max_height_mm'];
-        $barUri = self::barcodeDataUri($data, $cfg);
+        $qrMm = self::qrDisplaySideMm($cfg);
+        $qrUri = self::qrDataUri($data, $cfg);
 
         $sku = (string)($data['sku'] ?? '');
         $color = (string)($data['color'] ?? '');
@@ -215,8 +188,8 @@ final class JewelryLabel
 
         $innerRow = ''
             . '<div class="jl-inner-row" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:1.2mm;width:100%;min-width:0;box-sizing:border-box;">'
-            . '<div class="jl-col jl-col--barcode" style="flex:0 0 auto;min-width:0;display:flex;align-items:center;justify-content:center;">'
-            . '<img src="' . $e($barUri) . '" alt="" style="max-width:' . $e((string)$barW) . 'mm;max-height:' . $e((string)$barH) . 'mm;width:auto;height:auto;object-fit:contain;object-position:left center;display:block;flex-shrink:0;" />'
+            . '<div class="jl-col jl-col--qr" style="flex:0 0 auto;min-width:0;display:flex;align-items:center;justify-content:center;">'
+            . '<img src="' . $e($qrUri) . '" alt="" style="width:' . $e((string)$qrMm) . 'mm;height:' . $e((string)$qrMm) . 'mm;object-fit:contain;display:block;flex-shrink:0;" />'
             . '</div>'
             . $textCluster
             . '</div>';
