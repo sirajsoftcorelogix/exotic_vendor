@@ -4934,16 +4934,18 @@ class ProductsController {
         }
         if (!empty($insufficient)) {
             $parts = [];
+            $skuLabels = [];
             foreach ($insufficient as $row) {
                 $label = $row['sku'];
                 if ($row['item_code'] !== '') {
                     $label .= ' (' . $row['item_code'] . ')';
                 }
+                $skuLabels[] = $label;
                 $parts[] = $label . ' req:' . $row['requested_qty'] . ' avail:' . $row['available_qty'];
             }
             echo json_encode([
                 'success' => false,
-                'message' => 'Insufficient stock in source warehouse for one or more items. Please reduce transfer quantity and try again.',
+                'message' => 'Insufficient stock in source warehouse for SKU(s): ' . implode(', ', array_unique($skuLabels)) . '. Please reduce transfer quantity and try again.',
                 'insufficient_items' => $insufficient,
                 'details' => $parts,
             ]);
@@ -5321,16 +5323,18 @@ class ProductsController {
 
         if (!empty($insufficient)) {
             $parts = [];
+            $skuLabels = [];
             foreach ($insufficient as $row) {
                 $label = $row['sku'];
                 if ($row['item_code'] !== '') {
                     $label .= ' (' . $row['item_code'] . ')';
                 }
+                $skuLabels[] = $label;
                 $parts[] = $label . ' req:' . $row['requested_qty'] . ' avail:' . $row['available_qty'];
             }
             echo json_encode([
                 'success' => false,
-                'message' => 'Insufficient stock in source warehouse for one or more items. Please reduce transfer quantity and try again.',
+                'message' => 'Insufficient stock in source warehouse for SKU(s): ' . implode(', ', array_unique($skuLabels)) . '. Please reduce transfer quantity and try again.',
                 'insufficient_items' => $insufficient,
                 'details' => $parts,
             ]);
