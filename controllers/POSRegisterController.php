@@ -1419,6 +1419,26 @@ class POSRegisterController
         return $out;
     }
 
+    /**
+     * Remove every line item from the Exotic India cart API (qty 0 per cartref), same as POS "Remove".
+     */
+    private function clearRemoteCartLines(array $items): void
+    {
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $cartref = trim((string)($item['cartref'] ?? ''));
+            if ($cartref === '') {
+                continue;
+            }
+            $this->exotic_api_call('/cart/modifyqty', 'GET', [
+                'cartid' => $cartref,
+                'newqty' => 0,
+            ]);
+        }
+    }
+
 
     public function get_cart()
     {
@@ -2100,6 +2120,10 @@ class POSRegisterController
             );
             $stmt->execute();
         }
+
+        $this->clearRemoteCartLines($cartData['items'] ?? []);
+        unset($_SESSION['gift_voucher']);
+        unset($_SESSION['cart_error']);
 
         unset($_SESSION['discount_coupon']);
         unset($_SESSION['pos_customer_form']);
