@@ -7,24 +7,10 @@ $page_no = isset($page_no) ? max(1, (int)$page_no) : 1;
 $total_pages = isset($total_pages) ? max(1, (int)$total_pages) : 1;
 $total_records = isset($total_records) ? (int)$total_records : 0;
 $is_admin_customer_list = !empty($is_admin_customer_list);
-$has_list_scope = $is_admin_customer_list || !empty($warehouse_id);
-$filter_wh = (int)($filters['filter_warehouse_id'] ?? 0);
-$warehouses = $warehouses ?? [];
-$admin_filter_warehouse_name = $admin_filter_warehouse_name ?? '';
+$has_list_scope = true;
 $clearSearchParams = $qBase + ['limit' => $limit];
-if ($filter_wh > 0) {
-    $clearSearchParams['filter_warehouse_id'] = $filter_wh;
-}
-$allWarehousesParams = $qBase + ['limit' => $limit];
-if ($searchVal !== '') {
-    $allWarehousesParams['search'] = $searchVal;
-}
-$viewUrl = function (int $id) use ($is_admin_customer_list, $filter_wh) {
-    $u = base_url('?page=customer&action=view&customer_id=' . $id);
-    if ($is_admin_customer_list && $filter_wh > 0) {
-        $u .= '&list_wh=' . $filter_wh;
-    }
-    return $u;
+$viewUrl = function (int $id) {
+    return base_url('?page=customer&action=view&customer_id=' . $id);
 };
 ?>
 <div class="max-w-[1400px] mx-auto px-4 sm:px-6 pt-[10px] pb-10 mr-4">
@@ -48,32 +34,14 @@ $viewUrl = function (int $id) use ($is_admin_customer_list, $filter_wh) {
                     <div class="flex flex-wrap items-center gap-2 gap-y-1">
                         <h1 class="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">Customers</h1>
                         <?php if ($is_admin_customer_list): ?>
-                            <?php if ($filter_wh > 0): ?>
-                                <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-900 ring-1 ring-inset ring-amber-200/80">Admin · warehouse filter</span>
-                            <?php else: ?>
-                                <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-900 ring-1 ring-inset ring-amber-200/80">Admin · all locations</span>
-                            <?php endif; ?>
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-900 ring-1 ring-inset ring-amber-200/80">Admin</span>
                         <?php elseif (!empty($warehouse_id)): ?>
-                            <span class="inline-flex items-center rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-amber-200/60 shadow-sm">POS scope</span>
+                            <span class="inline-flex items-center rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-amber-200/60 shadow-sm">POS</span>
                         <?php endif; ?>
                     </div>
-                    <?php if ($is_admin_customer_list): ?>
-                        <?php if ($filter_wh > 0): ?>
-                            <p class="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
-                                Filtered to <span class="font-medium text-gray-800"><?= htmlspecialchars($admin_filter_warehouse_name) ?></span>.
-                                Customers and totals match the POS list for that location (orders at this warehouse only).
-                            </p>
-                        <?php else: ?>
-                            <p class="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">Every customer in the system. Search by name, email, or phone. Use the warehouse filter to narrow by store. Purchase totals include all orders.</p>
-                        <?php endif; ?>
-                    <?php elseif (!empty($warehouse_id)): ?>
-                        <p class="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
-                            Showing customers linked to your current store.
-                            <span class="font-medium text-gray-800"><?= htmlspecialchars($warehouse_name ?? '') ?></span>
-                        </p>
-                    <?php else: ?>
-                        <p class="mt-2 max-w-xl text-sm leading-relaxed text-amber-900/80">Open the POS register and select a warehouse, then return here to see customers for that store.</p>
-                    <?php endif; ?>
+                    <p class="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
+                        Full customer directory. Search by name, email, or phone. Purchase totals include all linked orders.
+                    </p>
                 </div>
             </div>
             <?php if ($has_list_scope): ?>
@@ -101,21 +69,6 @@ $viewUrl = function (int $id) use ($is_admin_customer_list, $filter_wh) {
                     </svg>
                 </button>
             </div>
-            <?php if ($is_admin_customer_list && !empty($warehouses)): ?>
-                <div class="relative w-full sm:w-auto sm:min-w-[14rem]">
-                    <label class="sr-only" for="filter_warehouse_id">Warehouse</label>
-                    <select id="filter_warehouse_id" name="filter_warehouse_id" onchange="this.form.submit()" class="w-full appearance-none bg-white border border-gray-200 text-gray-800 py-2.5 pl-3 pr-8 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer">
-                        <option value="0" <?= $filter_wh === 0 ? 'selected' : '' ?>>All warehouses</option>
-                        <?php foreach ($warehouses as $whrow): ?>
-                            <?php $wid = (int)($whrow['id'] ?? 0); ?>
-                            <option value="<?= $wid ?>" <?= $filter_wh === $wid ? 'selected' : '' ?>><?= htmlspecialchars($whrow['address_title'] ?? ('#' . $wid)) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </div>
-                </div>
-            <?php endif; ?>
             <div class="relative w-auto">
                 <select name="limit" onchange="this.form.submit()" class="appearance-none bg-white border border-gray-200 text-gray-800 py-2.5 pl-3 pr-8 rounded shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer">
                     <?php foreach ([10, 20, 50, 100] as $opt): ?>
@@ -129,16 +82,11 @@ $viewUrl = function (int $id) use ($is_admin_customer_list, $filter_wh) {
             <?php if ($searchVal !== ''): ?>
                 <a href="<?= htmlspecialchars(base_url('?' . http_build_query($clearSearchParams))) ?>" class="text-red-500 hover:text-red-700 text-sm font-medium px-2 py-2.5 whitespace-nowrap">Clear search</a>
             <?php endif; ?>
-            <?php if ($is_admin_customer_list && $filter_wh > 0): ?>
-                <a href="<?= htmlspecialchars(base_url('?' . http_build_query($allWarehousesParams))) ?>" class="text-gray-600 hover:text-gray-900 text-sm font-medium px-2 py-2.5 whitespace-nowrap border border-gray-200 rounded-md">All warehouses</a>
-            <?php endif; ?>
         </div>
     </form>
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-        <?php if (!$has_list_scope): ?>
-            <div class="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg border border-gray-100">No warehouse context — open POS with a warehouse selected, then return here.</div>
-        <?php elseif (empty($customers)): ?>
+        <?php if (empty($customers)): ?>
             <div class="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg border border-dashed border-gray-200"><?= $searchVal !== '' ? 'No customers match your search.' : 'No customers found.' ?></div>
         <?php else: ?>
             <?php foreach ($customers as $c): ?>
