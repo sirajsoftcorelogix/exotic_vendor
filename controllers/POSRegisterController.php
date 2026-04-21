@@ -2147,11 +2147,57 @@ class POSRegisterController
             exit;
         }
         $stmt->bind_param("sss", $name, $email, $phone);
-        if (!$stmt->execute()) {
+        try {
+            $executed = $stmt->execute();
+        } catch (\mysqli_sql_exception $e) {
+            $stmt->close();
+            $dup = str_contains($e->getMessage(), 'Duplicate entry')
+                || str_contains($e->getMessage(), 'unique_email_phone')
+                || $e->getSqlState() === '23000';
+            if ($dup) {
+                $lookup = $conn->prepare(
+                    'SELECT id, name, email, phone FROM vp_customers WHERE email = ? AND phone = ? LIMIT 1'
+                );
+                if ($lookup) {
+                    $lookup->bind_param('ss', $email, $phone);
+                    $lookup->execute();
+                    $existing = $lookup->get_result()->fetch_assoc();
+                    $lookup->close();
+                    if (!empty($existing['id'])) {
+                        $id = (int)$existing['id'];
+                        $_SESSION['pos_customer_id'] = $id;
+                        $_SESSION['pos_customer_form'] = $_POST;
+                        echo json_encode([
+                            'success' => true,
+                            'message' => 'This email and phone are already registered; using existing customer.',
+                            'customer' => [
+                                'id' => $id,
+                                'name' => $existing['name'] ?? $name,
+                                'phone' => $existing['phone'] ?? $phone,
+                                'email' => $existing['email'] ?? $email,
+                            ],
+                        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                        exit;
+                    }
+                }
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'A customer with this email and phone already exists.',
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not save customer: ' . $e->getMessage(),
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if (!$executed) {
             echo json_encode([
                 "success" => false,
                 "message" => "Could not save customer: " . $stmt->error
-            ]);
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             $stmt->close();
             exit;
         }
@@ -2163,7 +2209,7 @@ class POSRegisterController
             echo json_encode([
                 "success" => false,
                 "message" => "Customer was not created (no insert id)."
-            ]);
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
@@ -2179,7 +2225,7 @@ class POSRegisterController
                 "phone" => $phone,
                 "email" => $email
             ]
-        ]);
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
         exit;
     }
