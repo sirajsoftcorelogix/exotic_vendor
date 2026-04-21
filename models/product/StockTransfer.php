@@ -1398,22 +1398,10 @@ class StockTransfer
     public function listTransferGrns($transferId = 0)
     {
         $transferId = (int)$transferId;
-        // Resolve item_group via scalar subqueries (LIMIT 1) so duplicate vp_products rows for the same
-        // sku/item_code do not multiply GRN lines, which happened with LEFT JOIN vp_products.
+        // item_group is filled in PHP (see product::enrichStockTransferGrnRowsForList) to avoid
+        // per-row correlated subqueries on vp_products, which made large GRN lists very slow.
         $sql = "SELECT g.*, t.transfer_order_no, w.address_title AS location_name, u.name AS received_by_name,
-                       COALESCE(
-                          (SELECT p.groupname FROM vp_products p
-                           WHERE NULLIF(TRIM(g.sku), '') IS NOT NULL
-                             AND TRIM(CONVERT(p.sku USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
-                                 TRIM(CONVERT(g.sku USING utf8mb4)) COLLATE utf8mb4_unicode_ci
-                            LIMIT 1),
-                           (SELECT p2.groupname FROM vp_products p2
-                           WHERE NULLIF(TRIM(g.item_code), '') IS NOT NULL
-                             AND TRIM(CONVERT(p2.item_code USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
-                                 TRIM(CONVERT(g.item_code USING utf8mb4)) COLLATE utf8mb4_unicode_ci
-                            LIMIT 1),
-                           ''
-                       ) AS item_group
+                       '' AS item_group
                 FROM vp_stock_transfer_grns g
                 LEFT JOIN vp_stock_transfer t ON t.id = g.transfer_id
                 LEFT JOIN exotic_address w ON w.id = g.location

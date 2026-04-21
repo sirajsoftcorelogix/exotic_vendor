@@ -36,29 +36,7 @@ class StockTransferGrnController {
         $transfer = $transferId > 0 ? $this->stockTransferModel->getTransferById($transferId) : null;
 
         $productModel = new product($this->conn);
-        foreach ($grns as &$grnRow) {
-            $resolved = null;
-            $itemCode = trim((string)($grnRow['item_code'] ?? ''));
-            if ($itemCode !== '') {
-                $resolved = $productModel->findByItemCodeSizeColor(
-                    $itemCode,
-                    (string)($grnRow['size'] ?? ''),
-                    (string)($grnRow['color'] ?? '')
-                );
-            }
-            if (!$resolved) {
-                $sku = trim((string)($grnRow['sku'] ?? ''));
-                if ($sku !== '') {
-                    $resolved = $productModel->getProductByskuExact($sku);
-                }
-            }
-            $grnRow['label_product_id'] = $resolved && !empty($resolved['id']) ? (int)$resolved['id'] : 0;
-            $recv = (int)($grnRow['qty_received'] ?? 0);
-            $acc = (int)($grnRow['qty_acceptable'] ?? 0);
-            $base = max($recv, $acc);
-            $grnRow['label_default_qty'] = $base > 0 ? min(99, $base) : 1;
-        }
-        unset($grnRow);
+        $productModel->enrichStockTransferGrnRowsForList($grns);
 
         renderTemplate('views/stock_transfer_grns/stock_transfer_grn_list.php', [
             'transfer' => $transfer,
