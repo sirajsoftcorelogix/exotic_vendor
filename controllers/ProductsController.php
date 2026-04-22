@@ -4405,6 +4405,72 @@ class ProductsController {
         exit;
     }
 
+    public function updatePublishedStatus() {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            if (!is_array($data) || empty($data['product_id'])) {
+                throw new Exception('Invalid data received');
+            }
+            $productId = (int)$data['product_id'];
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+            $newVal = isset($data['published']) ? (int)$data['published'] : -1;
+            if ($newVal !== 0 && $newVal !== 1) {
+                throw new Exception('published must be 0 or 1');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+            $current = (int)($product['published'] ?? 0);
+            if ($current === $newVal) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'No change.',
+                    'published' => $newVal,
+                    'vendor_sync' => ['success' => true, 'message' => 'Skipped (already set).'],
+                ]);
+                exit;
+            }
+
+            $ok = $productModel->setProductPublished($productId, $newVal);
+            if (!$ok) {
+                throw new Exception('Could not update published status');
+            }
+
+            $fresh = $productModel->getProduct($productId);
+            $vendorSync = $fresh ? $this->syncPublishedToVendorFrontend($fresh, $newVal) : [
+                'success' => false,
+                'message' => 'Updated locally but could not reload product for vendor sync.',
+            ];
+
+            $message = 'Published status updated.';
+            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+                $message .= ' ' . $vendorSync['message'];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'published' => $newVal,
+                'vendor_sync' => $vendorSync,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     /**
      * Set permanently_available on frontend via vendor product/modify API.
      */
@@ -4466,6 +4532,72 @@ class ProductsController {
         return [
             'success' => $apiSuccess,
             'message' => $decoded['message'] ?? ($apiSuccess ? 'Vendor permanently_available sync completed.' : 'Vendor sync failed.'),
+            'http_code' => $httpCode,
+            'response' => $decoded,
+        ];
+    }
+
+    /**
+     * Set published status on frontend via vendor product/modify API.
+     */
+    private function syncPublishedToVendorFrontend(array $product, int $value): array
+    {
+        $itemCode = trim((string)($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
+        }
+
+        $size = trim((string)($product['size'] ?? ''));
+        $color = trim((string)($product['color'] ?? ''));
+        $flag = $value ? 1 : 0;
+
+        $url = 'https://www.exoticindia.com/vendor-api/product/modify'
+            . '?itemcode=' . urlencode($itemCode)
+            . '&size=' . urlencode($size)
+            . '&color=' . urlencode($color);
+
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+        $postData = [
+            'status' => $flag,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false) {
+            return ['success' => false, 'message' => 'Vendor API request failed: ' . $curlErr];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            return [
+                'success' => ($httpCode >= 200 && $httpCode < 300),
+                'message' => ($httpCode >= 200 && $httpCode < 300)
+                    ? 'Vendor published sync completed.'
+                    : 'Vendor API returned non-JSON response.',
+                'http_code' => $httpCode,
+                'raw_response' => $response,
+            ];
+        }
+
+        $apiSuccess = isset($decoded['success']) ? (bool)$decoded['success'] : ($httpCode >= 200 && $httpCode < 300);
+        return [
+            'success' => $apiSuccess,
+            'message' => $decoded['message'] ?? ($apiSuccess ? 'Vendor published sync completed.' : 'Vendor sync failed.'),
             'http_code' => $httpCode,
             'response' => $decoded,
         ];
