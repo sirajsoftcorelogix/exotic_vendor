@@ -184,6 +184,7 @@
     }
     $isBookProduct = strpos($groupNameLower, 'book') !== false;
     $authorRaw = trim((string)($products['author'] ?? ''));
+    $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
     $publishedVal = (int)($products['published'] ?? 0);
     $publishedText = $publishedVal === 1 ? 'Published' : 'Unpublished';
     $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
@@ -279,12 +280,18 @@
             </span> 
             <span class="text-xs ml-2 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium"><?php echo $products['item_code'] ?? ''; ?></span>
           </div>
-          <button type="button"
-            id="publishedStatusLink"
-            class="shrink-0 text-xs font-semibold px-3 py-1 rounded-md border <?php echo $publishedVal === 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'; ?> hover:opacity-85"
-            onclick="openPublishedStatusModal()">
-            <span id="publishedStatusDisplay"><?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?></span>
-          </button>
+          <?php if ($isAdminUser): ?>
+            <button type="button"
+              id="publishedStatusLink"
+              class="shrink-0 text-xs font-semibold px-3 py-1 rounded-md border <?php echo $publishedVal === 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'; ?> hover:opacity-85"
+              onclick="openPublishedStatusModal()">
+              <span id="publishedStatusDisplay"><?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?></span>
+            </button>
+          <?php else: ?>
+            <span id="publishedStatusDisplay" class="shrink-0 text-xs font-semibold px-3 py-1 rounded-md border <?php echo $publishedVal === 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'; ?>">
+              <?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?>
+            </span>
+          <?php endif; ?>
         </div>
         
         <h2 class="font-semibold mt-2 text-lg">
@@ -792,6 +799,7 @@
         </div>
     </div>
 </div>
+<?php if ($isAdminUser): ?>
 <div id="publishedStatusModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
     <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
         <button type="button" onclick="closePublishedStatusModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
@@ -810,6 +818,7 @@
         </div>
     </div>
 </div>
+<?php endif; ?>
 <!-- Stock Adjustment Card -->
 <!-- Overlay -->
 <div id="stockModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
