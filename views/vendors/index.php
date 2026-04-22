@@ -1138,7 +1138,7 @@
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
                 setTimeout(() => {
-                    location.reload();
+                    //location.reload();
                 }, 1500); // refresh after 1 sec
             } else if(data.api_response.success !== true){
                 msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
