@@ -485,6 +485,27 @@ class POSRegisterController
     }
 
     /**
+     * Base unit (₹) for POS product modal: prefer local vp_products price_india / price_india_suggested
+     * (treated as ex-GST), then fall back to mergeSellingPrice (API + DB). Upstream /product/code
+     * prices are often already GST-inclusive; using them as input to applyGstInclusiveToUnitPrice
+     * double-applied tax (wrong display: (base + GST) * (1 + GST%)).
+     */
+    private function mergePosProductSellingBaseExGst(array $apiData, array $dbRow): float
+    {
+        foreach (['price_india', 'price_india_suggested'] as $k) {
+            if (empty($dbRow[$k])) {
+                continue;
+            }
+            $f = (float)$dbRow[$k];
+            if ($f > 0) {
+                return $f;
+            }
+        }
+
+        return $this->mergeSellingPrice($apiData, $dbRow);
+    }
+
+    /**
      * India retail unit price from vp_products for a cart/API product code (sku or item_code).
      */
     private function resolveIndiaSellPriceFromVp($conn, string $code): float
@@ -923,7 +944,7 @@ class POSRegisterController
             $imageResolved = $imageFromDb;
         }
 
-        $sellingPrice = $this->mergeSellingPrice($data, $dbRow);
+        $sellingPrice = $this->mergePosProductSellingBaseExGst($data, $dbRow);
         if (
             $sellingPrice <= 0
             && $dbItemCode !== ''
@@ -933,7 +954,7 @@ class POSRegisterController
                 $resPrice = $this->exotic_api_call('/product/code', 'GET', ['code' => $dbItemCode]);
                 $data2 = $this->unwrapProductApiResponse($resPrice['data'] ?? []);
             }
-            $alt = $this->mergeSellingPrice($data2, $dbRow);
+            $alt = $this->mergePosProductSellingBaseExGst($data2, $dbRow);
             if ($alt > 0) {
                 $sellingPrice = $alt;
             }
