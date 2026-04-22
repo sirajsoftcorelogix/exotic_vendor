@@ -101,6 +101,7 @@ class VendorsController {
                         'webpage' => '1'
                     ];
                     $createApiResponse = $this->createVendorExternal($postData);
+                    $result['api_response'] = $createApiResponse; // Include API response in the result
                     
                     // Update vendor with remote vendor_id from API response
                     if (!empty($createApiResponse) && $localVendorId > 0) {

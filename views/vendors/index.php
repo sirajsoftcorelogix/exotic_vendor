@@ -1137,17 +1137,29 @@
                 </div>`;
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                  if(data.api_response.success !== true){
-                        msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
-                            ⚠️ ${data.api_response}
-                        </div>`;
-                        msgBox.focus();
-                        msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                    } else {
-                            setTimeout(() => {
-                            location.reload();
-                        }, 1500); // refresh after 1 sec
+                
+                // Parse API response if it exists
+                let apiSuccess = false;
+                if (data.api_response) {
+                    try {
+                        let apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
+                        apiSuccess = apiData.success === true;
+                    } catch (e) {
+                        apiSuccess = false;
                     }
+                }
+                
+                if (!apiSuccess && data.api_response) {
+                    msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
+                        ⚠️ API Response: ${data.api_response}
+                    </div>`;
+                    msgBox.focus();
+                    msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+                
+                setTimeout(() => {
+                    location.reload();
+                }, 1500); // refresh after 1 sec
             } else {
                 msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
                     ❌ ${data.message}
@@ -1363,17 +1375,28 @@
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
                 
-                if(data.api_response.success !== true){
+                // Parse API response if it exists
+                let apiSuccess = false;
+                if (data.api_response) {
+                    try {
+                        let apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
+                        apiSuccess = apiData.success === true;
+                    } catch (e) {
+                        apiSuccess = false;
+                    }
+                }
+                
+                if (!apiSuccess && data.api_response) {
                     msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
-                        ⚠️ ${data.api_response}
+                        ⚠️ API Response: ${data.api_response}
                     </div>`;
                     msgBox.focus();
                     msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                }else{
-                    setTimeout(() => {
-                    window.location.href = '?page=vendors&action=list';
-                    }, 1000); // redirect after 1 sec
                 }
+                
+                setTimeout(() => {
+                    window.location.href = '?page=vendors&action=list';
+                }, 1000); // redirect after 1 sec
             } else {
                 msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
                     ❌ ${data.message}
