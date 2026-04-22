@@ -157,9 +157,9 @@ class vendor {
             $checkPanStmt->close();
         }
         $vendorCode = generateVendorCode($this->conn);
-        $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active, groupname) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssssssssssssssssiiis',
+        $stmt->bind_param('ssssssssssssssssiiiss',
             $vendorCode,
             $data['addVendorName'],
             $data['addContactPerson'],
@@ -179,7 +179,8 @@ class vendor {
             $_SESSION["user"]["id"],
             $data['addTeam'],
             $data['addTeamMember'],
-            $data['addStatus']
+            $data['addStatus'],
+            $data['groupname']
         );
         if ($stmt->execute()) {
             // Get the last inserted vendor id
@@ -194,7 +195,7 @@ class vendor {
                $tm_status = $this->addVendorTeams($vendor_id, $data['addTeam']);
             }
 
-            return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status, 'team_status' => $tm_status];
+            return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status, 'team_status' => $tm_status,'inserted_id' => $vendor_id];
         }
         return [
             'success' => false,
@@ -202,9 +203,9 @@ class vendor {
         ];
     }
     public function updateVendor($id, $data) {
-        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ? WHERE id = ?";
+        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('sssssssssssssssiiisi', 
+        $stmt->bind_param('sssssssssssssssiiissi', 
             $data['editVendorName'],
             $data['editContactPerson'],
             $data['editEmail'],
@@ -224,6 +225,7 @@ class vendor {
             $data['editTeam'],
             $data['editTeamMember'],
             $data['editStatus'],
+            $data['editGroupname'],
             $id
         );
         if ($stmt->execute()) {
@@ -243,6 +245,18 @@ class vendor {
         return [
             'success' => false,
             'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
+        ];
+    }
+    public function updateVendorRemoteId($vendorId, $remoteVendorId) {
+        $sql = "UPDATE vp_vendors SET vendor_id = ? WHERE id = ?";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('si', $remoteVendorId, $vendorId);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Vendor remote ID updated successfully.'];
+        }
+        return [
+            'success' => false,
+            'message' => 'Update failed: ' . $stmt->error
         ];
     }
     public function deleteVendor($id) {
