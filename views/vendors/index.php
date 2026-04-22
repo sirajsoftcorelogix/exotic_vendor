@@ -321,7 +321,7 @@
                                 <select class="form-input w-full mt-1" name="groupname" id="groupname" required>
                                     <option value="" disabled selected>Select Group Name</option>
                                     <?php foreach($groupnameList as $key => $value): ?>
-                                        <option value="<?php echo $value; ?>"><?php echo $value; ?></option>
+                                        <option value="<?php echo $value; ?>"><?php echo ucfirst($value); ?></option>
                                     <?php endforeach; ?>
 
                                 </select>
@@ -538,7 +538,7 @@
                                 <select class="form-input w-full mt-1" name="editGroupname" id="editGroupname" required>
                                     <option value="" disabled selected>Select Group Name</option>
                                     <?php foreach($groupnameList as $key => $value): ?>
-                                        <option value="<?php echo $value; ?>"><?php echo $value; ?></option>
+                                        <option value="<?php echo $value; ?>"><?php echo ucfirst($value); ?></option>
                                     <?php endforeach; ?>
 
                                 </select>
