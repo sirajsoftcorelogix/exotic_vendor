@@ -1363,12 +1363,13 @@
                 // setTimeout(() => {
                 //    window.location.href = '?page=vendors&action=list';
                 // }, 1000); // redirect after 1 sec
-            } else if(data.api_response.success !== true){
-                msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
-                    ⚠️ ${data.api_response}
-                </div>`;
-                msgBox.focus();
-                msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                if(data.api_response.success !== true){
+                    msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
+                        ⚠️ ${data.api_response}
+                    </div>`;
+                    msgBox.focus();
+                    msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
             } else {
                 msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
                     ❌ ${data.message}
