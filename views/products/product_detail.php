@@ -184,6 +184,8 @@
     }
     $isBookProduct = strpos($groupNameLower, 'book') !== false;
     $authorRaw = trim((string)($products['author'] ?? ''));
+    $publishedVal = (int)($products['published'] ?? 0);
+    $publishedText = $publishedVal === 1 ? 'Published' : 'Unpublished';
     $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
     $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
     $priceIndiaBase = (float)($products['price_india'] ?? 0);
@@ -269,11 +271,21 @@
           UPC: <span class="font-medium text-gray-800"><?php echo htmlspecialchars((string)($products['upc'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
         </p>
       </div>
-      <div>
-        <span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-md font-medium">
-          <?php echo htmlspecialchars($groupNameDisplay, ENT_QUOTES, 'UTF-8'); ?>
-        </span> 
-        <span class="text-xs ml-2 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium"><?php echo $products['item_code'] ?? ''; ?></span>
+      <div class="min-w-0">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-md font-medium">
+              <?php echo htmlspecialchars($groupNameDisplay, ENT_QUOTES, 'UTF-8'); ?>
+            </span> 
+            <span class="text-xs ml-2 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium"><?php echo $products['item_code'] ?? ''; ?></span>
+          </div>
+          <button type="button"
+            id="publishedStatusLink"
+            class="shrink-0 text-xs font-semibold px-3 py-1 rounded-md border <?php echo $publishedVal === 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'; ?> hover:opacity-85"
+            onclick="openPublishedStatusModal()">
+            <span id="publishedStatusDisplay"><?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?></span>
+          </button>
+        </div>
         
         <h2 class="font-semibold mt-2 text-lg">
           <?php echo htmlspecialchars($products['title'] ?? 'Product Title'); ?>
@@ -777,6 +789,24 @@
         <div class="flex justify-end gap-3 mt-6">
             <button type="button" onclick="closePermaAvailableModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
             <button type="button" onclick="submitPermanentlyAvailableUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
+        </div>
+    </div>
+</div>
+<div id="publishedStatusModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="closePublishedStatusModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Published Status</h2>
+        <p class="text-sm text-gray-500 mb-4">Update local DB and sync same status to Product Update API.</p>
+        <div>
+            <label for="input_published_status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
+            <select id="input_published_status" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="1" <?php echo $publishedVal === 1 ? 'selected' : ''; ?>>Published</option>
+                <option value="0" <?php echo $publishedVal !== 1 ? 'selected' : ''; ?>>Unpublished</option>
+            </select>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closePublishedStatusModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitPublishedStatusUpdate()" class="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">Save</button>
         </div>
     </div>
 </div>
@@ -1291,6 +1321,58 @@ function submitPermanentlyAvailableUpdate() {
     })
     .catch(function () {
         showProfileStatusModal('An error occurred while saving.', 'error', false);
+    });
+}
+
+function openPublishedStatusModal() {
+    document.getElementById('publishedStatusModal').classList.remove('hidden');
+}
+
+function closePublishedStatusModal() {
+    document.getElementById('publishedStatusModal').classList.add('hidden');
+}
+
+function submitPublishedStatusUpdate() {
+    const sel = document.getElementById('input_published_status');
+    const val = parseInt(sel && sel.value ? sel.value : '0', 10);
+    fetch('index.php?page=products&action=update_published_status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+            published: val
+        })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        if (res && res.success) {
+            closePublishedStatusModal();
+            var disp = document.getElementById('publishedStatusDisplay');
+            var link = document.getElementById('publishedStatusLink');
+            var isPublished = parseInt(res.published, 10) === 1;
+            if (disp) {
+                disp.textContent = isPublished ? 'Published' : 'Unpublished';
+            }
+            if (link) {
+                link.classList.remove('border-emerald-300', 'bg-emerald-50', 'text-emerald-700', 'border-red-300', 'bg-red-50', 'text-red-700');
+                if (isPublished) {
+                    link.classList.add('border-emerald-300', 'bg-emerald-50', 'text-emerald-700');
+                } else {
+                    link.classList.add('border-red-300', 'bg-red-50', 'text-red-700');
+                }
+            }
+            var msg = res.message ? res.message : 'Published status updated.';
+            if (res.vendor_sync && res.vendor_sync.success === false && res.vendor_sync.message) {
+                showProfileStatusModal(msg, 'error', false);
+            } else {
+                showProfileStatusModal(msg, 'success', true);
+            }
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Update failed.', 'error', false);
+        }
+    })
+    .catch(function () {
+        showProfileStatusModal('An error occurred while updating published status.', 'error', false);
     });
 }
 </script>

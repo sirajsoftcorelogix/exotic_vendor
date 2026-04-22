@@ -3203,4 +3203,17 @@ class product
         $stmt->bind_param('ii', $flag, $productId);
         return $stmt->execute();
     }
+
+    public function setProductPublished($productId, $published)
+    {
+        $productId = (int)$productId;
+        $flag = ((int)$published) ? 1 : 0;
+        $sql = 'UPDATE vp_products SET published = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ii', $flag, $productId);
+        return $stmt->execute();
+    }
 }

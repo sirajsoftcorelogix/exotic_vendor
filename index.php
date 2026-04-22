@@ -641,6 +641,11 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->updatePermanentlyAvailable();
                 break;
+            case 'update_published_status':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updatePublishedStatus();
+                break;
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
