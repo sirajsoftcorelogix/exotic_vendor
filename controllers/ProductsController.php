@@ -4414,6 +4414,11 @@ class ProductsController {
         header('Content-Type: application/json');
 
         try {
+            $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+            if (!$isAdminUser) {
+                throw new Exception('Unauthorized access.');
+            }
+
             $json = file_get_contents('php://input');
             $data = json_decode($json, true);
             if (!is_array($data) || empty($data['product_id'])) {
