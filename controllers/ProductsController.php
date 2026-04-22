@@ -942,60 +942,84 @@ class ProductsController {
             exit;
         }
 
-        $rows = [];
-        $missing = [];
-        foreach ($items as $it) {
-            $pid = isset($it['id']) ? (int)$it['id'] : 0;
-            $qty = isset($it['qty']) ? (int)$it['qty'] : 1;
-            $qty = max(1, min(99, $qty));
-            if ($pid <= 0) {
-                continue;
+        try {
+            $rows = [];
+            $missing = [];
+            foreach ($items as $it) {
+                $pid = isset($it['id']) ? (int)$it['id'] : 0;
+                $qty = isset($it['qty']) ? (int)$it['qty'] : 1;
+                $qty = max(1, min(99, $qty));
+                if ($pid <= 0) {
+                    continue;
+                }
+                $p = $productModel->getProduct($pid);
+                if (!$p || !is_array($p)) {
+                    $missing[] = $pid;
+                    continue;
+                }
+
+                if ($template === 'jewelry') {
+                    require_once dirname(__DIR__) . '/helpers/label/JewelryLabel.php';
+                    $labelRow = JewelryLabel::fromProductRow($p);
+                } elseif ($template === 'textile') {
+                    require_once dirname(__DIR__) . '/helpers/label/TextileLabel.php';
+                    $labelRow = TextileLabel::fromProductRow($p);
+                } else {
+                    require_once dirname(__DIR__) . '/helpers/label/MgStoreLabel.php';
+                    $labelRow = MgStoreLabel::fromProductRow($p);
+                }
+
+                for ($i = 0; $i < $qty; $i++) {
+                    $rows[] = $labelRow;
+                }
             }
-            $p = $productModel->getProduct($pid);
-            if (!$p || !is_array($p)) {
-                $missing[] = $pid;
-                continue;
+
+            if ($rows === []) {
+                $msg = 'No valid products found to print.';
+                if ($missing !== []) {
+                    $msg .= ' Missing product IDs: ' . implode(', ', $missing);
+                }
+                echo json_encode(['success' => false, 'message' => $msg]);
+                exit;
             }
 
             if ($template === 'jewelry') {
-                require_once dirname(__DIR__) . '/helpers/label/JewelryLabel.php';
-                $labelRow = JewelryLabel::fromProductRow($p);
+                $html = JewelryLabel::renderPrintDocumentBatch($rows);
             } elseif ($template === 'textile') {
-                require_once dirname(__DIR__) . '/helpers/label/TextileLabel.php';
-                $labelRow = TextileLabel::fromProductRow($p);
+                $html = TextileLabel::renderPrintDocumentBatch($rows);
             } else {
-                require_once dirname(__DIR__) . '/helpers/label/MgStoreLabel.php';
-                $labelRow = MgStoreLabel::fromProductRow($p);
+                $html = MgStoreLabel::renderPrintDocumentBatch($rows);
             }
 
-            for ($i = 0; $i < $qty; $i++) {
-                $rows[] = $labelRow;
+            $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+            if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+                $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
             }
-        }
-
-        if ($rows === []) {
-            $msg = 'No valid products found to print.';
-            if ($missing !== []) {
-                $msg .= ' Missing product IDs: ' . implode(', ', $missing);
+            $out = json_encode([
+                'success' => true,
+                'html' => $html,
+                'total_labels' => count($rows),
+                'missing_product_ids' => $missing,
+            ], $flags);
+            if ($out === false) {
+                $je = json_last_error_msg();
+                throw new RuntimeException('JSON encode failed: ' . $je);
             }
-            echo json_encode(['success' => false, 'message' => $msg]);
-            exit;
+            echo $out;
+        } catch (\Throwable $e) {
+            error_log(
+                'bulk_label_print_generate template=' . $template
+                . ' ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()
+            );
+            $hint = preg_replace('/[^\x20-\x7E]/', '', substr($e->getMessage(), 0, 240));
+            $hint = trim($hint);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not build label output. If this continues, contact support with the time and template used.',
+                'hint' => $hint !== '' ? $hint : get_class($e),
+                'template' => $template,
+            ], JSON_UNESCAPED_UNICODE);
         }
-
-        if ($template === 'jewelry') {
-            $html = JewelryLabel::renderPrintDocumentBatch($rows);
-        } elseif ($template === 'textile') {
-            $html = TextileLabel::renderPrintDocumentBatch($rows);
-        } else {
-            $html = MgStoreLabel::renderPrintDocumentBatch($rows);
-        }
-
-        echo json_encode([
-            'success' => true,
-            'html' => $html,
-            'total_labels' => count($rows),
-            'missing_product_ids' => $missing,
-        ]);
         exit;
     }
 
@@ -4819,13 +4843,17 @@ class ProductsController {
                 foreach ($existingTransfer['items'] as $existingItem) {
                     $skuKey = trim($existingItem['sku'] ?? '');
                     if ($skuKey !== '') {
-                        $existingQtyBySku[$skuKey] = (int)$existingItem['transfer_qty'];
+                        if (!isset($existingQtyBySku[$skuKey])) {
+                            $existingQtyBySku[$skuKey] = 0;
+                        }
+                        $existingQtyBySku[$skuKey] += (int)$existingItem['transfer_qty'];
                     }
                 }
             }
         }
 
         $normalizedItems = [];
+        $unresolvedItems = [];
         $itemCodesForRefresh = [];
         foreach ($data['items'] as $idx => $item) {
             $transfer_qty = (int)$item['transfer_qty'];
@@ -4853,14 +4881,13 @@ class ProductsController {
                     $debugIdentity[] = 'product_id: ' . $productId;
                 }
                 $details = empty($debugIdentity) ? 'no SKU/item_code/product_id provided' : implode(', ', $debugIdentity);
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Could not resolve SKU at line ' . $lineNo . ' (' . $details . ').',
+                $unresolvedItems[] = [
                     'line' => $lineNo,
                     'item_code' => $itemCode,
                     'product_id' => $productId,
-                ]);
-                exit;
+                    'details' => $details,
+                ];
+                continue;
             }
 
             $lineItemCode = trim((string)($item['item_code'] ?? ''));
@@ -4886,6 +4913,33 @@ class ProductsController {
             $normalizedItems[] = $item;
         }
 
+        if (!empty($unresolvedItems)) {
+            $lines = [];
+            $codes = [];
+            foreach ($unresolvedItems as $row) {
+                $lineText = 'Line ' . (int)$row['line'] . ': ';
+                if ($row['item_code'] !== '') {
+                    $lineText .= 'item code ' . $row['item_code'];
+                    $codes[] = $row['item_code'];
+                } else {
+                    $lineText .= 'item code missing';
+                }
+                if ((int)$row['product_id'] > 0) {
+                    $lineText .= ' (product ID ' . (int)$row['product_id'] . ')';
+                }
+                $lines[] = $lineText;
+            }
+            $uniqueCodes = array_values(array_unique(array_filter($codes)));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not resolve SKU for some rows. Please review the list below, then click "Refresh from API" to sync all item codes at once.',
+                'unresolved_items' => $unresolvedItems,
+                'details' => $lines,
+                'refreshable_item_codes' => $uniqueCodes,
+            ]);
+            exit;
+        }
+
         if (!empty($itemCodesForRefresh)) {
             $codes = array_values($itemCodesForRefresh);
             $apiSync = $this->refreshTransferItemsFromApi($codes, $productModel);
@@ -4896,6 +4950,8 @@ class ProductsController {
         }
 
         $insufficient = [];
+        $requestedQtyBySku = [];
+        $alreadyFlaggedSku = [];
         foreach ($normalizedItems as $idx => $item) {
             $transfer_qty = (int)($item['transfer_qty'] ?? 0);
             if ($transfer_qty <= 0) {
@@ -4905,31 +4961,44 @@ class ProductsController {
             if ($sku === '') {
                 continue;
             }
+            if (!isset($requestedQtyBySku[$sku])) {
+                $requestedQtyBySku[$sku] = 0;
+            }
+            $requestedQtyBySku[$sku] += $transfer_qty;
+
+            // Validate cumulative qty per SKU so duplicate lines cannot bypass stock checks.
+            if (isset($alreadyFlaggedSku[$sku])) {
+                continue;
+            }
             $existingQty = $existingQtyBySku[$sku] ?? 0;
-            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $transfer_qty, $existingQty);
+            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $requestedQtyBySku[$sku], $existingQty);
             if (!$validation['valid']) {
+                $alreadyFlaggedSku[$sku] = true;
                 $insufficient[] = [
                     'line' => $idx + 1,
                     'sku' => $sku,
                     'item_code' => trim((string)($item['item_code'] ?? '')),
-                    'requested_qty' => $transfer_qty,
+                    'requested_qty' => (int)$requestedQtyBySku[$sku],
                     'available_qty' => (int)($validation['available'] ?? 0),
                 ];
             }
         }
         if (!empty($insufficient)) {
             $parts = [];
+            $skuLabels = [];
             foreach ($insufficient as $row) {
                 $label = $row['sku'];
                 if ($row['item_code'] !== '') {
                     $label .= ' (' . $row['item_code'] . ')';
                 }
+                $skuLabels[] = $label;
                 $parts[] = $label . ' req:' . $row['requested_qty'] . ' avail:' . $row['available_qty'];
             }
             echo json_encode([
                 'success' => false,
-                'message' => 'Transfer qty exceeds source warehouse stock for: ' . implode('; ', $parts),
+                'message' => 'Insufficient stock in source warehouse for SKU(s): ' . implode(', ', array_unique($skuLabels)) . '. Please reduce transfer quantity and try again.',
                 'insufficient_items' => $insufficient,
+                'details' => $parts,
             ]);
             exit;
         }
@@ -5014,40 +5083,63 @@ class ProductsController {
         if (empty($codes)) {
             return ['success' => true, 'message' => 'No item codes to refresh.'];
         }
-
-        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode(implode(',', $codes));
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
             'Content-Type: application/x-www-form-urlencoded',
         ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        $response = curl_exec($ch);
-        $curlErr = curl_error($ch);
-        curl_close($ch);
+        // Vendor fetch endpoint is stable with <= 50 codes/request (same as product-details flow).
+        $chunks = array_chunk($codes, 50);
+        $allRows = [];
+        $emptyResponseCodes = [];
+        $failedChunks = 0;
 
-        if ($response === false) {
-            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: ' . $curlErr];
+        foreach ($chunks as $chunk) {
+            $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode(implode(',', $chunk));
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            $response = curl_exec($ch);
+            $curlErr = curl_error($ch);
+            curl_close($ch);
+
+            if ($response === false) {
+                $failedChunks++;
+                continue;
+            }
+            $decoded = json_decode($response, true);
+            if (!is_array($decoded)) {
+                $failedChunks++;
+                continue;
+            }
+
+            $rows = product::normalizeVendorProductFetchItems($decoded);
+            if (empty($rows)) {
+                // Track sample item codes from empty-response chunks for user visibility.
+                $emptyResponseCodes = array_merge($emptyResponseCodes, $chunk);
+                continue;
+            }
+            $allRows = array_merge($allRows, $rows);
         }
-        $decoded = json_decode($response, true);
-        if (!is_array($decoded)) {
-            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: invalid response format.'];
+
+        if (empty($allRows)) {
+            $sample = implode(', ', array_slice(array_values(array_unique($emptyResponseCodes)), 0, 10));
+            $suffix = $sample !== '' ? ' Sample item code(s): ' . $sample : '';
+            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: no item rows returned for the submitted codes.' . $suffix];
         }
-        $rows = product::normalizeVendorProductFetchItems($decoded);
-        if (empty($rows)) {
-            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: no item rows returned.'];
-        }
-        $res = $productModel->updateProductFromApi($rows);
+
+        $res = $productModel->updateProductFromApi($allRows);
         if (!is_array($res) || empty($res['success'])) {
             $msg = is_array($res) ? (string)($res['message'] ?? 'Unknown API refresh error.') : 'Unknown API refresh error.';
             return ['success' => false, 'message' => 'Could not sync latest stock before transfer: ' . $msg];
         }
 
+        if ($failedChunks > 0) {
+            return ['success' => true, 'message' => 'Latest stock refreshed from API for available items. Some chunks failed; please retry refresh once.'];
+        }
         return ['success' => true, 'message' => 'Latest stock refreshed from API.'];
     }
 
@@ -5205,6 +5297,198 @@ class ProductsController {
         $data['product_ids'] = implode(',', array_unique($ids));
 
         $this->validateAndSaveTransferRequest($data, $stockTransferModel, true);
+    }
+
+    public function validateTransferStockBulkPreview() {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $fromWarehouse = isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0;
+        if ($fromWarehouse <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Please select source warehouse']);
+            exit;
+        }
+
+        $rowsRaw = $_POST['rows_json'] ?? '[]';
+        $rows = json_decode((string)$rowsRaw, true);
+        if (!is_array($rows)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid grid data']);
+            exit;
+        }
+
+        $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
+        if (!empty($aggregated['errors'])) {
+            echo json_encode(['success' => false, 'message' => implode(' ', $aggregated['errors'])]);
+            exit;
+        }
+        $items = $aggregated['items'] ?? [];
+        if (empty($items)) {
+            echo json_encode(['success' => false, 'message' => 'No valid lines to validate']);
+            exit;
+        }
+
+        $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
+        $existingQtyBySku = [];
+        if ($transferId > 0) {
+            $existingTransfer = $stockTransferModel->getTransferById($transferId);
+            if ($existingTransfer && isset($existingTransfer['from_warehouse']) && (int)$existingTransfer['from_warehouse'] === $fromWarehouse) {
+                foreach (($existingTransfer['items'] ?? []) as $existingItem) {
+                    $existingSku = trim((string)($existingItem['sku'] ?? ''));
+                    if ($existingSku === '') {
+                        continue;
+                    }
+                    if (!isset($existingQtyBySku[$existingSku])) {
+                        $existingQtyBySku[$existingSku] = 0;
+                    }
+                    $existingQtyBySku[$existingSku] += (int)($existingItem['transfer_qty'] ?? 0);
+                }
+            }
+        }
+
+        $requestedQtyBySku = [];
+        $firstItemCodeBySku = [];
+        $unresolvedItems = [];
+        foreach ($items as $item) {
+            $qty = (int)($item['transfer_qty'] ?? 0);
+            if ($qty <= 0) {
+                continue;
+            }
+
+            $sku = trim((string)($item['sku'] ?? ''));
+            if ($sku === '') {
+                $resolved = $stockTransferModel->resolveProductForTransferItem($item);
+                $sku = trim((string)($resolved['sku'] ?? ''));
+                if ($sku !== '' && empty($item['item_code']) && !empty($resolved['item_code'])) {
+                    $item['item_code'] = (string)$resolved['item_code'];
+                }
+            }
+            if ($sku === '') {
+                $unresolvedItems[] = [
+                    'item_code' => trim((string)($item['item_code'] ?? '')),
+                    'product_id' => (int)($item['product_id'] ?? 0),
+                ];
+                continue;
+            }
+
+            if (!isset($requestedQtyBySku[$sku])) {
+                $requestedQtyBySku[$sku] = 0;
+                $firstItemCodeBySku[$sku] = trim((string)($item['item_code'] ?? ''));
+            }
+            $requestedQtyBySku[$sku] += $qty;
+        }
+
+        if (!empty($unresolvedItems)) {
+            $lines = [];
+            $codes = [];
+            foreach ($unresolvedItems as $idx => $row) {
+                $lineText = 'Row ' . ($idx + 1) . ': ';
+                if ($row['item_code'] !== '') {
+                    $lineText .= 'item code ' . $row['item_code'];
+                    $codes[] = $row['item_code'];
+                } else {
+                    $lineText .= 'item code missing';
+                }
+                if ((int)$row['product_id'] > 0) {
+                    $lineText .= ' (product ID ' . (int)$row['product_id'] . ')';
+                }
+                $lines[] = $lineText;
+            }
+            $uniqueCodes = array_values(array_unique(array_filter($codes)));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not resolve SKU for some rows. Please review the list below, then click "Refresh from API" to sync all item codes at once.',
+                'unresolved_items' => $unresolvedItems,
+                'details' => $lines,
+                'refreshable_item_codes' => $uniqueCodes,
+            ]);
+            exit;
+        }
+
+        $insufficient = [];
+        foreach ($requestedQtyBySku as $sku => $requestedQty) {
+            $existingQty = (int)($existingQtyBySku[$sku] ?? 0);
+            $validation = $stockTransferModel->validateItemStock($sku, $fromWarehouse, (int)$requestedQty, $existingQty);
+            if (!($validation['valid'] ?? false)) {
+                $insufficient[] = [
+                    'sku' => $sku,
+                    'item_code' => (string)($firstItemCodeBySku[$sku] ?? ''),
+                    'requested_qty' => (int)$requestedQty,
+                    'available_qty' => (int)($validation['available'] ?? 0),
+                ];
+            }
+        }
+
+        if (!empty($insufficient)) {
+            $parts = [];
+            $skuLabels = [];
+            foreach ($insufficient as $row) {
+                $label = $row['sku'];
+                if ($row['item_code'] !== '') {
+                    $label .= ' (' . $row['item_code'] . ')';
+                }
+                $skuLabels[] = $label;
+                $parts[] = $label . ' req:' . $row['requested_qty'] . ' avail:' . $row['available_qty'];
+            }
+            echo json_encode([
+                'success' => false,
+                'message' => 'Insufficient stock in source warehouse for SKU(s): ' . implode(', ', array_unique($skuLabels)) . '. Please reduce transfer quantity and try again.',
+                'insufficient_items' => $insufficient,
+                'details' => $parts,
+            ]);
+            exit;
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Stock is available for all grid lines.']);
+        exit;
+    }
+
+    public function refreshTransferItemsFromApiAjax() {
+        is_login();
+        global $conn, $productModel;
+
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        $rawCodes = $_POST['item_codes_json'] ?? '[]';
+        $decoded = json_decode((string)$rawCodes, true);
+        if (!is_array($decoded)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid item code payload']);
+            exit;
+        }
+
+        $codes = array_values(array_unique(array_filter(array_map(static function ($v) {
+            return trim((string)$v);
+        }, $decoded))));
+
+        if (empty($codes)) {
+            echo json_encode(['success' => false, 'message' => 'No item codes provided for API refresh']);
+            exit;
+        }
+
+        $result = $this->refreshTransferItemsFromApi($codes, $productModel);
+        if (!$result['success']) {
+            echo json_encode(['success' => false, 'message' => $result['message']]);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'API refresh completed for ' . count($codes) . ' item code(s).',
+            'refreshed_codes' => $codes,
+        ]);
+        exit;
     }
 
     /**

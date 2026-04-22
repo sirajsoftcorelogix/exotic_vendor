@@ -6,7 +6,7 @@ use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
 
 /**
- * 100 × 12.9 mm jewelry label: left 47% — QR; text block row Color | Size | MRP; then SKU (full width, wraps).
+ * 100 × 12.9 mm jewelry label: left 47% — QR (SKU payload); text block row Color | Size | MRP; then SKU (full width, wraps).
  * Remainder blank for margin / peel. Use from controllers, models, or CLI.
  */
 final class JewelryLabel
@@ -76,6 +76,7 @@ final class JewelryLabel
     public static function qrPayloadFromData(array $data): string
     {
         $sku = trim((string)($data['sku'] ?? ''));
+
         return $sku !== '' ? $sku : '—';
     }
 
@@ -114,6 +115,7 @@ final class JewelryLabel
         $pad = (float)($cfg['padding_mm'] ?? 0.6);
         $inner = max(1.0, $h - 2 * $pad);
         $want = (float)($cfg['qr_max_side_mm'] ?? 10.0);
+
         return min($want, $inner);
     }
 
@@ -250,7 +252,12 @@ final class JewelryLabel
         $h = (float)($cfg['label_height_mm'] ?? 12.9);
         $pages = '';
         foreach ($rows as $row) {
-            $pages .= '<div class="jl-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
+            try {
+                $pages .= '<div class="jl-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
+            } catch (Throwable $e) {
+                error_log('JewelryLabel batch row: ' . $e->getMessage());
+                $pages .= '<div class="jl-page"><div class="jl-sheet" style="box-sizing:border-box;width:' . $w . 'mm;height:' . $h . 'mm;border:0.12mm solid #000;font-size:2mm;padding:1mm;">Label row skipped (print error).</div></div>';
+            }
         }
         $title = 'Jewelry labels';
         return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'

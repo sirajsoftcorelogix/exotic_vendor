@@ -793,9 +793,23 @@
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify(payload)
       });
-      var data = await res.json();
+      var raw = await res.text();
+      var data = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch (parseErr) {
+        alert('Could not generate labels (invalid server response).');
+        return;
+      }
       if (!data || !data.success || !data.html) {
-        alert((data && data.message) ? data.message : 'Could not generate labels.');
+        var msg = (data && data.message) ? data.message : 'Could not generate labels.';
+        if (data && data.hint) {
+          msg += '\n\n' + data.hint;
+        }
+        if (data && data.template) {
+          msg += '\n(template: ' + data.template + ')';
+        }
+        alert(msg);
         return;
       }
       openPrintHtmlInFrame(data.html);
