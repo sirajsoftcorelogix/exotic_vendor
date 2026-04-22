@@ -84,7 +84,7 @@ class VendorsController {
                                 $updateResult = $vendorsModel->updateVendorRemoteId($id, $remoteVendorId);
                             }
                         }
-                        echo "test response: ".print_r($result, true); // Debugging line to check API response
+                        //echo "test response: ".print_r($result, true); // Debugging line to check API response
                     }
                 }
             } else {
