@@ -33,7 +33,8 @@ class VendorsController {
         $countryList = $countryModel->getAllCountries();
         $stateList = $stateModel->getAllStates(105); // India ID = 105
         $teamList = $teamModel->getAllTeams();
-
+        $groupnameList = getCategoryFromTable();
+        
         $data = [
             'vendors' => $vendors_data["vendors"],
             'page_no' => $page_no,
@@ -49,7 +50,8 @@ class VendorsController {
             'countryList' => $countryList["countries"],
             'stateList' => $stateList["states"],
             'category' => $vendorsModel->listCategory(),
-            'teamList' => $teamList
+            'teamList' => $teamList,
+            'groupnameList' => $groupnameList
         ];
         
         renderTemplate('views/vendors/index.php', $data, 'Manage Vendors');
@@ -59,60 +61,52 @@ class VendorsController {
         global $vendorsModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = $_POST;
-            print_array($data);
             $id = isset($data['id']) ? (int)$data['id'] : 0;
             if ($id > 0) {
                 $result = $vendorsModel->updateVendor($id, $data);
+                // call external API if vendor does not have remote vendor_id
+                if (isset($result['success']) && $result['success'] === true) {
+                    $vendor = $vendorsModel->getVendorById($id);
+                    if (empty($vendor['vendor_id'])) {
+                        $postData = [
+                            'name' => isset($data['editVendorName']) ? trim($data['editVendorName']) : '',
+                            'groupname' => $data['editGroupname'] ?? '',
+                            'vendor_type' => 'vendor_'.$data['editGroupname'] ?? '',
+                            'webpage' => '1'
+                        ];
+                        $createApiResponse = $this->createVendorExternal($postData);
+                        
+                        // Update vendor with remote vendor_id from API response
+                        if (!empty($createApiResponse)) {
+                            $apiData = json_decode($createApiResponse, true);
+                            if (is_array($apiData) && isset($apiData['vendor_id'])) {
+                                $remoteVendorId = $apiData['vendor_id'];
+                                $updateResult = $vendorsModel->updateVendorRemoteId($id, $remoteVendorId);
+                            }
+                        }
+                    }
+                }
             } else {
                 $result = $vendorsModel->addVendor($data);
                 
                 // Call external API if vendor creation was successful
                 if (isset($result['success']) && $result['success'] === true) {
-                    $groupname = $vendorsModel->getGroupnames($data['addVendorCategory']);
-                    $vendorName = isset($data['addVendorName']) ? trim($data['addVendorName']) : '';
+                    $localVendorId = $result['inserted_id'] ?? 0;
                     
-                    if (!empty($vendorName) && !empty($groupname)) {
-                        // Prepare API request parameters
-                        $apiUrl = 'https://www.exoticindia.com/vendor-api/product/vendorcreate';
-                        
-                        // Split comma-separated groupname and prepend vendor_ to each
-                        $groupnameArray = array_map('trim', explode(',', $groupname));
-                        $vendorTypes = array_map(function($gn) { return 'vendor_' . $gn; }, $groupnameArray);
-                        $vendorType = implode(',', $vendorTypes);
-                        
-                        $postData = [
-                            'name' => $vendorName,
-                            'groupname' => $groupname,
-                            'vendor_type' => $vendorType,
-                            'webpage' => '1'
-                        ];
-                        
-                        $headers = [
-                            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-                            'x-adminapitest: 1',
-                            'Content-Type: application/x-www-form-urlencoded'
-                        ];
-                        print_array($postData);
-                        // Make POST request to external API
-                        $ch = curl_init($apiUrl);
-                        curl_setopt($ch, CURLOPT_POST, true);
-                        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-                        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-                        
-                        $apiResponse = curl_exec($ch);
-                        $apiError = curl_error($ch);
-                        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                        curl_close($ch);
-                        print_array($apiResponse);
-                        // Log the API response for debugging (optional)
-                        if ($apiResponse === false) {
-                            // API call failed, but don't fail the vendor creation
-                            error_log('Vendor API call failed for ' . $vendorName . ': ' . $apiError);
-                        } else {
-                            // Log successful API response
-                            error_log('Vendor API response for ' . $vendorName . ': HTTP ' . $httpCode);
+                    $postData = [
+                        'name' => isset($data['addVendorName']) ? trim($data['addVendorName']) : '',
+                        'groupname' => $data['groupname'] ?? '',
+                        'vendor_type' => 'vendor_'.$data['groupname'] ?? '',
+                        'webpage' => '1'
+                    ];
+                    $createApiResponse = $this->createVendorExternal($postData);
+                    
+                    // Update vendor with remote vendor_id from API response
+                    if (!empty($createApiResponse) && $localVendorId > 0) {
+                        $apiData = json_decode($createApiResponse, true);
+                        if (is_array($apiData) && isset($apiData['vendor_id'])) {
+                            $remoteVendorId = $apiData['vendor_id'];
+                            $updateResult = $vendorsModel->updateVendorRemoteId($localVendorId, $remoteVendorId);
                         }
                     }
                 }
@@ -120,6 +114,36 @@ class VendorsController {
             echo json_encode($result);
         }
         exit;
+    }
+    public function createVendorExternal($postData){
+        if (!empty($postData)) {
+            $apiUrl = 'https://www.exoticindia.com/vendor-api/product/vendorcreate';
+            
+            $headers = [
+                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+                'x-adminapitest: 1',
+                'Content-Type: application/x-www-form-urlencoded'
+            ];
+            
+            $ch = curl_init($apiUrl);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            
+            $apiResponse = curl_exec($ch);
+            $apiError = curl_error($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($apiResponse === false) {
+                error_log('Vendor API call failed: ' . $apiError);
+            } else {
+                error_log('Vendor API response: HTTP ' . $httpCode);
+            }
+            return $apiResponse;
+        }
     }
     public function delete() {
         global $vendorsModel;

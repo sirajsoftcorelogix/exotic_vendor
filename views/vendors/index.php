@@ -315,6 +315,17 @@
                                     <?php endforeach; ?>
                                 </select>
                             </div>
+                            <!--add groupname dropdown-->
+                            <div class="mt-2">
+                                <label for="groupname" class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
+                                <select class="form-input w-full mt-1" name="groupname" id="groupname" required>
+                                    <option value="" disabled selected>Select Group Name</option>
+                                    <?php foreach($groupnameList as $key => $value): ?>
+                                        <option value="<?php echo $value; ?>"><?php echo $value; ?></option>
+                                    <?php endforeach; ?>
+
+                                </select>
+                            </div>
                         </div>
 
                         <!-- Address -->
@@ -520,6 +531,17 @@
                                     ?>
                                 </select>
                                 
+                            </div>
+                            <!--add groupname dropdown-->
+                            <div class="mt-2">
+                                <label for="editGroupname" class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
+                                <select class="form-input w-full mt-1" name="editGroupname" id="editGroupname" required>
+                                    <option value="" disabled selected>Select Group Name</option>
+                                    <?php foreach($groupnameList as $key => $value): ?>
+                                        <option value="<?php echo $value; ?>"><?php echo $value; ?></option>
+                                    <?php endforeach; ?>
+
+                                </select>
                             </div>
                         </div>
 
@@ -1208,7 +1230,8 @@
             document.getElementById("editAddress").value = vendor.address;
             document.getElementById("editCity").value = vendor.city;
             document.getElementById("editCountry").value = vendor.country;
-
+            document.getElementById("editGroupname").value = vendor.groupname;
+            
             document.getElementById("editAgentIds").value = vendor.agent_id;
             
             fillTeamAgent(vendor.teamIds, vendor.agent_id);
