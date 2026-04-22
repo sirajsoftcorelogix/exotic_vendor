@@ -913,5 +913,35 @@ class vendor {
         }
         return $vendors;
     }
+    public function getGroupnames($categoryIds) {
+        //categoryIds is array, we need to fetch distinct parent_id for all categoryIds and then fetch category_name for those parent_id and return comma separated
+        $sql = "SELECT DISTINCT parent_id FROM vp_vendor_category WHERE id IN (" . implode(',', array_fill(0, count($categoryIds), '?')) . ")";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param(str_repeat('i', count($categoryIds)), ...$categoryIds);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $parentIds = [];
+        while ($row = $result->fetch_assoc()) {
+            $parentIds[] = $row['parent_id'];
+        }
+        
+        if (empty($parentIds)) {
+            return '';
+        }
+        
+        // Now fetch category_name for those parent_ids
+        $sql = "SELECT category_name FROM vp_vendor_category WHERE id IN (" . implode(',', array_fill(0, count($parentIds), '?')) . ")";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param(str_repeat('i', count($parentIds)), ...$parentIds);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $categoryNames = [];
+        while ($row = $result->fetch_assoc()) {
+            $categoryNames[] = $row['category_name'];
+        }
+        
+        return implode(',', $categoryNames);
+
+    }
 }
 ?>

@@ -59,11 +59,63 @@ class VendorsController {
         global $vendorsModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = $_POST;
+            print_array($data);
             $id = isset($data['id']) ? (int)$data['id'] : 0;
             if ($id > 0) {
                 $result = $vendorsModel->updateVendor($id, $data);
             } else {
-                $result = $vendorsModel->addVendor($data);            
+                $result = $vendorsModel->addVendor($data);
+                
+                // Call external API if vendor creation was successful
+                if (isset($result['success']) && $result['success'] === true) {
+                    $groupname = $vendorsModel->getGroupnames($data['addVendorCategory']);
+                    $vendorName = isset($data['addVendorName']) ? trim($data['addVendorName']) : '';
+                    
+                    if (!empty($vendorName) && !empty($groupname)) {
+                        // Prepare API request parameters
+                        $apiUrl = 'https://www.exoticindia.com/vendor-api/product/vendorcreate';
+                        
+                        // Split comma-separated groupname and prepend vendor_ to each
+                        $groupnameArray = array_map('trim', explode(',', $groupname));
+                        $vendorTypes = array_map(function($gn) { return 'vendor_' . $gn; }, $groupnameArray);
+                        $vendorType = implode(',', $vendorTypes);
+                        
+                        $postData = [
+                            'name' => $vendorName,
+                            'groupname' => $groupname,
+                            'vendor_type' => $vendorType,
+                            'webpage' => '1'
+                        ];
+                        
+                        $headers = [
+                            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+                            'x-adminapitest: 1',
+                            'Content-Type: application/x-www-form-urlencoded'
+                        ];
+                        print_array($postData);
+                        // Make POST request to external API
+                        $ch = curl_init($apiUrl);
+                        curl_setopt($ch, CURLOPT_POST, true);
+                        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+                        
+                        $apiResponse = curl_exec($ch);
+                        $apiError = curl_error($ch);
+                        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                        curl_close($ch);
+                        print_array($apiResponse);
+                        // Log the API response for debugging (optional)
+                        if ($apiResponse === false) {
+                            // API call failed, but don't fail the vendor creation
+                            error_log('Vendor API call failed for ' . $vendorName . ': ' . $apiError);
+                        } else {
+                            // Log successful API response
+                            error_log('Vendor API response for ' . $vendorName . ': HTTP ' . $httpCode);
+                        }
+                    }
+                }
             }
             echo json_encode($result);
         }
