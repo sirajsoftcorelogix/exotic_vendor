@@ -249,7 +249,95 @@ if (empty($transferOrderNo)) {
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
+<div id="transferNoticeModal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="transferNoticeTitle">
+    <div class="w-full max-w-md rounded-2xl bg-white shadow-2xl ring-1 ring-gray-900/10">
+        <div class="px-5 py-4 border-b border-gray-100">
+            <h3 id="transferNoticeTitle" class="text-base font-semibold text-gray-900">Stock Transfer</h3>
+        </div>
+        <div class="px-5 py-4">
+            <p id="transferNoticeMessage" class="text-sm text-gray-700 leading-relaxed"></p>
+        </div>
+        <div class="px-5 py-4 border-t border-gray-100 flex justify-end">
+            <button type="button" id="transferNoticeOk" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">OK</button>
+        </div>
+    </div>
+</div>
+
+<div id="transferStockProcessingOverlay" class="fixed inset-0 z-[120] hidden flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm p-6" aria-hidden="true" aria-live="polite" role="status">
+    <div class="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl ring-1 ring-gray-900/10 text-center">
+        <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-orange-100 text-orange-700">
+            <i class="fas fa-truck-loading text-2xl animate-pulse" aria-hidden="true"></i>
+        </div>
+        <h2 class="text-lg font-semibold text-gray-900">Processing your stock transfer</h2>
+        <p class="mt-3 text-sm text-gray-600 leading-relaxed">This may take a while as stock and warehouse movements are updated. Please keep this tab open and do not refresh the page.</p>
+        <div class="mt-6 text-left">
+            <div class="relative h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
+                <div class="transfer-stock-progress-bar absolute top-0 bottom-0 w-[38%] rounded-full bg-gradient-to-r from-orange-500 via-orange-600 to-orange-500 shadow-sm"></div>
+            </div>
+            <p class="mt-2 text-center text-xs font-medium text-orange-900/80">Working on the server…</p>
+        </div>
+    </div>
+</div>
+<style>
+@keyframes transfer-stock-progress-sweep {
+    0% { left: -38%; }
+    100% { left: 100%; }
+}
+.transfer-stock-progress-bar {
+    left: -38%;
+    animation: transfer-stock-progress-sweep 2.2s ease-in-out infinite;
+}
+</style>
+
 <script>
+    const transferNoticeModal = document.getElementById('transferNoticeModal');
+    const transferNoticeMessage = document.getElementById('transferNoticeMessage');
+    const transferNoticeOk = document.getElementById('transferNoticeOk');
+
+    function showTransferNotice(message) {
+        if (!transferNoticeModal || !transferNoticeMessage) {
+            alert(message);
+            return;
+        }
+        transferNoticeMessage.textContent = String(message || 'Something went wrong.');
+        transferNoticeModal.classList.remove('hidden');
+        transferNoticeModal.classList.add('flex');
+        if (transferNoticeOk) transferNoticeOk.focus();
+    }
+
+    function closeTransferNotice() {
+        if (!transferNoticeModal) return;
+        transferNoticeModal.classList.add('hidden');
+        transferNoticeModal.classList.remove('flex');
+    }
+
+    if (transferNoticeOk) {
+        transferNoticeOk.addEventListener('click', closeTransferNotice);
+    }
+    if (transferNoticeModal) {
+        transferNoticeModal.addEventListener('click', function (e) {
+            if (e.target === transferNoticeModal) closeTransferNotice();
+        });
+    }
+
+    const transferStockProcessingOverlay = document.getElementById('transferStockProcessingOverlay');
+
+    function showTransferStockProcessingOverlay() {
+        if (!transferStockProcessingOverlay) return;
+        transferStockProcessingOverlay.setAttribute('aria-hidden', 'false');
+        transferStockProcessingOverlay.classList.remove('hidden');
+        transferStockProcessingOverlay.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function hideTransferStockProcessingOverlay() {
+        if (!transferStockProcessingOverlay) return;
+        transferStockProcessingOverlay.setAttribute('aria-hidden', 'true');
+        transferStockProcessingOverlay.classList.add('hidden');
+        transferStockProcessingOverlay.classList.remove('flex');
+        document.body.style.overflow = '';
+    }
+
     // Warehouse address mapping and data
     const warehouseData = {
         <?php foreach ($warehouses as $warehouse): 
@@ -461,12 +549,12 @@ if (empty($transferOrderNo)) {
         const toWarehouse = document.getElementById('to_warehouse').value;
         
         if (!fromWarehouse || !toWarehouse) {
-            alert('Please select both source and destination warehouses');
+            showTransferNotice('Please select both source and destination warehouses');
             return;
         }
         
         if (fromWarehouse === toWarehouse) {
-            alert('Source and destination warehouses must be different');
+            showTransferNotice('Source and destination warehouses must be different');
             return;
         }
 
@@ -478,18 +566,18 @@ if (empty($transferOrderNo)) {
             const available = parseInt(input.dataset.available, 10);
 
             if (isNaN(val)) {
-                alert('Please enter a valid transfer quantity for each item.');
+                showTransferNotice('Please enter a valid transfer quantity for each item.');
                 return;
             }
 
             if (val <= 0) {
-                alert('Transfer quantity must be greater than zero for each item used in transfer.');
+                showTransferNotice('Transfer quantity must be greater than zero for each item used in transfer.');
                 input.focus();
                 return;
             }
 
             if (!isNaN(available) && val > available) {
-                alert(`Transfer quantity for an item cannot exceed available stock (${available}).`);
+                showTransferNotice(`Transfer quantity for an item cannot exceed available stock (${available}).`);
                 input.focus();
                 return;
             }
@@ -500,11 +588,13 @@ if (empty($transferOrderNo)) {
         }
 
         if (!hasValidQty) {
-            alert('Please enter transfer quantity for at least one item');
+            showTransferNotice('Please enter transfer quantity for at least one item');
             return;
         }
 
         const formData = new FormData(document.getElementById('transferStockForm'));
+        showTransferStockProcessingOverlay();
+
         fetch(apiUrl('process_transfer_stock'), {
             method: 'POST',
             credentials: 'same-origin',
@@ -517,16 +607,17 @@ if (empty($transferOrderNo)) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Stock transfer submitted successfully!');
                 window.location.href = '?page=products&action=stock_transfer';
-            } else {
-                alert('Error: ' + (data.message || 'Unknown error occurred'));
-                console.error('Transfer error:', data);
+                return;
             }
+            hideTransferStockProcessingOverlay();
+            showTransferNotice('Error: ' + (data.message || 'Unknown error occurred'));
+            console.error('Transfer error:', data);
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('An error occurred: ' + error.message);
+            hideTransferStockProcessingOverlay();
+            showTransferNotice('An error occurred: ' + error.message);
         });
     });
 
@@ -610,7 +701,7 @@ if (empty($transferOrderNo)) {
 
         const existingSku = Array.from(itemsTableBody.querySelectorAll('input[name="sku[]"]')).some(i => i.value.trim() === product.sku);
         if (existingSku) {
-            alert('This product is already in the transfer list.');
+            showTransferNotice('This product is already in the transfer list.');
             return;
         }
 

@@ -1149,6 +1149,188 @@ class product
         // (4) Size + color in file: full normalized match is handled above; no further disambiguation
         return null;
     }
+
+    /**
+     * Batch-load vp_products for stock transfer GRN list rows: item_group, label_product_id,
+     * label_default_qty. Avoids N+1 findByItemCodeSizeColor / getProductByskuExact calls.
+     *
+     * @param list<array<string,mixed>> $grnRows
+     */
+    public function enrichStockTransferGrnRowsForList(array &$grnRows): void
+    {
+        if ($grnRows === []) {
+            return;
+        }
+
+        $skus = [];
+        $itemCodes = [];
+        foreach ($grnRows as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $sku = trim((string)($r['sku'] ?? ''));
+            if ($sku !== '') {
+                $skus[$sku] = true;
+            }
+            $ic = trim((string)($r['item_code'] ?? ''));
+            if ($ic !== '') {
+                $itemCodes[$ic] = true;
+            }
+        }
+
+        $bySku = [];
+        foreach ($this->fetchVpProductsWhereInStringColumn('sku', array_keys($skus)) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $k = trim((string)($row['sku'] ?? ''));
+            if ($k === '') {
+                continue;
+            }
+            if (!isset($bySku[$k])) {
+                $bySku[$k] = $row;
+            }
+        }
+
+        $byItemCode = [];
+        foreach ($this->fetchVpProductsWhereInStringColumn('item_code', array_keys($itemCodes)) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $k = trim((string)($row['item_code'] ?? ''));
+            if ($k === '') {
+                continue;
+            }
+            if (!isset($byItemCode[$k])) {
+                $byItemCode[$k] = [];
+            }
+            $byItemCode[$k][] = $row;
+        }
+
+        foreach ($grnRows as &$grnRow) {
+            if (!is_array($grnRow)) {
+                continue;
+            }
+            $sku = trim((string)($grnRow['sku'] ?? ''));
+            $ic = trim((string)($grnRow['item_code'] ?? ''));
+            $size = (string)($grnRow['size'] ?? '');
+            $color = (string)($grnRow['color'] ?? '');
+
+            $itemGroup = '';
+            if ($sku !== '' && isset($bySku[$sku])) {
+                $itemGroup = (string)($bySku[$sku]['groupname'] ?? '');
+            }
+            if ($itemGroup === '' && $ic !== '' && !empty($byItemCode[$ic])) {
+                $itemGroup = (string)($byItemCode[$ic][0]['groupname'] ?? '');
+            }
+            $grnRow['item_group'] = $itemGroup;
+
+            $resolved = null;
+            if ($ic !== '' && !empty($byItemCode[$ic])) {
+                $resolved = $this->resolveProductFromPreloadedItemCodeRows($byItemCode[$ic], $size, $color);
+            }
+            if (!$resolved && $sku !== '' && isset($bySku[$sku])) {
+                $resolved = $bySku[$sku];
+            }
+
+            $grnRow['label_product_id'] = $resolved && !empty($resolved['id']) ? (int)$resolved['id'] : 0;
+            $recv = (int)($grnRow['qty_received'] ?? 0);
+            $acc = (int)($grnRow['qty_acceptable'] ?? 0);
+            $base = max($recv, $acc);
+            $grnRow['label_default_qty'] = $base > 0 ? min(99, $base) : 1;
+        }
+        unset($grnRow);
+    }
+
+    /**
+     * @param list<string> $values
+     * @return list<array<string,mixed>>
+     */
+    private function fetchVpProductsWhereInStringColumn(string $column, array $values): array
+    {
+        if ($values === []) {
+            return [];
+        }
+        if ($column !== 'sku' && $column !== 'item_code') {
+            return [];
+        }
+
+        $out = [];
+        $chunkSize = 400;
+        foreach (array_chunk($values, $chunkSize) as $chunk) {
+            if ($chunk === []) {
+                continue;
+            }
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = "SELECT * FROM vp_products WHERE `{$column}` IN ({$placeholders})";
+            $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $types = str_repeat('s', count($chunk));
+            $stmt->bind_param($types, ...$chunk);
+            if (!$this->executeVpProductsStmt($stmt)) {
+                $stmt->close();
+                continue;
+            }
+            $result = $stmt->get_result();
+            if ($result) {
+                while ($row = $result->fetch_assoc()) {
+                    $out[] = $row;
+                }
+            }
+            $stmt->close();
+        }
+
+        return $out;
+    }
+
+    /**
+     * Same resolution rules as findByItemCodeSizeColor, using rows already loaded for one item_code.
+     *
+     * @param list<array<string,mixed>> $rows
+     */
+    private function resolveProductFromPreloadedItemCodeRows(array $rows, string $size, string $color): ?array
+    {
+        if ($rows === []) {
+            return null;
+        }
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if ($this->rowMatchesItemCodeSizeColorExact($row, $size, $color)) {
+                return $row;
+            }
+        }
+        $hit = $this->findInRowsByNormalizedSizeColor($rows, $size, $color);
+        if ($hit) {
+            return $hit;
+        }
+
+        return $this->disambiguateVariantRowsByUpload($rows, $size, $color);
+    }
+
+    /**
+     * Mirrors findByItemCodeSizeColorExactSql (COALESCE/NULLIF/TRIM) in PHP for in-memory rows.
+     */
+    private function rowMatchesItemCodeSizeColorExact(array $row, string $size, string $color): bool
+    {
+        $rs = $this->vpProductVariantCoalescedTrim($row['size'] ?? '');
+        $rc = $this->vpProductVariantCoalescedTrim($row['color'] ?? '');
+        $us = $this->vpProductVariantCoalescedTrim($size);
+        $uc = $this->vpProductVariantCoalescedTrim($color);
+
+        return $rs === $us && $rc === $uc;
+    }
+
+    private function vpProductVariantCoalescedTrim($value): string
+    {
+        $t = trim((string)$value);
+
+        return $t === '' ? '' : $t;
+    }
+
     public function findBySku($sku)
     {
         $sql = "SELECT * FROM vp_products WHERE sku = ? LIMIT 1";

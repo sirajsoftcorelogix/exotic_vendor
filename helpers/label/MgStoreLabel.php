@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Picqer\Barcode\BarcodeGeneratorPNG;
+use Picqer\Barcode\BarcodeGeneratorSVG;
 
 /**
  * MG Road large label — 75 × 50 mm, CODE128 (SKU), title, material, price (Incl. GST), H×W×D.
@@ -95,29 +96,66 @@ final class MgStoreLabel
     }
 
     /**
+     * ASCII-safe payload for Picqer CODE128 (avoids InvalidCharacterException).
+     */
+    private static function normalizeSkuForCode128(string $sku): string
+    {
+        if ($sku === '') {
+            return '0';
+        }
+        $conv = @iconv('UTF-8', 'ASCII//TRANSLIT', $sku);
+        if ($conv !== false && $conv !== '') {
+            $sku = $conv;
+        }
+        $sku = preg_replace('/[^\x20-\x7E]/', '', $sku);
+        $sku = trim((string)$sku);
+        if ($sku === '') {
+            return '0';
+        }
+        if (strlen($sku) > 72) {
+            $sku = substr($sku, 0, 72);
+        }
+
+        return $sku;
+    }
+
+    /**
      * @param array<string, mixed>|null $config
      */
     public static function barcodeDataUri(array $data, ?array $config = null): string
     {
-        $vendorOk = self::loadVendor();
+        if (!self::loadVendor() || !class_exists(BarcodeGeneratorSVG::class)) {
+            return '';
+        }
         $cfg = self::config($config);
-        $code = self::barcodePayloadFromData($data);
+        $code = self::normalizeSkuForCode128(self::barcodePayloadFromData($data));
         $type = (string)($cfg['barcode_type'] ?? 'C128');
         $wFactor = max(1, (int)($cfg['barcode_width_factor'] ?? 1));
         $barH = max(8, (int)($cfg['barcode_height_px'] ?? 35));
 
-        if (!$vendorOk || !class_exists(BarcodeGeneratorPNG::class)) {
-            return '';
+        $canPng = class_exists(BarcodeGeneratorPNG::class)
+            && (extension_loaded('imagick') || function_exists('imagecreate'));
+
+        if ($canPng) {
+            try {
+                $generator = new BarcodeGeneratorPNG();
+                $png = $generator->getBarcode($code, $type, $wFactor, $barH);
+
+                return 'data:image/png;base64,' . base64_encode($png);
+            } catch (Throwable $e) {
+                // Fall back to SVG when PNG/GD/Imagick is unavailable or encoding fails.
+            }
         }
 
-        $generator = new BarcodeGeneratorPNG();
         try {
-            $png = $generator->getBarcode($code, $type, $wFactor, $barH);
+            $svgGen = new BarcodeGeneratorSVG();
+            $svg = $svgGen->getBarcode($code, $type, (float)$wFactor, (float)$barH);
         } catch (Throwable $e) {
-            $png = $generator->getBarcode('0', $type, $wFactor, $barH);
+            $svgGen = new BarcodeGeneratorSVG();
+            $svg = $svgGen->getBarcode('0', $svgGen::TYPE_CODE_128, 2.0, (float)$barH);
         }
 
-        return 'data:image/png;base64,' . base64_encode($png);
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
     }
 
     /**
@@ -269,7 +307,12 @@ final class MgStoreLabel
         $h = (float)($cfg['label_height_mm'] ?? 50);
         $pages = '';
         foreach ($rows as $row) {
-            $pages .= '<div class="mgs-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
+            try {
+                $pages .= '<div class="mgs-page">' . self::renderInnerHtml(is_array($row) ? $row : [], $cfg) . '</div>';
+            } catch (Throwable $e) {
+                error_log('MgStoreLabel batch row: ' . $e->getMessage());
+                $pages .= '<div class="mgs-page"><div class="mgs-sheet" style="box-sizing:border-box;width:' . $w . 'mm;height:' . $h . 'mm;border:0.15mm solid #000;font-size:2mm;padding:1mm;">Label row skipped.</div></div>';
+            }
         }
         $title = 'MG Road labels';
         return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'

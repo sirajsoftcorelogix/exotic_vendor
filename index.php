@@ -665,6 +665,12 @@ switch ($page) {
             case 'process_transfer_stock_bulk':
                 $controller->processTransferStockBulk();
                 break;
+            case 'validate_transfer_stock_bulk_preview':
+                $controller->validateTransferStockBulkPreview();
+                break;
+            case 'refresh_transfer_items_from_api':
+                $controller->refreshTransferItemsFromApiAjax();
+                break;
             case 'get_last_warehouse':
                 $controller->getLastWarehouse();
                 break;
@@ -953,6 +959,9 @@ switch ($page) {
                 break;
             case 'delete':
                 $controller->delete();
+                break;
+            case 'delete_bulk':
+                $controller->deleteBulk();
                 break;
             default:
                 $controller->listGrns();

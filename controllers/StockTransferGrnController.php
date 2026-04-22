@@ -36,29 +36,7 @@ class StockTransferGrnController {
         $transfer = $transferId > 0 ? $this->stockTransferModel->getTransferById($transferId) : null;
 
         $productModel = new product($this->conn);
-        foreach ($grns as &$grnRow) {
-            $resolved = null;
-            $itemCode = trim((string)($grnRow['item_code'] ?? ''));
-            if ($itemCode !== '') {
-                $resolved = $productModel->findByItemCodeSizeColor(
-                    $itemCode,
-                    (string)($grnRow['size'] ?? ''),
-                    (string)($grnRow['color'] ?? '')
-                );
-            }
-            if (!$resolved) {
-                $sku = trim((string)($grnRow['sku'] ?? ''));
-                if ($sku !== '') {
-                    $resolved = $productModel->getProductByskuExact($sku);
-                }
-            }
-            $grnRow['label_product_id'] = $resolved && !empty($resolved['id']) ? (int)$resolved['id'] : 0;
-            $recv = (int)($grnRow['qty_received'] ?? 0);
-            $acc = (int)($grnRow['qty_acceptable'] ?? 0);
-            $base = max($recv, $acc);
-            $grnRow['label_default_qty'] = $base > 0 ? min(99, $base) : 1;
-        }
-        unset($grnRow);
+        $productModel->enrichStockTransferGrnRowsForList($grns);
 
         renderTemplate('views/stock_transfer_grns/stock_transfer_grn_list.php', [
             'transfer' => $transfer,
@@ -88,12 +66,13 @@ class StockTransferGrnController {
         }
 
         // Cumulative qty already GRN'd for this SKU on this transfer (for remaining / caps in UI)
+        $receivedBySku = $this->stockTransferModel->getReceivedQtyByTransferSkuMap($transferId);
         if (!empty($transfer['items'])) {
             foreach ($transfer['items'] as &$item) {
                 $itemSku = trim($item['sku'] ?? '');
                 $item['already_received_on_transfer'] = 0;
                 if ($itemSku !== '' && $transferId > 0) {
-                    $item['already_received_on_transfer'] = (int)$this->stockTransferModel->getReceivedQtyForTransferSku($transferId, $itemSku);
+                    $item['already_received_on_transfer'] = (int)($receivedBySku[$itemSku] ?? 0);
                 }
                 $tq = (int)($item['transfer_qty'] ?? 0);
                 $item['remaining_to_receive'] = max(0, $tq - $item['already_received_on_transfer']);
@@ -180,6 +159,52 @@ class StockTransferGrnController {
             return;
         }
         header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . $tid);
+    }
+
+    public function deleteBulk() {
+        is_login();
+
+        $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
+        $idsRaw = isset($_POST['grn_ids']) ? $_POST['grn_ids'] : [];
+        if (!is_array($idsRaw) || empty($idsRaw)) {
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No GRN rows selected for deletion']], 'Error');
+            return;
+        }
+
+        $grnIds = array_values(array_unique(array_filter(array_map('intval', $idsRaw), static function ($v) {
+            return $v > 0;
+        })));
+
+        if (empty($grnIds)) {
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No valid GRN IDs provided']], 'Error');
+            return;
+        }
+
+        $failedIds = [];
+        foreach ($grnIds as $grnId) {
+            $grn = $this->stockTransferModel->getTransferGrnById($grnId);
+            if (!$grn) {
+                $failedIds[] = $grnId;
+                continue;
+            }
+            if ($transferId > 0 && (int)($grn['transfer_id'] ?? 0) !== $transferId) {
+                $failedIds[] = $grnId;
+                continue;
+            }
+            if (!$this->stockTransferModel->deleteTransferGrn($grnId)) {
+                $failedIds[] = $grnId;
+            }
+        }
+
+        if (!empty($failedIds)) {
+            $suffix = implode(', ', $failedIds);
+            renderTemplate('views/errors/error.php', [
+                'message' => ['type' => 'error', 'text' => 'Some GRN rows could not be deleted: ' . $suffix],
+            ], 'Error');
+            return;
+        }
+
+        header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . $transferId);
     }
 
     public function createPost() {
