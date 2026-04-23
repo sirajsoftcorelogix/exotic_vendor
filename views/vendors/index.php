@@ -868,6 +868,10 @@
         myDiv.classList.add(isSuccess ? 'text-green-600' : 'text-red-600');
         myDiv.textContent = message || '';
     }
+    function redirectToVendorListWithFlash(message, isSuccess) {
+        persistVendorFlash(message, isSuccess);
+        window.location.href = '?page=vendors&action=list';
+    }
     showPersistedVendorFlashIfAny();
 
     const syncVendorsApiBtn = document.getElementById('sync-vendors-api-btn');
@@ -899,14 +903,12 @@
                 }
                 const errMsg = (data && data.message) ? data.message : 'Vendor sync failed.';
                 showVendorTopMessage(errMsg, false);
-                persistVendorFlash(errMsg, false);
-                setTimeout(function () { window.location.reload(); }, 500);
+                redirectToVendorListWithFlash(errMsg, false);
             })
             .catch(function () {
                 const errMsg = 'Vendor sync request failed. Please try again.';
                 showVendorTopMessage(errMsg, false);
-                persistVendorFlash(errMsg, false);
-                setTimeout(function () { window.location.reload(); }, 500);
+                redirectToVendorListWithFlash(errMsg, false);
             })
             .finally(function () {
                 syncVendorsApiBtn.dataset.loading = '0';
@@ -1344,26 +1346,20 @@
                 }
                 
                 if (!apiSuccess && data.api_response) {
-                    msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
-                        ⚠️ API Response: ${data.api_response}
-                    </div>`;
-                    msgBox.focus();
-                    msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                    let apiErrorMessage = 'Vendor API sync failed after add.';
+                    try {
+                        const parsed = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
+                        apiErrorMessage = (parsed && parsed.message) ? parsed.message : apiErrorMessage;
+                    } catch (e) {}
+                    redirectToVendorListWithFlash(apiErrorMessage, false);
+                    return;
                 }
                 
                 setTimeout(() => {
                     location.reload();
                 }, 1500); // refresh after 1 sec
             } else {
-                msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
-                    ❌ ${data.message}
-                </div>`;
-                msgBox.focus();
-                msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                persistVendorFlash(data.message || 'Add vendor failed.', false);
-                setTimeout(() => {
-                    window.location.href = '?page=vendors&action=list';
-                }, 800);
+                redirectToVendorListWithFlash(data.message || 'Add vendor failed.', false);
             }
         });
     };
@@ -1387,16 +1383,16 @@
                 })
                 .then(res => res.json())
                 .then(data => {
+                    if (!data.success) {
+                        redirectToVendorListWithFlash(data.message || 'Delete vendor failed.', false);
+                        return;
+                    }
                     const title = document.getElementById("modalTitle");
                     var type = "error";
                     title.innerText = "Error ⚠️";
                     title.className = "text-2xl font-bold text-red-600 mb-4";
-                    if(data.success) {
-                        title.innerText = "Success 🎉";
-                        title.className = "text-2xl font-bold text-green-600 mb-4";
-                    } else {
-                        persistVendorFlash(data.message || 'Delete vendor failed.', false);
-                    }
+                    title.innerText = "Success 🎉";
+                    title.className = "text-2xl font-bold text-green-600 mb-4";
 
                     document.getElementById("showMessage").innerText = data.message;
                     const modal = document.getElementById("deleteMsgBox");
@@ -1411,8 +1407,7 @@
                 })
                 .catch(err => {
                     console.error("AJAX Error:", err);
-                    persistVendorFlash('Delete request failed. Please try again.', false);
-                    setTimeout(() => { window.location.reload(); }, 500);
+                    redirectToVendorListWithFlash('Delete request failed. Please try again.', false);
                 });
             });
         });
@@ -1595,26 +1590,20 @@
                 }
                 
                 if (!apiSuccess && data.api_response) {
-                    msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
-                        ⚠️ API Response: ${data.api_response}
-                    </div>`;
-                    msgBox.focus();
-                    msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                    let apiErrorMessage = 'Vendor API sync failed after edit.';
+                    try {
+                        const parsed = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
+                        apiErrorMessage = (parsed && parsed.message) ? parsed.message : apiErrorMessage;
+                    } catch (e) {}
+                    redirectToVendorListWithFlash(apiErrorMessage, false);
+                    return;
                 }
                 
                 setTimeout(() => {
                     window.location.href = '?page=vendors&action=list';
                 }, 1000); // redirect after 1 sec
             } else {
-                msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
-                    ❌ ${data.message}
-                </div>`;
-                msgBox.focus();
-                msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                persistVendorFlash(data.message || 'Edit vendor failed.', false);
-                setTimeout(() => {
-                    window.location.href = '?page=vendors&action=list';
-                }, 800);
+                redirectToVendorListWithFlash(data.message || 'Edit vendor failed.', false);
             }
         });
     };
