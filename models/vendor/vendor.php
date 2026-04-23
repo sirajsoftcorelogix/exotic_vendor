@@ -332,7 +332,7 @@ class vendor {
         $totalPages = ceil($totalRecords / $limit);
 
         // fetch data
-        $sql = "SELECT vp.*, vu.name AS agent_name, GROUP_CONCAT(DISTINCT vc.category_id) AS categories, GROUP_CONCAT(DISTINCT vvtm.team_id) AS teams FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id AND vu.is_deleted = 0 LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where GROUP BY vp.id LIMIT $limit OFFSET $offset";
+        $sql = "SELECT vp.*, vu.name AS agent_name, GROUP_CONCAT(DISTINCT vc.category_id) AS categories, GROUP_CONCAT(DISTINCT vvtm.team_id) AS teams FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id AND vu.is_deleted = 0 LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where GROUP BY vp.id ORDER BY CASE WHEN vp.vendor_id IS NULL OR TRIM(vp.vendor_id) = '' THEN 1 ELSE 0 END ASC, vp.vendor_id DESC, vp.id DESC LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
 
