@@ -1024,6 +1024,9 @@ switch ($page) {
             case 'set-customer':
                 $controller->set_customer();
                 break;
+            case 'customer-search':
+                $controller->customer_search();
+                break;
             case 'apply_custom_discount':
                 $controller->apply_custom_discount();
                 break;

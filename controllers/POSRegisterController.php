@@ -42,7 +42,27 @@ class POSRegisterController
         $categories = ['allProducts' => 'All Products'] + $categories;
 
         $customerModel = new Customer($conn);
-        $customers = $customerModel->getAllCustomers(500, 0, []);
+        $selected_customer = null;
+        if (!empty($_SESSION['pos_customer_id'])) {
+            $cid = (int)$_SESSION['pos_customer_id'];
+            if ($cid > 0) {
+                $row = $customerModel->getCustomerById($cid);
+                if (!empty($row['id'])) {
+                    $nm = (string)($row['name'] ?? '');
+                    $ph = (string)($row['phone'] ?? '');
+                    $em = (string)($row['email'] ?? '');
+                    $selected_customer = [
+                        'id' => (int)$row['id'],
+                        'name' => $nm,
+                        'phone' => $ph,
+                        'email' => $em,
+                        'text' => trim($nm . ' | ' . $ph . ($em !== '' ? ' | ' . $em : '')),
+                    ];
+                } else {
+                    unset($_SESSION['pos_customer_id']);
+                }
+            }
+        }
         // slug => svg icon
         $categoryIcons = [
             'allProducts' => '
@@ -96,8 +116,36 @@ class POSRegisterController
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
             'cartData' => $this->get_cart(),
-            'customers' => $customers
+            'selected_customer' => $selected_customer,
         ]);
+    }
+
+    /**
+     * JSON autocomplete for POS customer field (vp_customers). Requires q length >= 2.
+     */
+    public function customer_search()
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+        $len = function_exists('mb_strlen') ? mb_strlen($q, 'UTF-8') : strlen($q);
+        if ($len < 2) {
+            echo json_encode(['success' => true, 'customers' => []], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        require_once 'models/customer/Customer.php';
+        global $conn;
+        $customerModel = new Customer($conn);
+        $customers = $customerModel->searchCustomersForPos($q, 40);
+
+        echo json_encode([
+            'success' => true,
+            'customers' => $customers,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
     }
 
     public function stockReport()

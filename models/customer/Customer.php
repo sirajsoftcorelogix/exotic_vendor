@@ -141,6 +141,63 @@ class Customer
         $stmt->execute();
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
+
+    /**
+     * POS customer autocomplete: search vp_customers by name, email, or phone (LIKE).
+     * Escapes LIKE wildcards in the user's input. Intended to be called when query length >= 2.
+     *
+     * @return array<int, array{id:int,name:string,email:string,phone:string,display:string}>
+     */
+    public function searchCustomersForPos(string $search, int $limit = 40): array
+    {
+        $search = trim($search);
+        $len = function_exists('mb_strlen') ? mb_strlen($search, 'UTF-8') : strlen($search);
+        if ($len < 2) {
+            return [];
+        }
+
+        $limit = max(1, min(80, $limit));
+
+        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
+        $term = '%' . $escaped . '%';
+
+        $sql = 'SELECT id, name, email, phone FROM vp_customers
+                WHERE name LIKE ? OR email LIKE ? OR phone LIKE ?
+                ORDER BY id DESC
+                LIMIT ?';
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param('sssi', $term, $term, $term, $limit);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $name = (string)($row['name'] ?? '');
+            $email = (string)($row['email'] ?? '');
+            $phone = (string)($row['phone'] ?? '');
+            $display = $name . ' | ' . $phone . ($email !== '' ? ' | ' . $email : '');
+            $out[] = [
+                'id' => $id,
+                'name' => $name,
+                'email' => $email,
+                'phone' => $phone,
+                'display' => $display,
+            ];
+        }
+
+        return $out;
+    }
+
     public function countAllCustomers($filters = [])
     {
 
