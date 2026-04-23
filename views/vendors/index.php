@@ -12,7 +12,7 @@
                     <span>Procurement · Vendor management</span>
                 </div>
                 <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
-                    Vendor's <span class="text-amber-800"></span>
+                    Vendor's <span class="text-amber-800">Listing</span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
                     Search suppliers by vendor profile details, group, team, and status with quick actions for editing and banking.
@@ -46,7 +46,7 @@
                 </span>
                 <div class="min-w-0">
                     <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-                    <p class="text-xs text-gray-300 mt-0.5 hidden sm:block">Find vendors by name, id, group, category, team, and status.</p>
+                    <p class="text-xs text-gray-200 mt-0.5 hidden sm:block">Find vendors by name, id, group, category, team, and status.</p>
                 </div>
             </div>
         </div>
@@ -62,9 +62,17 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Group Name</label>
-                    <input type="text" name="groupname_filter" placeholder="e.g. Sculpture"
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
-                        value="<?php echo htmlspecialchars($data['groupname_filter'] ?? ''); ?>" autocomplete="off">
+                    <?php $groupnameOptions = array('textiles','paintings','sculptures','jewelry','homeandliving',''); ?>
+                    <select name="groupname_filter"
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="">All Groups</option>
+                        <?php foreach ($groupnameOptions as $groupOpt): ?>
+                            <?php if ($groupOpt === '') continue; ?>
+                            <option value="<?php echo htmlspecialchars($groupOpt); ?>" <?php echo (($data['groupname_filter'] ?? '') === $groupOpt) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupOpt, MB_CASE_TITLE, 'UTF-8') : ucwords($groupOpt)); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Category</label>
