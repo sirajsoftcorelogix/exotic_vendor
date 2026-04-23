@@ -321,7 +321,7 @@
                                 <select class="form-input w-full mt-1" name="groupname" id="groupname" required>
                                     <option value="" disabled selected>Select Group Name</option>
                                     <?php foreach($groupnameList as $key => $value): ?>
-                                        <option value="<?php echo $value; ?>"><?php echo $value; ?></option>
+                                        <option value="<?php echo $value; ?>"><?php echo ucfirst($value); ?></option>
                                     <?php endforeach; ?>
 
                                 </select>
@@ -538,7 +538,7 @@
                                 <select class="form-input w-full mt-1" name="editGroupname" id="editGroupname" required>
                                     <option value="" disabled selected>Select Group Name</option>
                                     <?php foreach($groupnameList as $key => $value): ?>
-                                        <option value="<?php echo $value; ?>"><?php echo $value; ?></option>
+                                        <option value="<?php echo $value; ?>"><?php echo ucfirst($value); ?></option>
                                     <?php endforeach; ?>
 
                                 </select>
@@ -1137,6 +1137,26 @@
                 </div>`;
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                
+                // Parse API response if it exists
+                let apiSuccess = false;
+                if (data.api_response) {
+                    try {
+                        let apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
+                        apiSuccess = apiData.success === true;
+                    } catch (e) {
+                        apiSuccess = false;
+                    }
+                }
+                
+                if (!apiSuccess && data.api_response) {
+                    msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
+                        ⚠️ API Response: ${data.api_response}
+                    </div>`;
+                    msgBox.focus();
+                    msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+                
                 setTimeout(() => {
                     location.reload();
                 }, 1500); // refresh after 1 sec
@@ -1354,8 +1374,28 @@
                 </div>`;
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                
+                // Parse API response if it exists
+                let apiSuccess = false;
+                if (data.api_response) {
+                    try {
+                        let apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
+                        apiSuccess = apiData.success === true;
+                    } catch (e) {
+                        apiSuccess = false;
+                    }
+                }
+                
+                if (!apiSuccess && data.api_response) {
+                    msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
+                        ⚠️ API Response: ${data.api_response}
+                    </div>`;
+                    msgBox.focus();
+                    msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+                
                 setTimeout(() => {
-                   window.location.href = '?page=vendors&action=list';
+                    window.location.href = '?page=vendors&action=list';
                 }, 1000); // redirect after 1 sec
             } else {
                 msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">

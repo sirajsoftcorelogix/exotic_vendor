@@ -75,7 +75,7 @@ class VendorsController {
                             'webpage' => '1'
                         ];
                         $createApiResponse = $this->createVendorExternal($postData);
-                        
+                        $result['api_response'] = $createApiResponse; // Include API response in the result for debugging
                         // Update vendor with remote vendor_id from API response
                         if (!empty($createApiResponse)) {
                             $apiData = json_decode($createApiResponse, true);
@@ -84,6 +84,7 @@ class VendorsController {
                                 $updateResult = $vendorsModel->updateVendorRemoteId($id, $remoteVendorId);
                             }
                         }
+                        //echo "test response: ".print_r($result, true); // Debugging line to check API response
                     }
                 }
             } else {
@@ -100,6 +101,7 @@ class VendorsController {
                         'webpage' => '1'
                     ];
                     $createApiResponse = $this->createVendorExternal($postData);
+                    $result['api_response'] = $createApiResponse; // Include API response in the result
                     
                     // Update vendor with remote vendor_id from API response
                     if (!empty($createApiResponse) && $localVendorId > 0) {
