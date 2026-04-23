@@ -921,25 +921,17 @@ class vendor {
                 $vendorName = substr(trim((string)$vendorName), 0, 150);
                 $groupname = substr(trim((string)$groupname), 0, 100);
                 
-                // Check if vendor exists by vendor_name
-                $checkStmt = $this->conn->prepare('SELECT id FROM vp_vendors WHERE vendor_name = ?');
-                $checkStmt->bind_param('s', $vendorName);
+                // Compare by vendor_id (authoritative key from Admin API)
+                $checkStmt = $this->conn->prepare('SELECT id, groupname FROM vp_vendors WHERE vendor_id = ? LIMIT 1');
+                $checkStmt->bind_param('s', $vendorId);
                 $checkStmt->execute();
                 $result = $checkStmt->get_result();
                 $existing = $result ? $result->fetch_assoc() : null;
                 $checkStmt->close();
                 
                 if ($existing) {
-                    // Get the existing groupname
                     $existingId = (int)$existing['id'];
-                    $getGroupStmt = $this->conn->prepare('SELECT groupname FROM vp_vendors WHERE id = ?');
-                    $getGroupStmt->bind_param('i', $existingId);
-                    $getGroupStmt->execute();
-                    $groupRes = $getGroupStmt->get_result();
-                    $groupRow = $groupRes->fetch_assoc();
-                    $getGroupStmt->close();
-                    
-                    $existingGroupname = !empty($groupRow['groupname']) ? trim($groupRow['groupname']) : '';
+                    $existingGroupname = !empty($existing['groupname']) ? trim((string)$existing['groupname']) : '';
                     
                     // Append new groupname with comma separator if not already present
                     if (!empty($existingGroupname)) {
@@ -953,9 +945,9 @@ class vendor {
                         $newGroupname = $groupname;
                     }
                     
-                    // Update vendor_id and groupname if vendor_name exists
-                    $updateStmt = $this->conn->prepare('UPDATE vp_vendors SET vendor_id = ?, groupname = ? WHERE id = ?');
-                    $updateStmt->bind_param('sss', $vendorId, $newGroupname, $existingId);
+                    // Update mapped row by matched vendor_id
+                    $updateStmt = $this->conn->prepare('UPDATE vp_vendors SET vendor_name = ?, groupname = ? WHERE id = ?');
+                    $updateStmt->bind_param('ssi', $vendorName, $newGroupname, $existingId);
                     if ($updateStmt->execute()) {
                         $updated++;
                     } else {
@@ -963,7 +955,7 @@ class vendor {
                     }
                     $updateStmt->close();
                 } else {
-                    // Insert if vendor_name doesn't exist
+                    // Insert if vendor_id not found
                     $insertStmt = $this->conn->prepare('INSERT INTO vp_vendors (vendor_id, vendor_name, groupname, country, is_active) VALUES (?, ?, ?, \'India\', \'active\')');
                     $insertStmt->bind_param('sss', $vendorId, $vendorName, $groupname);
                     if ($insertStmt->execute()) {
