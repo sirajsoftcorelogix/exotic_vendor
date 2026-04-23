@@ -1,6 +1,7 @@
 <div class="min-h-screen">
   <script>
     window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
+    window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
   </script>
   <a href="test_create_order_static();"></a>
   <!-- ===== TOP BAR ===== -->
@@ -166,24 +167,8 @@
 
           <select id="customerSelect"
             name="customer_id"
-            class="w-full border rounded-lg px-3 py-2 text-sm">
-
-            <option value="">Select Customer</option>
-
-            <?php foreach ($customers as $c): ?>
-
-              <option value="<?= $c['id'] ?>"
-                data-name="<?= htmlspecialchars($c['name']) ?>"
-                data-phone="<?= htmlspecialchars($c['phone']) ?>"
-                data-email="<?= htmlspecialchars($c['email']) ?>"
-                <?= (!empty($_SESSION['pos_customer_id']) && $_SESSION['pos_customer_id'] == $c['id']) ? 'selected' : '' ?>>
-
-                <?= htmlspecialchars($c['name']) ?> | <?= $c['phone'] ?> | <?= $c['email'] ?>
-
-              </option>
-
-            <?php endforeach; ?>
-
+            class="w-full border rounded-lg px-3 py-2 text-sm"
+            aria-label="Search customer">
           </select>
 
           <button onclick="openCustomerModal()"
@@ -1405,10 +1390,11 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
       if (!customerId) {
         showToast("⚠ Please select customer first", "red");
-        if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
+          if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
           jQuery("#customerSelect").select2("open");
         } else {
-          document.getElementById("customerSelect").focus();
+          var cs = document.getElementById("customerSelect");
+          if (cs) cs.focus();
         }
         return;
       }
@@ -1660,6 +1646,18 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
             opt.setAttribute("data-email", data.customer.email || "");
             $s.append(opt);
             $s.val(idStr).trigger("change");
+            fetch("index.php?page=pos_register&action=set-customer", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Requested-With": "XMLHttpRequest"
+              },
+              body: "customer_id=" + encodeURIComponent(idStr)
+            });
+            if (typeof updatePosCustomerLabels === "function") {
+              updatePosCustomerLabels(data.customer.name, data.customer.phone);
+            }
           } else {
             var option = document.createElement("option");
             option.value = idStr;
@@ -1670,6 +1668,18 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
             select.appendChild(option);
             select.value = idStr;
             select.dispatchEvent(new Event("change", { bubbles: true }));
+            fetch("index.php?page=pos_register&action=set-customer", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Requested-With": "XMLHttpRequest"
+              },
+              body: "customer_id=" + encodeURIComponent(idStr)
+            });
+            if (typeof updatePosCustomerLabels === "function") {
+              updatePosCustomerLabels(data.customer.name, data.customer.phone);
+            }
           }
 
           showToast("✓ Customer saved", "green");
@@ -1684,27 +1694,9 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 </script>
 
 <script>
-  document.getElementById("customerSelect").addEventListener("change", function() {
-
-    var id = this.value;
-    window.POS_SESSION_CUSTOMER_ID = id ? String(id) : "";
-
-    fetch("index.php?page=pos_register&action=set-customer", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: "customer_id=" + encodeURIComponent(id)
-    });
-
-    var selected = this.options[this.selectedIndex];
-    var name = selected ? selected.getAttribute("data-name") : null;
-    var phone = selected ? selected.getAttribute("data-phone") : null;
-
-    var nameText = name || "Walk-in Customer";
-    var phoneText = phone || "-";
-
+  function updatePosCustomerLabels(name, phone) {
+    var nameText = (name != null && String(name).trim() !== "") ? String(name).trim() : "Walk-in Customer";
+    var phoneText = (phone != null && String(phone).trim() !== "") ? String(phone).trim() : "-";
     var nameEl = document.getElementById("selectedCustomerName");
     var phoneEl = document.getElementById("selectedCustomerPhone");
     var nameCartEl = document.getElementById("selectedCustomerNameCart");
@@ -1713,8 +1705,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
     if (phoneEl) phoneEl.textContent = phoneText;
     if (nameCartEl) nameCartEl.textContent = nameText;
     if (phoneCartEl) phoneCartEl.textContent = phoneText;
-
-  });
+  }
 </script>
 
 <script>
@@ -1773,51 +1764,80 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
     var $cust = $('#customerSelect');
     $cust.select2({
-      placeholder: "Search Customer",
+      placeholder: "Type at least 2 characters to search…",
       allowClear: true,
       width: '100%',
-
-      matcher: function(params, data) {
-
-        if ($.trim(params.term) === '') {
-          return data;
-        }
-
-        if (!data.element) return data;
-
-        let term = params.term.toLowerCase();
-        let el = $(data.element);
-
-        let name = String(el.data('name') || '').toLowerCase();
-        let phone = String(el.data('phone') || '').toLowerCase();
-        let email = String(el.data('email') || '').toLowerCase();
-        let text = String(data.text || '').toLowerCase();
-
-        if (
-          name.includes(term) ||
-          phone.includes(term) ||
-          email.includes(term) ||
-          text.includes(term)
-        ) {
-          return data;
-        }
-
-        return null;
+      minimumInputLength: 2,
+      ajax: {
+        url: "index.php?page=pos_register&action=customer-search",
+        type: "GET",
+        dataType: "json",
+        delay: 320,
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        data: function (params) {
+          return { q: params.term || "" };
+        },
+        processResults: function (data) {
+          if (!data || !data.success || !Array.isArray(data.customers)) {
+            return { results: [] };
+          }
+          return {
+            results: data.customers.map(function (c) {
+              var disp = c.display || ((c.name || "") + " | " + (c.phone || "") + (c.email ? " | " + c.email : ""));
+              return {
+                id: String(c.id),
+                text: disp,
+                name: c.name || "",
+                phone: c.phone || "",
+                email: c.email || ""
+              };
+            })
+          };
+        },
+        cache: true
       },
-
       templateResult: formatCustomer,
       templateSelection: formatCustomerSelection
     });
 
-    $cust.on("select2:clear", function() {
-      window.POS_SESSION_CUSTOMER_ID = "";
+    $cust.on("select2:select", function (e) {
+      var d = e.params.data;
+      window.POS_SESSION_CUSTOMER_ID = d.id ? String(d.id) : "";
+      fetch("index.php?page=pos_register&action=set-customer", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: "customer_id=" + encodeURIComponent(d.id || "")
+      });
+      updatePosCustomerLabels(d.name, d.phone);
     });
 
-    var initialVal = $cust.val();
-    if (initialVal) {
-      $cust.trigger("change");
-    } else if (window.POS_SESSION_CUSTOMER_ID) {
-      $cust.val(String(window.POS_SESSION_CUSTOMER_ID)).trigger("change");
+    $cust.on("select2:clear", function () {
+      window.POS_SESSION_CUSTOMER_ID = "";
+      fetch("index.php?page=pos_register&action=set-customer", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: "customer_id="
+      });
+      updatePosCustomerLabels("", "");
+    });
+
+    if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.id) {
+      var ic = window.POS_INITIAL_CUSTOMER;
+      var opt = new Option(ic.text || ic.name || "", String(ic.id), true, true);
+      opt.setAttribute("data-name", ic.name || "");
+      opt.setAttribute("data-phone", ic.phone || "");
+      opt.setAttribute("data-email", ic.email || "");
+      $cust.append(opt);
+      $cust.val(String(ic.id)).trigger("change");
+      updatePosCustomerLabels(ic.name, ic.phone);
     }
 
   });
@@ -1826,17 +1846,24 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
     if (!data.id) return data.text;
 
-    let el = $(data.element);
-
-    let name = el.data('name') || data.text;
-    let phone = el.data('phone') || '';
-    let email = el.data('email') || '';
+    var name = data.name || "";
+    var phone = data.phone || "";
+    var email = data.email || "";
+    if ((!name || !phone) && data.element) {
+      var el = $(data.element);
+      name = name || String(el.data("name") || "");
+      phone = phone || String(el.data("phone") || "");
+      email = email || String(el.data("email") || "");
+    }
+    if (!name) {
+      name = String(data.text || "").split("|")[0].trim();
+    }
 
     return $(`
         <div>
             <div style="font-weight:600">${name}</div>
             <div style="font-size:11px;color:#777">
-                ${phone} ${email ? ' | ' + email : ''}
+                ${phone}${email ? " | " + email : ""}
             </div>
         </div>
     `);
@@ -1846,9 +1873,10 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
     if (!data.id) return data.text;
 
-    let el = $(data.element);
-    let name = el.data('name');
-
+    var name = data.name || "";
+    if (!name && data.element) {
+      name = $(data.element).data("name") || "";
+    }
     return name || data.text;
   }
 </script>
