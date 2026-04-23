@@ -842,12 +842,33 @@
 <!-- JavaScript to handle popup and form submission -->
 <script>
     const myDiv = document.getElementById('messageDiv');
+    const VENDOR_FLASH_KEY = 'vendor_list_flash_message';
+    function persistVendorFlash(message, isSuccess) {
+        try {
+            localStorage.setItem(VENDOR_FLASH_KEY, JSON.stringify({
+                message: String(message || ''),
+                isSuccess: !!isSuccess
+            }));
+        } catch (e) {}
+    }
+    function showPersistedVendorFlashIfAny() {
+        try {
+            const raw = localStorage.getItem(VENDOR_FLASH_KEY);
+            if (!raw) return;
+            localStorage.removeItem(VENDOR_FLASH_KEY);
+            const payload = JSON.parse(raw);
+            if (payload && payload.message) {
+                showVendorTopMessage(payload.message, !!payload.isSuccess);
+            }
+        } catch (e) {}
+    }
     function showVendorTopMessage(message, isSuccess) {
         if (!myDiv) return;
         myDiv.classList.remove('text-green-600', 'text-red-600');
         myDiv.classList.add(isSuccess ? 'text-green-600' : 'text-red-600');
         myDiv.textContent = message || '';
     }
+    showPersistedVendorFlashIfAny();
 
     const syncVendorsApiBtn = document.getElementById('sync-vendors-api-btn');
     if (syncVendorsApiBtn) {
@@ -876,10 +897,16 @@
                     }, 900);
                     return;
                 }
-                showVendorTopMessage((data && data.message) ? data.message : 'Vendor sync failed.', false);
+                const errMsg = (data && data.message) ? data.message : 'Vendor sync failed.';
+                showVendorTopMessage(errMsg, false);
+                persistVendorFlash(errMsg, false);
+                setTimeout(function () { window.location.reload(); }, 500);
             })
             .catch(function () {
-                showVendorTopMessage('Vendor sync request failed. Please try again.', false);
+                const errMsg = 'Vendor sync request failed. Please try again.';
+                showVendorTopMessage(errMsg, false);
+                persistVendorFlash(errMsg, false);
+                setTimeout(function () { window.location.reload(); }, 500);
             })
             .finally(function () {
                 syncVendorsApiBtn.dataset.loading = '0';
@@ -1333,6 +1360,10 @@
                 </div>`;
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                persistVendorFlash(data.message || 'Add vendor failed.', false);
+                setTimeout(() => {
+                    window.location.href = '?page=vendors&action=list';
+                }, 800);
             }
         });
     };
@@ -1363,6 +1394,8 @@
                     if(data.success) {
                         title.innerText = "Success 🎉";
                         title.className = "text-2xl font-bold text-green-600 mb-4";
+                    } else {
+                        persistVendorFlash(data.message || 'Delete vendor failed.', false);
                     }
 
                     document.getElementById("showMessage").innerText = data.message;
@@ -1378,6 +1411,8 @@
                 })
                 .catch(err => {
                     console.error("AJAX Error:", err);
+                    persistVendorFlash('Delete request failed. Please try again.', false);
+                    setTimeout(() => { window.location.reload(); }, 500);
                 });
             });
         });
@@ -1576,6 +1611,10 @@
                 </div>`;
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                persistVendorFlash(data.message || 'Edit vendor failed.', false);
+                setTimeout(() => {
+                    window.location.href = '?page=vendors&action=list';
+                }, 800);
             }
         });
     };
