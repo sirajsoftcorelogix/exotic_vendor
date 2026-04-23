@@ -431,7 +431,12 @@
                             </div>
                             <div class="mt-2">
                                 <label for="addWebpage" class="text-sm font-medium text-gray-700">Webpage</label>
-                                <input type="text" class="form-input w-full mt-1" name="addWebpage" id="addWebpage" value="1" />
+                                <div class="mt-1 flex items-center gap-2">
+                                    <input type="hidden" name="addWebpage" value="0">
+                                    <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="addWebpage" id="addWebpage" value="1" checked>
+                                    <label for="addWebpage" class="text-sm text-gray-700">Allow webpage</label>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">Whether to allow a webpage for this vendor.</p>
                             </div>
                         </div>
 
@@ -653,7 +658,12 @@
                             </div>
                             <div class="mt-2">
                                 <label for="editWebpage" class="text-sm font-medium text-gray-700">Webpage</label>
-                                <input type="text" class="form-input w-full mt-1" name="editWebpage" id="editWebpage" value="1" />
+                                <div class="mt-1 flex items-center gap-2">
+                                    <input type="hidden" name="editWebpage" value="0">
+                                    <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editWebpage" id="editWebpage" value="1" checked>
+                                    <label for="editWebpage" class="text-sm text-gray-700">Allow webpage</label>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">Whether to allow a webpage for this vendor.</p>
                             </div>
                         </div>
 
@@ -1407,7 +1417,7 @@
             document.getElementById("editAddress").value = vendor.address;
             document.getElementById("editCity").value = vendor.city;
             document.getElementById("editCountry").value = vendor.country;
-            document.getElementById("editWebpage").value = (vendor.webpage && String(vendor.webpage).trim() !== '') ? vendor.webpage : '1';
+            document.getElementById("editWebpage").checked = String(vendor.webpage ?? '1') === '1';
             const selectedGroups = String(vendor.groupname || '')
                 .split(',')
                 .map(s => s.trim())
