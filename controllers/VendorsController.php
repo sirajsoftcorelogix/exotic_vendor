@@ -70,10 +70,25 @@ class VendorsController {
                 if (isset($result['success']) && $result['success'] === true) {
                     $vendor = $vendorsModel->getVendorById($id);
                     if (empty($vendor['vendor_id'])) {
+                        $editGroups = $data['editGroupname'] ?? '';
+                        if (is_array($editGroups)) {
+                            $editGroups = implode(',', array_values(array_unique(array_filter(array_map('trim', $editGroups), static function ($v) {
+                                return $v !== '';
+                            }))));
+                        } else {
+                            $editGroups = trim((string)$editGroups);
+                        }
+                        $editVendorType = '';
+                        if ($editGroups !== '') {
+                            $first = trim((string)explode(',', $editGroups)[0]);
+                            if ($first !== '') {
+                                $editVendorType = 'vendor_' . $first;
+                            }
+                        }
                         $postData = [
                             'name' => isset($data['editVendorName']) ? trim($data['editVendorName']) : '',
-                            'groupname' => $data['editGroupname'] ?? '',
-                            'vendor_type' => 'vendor_'.$data['editGroupname'] ?? '',
+                            'groupname' => $editGroups,
+                            'vendor_type' => $editVendorType,
                             'webpage' => '1'
                         ];
                         $createApiResponse = $this->createVendorExternal($postData);
@@ -95,11 +110,26 @@ class VendorsController {
                 // Call external API if vendor creation was successful
                 if (isset($result['success']) && $result['success'] === true) {
                     $localVendorId = $result['inserted_id'] ?? 0;
+                    $addGroups = $data['groupname'] ?? '';
+                    if (is_array($addGroups)) {
+                        $addGroups = implode(',', array_values(array_unique(array_filter(array_map('trim', $addGroups), static function ($v) {
+                            return $v !== '';
+                        }))));
+                    } else {
+                        $addGroups = trim((string)$addGroups);
+                    }
+                    $addVendorType = '';
+                    if ($addGroups !== '') {
+                        $first = trim((string)explode(',', $addGroups)[0]);
+                        if ($first !== '') {
+                            $addVendorType = 'vendor_' . $first;
+                        }
+                    }
                     
                     $postData = [
                         'name' => isset($data['addVendorName']) ? trim($data['addVendorName']) : '',
-                        'groupname' => $data['groupname'] ?? '',
-                        'vendor_type' => 'vendor_'.$data['groupname'] ?? '',
+                        'groupname' => $addGroups,
+                        'vendor_type' => $addVendorType,
                         'webpage' => '1'
                     ];
                     $createApiResponse = $this->createVendorExternal($postData);
