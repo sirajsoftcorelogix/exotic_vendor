@@ -89,7 +89,7 @@ class VendorsController {
                             'name' => isset($data['editVendorName']) ? trim($data['editVendorName']) : '',
                             'groupname' => $editGroups,
                             'vendor_type' => $editVendorType,
-                            'webpage' => (isset($data['editWebpage']) && trim((string)$data['editWebpage']) !== '') ? trim((string)$data['editWebpage']) : '1'
+                            'webpage' => (isset($data['editWebpage']) && (string)$data['editWebpage'] === '1') ? '1' : '0'
                         ];
                         $createApiResponse = $this->createVendorExternal($postData);
                         $result['api_response'] = $createApiResponse; // Include API response in the result for debugging
@@ -130,7 +130,7 @@ class VendorsController {
                         'name' => isset($data['addVendorName']) ? trim($data['addVendorName']) : '',
                         'groupname' => $addGroups,
                         'vendor_type' => $addVendorType,
-                        'webpage' => (isset($data['addWebpage']) && trim((string)$data['addWebpage']) !== '') ? trim((string)$data['addWebpage']) : '1'
+                        'webpage' => (isset($data['addWebpage']) && (string)$data['addWebpage'] === '1') ? '1' : '0'
                     ];
                     $createApiResponse = $this->createVendorExternal($postData);
                     $result['api_response'] = $createApiResponse; // Include API response in the result
