@@ -1,78 +1,108 @@
-<div class="max-w-7xl mx-auto space-y-6">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
     <!-- Page Header -->
-    <div class="flex flex-wrap items-center justify-between gap-4">
-        <!-- Header Section with Filters and Actions -->
-        <div class="bg-white rounded-xl shadow-md p-4 flex flex-wrap items-center justify-between gap-4 flex-grow mt-[10px]">
-            <!-- Filters -->
-            <form method="get" id="filterForm">
-                <input type="hidden" name="page" value="vendors">
-                <input type="hidden" name="action" value="list">
-                <div class="flex flex-wrap items-center gap-4">
-                    <div class="flex items-center gap-2">
-                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M14 1H1L5.5 6.5V12L8.5 14V6.5L14 1Z" stroke="#797A7C" stroke-width="2" stroke-linejoin="round"/>
-                        </svg>
-                        <span class="text-gray-600 font-medium">Filters:</span>
-                    </div>
-                    <div class="flex flex-wrap items-left gap-4">
-                        <div class="relative flex items-left gap-2">
-                            <input type="text" name="search_text" placeholder="Search by name, email or phone" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 250px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
-                        </div>
-                    </div>
-                    <div class="relative">
-                        <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="category_filter" id="category_filter">
-                            <option value="" selected>All Categories</option>
-                            <?php foreach($category[0] as $key => $value): ?>
-                                <?php if ($value['parent_id'] == 0): ?>
-                                    <optgroup label="<?php echo $value['category_name']; ?>">
-                                        <?php foreach($category[$value['id']] as $subKey => $subValue): 
-                                            if ($subValue['parent_id'] == $value['id']): ?>
-                                                <option value="<?php echo $subValue['id']; ?>" title="<?php echo $subValue['category_name']; ?>" <?php echo ($data['category_filter'] == $subValue['id']) ? "selected" : ""?>><?php echo $subValue['category_name']; ?></option>
-                                        <?php endif; endforeach; ?>
-                                    </optgroup>
-                                <?php endif; ?>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="relative">
-                        <select style="width: 132px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="team_filter" id="team_filter">
-                            <option value="" selected>All Teams</option>
-                            <?php foreach($teamList as $team): ?>
-                                <option value="<?php echo $team['id']; ?>" <?php echo ($data['team_filter'] == $team['id']) ? "selected" : ""?>><?php echo $team['team_name']; ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div class="relative">
-                        <select style="width: 120px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
-                            <option value="" selected>All Status</option>
-                            <option value="active" <?php echo ($data['status_filter'] == "active") ? "selected" : ""?>>Active</option>
-                            <option value="inactive" <?php echo ($data['status_filter'] == "inactive") ? "selected" : ""?>>Inactive</option>
-                            <option value="blacklisted" <?php echo ($data['status_filter'] == "blacklisted") ? "selected" : ""?>>Blacklisted</option>
-                        </select>
-                    </div>
-                    <div class="relative">
-                        <input type="submit" value="Search" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2">
-                    </div>
-                    <div class="relative">
-                        <input type="button" value="Clear" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 800; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="font-bold rounded-lg flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white" onclick="document.getElementById('filterForm').reset();window.location='?page=vendors&action=list';">
-                    </div>
+    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04]">
+        <div class="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-sky-200/15 blur-2xl" aria-hidden="true"></div>
+        <div class="relative px-5 py-7 sm:px-8 sm:py-9 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+            <div class="min-w-0 max-w-3xl">
+                <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+                        <i class="fas fa-truck-loading text-[11px]" aria-hidden="true"></i>
+                    </span>
+                    <span>Procurement · Vendor management</span>
                 </div>
-            </form>
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
+                    Vendor <span class="text-amber-800">listing</span>
+                </h1>
+                <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+                    Search suppliers by vendor profile details, group, team, and status with quick actions for editing and banking.
+                </p>
+            </div>
+            <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'add')): ?>
+                <div class="flex shrink-0 lg:pl-4 lg:self-center">
+                    <button id="open-vendor-popup-btn"
+                        class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap w-full sm:w-auto">
+                        <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
+                        Add Vendor
+                    </button>
+                </div>
+            <?php endif; ?>
         </div>
-        <!-- Add User Button -->
-        <?php
-        if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'add')) {
-        ?>
-        <button style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%; margin-right:10px;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2 mt-[10px]" id="open-vendor-popup-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-            </svg>Add Vendor</button>
-        <?php } ?>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
+        <div class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 border-b border-amber-100/80">
+            <div class="flex items-center gap-3 min-w-0">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
+                    <i class="fas fa-filter text-sm" aria-hidden="true"></i>
+                </span>
+                <div class="min-w-0">
+                    <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
+                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Find vendors by name, id, group, category, team, and status.</p>
+                </div>
+            </div>
+        </div>
+        <form method="get" id="filterForm" class="p-5">
+            <input type="hidden" name="page" value="vendors">
+            <input type="hidden" name="action" value="list">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4">
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Search</label>
+                    <input type="text" name="search_text" placeholder="Search by name, vendor id, groupname, email, or phone"
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
+                        value="<?php echo htmlspecialchars($data['search'] ?? ''); ?>" autocomplete="off">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+                    <select class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" name="category_filter" id="category_filter">
+                        <option value="" selected>All Categories</option>
+                        <?php foreach($category[0] as $key => $value): ?>
+                            <?php if ($value['parent_id'] == 0): ?>
+                                <optgroup label="<?php echo $value['category_name']; ?>">
+                                    <?php foreach($category[$value['id']] as $subKey => $subValue):
+                                        if ($subValue['parent_id'] == $value['id']): ?>
+                                            <option value="<?php echo $subValue['id']; ?>" title="<?php echo $subValue['category_name']; ?>" <?php echo ($data['category_filter'] == $subValue['id']) ? "selected" : "";?>><?php echo $subValue['category_name']; ?></option>
+                                    <?php endif; endforeach; ?>
+                                </optgroup>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Team</label>
+                    <select class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" name="team_filter" id="team_filter">
+                        <option value="" selected>All Teams</option>
+                        <?php foreach($teamList as $team): ?>
+                            <option value="<?php echo $team['id']; ?>" <?php echo ($data['team_filter'] == $team['id']) ? "selected" : "";?>><?php echo $team['team_name']; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+                    <select class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" name="status_filter" id="status_filter">
+                        <option value="" selected>All Status</option>
+                        <option value="active" <?php echo ($data['status_filter'] == "active") ? "selected" : "";?>>Active</option>
+                        <option value="inactive" <?php echo ($data['status_filter'] == "inactive") ? "selected" : "";?>>Inactive</option>
+                        <option value="blacklisted" <?php echo ($data['status_filter'] == "blacklisted") ? "selected" : "";?>>Blacklisted</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-5 flex flex-wrap items-center gap-3">
+                <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
+                    <i class="fas fa-search text-xs opacity-90" aria-hidden="true"></i>
+                    Apply filters
+                </button>
+                <button type="button" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition"
+                    onclick="document.getElementById('filterForm').reset();window.location='?page=vendors&action=list';">
+                    Reset
+                </button>
+            </div>
+        </form>
     </div>
 
     <!-- Vendor Listing -->
-    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
         <div class="p-6">
             <!-- <div id="deleteMsgBox" style="margin-top: 10px; margin: botton 10px;" class="text-sm font-bold"></div> -->
             <!-- Success Modal -->
@@ -91,22 +121,22 @@
             </div>
             <div class="text-sm font-bold text-green-600 mb-4" id="messageDiv"><?php echo $_SESSION["mapping_message"] ?? ""; unset($_SESSION["mapping_message"]); ?></div>
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
+                <table class="min-w-full text-left">
                     <thead>
-                    <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor Name</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Groupname</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text" nowrap>Vendor ID</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Phone</th>
+                    <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">#</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Vendor Name</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Groupname</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap" nowrap>Vendor ID</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Phone</th>
                         <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th> -->
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">City</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">State</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Status</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Action</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">City</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">State</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Status</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Action</th>
                     </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+                    <tbody class="divide-y divide-gray-100">
                     <?php if (!empty($vendors)): ?>
                         <?php
                             $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
@@ -126,10 +156,10 @@
                             $counter = ($page - 1) * $limit;
                         ?>
                         <?php foreach ($vendors as $index => $vendor): ?>
-                            <tr class="table-content-text">
-                                <td class="px-6 py-4 whitespace-wrap"><?= ++$counter ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name'] ?? '') ?></td>
-                                <td class="px-6 py-4 whitespace-wrap">
+                            <tr class="hover:bg-amber-50/40 transition-colors">
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= ++$counter ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm font-semibold text-gray-900"><?= htmlspecialchars($vendor['vendor_name'] ?? '') ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700">
                                     <?php
                                         $groupNameRaw = trim((string)($vendor['groupname'] ?? ''));
                                         $groupNameDisplay = '';
@@ -161,14 +191,28 @@
                                     ?>
                                     <?= htmlspecialchars($groupNameDisplay) ?>
                                 </td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= !empty($vendor['vendor_id']) ? htmlspecialchars((string)$vendor['vendor_id']) : '-' ?></td>
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone'] ?? '') ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= !empty($vendor['vendor_id']) ? htmlspecialchars((string)$vendor['vendor_id']) : '-' ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= htmlspecialchars($vendor['vendor_phone'] ?? '') ?></td>
                                 <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email'] ?? '') ?></td> -->
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['city'] ?? '') ?></td>
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['state'] ?? '') ?></td>
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars(ucfirst($vendor['is_active'] ?? '')) ?>
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= htmlspecialchars($vendor['city'] ?? '') ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= htmlspecialchars($vendor['state'] ?? '') ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm">
+                                    <?php
+                                        $vendorStatus = strtolower(trim((string)($vendor['is_active'] ?? '')));
+                                        $vendorStatusClass = 'bg-slate-50 text-slate-700 ring-slate-500/15';
+                                        if ($vendorStatus === 'active') {
+                                            $vendorStatusClass = 'bg-emerald-50 text-emerald-800 ring-emerald-600/20';
+                                        } elseif ($vendorStatus === 'inactive') {
+                                            $vendorStatusClass = 'bg-amber-50 text-amber-900 ring-amber-600/25';
+                                        } elseif ($vendorStatus === 'blacklisted') {
+                                            $vendorStatusClass = 'bg-gray-100 text-gray-700 ring-gray-500/20';
+                                        }
+                                    ?>
+                                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset <?php echo $vendorStatusClass; ?>">
+                                        <?= htmlspecialchars(ucfirst($vendor['is_active'] ?? '')) ?>
+                                    </span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td class="px-5 py-4 whitespace-nowrap text-sm font-medium">
                                     <!-- Three-dot menu container -->
                                     <div class="menu-wrapper">
                                         <button class="menu-button" onclick="toggleMenu(this)">
@@ -194,7 +238,15 @@
                         
                     <?php else: ?>
                         <tr>
-                            <td colspan="12" class="px-6 py-4 text-center text-gray-500">No vendors found.</td>
+                            <td colspan="12" class="px-6 py-16 text-center text-gray-500">
+                                <div class="mx-auto flex max-w-sm flex-col items-center">
+                                    <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
+                                        <i class="fas fa-inbox" aria-hidden="true"></i>
+                                    </span>
+                                    <p class="text-base font-medium text-gray-900">No vendors match</p>
+                                    <p class="mt-1 text-sm text-gray-500">Try changing filters or add a new vendor.</p>
+                                </div>
+                            </td>
                         </tr>
                     <?php endif; ?>
                     </tbody>
@@ -205,30 +257,29 @@
 
     <!-- Pagination Logic -->
     <?php if (!empty($vendors)): ?>
-        <div class="bg-white rounded-xl shadow-md p-4">
-            <div class="flex items-center justify-center">
-                <div class="flex items-center gap-4 text-sm text-gray-600">
+        <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4">
+            <div class="flex flex-wrap items-center justify-center gap-3 text-sm text-gray-600">
                     <?php
                     if ($total_pages > 1): ?>          
                     <!-- Prev Button -->
-                    <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
+                    <a class="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
                     href="?page=vendors&action=list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?>">
                         &laquo; Prev
                     </a>
                     <!-- Page Slots -->
                     <?php for ($i = $start; $i <= $end; $i++): ?>
-                        <a class="page-link px-2 py-1 rounded <?= $i == $page ? 'bg-black text-white font-bold' : 'bg-gray-100 text-gray-700' ?>"
+                        <a class="inline-flex items-center px-3 py-1.5 rounded-lg <?= $i == $page ? 'bg-amber-600 text-white font-bold' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50' ?>"
                         href="?page=vendors&action=list&page_no=<?= $i ?>&limit=<?= $limit ?>">
                             <?= $i ?>
                         </a>
                     <?php endfor; ?>
                     <!-- Next Button -->
-                    <a class="page-link px-2 py-1 rounded <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
+                    <a class="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
                     href="?page=vendors&action=list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?>">
                         Next &raquo;
                     </a>
                     <?php endif; ?>
-                    <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
+                    <select id="rows-per-page" class="px-2 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
                             onchange="location.href='?page=vendors&action=list&page_no=1&limit=' + this.value;">
                         <?php foreach ([10, 20, 50, 100] as $opt): ?>
                             <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
@@ -236,7 +287,6 @@
                             </option>
                         <?php endforeach; ?>
                     </select>
-                </div>
             </div>
         </div>
     <?php endif; ?>
