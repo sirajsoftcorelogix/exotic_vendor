@@ -23,7 +23,7 @@
                     <button id="sync-vendors-api-btn"
                         class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-amber-300 bg-white text-amber-800 text-sm font-semibold shadow-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap">
                         <i class="fas fa-sync-alt text-xs opacity-95" aria-hidden="true"></i>
-                        Fetch Vendors from API
+                        Refresh from Admin
                     </button>
                 <?php endif; ?>
                 <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'add')): ?>
