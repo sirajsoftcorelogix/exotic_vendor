@@ -129,7 +129,38 @@
                             <tr class="table-content-text">
                                 <td class="px-6 py-4 whitespace-wrap"><?= ++$counter ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name'] ?? '') ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['groupname'] ?? '') ?></td>
+                                <td class="px-6 py-4 whitespace-wrap">
+                                    <?php
+                                        $groupNameRaw = trim((string)($vendor['groupname'] ?? ''));
+                                        $groupNameDisplay = '';
+                                        if ($groupNameRaw !== '') {
+                                            $parts = array_filter(array_map('trim', explode(',', $groupNameRaw)), static function ($v) {
+                                                return $v !== '';
+                                            });
+                                            $normalized = [];
+                                            foreach ($parts as $part) {
+                                                $slug = strtolower($part);
+                                                $map = [
+                                                    'painting' => 'Paintings',
+                                                    'sculpture' => 'Sculptures',
+                                                    'textile' => 'Textiles',
+                                                    'jewelry' => 'Jewelry',
+                                                    'book' => 'Book',
+                                                    'homeandliving' => 'Home And Living',
+                                                ];
+                                                if (isset($map[$slug])) {
+                                                    $normalized[] = $map[$slug];
+                                                } elseif (function_exists('mb_convert_case')) {
+                                                    $normalized[] = mb_convert_case($part, MB_CASE_TITLE, 'UTF-8');
+                                                } else {
+                                                    $normalized[] = ucwords(strtolower($part));
+                                                }
+                                            }
+                                            $groupNameDisplay = implode(', ', $normalized);
+                                        }
+                                    ?>
+                                    <?= htmlspecialchars($groupNameDisplay) ?>
+                                </td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= !empty($vendor['vendor_id']) ? htmlspecialchars((string)$vendor['vendor_id']) : '-' ?></td>
                                 <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone'] ?? '') ?></td>
                                 <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email'] ?? '') ?></td> -->
