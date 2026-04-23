@@ -18,15 +18,22 @@
                     Search suppliers by vendor profile details, group, team, and status with quick actions for editing and banking.
                 </p>
             </div>
-            <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'add')): ?>
-                <div class="flex shrink-0 lg:pl-4 lg:self-center">
+            <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">
+                <?php if (isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1): ?>
+                    <button id="sync-vendors-api-btn"
+                        class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-amber-300 bg-white text-amber-800 text-sm font-semibold shadow-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap">
+                        <i class="fas fa-sync-alt text-xs opacity-95" aria-hidden="true"></i>
+                        Fetch Vendors from API
+                    </button>
+                <?php endif; ?>
+                <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'add')): ?>
                     <button id="open-vendor-popup-btn"
                         class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap w-full sm:w-auto">
                         <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
                         Add Vendor
                     </button>
-                </div>
-            <?php endif; ?>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 
@@ -801,6 +808,53 @@
 <!-- JavaScript to handle popup and form submission -->
 <script>
     const myDiv = document.getElementById('messageDiv');
+    function showVendorTopMessage(message, isSuccess) {
+        if (!myDiv) return;
+        myDiv.classList.remove('text-green-600', 'text-red-600');
+        myDiv.classList.add(isSuccess ? 'text-green-600' : 'text-red-600');
+        myDiv.textContent = message || '';
+    }
+
+    const syncVendorsApiBtn = document.getElementById('sync-vendors-api-btn');
+    if (syncVendorsApiBtn) {
+        syncVendorsApiBtn.addEventListener('click', function () {
+            if (syncVendorsApiBtn.dataset.loading === '1') return;
+            syncVendorsApiBtn.dataset.loading = '1';
+            syncVendorsApiBtn.disabled = true;
+            const originalHtml = syncVendorsApiBtn.innerHTML;
+            syncVendorsApiBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs opacity-95" aria-hidden="true"></i> Syncing...';
+            showVendorTopMessage('Syncing vendors from API, please wait...', true);
+
+            fetch('index.php?page=vendors&action=fetchAllVendors', {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data && data.success) {
+                    const inserted = Number(data.inserted || 0);
+                    const updated = Number(data.updated || 0);
+                    const total = Number(data.total || 0);
+                    showVendorTopMessage('Vendor sync complete. Inserted: ' + inserted + ', Updated: ' + updated + ', Total: ' + total + '.', true);
+                    setTimeout(function () {
+                        window.location.reload();
+                    }, 900);
+                    return;
+                }
+                showVendorTopMessage((data && data.message) ? data.message : 'Vendor sync failed.', false);
+            })
+            .catch(function () {
+                showVendorTopMessage('Vendor sync request failed. Please try again.', false);
+            })
+            .finally(function () {
+                syncVendorsApiBtn.dataset.loading = '0';
+                syncVendorsApiBtn.disabled = false;
+                syncVendorsApiBtn.innerHTML = originalHtml;
+            });
+        });
+    }
+
     // Clear the div after 5000 milliseconds (5 seconds)
     if (myDiv) {
         setTimeout(() => {
