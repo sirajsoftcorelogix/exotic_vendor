@@ -420,8 +420,7 @@
                             <!--add groupname dropdown-->
                             <div class="mt-2">
                                 <label for="groupname" class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
-                                <select class="form-input w-full mt-1" name="groupname" id="groupname" required>
-                                    <option value="" disabled selected>Select Group Name</option>
+                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="groupname[]" id="groupname" required>
                                     <?php foreach($groupnameList as $key => $value): ?>
                                         <option value="<?php echo $value; ?>"><?php echo ucfirst($value); ?></option>
                                     <?php endforeach; ?>
@@ -637,8 +636,7 @@
                             <!--add groupname dropdown-->
                             <div class="mt-2">
                                 <label for="editGroupname" class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
-                                <select class="form-input w-full mt-1" name="editGroupname" id="editGroupname" required>
-                                    <option value="" disabled selected>Select Group Name</option>
+                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="editGroupname[]" id="editGroupname" required>
                                     <?php foreach($groupnameList as $key => $value): ?>
                                         <option value="<?php echo $value; ?>"><?php echo ucfirst($value); ?></option>
                                     <?php endforeach; ?>
@@ -1397,7 +1395,21 @@
             document.getElementById("editAddress").value = vendor.address;
             document.getElementById("editCity").value = vendor.city;
             document.getElementById("editCountry").value = vendor.country;
-            document.getElementById("editGroupname").value = vendor.groupname;
+            const groupSelect = document.getElementById("editGroupname");
+            if (groupSelect) {
+                const selectedGroups = String(vendor.groupname || '')
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+                Array.from(groupSelect.options).forEach(opt => {
+                    opt.selected = selectedGroups.includes(opt.value);
+                });
+                if (window.jQuery && jQuery.fn.select2 && jQuery(groupSelect).data('select2')) {
+                    jQuery(groupSelect).trigger('change.select2');
+                } else if (window.jQuery && jQuery.fn.multiselect) {
+                    jQuery(groupSelect).multiselect('refresh');
+                }
+            }
             
             document.getElementById("editAgentIds").value = vendor.agent_id;
             

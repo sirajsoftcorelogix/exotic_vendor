@@ -95,6 +95,17 @@ class vendor {
         }
     }
     public function addVendor($data) {
+        $groupnameValue = '';
+        if (isset($data['groupname'])) {
+            if (is_array($data['groupname'])) {
+                $groups = array_values(array_unique(array_filter(array_map('trim', $data['groupname']), static function ($v) {
+                    return $v !== '';
+                })));
+                $groupnameValue = implode(',', $groups);
+            } else {
+                $groupnameValue = trim((string)$data['groupname']);
+            }
+        }
         // Vendor Name
         if (!empty($data['addVendorName'])) {
             $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_name = ?";
@@ -180,7 +191,7 @@ class vendor {
             $data['addTeam'],
             $data['addTeamMember'],
             $data['addStatus'],
-            $data['groupname']
+            $groupnameValue
         );
         if ($stmt->execute()) {
             // Get the last inserted vendor id
@@ -203,6 +214,17 @@ class vendor {
         ];
     }
     public function updateVendor($id, $data) {
+        $groupnameValue = '';
+        if (isset($data['editGroupname'])) {
+            if (is_array($data['editGroupname'])) {
+                $groups = array_values(array_unique(array_filter(array_map('trim', $data['editGroupname']), static function ($v) {
+                    return $v !== '';
+                })));
+                $groupnameValue = implode(',', $groups);
+            } else {
+                $groupnameValue = trim((string)$data['editGroupname']);
+            }
+        }
         $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('sssssssssssssssiiissi', 
@@ -225,7 +247,7 @@ class vendor {
             $data['editTeam'],
             $data['editTeamMember'],
             $data['editStatus'],
-            $data['editGroupname'],
+            $groupnameValue,
             $id
         );
         if ($stmt->execute()) {
