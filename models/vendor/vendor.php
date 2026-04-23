@@ -282,16 +282,10 @@ class vendor {
         ];
     }
     public function deleteVendor($id) {
-        // Check if Order(s) exists
-        $checkOrdersSql = "SELECT id FROM vp_orders WHERE vendor_id = ?";
-        $checkOrdersStmt = $this->conn->prepare($checkOrdersSql);
-        $checkOrdersStmt->bind_param('i', $id);
-        $checkOrdersStmt->execute();
-        $checkOrdersStmt->store_result();
-        if ($checkOrdersStmt->num_rows > 0) {
-            return ['success' => false, 'message' => 'Vendor can not be deleted. Order(s) exists in the database.'];
+        $guard = $this->canDeleteVendor((int)$id);
+        if (empty($guard['success'])) {
+            return $guard;
         }
-        $checkOrdersStmt->close();
 
         // Delete Bank details of the Vendor
         $sql = "DELETE FROM vendor_bank_details WHERE vendor_id = ?";
@@ -309,6 +303,51 @@ class vendor {
             'success' => false,
             'message' => 'Delete failed: ' . $stmt->error . '. Please try again later.'
         ];
+    }
+
+    public function canDeleteVendor(int $id): array
+    {
+        if ($id <= 0) {
+            return ['success' => false, 'message' => 'Invalid vendor ID.'];
+        }
+
+        // Existing guard: vp_orders
+        $checkOrdersSql = "SELECT id FROM vp_orders WHERE vendor_id = ? LIMIT 1";
+        $checkOrdersStmt = $this->conn->prepare($checkOrdersSql);
+        $checkOrdersStmt->bind_param('i', $id);
+        $checkOrdersStmt->execute();
+        $checkOrdersStmt->store_result();
+        if ($checkOrdersStmt->num_rows > 0) {
+            $checkOrdersStmt->close();
+            return ['success' => false, 'message' => 'Vendor cannot be deleted because it is mapped in vp_orders.'];
+        }
+        $checkOrdersStmt->close();
+
+        // New guard: vp_inbound (mapped via vendor_code)
+        $checkInboundSql = "SELECT id FROM vp_inbound WHERE vendor_code = ? LIMIT 1";
+        $checkInboundStmt = $this->conn->prepare($checkInboundSql);
+        $checkInboundStmt->bind_param('i', $id);
+        $checkInboundStmt->execute();
+        $checkInboundStmt->store_result();
+        if ($checkInboundStmt->num_rows > 0) {
+            $checkInboundStmt->close();
+            return ['success' => false, 'message' => 'Vendor cannot be deleted because it is mapped in vp_inbound.'];
+        }
+        $checkInboundStmt->close();
+
+        // New guard: vp_products (mapped via vendor_id)
+        $checkProductsSql = "SELECT id FROM vp_products WHERE vendor_id = ? LIMIT 1";
+        $checkProductsStmt = $this->conn->prepare($checkProductsSql);
+        $checkProductsStmt->bind_param('i', $id);
+        $checkProductsStmt->execute();
+        $checkProductsStmt->store_result();
+        if ($checkProductsStmt->num_rows > 0) {
+            $checkProductsStmt->close();
+            return ['success' => false, 'message' => 'Vendor cannot be deleted because it is mapped in vp_products.'];
+        }
+        $checkProductsStmt->close();
+
+        return ['success' => true, 'message' => 'Vendor can be deleted.'];
     }
     public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '', $category_filter = '', $team_filter = '', $groupname_filter = '') {
         // sanitize

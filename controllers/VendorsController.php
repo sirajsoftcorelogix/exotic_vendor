@@ -89,7 +89,7 @@ class VendorsController {
                             'name' => isset($data['editVendorName']) ? trim($data['editVendorName']) : '',
                             'groupname' => $editGroups,
                             'vendor_type' => $editVendorType,
-                            'webpage' => '1'
+                            'webpage' => (isset($data['editWebpage']) && trim((string)$data['editWebpage']) !== '') ? trim((string)$data['editWebpage']) : '1'
                         ];
                         $createApiResponse = $this->createVendorExternal($postData);
                         $result['api_response'] = $createApiResponse; // Include API response in the result for debugging
@@ -130,7 +130,7 @@ class VendorsController {
                         'name' => isset($data['addVendorName']) ? trim($data['addVendorName']) : '',
                         'groupname' => $addGroups,
                         'vendor_type' => $addVendorType,
-                        'webpage' => '1'
+                        'webpage' => (isset($data['addWebpage']) && trim((string)$data['addWebpage']) !== '') ? trim((string)$data['addWebpage']) : '1'
                     ];
                     $createApiResponse = $this->createVendorExternal($postData);
                     $result['api_response'] = $createApiResponse; // Include API response in the result
@@ -232,6 +232,12 @@ class VendorsController {
             $vendor = $vendorsModel->getVendorById($id);
             if (!$vendor || !is_array($vendor)) {
                 echo json_encode(['success' => false, 'message' => 'Vendor not found.']);
+                exit;
+            }
+
+            $guard = $vendorsModel->canDeleteVendor($id);
+            if (empty($guard['success'])) {
+                echo json_encode($guard);
                 exit;
             }
 

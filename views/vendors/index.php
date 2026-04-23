@@ -429,6 +429,10 @@
                                     <?php endforeach; ?>
                                 </div>
                             </div>
+                            <div class="mt-2">
+                                <label for="addWebpage" class="text-sm font-medium text-gray-700">Webpage</label>
+                                <input type="text" class="form-input w-full mt-1" name="addWebpage" id="addWebpage" value="1" />
+                            </div>
                         </div>
 
                         <!-- Address -->
@@ -646,6 +650,10 @@
                                         </label>
                                     <?php endforeach; ?>
                                 </div>
+                            </div>
+                            <div class="mt-2">
+                                <label for="editWebpage" class="text-sm font-medium text-gray-700">Webpage</label>
+                                <input type="text" class="form-input w-full mt-1" name="editWebpage" id="editWebpage" value="1" />
                             </div>
                         </div>
 
@@ -1399,6 +1407,7 @@
             document.getElementById("editAddress").value = vendor.address;
             document.getElementById("editCity").value = vendor.city;
             document.getElementById("editCountry").value = vendor.country;
+            document.getElementById("editWebpage").value = (vendor.webpage && String(vendor.webpage).trim() !== '') ? vendor.webpage : '1';
             const selectedGroups = String(vendor.groupname || '')
                 .split(',')
                 .map(s => s.trim())
