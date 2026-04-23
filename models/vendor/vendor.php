@@ -335,17 +335,32 @@ class vendor {
         }
         $checkInboundStmt->close();
 
-        // New guard: vp_products (mapped via vendor_id)
-        $checkProductsSql = "SELECT id FROM vp_products WHERE vendor_id = ? LIMIT 1";
-        $checkProductsStmt = $this->conn->prepare($checkProductsSql);
-        $checkProductsStmt->bind_param('i', $id);
-        $checkProductsStmt->execute();
-        $checkProductsStmt->store_result();
-        if ($checkProductsStmt->num_rows > 0) {
-            $checkProductsStmt->close();
-            return ['success' => false, 'message' => 'Vendor cannot be deleted because it is mapped in vp_products.'];
+        // New guard: vp_products (schema-safe: vendor_id preferred, fallback vendor_code)
+        $productVendorCol = null;
+        $colRes = $this->conn->query("SHOW COLUMNS FROM vp_products LIKE 'vendor_id'");
+        if ($colRes && $colRes->num_rows > 0) {
+            $productVendorCol = 'vendor_id';
+        } else {
+            $colRes2 = $this->conn->query("SHOW COLUMNS FROM vp_products LIKE 'vendor_code'");
+            if ($colRes2 && $colRes2->num_rows > 0) {
+                $productVendorCol = 'vendor_code';
+            }
         }
-        $checkProductsStmt->close();
+
+        if ($productVendorCol !== null) {
+            $checkProductsSql = "SELECT id FROM vp_products WHERE {$productVendorCol} = ? LIMIT 1";
+            $checkProductsStmt = $this->conn->prepare($checkProductsSql);
+            if ($checkProductsStmt) {
+                $checkProductsStmt->bind_param('i', $id);
+                $checkProductsStmt->execute();
+                $checkProductsStmt->store_result();
+                if ($checkProductsStmt->num_rows > 0) {
+                    $checkProductsStmt->close();
+                    return ['success' => false, 'message' => 'Vendor cannot be deleted because it is mapped in vp_products.'];
+                }
+                $checkProductsStmt->close();
+            }
+        }
 
         return ['success' => true, 'message' => 'Vendor can be deleted.'];
     }
