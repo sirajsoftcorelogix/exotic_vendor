@@ -178,10 +178,6 @@
 
 
         </div>
-        <div class="mt-2 text-[11px] text-slate-600 space-y-0.5">
-          <div id="selectedCustomerName" class="font-semibold text-slate-800">Walk-in Customer</div>
-          <div id="selectedCustomerPhone" class="text-slate-500">-</div>
-        </div>
 
       </div>
       <div class="sticky top-4 rounded-2xl bg-white border shadow-sm overflow-hidden">
@@ -1697,12 +1693,8 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
   function updatePosCustomerLabels(name, phone) {
     var nameText = (name != null && String(name).trim() !== "") ? String(name).trim() : "Walk-in Customer";
     var phoneText = (phone != null && String(phone).trim() !== "") ? String(phone).trim() : "-";
-    var nameEl = document.getElementById("selectedCustomerName");
-    var phoneEl = document.getElementById("selectedCustomerPhone");
     var nameCartEl = document.getElementById("selectedCustomerNameCart");
     var phoneCartEl = document.getElementById("selectedCustomerPhoneCart");
-    if (nameEl) nameEl.textContent = nameText;
-    if (phoneEl) phoneEl.textContent = phoneText;
     if (nameCartEl) nameCartEl.textContent = nameText;
     if (phoneCartEl) phoneCartEl.textContent = phoneText;
   }
