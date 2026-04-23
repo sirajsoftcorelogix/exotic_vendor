@@ -23,7 +23,7 @@
                     <button id="sync-vendors-api-btn"
                         class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-amber-300 bg-white text-amber-800 text-sm font-semibold shadow-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap">
                         <i class="fas fa-sync-alt text-xs opacity-95" aria-hidden="true"></i>
-                        Sync with Admin
+                        Pull from Admin
                     </button>
                 <?php endif; ?>
                 <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'add')): ?>
@@ -434,18 +434,18 @@
                         <div class="pt-4">
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Address</h3>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Address <span class="text-red-500">*</span></label>
-                                <input type="text" class="form-input w-full mt-1" required name="addAddress" id="addAddress" />
+                                <label class="text-sm font-medium text-gray-700">Address</label>
+                                <input type="text" class="form-input w-full mt-1" name="addAddress" id="addAddress" />
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">City <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="addCity" id="addCity" />
+                                    <label class="text-sm font-medium text-gray-700">City</label>
+                                    <input type="text" class="form-input w-full mt-1" name="addCity" id="addCity" />
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">State <span class="text-red-500">*</span></label>
+                                    <label class="text-sm font-medium text-gray-700">State</label>
                                     <span id="addStateBlock">
-                                        <select class="form-input w-full mt-1" required name="addState" id="addState">
+                                        <select class="form-input w-full mt-1" name="addState" id="addState">
                                             <?php foreach($stateList as $item): ?>
                                                 <option value="<?php echo $item["name"];?>"><?php echo $item["name"];?></option>
                                             <?php endforeach?>
@@ -453,16 +453,16 @@
                                     </span>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Country <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="addCountry" id="addCountry" onchange="fetchStates(this.value, 'AddForm');">
+                                    <label class="text-sm font-medium text-gray-700">Country</label>
+                                    <select class="form-input w-full mt-1" name="addCountry" id="addCountry" onchange="fetchStates(this.value, 'AddForm');">
                                         <?php foreach($countryList as $item): ?>
                                             <option value="<?php echo $item["name"];?>" <?php if($item["name"]=="India") { echo "selected"; }?>><?php echo $item["name"];?></option>
                                         <?php endforeach?>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Postal Code <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="addPostalCode" id="addPostalCode" />
+                                    <label class="text-sm font-medium text-gray-700">Postal Code</label>
+                                    <input type="text" class="form-input w-full mt-1" name="addPostalCode" id="addPostalCode" />
                                 </div>
                             </div>
                         </div>
@@ -651,18 +651,18 @@
                         <div class="pt-4">
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Address</h3>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Address <span class="text-red-500">*</span></label>
-                                <input type="text" class="form-input w-full mt-1" required name="editAddress" id="editAddress" />
+                                <label class="text-sm font-medium text-gray-700">Address</label>
+                                <input type="text" class="form-input w-full mt-1" name="editAddress" id="editAddress" />
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">City <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="editCity" id="editCity" />
+                                    <label class="text-sm font-medium text-gray-700">City</label>
+                                    <input type="text" class="form-input w-full mt-1" name="editCity" id="editCity" />
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">State <span class="text-red-500">*</span></label>
+                                    <label class="text-sm font-medium text-gray-700">State</label>
                                     <span id="editStateBlock">
-                                        <select class="form-input w-full mt-1" required name="editState" id="editState">
+                                        <select class="form-input w-full mt-1" name="editState" id="editState">
                                             <?php foreach($stateList as $item): ?>
                                                 <option value="<?php echo $item["name"];?>"><?php echo $item["name"];?></option>
                                             <?php endforeach?>
@@ -670,16 +670,16 @@
                                     </span>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Country <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="editCountry" id="editCountry" onchange="fetchStates(this.value, 'EditForm');">
+                                    <label class="text-sm font-medium text-gray-700">Country</label>
+                                    <select class="form-input w-full mt-1" name="editCountry" id="editCountry" onchange="fetchStates(this.value, 'EditForm');">
                                         <?php foreach($countryList as $item): ?>
                                             <option value="<?php echo $item["name"];?>" <?php if($item["name"]=="India") { echo "selected"; }?>><?php echo $item["name"];?></option>
                                         <?php endforeach?>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Postal Code <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="editPostalCode" id="editPostalCode" />
+                                    <label class="text-sm font-medium text-gray-700">Postal Code</label>
+                                    <input type="text" class="form-input w-full mt-1" name="editPostalCode" id="editPostalCode" />
                                 </div>
                             </div>
                         </div>
@@ -1185,9 +1185,9 @@
         if(countryId === "") return;
         if(countryId !== "India") {
             if(formType === 'AddForm') {
-                document.getElementById('addStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" required name="addState" id="addState" />';
+                document.getElementById('addStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" name="addState" id="addState" />';
             } else {
-                document.getElementById('editStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" required name="editState" id="editState" />';
+                document.getElementById('editStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" name="editState" id="editState" />';
             }
             return;
         } else {
@@ -1203,7 +1203,6 @@
                     stateSelect.id = "addState";
                     stateSelect.name = "addState";
                     stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-                    stateSelect.required = true;
 
                     // Populate the select element with options
                     let states = Array.isArray(data) ? data : [data]; 
@@ -1222,7 +1221,6 @@
                     stateSelect.id = "editState";
                     stateSelect.name = "editState";
                     stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-                    stateSelect.required = true;
 
                     // Populate the select element with options
                     let states = Array.isArray(data) ? data : [data]; 
@@ -1408,7 +1406,7 @@
             //document.getElementById("editTeamMember").value = vendor.agent_id;
 
             if(vendor.country !== "India") {
-                document.getElementById("editStateBlock").innerHTML = '<input type="text" class="form-input w-full mt-1" required name="editState" id="editState" value="' + vendor.state + '" />';
+                document.getElementById("editStateBlock").innerHTML = '<input type="text" class="form-input w-full mt-1" name="editState" id="editState" value="' + vendor.state + '" />';
                 document.getElementById("editPreviousState").value = vendor.state;
             } else {
                 // Fetch states from the server
@@ -1422,7 +1420,6 @@
                     stateSelect.id = "editState";
                     stateSelect.name = "editState";
                     stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-                    stateSelect.required = true;
 
                     // Populate the select element with options
                     let states = Array.isArray(data) ? data : [data]; 
