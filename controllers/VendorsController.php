@@ -179,12 +179,74 @@ class VendorsController {
             return $apiResponse;
         }
     }
+    public function deleteVendorExternal($vendorId){
+        $vendorId = trim((string)$vendorId);
+        if ($vendorId === '') {
+            return ['success' => false, 'message' => 'Remote vendor_id is missing.'];
+        }
+
+        $apiUrl = 'https://www.exoticindia.com/vendor-api/product/vendordelete';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded'
+        ];
+
+        $ch = curl_init($apiUrl);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(['vendor_id' => $vendorId]));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $apiResponse = curl_exec($ch);
+        $apiError = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($apiResponse === false) {
+            return ['success' => false, 'message' => 'Vendor delete API call failed: ' . $apiError];
+        }
+
+        $decoded = json_decode((string)$apiResponse, true);
+        if ($httpCode >= 400) {
+            $msg = is_array($decoded) && !empty($decoded['message']) ? (string)$decoded['message'] : 'HTTP ' . $httpCode;
+            return ['success' => false, 'message' => 'Vendor delete API failed: ' . $msg];
+        }
+
+        if (is_array($decoded)) {
+            if ((isset($decoded['success']) && $decoded['success'] === false) || (isset($decoded['status']) && strtolower((string)$decoded['status']) === 'error')) {
+                $msg = !empty($decoded['message']) ? (string)$decoded['message'] : 'Remote delete returned failure.';
+                return ['success' => false, 'message' => 'Vendor delete API failed: ' . $msg];
+            }
+        }
+
+        return ['success' => true, 'message' => 'Remote vendor deleted.'];
+    }
     public function delete() {
         global $vendorsModel;
         // Try to get id from JSON or POST
         $data = json_decode(file_get_contents('php://input'), true);
         $id = isset($data['id']) ? (int)$data['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
         if ($id > 0) {
+            $vendor = $vendorsModel->getVendorById($id);
+            if (!$vendor || !is_array($vendor)) {
+                echo json_encode(['success' => false, 'message' => 'Vendor not found.']);
+                exit;
+            }
+
+            $remoteVendorId = trim((string)($vendor['vendor_id'] ?? ''));
+            if ($remoteVendorId !== '') {
+                $remoteDelete = $this->deleteVendorExternal($remoteVendorId);
+                if (empty($remoteDelete['success'])) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $remoteDelete['message'] ?? 'Remote vendor delete failed.'
+                    ]);
+                    exit;
+                }
+            }
+
             $result = $vendorsModel->deleteVendor($id);
             echo json_encode($result);
         } else {
