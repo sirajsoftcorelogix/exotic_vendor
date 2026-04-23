@@ -417,15 +417,17 @@
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <!--add groupname dropdown-->
+                            <!-- Groupname checkboxes -->
                             <div class="mt-2">
-                                <label for="groupname" class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
-                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="groupname[]" id="groupname" required>
+                                <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
+                                <div id="groupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
                                     <?php foreach($groupnameList as $key => $value): ?>
-                                        <option value="<?php echo $value; ?>"><?php echo ucfirst($value); ?></option>
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="groupname[]" value="<?php echo htmlspecialchars($value); ?>">
+                                            <span><?php echo htmlspecialchars(ucfirst($value)); ?></span>
+                                        </label>
                                     <?php endforeach; ?>
-
-                                </select>
+                                </div>
                             </div>
                         </div>
 
@@ -633,15 +635,17 @@
                                 </select>
                                 
                             </div>
-                            <!--add groupname dropdown-->
+                            <!-- Groupname checkboxes -->
                             <div class="mt-2">
-                                <label for="editGroupname" class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
-                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="editGroupname[]" id="editGroupname" required>
+                                <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
+                                <div id="editGroupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
                                     <?php foreach($groupnameList as $key => $value): ?>
-                                        <option value="<?php echo $value; ?>"><?php echo ucfirst($value); ?></option>
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editGroupname[]" value="<?php echo htmlspecialchars($value); ?>">
+                                            <span><?php echo htmlspecialchars(ucfirst($value)); ?></span>
+                                        </label>
                                     <?php endforeach; ?>
-
-                                </select>
+                                </div>
                             </div>
                         </div>
 
@@ -1395,21 +1399,13 @@
             document.getElementById("editAddress").value = vendor.address;
             document.getElementById("editCity").value = vendor.city;
             document.getElementById("editCountry").value = vendor.country;
-            const groupSelect = document.getElementById("editGroupname");
-            if (groupSelect) {
-                const selectedGroups = String(vendor.groupname || '')
-                    .split(',')
-                    .map(s => s.trim())
-                    .filter(Boolean);
-                Array.from(groupSelect.options).forEach(opt => {
-                    opt.selected = selectedGroups.includes(opt.value);
-                });
-                if (window.jQuery && jQuery.fn.select2 && jQuery(groupSelect).data('select2')) {
-                    jQuery(groupSelect).trigger('change.select2');
-                } else if (window.jQuery && jQuery.fn.multiselect) {
-                    jQuery(groupSelect).multiselect('refresh');
-                }
-            }
+            const selectedGroups = String(vendor.groupname || '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+            document.querySelectorAll('#editGroupname input[name="editGroupname[]"]').forEach(function (cb) {
+                cb.checked = selectedGroups.includes(cb.value);
+            });
             
             document.getElementById("editAgentIds").value = vendor.agent_id;
             
