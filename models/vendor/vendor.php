@@ -304,11 +304,11 @@ class vendor {
         if (!empty($search) && !empty($status_filter)) {
             $search = $this->conn->real_escape_string($search);
             $status_filter = $this->conn->real_escape_string($status_filter);
-            $where = "WHERE (vendor_name LIKE '%$search%' OR contact_name LIKE '%$search%' OR vendor_email LIKE '%$search%' OR vendor_phone LIKE '%$search%' OR city LIKE '%$search%' OR state LIKE '%$search%') AND is_active = '$status_filter'";
+            $where = "WHERE (vp.vendor_id LIKE '%$search%' OR vp.groupname LIKE '%$search%' OR vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%') AND vp.is_active = '$status_filter'";
         } else {
             if (!empty($search)) {
                 $search = $this->conn->real_escape_string($search);
-                $where = "WHERE vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%'";
+                $where = "WHERE vp.vendor_id LIKE '%$search%' OR vp.groupname LIKE '%$search%' OR vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%'";
             }
 
             if (!empty($status_filter)) {
