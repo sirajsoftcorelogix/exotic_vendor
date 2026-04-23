@@ -66,42 +66,40 @@ class VendorsController {
             $id = isset($data['id']) ? (int)$data['id'] : 0;
             if ($id > 0) {
                 $result = $vendorsModel->updateVendor($id, $data);
-                // call external API if vendor does not have remote vendor_id
+                // Call external vendor API after local update:
+                // - vendormodify if remote vendor_id exists
+                // - vendorcreate if remote vendor_id is missing
                 if (isset($result['success']) && $result['success'] === true) {
                     $vendor = $vendorsModel->getVendorById($id);
-                    if (empty($vendor['vendor_id'])) {
-                        $editGroups = $data['editGroupname'] ?? '';
-                        if (is_array($editGroups)) {
-                            $editGroups = implode(',', array_values(array_unique(array_filter(array_map('trim', $editGroups), static function ($v) {
-                                return $v !== '';
-                            }))));
-                        } else {
-                            $editGroups = trim((string)$editGroups);
-                        }
-                        $editVendorType = '';
-                        if ($editGroups !== '') {
-                            $first = trim((string)explode(',', $editGroups)[0]);
-                            if ($first !== '') {
-                                $editVendorType = 'vendor_' . $first;
-                            }
-                        }
-                        $postData = [
-                            'name' => isset($data['editVendorName']) ? trim($data['editVendorName']) : '',
-                            'groupname' => $editGroups,
-                            'vendor_type' => $editVendorType,
-                            'webpage' => (isset($data['editWebpage']) && (string)$data['editWebpage'] === '1') ? '1' : '0'
-                        ];
+                    $editGroups = $data['editGroupname'] ?? '';
+                    if (is_array($editGroups)) {
+                        $editGroups = implode(',', array_values(array_unique(array_filter(array_map('trim', $editGroups), static function ($v) {
+                            return $v !== '';
+                        }))));
+                    } else {
+                        $editGroups = trim((string)$editGroups);
+                    }
+                    $editVendorType = $this->resolveVendorTypeFromGroups($editGroups);
+                    $postData = [
+                        'name' => isset($data['editVendorName']) ? trim($data['editVendorName']) : '',
+                        'groupname' => $editGroups,
+                        'vendor_type' => $editVendorType,
+                        'webpage' => (isset($data['editWebpage']) && (string)$data['editWebpage'] === '1') ? '1' : '0'
+                    ];
+
+                    $remoteVendorId = trim((string)($vendor['vendor_id'] ?? ''));
+                    if ($remoteVendorId !== '') {
+                        $postData['vendor_id'] = $remoteVendorId;
+                        $result['api_response'] = $this->modifyVendorExternal($postData);
+                    } else {
                         $createApiResponse = $this->createVendorExternal($postData);
-                        $result['api_response'] = $createApiResponse; // Include API response in the result for debugging
-                        // Update vendor with remote vendor_id from API response
+                        $result['api_response'] = $createApiResponse;
                         if (!empty($createApiResponse)) {
                             $apiData = json_decode($createApiResponse, true);
                             if (is_array($apiData) && isset($apiData['vendor_id'])) {
-                                $remoteVendorId = $apiData['vendor_id'];
-                                $updateResult = $vendorsModel->updateVendorRemoteId($id, $remoteVendorId);
+                                $vendorsModel->updateVendorRemoteId($id, $apiData['vendor_id']);
                             }
                         }
-                        //echo "test response: ".print_r($result, true); // Debugging line to check API response
                     }
                 }
             } else {
@@ -178,6 +176,60 @@ class VendorsController {
             }
             return $apiResponse;
         }
+    }
+
+    private function resolveVendorTypeFromGroups(string $groupsCsv): string
+    {
+        $first = trim((string)explode(',', $groupsCsv)[0]);
+        if ($first === '') {
+            return '';
+        }
+        $key = strtolower($first);
+        $map = [
+            'sculptures' => 'vendor_sculptures',
+            'sculpture' => 'vendor_sculptures',
+            'statues' => 'vendor_statues',
+            'homeandliving' => 'vendor_homeandliving',
+            'paintings' => 'vendor_paintings',
+            'textiles' => 'vendor_textiles',
+            'jewelry' => 'vendor_jewelry',
+            'book' => 'vendor_book',
+        ];
+        return $map[$key] ?? ('vendor_' . $key);
+    }
+
+    public function modifyVendorExternal(array $postData): string
+    {
+        if (empty($postData['vendor_id'])) {
+            return json_encode(['success' => false, 'message' => 'vendor_id is required for vendormodify']);
+        }
+
+        $apiUrl = 'https://www.exoticindia.com/vendor-api/product/vendormodify';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded'
+        ];
+
+        $ch = curl_init($apiUrl);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $apiResponse = curl_exec($ch);
+        $apiError = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($apiResponse === false) {
+            error_log('Vendor modify API call failed: ' . $apiError);
+            return json_encode(['success' => false, 'message' => 'Vendor modify API call failed', 'error' => $apiError]);
+        }
+
+        error_log('Vendor modify API response: HTTP ' . $httpCode);
+        return (string)$apiResponse;
     }
     public function deleteVendorExternal($vendorId){
         $vendorId = trim((string)$vendorId);
