@@ -97,7 +97,7 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor Name</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Contact Person</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text" nowrap>Agent Name</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text" nowrap>Vendor ID</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Phone</th>
                         <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th> -->
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">City</th>
@@ -130,7 +130,7 @@
                                 <td class="px-6 py-4 whitespace-wrap"><?= ++$counter ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name'] ?? '') ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['contact_name'] ?? '') ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= ($vendor['agent_name']!="") ? htmlspecialchars($vendor['agent_name']) : "" ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= !empty($vendor['vendor_id']) ? htmlspecialchars((string)$vendor['vendor_id']) : '-' ?></td>
                                 <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone'] ?? '') ?></td>
                                 <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email'] ?? '') ?></td> -->
                                 <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['city'] ?? '') ?></td>
