@@ -288,7 +288,7 @@ class vendor {
             'message' => 'Delete failed: ' . $stmt->error . '. Please try again later.'
         ];
     }
-    public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '', $category_filter = '', $team_filter = '') {
+    public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '', $category_filter = '', $team_filter = '', $groupname_filter = '') {
         // sanitize
         $page = (int)$page;
         if ($page < 1) $page = 1;
@@ -322,6 +322,15 @@ class vendor {
             if (!empty($team_filter)) {
                 $search = $this->conn->real_escape_string($team_filter);   
                 $where = "WHERE vvtm.team_id = '$team_filter'";
+            }
+        }
+
+        if (!empty($groupname_filter)) {
+            $groupname_filter = $this->conn->real_escape_string($groupname_filter);
+            if ($where === '') {
+                $where = "WHERE vp.groupname LIKE '%$groupname_filter%'";
+            } else {
+                $where .= " AND vp.groupname LIKE '%$groupname_filter%'";
             }
         }
 

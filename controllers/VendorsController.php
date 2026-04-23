@@ -20,6 +20,7 @@ class VendorsController {
         global $teamModel;
 
         $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
+        $groupname_filter = isset($_GET['groupname_filter']) ? trim($_GET['groupname_filter']) : '';
         $status_filter = isset($_GET['status_filter']) ? trim($_GET['status_filter']) : '';
         $category_filter = isset($_GET['category_filter']) ? trim($_GET['category_filter']) : '';
         $team_filter = isset($_GET['team_filter']) ? trim($_GET['team_filter']) : '';
@@ -28,7 +29,7 @@ class VendorsController {
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Users per page, default 5
         $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
 
-        $vendors_data = $vendorsModel->getAllVendorsListing($page_no, $limit, $search, $status_filter, $category_filter, $team_filter);
+        $vendors_data = $vendorsModel->getAllVendorsListing($page_no, $limit, $search, $status_filter, $category_filter, $team_filter, $groupname_filter);
 
         $countryList = $countryModel->getAllCountries();
         $stateList = $stateModel->getAllStates(105); // India ID = 105
@@ -45,6 +46,7 @@ class VendorsController {
             'limit'        => $limit,
             'totalRecords' => $vendors_data["totalRecords"],
             'status_filter'=> $status_filter,
+            'groupname_filter'=> $groupname_filter,
             'category_filter'=> $category_filter,
             'team_filter'=> $team_filter,
             'countryList' => $countryList["countries"],

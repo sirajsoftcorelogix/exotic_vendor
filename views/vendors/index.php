@@ -12,7 +12,7 @@
                     <span>Procurement · Vendor management</span>
                 </div>
                 <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
-                    Vendor <span class="text-amber-800">listing</span>
+                    Vendor's <span class="text-amber-800"></span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
                     Search suppliers by vendor profile details, group, team, and status with quick actions for editing and banking.
@@ -23,7 +23,7 @@
                     <button id="sync-vendors-api-btn"
                         class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-amber-300 bg-white text-amber-800 text-sm font-semibold shadow-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap">
                         <i class="fas fa-sync-alt text-xs opacity-95" aria-hidden="true"></i>
-                        Refresh from Admin
+                        Sync with Admin
                     </button>
                 <?php endif; ?>
                 <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'add')): ?>
@@ -46,19 +46,25 @@
                 </span>
                 <div class="min-w-0">
                     <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Find vendors by name, id, group, category, team, and status.</p>
+                    <p class="text-xs text-gray-300 mt-0.5 hidden sm:block">Find vendors by name, id, group, category, team, and status.</p>
                 </div>
             </div>
         </div>
         <form method="get" id="filterForm" class="p-5">
             <input type="hidden" name="page" value="vendors">
             <input type="hidden" name="action" value="list">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-5 gap-y-4">
                 <div class="sm:col-span-2">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Search</label>
                     <input type="text" name="search_text" placeholder="Search by name, vendor id, groupname, email, or phone"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
                         value="<?php echo htmlspecialchars($data['search'] ?? ''); ?>" autocomplete="off">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Group Name</label>
+                    <input type="text" name="groupname_filter" placeholder="e.g. Sculpture"
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
+                        value="<?php echo htmlspecialchars($data['groupname_filter'] ?? ''); ?>" autocomplete="off">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Category</label>
