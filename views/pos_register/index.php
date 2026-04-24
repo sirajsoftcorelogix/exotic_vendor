@@ -1466,31 +1466,70 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       cid = cid[0];
     }
     formData.append("customer_id", cid || window.POS_SESSION_CUSTOMER_ID || "");
-    var previewBody = {};
-    formData.forEach(function (value, key) {
-      previewBody[key] = value;
-    });
-
-    var previewDebug = {
-      timestamp: new Date().toISOString(),
-      triggered_from: "payment_modal",
-      message_only: true,
-      message: "Order creation API is disabled from this screen. Showing request JSON preview only.",
-      request: {
+    fetch("index.php?page=pos_register&action=create-order", {
         method: "POST",
-        url: "index.php?page=pos_register&action=create-order",
-        post_body: previewBody
-      }
-    };
+        credentials: "same-origin",
+        body: formData
+      })
+      .then(function (res) {
+        return res.text().then(function (text) {
+          var cleaned = text.replace(/^\uFEFF/, "").trim();
+          try {
+            return { res: res, data: JSON.parse(cleaned), raw: cleaned, parseError: false };
+          } catch (e) {
+            return {
+              res: res,
+              parseError: true,
+              raw: cleaned
+            };
+          }
+        });
+      })
+      .then(function (wrapped) {
+        if (wrapped.parseError) {
+          var parseDbg = {
+            triggered_from: "payment_modal",
+            parse_error: true,
+            http_status: wrapped.res.status,
+            raw_body_preview: wrapped.raw.slice(0, 12000)
+          };
+          if (typeof window.setOrderCreateApiDebugPayload === "function") {
+            window.setOrderCreateApiDebugPayload(parseDbg);
+          }
+          showPaymentModalOrderApiRecord(parseDbg);
+          if (typeof window.openOrderCreateApiResponseModal === "function") {
+            window.openOrderCreateApiResponseModal();
+          }
+          showToast("Preview response was not JSON.", "red");
+          return;
+        }
 
-    if (typeof window.setOrderCreateApiDebugPayload === "function") {
-      window.setOrderCreateApiDebugPayload(previewDebug);
-    }
-    showPaymentModalOrderApiRecord(previewDebug);
-    if (typeof window.openOrderCreateApiResponseModal === "function") {
-      window.openOrderCreateApiResponseModal();
-    }
-    showToast("Order JSON preview opened. API not fired.", "blue");
+        var data = wrapped.data || {};
+        var previewDebug = data.order_api_debug || {
+          timestamp: new Date().toISOString(),
+          triggered_from: "payment_modal",
+          message_only: true,
+          message: data.message || "Preview generated.",
+          request: {
+            method: "POST",
+            url: "index.php?page=pos_register&action=create-order",
+            post_body: (data.order_payload && data.order_payload.post) ? data.order_payload.post : {}
+          }
+        };
+
+        if (typeof window.setOrderCreateApiDebugPayload === "function") {
+          window.setOrderCreateApiDebugPayload(previewDebug);
+        }
+        showPaymentModalOrderApiRecord(previewDebug);
+        if (typeof window.openOrderCreateApiResponseModal === "function") {
+          window.openOrderCreateApiResponseModal();
+        }
+        showToast("Order JSON preview opened (server-built payload). API not fired.", "blue");
+      })
+      .catch(function (err) {
+        console.error(err);
+        showToast(err.message || "Could not generate JSON preview.", "red");
+      });
 
   }
 
