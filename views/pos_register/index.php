@@ -1485,7 +1485,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           }
         });
       })
-      .then(function (wrapped) {
+      .then(function(wrapped) {
         if (wrapped.parseError) {
           var parseDbg = {
             triggered_from: "payment_modal",
@@ -1500,35 +1500,60 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           if (typeof window.openOrderCreateApiResponseModal === "function") {
             window.openOrderCreateApiResponseModal();
           }
-          showToast("Preview response was not JSON.", "red");
+          showToast("Order API response was not valid JSON.", "red");
           return;
         }
 
         var data = wrapped.data || {};
-        var previewDebug = data.order_api_debug || {
+        var apiDebug = data.order_api_debug || {
           timestamp: new Date().toISOString(),
           triggered_from: "payment_modal",
           message_only: true,
-          message: data.message || "Preview generated.",
+          message: data.message || "Order create response received.",
           request: {
             method: "POST",
             url: "index.php?page=pos_register&action=create-order",
-            post_body: (data.order_payload && data.order_payload.post) ? data.order_payload.post : {}
+            post_body: {}
           }
         };
 
         if (typeof window.setOrderCreateApiDebugPayload === "function") {
-          window.setOrderCreateApiDebugPayload(previewDebug);
+          window.setOrderCreateApiDebugPayload(apiDebug);
         }
-        showPaymentModalOrderApiRecord(previewDebug);
+        showPaymentModalOrderApiRecord(apiDebug);
         if (typeof window.openOrderCreateApiResponseModal === "function") {
           window.openOrderCreateApiResponseModal();
         }
-        showToast("Order JSON preview opened (server-built payload). API not fired.", "blue");
+
+        if (!data.success) {
+          showToast(data.message || "Order creation failed.", "red");
+          return;
+        }
+
+        var orderId = data.order_id || "";
+        if (!orderId && data.api_response) {
+          orderId =
+            data.api_response.orderid ||
+            data.api_response.order_id ||
+            data.api_response.order_no ||
+            "";
+        }
+        if (!orderId) {
+          showToast("Order created but order ID was missing in response.", "red");
+          return;
+        }
+
+        showToast("✓ Order created on API: " + orderId, "blue");
+        importOrder(orderId, function() {
+          window.open("index.php?page=invoice&action=preview&id=" + encodeURIComponent(orderId), "_blank");
+          setTimeout(function() {
+            window.location.href = "index.php?page=pos_register&action=list";
+          }, 400);
+        });
       })
       .catch(function (err) {
         console.error(err);
-        showToast(err.message || "Could not generate JSON preview.", "red");
+        showToast(err.message || "Order creation request failed.", "red");
       });
 
   }
