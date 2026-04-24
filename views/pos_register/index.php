@@ -1466,69 +1466,31 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       cid = cid[0];
     }
     formData.append("customer_id", cid || window.POS_SESSION_CUSTOMER_ID || "");
+    var previewBody = {};
+    formData.forEach(function (value, key) {
+      previewBody[key] = value;
+    });
 
-    fetch("index.php?page=pos_register&action=create-order", {
+    var previewDebug = {
+      timestamp: new Date().toISOString(),
+      triggered_from: "payment_modal",
+      message_only: true,
+      message: "Order creation API is disabled from this screen. Showing request JSON preview only.",
+      request: {
         method: "POST",
-        credentials: "same-origin",
-        body: formData
-      })
-      .then(function (res) {
-        return res.text().then(function (text) {
-          var cleaned = text.replace(/^\uFEFF/, "").trim();
-          try {
-            return { res: res, data: JSON.parse(cleaned), raw: cleaned, parseError: false };
-          } catch (e) {
-            return {
-              res: res,
-              parseError: true,
-              raw: cleaned
-            };
-          }
-        });
-      })
-      .then(function (wrapped) {
-        if (wrapped.parseError) {
-          console.error("create-order: not JSON (status " + wrapped.res.status + ")", wrapped.raw.slice(0, 800));
-          var parseDbg = {
-            triggered_from: "payment_modal",
-            parse_error: true,
-            http_status: wrapped.res.status,
-            raw_body_preview: wrapped.raw.slice(0, 12000)
-          };
-          if (typeof window.setOrderCreateApiDebugPayload === "function") {
-            window.setOrderCreateApiDebugPayload(parseDbg);
-          }
-          showPaymentModalOrderApiRecord(parseDbg);
-          showToast("Server did not return JSON. See Order create API in this window or use Full JSON.", "red");
-          return;
-        }
+        url: "index.php?page=pos_register&action=create-order",
+        post_body: previewBody
+      }
+    };
 
-        var data = wrapped.data;
-        if (data.order_api_debug && typeof window.setOrderCreateApiDebugPayload === "function") {
-          window.setOrderCreateApiDebugPayload(data.order_api_debug);
-          if (!data.success) {
-            showPaymentModalOrderApiRecord(data.order_api_debug);
-          }
-        }
-
-        if (data.success) {
-
-          closePaymentModal();
-          showToast("✓ Order Created", "green");
-
-          importOrder(data.orderid, function() {
-            autoCreateInvoiceThenPreview(data.orderid);
-          });
-
-        } else {
-          showToast(data.message || "Order failed", "red");
-        }
-
-      })
-      .catch(function (err) {
-        console.error(err);
-        showToast(err.message || "Order request failed", "red");
-      });
+    if (typeof window.setOrderCreateApiDebugPayload === "function") {
+      window.setOrderCreateApiDebugPayload(previewDebug);
+    }
+    showPaymentModalOrderApiRecord(previewDebug);
+    if (typeof window.openOrderCreateApiResponseModal === "function") {
+      window.openOrderCreateApiResponseModal();
+    }
+    showToast("Order JSON preview opened. API not fired.", "blue");
 
   }
 
