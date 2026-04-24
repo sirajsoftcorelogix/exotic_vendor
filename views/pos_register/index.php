@@ -215,7 +215,12 @@
 
               <?php foreach ($cart as $item): ?>
 
-                <div class="flex gap-3">
+                <?php
+                $cartItemCode = trim((string)($item['item_code'] ?? $item['itemcode'] ?? $item['code'] ?? $item['sku'] ?? ''));
+                ?>
+                <div
+                  class="flex gap-3 pos-cart-item cursor-pointer"
+                  data-product-code="<?= htmlspecialchars($cartItemCode) ?>">
 
                   <img
                     src="<?= htmlspecialchars($item['imageurl'] ?? 'https://dummyimage.com/80x80/e5e7eb/6b7280&text=No+Image') ?>"
