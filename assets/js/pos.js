@@ -774,6 +774,14 @@ data-code="${lookupCode}">
     if (!code) return;
     openProductModalByCode(code);
   });
+  $(document).on('click', '.pos-cart-item', function (e) {
+    if ($(e.target).closest('form,button,input,a,select,textarea,label').length) {
+      return;
+    }
+    const code = String($(this).data('product-code') || '').trim();
+    if (!code) return;
+    openProductModalByCode(code);
+  });
   function openProductModalByCode(code) {
     if (!code) return;
     openModal();
