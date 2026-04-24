@@ -1943,17 +1943,15 @@ class POSRegisterController
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
         $allowedPaymentTypes = [
-            'offline',
-            'cod',
-            'razorpay',
-            'cc',
-            'bank_transfer',
-            'pos_machine',
-            'specialpay',
-            'cheque',
-            'demand_draft',
+            'Cash',
+            'POS Machine',
+            'UPI',
+            'Bank Transfer',
+            'Special Pay',
+            'Cheque',
+            'Razorpay',
         ];
-        $paymentType = $_POST['payment_type'] ?? 'offline';
+        $paymentType = 'offline';
         if (!in_array($paymentType, $allowedPaymentTypes, true)) {
             $paymentType = 'offline';
         }
@@ -1963,15 +1961,22 @@ class POSRegisterController
         }
         $note = $_POST['note'] ?? '';
 
-        $transactionId = $_POST['transaction_id'] ?? '';
+        $transactionId = trim((string)($_POST['transaction_id'] ?? ''));
 
         /* ================= USER / STORE ================= */
         $userModel = new User($conn);
         $user_id = $_SESSION['user']['id'] ?? 0;
         $user = $userModel->getUserById($user_id);
-        $warehouse_name = $user['warehouse_name'] ?? 'POS';
-
-        $store_payment_details = $warehouse_name . "_" . $paymentType . "_" . $transactionId . "_" . $note;
+        $storeId = (string)((int)($_SESSION['warehouse_id'] ?? 0));
+        if ($storeId === '0' || $storeId === '') {
+            $storeId = 'store';
+        }
+        // Required format: STORE_ID|PAYMENT_MODE|TRANSACTION_ID
+        // If no transaction ID is provided (cash/offline etc.), send store.<UTC TIMESTAMP>.
+        $effectiveTransactionId = $transactionId !== ''
+            ? $transactionId
+            : ('store.' . gmdate('YmdHis'));
+        $store_payment_details = $storeId . '|' . $paymentType . '|' . $effectiveTransactionId;
 
         /* ================= CART ================= */
         $cartData = $this->get_cart();
@@ -1983,7 +1988,6 @@ class POSRegisterController
             ]);
             exit;
         }
-
 
         /* ================= CUSTOMER ================= */
 
@@ -2077,7 +2081,6 @@ class POSRegisterController
         }
 
         /* ================= COD ================= */
-
         if ($paymentType == 'cod' && $cartData['codcharges'] > 0) {
             $cod = "1";
             $codCharges = (string)$cartData['codcharges'];
@@ -2115,18 +2118,32 @@ class POSRegisterController
         $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
         $orderCreateQuery = ['discountcoupondetails' => $coupon];
 
-        /* ================= API CALL ================= */
-        $result = $this->exotic_api_call(
-            '/order/create',
-            'POST',
-            $orderCreateQuery,
-            $postData
-        );
-
+        // Preview mode: generate payload JSON for review only; do NOT execute external order-create cURL/API.
+        $previewResult = [
+            'data' => [
+                'success' => true,
+                'preview_only' => true,
+                'request' => [
+                    'endpoint' => '/order/create',
+                    'query' => $orderCreateQuery,
+                    'post' => $postData,
+                ],
+            ],
+            'code' => 200,
+            'raw' => json_encode([
+                'success' => true,
+                'preview_only' => true,
+                'request' => [
+                    'endpoint' => '/order/create',
+                    'query' => $orderCreateQuery,
+                    'post' => $postData,
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+        ];
         $orderApiDebug = $this->buildOrderCreateApiDebug(
             $orderCreateQuery,
             $postData,
-            $result,
+            $previewResult,
             [
                 'payment_type' => $paymentType,
                 'payment_stage' => $paymentStage,
@@ -2134,76 +2151,23 @@ class POSRegisterController
                 'transaction_id' => $transactionId,
                 'customer_id' => (int)$customerId,
                 'note' => $note,
+                'preview_only' => true,
             ]
         );
         $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
 
-        if (empty($result['data']['orderid'])) {
-            echo json_encode([
-                "success" => false,
-                "message" => "Order API failed",
-                "order_api_debug" => $orderApiDebug,
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        } else {
-            $orderId = $result['data']['orderid'];
-            // $orderNumber = $result['data']['ordernumber'] ?? $orderId;
-            $orderNumber = $result['data']['orderid'];
-            $warehouseId = $_SESSION['warehouse_id'];
-            $userId = $_SESSION['user']['id'];
-            $amount = $_POST['amount'];
-            $transactionId = $_POST['transaction_id'];
-            $note = $_POST['note'];
-            $paymentDate = date('Y-m-d');
-            $stmt = $conn->prepare("
-            INSERT INTO pos_payments 
-            (order_id, order_number, customer_id, warehouse_id, user_id,payment_stage, payment_mode, amount, transaction_id, note, payment_date)VALUES (?,?,?,?,?,?,?,?,?,?,?)");
-
-            // $stmt->bind_param(
-            //     "isiisssdsss",
-            //     $orderId,
-            //     $orderNumber,
-            //     $customerId,
-            //     $_SESSION['warehouse_id'],
-            //     $_SESSION['user']['id'],
-            //     $_POST['payment_stage'],
-            //     $_POST['payment_type'],
-            //     $_POST['amount'],
-            //     $_POST['transaction_id'],
-            //     $_POST['note'],
-            //     date('Y-m-d')
-            // );
-            $stmt->bind_param(
-                "isiisssdsss",
-                $orderId,
-                $orderNumber,
-                $customerId,
-                $warehouseId,
-                $userId,
-                $paymentStage,
-                $paymentType,
-                $amount,
-                $transactionId,
-                $note,
-                $paymentDate
-            );
-            $stmt->execute();
-        }
-
-        $this->clearRemoteCartLines($cartData['items'] ?? []);
-        unset($_SESSION['gift_voucher']);
-        unset($_SESSION['cart_error']);
-
-        unset($_SESSION['discount_coupon']);
-        unset($_SESSION['pos_customer_form']);
-        unset($_SESSION['pos_customer_id']);
-        unset($_SESSION['custom_discount']);
-        // echo '<pre>'; print_r($result); exit;
         echo json_encode([
             "success" => true,
-            "orderid" => $result['data']['orderid'],
+            "preview_only" => true,
+            "message" => "Order create API not executed. Returning payload preview only.",
+            "order_payload" => [
+                "endpoint" => "/order/create",
+                "query" => $orderCreateQuery,
+                "post" => $postData
+            ],
             "order_api_debug" => $orderApiDebug,
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
     }
 
     public function add_customer()
