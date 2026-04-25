@@ -1,4 +1,7 @@
 <div class="min-h-screen pos-register-page">
+  <script>
+    document.documentElement.classList.add('pos-page-hide-scrollbars');
+  </script>
   <style>
     .pos-register-page {
       font-size: 14px;
@@ -6,6 +9,25 @@
       color: #334155;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Hide all scrollbars on POS screen (scroll/touch still works) */
+    html.pos-page-hide-scrollbars {
+      overflow-x: hidden;
+    }
+    html.pos-page-hide-scrollbars,
+    html.pos-page-hide-scrollbars body,
+    .pos-register-page,
+    .pos-register-page * {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    html.pos-page-hide-scrollbars::-webkit-scrollbar,
+    html.pos-page-hide-scrollbars body::-webkit-scrollbar,
+    .pos-register-page *::-webkit-scrollbar {
+      width: 0 !important;
+      height: 0 !important;
+      background: transparent;
     }
 
     /* Consistent typography scale across POS */
