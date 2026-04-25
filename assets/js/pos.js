@@ -260,6 +260,7 @@ $(function () {
   let activeModalKey = null;
   /** When set from `stock_qty`, qty controls cannot exceed this (warehouse running stock). */
   let modalWarehouseMaxQty = null;
+  let modalPreselectedAddonEntries = [];
 
   function openModal() {
     $modal.removeClass('hidden');
@@ -275,6 +276,8 @@ $(function () {
     $('#pmSiblingSkus').empty();
     $('#pmSiblingSkusWrapper').addClass('hidden');
     $('#modal_stock_check_code').val('');
+    $('#modal_options').val('');
+    modalPreselectedAddonEntries = [];
     $('#pmQtySummary').empty().addClass('hidden');
     $('#pmModalPrice').addClass('hidden').text('');
   }
@@ -328,6 +331,31 @@ $(function () {
   function getModalQty() {
     const n = parseInt(String($pmQtyVal.text()).trim(), 10);
     return Number.isFinite(n) ? n : 1;
+  }
+
+  function normalizeAddonEntries(entries) {
+    if (!Array.isArray(entries)) return [];
+    const out = [];
+    const seen = new Set();
+    entries.forEach(function (v) {
+      const s = String(v || '').trim();
+      if (!s) return;
+      const k = s.toLowerCase();
+      if (seen.has(k)) return;
+      seen.add(k);
+      out.push(s);
+    });
+    return out;
+  }
+
+  function applyPreselectedAddonsToModal(entries) {
+    const wanted = normalizeAddonEntries(entries);
+    const wantedLower = new Set(wanted.map(function (x) { return x.toLowerCase(); }));
+    $('#productModal .addon-checkbox').each(function () {
+      const entry = String($(this).data('entry') || '').trim().toLowerCase();
+      $(this).prop('checked', entry && wantedLower.has(entry));
+    });
+    $('#modal_options').val(wanted.join('|'));
   }
 
   $pmQtyDec.on('click', function () {
@@ -781,23 +809,29 @@ data-code="${lookupCode}">
 
     let code = $(this).data('code');
     if (!code) return;
-    openProductModalByCode(code);
+    openProductModalByCode(code, []);
   });
   $(document).on('click', '.pos-cart-item', function (e) {
     if ($(e.target).closest('form,button,input,a,select,textarea,label').length) {
       return;
     }
     const code = String($(this).data('product-code') || '').trim();
+    const selectedEntriesRaw = String($(this).data('selected-entries') || '').trim();
+    const selectedEntries = selectedEntriesRaw
+      ? selectedEntriesRaw.split('|').map(function (x) { return String(x || '').trim(); }).filter(Boolean)
+      : [];
     if (!code) return;
-    openProductModalByCode(code);
+    openProductModalByCode(code, selectedEntries);
   });
-  function openProductModalByCode(code) {
+  function openProductModalByCode(code, preselectedAddonEntries = []) {
     if (!code) return;
+    modalPreselectedAddonEntries = normalizeAddonEntries(preselectedAddonEntries);
     openModal();
 
     //  CACHE HIT
     if (productApiCache[code]) {
       renderProductModal(productApiCache[code], code);
+      applyPreselectedAddonsToModal(modalPreselectedAddonEntries);
       return;
     }
 
@@ -817,6 +851,7 @@ data-code="${lookupCode}">
         productApiCache[code] = p;
         //  USE EXISTING MODAL FUNCTION
         renderProductModal(p, code);
+        applyPreselectedAddonsToModal(modalPreselectedAddonEntries);
       }
     });
   }
@@ -837,7 +872,7 @@ data-code="${lookupCode}">
       .then(function (data) {
         if (data && data.success && data.current_available === false && data.message) {
           alert(data.message);
-          openProductModalByCode(codeForPopup);
+          openProductModalByCode(codeForPopup, []);
         }
       })
       .catch(function () {

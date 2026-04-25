@@ -266,10 +266,20 @@
 
                 <?php
                 $cartItemCode = trim((string)($item['item_code'] ?? $item['itemcode'] ?? $item['code'] ?? $item['sku'] ?? ''));
+                $cartSelectedEntries = [];
+                if (!empty($item['selected_entries']) && is_array($item['selected_entries'])) {
+                  foreach ($item['selected_entries'] as $se) {
+                    $se = trim((string)$se);
+                    if ($se !== '') {
+                      $cartSelectedEntries[] = $se;
+                    }
+                  }
+                }
                 ?>
                 <div
                   class="flex gap-3 pos-cart-item cursor-pointer"
-                  data-product-code="<?= htmlspecialchars($cartItemCode) ?>">
+                  data-product-code="<?= htmlspecialchars($cartItemCode) ?>"
+                  data-selected-entries="<?= htmlspecialchars(implode('|', $cartSelectedEntries)) ?>">
 
                   <img
                     src="<?= htmlspecialchars($item['imageurl'] ?? 'https://dummyimage.com/80x80/e5e7eb/6b7280&text=No+Image') ?>"
