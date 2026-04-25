@@ -1,4 +1,53 @@
-<div class="min-h-screen">
+<div class="min-h-screen pos-register-page">
+  <style>
+    .pos-register-page {
+      font-size: 14px;
+      line-height: 1.45;
+      color: #334155;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Consistent typography scale across POS */
+    .pos-register-page .text-xs {
+      font-size: 0.8125rem !important; /* 13px */
+      line-height: 1.35 !important;
+    }
+    .pos-register-page .text-sm {
+      font-size: 0.875rem !important; /* 14px */
+      line-height: 1.45 !important;
+    }
+    .pos-register-page .text-base {
+      font-size: 0.95rem !important; /* ~15px */
+      line-height: 1.5 !important;
+    }
+    .pos-register-page [class*="text-[8px]"],
+    .pos-register-page [class*="text-[9px]"],
+    .pos-register-page [class*="text-[10px]"],
+    .pos-register-page [class*="text-[11px]"],
+    .pos-register-page [class*="text-[12px]"] {
+      font-size: 0.8125rem !important;
+      line-height: 1.35 !important;
+    }
+
+    /* Standardize controls */
+    .pos-register-page input,
+    .pos-register-page select,
+    .pos-register-page textarea,
+    .pos-register-page button {
+      font-size: 0.875rem;
+      line-height: 1.35;
+    }
+    .pos-register-page label {
+      font-size: 0.8125rem;
+      line-height: 1.35;
+    }
+    .pos-register-page h1,
+    .pos-register-page h2,
+    .pos-register-page h3 {
+      letter-spacing: 0.01em;
+    }
+  </style>
   <script>
     window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
     window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
