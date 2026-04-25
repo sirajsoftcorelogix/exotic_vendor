@@ -40,13 +40,16 @@ function backfill_fail(string $msg, int $code = 1): void
 
 function table_has_column(mysqli $conn, string $table, string $column): bool
 {
-    $sql = 'SHOW COLUMNS FROM `' . $conn->real_escape_string($table) . '` LIKE ?';
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param('s', $column);
-    $stmt->execute();
-    $res = $stmt->get_result();
+    $safeTable = str_replace('`', '``', $table);
+    $safeColumn = $conn->real_escape_string($column);
+    // NOTE: MySQL does not reliably support placeholders in SHOW ... LIKE.
+    $sql = "SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeColumn}'";
+    $res = $conn->query($sql);
+    if ($res === false) {
+        return false;
+    }
     $ok = (bool)$res->fetch_assoc();
-    $stmt->close();
+    $res->free();
     return $ok;
 }
 
