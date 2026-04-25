@@ -297,11 +297,17 @@ class POSRegisterController
         $searchValue = $_GET['search']['value'] ?? '';
 
         $category    = $_GET['category'] ?? '';
-        $productName = $_GET['product_name'] ?? '';
-        $productCode = $_GET['product_code'] ?? '';
+        $productName = trim((string)($_GET['product_name'] ?? ''));
+        $productCode = trim((string)($_GET['product_code'] ?? ''));
+        // Same text in both fields (current POS UI) would AND two LIKE blocks and drop title-only matches.
+        if ($productName !== '' && $productCode !== '' && $productName === $productCode) {
+            $productCode = '';
+        }
 
         $minPrice = $_GET['min_price'] ?? '';
         $maxPrice = $_GET['max_price'] ?? '';
+        // Match stock report default: all rows with latest movement for warehouse (in|out|low|all).
+        $stockFilter = strtolower(trim((string)($_GET['stock_filter'] ?? 'all')));
 
         // SORT
         $sortBy = $_GET['sort_by'] ?? '';
@@ -342,7 +348,8 @@ class POSRegisterController
             $category,
             $productCode,
             $minPrice,
-            $maxPrice
+            $maxPrice,
+            $stockFilter
         );
 
         $rows = $result['data'] ?? [];
@@ -1490,18 +1497,34 @@ class POSRegisterController
         //     'User-Agent: ExoticPOS-Web/1.0'
         // ];
         $headers = [
-            // 'Content-Type: application/x-www-form-urlencoded',
             'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
             'x-api-deviceid: POS-Store_1',
             'x-api-appplayerid: POS-Web-Terminal',
             'x-api-countrycode: IN',
-            'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
+            // Keep API-issued euid in session; do not use local user id here.
+            'x-api-euid:' . (string)($_SESSION['x_api_euid'] ?? ''),
             'User-Agent: ExoticPOS'
         ];
 
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
+        $capturedEuid = null;
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$capturedEuid) {
+            $len = strlen($headerLine);
+            $header = explode(':', $headerLine, 2);
+            if (count($header) < 2) {
+                return $len;
+            }
+            $name = strtolower(trim($header[0]));
+            if ($name === 'x-api-euid') {
+                $capturedEuid = trim($header[1]);
+            }
+            return $len;
+        });
+
         if ($method === 'POST' && $postData) {
+            $headers[] = 'Content-Type: application/x-www-form-urlencoded';
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
         }
@@ -1513,6 +1536,10 @@ class POSRegisterController
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         curl_close($ch);
+
+        if (!empty($capturedEuid)) {
+            $_SESSION['x_api_euid'] = $capturedEuid;
+        }
 
         $body = (string)$response;
         $decoded = json_decode($body, true);
@@ -1880,7 +1907,19 @@ class POSRegisterController
         // print_r($result);
         // exit;
         if (empty($result['data']['cartref'])) {
-            $_SESSION['cart_error'] = $result['data']['error'] ?? 'Cart add failed';
+            $apiMsg = trim((string)($result['data']['error'] ?? $result['data']['message'] ?? ''));
+            if ($apiMsg === '') {
+                $raw = trim((string)($result['raw'] ?? ''));
+                if ($raw !== '') {
+                    $apiMsg = function_exists('mb_substr')
+                        ? mb_substr($raw, 0, 220, 'UTF-8')
+                        : substr($raw, 0, 220);
+                }
+            }
+            $httpCode = (int)($result['code'] ?? 0);
+            $_SESSION['cart_error'] = 'Cart add failed'
+                . ($httpCode > 0 ? ' (HTTP ' . $httpCode . ')' : '')
+                . ($apiMsg !== '' ? ': ' . $apiMsg : '');
         }
 
         header("Location: ?page=pos_register");
