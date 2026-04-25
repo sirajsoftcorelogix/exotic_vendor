@@ -161,18 +161,18 @@
     <aside class="col-span-12 lg:col-span-3">
       <div class="px-4 py-3 border-b">
 
-        <label class="text-xs text-gray-500">Customer</label>
+        <label class="text-sm text-gray-500">Customer</label>
 
         <div class="flex gap-2 mt-1">
 
           <select id="customerSelect"
             name="customer_id"
-            class="w-full border rounded-lg px-3 py-2 text-sm"
+            class="w-full border rounded-lg px-3 py-2.5 text-base"
             aria-label="Search customer">
           </select>
 
           <button onclick="openCustomerModal()"
-            class="bg-orange-600 text-white px-3 rounded-lg text-sm hover:bg-orange-700">
+            class="bg-orange-600 text-white px-3 py-2 rounded-lg text-base hover:bg-orange-700">
             +
           </button>
 
@@ -182,32 +182,32 @@
       </div>
       <div class="sticky top-4 rounded-2xl bg-white border shadow-sm overflow-hidden">
         <div class="px-4 py-3 border-b">
-          <div id="selectedCustomerNameCart" class="text-sm font-semibold text-center text-slate-800">Walk-in Customer</div>
-          <div id="selectedCustomerPhoneCart" class="text-[11px] text-slate-500 text-center">-</div>
+          <div id="selectedCustomerNameCart" class="text-base font-semibold text-center text-slate-800">Walk-in Customer</div>
+          <div id="selectedCustomerPhoneCart" class="text-sm text-slate-500 text-center">-</div>
         </div>
 
         <?php if (isset($_SESSION['cart_success'])): ?>
-          <div class="text-green-600 text-xs mb-2 px-4">
+          <div class="text-green-600 text-sm mb-2 px-4">
             <?= $_SESSION['cart_success'] ?>
           </div>
           <?php unset($_SESSION['cart_success']); ?>
         <?php endif; ?>
 
         <?php if (!empty($_SESSION['cart_error'])): ?>
-          <div class="text-red-600 text-xs mb-2 px-4">
+          <div class="text-red-600 text-sm mb-2 px-4">
             <?= htmlspecialchars((string)$_SESSION['cart_error']) ?>
           </div>
           <?php unset($_SESSION['cart_error']); ?>
         <?php endif; ?>
 
-        <div class="px-4 py-3 space-y-4 text-[12px]">
+        <div class="px-4 py-3 space-y-4 text-sm">
 
           <!-- PRODUCTS -->
           <div class="space-y-3" id="cartItems">
 
             <?php if (empty($cart)): ?>
 
-              <div class="py-8 text-center text-gray-400 text-xs">
+              <div class="py-8 text-center text-gray-400 text-sm">
                 Your cart is empty
               </div>
 
@@ -224,18 +224,18 @@
 
                   <img
                     src="<?= htmlspecialchars($item['imageurl'] ?? 'https://dummyimage.com/80x80/e5e7eb/6b7280&text=No+Image') ?>"
-                    class="h-12 w-12 rounded-lg bg-slate-50 object-contain">
+                    class="h-14 w-14 shrink-0 rounded-lg bg-slate-50 object-contain">
 
                   <div class="flex-1 min-w-0">
 
-                    <div class="text-[9px] leading-snug line-clamp-2">
+                    <div class="text-xs leading-snug line-clamp-2 text-slate-800 sm:text-sm">
                       <?= htmlspecialchars($item['name']) ?>
                     </div>
 
                     <?php if (!empty($item['addons_display']) && is_array($item['addons_display'])): ?>
-                      <div class="mt-1 flex flex-wrap gap-1">
+                      <div class="mt-1.5 flex flex-wrap gap-1.5">
                         <?php foreach ($item['addons_display'] as $adl): ?>
-                          <span class="inline-block max-w-full truncate rounded bg-slate-100 px-1.5 py-0.5 text-[8px] leading-tight text-slate-700"
+                          <span class="inline-block max-w-full truncate rounded bg-slate-100 px-2 py-0.5 text-[11px] leading-snug text-slate-700"
                             title="<?= htmlspecialchars((string)($adl['title'] ?? '')) ?>">
                             <?= htmlspecialchars((string)($adl['title'] ?? '')) ?>
                             <?php if (!empty($adl['value']) && (float)$adl['value'] > 0): ?>
@@ -248,8 +248,8 @@
                       </div>
                     <?php endif; ?>
 
-                    <div class="mt-1 flex items-center justify-between">
-                      <span class="text-orange-600 font-semibold">
+                    <div class="mt-1.5 flex items-center justify-between">
+                      <span class="text-sm font-semibold text-orange-600 sm:text-base">
                         <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['price'], 2) ?>
                       </span>
                     </div>
@@ -265,10 +265,10 @@
                           <button type="submit"
                             name="newqty"
                             value="<?= $item['quantity'] - 1 ?>"
-                            class="h-6 w-6 text-slate-600">−</button>
+                            class="h-7 w-7 text-sm text-slate-600">−</button>
                         </form>
 
-                        <span class="h-6 w-7 flex items-center justify-center font-semibold">
+                        <span class="h-7 min-w-[1.75rem] flex items-center justify-center text-sm font-semibold tabular-nums">
                           <?= $item['quantity'] ?>
                         </span>
 
@@ -278,7 +278,7 @@
                           <button type="submit"
                             name="newqty"
                             value="<?= $item['quantity'] + 1 ?>"
-                            class="h-6 w-6 text-slate-600">+</button>
+                            class="h-7 w-7 text-sm text-slate-600">+</button>
                         </form>
 
                       </div>
@@ -287,7 +287,7 @@
                       <form method="POST" action="?page=pos_register&action=remove-item">
                         <!-- <input type="hidden" name="action" value="remove"> -->
                         <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
-                        <button type="submit" class="text-[10px] text-red-600 hover:underline">
+                        <button type="submit" class="text-xs text-red-600 hover:underline sm:text-sm">
                           Remove
                         </button>
                       </form>
@@ -326,11 +326,11 @@
                     <div>
 
 
-                      <div class="text-[9px] text-green-900 leading-tight">
+                      <div class="text-xs text-green-900 leading-snug sm:text-sm">
                         <?= htmlspecialchars($item['shipping_title'] ?? 'Express Shipping') ?>
                       </div>
 
-                      <div class="text-[11px] font-semibold text-green-900">
+                      <div class="text-sm font-semibold text-green-900 sm:text-base">
                         <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['shipping_per_unit'], 2) ?>
                       </div>
 
@@ -383,12 +383,12 @@
 
               <input
                 name="coupon"
-                class="w-2/3 rounded-lg border px-2 py-2 text-xs"
+                class="w-2/3 rounded-lg border px-2 py-2.5 text-sm"
                 placeholder="Coupon/Discount Code">
 
               <button
                 type="submit"
-                class="w-1/3 rounded-lg bg-black px-4 py-2 text-xs text-white">
+                class="w-1/3 rounded-lg bg-black px-4 py-2.5 text-sm text-white">
                 Apply
               </button>
 
@@ -399,7 +399,7 @@
             <!-- COUPON APPLIED -->
             <div class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
 
-              <span class="text-[11px] text-green-700 font-semibold">
+              <span class="text-sm text-green-700 font-semibold">
                 Coupon Applied: <?= htmlspecialchars(explode('|', $coupon)[0]) ?>
               </span>
 
@@ -408,7 +408,7 @@
 
                 <button
                   type="submit"
-                  class="text-[11px] text-red-600 font-semibold hover:underline">
+                  class="text-sm text-red-600 font-semibold hover:underline">
                   Remove
                 </button>
 
@@ -420,7 +420,7 @@
           <?php if (!empty($cartData['custom_discount']) && $cartData['custom_discount'] > 0): ?>
             <div class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
 
-              <span class="text-[11px] text-green-700 font-semibold">
+              <span class="text-sm text-green-700 font-semibold">
                 Custom Discount
                 (- <?= currencySymbol($cartData['currency']) ?>
                 <?= number_format($cartData['custom_discount'], 2) ?>)
@@ -429,17 +429,17 @@
               <form method="POST" action="?page=pos_register&action=remove-custom-discount">
                 <button
                   type="submit"
-                  class="text-[11px] text-green-600 font-semibold hover:underline">
+                  class="text-sm text-green-600 font-semibold hover:underline">
                   Remove
                 </button>
               </form>
 
             </div>
           <?php endif; ?>
-          <div id="couponMessage" class="text-[11px]"></div>
+          <div id="couponMessage" class="text-sm"></div>
           <?php if (isset($_SESSION['coupon_message'])): ?>
 
-            <div class="text-[11px] mt-1
+            <div class="text-sm mt-1
         <?= $_SESSION['coupon_status'] == 'success'
               ? 'text-green-600'
               : 'text-red-600' ?>">
@@ -498,53 +498,53 @@
 
           <?php endif; ?>
           <!-- TOTALS -->
-          <div class="pt-2 border-t space-y-1.5">
+          <div class="pt-2 border-t space-y-2 text-sm">
             <?php if (!empty($cartData['discount'])): ?>
               <div class="flex justify-between text-green-600">
                 <span>Coupon Discount</span>
-                <span>- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['discount'], 2) ?></span>
+                <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['discount'], 2) ?></span>
               </div>
             <?php endif; ?>
             <div class="flex justify-between text-slate-600">
               <span>Sub Total</span>
-              <span><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['subtotal'] ?? 0, 2) ?></span>
+              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['subtotal'] ?? 0, 2) ?></span>
             </div>
 
             <div class="flex justify-between text-slate-600">
               <span>GST</span>
-              <span><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['gst'] ?? 0, 2) ?></span>
+              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['gst'] ?? 0, 2) ?></span>
             </div>
 
-            <div class="flex justify-between font-semibold text-slate-900">
+            <div class="flex justify-between text-base font-semibold text-slate-900">
               <span>Total</span>
-              <span><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['grand_total'] ?? 0, 2) ?></span>
+              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['grand_total'] ?? 0, 2) ?></span>
             </div>
 
           </div>
 
           <!-- ACTION -->
           <button id="applyCustomDiscountBtn"
-            class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold">
+            class="w-full rounded-xl bg-orange-600 py-3 text-base text-white font-semibold">
             Apply Cash Discount
           </button>
 
           <button
             onclick="openPaymentModal()"
-            class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold hover:bg-orange-700">
+            class="w-full rounded-xl bg-orange-600 py-3 text-base text-white font-semibold hover:bg-orange-700">
             Proceed to Payment
           </button>
 
           <button
             type="button"
             id="btnOpenCartApiModal"
-            class="mt-2 w-full text-center text-[11px] text-slate-500 hover:text-slate-800 underline decoration-slate-400">
+            class="mt-2 w-full text-center text-sm text-slate-500 hover:text-slate-800 underline decoration-slate-400">
             View Cart API request &amp; response
           </button>
 
           <button
             type="button"
             id="btnOpenOrderCreateApiModal"
-            class="mt-1 w-full text-center text-[11px] text-slate-500 hover:text-slate-800 underline decoration-slate-400">
+            class="mt-1 w-full text-center text-sm text-slate-500 hover:text-slate-800 underline decoration-slate-400">
             View order create API request &amp; response
           </button>
 
