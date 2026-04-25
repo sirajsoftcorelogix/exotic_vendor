@@ -677,6 +677,98 @@ class POSRegisterController
         return $addonsSumPerUnit;
     }
 
+    /**
+     * Human-readable addon lines for POS cart UI (non-express; express has its own row).
+     *
+     * @param array<int, array<string, mixed>> $addonsFromApi
+     * @param array<int, string> $selectedEntries
+     * @param array<int, array<string, mixed>> $catalog
+     * @return array<int, array{title: string, value: float, cart_entry: string}>
+     */
+    private function buildPosCartAddonDisplayLines(
+        array $addonsFromApi,
+        array $selectedEntries,
+        array $catalog
+    ): array {
+        $lines = [];
+        $seen = [];
+
+        $resolveTitle = static function (string $cartEntry, string $fallbackName) use ($catalog): string {
+            $ce = trim($cartEntry);
+            $name = trim($fallbackName);
+            if ($name !== '') {
+                return $name;
+            }
+            if ($ce === '') {
+                return '';
+            }
+            foreach ($catalog as $opt) {
+                if (strcasecmp(trim((string)($opt['cart_entry'] ?? '')), $ce) === 0) {
+                    return trim((string)($opt['title'] ?? '')) ?: $ce;
+                }
+            }
+
+            return $ce;
+        };
+
+        foreach ($addonsFromApi as $ad) {
+            if (!is_array($ad)) {
+                continue;
+            }
+            $ce = trim((string)($ad['cart_entry'] ?? ''));
+            $title = $resolveTitle($ce, (string)($ad['name'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            if (stripos($title, 'express') !== false) {
+                continue;
+            }
+            if ($ce !== '') {
+                $seen[strtolower($ce)] = true;
+            }
+            $lines[] = [
+                'title' => $title,
+                'value' => (float)($ad['value'] ?? 0),
+                'cart_entry' => $ce,
+            ];
+        }
+
+        foreach ($selectedEntries as $entry) {
+            $entry = trim((string)$entry);
+            if ($entry === '') {
+                continue;
+            }
+            if (isset($seen[strtolower($entry)])) {
+                continue;
+            }
+            $seen[strtolower($entry)] = true;
+
+            $title = $resolveTitle($entry, '');
+            if ($title === '') {
+                $title = $entry;
+            }
+            if (stripos($title, 'express') !== false) {
+                continue;
+            }
+
+            $price = 0.0;
+            foreach ($catalog as $opt) {
+                if (strcasecmp(trim((string)($opt['cart_entry'] ?? '')), $entry) === 0) {
+                    $price = (float)($opt['price'] ?? 0);
+                    break;
+                }
+            }
+
+            $lines[] = [
+                'title' => $title,
+                'value' => $price,
+                'cart_entry' => $entry,
+            ];
+        }
+
+        return $lines;
+    }
+
     /** First usable image path/URL from a /product/code JSON payload. */
     private function pickRawImageFromProductApiArray(array $data): string
     {
@@ -1587,8 +1679,11 @@ class POSRegisterController
 
                 $optStr = trim((string)($item['options'] ?? ''));
                 if ($optStr !== '') {
-                    foreach (explode('|', $optStr) as $chunk) {
-                        $chunk = trim($chunk);
+                    $optParts = strpos($optStr, '|') !== false
+                        ? explode('|', $optStr)
+                        : explode(',', $optStr);
+                    foreach ($optParts as $chunk) {
+                        $chunk = trim((string)$chunk);
                         if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
                             $selectedEntries[] = $chunk;
                         }
@@ -1607,6 +1702,8 @@ class POSRegisterController
                     $unitBase = $vpIndia;
                 }
 
+                $addons_display = $this->buildPosCartAddonDisplayLines($addons, $selectedEntries, $all_addons);
+
                 $items[] = [
                     'item_code' => $item['code'],
                     'cartref' => $item['cartref'],
@@ -1621,7 +1718,8 @@ class POSRegisterController
                     'express_selected' => $expressSelected,
                     'addons' => $addons,
                     'all_addons' => $all_addons, //  NOW ALWAYS ARRAY
-                    'selected_entries' => $selectedEntries
+                    'selected_entries' => $selectedEntries,
+                    'addons_display' => $addons_display,
                 ];
 
                 // Subtotal = Σ ((unit item price + sum of addon prices per unit) × quantity)
@@ -1684,15 +1782,12 @@ class POSRegisterController
         $code      = $_POST['code'] ?? '';
         $qty       = $_POST['qty'] ?? 1;
         $variation = trim($_POST['variation'] ?? '');
-        $options   = $_POST['options'] ?? '';
+        $rawOptions = $_POST['options'] ?? '';
         $buyNow    = false;
-        $optionsArray = $_POST['options'] ?? [];
+        $optionsArray = is_array($rawOptions) ? $rawOptions : [];
+        $optionsString = is_string($rawOptions) ? trim($rawOptions) : '';
         $toggleOption = $_POST['toggle_option'] ?? '';
         $checked      = $_POST['checked'] ?? 0;
-        // ensure array
-        if (!is_array($optionsArray)) {
-            $optionsArray = [];
-        }
 
         // ✅ ADD / REMOVE LOGIC
         if (!empty($toggleOption)) {
@@ -1710,10 +1805,6 @@ class POSRegisterController
             }
         }
 
-        // ✅ FINAL OPTIONS STRING
-        if (!empty($optionsArray)) {
-            $postArray['options'] = implode(',', $optionsArray);
-        }
         // echo '<pre>';
         // print_r($options);
         // exit;
@@ -1765,9 +1856,21 @@ class POSRegisterController
             $postArray['variation'] = $variation;
         }
 
-
-        if (!empty($options)) {
-            $postArray['options'] = trim($options);
+        if ($optionsString !== '') {
+            $postArray['options'] = $optionsString;
+        } elseif (!empty($optionsArray)) {
+            $normalized = [];
+            foreach ($optionsArray as $o) {
+                $o = trim((string)$o);
+                if ($o !== '') {
+                    $normalized[] = $o;
+                }
+            }
+            $normalized = array_values(array_unique($normalized));
+            if ($normalized !== []) {
+                // Match toggle_addon / cart retrieve (pipe-separated cart_entry tokens)
+                $postArray['options'] = implode('|', $normalized);
+            }
         }
 
         $postData = http_build_query($postArray);

@@ -232,6 +232,22 @@
                       <?= htmlspecialchars($item['name']) ?>
                     </div>
 
+                    <?php if (!empty($item['addons_display']) && is_array($item['addons_display'])): ?>
+                      <div class="mt-1 flex flex-wrap gap-1">
+                        <?php foreach ($item['addons_display'] as $adl): ?>
+                          <span class="inline-block max-w-full truncate rounded bg-slate-100 px-1.5 py-0.5 text-[8px] leading-tight text-slate-700"
+                            title="<?= htmlspecialchars((string)($adl['title'] ?? '')) ?>">
+                            <?= htmlspecialchars((string)($adl['title'] ?? '')) ?>
+                            <?php if (!empty($adl['value']) && (float)$adl['value'] > 0): ?>
+                              <span class="text-orange-600 font-semibold tabular-nums">
+                                +<?= currencySymbol($cartData['currency']) ?><?= number_format((float)$adl['value'], 2) ?>
+                              </span>
+                            <?php endif; ?>
+                          </span>
+                        <?php endforeach; ?>
+                      </div>
+                    <?php endif; ?>
+
                     <div class="mt-1 flex items-center justify-between">
                       <span class="text-orange-600 font-semibold">
                         <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['price'], 2) ?>
