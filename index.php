@@ -1017,6 +1017,9 @@ switch ($page) {
             case 'create-order':
                 $controller->create_order();
                 break;
+            case 'order-confirmation':
+                $controller->order_confirmation();
+                break;
 
             case 'add-customer':
                 $controller->add_customer();

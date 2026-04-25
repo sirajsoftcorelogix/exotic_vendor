@@ -2270,10 +2270,42 @@ class POSRegisterController
             "success" => true,
             "message" => $response['message'] ?? "Order created successfully",
             "order_id" => $orderId,
+            "payment_summary" => [
+                "payment_type" => (string)$paymentType,
+                "payment_stage" => (string)$paymentStage,
+                "amount" => (string)($_POST['amount'] ?? ''),
+                "transaction_id" => (string)$transactionId,
+                "store_payment_details" => (string)$store_payment_details,
+            ],
             "api_response" => $response,
             "order_api_debug" => $orderApiDebug,
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
+    }
+
+    public function order_confirmation()
+    {
+        is_login();
+        $orderId = trim((string)($_GET['order_id'] ?? ''));
+        $paymentType = trim((string)($_GET['payment_type'] ?? 'offline'));
+        $paymentStage = trim((string)($_GET['payment_stage'] ?? 'final'));
+        $amount = trim((string)($_GET['amount'] ?? ''));
+        $transactionId = trim((string)($_GET['transaction_id'] ?? ''));
+        $importStatus = trim((string)($_GET['import_status'] ?? 'unknown'));
+
+        $invoicePreviewUrl = 'index.php?page=invoice&action=preview&id=' . rawurlencode($orderId);
+        $paymentHistoryUrl = 'index.php?page=orders&action=list';
+
+        renderTemplate('views/pos_register/order_confirmation.php', [
+            'order_id' => $orderId,
+            'payment_type' => $paymentType,
+            'payment_stage' => $paymentStage,
+            'amount' => $amount,
+            'transaction_id' => $transactionId,
+            'import_status' => $importStatus,
+            'invoice_preview_url' => $invoicePreviewUrl,
+            'payment_history_url' => $paymentHistoryUrl,
+        ]);
     }
 
     public function add_customer()
