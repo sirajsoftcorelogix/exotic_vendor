@@ -316,7 +316,7 @@
                     <?php if (!empty($item['addons_display']) && is_array($item['addons_display'])): ?>
                       <div class="mt-1.5 flex flex-wrap gap-1.5">
                         <?php foreach ($item['addons_display'] as $adl): ?>
-                          <span class="inline-block max-w-full truncate rounded bg-slate-100 px-2 py-0.5 text-[11px] leading-snug text-slate-700"
+                          <span class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] leading-snug text-slate-700"
                             title="<?= htmlspecialchars((string)($adl['title'] ?? '')) ?>">
                             <?= htmlspecialchars((string)($adl['title'] ?? '')) ?>
                             <?php if (!empty($adl['value']) && (float)$adl['value'] > 0): ?>
