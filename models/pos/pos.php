@@ -88,8 +88,15 @@ class pos
             $types .= "d";
         }
 
-        // Show only in-stock products in current warehouse.
-        $where .= " AND sm.running_stock > 0 ";
+        // Stock scope: align with stock report (getStockReport) — default is "all" rows with a movement row.
+        $stockFilter = strtolower(trim((string)$stockFilter));
+        if ($stockFilter === 'out') {
+            $where .= ' AND sm.running_stock = 0 ';
+        } elseif ($stockFilter === 'low') {
+            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
+        } elseif ($stockFilter === 'in') {
+            $where .= ' AND sm.running_stock > 0 ';
+        }
 
         /* ================= ORDER ================= */
         $allowedColumns = [
@@ -163,7 +170,7 @@ class pos
         (IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) * (1 + IFNULL(p.gst, 0) / 100)) AS price
     $stockFrom
     $where
-    ORDER BY $orderExpr $orderDir
+    ORDER BY $orderExpr $orderDir, p.id ASC
     LIMIT ?, ?
     ";
 

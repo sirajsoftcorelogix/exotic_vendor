@@ -712,10 +712,12 @@ data-code="${lookupCode}">
     const sortBy = $('#sortBy').val();
     const minPrice = $('#minPrice').val();
     const maxPrice = $('#maxPrice').val();
-    const stockFilter = $('#stockFilter').val();
-    // Search input matches by SKU and/or product name
-    const productCode = $('#searchName').val();
-    const productName = $('#searchName').val();
+    const $stockFilterEl = $('#stockFilter');
+    const stockFilter = $stockFilterEl.length ? String($stockFilterEl.val() || 'all') : 'all';
+    // One search box: same semantics as stock report (title OR item_code OR sku).
+    const searchVal = String($('#searchName').val() || '').trim();
+    const productName = searchVal;
+    const productCode = '';
     const requestedPage = page;
 
     $.ajax({
