@@ -308,12 +308,12 @@ class POSRegisterController
 
         switch ($sortBy) {
             case 'price_low_high':
-                $orderColumn = 'itemprice';
+                $orderColumn = 'price_india';
                 $orderDir = 'asc';
                 break;
 
             case 'price_high_low':
-                $orderColumn = 'itemprice';
+                $orderColumn = 'price_india';
                 $orderDir = 'desc';
                 break;
 
