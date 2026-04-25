@@ -1624,11 +1624,19 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
         }
 
         showToast("✓ Order created on API: " + orderId, "blue");
-        importOrder(orderId, function() {
-          window.open("index.php?page=invoice&action=preview&id=" + encodeURIComponent(orderId), "_blank");
-          setTimeout(function() {
-            window.location.href = "index.php?page=pos_register&action=list";
-          }, 400);
+        importOrder(orderId, function(importOk) {
+          var paymentSummary = data.payment_summary || {};
+          var qs = new URLSearchParams({
+            page: "pos_register",
+            action: "order-confirmation",
+            order_id: String(orderId || ""),
+            payment_type: String(paymentSummary.payment_type || paymentType || ""),
+            payment_stage: String(paymentSummary.payment_stage || paymentStage || ""),
+            amount: String(paymentSummary.amount || paymentAmount || ""),
+            transaction_id: String(paymentSummary.transaction_id || transactionId || ""),
+            import_status: importOk ? "success" : "failed"
+          });
+          window.location.href = "index.php?" + qs.toString();
         });
       })
       .catch(function (err) {
@@ -1654,12 +1662,13 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           showToast("✓ Order imported & Invoice created", "blue");
 
           setTimeout(() => {
-            if (callback) callback();
+            if (callback) callback(true, text);
           }, 800);
 
         } else {
 
           showToast("Import failed", "red");
+          if (callback) callback(false, text);
 
         }
 
@@ -1667,6 +1676,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       .catch(err => {
         console.error(err);
         showToast("✗ Import request failed", "red");
+        if (callback) callback(false, '');
       });
   }
 
