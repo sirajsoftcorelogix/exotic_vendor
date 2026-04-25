@@ -11,7 +11,7 @@ $(function () {
   let productsByKey = new Map();
 
   const $cards = $('#productsCards');
-  const $scrollWrapper = $cards.parent();
+  const $listHost = $('#productsListContainer');
 
   // ────────────────────────────────────────────────
   // HELPERS (needed for products & modal)
@@ -39,7 +39,7 @@ $(function () {
   function showLoader(show) {
     if (show) {
       if (!$('#productsLoader').length) {
-        $scrollWrapper.append(
+        $listHost.append(
           '<div id="productsLoader" class="text-center text-xs text-gray-500 py-4">Loading...</div>'
         );
       }
@@ -761,7 +761,6 @@ data-code="${lookupCode}">
     currentPage = 1;
     hasMore = true;
     fetchProducts(1, false);
-    $scrollWrapper.scrollTop(0);
   }
   $('#applyFilterBtn').on('click', function () {
     resetAndLoad();
@@ -1108,12 +1107,15 @@ data-code="${lookupCode}">
     fetchSuggest($searchName.val());
   });
 
-  $scrollWrapper.on('scroll', function () {
-    const scrollTop = $(this).scrollTop();
-    const scrollHeight = this.scrollHeight;
-    const containerHeight = $(this).innerHeight();
+  $(window).on('scroll', function () {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const documentHeight = Math.max(
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight
+    );
 
-    if (scrollTop + containerHeight >= scrollHeight - 150) {
+    if (scrollTop + viewportHeight >= documentHeight - 220) {
       if (!isLoading && hasMore) {
         fetchProducts(currentPage + 1, true);
       }
