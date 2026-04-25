@@ -190,7 +190,7 @@
 
         </div>
         <!-- Product Card -->
-        <div class="mt-3 h-[70vh] overflow-y-auto no-scrollbar">
+        <div id="productsListContainer" class="mt-3">
           <div
             class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
             id="productsCards">
