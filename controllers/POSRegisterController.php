@@ -1906,7 +1906,21 @@ class POSRegisterController
         // echo '<pre>';
         // print_r($result);
         // exit;
-        if (empty($result['data']['cartref'])) {
+        $apiData = is_array($result['data'] ?? null) ? $result['data'] : [];
+        $cartAddOk = !empty($apiData['cartref']);
+        if (!$cartAddOk && !empty($apiData['cartitems']) && is_array($apiData['cartitems'])) {
+            foreach ($apiData['cartitems'] as $ci) {
+                if (!is_array($ci)) {
+                    continue;
+                }
+                if (!empty($ci['cartref'])) {
+                    $cartAddOk = true;
+                    break;
+                }
+            }
+        }
+
+        if (!$cartAddOk) {
             $apiMsg = trim((string)($result['data']['error'] ?? $result['data']['message'] ?? ''));
             if ($apiMsg === '') {
                 $raw = trim((string)($result['raw'] ?? ''));
