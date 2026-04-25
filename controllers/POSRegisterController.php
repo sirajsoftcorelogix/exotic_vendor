@@ -2275,7 +2275,28 @@ class POSRegisterController
         $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
         $orderCreateQuery = ['discountcoupondetails' => $coupon];
 
-        $apiResult = $this->exotic_api_call('/order/create', 'POST', $orderCreateQuery, $postData);
+        // Preview mode: generate payload/debug only; do NOT execute external /order/create API.
+        $apiResult = [
+            'data' => [
+                'success' => true,
+                'preview_only' => true,
+                'request' => [
+                    'endpoint' => '/order/create',
+                    'query' => $orderCreateQuery,
+                    'post' => $postData,
+                ],
+            ],
+            'code' => 200,
+            'raw' => json_encode([
+                'success' => true,
+                'preview_only' => true,
+                'request' => [
+                    'endpoint' => '/order/create',
+                    'query' => $orderCreateQuery,
+                    'post' => $postData,
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+        ];
         $orderApiDebug = $this->buildOrderCreateApiDebug(
             $orderCreateQuery,
             $postData,
@@ -2287,51 +2308,20 @@ class POSRegisterController
                 'transaction_id' => $transactionId,
                 'customer_id' => (int)$customerId,
                 'note' => $note,
+                'preview_only' => true,
             ]
         );
         $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
 
-        $response = $apiResult['data'] ?? [];
-        $httpCode = (int)($apiResult['code'] ?? 0);
-
-        if ($httpCode >= 400 || empty($response) || !empty($response['error'])) {
-            echo json_encode([
-                "success" => false,
-                "message" => $response['error'] ?? $response['message'] ?? "Order create API failed",
-                "order_api_debug" => $orderApiDebug,
-                "api_response" => $response,
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
-
-        $orderId = '';
-        foreach (['orderid', 'order_id', 'order_no', 'id'] as $key) {
-            if (!empty($response[$key])) {
-                $orderId = (string)$response[$key];
-                break;
-            }
-        }
-        if ($orderId === '' && !empty($response['order']) && is_array($response['order'])) {
-            foreach (['orderid', 'order_id', 'order_no', 'id'] as $key) {
-                if (!empty($response['order'][$key])) {
-                    $orderId = (string)$response['order'][$key];
-                    break;
-                }
-            }
-        }
-
         echo json_encode([
             "success" => true,
-            "message" => $response['message'] ?? "Order created successfully",
-            "order_id" => $orderId,
-            "payment_summary" => [
-                "payment_type" => (string)$paymentType,
-                "payment_stage" => (string)$paymentStage,
-                "amount" => (string)($_POST['amount'] ?? ''),
-                "transaction_id" => (string)$transactionId,
-                "store_payment_details" => (string)$store_payment_details,
+            "preview_only" => true,
+            "message" => "Order create API not executed. Returning payload preview only.",
+            "order_payload" => [
+                "endpoint" => "/order/create",
+                "query" => $orderCreateQuery,
+                "post" => $postData
             ],
-            "api_response" => $response,
             "order_api_debug" => $orderApiDebug,
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;

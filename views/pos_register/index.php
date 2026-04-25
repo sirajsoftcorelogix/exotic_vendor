@@ -1628,42 +1628,14 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
         }
 
         if (!data.success) {
-          showToast(data.message || "Order creation failed.", "red");
+          showToast(data.message || "Could not generate JSON preview.", "red");
           return;
         }
-
-        var orderId = data.order_id || "";
-        if (!orderId && data.api_response) {
-          orderId =
-            data.api_response.orderid ||
-            data.api_response.order_id ||
-            data.api_response.order_no ||
-            "";
-        }
-        if (!orderId) {
-          showToast("Order created but order ID was missing in response.", "red");
-          return;
-        }
-
-        showToast("✓ Order created on API: " + orderId, "blue");
-        importOrder(orderId, function(importOk) {
-          var paymentSummary = data.payment_summary || {};
-          var qs = new URLSearchParams({
-            page: "pos_register",
-            action: "order-confirmation",
-            order_id: String(orderId || ""),
-            payment_type: String(paymentSummary.payment_type || paymentType || ""),
-            payment_stage: String(paymentSummary.payment_stage || paymentStage || ""),
-            amount: String(paymentSummary.amount || paymentAmount || ""),
-            transaction_id: String(paymentSummary.transaction_id || transactionId || ""),
-            import_status: importOk ? "success" : "failed"
-          });
-          window.location.href = "index.php?" + qs.toString();
-        });
+        showToast("Order JSON preview opened (server-built payload). API not fired.", "blue");
       })
       .catch(function (err) {
         console.error(err);
-        showToast(err.message || "Order creation request failed.", "red");
+        showToast(err.message || "Could not generate JSON preview.", "red");
       });
 
   }
