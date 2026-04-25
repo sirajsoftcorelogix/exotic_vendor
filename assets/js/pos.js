@@ -344,6 +344,15 @@ $(function () {
   });
 
   $('#productModal').find('form[action*="cart-add"]').on('submit', function (e) {
+    const selectedEntries = [];
+    $('#productModal .addon-checkbox:checked').each(function () {
+      const entry = $(this).data('entry');
+      if (entry) {
+        selectedEntries.push(String(entry));
+      }
+    });
+    $('#modal_options').val(selectedEntries.join('|'));
+
     const max = modalWarehouseMaxQty;
     const q = parseInt(String($('#modal_qty').val()), 10);
     const qtyNum = Number.isFinite(q) ? q : 0;
