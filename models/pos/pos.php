@@ -100,7 +100,8 @@ class pos
             'color',
             'image',
             'stock_qty',
-            'price'
+            'price',
+            'price_india'
         ];
 
         if (!in_array($orderColumn, $allowedColumns, true)) {
@@ -114,6 +115,9 @@ class pos
             $orderExpr = 'sm.running_stock';
         } elseif ($orderColumn === 'price') {
             $orderExpr = $sellPriceExpr;
+        } elseif ($orderColumn === 'price_india') {
+            // POS sorting requirement: use India base price (not GST-inclusive display price)
+            $orderExpr = 'IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice)';
         }
 
         $stockFrom = "
