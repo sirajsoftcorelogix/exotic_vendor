@@ -148,6 +148,94 @@ class POSRegisterController
         exit;
     }
 
+    /**
+     * Fetch latest billing/shipping info used for POS order create confirmation popup.
+     */
+    public function customer_order_info()
+    {
+        is_login();
+        global $conn;
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+        $billing = [];
+        $shipping = [];
+
+        if ($customerId > 0) {
+            $stmt = $conn->prepare("SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param("i", $customerId);
+                $stmt->execute();
+                $info = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($info) {
+                    $billing = [
+                        "first_name" => trim((string)($info['first_name'] ?? '')),
+                        "last_name" => trim((string)($info['last_name'] ?? '')),
+                        "email" => trim((string)($info['email'] ?? '')),
+                        "phone" => trim((string)($info['mobile'] ?? '')),
+                        "address1" => trim((string)($info['address_line1'] ?? '')),
+                        "address2" => trim((string)($info['address_line2'] ?? '')),
+                        "city" => trim((string)($info['city'] ?? '')),
+                        "state" => trim((string)($info['state'] ?? '')),
+                        "zip" => trim((string)($info['zipcode'] ?? '')),
+                        "country" => trim((string)($info['country'] ?? 'IN')),
+                        "gstin" => trim((string)($info['gstin'] ?? '')),
+                    ];
+                    $shipping = [
+                        "sname" => trim((string)(($info['shipping_first_name'] ?? '') . ' ' . ($info['shipping_last_name'] ?? ''))),
+                        "saddress1" => trim((string)($info['shipping_address_line1'] ?? '')),
+                        "saddress2" => trim((string)($info['shipping_address_line2'] ?? '')),
+                        "scity" => trim((string)($info['shipping_city'] ?? '')),
+                        "sstate" => trim((string)($info['shipping_state'] ?? '')),
+                        "szip" => trim((string)($info['shipping_zipcode'] ?? '')),
+                        "scountry" => trim((string)($info['shipping_country'] ?? 'IN')),
+                        "sphone" => trim((string)($info['shipping_mobile'] ?? '')),
+                    ];
+                }
+            }
+        }
+
+        if ((empty($billing) || empty($shipping)) && !empty($_SESSION['pos_customer_form'])) {
+            $form = $_SESSION['pos_customer_form'];
+            if (empty($billing)) {
+                $billing = [
+                    "first_name" => trim((string)($form['first_name'] ?? '')),
+                    "last_name" => trim((string)($form['last_name'] ?? '')),
+                    "email" => trim((string)($form['cus_email'] ?? '')),
+                    "phone" => trim((string)($form['mobile'] ?? '')),
+                    "address1" => trim((string)($form['address_line1'] ?? '')),
+                    "address2" => trim((string)($form['address_line2'] ?? '')),
+                    "city" => trim((string)($form['city'] ?? '')),
+                    "state" => trim((string)($form['state'] ?? '')),
+                    "zip" => trim((string)($form['zipcode'] ?? '')),
+                    "country" => "IN",
+                    "gstin" => trim((string)($form['gstin'] ?? '')),
+                ];
+            }
+            if (empty($shipping)) {
+                $shipping = [
+                    "sname" => trim((string)(($form['shipping_first_name'] ?? '') . ' ' . ($form['shipping_last_name'] ?? ''))),
+                    "saddress1" => trim((string)($form['shipping_address_line1'] ?? '')),
+                    "saddress2" => trim((string)($form['shipping_address_line2'] ?? '')),
+                    "scity" => trim((string)($form['shipping_city'] ?? '')),
+                    "sstate" => trim((string)($form['shipping_state'] ?? '')),
+                    "szip" => trim((string)($form['shipping_zipcode'] ?? '')),
+                    "scountry" => "IN",
+                    "sphone" => trim((string)($form['shipping_mobile'] ?? '')),
+                ];
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'billing' => $billing,
+            'shipping' => $shipping,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     public function stockReport()
     {
         is_login();
@@ -2222,6 +2310,33 @@ class POSRegisterController
                 "sphone" => trim($form['shipping_mobile'] ?? '')
             ];
         }
+
+        // Step 3: explicit confirmation popup values from POS UI override defaults.
+        if ((int)($_POST['confirm_address_submit'] ?? 0) === 1) {
+            $billing = [
+                "first_name" => trim((string)($_POST['confirm_first_name'] ?? ($billing['first_name'] ?? ''))),
+                "last_name" => trim((string)($_POST['confirm_last_name'] ?? ($billing['last_name'] ?? ''))),
+                "email" => trim((string)($_POST['confirm_email'] ?? ($billing['email'] ?? ''))),
+                "phone" => trim((string)($_POST['confirm_phone'] ?? ($billing['phone'] ?? ''))),
+                "address1" => trim((string)($_POST['confirm_address1'] ?? ($billing['address1'] ?? ''))),
+                "address2" => trim((string)($_POST['confirm_address2'] ?? ($billing['address2'] ?? ''))),
+                "city" => trim((string)($_POST['confirm_city'] ?? ($billing['city'] ?? ''))),
+                "state" => trim((string)($_POST['confirm_state'] ?? ($billing['state'] ?? ''))),
+                "zip" => trim((string)($_POST['confirm_zip'] ?? ($billing['zip'] ?? ''))),
+                "country" => trim((string)($_POST['confirm_country'] ?? ($billing['country'] ?? 'IN'))),
+                "gstin" => trim((string)($_POST['confirm_gstin'] ?? ($billing['gstin'] ?? ''))),
+            ];
+            $shipping = [
+                "sname" => trim((string)($_POST['confirm_sname'] ?? ($shipping['sname'] ?? ''))),
+                "saddress1" => trim((string)($_POST['confirm_saddress1'] ?? ($shipping['saddress1'] ?? ''))),
+                "saddress2" => trim((string)($_POST['confirm_saddress2'] ?? ($shipping['saddress2'] ?? ''))),
+                "scity" => trim((string)($_POST['confirm_scity'] ?? ($shipping['scity'] ?? ''))),
+                "sstate" => trim((string)($_POST['confirm_sstate'] ?? ($shipping['sstate'] ?? ''))),
+                "szip" => trim((string)($_POST['confirm_szip'] ?? ($shipping['szip'] ?? ''))),
+                "scountry" => trim((string)($_POST['confirm_scountry'] ?? ($shipping['scountry'] ?? 'IN'))),
+                "sphone" => trim((string)($_POST['confirm_sphone'] ?? ($shipping['sphone'] ?? ''))),
+            ];
+        }
         // echo '<pre>';
         // print_r($billing);
         // exit;
@@ -2275,28 +2390,7 @@ class POSRegisterController
         $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
         $orderCreateQuery = ['discountcoupondetails' => $coupon];
 
-        // Preview mode: generate payload/debug only; do NOT execute external /order/create API.
-        $apiResult = [
-            'data' => [
-                'success' => true,
-                'preview_only' => true,
-                'request' => [
-                    'endpoint' => '/order/create',
-                    'query' => $orderCreateQuery,
-                    'post' => $postData,
-                ],
-            ],
-            'code' => 200,
-            'raw' => json_encode([
-                'success' => true,
-                'preview_only' => true,
-                'request' => [
-                    'endpoint' => '/order/create',
-                    'query' => $orderCreateQuery,
-                    'post' => $postData,
-                ],
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
-        ];
+        $apiResult = $this->exotic_api_call('/order/create', 'POST', $orderCreateQuery, $postData);
         $orderApiDebug = $this->buildOrderCreateApiDebug(
             $orderCreateQuery,
             $postData,
@@ -2308,20 +2402,51 @@ class POSRegisterController
                 'transaction_id' => $transactionId,
                 'customer_id' => (int)$customerId,
                 'note' => $note,
-                'preview_only' => true,
             ]
         );
         $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
 
+        $response = $apiResult['data'] ?? [];
+        $httpCode = (int)($apiResult['code'] ?? 0);
+
+        if ($httpCode >= 400 || empty($response) || !empty($response['error'])) {
+            echo json_encode([
+                "success" => false,
+                "message" => $response['error'] ?? $response['message'] ?? "Order create API failed",
+                "order_api_debug" => $orderApiDebug,
+                "api_response" => $response,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $orderId = '';
+        foreach (['orderid', 'order_id', 'order_no', 'id'] as $key) {
+            if (!empty($response[$key])) {
+                $orderId = (string)$response[$key];
+                break;
+            }
+        }
+        if ($orderId === '' && !empty($response['order']) && is_array($response['order'])) {
+            foreach (['orderid', 'order_id', 'order_no', 'id'] as $key) {
+                if (!empty($response['order'][$key])) {
+                    $orderId = (string)$response['order'][$key];
+                    break;
+                }
+            }
+        }
+
         echo json_encode([
             "success" => true,
-            "preview_only" => true,
-            "message" => "Order create API not executed. Returning payload preview only.",
-            "order_payload" => [
-                "endpoint" => "/order/create",
-                "query" => $orderCreateQuery,
-                "post" => $postData
+            "message" => $response['message'] ?? "Order created successfully",
+            "order_id" => $orderId,
+            "payment_summary" => [
+                "payment_type" => (string)$paymentType,
+                "payment_stage" => (string)$paymentStage,
+                "amount" => (string)($_POST['amount'] ?? ''),
+                "transaction_id" => (string)$transactionId,
+                "store_payment_details" => (string)$store_payment_details,
             ],
+            "api_response" => $response,
             "order_api_debug" => $orderApiDebug,
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
