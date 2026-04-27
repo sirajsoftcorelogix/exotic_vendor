@@ -1876,6 +1876,7 @@ class POSRegisterController
         }
 
         $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
+        $coupon_applied = trim((string)$coupon) !== '';
         $discount = 0.0;
         foreach ([
             'couponreduction',
@@ -1908,6 +1909,15 @@ class POSRegisterController
         $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
 
         $apiTotal = isset($data['totalamount']) && is_numeric($data['totalamount']) ? (float)$data['totalamount'] : 0.0;
+        if ($discount <= 0 && $coupon_applied && $apiTotal > 0) {
+            // Infer coupon from totals when API omits coupon reduction fields.
+            $inferredCoupon = ($subtotal + $shipping_total + $gst - $custom_discount) - $apiTotal;
+            if ($inferredCoupon > 0.01) {
+                $discount = round($inferredCoupon, 2);
+                $total_discount = $discount + $custom_discount;
+                $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
+            }
+        }
         if ($apiTotal > 0) {
             // If coupon is detected but API total doesn't reflect deduction, prefer computed total.
             $grand_total = ($discount > 0 && $apiTotal > ($grand_total + 0.01)) ? $grand_total : $apiTotal;
@@ -1918,6 +1928,7 @@ class POSRegisterController
             'shipping_total' => $shipping_total,
             'gst' => $gst,
             'discount' => $discount,
+            'coupon_applied' => $coupon_applied,
             'custom_discount' => $custom_discount,
             'grand_total' => $grand_total,
             'checkoutdata' => $data['checkoutdata'] ?? '',
