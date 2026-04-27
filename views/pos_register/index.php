@@ -639,6 +639,13 @@
 
           <button
             type="button"
+            id="btnOpenCouponApiModal"
+            class="mt-1 w-full text-center text-sm text-slate-500 hover:text-slate-800 underline decoration-slate-400">
+            View coupon API request &amp; response
+          </button>
+
+          <button
+            type="button"
             id="btnOpenOrderCreateApiModal"
             class="mt-1 w-full text-center text-sm text-slate-500 hover:text-slate-800 underline decoration-slate-400">
             View order create API request &amp; response
@@ -701,6 +708,63 @@
   if (btn) btn.addEventListener('click', openCartApiModal);
   if (closeBtn) closeBtn.addEventListener('click', closeCartApiModal);
   if (overlay) overlay.addEventListener('click', closeCartApiModal);
+})();
+</script>
+<?php
+$couponApiDebugInitial = $_SESSION['pos_coupon_api_debug'] ?? null;
+$couponApiPrePayload = $couponApiDebugInitial ?: [
+    'message' => 'No coupon API call recorded yet. Apply a coupon code to capture GET https://www.exoticindia.com/cart/addcoupon request and response here (including invalid or expired responses).',
+];
+$couponApiPreJson = json_encode(
+    $couponApiPrePayload,
+    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+);
+$couponApiHttpMeta = $couponApiDebugInitial
+    ? 'HTTP ' . (int)($couponApiDebugInitial['http_code'] ?? 0) . ' · GET /cart/addcoupon'
+    : '—';
+?>
+<!-- Coupon add API debug (GET https://www.exoticindia.com/cart/addcoupon) -->
+<div id="couponApiResponseModal" class="fixed inset-0 z-[10000] hidden">
+  <div id="couponApiResponseOverlay" class="absolute inset-0 bg-black/50"></div>
+  <div class="relative mx-auto mt-8 w-[95%] max-w-4xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[88vh]">
+    <div class="flex items-center justify-between gap-3 border-b px-4 py-3 shrink-0">
+      <h2 class="text-sm font-semibold text-gray-900">Coupon API request &amp; response</h2>
+      <button type="button" id="couponApiResponseClose" class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100">
+        ✕
+      </button>
+    </div>
+    <div class="px-4 py-3 overflow-auto text-xs leading-relaxed">
+      <p class="text-[11px] text-slate-500 mb-2">
+        <span class="font-medium text-slate-700"><?= htmlspecialchars($couponApiHttpMeta, ENT_QUOTES, 'UTF-8') ?></span>
+        · Last <code class="bg-slate-100 px-1 rounded">GET /cart/addcoupon</code> used when you clicked Apply on the coupon field
+      </p>
+      <pre id="couponApiResponsePre" class="whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-200 p-3 font-mono text-[11px] text-slate-800"><?= htmlspecialchars(
+          $couponApiPreJson !== false ? $couponApiPreJson : '{}',
+          ENT_QUOTES,
+          'UTF-8'
+      ) ?></pre>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var modal = document.getElementById('couponApiResponseModal');
+  var btn = document.getElementById('btnOpenCouponApiModal');
+  var closeBtn = document.getElementById('couponApiResponseClose');
+  var overlay = document.getElementById('couponApiResponseOverlay');
+  function openCouponApiModal() {
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeCouponApiModal() {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+  if (btn) btn.addEventListener('click', openCouponApiModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeCouponApiModal);
+  if (overlay) overlay.addEventListener('click', closeCouponApiModal);
 })();
 </script>
 <?php
