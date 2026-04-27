@@ -715,7 +715,7 @@ data-code="${lookupCode}">
     if ($pageInfo.length) {
       $pageInfo.text(
         hasPageCount
-          ? ('Page ' + String(currentPage) + ' of ' + String(resolvedTotalPages))
+          ? ('Loaded Page ' + String(currentPage) + ' of ' + String(resolvedTotalPages))
           : ('Page ' + String(currentPage))
       );
     }
@@ -775,8 +775,8 @@ data-code="${lookupCode}">
           hasMore = rows.length === perPage;
         }
 
-        // Basic pagination: one page at a time (no append merge).
-        renderProducts(rows, false);
+        // Incremental pagination: append when loading next page.
+        renderProducts(rows, append);
         updatePaginationUi(totalPages);
       },
       error: function (xhr, status, err) {
@@ -1144,14 +1144,14 @@ data-code="${lookupCode}">
 
   if ($pagePrev.length) {
     $pagePrev.on('click', function () {
-      if (isLoading || currentPage <= 1) return;
-      fetchProducts(currentPage - 1, false);
+      if (isLoading) return;
+      resetAndLoad();
     });
   }
   if ($pageNext.length) {
     $pageNext.on('click', function () {
       if (isLoading || !hasMore) return;
-      fetchProducts(currentPage + 1, false);
+      fetchProducts(currentPage + 1, true);
     });
   }
 
