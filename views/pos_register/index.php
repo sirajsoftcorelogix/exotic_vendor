@@ -222,14 +222,14 @@
               type="button"
               id="productsPagePrev"
               class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
-              Prev
+              Reset
             </button>
             <span id="productsPageInfo" class="text-sm text-slate-600">Page 1 of 1</span>
             <button
               type="button"
               id="productsPageNext"
               class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
-              Next
+              Load More
             </button>
           </div>
         </div>
