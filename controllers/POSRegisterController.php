@@ -1564,13 +1564,21 @@ class POSRegisterController
         return [];
     }
 
-    public  function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null)
+    /**
+     * @param string      $endpoint   Path beginning with "/", e.g. "/cart/retrieve"
+     * @param string|null $apiBaseUrl Base URL without trailing slash. Default API JSON gateway:
+     *                                "https://www.exoticindia.com/api".
+     *                                Site cart helpers (documented separately from /api/) use
+     *                                "https://www.exoticindia.com" — e.g. GET /cart/addcoupon.
+     */
+    public function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null)
     {
         // echo "<pre>";
         // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
         // exit;
 
-        $url = 'https://www.exoticindia.com/api' . $endpoint;
+        $base = $apiBaseUrl ?? 'https://www.exoticindia.com/api';
+        $url = rtrim($base, '/') . $endpoint;
         if ($params) {
             $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
         }
@@ -2133,12 +2141,41 @@ class POSRegisterController
     }
 
 
+    /**
+     * Documented endpoint: GET https://www.exoticindia.com/cart/addcoupon?couponid=...
+     * Response includes discountcoupondetails for subsequent cart query strings.
+     * `/cart/addcoupon` may return a JSON object (preferred) or a JSON-encoded string
+     * like "CODE|P|10". exotic_api_call() only keeps decoded arrays, so plain strings
+     * must be normalized here or the coupon is silently ignored.
+     */
+    private function normalizeCouponApiResponse(array $apiResult): array
+    {
+        $data = $apiResult['data'] ?? [];
+        if (is_array($data) && $data !== []) {
+            return $data;
+        }
+        $raw = (string)($apiResult['raw'] ?? '');
+        if ($raw === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return [];
+        }
+        if (is_string($decoded) && $decoded !== '') {
+            return ['discountcoupondetails' => $decoded];
+        }
+        return is_array($decoded) ? $decoded : [];
+    }
+
     public function apply_coupon()
     {
-        $couponId = $_POST['coupon'] ?? '';
+        $couponId = trim((string)($_POST['coupon'] ?? ''));
 
-        if (empty($couponId)) {
-            header("Location: ?page=pos_register");
+        if ($couponId === '') {
+            $_SESSION['coupon_message'] = 'Coupon code required';
+            $_SESSION['coupon_status'] = 'error';
+            header('Location: ?page=pos_register');
             exit;
         }
 
@@ -2147,18 +2184,32 @@ class POSRegisterController
             'GET',
             [
                 'couponid' => $couponId
-            ]
+            ],
+            null,
+            'https://www.exoticindia.com'
         );
 
-        $response = $result['data'] ?? '';
+        $httpCode = (int)($result['code'] ?? 0);
+        $httpOk = $httpCode >= 200 && $httpCode < 300;
 
-        if (!empty($response) && !isset($response['error'])) {
+        $response = $this->normalizeCouponApiResponse($result);
 
-            // store string coupon
+        $apiError = trim((string)($response['error'] ?? ''));
+
+        if ($httpOk && $apiError === '' && $response !== []) {
             $_SESSION['discount_coupon'] = $response;
+            $_SESSION['coupon_message'] = 'Coupon applied successfully';
+            $_SESSION['coupon_status'] = 'success';
+        } else {
+            $_SESSION['coupon_message'] = $apiError !== ''
+                ? $apiError
+                : (!$httpOk
+                    ? ('Coupon request failed (HTTP ' . $httpCode . ')')
+                    : 'Invalid or expired coupon');
+            $_SESSION['coupon_status'] = 'error';
         }
 
-        header("Location: ?page=pos_register");
+        header('Location: ?page=pos_register');
         exit;
     }
 
@@ -2618,11 +2669,13 @@ class POSRegisterController
 
     public function remove_coupon()
     {
+        // Per API docs: delete coupon by omitting discountcoupondetails on cart requests.
         if (isset($_SESSION['discount_coupon'])) {
             unset($_SESSION['discount_coupon']);
         }
 
-        $_SESSION['coupon_status'] = "success";
+        $_SESSION['coupon_message'] = 'Coupon removed';
+        $_SESSION['coupon_status'] = 'success';
 
         header("Location: ?page=pos_register");
         exit;

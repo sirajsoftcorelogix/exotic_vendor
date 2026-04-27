@@ -130,13 +130,14 @@ function cart_resolve_india_price_from_vp($mysqli, string $code): float
     return 0.0;
 }
 
-function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null)
+function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null)
 {
     // echo "<pre>";
     // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
     // exit;
 
-    $url = 'https://www.exoticindia.com/api' . $endpoint;
+    $base = $apiBaseUrl ?? 'https://www.exoticindia.com/api';
+    $url = rtrim($base, '/') . $endpoint;
     if ($params) {
         $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
     }
@@ -176,7 +177,11 @@ function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = n
 
     curl_close($ch);
 
-    return ['data' => json_decode($response, true) ?: [], 'code' => $httpCode];
+    $body = (string)$response;
+    $decoded = json_decode($body, true);
+    $data = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : [];
+
+    return ['data' => $data, 'code' => $httpCode, 'raw' => $body];
 }
 
 
@@ -407,10 +412,18 @@ function apply_coupon($couponId)
         'GET',
         [
             'couponid' => $couponId
-        ]
+        ],
+        null,
+        'https://www.exoticindia.com'
     );
 
     $response = $result['data'] ?? [];
+    if ($response === [] && !empty($result['raw'])) {
+        $rd = json_decode((string)$result['raw'], true);
+        if (json_last_error() === JSON_ERROR_NONE && is_string($rd) && $rd !== '') {
+            $response = ['discountcoupondetails' => $rd];
+        }
+    }
     // echo '<pre>'; print_r($result); exit;
     // Example response: "APP05|P|5"
     if (!empty($response) && !isset($response['error'])) {
