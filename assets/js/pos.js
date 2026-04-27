@@ -12,6 +12,9 @@ $(function () {
 
   const $cards = $('#productsCards');
   const $listHost = $('#productsListContainer');
+  const $pagePrev = $('#productsPagePrev');
+  const $pageNext = $('#productsPageNext');
+  const $pageInfo = $('#productsPageInfo');
 
   // ────────────────────────────────────────────────
   // HELPERS (needed for products & modal)
@@ -703,11 +706,24 @@ data-code="${lookupCode}">
     });
   }
 
+  function updatePaginationUi() {
+    if ($pageInfo.length) {
+      $pageInfo.text('Page ' + String(currentPage));
+    }
+    if ($pagePrev.length) {
+      $pagePrev.prop('disabled', currentPage <= 1 || isLoading);
+    }
+    if ($pageNext.length) {
+      $pageNext.prop('disabled', !hasMore || isLoading);
+    }
+  }
+
   function fetchProducts(page = 1, append = false) {
     if (isLoading) return;
     if (append && !hasMore) return;
 
     isLoading = true;
+    updatePaginationUi();
     showLoader(true);
     const sortBy = $('#sortBy').val();
     const minPrice = $('#minPrice').val();
@@ -747,7 +763,9 @@ data-code="${lookupCode}">
           hasMore = rows.length === perPage;
         }
 
-        renderProducts(rows, append);
+        // Basic pagination: one page at a time (no append merge).
+        renderProducts(rows, false);
+        updatePaginationUi();
       },
       error: function (xhr, status, err) {
         console.error('Error loading products', err);
@@ -755,6 +773,7 @@ data-code="${lookupCode}">
       complete: function () {
         isLoading = false;
         showLoader(false);
+        updatePaginationUi();
       }
     });
   }
@@ -763,6 +782,7 @@ data-code="${lookupCode}">
     currentPage = 1;
     hasMore = true;
     fetchProducts(1, false);
+    updatePaginationUi();
   }
   $('#applyFilterBtn').on('click', function () {
     resetAndLoad();
@@ -1109,20 +1129,18 @@ data-code="${lookupCode}">
     fetchSuggest($searchName.val());
   });
 
-  $(window).on('scroll', function () {
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-    const documentHeight = Math.max(
-      document.body.scrollHeight,
-      document.documentElement.scrollHeight
-    );
-
-    if (scrollTop + viewportHeight >= documentHeight - 220) {
-      if (!isLoading && hasMore) {
-        fetchProducts(currentPage + 1, true);
-      }
-    }
-  });
+  if ($pagePrev.length) {
+    $pagePrev.on('click', function () {
+      if (isLoading || currentPage <= 1) return;
+      fetchProducts(currentPage - 1, false);
+    });
+  }
+  if ($pageNext.length) {
+    $pageNext.on('click', function () {
+      if (isLoading || !hasMore) return;
+      fetchProducts(currentPage + 1, false);
+    });
+  }
 
   // Initial load – products only
   resetAndLoad();

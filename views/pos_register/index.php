@@ -217,6 +217,21 @@
             class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
             id="productsCards">
           </div>
+          <div id="productsPagination" class="mt-4 flex items-center justify-between border-t border-slate-200 pt-3">
+            <button
+              type="button"
+              id="productsPagePrev"
+              class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              Prev
+            </button>
+            <span id="productsPageInfo" class="text-sm text-slate-600">Page 1</span>
+            <button
+              type="button"
+              id="productsPageNext"
+              class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -1185,6 +1200,57 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
   </div>
 </div>
+<!-- ADDRESS CONFIRMATION MODAL -->
+<div id="addressConfirmModal" class="fixed inset-0 z-[10000] hidden">
+  <div class="absolute inset-0 bg-black/40" onclick="closeAddressConfirmModal()"></div>
+  <div class="relative mx-auto mt-10 w-[96%] max-w-4xl rounded-2xl bg-white shadow-xl">
+    <div class="flex items-center justify-between border-b px-6 py-4">
+      <h2 class="text-lg font-semibold">Confirm Billing &amp; Shipping Details</h2>
+      <button type="button" onclick="closeAddressConfirmModal()" class="text-xl text-gray-500 hover:text-gray-800">✕</button>
+    </div>
+    <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
+      <div class="space-y-3">
+        <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
+        <input id="confirm_first_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="First Name">
+        <input id="confirm_last_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Last Name">
+        <input id="confirm_email" class="w-full border rounded px-3 py-2 text-sm" placeholder="Email">
+        <input id="confirm_phone" class="w-full border rounded px-3 py-2 text-sm" placeholder="Phone">
+        <input id="confirm_address1" class="w-full border rounded px-3 py-2 text-sm" placeholder="Address 1">
+        <input id="confirm_address2" class="w-full border rounded px-3 py-2 text-sm" placeholder="Address 2">
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_city" class="w-full border rounded px-3 py-2 text-sm" placeholder="City">
+          <input id="confirm_state" class="w-full border rounded px-3 py-2 text-sm" placeholder="State">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_zip" class="w-full border rounded px-3 py-2 text-sm" placeholder="ZIP">
+          <input id="confirm_country" class="w-full border rounded px-3 py-2 text-sm" placeholder="Country">
+        </div>
+        <input id="confirm_gstin" class="w-full border rounded px-3 py-2 text-sm" placeholder="GSTIN (optional)">
+      </div>
+      <div class="space-y-3">
+        <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
+        <input id="confirm_sname" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Name">
+        <input id="confirm_sphone" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Phone">
+        <input id="confirm_saddress1" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 1">
+        <input id="confirm_saddress2" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 2">
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_scity" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping City">
+          <input id="confirm_sstate" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping State">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_szip" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping ZIP">
+          <input id="confirm_scountry" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Country">
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-end gap-3 border-t px-6 py-4">
+      <button type="button" onclick="closeAddressConfirmModal()" class="rounded-lg bg-gray-300 px-5 py-2 text-gray-700 hover:bg-gray-400">Cancel</button>
+      <button type="button" id="confirmAddressSubmitBtn" class="rounded-lg bg-orange-600 px-5 py-2 text-white hover:bg-orange-700">
+        Confirm &amp; Submit Order
+      </button>
+    </div>
+  </div>
+</div>
 <!-- DISCOUNT MODAL -->
 <div id="discountModal" class="fixed inset-0 z-[9999] hidden">
 
@@ -1452,6 +1518,100 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
     document.getElementById("paymentModal").classList.add("hidden");
   }
 
+  function openAddressConfirmModal() {
+    document.getElementById("addressConfirmModal").classList.remove("hidden");
+  }
+
+  function closeAddressConfirmModal() {
+    document.getElementById("addressConfirmModal").classList.add("hidden");
+  }
+
+  function getSelectedCustomerId() {
+    var fromSelect = typeof jQuery !== "undefined" ? jQuery("#customerSelect").val() : document.getElementById("customerSelect").value;
+    if (Array.isArray(fromSelect)) {
+      fromSelect = fromSelect[0] || "";
+    }
+    return (fromSelect && String(fromSelect)) || (window.POS_SESSION_CUSTOMER_ID && String(window.POS_SESSION_CUSTOMER_ID)) || "";
+  }
+
+  function setAddressConfirmFields(payload) {
+    var billing = (payload && payload.billing) || {};
+    var shipping = (payload && payload.shipping) || {};
+    var map = {
+      confirm_first_name: billing.first_name || "",
+      confirm_last_name: billing.last_name || "",
+      confirm_email: billing.email || "",
+      confirm_phone: billing.phone || "",
+      confirm_address1: billing.address1 || "",
+      confirm_address2: billing.address2 || "",
+      confirm_city: billing.city || "",
+      confirm_state: billing.state || "",
+      confirm_zip: billing.zip || "",
+      confirm_country: billing.country || "IN",
+      confirm_gstin: billing.gstin || "",
+      confirm_sname: shipping.sname || "",
+      confirm_saddress1: shipping.saddress1 || "",
+      confirm_saddress2: shipping.saddress2 || "",
+      confirm_scity: shipping.scity || "",
+      confirm_sstate: shipping.sstate || "",
+      confirm_szip: shipping.szip || "",
+      confirm_scountry: shipping.scountry || "IN",
+      confirm_sphone: shipping.sphone || ""
+    };
+    Object.keys(map).forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = map[id];
+    });
+  }
+
+  function getAddressConfirmPayload() {
+    var read = function(id) {
+      var el = document.getElementById(id);
+      return el ? String(el.value || "").trim() : "";
+    };
+    return {
+      confirm_address_submit: "1",
+      confirm_first_name: read("confirm_first_name"),
+      confirm_last_name: read("confirm_last_name"),
+      confirm_email: read("confirm_email"),
+      confirm_phone: read("confirm_phone"),
+      confirm_address1: read("confirm_address1"),
+      confirm_address2: read("confirm_address2"),
+      confirm_city: read("confirm_city"),
+      confirm_state: read("confirm_state"),
+      confirm_zip: read("confirm_zip"),
+      confirm_country: read("confirm_country"),
+      confirm_gstin: read("confirm_gstin"),
+      confirm_sname: read("confirm_sname"),
+      confirm_saddress1: read("confirm_saddress1"),
+      confirm_saddress2: read("confirm_saddress2"),
+      confirm_scity: read("confirm_scity"),
+      confirm_sstate: read("confirm_sstate"),
+      confirm_szip: read("confirm_szip"),
+      confirm_scountry: read("confirm_scountry"),
+      confirm_sphone: read("confirm_sphone")
+    };
+  }
+
+  function loadAndOpenAddressConfirm(customerId) {
+    fetch("index.php?page=pos_register&action=customer-order-info&customer_id=" + encodeURIComponent(customerId), {
+      credentials: "same-origin",
+      headers: { "Accept": "application/json" }
+    })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (!data || !data.success) {
+          showToast("Could not load customer address info.", "red");
+          return;
+        }
+        setAddressConfirmFields(data);
+        openAddressConfirmModal();
+      })
+      .catch(function() {
+        showToast("Could not load customer address info.", "red");
+      });
+  }
+
   function showPaymentModalOrderApiRecord(debug) {
     var panel = document.getElementById("paymentModalOrderApiPanel");
     var pre = document.getElementById("paymentModalOrderApiPre");
@@ -1480,11 +1640,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
     document.getElementById("placeOrderBtn").addEventListener("click", function() {
 
-      var fromSelect = typeof jQuery !== "undefined" ? jQuery("#customerSelect").val() : document.getElementById("customerSelect").value;
-      if (Array.isArray(fromSelect)) {
-        fromSelect = fromSelect[0] || "";
-      }
-      var customerId = (fromSelect && String(fromSelect)) || (window.POS_SESSION_CUSTOMER_ID && String(window.POS_SESSION_CUSTOMER_ID)) || "";
+      var customerId = getSelectedCustomerId();
 
       if (!customerId) {
         showToast("⚠ Please select customer first", "red");
@@ -1531,12 +1687,27 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
       }
 
-      // continue existing code
-      createOrderNow();
+      loadAndOpenAddressConfirm(customerId);
     });
+
+    var confirmAddressSubmitBtn = document.getElementById("confirmAddressSubmitBtn");
+    if (confirmAddressSubmitBtn) {
+      confirmAddressSubmitBtn.addEventListener("click", function() {
+        var payload = getAddressConfirmPayload();
+        if (!payload.confirm_first_name || !payload.confirm_phone || !payload.confirm_state || !payload.confirm_zip) {
+          showToast("⚠ Billing details are incomplete.", "red");
+          return;
+        }
+        if (!payload.confirm_sname || !payload.confirm_sphone || !payload.confirm_sstate) {
+          showToast("⚠ Shipping details are incomplete.", "red");
+          return;
+        }
+        createOrderNow(payload);
+      });
+    }
   });
 
-  function createOrderNow() {
+  function createOrderNow(addressPayload) {
 
     let paymentType = document.getElementById("payment_mode").value;
     let paymentStage = document.getElementById("payment_stage").value;
@@ -1568,6 +1739,11 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       cid = cid[0];
     }
     formData.append("customer_id", cid || window.POS_SESSION_CUSTOMER_ID || "");
+    if (addressPayload && typeof addressPayload === "object") {
+      Object.keys(addressPayload).forEach(function(k) {
+        formData.append(k, addressPayload[k]);
+      });
+    }
     fetch("index.php?page=pos_register&action=create-order", {
         method: "POST",
         credentials: "same-origin",
@@ -1645,6 +1821,8 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           return;
         }
 
+        closeAddressConfirmModal();
+        closePaymentModal();
         showToast("✓ Order created on API: " + orderId, "blue");
         importOrder(orderId, function(importOk) {
           var paymentSummary = data.payment_summary || {};

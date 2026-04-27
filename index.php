@@ -1030,6 +1030,9 @@ switch ($page) {
             case 'customer-search':
                 $controller->customer_search();
                 break;
+            case 'customer-order-info':
+                $controller->customer_order_info();
+                break;
             case 'apply_custom_discount':
                 $controller->apply_custom_discount();
                 break;
