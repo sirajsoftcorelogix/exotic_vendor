@@ -1900,7 +1900,21 @@ class POSRegisterController
         ) {
             $discount = (float)$data['orderremarks']['coupon_reduce'];
         }
-        $gst = (float)($data['gstamount'] ?? 0);
+        $gst = 0.0;
+        foreach ([
+            'gstamount',
+            'gst_amount',
+            'totalgst',
+            'total_gst',
+            'gst',
+        ] as $k) {
+            if (isset($data[$k]) && is_numeric($data[$k])) {
+                $gst = (float)$data[$k];
+                if ($gst > 0) {
+                    break;
+                }
+            }
+        }
         $custom_discount = (float)($data['customreduction'] ?? 0);
         // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
         $total_discount = $discount + $custom_discount;
@@ -1909,6 +1923,14 @@ class POSRegisterController
         $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
 
         $apiTotal = isset($data['totalamount']) && is_numeric($data['totalamount']) ? (float)$data['totalamount'] : 0.0;
+        if ($gst <= 0 && $apiTotal > 0) {
+            // Infer GST when API omits explicit GST fields but total includes tax.
+            $inferredGst = $apiTotal - ($subtotal + $shipping_total - $total_discount);
+            if ($inferredGst > 0.01) {
+                $gst = round($inferredGst, 2);
+                $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
+            }
+        }
         if ($discount <= 0 && $coupon_applied && $apiTotal > 0) {
             // Infer coupon from totals when API omits coupon reduction fields.
             $inferredCoupon = ($subtotal + $shipping_total + $gst - $custom_discount) - $apiTotal;
