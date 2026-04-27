@@ -2194,8 +2194,36 @@ class POSRegisterController
         $httpOk = $httpCode >= 200 && $httpCode < 300;
 
         $response = $this->normalizeCouponApiResponse($result);
-
         $apiError = trim((string)($response['error'] ?? ''));
+
+        $fallbackProbe = null;
+        if ($httpOk && ($response === [] || $apiError !== '')) {
+            $probeQuery = ['discountcoupondetails' => $couponId];
+            $probeResult = $this->exotic_api_call('/cart/retrieve', 'GET', $probeQuery);
+            $probeData = $probeResult['data'] ?? [];
+            $probeError = trim((string)($probeData['error'] ?? ($probeData['message'] ?? '')));
+            $probeLooksValid = (
+                ((int)($probeResult['code'] ?? 0) >= 200 && (int)($probeResult['code'] ?? 0) < 300)
+                && $probeError === ''
+                && (!empty($probeData['checkoutdata']) || !empty($probeData['cartitems']))
+            );
+            if ($probeLooksValid) {
+                $response = ['discountcoupondetails' => $couponId];
+                $apiError = '';
+            }
+            $fallbackProbe = [
+                'used_entered_coupon_as_discountcoupondetails' => true,
+                'request' => [
+                    'method' => 'GET',
+                    'url' => 'https://www.exoticindia.com/api/cart/retrieve?' . http_build_query($probeQuery),
+                    'query_params' => $probeQuery,
+                ],
+                'http_code' => (int)($probeResult['code'] ?? 0),
+                'response_raw' => (string)($probeResult['raw'] ?? ''),
+                'response_error' => $probeError,
+                'accepted' => $probeLooksValid,
+            ];
+        }
 
         $_SESSION['pos_coupon_api_debug'] = [
             'timestamp' => date('c'),
@@ -2208,6 +2236,9 @@ class POSRegisterController
             'response_body_raw' => (string)($result['raw'] ?? ''),
             'response_normalized' => $response,
         ];
+        if ($fallbackProbe !== null) {
+            $_SESSION['pos_coupon_api_debug']['fallback_probe'] = $fallbackProbe;
+        }
 
         if ($httpOk && $apiError === '' && $response !== []) {
             $_SESSION['discount_coupon'] = $response;
