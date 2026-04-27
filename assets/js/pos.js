@@ -706,9 +706,14 @@ data-code="${lookupCode}">
     });
   }
 
-  function updatePaginationUi() {
+  function updatePaginationUi(totalPages) {
+    const hasPageCount = Number.isFinite(totalPages) && totalPages > 0;
     if ($pageInfo.length) {
-      $pageInfo.text('Page ' + String(currentPage));
+      $pageInfo.text(
+        hasPageCount
+          ? ('Page ' + String(currentPage) + ' of ' + String(totalPages))
+          : ('Page ' + String(currentPage))
+      );
     }
     if ($pagePrev.length) {
       $pagePrev.prop('disabled', currentPage <= 1 || isLoading);
@@ -729,7 +734,8 @@ data-code="${lookupCode}">
     const minPrice = $('#minPrice').val();
     const maxPrice = $('#maxPrice').val();
     const $stockFilterEl = $('#stockFilter');
-    const stockFilter = $stockFilterEl.length ? String($stockFilterEl.val() || 'all') : 'all';
+    // Align POS listing default with stock report compare URL (stock_status=in).
+    const stockFilter = $stockFilterEl.length ? String($stockFilterEl.val() || 'in') : 'in';
     // One search box: same semantics as stock report (title OR item_code OR sku).
     const searchVal = String($('#searchName').val() || '').trim();
     const productName = searchVal;
@@ -765,7 +771,7 @@ data-code="${lookupCode}">
 
         // Basic pagination: one page at a time (no append merge).
         renderProducts(rows, false);
-        updatePaginationUi();
+        updatePaginationUi(parseInt(res.total_pages, 10));
       },
       error: function (xhr, status, err) {
         console.error('Error loading products', err);

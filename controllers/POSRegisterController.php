@@ -441,10 +441,12 @@ class POSRegisterController
         );
 
         $rows = $result['data'] ?? [];
-        $hasMore = count($rows) > (int)$perPage;
-        if ($hasMore) {
+        $totalFiltered = (int)($result['recordsFiltered'] ?? 0);
+        if (count($rows) > (int)$perPage) {
             $rows = array_slice($rows, 0, (int)$perPage);
         }
+        $hasMore = ((int)$pageNo * (int)$perPage) < $totalFiltered;
+        $totalPages = $perPage > 0 ? (int)ceil($totalFiltered / (int)$perPage) : 1;
 
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
@@ -452,7 +454,9 @@ class POSRegisterController
             'data' => $rows,
             'current_page' => $pageNo,
             'has_more' => $hasMore,
-            'per_page' => (int)$perPage
+            'per_page' => (int)$perPage,
+            'total_rows' => $totalFiltered,
+            'total_pages' => $totalPages
         ]);
         exit;
     }

@@ -186,8 +186,21 @@ class pos
         $rows = $result->fetch_all(MYSQLI_ASSOC);
         $dataStmt->close();
 
+        // Filtered count with exactly same join + where conditions (stable pagination).
+        $countSql = "SELECT COUNT(*) AS cnt $stockFrom $where";
+        $countStmt = $this->db->prepare($countSql);
+        $countTypes = "ii" . $types;
+        $countParams = array_merge([(int)$warehouseId, (int)$warehouseId], $params);
+        $countStmt->bind_param($countTypes, ...$countParams);
+        $countStmt->execute();
+        $countRow = $countStmt->get_result()->fetch_assoc();
+        $countStmt->close();
+        $recordsFiltered = (int)($countRow['cnt'] ?? 0);
+
         return [
-            'data'            => $rows
+            'data' => $rows,
+            'recordsFiltered' => $recordsFiltered,
+            'recordsTotal' => $recordsFiltered,
         ];
     }
     public function getProductsDataTable_bk(
