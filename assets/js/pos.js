@@ -6,6 +6,7 @@ $(function () {
 
   let isLoading = false;
   let hasMore = true;
+  let totalPages = 1;
 
   let loadedKeys = new Set();
   let productsByKey = new Map();
@@ -706,12 +707,15 @@ data-code="${lookupCode}">
     });
   }
 
-  function updatePaginationUi(totalPages) {
-    const hasPageCount = Number.isFinite(totalPages) && totalPages > 0;
+  function updatePaginationUi(pageCount) {
+    const resolvedTotalPages = Number.isFinite(pageCount) && pageCount > 0
+      ? pageCount
+      : totalPages;
+    const hasPageCount = Number.isFinite(resolvedTotalPages) && resolvedTotalPages > 0;
     if ($pageInfo.length) {
       $pageInfo.text(
         hasPageCount
-          ? ('Page ' + String(currentPage) + ' of ' + String(totalPages))
+          ? ('Page ' + String(currentPage) + ' of ' + String(resolvedTotalPages))
           : ('Page ' + String(currentPage))
       );
     }
@@ -760,6 +764,8 @@ data-code="${lookupCode}">
       success: function (res) {
         const rows = res.data || [];
         currentPage = requestedPage;
+        const pagesFromApi = parseInt(res.total_pages, 10);
+        totalPages = Number.isFinite(pagesFromApi) && pagesFromApi > 0 ? pagesFromApi : 1;
 
         if (res.has_more != null) {
           hasMore = !!res.has_more;
@@ -771,7 +777,7 @@ data-code="${lookupCode}">
 
         // Basic pagination: one page at a time (no append merge).
         renderProducts(rows, false);
-        updatePaginationUi(parseInt(res.total_pages, 10));
+        updatePaginationUi(totalPages);
       },
       error: function (xhr, status, err) {
         console.error('Error loading products', err);
@@ -787,6 +793,7 @@ data-code="${lookupCode}">
   function resetAndLoad() {
     currentPage = 1;
     hasMore = true;
+    totalPages = 1;
     fetchProducts(1, false);
     updatePaginationUi();
   }
