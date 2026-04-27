@@ -1,7 +1,7 @@
 $(function () {
   let productApiCache = {};
   let currentPage = 1;
-  const perPage = 50;
+  const perPage = 48;
   let currentCategory = '';
 
   let isLoading = false;

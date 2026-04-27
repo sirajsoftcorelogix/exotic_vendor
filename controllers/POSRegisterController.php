@@ -376,7 +376,7 @@ class POSRegisterController
     public function productsAjax()
     {
         $pageNo  = $_GET['page_no'] ?? 1;
-        $perPage = $_GET['per_page'] ?? 50;
+        $perPage = $_GET['per_page'] ?? 48;
 
         $start  = ($pageNo - 1) * $perPage;
         // Fastest POS: fetch one extra row to decide has_more (avoid COUNT(*))
