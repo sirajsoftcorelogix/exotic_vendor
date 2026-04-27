@@ -595,16 +595,16 @@
           <?php endif; ?>
           <!-- TOTALS -->
           <div class="pt-2 border-t space-y-2 text-sm">
+            <div class="flex justify-between text-slate-600">
+              <span>Sub Total</span>
+              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['subtotal'] ?? 0, 2) ?></span>
+            </div>
             <?php if (!empty($cartData['discount'])): ?>
               <div class="flex justify-between text-green-600">
                 <span>Coupon Discount</span>
                 <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['discount'], 2) ?></span>
               </div>
             <?php endif; ?>
-            <div class="flex justify-between text-slate-600">
-              <span>Sub Total</span>
-              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['subtotal'] ?? 0, 2) ?></span>
-            </div>
 
             <div class="flex justify-between text-slate-600">
               <span>GST</span>

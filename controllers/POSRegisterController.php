@@ -1876,7 +1876,29 @@ class POSRegisterController
         }
 
         $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
-        $discount = (float)($data['couponreduction'] ?? 0);
+        $discount = 0.0;
+        foreach ([
+            'couponreduction',
+            'coupon_reduction',
+            'couponreduce',
+            'coupon_reduce',
+        ] as $k) {
+            if (isset($data[$k]) && is_numeric($data[$k])) {
+                $discount = (float)$data[$k];
+                if ($discount > 0) {
+                    break;
+                }
+            }
+        }
+        if (
+            $discount <= 0
+            && !empty($data['orderremarks'])
+            && is_array($data['orderremarks'])
+            && isset($data['orderremarks']['coupon_reduce'])
+            && is_numeric($data['orderremarks']['coupon_reduce'])
+        ) {
+            $discount = (float)$data['orderremarks']['coupon_reduce'];
+        }
         $gst = (float)($data['gstamount'] ?? 0);
         $custom_discount = (float)($data['customreduction'] ?? 0);
         // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
@@ -1885,8 +1907,11 @@ class POSRegisterController
         $display_subtotal = $subtotal;
         $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
 
-        // $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
-        $grand_total = (float)($data['totalamount'] ?? 0);
+        $apiTotal = isset($data['totalamount']) && is_numeric($data['totalamount']) ? (float)$data['totalamount'] : 0.0;
+        if ($apiTotal > 0) {
+            // If coupon is detected but API total doesn't reflect deduction, prefer computed total.
+            $grand_total = ($discount > 0 && $apiTotal > ($grand_total + 0.01)) ? $grand_total : $apiTotal;
+        }
         return [
             'items' => $items,
             'subtotal' => $display_subtotal,
