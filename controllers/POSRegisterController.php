@@ -2002,7 +2002,6 @@ class POSRegisterController
                 header("Location: ?page=pos_register&error=invalid_variation");
                 exit;
             }
-
             list($size, $color) = explode(':', $variation) + ['', ''];
             $variation = trim($size) . ':' . trim($color);
 
