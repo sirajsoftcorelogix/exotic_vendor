@@ -217,6 +217,21 @@
             class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
             id="productsCards">
           </div>
+          <div id="productsPagination" class="mt-4 flex items-center justify-between border-t border-slate-200 pt-3">
+            <button
+              type="button"
+              id="productsPagePrev"
+              class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              Prev
+            </button>
+            <span id="productsPageInfo" class="text-sm text-slate-600">Page 1</span>
+            <button
+              type="button"
+              id="productsPageNext"
+              class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </section>
