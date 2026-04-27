@@ -2179,12 +2179,13 @@ class POSRegisterController
             exit;
         }
 
+        $couponQuery = ['couponid' => $couponId];
+        $couponUrl = 'https://www.exoticindia.com/cart/addcoupon?' . http_build_query($couponQuery);
+
         $result = $this->exotic_api_call(
             '/cart/addcoupon',
             'GET',
-            [
-                'couponid' => $couponId
-            ],
+            $couponQuery,
             null,
             'https://www.exoticindia.com'
         );
@@ -2195,6 +2196,18 @@ class POSRegisterController
         $response = $this->normalizeCouponApiResponse($result);
 
         $apiError = trim((string)($response['error'] ?? ''));
+
+        $_SESSION['pos_coupon_api_debug'] = [
+            'timestamp' => date('c'),
+            'request' => [
+                'method' => 'GET',
+                'url' => $couponUrl,
+                'query_params' => $couponQuery,
+            ],
+            'http_code' => $httpCode,
+            'response_body_raw' => (string)($result['raw'] ?? ''),
+            'response_normalized' => $response,
+        ];
 
         if ($httpOk && $apiError === '' && $response !== []) {
             $_SESSION['discount_coupon'] = $response;
