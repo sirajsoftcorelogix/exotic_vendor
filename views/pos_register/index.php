@@ -595,6 +595,7 @@
           <?php endif; ?>
           <!-- TOTALS -->
           <?php
+          print_array($cartData);
           $rawSubtotal = (float)($cartData['subtotal'] ?? 0);
           $gstTotal = (float)($cartData['gst'] ?? 0);
           echo 'Coupon Discount: '.$couponDiscount = (float)($cartData['coupon_discount'] ?? 0);
