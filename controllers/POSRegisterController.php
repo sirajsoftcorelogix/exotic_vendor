@@ -2299,6 +2299,28 @@ class POSRegisterController
         return $data;
     }
 
+    /**
+     * Order API expects checkoutdata as serialized string.
+     */
+    private function serializeCheckoutdataForOrder($checkoutdata): string
+    {
+        if (is_string($checkoutdata)) {
+            return trim($checkoutdata);
+        }
+        if (is_array($checkoutdata)) {
+            $encoded = json_encode($checkoutdata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+            return is_string($encoded) ? $encoded : '';
+        }
+        if (is_object($checkoutdata)) {
+            $encoded = json_encode($checkoutdata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+            return is_string($encoded) ? $encoded : '';
+        }
+
+        return '';
+    }
+
 
     public function get_cart()
     {
@@ -2928,10 +2950,11 @@ class POSRegisterController
         ];
 
         /* ================= FINAL DATA ================= */
+        $serializedCheckoutdata = $this->serializeCheckoutdataForOrder($cartData['checkoutdata'] ?? '');
         $postData = array_merge([
             "payment_type" => $paymentType,
             "buynow" => "0",
-            "checkoutdata" => $cartData['checkoutdata'], // RAW !!!
+            "checkoutdata" => $serializedCheckoutdata,
             "cod" => $cod,
             "codcharges" => $codCharges,
             "store_payment_details" => $store_payment_details
