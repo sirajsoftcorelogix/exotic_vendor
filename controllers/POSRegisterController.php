@@ -2080,7 +2080,7 @@ class POSRegisterController
             'shipping_total' => $shipping_total,
             'gst' => $gst,
             // Keep existing output key name for backwards compatibility with the view.
-            'discount' => $coupon_discount,
+            'coupon_discount' => $coupon_discount,
             'coupon_applied' => $coupon_applied,
             'custom_discount' => $custom_discount,
             'grand_total' => $grand_total,

@@ -597,7 +597,7 @@
           <?php
           $rawSubtotal = (float)($cartData['subtotal'] ?? 0);
           $gstTotal = (float)($cartData['gst'] ?? 0);
-          echo 'Coupon Discount: '.$couponDiscount = (float)($cartData['discount'] ?? 0);
+          echo 'Coupon Discount: '.$couponDiscount = (float)($cartData['coupon_discount'] ?? 0);
           $customDiscount = (float)($cartData['custom_discount'] ?? 0);
           $totalDiscount = $couponDiscount + $customDiscount;
           $computedGrandTotal = max(0, $rawSubtotal + $gstTotal - $totalDiscount);
@@ -612,13 +612,18 @@
               <span>Sub Total</span>
               <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($rawSubtotal, 2) ?></span>
             </div>
-            <?php if (!empty($cartData['discount'])): ?>
+            <?php if (!empty($cartData['custom_discount'])): ?>
               <div class="flex justify-between text-green-600">
                 <span>Coupon Discount</span>
-                <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['discount'], 2) ?></span>
+                <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['custom_discount'], 2) ?></span>
               </div>
             <?php endif; ?>
-
+            <?php if (!empty($cartData['coupon_discount'])): ?>
+              <div class="flex justify-between text-green-600">
+                <span>Coupon Discount</span>
+                <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['coupon_discount'], 2) ?></span>
+              </div>
+            <?php endif; ?>
             <div class="flex justify-between text-slate-600">
               <span>GST Total</span>
               <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($gstTotal, 2) ?></span>
