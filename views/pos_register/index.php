@@ -468,6 +468,11 @@
 
 
           <?php $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? ''; ?>
+          <?php
+          $couponApiDebug = $cartData['cart_api_body']['coupon_discount_debug'] ?? [];
+          $couponApiRawValue = $couponApiDebug['payload_coupon_discount']
+            ?? ($cartData['cart_api_body']['couponreduction'] ?? 0);
+          ?>
 
           <?php if (empty($coupon)): ?>
 
@@ -509,6 +514,10 @@
 
               </form>
 
+            </div>
+
+            <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              API Coupon Value: <?= currencySymbol($cartData['currency']) ?> <?= number_format((float)$couponApiRawValue, 2) ?>
             </div>
 
           <?php endif; ?>
@@ -594,7 +603,7 @@
           <?php endif; ?>
           <!-- TOTALS -->
           <?php
-          print_array($cartData);
+          //print_array($cartData);
           $rawSubtotal = (float)($cartData['subtotal'] ?? 0);
           $gstTotal = (float)($cartData['gst'] ?? 0);
           $couponDiscount = (float)($cartData['coupon_discount'] ?? 0);

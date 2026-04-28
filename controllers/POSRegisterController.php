@@ -2112,6 +2112,77 @@ class POSRegisterController
         return $couponDiscount;
     }
 
+    /**
+     * Parse coupon amount from discountcoupondetails formats like:
+     * CODE|P|10  => 10% of subtotal
+     * CODE|F|100 => fixed 100
+     */
+    private function deriveCouponDiscountFromCouponString(string $coupon, float $subtotal): float
+    {
+        $coupon = trim($coupon);
+        if ($coupon === '' || strpos($coupon, '|') === false) {
+            return 0.0;
+        }
+        $parts = explode('|', $coupon);
+        if (count($parts) < 3) {
+            return 0.0;
+        }
+        $type = strtoupper(trim((string)$parts[1]));
+        $rawValue = trim((string)$parts[2]);
+        if (!is_numeric($rawValue)) {
+            return 0.0;
+        }
+        $value = (float)$rawValue;
+        if ($value <= 0) {
+            return 0.0;
+        }
+        if ($type === 'P' || $type === '%' || $type === 'PERCENT') {
+            return round(($subtotal * $value) / 100, 2);
+        }
+
+        return round($value, 2);
+    }
+
+    private function buildCouponStringParseDebug(string $coupon, float $subtotal): array
+    {
+        $raw = trim($coupon);
+        $out = [
+            'raw_coupon' => $raw,
+            'parsed' => false,
+            'code' => '',
+            'type' => '',
+            'raw_value' => '',
+            'computed_discount' => 0.0,
+        ];
+        if ($raw === '' || strpos($raw, '|') === false) {
+            return $out;
+        }
+        $parts = explode('|', $raw);
+        if (count($parts) < 3) {
+            return $out;
+        }
+        $type = strtoupper(trim((string)$parts[1]));
+        $rawValue = trim((string)$parts[2]);
+        if (!is_numeric($rawValue)) {
+            return $out;
+        }
+        $value = (float)$rawValue;
+        if ($value <= 0) {
+            return $out;
+        }
+        $computed = ($type === 'P' || $type === '%' || $type === 'PERCENT')
+            ? round(($subtotal * $value) / 100, 2)
+            : round($value, 2);
+
+        $out['parsed'] = true;
+        $out['code'] = trim((string)$parts[0]);
+        $out['type'] = $type;
+        $out['raw_value'] = $rawValue;
+        $out['computed_discount'] = $computed;
+
+        return $out;
+    }
+
     private function resolveGrandTotalFromApi(
         float $apiTotal,
         float $subtotal,
@@ -2145,7 +2216,8 @@ class POSRegisterController
      *   coupon_discount: float,
      *   custom_discount: float,
      *   gst: float,
-     *   grand_total: float
+     *   grand_total: float,
+     *   coupon_debug: array<string,mixed>
      * }
      */
     private function resolveCartFinancials(array $data, string $coupon, float $subtotal, float $gstComputed): array
@@ -2153,14 +2225,22 @@ class POSRegisterController
         $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
         $coupon_applied = trim($coupon) !== '';
         $coupon_discount = $this->extractCartRetrieveCouponDiscountRupees($data);
+        $couponDiscountFromPayload = $coupon_discount;
         $custom_discount = (float)($data['customreduction'] ?? 0);
         $gst = $this->resolveCartRetrieveGstTotal($data);
         if ($gstComputed > 0) {
             $gst = round($gstComputed, 2);
         }
         $apiTotal = isset($data['totalamount']) && is_numeric($data['totalamount']) ? (float)$data['totalamount'] : 0.0;
+        $couponStringDebug = $this->buildCouponStringParseDebug($coupon, $subtotal);
+        $couponDiscountFromString = 0.0;
+        if ($coupon_discount <= 0 && $coupon_applied) {
+            $coupon_discount = $this->deriveCouponDiscountFromCouponString($coupon, $subtotal);
+            $couponDiscountFromString = $coupon_discount;
+        }
 
         $total_discount = $coupon_discount + $custom_discount;
+        $couponBeforeInfer = $coupon_discount;
         $coupon_discount = $this->inferMissingCouponDiscount(
             $coupon_discount,
             $coupon_applied,
@@ -2171,6 +2251,7 @@ class POSRegisterController
         );
         $total_discount = $coupon_discount + $custom_discount;
         $grand_total = $this->resolveGrandTotalFromApi($apiTotal, $subtotal, $gst, $total_discount, $coupon_discount);
+        $couponDiscountFromInference = max(0, round($coupon_discount - $couponBeforeInfer, 2));
 
         return [
             'codcharges' => $codcharges,
@@ -2179,6 +2260,17 @@ class POSRegisterController
             'custom_discount' => $custom_discount,
             'gst' => $gst,
             'grand_total' => $grand_total,
+            'coupon_debug' => [
+                'coupon_applied' => $coupon_applied,
+                'payload_coupon_discount' => $couponDiscountFromPayload,
+                'string_parse' => $couponStringDebug,
+                'string_coupon_discount' => $couponDiscountFromString,
+                'inferred_coupon_discount' => $couponDiscountFromInference,
+                'final_coupon_discount' => $coupon_discount,
+                'subtotal_for_calc' => $subtotal,
+                'gst_for_calc' => $gst,
+                'api_totalamount' => $apiTotal,
+            ],
         ];
     }
 
@@ -2235,6 +2327,7 @@ class POSRegisterController
         $display_subtotal = $subtotal;
         $financials = $this->resolveCartFinancials($data, (string)$coupon, $subtotal, $gst_computed);
         $cartApiBodyForDebug = $this->stripCartItemsFromDebugBody($data);
+        $cartApiBodyForDebug['coupon_discount_debug'] = $financials['coupon_debug'];
 
         return [
             'items' => $items,
