@@ -685,6 +685,80 @@ class POSRegisterController
     }
 
     /**
+     * vp_products.gst fallback only (matches mergeGstPercentField / POS product modal).
+     */
+    private function fetchVpProductGstFallbackRow($conn, string $code): array
+    {
+        if ($code === '' || !$conn) {
+            return [];
+        }
+        $stmt = $conn->prepare(
+            'SELECT gst FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ss', $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return is_array($row) ? $row : [];
+    }
+
+    /**
+     * GST % for a cart line: same keys as Exotic `/product/code` (see mergeGstPercentField): gst_rate, gst_percent, gst.
+     * Cart line keys can override when present; unwrapped product payload fills typical API fields.
+     */
+    private function resolveCartLineGstPercent(array $cartLineItem, array $productApiResult, $conn): float
+    {
+        $productData = $this->unwrapProductApiResponse($productApiResult['data'] ?? []);
+        $merged = array_merge($cartLineItem, $productData);
+        $dbRow = $this->fetchVpProductGstFallbackRow($conn, trim((string)($cartLineItem['code'] ?? '')));
+
+        return $this->resolveGstPercentAsNumber($merged, $dbRow);
+    }
+
+    /**
+     * Coupon discount rupees from GET /cart/retrieve JSON.
+     * Primary key matches legacy POS cart helper (views/pos_register/cart-functions.php): couponreduction.
+     * Fallback: orderremarks.coupon_reduce (same shape as order detail templates).
+     */
+    private function resolveCartRetrieveCouponDiscount(array $data): float
+    {
+        if (array_key_exists('couponreduction', $data) && is_numeric($data['couponreduction'])) {
+            $v = (float)$data['couponreduction'];
+            if ($v > 0) {
+                return $v;
+            }
+        }
+        if (
+            !empty($data['orderremarks'])
+            && is_array($data['orderremarks'])
+            && isset($data['orderremarks']['coupon_reduce'])
+            && is_numeric($data['orderremarks']['coupon_reduce'])
+        ) {
+            $v = (float)$data['orderremarks']['coupon_reduce'];
+
+            return $v > 0 ? $v : 0.0;
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Total GST rupees from GET /cart/retrieve JSON root (same key as views/pos_register/cart-functions.php): gstamount.
+     */
+    private function resolveCartRetrieveGstTotal(array $data): float
+    {
+        if (array_key_exists('gstamount', $data) && is_numeric($data['gstamount'])) {
+            return max(0.0, (float)$data['gstamount']);
+        }
+
+        return 0.0;
+    }
+
+    /**
      * Addon list from /product/code (unwrapped), including express row for cart_entry matching.
      *
      * @return array<int, array<string, mixed>>
@@ -1760,6 +1834,7 @@ class POSRegisterController
         $items = [];
         $subtotal = 0;
         $shipping_total = 0;
+        $gst_computed = 0.0;
         if (!empty($data['cartitems'])) {
 
             foreach ($data['cartitems'] as $item) {
@@ -1866,7 +1941,14 @@ class POSRegisterController
                     $shipping_per_unit
                 );
                 $unitLine = $unitBase + $addonsSumPerUnit;
-                $subtotal += $unitLine * (int)$item['quantity'];
+                // Per-unit taxable × quantity (same as your sample: lineSubTotal = unitTaxable * qty).
+                $lineQty = max(1, (int)($item['quantity'] ?? 1));
+                $taxableLine = $unitLine * $lineQty;
+                $subtotal += $taxableLine;
+
+                // GST per line (real API field names — same as mergeGstPercentField): gst_rate → gst_percent → gst; else vp_products.gst.
+                $gstPercent = $this->resolveCartLineGstPercent($item, $productRes, $conn);
+                $gst_computed += round(($taxableLine * $gstPercent) / 100, 2);
 
                 // Add shipping only if selected
                 if ($expressSelected) {
@@ -1877,67 +1959,34 @@ class POSRegisterController
 
         $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
         $coupon_applied = trim((string)$coupon) !== '';
-        $discount = 0.0;
-        foreach ([
-            'couponreduction',
-            'coupon_reduction',
-            'couponreduce',
-            'coupon_reduce',
-        ] as $k) {
-            if (isset($data[$k]) && is_numeric($data[$k])) {
-                $discount = (float)$data[$k];
-                if ($discount > 0) {
-                    break;
-                }
-            }
-        }
-        if (
-            $discount <= 0
-            && !empty($data['orderremarks'])
-            && is_array($data['orderremarks'])
-            && isset($data['orderremarks']['coupon_reduce'])
-            && is_numeric($data['orderremarks']['coupon_reduce'])
-        ) {
-            $discount = (float)$data['orderremarks']['coupon_reduce'];
-        }
-        $gst = 0.0;
-        foreach ([
-            'gstamount',
-            'gst_amount',
-            'totalgst',
-            'total_gst',
-            'gst',
-        ] as $k) {
-            if (isset($data[$k]) && is_numeric($data[$k])) {
-                $gst = (float)$data[$k];
-                if ($gst > 0) {
-                    break;
-                }
-            }
-        }
+        $discount = $this->resolveCartRetrieveCouponDiscount($data);
+        $gst = $this->resolveCartRetrieveGstTotal($data);
         $custom_discount = (float)($data['customreduction'] ?? 0);
         // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
         $total_discount = $discount + $custom_discount;
         // Keep Sub Total as pre-discount line sum; discount is shown separately in UI.
         $display_subtotal = $subtotal;
-        $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
+        if ($gst_computed > 0) {
+            $gst = round($gst_computed, 2);
+        }
+        $grand_total = $subtotal + $gst - $total_discount;
 
         $apiTotal = isset($data['totalamount']) && is_numeric($data['totalamount']) ? (float)$data['totalamount'] : 0.0;
         if ($gst <= 0 && $apiTotal > 0) {
             // Infer GST when API omits explicit GST fields but total includes tax.
-            $inferredGst = $apiTotal - ($subtotal + $shipping_total - $total_discount);
+            $inferredGst = $apiTotal - ($subtotal - $total_discount);
             if ($inferredGst > 0.01) {
                 $gst = round($inferredGst, 2);
-                $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
+                $grand_total = $subtotal + $gst - $total_discount;
             }
         }
         if ($discount <= 0 && $coupon_applied && $apiTotal > 0) {
             // Infer coupon from totals when API omits coupon reduction fields.
-            $inferredCoupon = ($subtotal + $shipping_total + $gst - $custom_discount) - $apiTotal;
+            $inferredCoupon = ($subtotal + $gst - $custom_discount) - $apiTotal;
             if ($inferredCoupon > 0.01) {
                 $discount = round($inferredCoupon, 2);
                 $total_discount = $discount + $custom_discount;
-                $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
+                $grand_total = $subtotal + $gst - $total_discount;
             }
         }
         if ($apiTotal > 0) {

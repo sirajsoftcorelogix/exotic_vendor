@@ -596,12 +596,11 @@
           <!-- TOTALS -->
           <?php
           $rawSubtotal = (float)($cartData['subtotal'] ?? 0);
-          $shippingTotal = (float)($cartData['shipping_total'] ?? 0);
           $gstTotal = (float)($cartData['gst'] ?? 0);
           $couponDiscount = (float)($cartData['discount'] ?? 0);
           $customDiscount = (float)($cartData['custom_discount'] ?? 0);
           $totalDiscount = $couponDiscount + $customDiscount;
-          $computedGrandTotal = max(0, $rawSubtotal + $shippingTotal + $gstTotal - $totalDiscount);
+          $computedGrandTotal = max(0, $rawSubtotal + $gstTotal - $totalDiscount);
           $displayGrandTotal = (float)($cartData['grand_total'] ?? 0);
           if ($totalDiscount > 0 && abs($displayGrandTotal - $computedGrandTotal) > 0.01) {
             // Keep discount effect visible even if API returns a stale grand total.
@@ -613,12 +612,6 @@
               <span>Sub Total</span>
               <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($rawSubtotal, 2) ?></span>
             </div>
-            <?php if ($shippingTotal > 0): ?>
-              <div class="flex justify-between text-slate-600">
-                <span>Shipping</span>
-                <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($shippingTotal, 2) ?></span>
-              </div>
-            <?php endif; ?>
             <?php if (!empty($cartData['discount'])): ?>
               <div class="flex justify-between text-green-600">
                 <span>Coupon Discount</span>
