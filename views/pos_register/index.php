@@ -609,7 +609,8 @@
           $couponDiscount = (float)($cartData['coupon_discount'] ?? 0);
           $customDiscount = (float)($cartData['custom_discount'] ?? 0);
           $totalDiscount = $couponDiscount + $customDiscount;
-          $computedGrandTotal = max(0, $rawSubtotal + $gstTotal - $totalDiscount);
+          // Subtotal is already GST-inclusive.
+          $computedGrandTotal = max(0, $rawSubtotal - $totalDiscount);
           $displayGrandTotal = (float)($cartData['grand_total'] ?? 0);
           if ($totalDiscount > 0 && abs($displayGrandTotal - $computedGrandTotal) > 0.01) {
             // Keep discount effect visible even if API returns a stale grand total.
