@@ -1629,26 +1629,41 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
   function setAddressConfirmFields(payload) {
     var billing = (payload && payload.billing) || {};
     var shipping = (payload && payload.shipping) || {};
+    function firstNonEmpty() {
+      for (var i = 0; i < arguments.length; i++) {
+        var v = arguments[i];
+        if (v != null && String(v).trim() !== "") return String(v).trim();
+      }
+      return "";
+    }
+    var shippingName = firstNonEmpty(
+      shipping.sname,
+      [shipping.shipping_first_name, shipping.shipping_last_name].filter(Boolean).join(" "),
+      [shipping.first_name, shipping.last_name].filter(Boolean).join(" ")
+    );
     var map = {
-      confirm_first_name: billing.first_name || "",
-      confirm_last_name: billing.last_name || "",
-      confirm_email: billing.email || "",
-      confirm_phone: billing.phone || "",
-      confirm_address1: billing.address1 || "",
-      confirm_address2: billing.address2 || "",
-      confirm_city: billing.city || "",
-      confirm_state: billing.state || "",
-      confirm_zip: billing.zip || "",
-      confirm_country: billing.country || "IN",
-      confirm_gstin: billing.gstin || "",
-      confirm_sname: shipping.sname || "",
-      confirm_saddress1: shipping.saddress1 || "",
-      confirm_saddress2: shipping.saddress2 || "",
-      confirm_scity: shipping.scity || "",
-      confirm_sstate: shipping.sstate || "",
-      confirm_szip: shipping.szip || "",
-      confirm_scountry: shipping.scountry || "IN",
-      confirm_sphone: shipping.sphone || ""
+      // Billing: support normalized keys + DB/raw aliases.
+      confirm_first_name: firstNonEmpty(billing.first_name, billing.billing_first_name),
+      confirm_last_name: firstNonEmpty(billing.last_name, billing.billing_last_name),
+      confirm_email: firstNonEmpty(billing.email, billing.cus_email, billing.billing_email),
+      confirm_phone: firstNonEmpty(billing.phone, billing.mobile, billing.billing_mobile),
+      confirm_address1: firstNonEmpty(billing.address1, billing.address_line1, billing.billing_address_line1),
+      confirm_address2: firstNonEmpty(billing.address2, billing.address_line2, billing.billing_address_line2),
+      confirm_city: firstNonEmpty(billing.city),
+      confirm_state: firstNonEmpty(billing.state),
+      confirm_zip: firstNonEmpty(billing.zip, billing.zipcode),
+      confirm_country: firstNonEmpty(billing.country, "IN"),
+      confirm_gstin: firstNonEmpty(billing.gstin),
+
+      // Shipping: support normalized keys + DB/raw aliases.
+      confirm_sname: shippingName,
+      confirm_saddress1: firstNonEmpty(shipping.saddress1, shipping.shipping_address_line1, shipping.address1, shipping.address_line1),
+      confirm_saddress2: firstNonEmpty(shipping.saddress2, shipping.shipping_address_line2, shipping.address2, shipping.address_line2),
+      confirm_scity: firstNonEmpty(shipping.scity, shipping.shipping_city, shipping.city),
+      confirm_sstate: firstNonEmpty(shipping.sstate, shipping.shipping_state, shipping.state),
+      confirm_szip: firstNonEmpty(shipping.szip, shipping.shipping_zipcode, shipping.zip, shipping.zipcode),
+      confirm_scountry: firstNonEmpty(shipping.scountry, shipping.shipping_country, shipping.country, "IN"),
+      confirm_sphone: firstNonEmpty(shipping.sphone, shipping.shipping_mobile, shipping.mobile, shipping.phone)
     };
     Object.keys(map).forEach(function(id) {
       var el = document.getElementById(id);
