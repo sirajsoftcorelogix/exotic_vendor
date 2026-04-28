@@ -747,6 +747,48 @@ class POSRegisterController
     }
 
     /**
+     * First positive numeric value from a payload node by candidate keys.
+     */
+    private function pickFirstPositiveNumeric(array $node, array $keys): float
+    {
+        foreach ($keys as $k) {
+            if (array_key_exists($k, $node) && is_numeric($node[$k])) {
+                $v = (float)$node[$k];
+                if ($v > 0) {
+                    return $v;
+                }
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Decode checkoutdata that may be array/json/base64-json.
+     */
+    private function decodeCheckoutdataNode($checkoutdata): array
+    {
+        if (is_array($checkoutdata)) {
+            return $checkoutdata;
+        }
+        $s = trim((string)$checkoutdata);
+        if ($s === '') {
+            return [];
+        }
+        $decoded = json_decode($s, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+        $b = base64_decode($s, true);
+        if ($b === false || $b === '') {
+            return [];
+        }
+        $decoded2 = json_decode($b, true);
+
+        return is_array($decoded2) ? $decoded2 : [];
+    }
+
+    /**
      * Coupon discount in rupees: root fields, then JSON (or base64+JSON) checkoutdata.
      * The API may omit couponreduction on the root but still include it in checkoutdata.
      */
@@ -756,36 +798,17 @@ class POSRegisterController
         if ($v > 0) {
             return $v;
         }
-        foreach (['coupon_reduction', 'couponreduce', 'coupon_reduce', 'coupondiscount', 'coupon_discount'] as $k) {
-            if (array_key_exists($k, $data) && is_numeric($data[$k])) {
-                $x = (float)$data[$k];
-                if ($x > 0) {
-                    return $x;
-                }
-            }
+        $rootAlt = $this->pickFirstPositiveNumeric(
+            $data,
+            ['coupon_reduction', 'couponreduce', 'coupon_reduce', 'coupondiscount', 'coupon_discount']
+        );
+        if ($rootAlt > 0) {
+            return $rootAlt;
         }
-        $cd = $data['checkoutdata'] ?? null;
-        if ($cd === null) {
+
+        $checkoutNode = $this->decodeCheckoutdataNode($data['checkoutdata'] ?? null);
+        if ($checkoutNode === []) {
             return 0.0;
-        }
-        if (is_array($cd)) {
-            $nodes = [$cd];
-        } else {
-            $s = trim((string)$cd);
-            if ($s === '') {
-                return 0.0;
-            }
-            $decoded = json_decode($s, true);
-            if (!is_array($decoded)) {
-                $b = base64_decode($s, true);
-                if ($b !== false && $b !== '') {
-                    $decoded = json_decode($b, true);
-                }
-            }
-            if (!is_array($decoded)) {
-                return 0.0;
-            }
-            $nodes = [$decoded];
         }
         $tryNode = static function (array $node): float {
             foreach (['couponreduction', 'coupon_reduction', 'couponreduce', 'coupon_reduce', 'coupondiscount', 'coupon_discount'] as $k) {
@@ -805,11 +828,9 @@ class POSRegisterController
 
             return 0.0;
         };
-        foreach ($nodes as $n) {
-            $f = $tryNode($n);
-            if ($f > 0) {
-                return $f;
-            }
+        $fromCheckout = $tryNode($checkoutNode);
+        if ($fromCheckout > 0) {
+            return $fromCheckout;
         }
 
         return 0.0;
@@ -820,11 +841,7 @@ class POSRegisterController
      */
     private function resolveCartRetrieveGstTotal(array $data): float
     {
-        if (array_key_exists('gstamount', $data) && is_numeric($data['gstamount'])) {
-            return max(0.0, (float)$data['gstamount']);
-        }
-
-        return 0.0;
+        return $this->pickFirstPositiveNumeric($data, ['gstamount']);
     }
 
     /**
@@ -1870,178 +1887,186 @@ class POSRegisterController
         }
     }
 
-
-    public function get_cart()
+    /**
+     * Build one normalized POS cart line plus computed totals for subtotal/shipping/gst.
+     *
+     * @return array{
+     *   item: array<string,mixed>,
+     *   taxable_line: float,
+     *   shipping_component: float,
+     *   gst_line: float
+     * }
+     */
+    private function buildPosCartLineFromApiItem(array $item, $conn): array
     {
-        global $conn;
-        $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
-        $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
-        $cartRetrieveQuery = [
-            'discountcoupondetails' => $coupon,
-            'giftvoucherdetails' => $voucher,
-        ];
-        $res = $this->exotic_api_call('/cart/retrieve', 'GET', $cartRetrieveQuery);
+        $shipping_per_unit = (float)($item['express_shipping_cost'] ?? 0);
+        $lineQty = max(1, (int)($item['quantity'] ?? 1));
+        $shipping = $shipping_per_unit * $lineQty;
+        $expressSelected = $item['express_shipping_chosen'] ?? false;
+        $addons = [];
+        $selectedEntries = [];
 
-        $cartRetrieveUrl = 'https://www.exoticindia.com/api/cart/retrieve?' . http_build_query($cartRetrieveQuery);
+        if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
+            foreach ($item['addons_selected'] as $ad) {
+                if (!is_array($ad)) {
+                    continue;
+                }
 
-        $cartApiRequestMeta = [
-            'method' => 'GET',
-            'url' => $cartRetrieveUrl,
-            'query_params' => $cartRetrieveQuery,
-            'headers' => [
-                'x-api-key' => '(redacted)',
-                'x-api-deviceid' => 'POS-Store_1',
-                'x-api-appplayerid' => 'POS-Web-Terminal',
-                'x-api-countrycode' => 'IN',
-                'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
-                'User-Agent' => 'ExoticPOS',
-            ],
-        ];
-
-        $data = $res['data'] ?? [];
-
-        $items = [];
-        $subtotal = 0;
-        $shipping_total = 0;
-        $gst_computed = 0.0;
-        if (!empty($data['cartitems'])) {
-
-            foreach ($data['cartitems'] as $item) {
-
-                // $shipping = (float)($item['express_shipping_cost'] ?? 0);
-                $shipping_per_unit = (float)($item['express_shipping_cost'] ?? 0);
-                $shipping = $shipping_per_unit * (int)$item['quantity'];
-                // $expressSelected = $item['express_shipping_chosen'] ?? false;
-                $expressSelected = $item['express_shipping_chosen'] ?? false;
-                $addons = [];
-                $selectedEntries = [];
-
-                if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
-                    foreach ($item['addons_selected'] as $ad) {
-                        if (!is_array($ad)) {
-                            continue;
-                        }
-
-                        $amt = 0.0;
-                        foreach (['value', 'price', 'amount'] as $k) {
-                            if (isset($ad[$k]) && $ad[$k] !== '' && is_numeric($ad[$k])) {
-                                $amt = (float)$ad[$k];
-                                break;
-                            }
-                        }
-
-                        $cartEntry = trim((string)($ad['cart_entry'] ?? ''));
-                        if ($cartEntry === '') {
-                            if (stripos((string)($ad['name'] ?? ''), 'Express') !== false) {
-                                $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $amt;
-                            } else {
-                                $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amt;
-                            }
-                        }
-
-                        $addons[] = [
-                            'name' => $ad['name'] ?? '',
-                            'value' => $amt,
-                            'cart_entry' => $cartEntry,
-                        ];
-                        $selectedEntries[] = $cartEntry;
+                $amt = 0.0;
+                foreach (['value', 'price', 'amount'] as $k) {
+                    if (isset($ad[$k]) && $ad[$k] !== '' && is_numeric($ad[$k])) {
+                        $amt = (float)$ad[$k];
+                        break;
                     }
                 }
 
-                $optStr = trim((string)($item['options'] ?? ''));
-                if ($optStr !== '') {
-                    $optParts = strpos($optStr, '|') !== false
-                        ? explode('|', $optStr)
-                        : explode(',', $optStr);
-                    foreach ($optParts as $chunk) {
-                        $chunk = trim((string)$chunk);
-                        if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
-                            $selectedEntries[] = $chunk;
-                        }
+                $cartEntry = trim((string)($ad['cart_entry'] ?? ''));
+                if ($cartEntry === '') {
+                    if (stripos((string)($ad['name'] ?? ''), 'Express') !== false) {
+                        $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $amt;
+                    } else {
+                        $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amt;
                     }
                 }
 
-                $productRes = $this->exotic_api_call('/product/code', 'GET', [
-                    'code' => $item['code']
-                ]);
-
-                $all_addons = $this->productApiAddonCatalogList($productRes);
-
-                $unitBase = (float)$item['price'];
-                $vpIndia = $this->resolveIndiaSellPriceFromVp($conn, trim((string)$item['code']));
-                if ($vpIndia > 0) {
-                    $unitBase = $vpIndia;
-                }
-
-                $addons_display = $this->buildPosCartAddonDisplayLines($addons, $selectedEntries, $all_addons);
-
-                $items[] = [
-                    'item_code' => $item['code'],
-                    'cartref' => $item['cartref'],
-                    'name' => $item['name'],
-                    'imageurl' => $item['imageurl'],
-                    'price' => $unitBase,
-                    'quantity' => (int)$item['quantity'],
-                    'shipping' => $shipping,
-                    'shipping_per_unit' => $shipping_per_unit,
-                    'shipping_title' => $item['express_shipping_option']['title'] ?? '',
-                    'shipping_longtitle' => $item['express_shipping_option']['longtitle'] ?? '',
-                    'express_selected' => $expressSelected,
-                    'addons' => $addons,
-                    'all_addons' => $all_addons, //  NOW ALWAYS ARRAY
-                    'selected_entries' => $selectedEntries,
-                    'addons_display' => $addons_display,
+                $addons[] = [
+                    'name' => $ad['name'] ?? '',
+                    'value' => $amt,
+                    'cart_entry' => $cartEntry,
                 ];
+                $selectedEntries[] = $cartEntry;
+            }
+        }
 
-                // Subtotal = Σ ((unit item price + sum of addon prices per unit) × quantity)
-                $addonsSumPerUnit = 0.0;
-                foreach ($addons as $a) {
-                    $addonsSumPerUnit += (float)($a['value'] ?? 0);
-                }
-                if ($addonsSumPerUnit <= 0 && $selectedEntries !== [] && $all_addons !== []) {
-                    $addonsSumPerUnit = $this->sumAddonPricesFromCatalogMatches($selectedEntries, $all_addons);
-                }
-                $addonsSumPerUnit = $this->mergeExpressShippingIntoAddonUnitSum(
-                    $addonsSumPerUnit,
-                    $addons,
-                    $selectedEntries,
-                    $all_addons,
-                    (bool)$expressSelected,
-                    $shipping_per_unit
-                );
-                $unitLine = $unitBase + $addonsSumPerUnit;
-                // Per-unit taxable × quantity (same as your sample: lineSubTotal = unitTaxable * qty).
-                $lineQty = max(1, (int)($item['quantity'] ?? 1));
-                $taxableLine = $unitLine * $lineQty;
-                $subtotal += $taxableLine;
-
-                // GST per line (real API field names — same as mergeGstPercentField): gst_rate → gst_percent → gst; else vp_products.gst.
-                $gstPercent = $this->resolveCartLineGstPercent($item, $productRes, $conn);
-                $gst_computed += round(($taxableLine * $gstPercent) / 100, 2);
-
-                // Add shipping only if selected
-                if ($expressSelected) {
-                    $shipping_total += $shipping;
+        $optStr = trim((string)($item['options'] ?? ''));
+        if ($optStr !== '') {
+            $optParts = strpos($optStr, '|') !== false
+                ? explode('|', $optStr)
+                : explode(',', $optStr);
+            foreach ($optParts as $chunk) {
+                $chunk = trim((string)$chunk);
+                if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
+                    $selectedEntries[] = $chunk;
                 }
             }
         }
 
-        $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
-        $coupon_applied = trim((string)$coupon) !== '';
-        // Coupon discount and custom discount are separate entities.
-        $coupon_discount = $this->extractCartRetrieveCouponDiscountRupees($data);
-        $gst = $this->resolveCartRetrieveGstTotal($data);
-        $custom_discount = (float)($data['customreduction'] ?? 0);
-        // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
-        $total_discount = $coupon_discount + $custom_discount;
-        // Keep Sub Total as pre-discount line sum; discount is shown separately in UI.
-        $display_subtotal = $subtotal;
-        if ($gst_computed > 0) {
-            $gst = round($gst_computed, 2);
-        }
-        $grand_total = $subtotal + $gst - $total_discount;
+        $productRes = $this->exotic_api_call('/product/code', 'GET', [
+            'code' => $item['code']
+        ]);
+        $all_addons = $this->productApiAddonCatalogList($productRes);
 
+        $unitBase = (float)($item['price'] ?? 0);
+        $vpIndia = $this->resolveIndiaSellPriceFromVp($conn, trim((string)($item['code'] ?? '')));
+        if ($vpIndia > 0) {
+            $unitBase = $vpIndia;
+        }
+
+        $addons_display = $this->buildPosCartAddonDisplayLines($addons, $selectedEntries, $all_addons);
+
+        $addonsSumPerUnit = 0.0;
+        foreach ($addons as $a) {
+            $addonsSumPerUnit += (float)($a['value'] ?? 0);
+        }
+        if ($addonsSumPerUnit <= 0 && $selectedEntries !== [] && $all_addons !== []) {
+            $addonsSumPerUnit = $this->sumAddonPricesFromCatalogMatches($selectedEntries, $all_addons);
+        }
+        $addonsSumPerUnit = $this->mergeExpressShippingIntoAddonUnitSum(
+            $addonsSumPerUnit,
+            $addons,
+            $selectedEntries,
+            $all_addons,
+            (bool)$expressSelected,
+            $shipping_per_unit
+        );
+
+        $unitLine = $unitBase + $addonsSumPerUnit;
+        $taxableLine = $unitLine * $lineQty;
+        $gstPercent = $this->resolveCartLineGstPercent($item, $productRes, $conn);
+        $gstLine = round(($taxableLine * $gstPercent) / 100, 2);
+
+        return [
+            'item' => [
+                'item_code' => $item['code'] ?? '',
+                'cartref' => $item['cartref'] ?? '',
+                'name' => $item['name'] ?? '',
+                'imageurl' => $item['imageurl'] ?? '',
+                'price' => $unitBase,
+                'quantity' => $lineQty,
+                'shipping' => $shipping,
+                'shipping_per_unit' => $shipping_per_unit,
+                'shipping_title' => $item['express_shipping_option']['title'] ?? '',
+                'shipping_longtitle' => $item['express_shipping_option']['longtitle'] ?? '',
+                'express_selected' => $expressSelected,
+                'addons' => $addons,
+                'selected_entries' => $selectedEntries,
+                'addons_display' => $addons_display,
+            ],
+            'taxable_line' => $taxableLine,
+            'shipping_component' => $expressSelected ? $shipping : 0.0,
+            'gst_line' => $gstLine,
+        ];
+    }
+
+    /**
+     * Convert raw /cart/retrieve rows into normalized cart lines and running totals.
+     *
+     * @return array{items: array<int,array<string,mixed>>, subtotal: float, shipping_total: float, gst_computed: float}
+     */
+    private function buildPosCartLinesAndTotals(array $cartItems, $conn): array
+    {
+        $items = [];
+        $subtotal = 0.0;
+        $shipping_total = 0.0;
+        $gst_computed = 0.0;
+
+        foreach ($cartItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $line = $this->buildPosCartLineFromApiItem($item, $conn);
+            $items[] = $line['item'];
+            $subtotal += (float)$line['taxable_line'];
+            $shipping_total += (float)$line['shipping_component'];
+            $gst_computed += (float)$line['gst_line'];
+        }
+
+        return [
+            'items' => $items,
+            'subtotal' => $subtotal,
+            'shipping_total' => $shipping_total,
+            'gst_computed' => $gst_computed,
+        ];
+    }
+
+    /**
+     * Resolve coupon/custom/gst/grand-total fallbacks from cart payload + computed lines.
+     *
+     * @return array{
+     *   codcharges: float,
+     *   coupon_applied: bool,
+     *   coupon_discount: float,
+     *   custom_discount: float,
+     *   total_discount: float,
+     *   gst: float,
+     *   grand_total: float
+     * }
+     */
+    private function resolveCartFinancials(array $data, string $coupon, float $subtotal, float $gstComputed): array
+    {
+        $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
+        $coupon_applied = trim($coupon) !== '';
+        $coupon_discount = $this->extractCartRetrieveCouponDiscountRupees($data);
+        $custom_discount = (float)($data['customreduction'] ?? 0);
+        $total_discount = $coupon_discount + $custom_discount;
+        $gst = $this->resolveCartRetrieveGstTotal($data);
+        if ($gstComputed > 0) {
+            $gst = round($gstComputed, 2);
+        }
+
+        $grand_total = $subtotal + $gst - $total_discount;
         $apiTotal = isset($data['totalamount']) && is_numeric($data['totalamount']) ? (float)$data['totalamount'] : 0.0;
+
         if ($gst <= 0 && $apiTotal > 0) {
             // Infer GST when API omits explicit GST fields but total includes tax.
             $inferredGst = $apiTotal - ($subtotal - $total_discount);
@@ -2074,22 +2099,81 @@ class POSRegisterController
                 $grand_total = $apiTotal;
             }
         }
+
+        return [
+            'codcharges' => $codcharges,
+            'coupon_applied' => $coupon_applied,
+            'coupon_discount' => $coupon_discount,
+            'custom_discount' => $custom_discount,
+            'total_discount' => $total_discount,
+            'gst' => $gst,
+            'grand_total' => $grand_total,
+        ];
+    }
+
+
+    public function get_cart()
+    {
+        global $conn;
+        $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
+        $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
+        $cartRetrieveQuery = [
+            'discountcoupondetails' => $coupon,
+            'giftvoucherdetails' => $voucher,
+        ];
+        $res = $this->exotic_api_call('/cart/retrieve', 'GET', $cartRetrieveQuery);
+
+        $cartRetrieveUrl = 'https://www.exoticindia.com/api/cart/retrieve?' . http_build_query($cartRetrieveQuery);
+
+        $cartApiRequestMeta = [
+            'method' => 'GET',
+            'url' => $cartRetrieveUrl,
+            'query_params' => $cartRetrieveQuery,
+            'headers' => [
+                'x-api-key' => '(redacted)',
+                'x-api-deviceid' => 'POS-Store_1',
+                'x-api-appplayerid' => 'POS-Web-Terminal',
+                'x-api-countrycode' => 'IN',
+                'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
+                'User-Agent' => 'ExoticPOS',
+            ],
+        ];
+
+        $data = $res['data'] ?? [];
+
+        $lineBuild = $this->buildPosCartLinesAndTotals(
+            !empty($data['cartitems']) && is_array($data['cartitems']) ? $data['cartitems'] : [],
+            $conn
+        );
+        $items = $lineBuild['items'];
+        $subtotal = $lineBuild['subtotal'];
+        $shipping_total = $lineBuild['shipping_total'];
+        $gst_computed = $lineBuild['gst_computed'];
+        // Keep Sub Total as pre-discount line sum; discount is shown separately in UI.
+        $display_subtotal = $subtotal;
+        $financials = $this->resolveCartFinancials($data, (string)$coupon, $subtotal, $gst_computed);
+        $cartApiBodyForDebug = $data;
+        if (isset($cartApiBodyForDebug['cartitems'])) {
+            unset($cartApiBodyForDebug['cartitems']);
+        }
+
         return [
             'items' => $items,
             'subtotal' => $display_subtotal,
             'shipping_total' => $shipping_total,
-            'gst' => $gst,
+            'gst' => $financials['gst'],
             // Keep existing output key name for backwards compatibility with the view.
-            'coupon_discount' => $coupon_discount,
-            'coupon_applied' => $coupon_applied,
-            'custom_discount' => $custom_discount,
-            'grand_total' => $grand_total,
+            'discount' => $financials['coupon_discount'],
+            'coupon_discount' => $financials['coupon_discount'],
+            'coupon_applied' => $financials['coupon_applied'],
+            'custom_discount' => $financials['custom_discount'],
+            'grand_total' => $financials['grand_total'],
             'checkoutdata' => $data['checkoutdata'] ?? '',
-            'codcharges' => $codcharges,
+            'codcharges' => $financials['codcharges'],
             // POS register is INR billing; do not inherit API fx_type (can return USD/$).
             'currency' => 'INR',
             'cart_api_http_code' => (int)($res['code'] ?? 0),
-            'cart_api_body' => $data,
+            'cart_api_body' => $cartApiBodyForDebug,
             'cart_api_request' => $cartApiRequestMeta,
         ];
     }
