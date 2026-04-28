@@ -609,7 +609,8 @@
           $couponDiscount = (float)($cartData['coupon_discount'] ?? 0);
           $customDiscount = (float)($cartData['custom_discount'] ?? 0);
           $totalDiscount = $couponDiscount + $customDiscount;
-          $computedGrandTotal = max(0, $rawSubtotal + $gstTotal - $totalDiscount);
+          // Subtotal is already GST-inclusive.
+          $computedGrandTotal = max(0, $rawSubtotal - $totalDiscount);
           $displayGrandTotal = (float)($cartData['grand_total'] ?? 0);
           if ($totalDiscount > 0 && abs($displayGrandTotal - $computedGrandTotal) > 0.01) {
             // Keep discount effect visible even if API returns a stale grand total.
@@ -1228,7 +1229,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           <input
             type="number"
             id="payment_amount"
-            value="<?= $cartData['grand_total'] ?? 0 ?>"
+            value="<?= $displayGrandTotal ?? ($cartData['grand_total'] ?? 0) ?>"
             class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
         </div>
 
@@ -1746,7 +1747,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
       let paymentStage = document.getElementById("payment_stage").value;
       let paymentAmount = parseFloat(document.getElementById("payment_amount").value);
-      let grandTotal = parseFloat("<?= $cartData['grand_total'] ?? 0 ?>");
+      let grandTotal = parseFloat("<?= $displayGrandTotal ?? ($cartData['grand_total'] ?? 0) ?>");
 
       if (!paymentAmount || paymentAmount <= 0) {
         showToast("⚠ Payment amount must be greater than 0", "red");

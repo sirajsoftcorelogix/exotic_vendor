@@ -2097,15 +2097,14 @@ class POSRegisterController
         bool $couponApplied,
         float $apiTotal,
         float $subtotal,
-        float $gst,
         float $customDiscount
     ): float {
         if (!($couponDiscount <= 0 && $couponApplied && $apiTotal > 0)) {
             return $couponDiscount;
         }
-        $inferredCoupon = ($subtotal + $gst - $customDiscount) - $apiTotal;
-        $inferredLooksLikeGstBug = ($gst > 0.01 && abs($inferredCoupon - $gst) < 0.05);
-        if (!$inferredLooksLikeGstBug && $inferredCoupon > 0.01) {
+        // Subtotal is already GST-inclusive in POS totals.
+        $inferredCoupon = ($subtotal - $customDiscount) - $apiTotal;
+        if ($inferredCoupon > 0.01) {
             return round($inferredCoupon, 2);
         }
 
@@ -2190,7 +2189,8 @@ class POSRegisterController
         float $totalDiscount,
         float $couponDiscount
     ): float {
-        $computedPayable = $subtotal + $gst - $totalDiscount;
+        // Subtotal is GST-inclusive, so do not add GST again.
+        $computedPayable = $subtotal - $totalDiscount;
         if ($apiTotal <= 0) {
             return $computedPayable;
         }
@@ -2246,7 +2246,6 @@ class POSRegisterController
             $coupon_applied,
             $apiTotal,
             $subtotal,
-            $gst,
             $custom_discount
         );
         $total_discount = $coupon_discount + $custom_discount;
