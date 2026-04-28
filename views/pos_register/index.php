@@ -324,8 +324,13 @@
 
                   <div class="flex-1 min-w-0">
 
-                    <div class="text-xs leading-snug line-clamp-2 text-slate-800 sm:text-sm">
-                      <?= htmlspecialchars($item['name']) ?>
+                    <div class="mt-0.5 flex items-start justify-between gap-2">
+                      <div class="text-xs leading-snug line-clamp-2 text-slate-800 sm:text-sm">
+                        <?= htmlspecialchars($item['name']) ?>
+                      </div>
+                      <span class="shrink-0 text-sm font-semibold text-orange-600 sm:text-base">
+                        <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['price'], 2) ?>
+                      </span>
                     </div>
 
                     <?php if (!empty($item['addons_display']) && is_array($item['addons_display'])): ?>
@@ -343,12 +348,6 @@
                         <?php endforeach; ?>
                       </div>
                     <?php endif; ?>
-
-                    <div class="mt-1.5 flex items-center justify-between">
-                      <span class="text-sm font-semibold text-orange-600 sm:text-base">
-                        <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['price'], 2) ?>
-                      </span>
-                    </div>
 
                     <div class="mt-2 flex items-center justify-between">
 
@@ -620,7 +619,7 @@
             <?php endif; ?>
             <?php if (!empty($cartData['coupon_discount'])): ?>
               <div class="flex justify-between text-green-600">
-                <span>Coupon Discount</span>
+                <span>Item Coupon Discount</span>
                 <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['coupon_discount'], 2) ?></span>
               </div>
             <?php endif; ?>
