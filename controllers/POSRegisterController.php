@@ -1655,18 +1655,6 @@ class POSRegisterController
             $headers[] = 'x-api-euid: ' . $_SESSION['x_api_euid'];
         }
 
-        // Debug: log equivalent curl request
-        $curlParts = [];
-        $curlParts[] = 'curl -X POST';
-        foreach ($headers as $h) {
-            $curlParts[] = '-H ' . escapeshellarg($h);
-        }
-        $curlParts[] = escapeshellarg($url);
-        $curlParts[] = '--data ' . escapeshellarg(http_build_query($postData));
-        print('[POS cart-add] ' . implode(' ', $curlParts));
-        die;
-
-
         $capturedEuid = null;
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -1688,8 +1676,6 @@ class POSRegisterController
         });
 
         $response = curl_exec($ch);
-        // print_r($response);
-        die;
         $error = curl_error($ch);
         $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -2750,15 +2736,17 @@ class POSRegisterController
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
         $allowedPaymentTypes = [
-            'Cash',
-            'POS Machine',
-            'UPI',
-            'Bank Transfer',
-            'Special Pay',
-            'Cheque',
-            'Razorpay',
+            'offline',
+            'cc',
+            'razorpay',
+            'cod',
+            'bank_transfer',
+            'pos_machine',
+            'specialpay',
+            'cheque',
+            'demand_draft',
         ];
-        $paymentType = 'offline';
+        $paymentType = trim((string)($_POST['payment_type'] ?? 'offline'));
         if (!in_array($paymentType, $allowedPaymentTypes, true)) {
             $paymentType = 'offline';
         }
