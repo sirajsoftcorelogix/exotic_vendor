@@ -595,10 +595,9 @@
           <?php endif; ?>
           <!-- TOTALS -->
           <?php
-          print_array($cartData);
           $rawSubtotal = (float)($cartData['subtotal'] ?? 0);
           $gstTotal = (float)($cartData['gst'] ?? 0);
-          echo 'Coupon Discount: '.$couponDiscount = (float)($cartData['coupon_discount'] ?? 0);
+          $couponDiscount = (float)($cartData['coupon_discount'] ?? 0);
           $customDiscount = (float)($cartData['custom_discount'] ?? 0);
           $totalDiscount = $couponDiscount + $customDiscount;
           $computedGrandTotal = max(0, $rawSubtotal + $gstTotal - $totalDiscount);
@@ -615,7 +614,7 @@
             </div>
             <?php if (!empty($cartData['custom_discount'])): ?>
               <div class="flex justify-between text-green-600">
-                <span>Coupon Discount</span>
+                <span>Custom Discount</span>
                 <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['custom_discount'], 2) ?></span>
               </div>
             <?php endif; ?>
