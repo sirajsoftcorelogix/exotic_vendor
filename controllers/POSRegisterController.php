@@ -2028,11 +2028,12 @@ class POSRegisterController
 
         $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
         $coupon_applied = trim((string)$coupon) !== '';
-        $discount = $this->extractCartRetrieveCouponDiscountRupees($data);
+        // Coupon discount and custom discount are separate entities.
+        $coupon_discount = $this->extractCartRetrieveCouponDiscountRupees($data);
         $gst = $this->resolveCartRetrieveGstTotal($data);
         $custom_discount = (float)($data['customreduction'] ?? 0);
         // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
-        $total_discount = $discount + $custom_discount;
+        $total_discount = $coupon_discount + $custom_discount;
         // Keep Sub Total as pre-discount line sum; discount is shown separately in UI.
         $display_subtotal = $subtotal;
         if ($gst_computed > 0) {
@@ -2049,14 +2050,14 @@ class POSRegisterController
                 $grand_total = $subtotal + $gst - $total_discount;
             }
         }
-        if ($discount <= 0 && $coupon_applied && $apiTotal > 0) {
+        if ($coupon_discount <= 0 && $coupon_applied && $apiTotal > 0) {
             // Infer only when API omits coupon fields: payable = subtotal + gst - coupon.
             // Reject when inferred amount ≈ gst (happens if totalamount equals taxable subtotal only).
             $inferredCoupon = ($subtotal + $gst - $custom_discount) - $apiTotal;
             $inferredLooksLikeGstBug = ($gst > 0.01 && abs($inferredCoupon - $gst) < 0.05);
             if (!$inferredLooksLikeGstBug && $inferredCoupon > 0.01) {
-                $discount = round($inferredCoupon, 2);
-                $total_discount = $discount + $custom_discount;
+                $coupon_discount = round($inferredCoupon, 2);
+                $total_discount = $coupon_discount + $custom_discount;
                 $grand_total = $subtotal + $gst - $total_discount;
             }
         }
@@ -2066,7 +2067,7 @@ class POSRegisterController
             if ($apiTotalLooksLikePreTaxSubtotal) {
                 // totalamount matches taxable subtotal only; do not use it as grand total.
                 $grand_total = $computedPayable;
-            } elseif ($discount > 0 && $apiTotal > ($computedPayable + 0.01)) {
+            } elseif ($coupon_discount > 0 && $apiTotal > ($computedPayable + 0.01)) {
                 // Coupon applied on API but totalamount didn't drop — prefer computed checkout total.
                 $grand_total = $computedPayable;
             } else {
@@ -2078,7 +2079,8 @@ class POSRegisterController
             'subtotal' => $display_subtotal,
             'shipping_total' => $shipping_total,
             'gst' => $gst,
-            'discount' => $discount,
+            // Keep existing output key name for backwards compatibility with the view.
+            'discount' => $coupon_discount,
             'coupon_applied' => $coupon_applied,
             'custom_discount' => $custom_discount,
             'grand_total' => $grand_total,
