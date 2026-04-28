@@ -747,6 +747,75 @@ class POSRegisterController
     }
 
     /**
+     * Coupon discount in rupees: root fields, then JSON (or base64+JSON) checkoutdata.
+     * The API may omit couponreduction on the root but still include it in checkoutdata.
+     */
+    private function extractCartRetrieveCouponDiscountRupees(array $data): float
+    {
+        $v = $this->resolveCartRetrieveCouponDiscount($data);
+        if ($v > 0) {
+            return $v;
+        }
+        foreach (['coupon_reduction', 'couponreduce', 'coupon_reduce', 'coupondiscount', 'coupon_discount'] as $k) {
+            if (array_key_exists($k, $data) && is_numeric($data[$k])) {
+                $x = (float)$data[$k];
+                if ($x > 0) {
+                    return $x;
+                }
+            }
+        }
+        $cd = $data['checkoutdata'] ?? null;
+        if ($cd === null) {
+            return 0.0;
+        }
+        if (is_array($cd)) {
+            $nodes = [$cd];
+        } else {
+            $s = trim((string)$cd);
+            if ($s === '') {
+                return 0.0;
+            }
+            $decoded = json_decode($s, true);
+            if (!is_array($decoded)) {
+                $b = base64_decode($s, true);
+                if ($b !== false && $b !== '') {
+                    $decoded = json_decode($b, true);
+                }
+            }
+            if (!is_array($decoded)) {
+                return 0.0;
+            }
+            $nodes = [$decoded];
+        }
+        $tryNode = static function (array $node): float {
+            foreach (['couponreduction', 'coupon_reduction', 'couponreduce', 'coupon_reduce', 'coupondiscount', 'coupon_discount'] as $k) {
+                if (array_key_exists($k, $node) && is_numeric($node[$k])) {
+                    $x = (float)$node[$k];
+                    if ($x > 0) {
+                        return $x;
+                    }
+                }
+            }
+            if (!empty($node['orderremarks']) && is_array($node['orderremarks'])
+                && isset($node['orderremarks']['coupon_reduce']) && is_numeric($node['orderremarks']['coupon_reduce'])) {
+                $x = (float)$node['orderremarks']['coupon_reduce'];
+
+                return $x > 0 ? $x : 0.0;
+            }
+
+            return 0.0;
+        };
+        foreach ($nodes as $n) {
+            $f = $tryNode($n);
+            if ($f > 0) {
+                return $f;
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
      * Total GST rupees from GET /cart/retrieve JSON root (same key as views/pos_register/cart-functions.php): gstamount.
      */
     private function resolveCartRetrieveGstTotal(array $data): float
@@ -1959,7 +2028,7 @@ class POSRegisterController
 
         $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
         $coupon_applied = trim((string)$coupon) !== '';
-        $discount = $this->resolveCartRetrieveCouponDiscount($data);
+        $discount = $this->extractCartRetrieveCouponDiscountRupees($data);
         $gst = $this->resolveCartRetrieveGstTotal($data);
         $custom_discount = (float)($data['customreduction'] ?? 0);
         // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
@@ -1981,16 +2050,11 @@ class POSRegisterController
             }
         }
         if ($discount <= 0 && $coupon_applied && $apiTotal > 0) {
-            // Infer coupon only when totalamount is clearly "final payable", not pre-GST subtotal.
-            // If totalamount ≈ subtotal while we have GST, (subtotal + gst - apiTotal) falsely equals gst.
-            $apiTotalLooksLikePreTaxSubtotal = ($gst > 0.01 && abs($apiTotal - $subtotal) < 0.05);
+            // Infer only when API omits coupon fields: payable = subtotal + gst - coupon.
+            // Reject when inferred amount ≈ gst (happens if totalamount equals taxable subtotal only).
             $inferredCoupon = ($subtotal + $gst - $custom_discount) - $apiTotal;
-            $inferredLooksLikeGstNotCoupon = ($gst > 0.01 && abs($inferredCoupon - $gst) < 0.05);
-            if (
-                !$apiTotalLooksLikePreTaxSubtotal
-                && !$inferredLooksLikeGstNotCoupon
-                && $inferredCoupon > 0.01
-            ) {
+            $inferredLooksLikeGstBug = ($gst > 0.01 && abs($inferredCoupon - $gst) < 0.05);
+            if (!$inferredLooksLikeGstBug && $inferredCoupon > 0.01) {
                 $discount = round($inferredCoupon, 2);
                 $total_discount = $discount + $custom_discount;
                 $grand_total = $subtotal + $gst - $total_discount;
