@@ -2124,7 +2124,6 @@ class POSRegisterController
         if ($type === 'P' || $type === '%' || $type === 'PERCENT') {
             return round(($subtotal * $value) / 100, 2);
         }
-
         return round($value, 2);
     }
 
