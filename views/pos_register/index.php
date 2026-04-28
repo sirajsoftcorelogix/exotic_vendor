@@ -594,6 +594,7 @@
           <?php endif; ?>
           <!-- TOTALS -->
           <?php
+          print_array($cartData);
           $rawSubtotal = (float)($cartData['subtotal'] ?? 0);
           $gstTotal = (float)($cartData['gst'] ?? 0);
           $couponDiscount = (float)($cartData['coupon_discount'] ?? 0);
@@ -619,7 +620,7 @@
             <?php endif; ?>
             <?php if (!empty($cartData['coupon_discount'])): ?>
               <div class="flex justify-between text-green-600">
-                <span>Item Coupon Discount</span>
+                <span>Coupon Discount</span>
                 <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['coupon_discount'], 2) ?></span>
               </div>
             <?php endif; ?>

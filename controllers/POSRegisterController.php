@@ -1887,6 +1887,119 @@ class POSRegisterController
         }
     }
 
+    private function resolveAddonAmount(array $ad): float
+    {
+        foreach (['value', 'price', 'amount'] as $k) {
+            if (isset($ad[$k]) && $ad[$k] !== '' && is_numeric($ad[$k])) {
+                return (float)$ad[$k];
+            }
+        }
+
+        return 0.0;
+    }
+
+    private function buildAddonCartEntry(array $ad, float $amount): string
+    {
+        $cartEntry = trim((string)($ad['cart_entry'] ?? ''));
+        if ($cartEntry !== '') {
+            return $cartEntry;
+        }
+
+        return stripos((string)($ad['name'] ?? ''), 'Express') !== false
+            ? 'OPTIONALS_EXPRESS:_blank_:' . $amount
+            : 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amount;
+    }
+
+    /**
+     * @return array{addons: array<int,array<string,mixed>>, selected_entries: array<int,string>}
+     */
+    private function extractCartAddonsAndEntries(array $item): array
+    {
+        $addons = [];
+        $selectedEntries = [];
+
+        if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
+            foreach ($item['addons_selected'] as $ad) {
+                if (!is_array($ad)) {
+                    continue;
+                }
+                $amt = $this->resolveAddonAmount($ad);
+                $cartEntry = $this->buildAddonCartEntry($ad, $amt);
+                $addons[] = [
+                    'name' => $ad['name'] ?? '',
+                    'value' => $amt,
+                    'cart_entry' => $cartEntry,
+                ];
+                $selectedEntries[] = $cartEntry;
+            }
+        }
+
+        $optStr = trim((string)($item['options'] ?? ''));
+        if ($optStr !== '') {
+            $optParts = strpos($optStr, '|') !== false ? explode('|', $optStr) : explode(',', $optStr);
+            foreach ($optParts as $chunk) {
+                $chunk = trim((string)$chunk);
+                if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
+                    $selectedEntries[] = $chunk;
+                }
+            }
+        }
+
+        return [
+            'addons' => $addons,
+            'selected_entries' => $selectedEntries,
+        ];
+    }
+
+    /**
+     * @return array{product_res: array<string,mixed>, all_addons: array<int,array<string,mixed>>, unit_base: float, addons_display: array<int,array<string,mixed>>}
+     */
+    private function resolveCartLineCatalogAndPrice(array $item, $conn, array $addons, array $selectedEntries): array
+    {
+        $productRes = $this->exotic_api_call('/product/code', 'GET', [
+            'code' => $item['code']
+        ]);
+        $allAddons = $this->productApiAddonCatalogList($productRes);
+
+        $unitBase = (float)($item['price'] ?? 0);
+        $vpIndia = $this->resolveIndiaSellPriceFromVp($conn, trim((string)($item['code'] ?? '')));
+        if ($vpIndia > 0) {
+            $unitBase = $vpIndia;
+        }
+
+        return [
+            'product_res' => $productRes,
+            'all_addons' => $allAddons,
+            'unit_base' => $unitBase,
+            'addons_display' => $this->buildPosCartAddonDisplayLines($addons, $selectedEntries, $allAddons),
+        ];
+    }
+
+    private function resolveAddonUnitSum(
+        array $addons,
+        array $selectedEntries,
+        array $allAddons,
+        bool $expressSelected,
+        float $shippingPerUnit
+    ): float {
+        $addonsSumPerUnit = 0.0;
+        foreach ($addons as $a) {
+            $addonsSumPerUnit += (float)($a['value'] ?? 0);
+        }
+        if ($addonsSumPerUnit <= 0 && $selectedEntries !== [] && $allAddons !== []) {
+            $addonsSumPerUnit = $this->sumAddonPricesFromCatalogMatches($selectedEntries, $allAddons);
+        }
+
+        return $this->mergeExpressShippingIntoAddonUnitSum(
+            $addonsSumPerUnit,
+            $addons,
+            $selectedEntries,
+            $allAddons,
+            $expressSelected,
+            $shippingPerUnit
+        );
+    }
+
     /**
      * Build one normalized POS cart line plus computed totals for subtotal/shipping/gst.
      *
@@ -1902,86 +2015,26 @@ class POSRegisterController
         $shipping_per_unit = (float)($item['express_shipping_cost'] ?? 0);
         $lineQty = max(1, (int)($item['quantity'] ?? 1));
         $shipping = $shipping_per_unit * $lineQty;
-        $expressSelected = $item['express_shipping_chosen'] ?? false;
-        $addons = [];
-        $selectedEntries = [];
+        $expressSelected = (bool)($item['express_shipping_chosen'] ?? false);
 
-        if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
-            foreach ($item['addons_selected'] as $ad) {
-                if (!is_array($ad)) {
-                    continue;
-                }
+        $addonData = $this->extractCartAddonsAndEntries($item);
+        $addons = $addonData['addons'];
+        $selectedEntries = $addonData['selected_entries'];
 
-                $amt = 0.0;
-                foreach (['value', 'price', 'amount'] as $k) {
-                    if (isset($ad[$k]) && $ad[$k] !== '' && is_numeric($ad[$k])) {
-                        $amt = (float)$ad[$k];
-                        break;
-                    }
-                }
+        $lineContext = $this->resolveCartLineCatalogAndPrice($item, $conn, $addons, $selectedEntries);
+        $productRes = $lineContext['product_res'];
+        $allAddons = $lineContext['all_addons'];
+        $unitBase = $lineContext['unit_base'];
+        $addonsDisplay = $lineContext['addons_display'];
 
-                $cartEntry = trim((string)($ad['cart_entry'] ?? ''));
-                if ($cartEntry === '') {
-                    if (stripos((string)($ad['name'] ?? ''), 'Express') !== false) {
-                        $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $amt;
-                    } else {
-                        $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amt;
-                    }
-                }
-
-                $addons[] = [
-                    'name' => $ad['name'] ?? '',
-                    'value' => $amt,
-                    'cart_entry' => $cartEntry,
-                ];
-                $selectedEntries[] = $cartEntry;
-            }
-        }
-
-        $optStr = trim((string)($item['options'] ?? ''));
-        if ($optStr !== '') {
-            $optParts = strpos($optStr, '|') !== false
-                ? explode('|', $optStr)
-                : explode(',', $optStr);
-            foreach ($optParts as $chunk) {
-                $chunk = trim((string)$chunk);
-                if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
-                    $selectedEntries[] = $chunk;
-                }
-            }
-        }
-
-        $productRes = $this->exotic_api_call('/product/code', 'GET', [
-            'code' => $item['code']
-        ]);
-        $all_addons = $this->productApiAddonCatalogList($productRes);
-
-        $unitBase = (float)($item['price'] ?? 0);
-        $vpIndia = $this->resolveIndiaSellPriceFromVp($conn, trim((string)($item['code'] ?? '')));
-        if ($vpIndia > 0) {
-            $unitBase = $vpIndia;
-        }
-
-        $addons_display = $this->buildPosCartAddonDisplayLines($addons, $selectedEntries, $all_addons);
-
-        $addonsSumPerUnit = 0.0;
-        foreach ($addons as $a) {
-            $addonsSumPerUnit += (float)($a['value'] ?? 0);
-        }
-        if ($addonsSumPerUnit <= 0 && $selectedEntries !== [] && $all_addons !== []) {
-            $addonsSumPerUnit = $this->sumAddonPricesFromCatalogMatches($selectedEntries, $all_addons);
-        }
-        $addonsSumPerUnit = $this->mergeExpressShippingIntoAddonUnitSum(
-            $addonsSumPerUnit,
+        $addonsSumPerUnit = $this->resolveAddonUnitSum(
             $addons,
             $selectedEntries,
-            $all_addons,
-            (bool)$expressSelected,
+            $allAddons,
+            $expressSelected,
             $shipping_per_unit
         );
-
-        $unitLine = $unitBase + $addonsSumPerUnit;
-        $taxableLine = $unitLine * $lineQty;
+        $taxableLine = ($unitBase + $addonsSumPerUnit) * $lineQty;
         $gstPercent = $this->resolveCartLineGstPercent($item, $productRes, $conn);
         $gstLine = round(($taxableLine * $gstPercent) / 100, 2);
 
@@ -2000,7 +2053,7 @@ class POSRegisterController
                 'express_selected' => $expressSelected,
                 'addons' => $addons,
                 'selected_entries' => $selectedEntries,
-                'addons_display' => $addons_display,
+                'addons_display' => $addonsDisplay,
             ],
             'taxable_line' => $taxableLine,
             'shipping_component' => $expressSelected ? $shipping : 0.0,
@@ -2039,6 +2092,50 @@ class POSRegisterController
         ];
     }
 
+    private function inferMissingCouponDiscount(
+        float $couponDiscount,
+        bool $couponApplied,
+        float $apiTotal,
+        float $subtotal,
+        float $gst,
+        float $customDiscount
+    ): float {
+        if (!($couponDiscount <= 0 && $couponApplied && $apiTotal > 0)) {
+            return $couponDiscount;
+        }
+        $inferredCoupon = ($subtotal + $gst - $customDiscount) - $apiTotal;
+        $inferredLooksLikeGstBug = ($gst > 0.01 && abs($inferredCoupon - $gst) < 0.05);
+        if (!$inferredLooksLikeGstBug && $inferredCoupon > 0.01) {
+            return round($inferredCoupon, 2);
+        }
+
+        return $couponDiscount;
+    }
+
+    private function resolveGrandTotalFromApi(
+        float $apiTotal,
+        float $subtotal,
+        float $gst,
+        float $totalDiscount,
+        float $couponDiscount
+    ): float {
+        $computedPayable = $subtotal + $gst - $totalDiscount;
+        if ($apiTotal <= 0) {
+            return $computedPayable;
+        }
+        $apiTotalLooksLikePreTaxSubtotal = ($gst > 0.01 && abs($apiTotal - $subtotal) < 0.05);
+        if ($apiTotalLooksLikePreTaxSubtotal) {
+            // totalamount matches taxable subtotal only; do not use it as grand total.
+            return $computedPayable;
+        }
+        if ($couponDiscount > 0 && $apiTotal > ($computedPayable + 0.01)) {
+            // Coupon applied on API but totalamount didn't drop — prefer computed checkout total.
+            return $computedPayable;
+        }
+
+        return $apiTotal;
+    }
+
     /**
      * Resolve coupon/custom/gst/grand-total fallbacks from cart payload + computed lines.
      *
@@ -2047,7 +2144,6 @@ class POSRegisterController
      *   coupon_applied: bool,
      *   coupon_discount: float,
      *   custom_discount: float,
-     *   total_discount: float,
      *   gst: float,
      *   grand_total: float
      * }
@@ -2058,57 +2154,58 @@ class POSRegisterController
         $coupon_applied = trim($coupon) !== '';
         $coupon_discount = $this->extractCartRetrieveCouponDiscountRupees($data);
         $custom_discount = (float)($data['customreduction'] ?? 0);
-        $total_discount = $coupon_discount + $custom_discount;
         $gst = $this->resolveCartRetrieveGstTotal($data);
         if ($gstComputed > 0) {
             $gst = round($gstComputed, 2);
         }
-
-        $grand_total = $subtotal + $gst - $total_discount;
         $apiTotal = isset($data['totalamount']) && is_numeric($data['totalamount']) ? (float)$data['totalamount'] : 0.0;
 
-        if ($gst <= 0 && $apiTotal > 0) {
-            // Infer GST when API omits explicit GST fields but total includes tax.
-            $inferredGst = $apiTotal - ($subtotal - $total_discount);
-            if ($inferredGst > 0.01) {
-                $gst = round($inferredGst, 2);
-                $grand_total = $subtotal + $gst - $total_discount;
-            }
-        }
-        if ($coupon_discount <= 0 && $coupon_applied && $apiTotal > 0) {
-            // Infer only when API omits coupon fields: payable = subtotal + gst - coupon.
-            // Reject when inferred amount ≈ gst (happens if totalamount equals taxable subtotal only).
-            $inferredCoupon = ($subtotal + $gst - $custom_discount) - $apiTotal;
-            $inferredLooksLikeGstBug = ($gst > 0.01 && abs($inferredCoupon - $gst) < 0.05);
-            if (!$inferredLooksLikeGstBug && $inferredCoupon > 0.01) {
-                $coupon_discount = round($inferredCoupon, 2);
-                $total_discount = $coupon_discount + $custom_discount;
-                $grand_total = $subtotal + $gst - $total_discount;
-            }
-        }
-        if ($apiTotal > 0) {
-            $computedPayable = $subtotal + $gst - $total_discount;
-            $apiTotalLooksLikePreTaxSubtotal = ($gst > 0.01 && abs($apiTotal - $subtotal) < 0.05);
-            if ($apiTotalLooksLikePreTaxSubtotal) {
-                // totalamount matches taxable subtotal only; do not use it as grand total.
-                $grand_total = $computedPayable;
-            } elseif ($coupon_discount > 0 && $apiTotal > ($computedPayable + 0.01)) {
-                // Coupon applied on API but totalamount didn't drop — prefer computed checkout total.
-                $grand_total = $computedPayable;
-            } else {
-                $grand_total = $apiTotal;
-            }
-        }
+        $total_discount = $coupon_discount + $custom_discount;
+        $coupon_discount = $this->inferMissingCouponDiscount(
+            $coupon_discount,
+            $coupon_applied,
+            $apiTotal,
+            $subtotal,
+            $gst,
+            $custom_discount
+        );
+        $total_discount = $coupon_discount + $custom_discount;
+        $grand_total = $this->resolveGrandTotalFromApi($apiTotal, $subtotal, $gst, $total_discount, $coupon_discount);
 
         return [
             'codcharges' => $codcharges,
             'coupon_applied' => $coupon_applied,
             'coupon_discount' => $coupon_discount,
             'custom_discount' => $custom_discount,
-            'total_discount' => $total_discount,
             'gst' => $gst,
             'grand_total' => $grand_total,
         ];
+    }
+
+    private function buildCartRetrieveRequestMeta(array $query): array
+    {
+        return [
+            'method' => 'GET',
+            'url' => 'https://www.exoticindia.com/api/cart/retrieve?' . http_build_query($query),
+            'query_params' => $query,
+            'headers' => [
+                'x-api-key' => '(redacted)',
+                'x-api-deviceid' => 'POS-Store_1',
+                'x-api-appplayerid' => 'POS-Web-Terminal',
+                'x-api-countrycode' => 'IN',
+                'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
+                'User-Agent' => 'ExoticPOS',
+            ],
+        ];
+    }
+
+    private function stripCartItemsFromDebugBody(array $data): array
+    {
+        if (isset($data['cartitems'])) {
+            unset($data['cartitems']);
+        }
+
+        return $data;
     }
 
 
@@ -2122,22 +2219,7 @@ class POSRegisterController
             'giftvoucherdetails' => $voucher,
         ];
         $res = $this->exotic_api_call('/cart/retrieve', 'GET', $cartRetrieveQuery);
-
-        $cartRetrieveUrl = 'https://www.exoticindia.com/api/cart/retrieve?' . http_build_query($cartRetrieveQuery);
-
-        $cartApiRequestMeta = [
-            'method' => 'GET',
-            'url' => $cartRetrieveUrl,
-            'query_params' => $cartRetrieveQuery,
-            'headers' => [
-                'x-api-key' => '(redacted)',
-                'x-api-deviceid' => 'POS-Store_1',
-                'x-api-appplayerid' => 'POS-Web-Terminal',
-                'x-api-countrycode' => 'IN',
-                'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
-                'User-Agent' => 'ExoticPOS',
-            ],
-        ];
+        $cartApiRequestMeta = $this->buildCartRetrieveRequestMeta($cartRetrieveQuery);
 
         $data = $res['data'] ?? [];
 
@@ -2152,18 +2234,13 @@ class POSRegisterController
         // Keep Sub Total as pre-discount line sum; discount is shown separately in UI.
         $display_subtotal = $subtotal;
         $financials = $this->resolveCartFinancials($data, (string)$coupon, $subtotal, $gst_computed);
-        $cartApiBodyForDebug = $data;
-        if (isset($cartApiBodyForDebug['cartitems'])) {
-            unset($cartApiBodyForDebug['cartitems']);
-        }
+        $cartApiBodyForDebug = $this->stripCartItemsFromDebugBody($data);
 
         return [
             'items' => $items,
             'subtotal' => $display_subtotal,
             'shipping_total' => $shipping_total,
             'gst' => $financials['gst'],
-            // Keep existing output key name for backwards compatibility with the view.
-            'discount' => $financials['coupon_discount'],
             'coupon_discount' => $financials['coupon_discount'],
             'coupon_applied' => $financials['coupon_applied'],
             'custom_discount' => $financials['custom_discount'],
