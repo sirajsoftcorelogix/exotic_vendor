@@ -1321,7 +1321,10 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       </div>
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
-        <input id="confirm_sname" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Name">
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_sfirst_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping First Name">
+          <input id="confirm_slast_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Last Name">
+        </div>
         <input id="confirm_sphone" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Phone">
         <input id="confirm_saddress1" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 1">
         <input id="confirm_saddress2" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 2">
@@ -1641,6 +1644,17 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       [shipping.shipping_first_name, shipping.shipping_last_name].filter(Boolean).join(" "),
       [shipping.first_name, shipping.last_name].filter(Boolean).join(" ")
     );
+    var shippingNameParts = shippingName.split(/\s+/).filter(Boolean);
+    var shippingFirstName = firstNonEmpty(
+      shipping.shipping_first_name,
+      shipping.first_name,
+      shippingNameParts[0] || ""
+    );
+    var shippingLastName = firstNonEmpty(
+      shipping.shipping_last_name,
+      shipping.last_name,
+      shippingNameParts.length > 1 ? shippingNameParts.slice(1).join(" ") : ""
+    );
     var map = {
       // Billing: support normalized keys + DB/raw aliases.
       confirm_first_name: firstNonEmpty(billing.first_name, billing.billing_first_name),
@@ -1656,7 +1670,8 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       confirm_gstin: firstNonEmpty(billing.gstin),
 
       // Shipping: support normalized keys + DB/raw aliases.
-      confirm_sname: shippingName,
+      confirm_sfirst_name: shippingFirstName,
+      confirm_slast_name: shippingLastName,
       confirm_saddress1: firstNonEmpty(shipping.saddress1, shipping.shipping_address_line1, shipping.address1, shipping.address_line1),
       confirm_saddress2: firstNonEmpty(shipping.saddress2, shipping.shipping_address_line2, shipping.address2, shipping.address_line2),
       confirm_scity: firstNonEmpty(shipping.scity, shipping.shipping_city, shipping.city),
@@ -1676,6 +1691,9 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       var el = document.getElementById(id);
       return el ? String(el.value || "").trim() : "";
     };
+    var shippingFirstName = read("confirm_sfirst_name");
+    var shippingLastName = read("confirm_slast_name");
+    var shippingFullName = [shippingFirstName, shippingLastName].filter(Boolean).join(" ").trim();
     return {
       confirm_address_submit: "1",
       confirm_first_name: read("confirm_first_name"),
@@ -1689,7 +1707,10 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       confirm_zip: read("confirm_zip"),
       confirm_country: read("confirm_country"),
       confirm_gstin: read("confirm_gstin"),
-      confirm_sname: read("confirm_sname"),
+      confirm_sfirst_name: shippingFirstName,
+      confirm_slast_name: shippingLastName,
+      // Keep combined name for backward compatibility on server side.
+      confirm_sname: shippingFullName,
       confirm_saddress1: read("confirm_saddress1"),
       confirm_saddress2: read("confirm_saddress2"),
       confirm_scity: read("confirm_scity"),
@@ -1805,7 +1826,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           showToast("⚠ Billing details are incomplete.", "red");
           return;
         }
-        if (!payload.confirm_sname || !payload.confirm_sphone || !payload.confirm_sstate) {
+        if (!payload.confirm_sfirst_name || !payload.confirm_sphone || !payload.confirm_sstate) {
           showToast("⚠ Shipping details are incomplete.", "red");
           return;
         }

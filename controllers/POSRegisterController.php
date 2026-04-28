@@ -2853,6 +2853,16 @@ class POSRegisterController
 
         // Step 3: explicit confirmation popup values from POS UI override defaults.
         if ((int)($_POST['confirm_address_submit'] ?? 0) === 1) {
+            $confirmShippingFirst = trim((string)($_POST['confirm_sfirst_name'] ?? ''));
+            $confirmShippingLast = trim((string)($_POST['confirm_slast_name'] ?? ''));
+            $confirmShippingFull = trim((string)($_POST['confirm_sname'] ?? ''));
+            $resolvedShippingName = trim($confirmShippingFirst . ' ' . $confirmShippingLast);
+            if ($resolvedShippingName === '') {
+                $resolvedShippingName = $confirmShippingFull;
+            }
+            if ($resolvedShippingName === '') {
+                $resolvedShippingName = trim((string)($shipping['sname'] ?? ''));
+            }
             $billing = [
                 "first_name" => trim((string)($_POST['confirm_first_name'] ?? ($billing['first_name'] ?? ''))),
                 "last_name" => trim((string)($_POST['confirm_last_name'] ?? ($billing['last_name'] ?? ''))),
@@ -2867,7 +2877,7 @@ class POSRegisterController
                 "gstin" => trim((string)($_POST['confirm_gstin'] ?? ($billing['gstin'] ?? ''))),
             ];
             $shipping = [
-                "sname" => trim((string)($_POST['confirm_sname'] ?? ($shipping['sname'] ?? ''))),
+                "sname" => $resolvedShippingName,
                 "saddress1" => trim((string)($_POST['confirm_saddress1'] ?? ($shipping['saddress1'] ?? ''))),
                 "saddress2" => trim((string)($_POST['confirm_saddress2'] ?? ($shipping['saddress2'] ?? ''))),
                 "scity" => trim((string)($_POST['confirm_scity'] ?? ($shipping['scity'] ?? ''))),
