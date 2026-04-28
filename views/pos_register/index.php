@@ -738,6 +738,7 @@
   if (overlay) overlay.addEventListener('click', closeCartApiModal);
 })();
 </script>
+
 <?php
 $couponApiDebugInitial = $_SESSION['pos_coupon_api_debug'] ?? null;
 $couponApiPrePayload = $couponApiDebugInitial ?: [
