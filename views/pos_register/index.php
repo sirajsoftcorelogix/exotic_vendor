@@ -597,7 +597,7 @@
           <?php
           $rawSubtotal = (float)($cartData['subtotal'] ?? 0);
           $gstTotal = (float)($cartData['gst'] ?? 0);
-          $couponDiscount = (float)($cartData['discount'] ?? 0);
+          echo 'Coupon Discount: '.$couponDiscount = (float)($cartData['discount'] ?? 0);
           $customDiscount = (float)($cartData['custom_discount'] ?? 0);
           $totalDiscount = $couponDiscount + $customDiscount;
           $computedGrandTotal = max(0, $rawSubtotal + $gstTotal - $totalDiscount);
