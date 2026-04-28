@@ -1303,10 +1303,14 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
     <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
-        <input id="confirm_first_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="First Name">
-        <input id="confirm_last_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Last Name">
-        <input id="confirm_email" class="w-full border rounded px-3 py-2 text-sm" placeholder="Email">
-        <input id="confirm_phone" class="w-full border rounded px-3 py-2 text-sm" placeholder="Phone">
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_first_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="First Name">
+          <input id="confirm_last_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Last Name">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_email" class="w-full border rounded px-3 py-2 text-sm" placeholder="Email">
+          <input id="confirm_phone" class="w-full border rounded px-3 py-2 text-sm" placeholder="Phone">
+        </div>
         <input id="confirm_address1" class="w-full border rounded px-3 py-2 text-sm" placeholder="Address 1">
         <input id="confirm_address2" class="w-full border rounded px-3 py-2 text-sm" placeholder="Address 2">
         <div class="grid grid-cols-2 gap-3">
