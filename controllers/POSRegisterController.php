@@ -1981,17 +1981,33 @@ class POSRegisterController
             }
         }
         if ($discount <= 0 && $coupon_applied && $apiTotal > 0) {
-            // Infer coupon from totals when API omits coupon reduction fields.
+            // Infer coupon only when totalamount is clearly "final payable", not pre-GST subtotal.
+            // If totalamount ≈ subtotal while we have GST, (subtotal + gst - apiTotal) falsely equals gst.
+            $apiTotalLooksLikePreTaxSubtotal = ($gst > 0.01 && abs($apiTotal - $subtotal) < 0.05);
             $inferredCoupon = ($subtotal + $gst - $custom_discount) - $apiTotal;
-            if ($inferredCoupon > 0.01) {
+            $inferredLooksLikeGstNotCoupon = ($gst > 0.01 && abs($inferredCoupon - $gst) < 0.05);
+            if (
+                !$apiTotalLooksLikePreTaxSubtotal
+                && !$inferredLooksLikeGstNotCoupon
+                && $inferredCoupon > 0.01
+            ) {
                 $discount = round($inferredCoupon, 2);
                 $total_discount = $discount + $custom_discount;
                 $grand_total = $subtotal + $gst - $total_discount;
             }
         }
         if ($apiTotal > 0) {
-            // If coupon is detected but API total doesn't reflect deduction, prefer computed total.
-            $grand_total = ($discount > 0 && $apiTotal > ($grand_total + 0.01)) ? $grand_total : $apiTotal;
+            $computedPayable = $subtotal + $gst - $total_discount;
+            $apiTotalLooksLikePreTaxSubtotal = ($gst > 0.01 && abs($apiTotal - $subtotal) < 0.05);
+            if ($apiTotalLooksLikePreTaxSubtotal) {
+                // totalamount matches taxable subtotal only; do not use it as grand total.
+                $grand_total = $computedPayable;
+            } elseif ($discount > 0 && $apiTotal > ($computedPayable + 0.01)) {
+                // Coupon applied on API but totalamount didn't drop — prefer computed checkout total.
+                $grand_total = $computedPayable;
+            } else {
+                $grand_total = $apiTotal;
+            }
         }
         return [
             'items' => $items,
