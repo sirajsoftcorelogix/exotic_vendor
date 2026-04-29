@@ -2802,6 +2802,241 @@ class POSRegisterController
         exit;
     }
 
+    private function buildStorePaymentDetails(string $paymentType, string $transactionId): string
+    {
+        $storeId = (string)((int)($_SESSION['warehouse_id'] ?? 0));
+        if ($storeId === '0' || $storeId === '') {
+            $storeId = 'store';
+        }
+
+        // Required format: STORE_ID|PAYMENT_MODE|TRANSACTION_ID
+        // If no transaction ID is provided (cash/offline etc.), send store.<UTC TIMESTAMP>.
+        $effectiveTransactionId = $transactionId !== ''
+            ? $transactionId
+            : ('store.' . gmdate('YmdHis'));
+
+        return $storeId . '|' . $paymentType . '|' . $effectiveTransactionId;
+    }
+
+    private function extractOrderIdFromCreateResponse(array $response): string
+    {
+        foreach (['orderid', 'order_id', 'order_no', 'id'] as $key) {
+            if (!empty($response[$key])) {
+                return (string)$response[$key];
+            }
+        }
+
+        if (!empty($response['order']) && is_array($response['order'])) {
+            foreach (['orderid', 'order_id', 'order_no', 'id'] as $key) {
+                if (!empty($response['order'][$key])) {
+                    return (string)$response['order'][$key];
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Resolve billing/shipping for POS order/create from:
+     * - latest vp_order_info row for existing customer
+     * - $_SESSION['pos_customer_form'] for new customers
+     * - optional confirm-address POST override
+     */
+    private function resolveCustomerBillingShippingForOrder(mysqli $conn): array
+    {
+        $billing = [];
+        $shipping = [];
+
+        $rawCustomerId = $_POST['customer_id'] ?? null;
+        if ($rawCustomerId !== null && $rawCustomerId !== '') {
+            $customerId = (int)$rawCustomerId;
+        } else {
+            $customerId = (int)($_SESSION['pos_customer_id'] ?? 0);
+        }
+
+        // Existing customer: pull last known billing/shipping from vp_order_info
+        if ($customerId > 0) {
+            $stmt = $conn->prepare("SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1");
+            $stmt->bind_param("i", $customerId);
+            $stmt->execute();
+            $info = $stmt->get_result()->fetch_assoc();
+
+            if ($info) {
+                $billing = [
+                    "first_name" => $info['first_name'],
+                    "last_name" => $info['last_name'],
+                    "email" => $info['email'],
+                    "phone" => $info['mobile'],
+                    "address1" => $info['address_line1'],
+                    "address2" => $info['address_line2'],
+                    "city" => $info['city'],
+                    "state" => $info['state'],
+                    "zip" => $info['zipcode'],
+                    "country" => $info['country'] ?: 'IN',
+                    "gstin" => $info['gstin'],
+                ];
+
+                $shipping = [
+                    "sname" => trim($info['shipping_first_name'] . " " . $info['shipping_last_name']),
+                    "saddress1" => $info['shipping_address_line1'],
+                    "saddress2" => $info['shipping_address_line2'],
+                    "scity" => $info['shipping_city'],
+                    "sstate" => $info['shipping_state'],
+                    "szip" => $info['shipping_zipcode'],
+                    "scountry" => $info['shipping_country'] ?: 'IN',
+                    "sphone" => $info['shipping_mobile'],
+                ];
+            }
+        }
+
+        // New customer form fallback
+        if (empty($billing) && !empty($_SESSION['pos_customer_form'])) {
+            $form = $_SESSION['pos_customer_form'];
+
+            $billing = [
+                "first_name" => trim($form['first_name'] ?? ''),
+                "last_name" => trim($form['last_name'] ?? ''),
+                "email" => trim($form['cus_email'] ?? ''),
+                "phone" => trim($form['mobile'] ?? ''),
+                "address1" => trim($form['address_line1'] ?? ''),
+                "address2" => trim($form['address_line2'] ?? ''),
+                "city" => trim($form['city'] ?? ''),
+                "state" => trim($form['state'] ?? ''),
+                "zip" => trim($form['zipcode'] ?? ''),
+                "country" => "IN",
+                "gstin" => trim($form['gstin'] ?? ''),
+            ];
+
+            $shipping = [
+                "sname" => trim(($form['shipping_first_name'] ?? '') . " " . ($form['shipping_last_name'] ?? '')),
+                "saddress1" => trim($form['shipping_address_line1'] ?? ''),
+                "saddress2" => trim($form['shipping_address_line2'] ?? ''),
+                "scity" => trim($form['shipping_city'] ?? ''),
+                "sstate" => trim($form['shipping_state'] ?? ''),
+                "szip" => trim($form['shipping_zipcode'] ?? ''),
+                "scountry" => "IN",
+                "sphone" => trim($form['shipping_mobile'] ?? ''),
+            ];
+        }
+
+        // Confirmation popup override
+        $confirmFlag = trim((string)($_POST['confirm_address_submit'] ?? ''));
+        $applyConfirmPopup = ($confirmFlag === '1')
+            || (
+                trim((string)($_POST['confirm_first_name'] ?? '')) !== ''
+                && trim((string)($_POST['confirm_phone'] ?? '')) !== ''
+            );
+
+        if ($applyConfirmPopup) {
+            $confirmShippingFirst = trim((string)($_POST['confirm_sfirst_name'] ?? ''));
+            $confirmShippingLast = trim((string)($_POST['confirm_slast_name'] ?? ''));
+            $confirmShippingFull = trim((string)($_POST['confirm_sname'] ?? ''));
+            $resolvedShippingName = trim($confirmShippingFirst . ' ' . $confirmShippingLast);
+            if ($resolvedShippingName === '') {
+                $resolvedShippingName = $confirmShippingFull;
+            }
+            if ($resolvedShippingName === '') {
+                $resolvedShippingName = trim((string)($shipping['sname'] ?? ''));
+            }
+
+            $billing = [
+                "first_name" => trim((string)($_POST['confirm_first_name'] ?? ($billing['first_name'] ?? ''))),
+                "last_name" => trim((string)($_POST['confirm_last_name'] ?? ($billing['last_name'] ?? ''))),
+                "email" => trim((string)($_POST['confirm_email'] ?? ($billing['email'] ?? ''))),
+                "phone" => trim((string)($_POST['confirm_phone'] ?? ($billing['phone'] ?? ''))),
+                "address1" => trim((string)($_POST['confirm_address1'] ?? ($billing['address1'] ?? ''))),
+                "address2" => trim((string)($_POST['confirm_address2'] ?? ($billing['address2'] ?? ''))),
+                "city" => trim((string)($_POST['confirm_city'] ?? ($billing['city'] ?? ''))),
+                "state" => trim((string)($_POST['confirm_state'] ?? ($billing['state'] ?? ''))),
+                "zip" => trim((string)($_POST['confirm_zip'] ?? ($billing['zip'] ?? ''))),
+                "country" => trim((string)($_POST['confirm_country'] ?? ($billing['country'] ?? 'IN'))),
+                "gstin" => trim((string)($_POST['confirm_gstin'] ?? ($billing['gstin'] ?? ''))),
+            ];
+
+            $shipping = [
+                "sname" => $resolvedShippingName,
+                "saddress1" => trim((string)($_POST['confirm_saddress1'] ?? ($shipping['saddress1'] ?? ''))),
+                "saddress2" => trim((string)($_POST['confirm_saddress2'] ?? ($shipping['saddress2'] ?? ''))),
+                "scity" => trim((string)($_POST['confirm_scity'] ?? ($shipping['scity'] ?? ''))),
+                "sstate" => trim((string)($_POST['confirm_sstate'] ?? ($shipping['sstate'] ?? ''))),
+                "szip" => trim((string)($_POST['confirm_szip'] ?? ($shipping['szip'] ?? ''))),
+                "scountry" => trim((string)($_POST['confirm_scountry'] ?? ($shipping['scountry'] ?? 'IN'))),
+                "sphone" => trim((string)($_POST['confirm_sphone'] ?? ($shipping['sphone'] ?? ''))),
+            ];
+        }
+
+        // Default shipping to billing when shipping rows are blank (walk-in / same-as-billing).
+        if (trim((string)($shipping['sname'] ?? '')) === '') {
+            $shipping['sname'] = trim(
+                trim((string)($billing['first_name'] ?? '')) . ' ' . trim((string)($billing['last_name'] ?? ''))
+            );
+        }
+
+        foreach (
+            [
+                'sphone' => 'phone',
+                'saddress1' => 'address1',
+                'saddress2' => 'address2',
+                'scity' => 'city',
+                'sstate' => 'state',
+                'szip' => 'zip',
+                'scountry' => 'country',
+            ] as $sk => $bk
+        ) {
+            if (trim((string)($shipping[$sk] ?? '')) === '' && trim((string)($billing[$bk] ?? '')) !== '') {
+                $shipping[$sk] = $billing[$bk];
+            }
+        }
+
+        // Validation
+        $bFirst = trim((string)($billing['first_name'] ?? ''));
+        $bPhone = trim((string)($billing['phone'] ?? ''));
+        $bState = trim((string)($billing['state'] ?? ''));
+        $bZip = trim((string)($billing['zip'] ?? ''));
+        if ($bFirst === '' || $bPhone === '' || $bState === '' || $bZip === '') {
+            return ['success' => false, 'message' => 'Billing missing'];
+        }
+
+        $sName = trim((string)($shipping['sname'] ?? ''));
+        $sPhone = trim((string)($shipping['sphone'] ?? ''));
+        $sState = trim((string)($shipping['sstate'] ?? ''));
+        if ($sName === '' || $sPhone === '' || $sState === '') {
+            return ['success' => false, 'message' => 'Shipping missing'];
+        }
+
+        return ['success' => true, 'billing' => $billing, 'shipping' => $shipping];
+    }
+
+    private function resolveCodForPayment(string $paymentType, array $cartSnapshot): array
+    {
+        $codchargesSnap = (float)($cartSnapshot['codcharges'] ?? 0);
+        if ($paymentType === 'cod' && $codchargesSnap > 0) {
+            return ['cod' => '1', 'codcharges' => (string)$codchargesSnap];
+        }
+
+        return ['cod' => '0', 'codcharges' => '0'];
+    }
+
+    private function buildRazorpayAndCardFromPost(): array
+    {
+        $razorpay = [
+            "razorpay_order_id" => $_POST['razorpay_order_id'] ?? '',
+            "razorpay_payment_id" => $_POST['razorpay_payment_id'] ?? '',
+            "razorpay_signature" => $_POST['razorpay_signature'] ?? '',
+            "magiccheckout_done" => $_POST['magiccheckout_done'] ?? ''
+        ];
+
+        $card = [
+            "cardnumber" => $_POST['cardnumber'] ?? '',
+            "cardexpmonth" => $_POST['cardexpmonth'] ?? '',
+            "cardexpyear" => $_POST['cardexpyear'] ?? '',
+            "card_cvv" => $_POST['card_cvv'] ?? ''
+        ];
+
+        return ['razorpay' => $razorpay, 'card' => $card];
+    }
+
     public function create_order()
     {
         global $conn;
@@ -2832,19 +3067,7 @@ class POSRegisterController
         $transactionId = trim((string)($_POST['transaction_id'] ?? ''));
 
         /* ================= USER / STORE ================= */
-        $userModel = new User($conn);
-        $user_id = $_SESSION['user']['id'] ?? 0;
-        $user = $userModel->getUserById($user_id);
-        $storeId = (string)((int)($_SESSION['warehouse_id'] ?? 0));
-        if ($storeId === '0' || $storeId === '') {
-            $storeId = 'store';
-        }
-        // Required format: STORE_ID|PAYMENT_MODE|TRANSACTION_ID
-        // If no transaction ID is provided (cash/offline etc.), send store.<UTC TIMESTAMP>.
-        $effectiveTransactionId = $transactionId !== ''
-            ? $transactionId
-            : ('store.' . gmdate('YmdHis'));
-        $store_payment_details = $storeId . '|' . $paymentType . '|' . $effectiveTransactionId;
+        $store_payment_details = $this->buildStorePaymentDetails($paymentType, $transactionId);
 
         /* ================= CART (GET /cart/retrieve) ================= */
         $cartData = $this->get_cart();
@@ -2858,10 +3081,7 @@ class POSRegisterController
         }
 
         /* ================= CUSTOMER ================= */
-
-        $billing = [];
-        $shipping = [];
-
+        // Resolve customer billing/shipping (includes validation + confirm popup overrides).
         $rawCustomerId = $_POST['customer_id'] ?? null;
         if ($rawCustomerId !== null && $rawCustomerId !== '') {
             $customerId = (int)$rawCustomerId;
@@ -2869,157 +3089,17 @@ class POSRegisterController
             $customerId = (int)($_SESSION['pos_customer_id'] ?? 0);
         }
 
-        /* ---------- STEP 1 : EXISTING CUSTOMER ---------- */
-        if ($customerId > 0) {
-
-            $stmt = $conn->prepare("SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1");
-            $stmt->bind_param("i", $customerId);
-            $stmt->execute();
-            $info = $stmt->get_result()->fetch_assoc();
-
-            if ($info) {
-
-                /*  EXISTING CUSTOMER WITH ORDER HISTORY */
-                $billing = [
-                    "first_name" => $info['first_name'],
-                    "last_name" => $info['last_name'],
-                    "email" => $info['email'],
-                    "phone" => $info['mobile'],
-                    "address1" => $info['address_line1'],
-                    "address2" => $info['address_line2'],
-                    "city" => $info['city'],
-                    "state" => $info['state'],
-                    "zip" => $info['zipcode'],
-                    "country" => $info['country'] ?: 'IN',
-                    "gstin" => $info['gstin']
-                ];
-
-                $shipping = [
-                    "sname" => trim($info['shipping_first_name'] . " " . $info['shipping_last_name']),
-                    "saddress1" => $info['shipping_address_line1'],
-                    "saddress2" => $info['shipping_address_line2'],
-                    "scity" => $info['shipping_city'],
-                    "sstate" => $info['shipping_state'],
-                    "szip" => $info['shipping_zipcode'],
-                    "scountry" => $info['shipping_country'] ?: 'IN',
-                    "sphone" => $info['shipping_mobile']
-                ];
-            }
-        }
-
-        /* ---------- STEP 2 : NEW CUSTOMER (SESSION FORM) ---------- */
-        if (empty($billing) && !empty($_SESSION['pos_customer_form'])) {
-
-            $form = $_SESSION['pos_customer_form'];
-
-            $billing = [
-                "first_name" => trim($form['first_name'] ?? ''),
-                "last_name" => trim($form['last_name'] ?? ''),
-                "email" => trim($form['cus_email'] ?? ''),
-                "phone" => trim($form['mobile'] ?? ''),
-                "address1" => trim($form['address_line1'] ?? ''),
-                "address2" => trim($form['address_line2'] ?? ''),
-                "city" => trim($form['city'] ?? ''),
-                "state" => trim($form['state'] ?? ''),
-                "zip" => trim($form['zipcode'] ?? ''),
-                "country" => "IN",
-                "gstin" => trim($form['gstin'] ?? '')
-            ];
-
-            $shipping = [
-                "sname" => trim(($form['shipping_first_name'] ?? '') . " " . ($form['shipping_last_name'] ?? '')),
-                "saddress1" => trim($form['shipping_address_line1'] ?? ''),
-                "saddress2" => trim($form['shipping_address_line2'] ?? ''),
-                "scity" => trim($form['shipping_city'] ?? ''),
-                "sstate" => trim($form['shipping_state'] ?? ''),
-                "szip" => trim($form['shipping_zipcode'] ?? ''),
-                "scountry" => "IN",
-                "sphone" => trim($form['shipping_mobile'] ?? '')
-            ];
-        }
-
-        // Step 3: confirmation popup from POS UI (may arrive without confirm_address_submit if POST was truncated).
-        $confirmFlag = trim((string)($_POST['confirm_address_submit'] ?? ''));
-        $applyConfirmPopup = ($confirmFlag === '1')
-            || (
-                trim((string)($_POST['confirm_first_name'] ?? '')) !== ''
-                && trim((string)($_POST['confirm_phone'] ?? '')) !== ''
-            );
-        if ($applyConfirmPopup) {
-            $confirmShippingFirst = trim((string)($_POST['confirm_sfirst_name'] ?? ''));
-            $confirmShippingLast = trim((string)($_POST['confirm_slast_name'] ?? ''));
-            $confirmShippingFull = trim((string)($_POST['confirm_sname'] ?? ''));
-            $resolvedShippingName = trim($confirmShippingFirst . ' ' . $confirmShippingLast);
-            if ($resolvedShippingName === '') {
-                $resolvedShippingName = $confirmShippingFull;
-            }
-            if ($resolvedShippingName === '') {
-                $resolvedShippingName = trim((string)($shipping['sname'] ?? ''));
-            }
-            $billing = [
-                "first_name" => trim((string)($_POST['confirm_first_name'] ?? ($billing['first_name'] ?? ''))),
-                "last_name" => trim((string)($_POST['confirm_last_name'] ?? ($billing['last_name'] ?? ''))),
-                "email" => trim((string)($_POST['confirm_email'] ?? ($billing['email'] ?? ''))),
-                "phone" => trim((string)($_POST['confirm_phone'] ?? ($billing['phone'] ?? ''))),
-                "address1" => trim((string)($_POST['confirm_address1'] ?? ($billing['address1'] ?? ''))),
-                "address2" => trim((string)($_POST['confirm_address2'] ?? ($billing['address2'] ?? ''))),
-                "city" => trim((string)($_POST['confirm_city'] ?? ($billing['city'] ?? ''))),
-                "state" => trim((string)($_POST['confirm_state'] ?? ($billing['state'] ?? ''))),
-                "zip" => trim((string)($_POST['confirm_zip'] ?? ($billing['zip'] ?? ''))),
-                "country" => trim((string)($_POST['confirm_country'] ?? ($billing['country'] ?? 'IN'))),
-                "gstin" => trim((string)($_POST['confirm_gstin'] ?? ($billing['gstin'] ?? ''))),
-            ];
-            $shipping = [
-                "sname" => $resolvedShippingName,
-                "saddress1" => trim((string)($_POST['confirm_saddress1'] ?? ($shipping['saddress1'] ?? ''))),
-                "saddress2" => trim((string)($_POST['confirm_saddress2'] ?? ($shipping['saddress2'] ?? ''))),
-                "scity" => trim((string)($_POST['confirm_scity'] ?? ($shipping['scity'] ?? ''))),
-                "sstate" => trim((string)($_POST['confirm_sstate'] ?? ($shipping['sstate'] ?? ''))),
-                "szip" => trim((string)($_POST['confirm_szip'] ?? ($shipping['szip'] ?? ''))),
-                "scountry" => trim((string)($_POST['confirm_scountry'] ?? ($shipping['scountry'] ?? 'IN'))),
-                "sphone" => trim((string)($_POST['confirm_sphone'] ?? ($shipping['sphone'] ?? ''))),
-            ];
-        }
-
-        // Default shipping to billing when shipping rows are blank (walk-in / same-as-billing).
-        if (trim((string)($shipping['sname'] ?? '')) === '') {
-            $shipping['sname'] = trim(
-                trim((string)($billing['first_name'] ?? '')) . ' ' . trim((string)($billing['last_name'] ?? ''))
-            );
-        }
-        foreach (
-            [
-                'sphone' => 'phone',
-                'saddress1' => 'address1',
-                'saddress2' => 'address2',
-                'scity' => 'city',
-                'sstate' => 'state',
-                'szip' => 'zip',
-                'scountry' => 'country',
-            ] as $sk => $bk
-        ) {
-            if (trim((string)($shipping[$sk] ?? '')) === '' && trim((string)($billing[$bk] ?? '')) !== '') {
-                $shipping[$sk] = $billing[$bk];
-            }
-        }
-
-        /* ================= VALIDATION ================= */
-        $bFirst = trim((string)($billing['first_name'] ?? ''));
-        $bPhone = trim((string)($billing['phone'] ?? ''));
-        $bState = trim((string)($billing['state'] ?? ''));
-        $bZip = trim((string)($billing['zip'] ?? ''));
-        if ($bFirst === '' || $bPhone === '' || $bState === '' || $bZip === '') {
-            echo json_encode(["success" => false, "message" => "Billing missing"]);
+        $resolvedCustomer = $this->resolveCustomerBillingShippingForOrder($conn);
+        if (empty($resolvedCustomer['success'])) {
+            echo json_encode([
+                "success" => false,
+                "message" => $resolvedCustomer['message'] ?? 'Customer missing',
+            ]);
             exit;
         }
 
-        $sName = trim((string)($shipping['sname'] ?? ''));
-        $sPhone = trim((string)($shipping['sphone'] ?? ''));
-        $sState = trim((string)($shipping['sstate'] ?? ''));
-        if ($sName === '' || $sPhone === '' || $sState === '') {
-            echo json_encode(["success" => false, "message" => "Shipping missing"]);
-            exit;
-        }
+        $billing = $resolvedCustomer['billing'];
+        $shipping = $resolvedCustomer['shipping'];
 
         /* ================= Fresh cart snapshot for order/create (checkoutdata must match latest retrieve) ================= */
         $orderCartSnapshot = $this->get_cart();
@@ -3032,30 +3112,14 @@ class POSRegisterController
         }
 
         /* ================= COD ================= */
-        $codchargesSnap = (float)($orderCartSnapshot['codcharges'] ?? 0);
-        if ($paymentType == 'cod' && $codchargesSnap > 0) {
-            $cod = "1";
-            $codCharges = (string)$codchargesSnap;
-        } else {
-            $cod = "0";
-            $codCharges = "0";
-        }
+        $codResolved = $this->resolveCodForPayment($paymentType, $orderCartSnapshot);
+        $cod = $codResolved['cod'];
+        $codCharges = $codResolved['codcharges'];
 
-        /* ================= RAZORPAY ================= */
-        $razorpay = [
-            "razorpay_order_id" => $_POST['razorpay_order_id'] ?? '',
-            "razorpay_payment_id" => $_POST['razorpay_payment_id'] ?? '',
-            "razorpay_signature" => $_POST['razorpay_signature'] ?? '',
-            "magiccheckout_done" => $_POST['magiccheckout_done'] ?? ''
-        ];
-
-        /* ================= CARD ================= */
-        $card = [
-            "cardnumber" => $_POST['cardnumber'] ?? '',
-            "cardexpmonth" => $_POST['cardexpmonth'] ?? '',
-            "cardexpyear" => $_POST['cardexpyear'] ?? '',
-            "card_cvv" => $_POST['card_cvv'] ?? ''
-        ];
+        /* ================= RAZORPAY / CARD ================= */
+        $paymentExtra = $this->buildRazorpayAndCardFromPost();
+        $razorpay = $paymentExtra['razorpay'];
+        $card = $paymentExtra['card'];
 
         /* ================= FINAL DATA (checkoutdata sourced from GET /cart/retrieve via get_cart()) ================= */
         $serializedCheckoutdata = $this->serializeCheckoutdataForOrder($orderCartSnapshot['checkoutdata'] ?? '');
@@ -3100,21 +3164,7 @@ class POSRegisterController
             exit;
         }
 
-        $orderId = '';
-        foreach (['orderid', 'order_id', 'order_no', 'id'] as $key) {
-            if (!empty($response[$key])) {
-                $orderId = (string)$response[$key];
-                break;
-            }
-        }
-        if ($orderId === '' && !empty($response['order']) && is_array($response['order'])) {
-            foreach (['orderid', 'order_id', 'order_no', 'id'] as $key) {
-                if (!empty($response['order'][$key])) {
-                    $orderId = (string)$response['order'][$key];
-                    break;
-                }
-            }
-        }
+        $orderId = $this->extractOrderIdFromCreateResponse($response);
 
         echo json_encode([
             "success" => true,
