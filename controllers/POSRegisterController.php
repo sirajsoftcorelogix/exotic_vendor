@@ -2295,13 +2295,17 @@ class POSRegisterController
                 return '';
             }
 
-            return serialize($s);
+            // checkoutdata from /cart/retrieve is typically already the correct pipe-token string
+            // that /order/create expects. Do not PHP-serialize it.
+            return $s;
         }
         if (is_array($checkoutdata)) {
-            return serialize($checkoutdata);
+            $encoded = json_encode($checkoutdata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            return is_string($encoded) ? $encoded : '';
         }
         if (is_object($checkoutdata)) {
-            return serialize($checkoutdata);
+            $encoded = json_encode($checkoutdata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            return is_string($encoded) ? $encoded : '';
         }
 
         return '';
