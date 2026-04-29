@@ -1839,13 +1839,26 @@ class POSRegisterController
                     'x-api-deviceid' => 'POS-Store_1',
                     'x-api-appplayerid' => 'POS-Web-Terminal',
                     'x-api-countrycode' => 'IN',
-                    'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
+                    // Must match exotic_api_call() header value.
+                    // exotic_api_call() uses $_SESSION['x_api_euid'] captured from previous API responses.
+                    'x-api-euid' => (string)($_SESSION['x_api_euid'] ?? ''),
                     'User-Agent' => 'ExoticPOS',
                 ],
             ],
             'http_code' => (int)($apiResult['code'] ?? 0),
             'response' => is_array($parsed) ? $parsed : [],
         ];
+
+        // Helpful when upstream errors are generic (e.g. "Missing order data").
+        if (array_key_exists('checkoutdata', $postData)) {
+            $cd = $postData['checkoutdata'];
+            $cdStr = is_string($cd) ? $cd : (is_scalar($cd) ? (string)$cd : '');
+            $out['request']['checkoutdata_debug'] = [
+                'type' => gettype($cd),
+                'length' => strlen($cdStr),
+                'preview' => strlen($cdStr) > 80 ? substr($cdStr, 0, 80) . '…' : $cdStr,
+            ];
+        }
         if ($rawPreview !== '') {
             $out['response_raw_preview'] = $rawPreview;
         }
