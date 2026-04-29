@@ -1691,6 +1691,49 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
     });
   }
 
+  /** When shipping is blank but billing is present, mirror billing into shipping (same-as-billing / walk-in). */
+  function applyShippingFallbackFromBilling() {
+    function read(id) {
+      var el = document.getElementById(id);
+      return el ? String(el.value || "").trim() : "";
+    }
+    function write(id, v) {
+      var el = document.getElementById(id);
+      if (el) el.value = v;
+    }
+    var sf = read("confirm_sfirst_name");
+    var sl = read("confirm_slast_name");
+    if (sf === "" && sl === "") {
+      var bf = read("confirm_first_name");
+      var bl = read("confirm_last_name");
+      if (bf !== "") {
+        write("confirm_sfirst_name", bf);
+        write("confirm_slast_name", bl);
+      }
+    }
+    if (read("confirm_sphone") === "" && read("confirm_phone") !== "") {
+      write("confirm_sphone", read("confirm_phone"));
+    }
+    if (read("confirm_saddress1") === "" && read("confirm_address1") !== "") {
+      write("confirm_saddress1", read("confirm_address1"));
+    }
+    if (read("confirm_saddress2") === "" && read("confirm_address2") !== "") {
+      write("confirm_saddress2", read("confirm_address2"));
+    }
+    if (read("confirm_scity") === "" && read("confirm_city") !== "") {
+      write("confirm_scity", read("confirm_city"));
+    }
+    if (read("confirm_sstate") === "" && read("confirm_state") !== "") {
+      write("confirm_sstate", read("confirm_state"));
+    }
+    if (read("confirm_szip") === "" && read("confirm_zip") !== "") {
+      write("confirm_szip", read("confirm_zip"));
+    }
+    if (read("confirm_scountry") === "" && read("confirm_country") !== "") {
+      write("confirm_scountry", read("confirm_country"));
+    }
+  }
+
   function getAddressConfirmPayload() {
     var read = function(id) {
       var el = document.getElementById(id);
@@ -1738,6 +1781,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           return;
         }
         setAddressConfirmFields(data);
+        applyShippingFallbackFromBilling();
         openAddressConfirmModal();
       })
       .catch(function() {

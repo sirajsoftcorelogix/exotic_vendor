@@ -513,7 +513,12 @@ function cart_resolve_order_billing_shipping_for_api($mysqli): array
     $billing = [];
     $shipping = [];
 
-    $customerId = (int)($_POST['customer_id'] ?? ($_SESSION['pos_customer_id'] ?? 0));
+    $rawCustomerId = $_POST['customer_id'] ?? null;
+    if ($rawCustomerId !== null && $rawCustomerId !== '') {
+        $customerId = (int)$rawCustomerId;
+    } else {
+        $customerId = (int)($_SESSION['pos_customer_id'] ?? 0);
+    }
 
     if ($customerId > 0 && $mysqli) {
         $stmt = $mysqli->prepare('SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1');
@@ -581,7 +586,13 @@ function cart_resolve_order_billing_shipping_for_api($mysqli): array
         ];
     }
 
-    if ((int)($_POST['confirm_address_submit'] ?? 0) === 1) {
+    $confirmFlag = trim((string)($_POST['confirm_address_submit'] ?? ''));
+    $applyConfirmPopup = ($confirmFlag === '1')
+        || (
+            trim((string)($_POST['confirm_first_name'] ?? '')) !== ''
+            && trim((string)($_POST['confirm_phone'] ?? '')) !== ''
+        );
+    if ($applyConfirmPopup) {
         $confirmShippingFirst = trim((string)($_POST['confirm_sfirst_name'] ?? ''));
         $confirmShippingLast = trim((string)($_POST['confirm_slast_name'] ?? ''));
         $confirmShippingFull = trim((string)($_POST['confirm_sname'] ?? ''));
@@ -615,6 +626,27 @@ function cart_resolve_order_billing_shipping_for_api($mysqli): array
             'scountry' => trim((string)($_POST['confirm_scountry'] ?? ($shipping['scountry'] ?? 'IN'))),
             'sphone' => trim((string)($_POST['confirm_sphone'] ?? ($shipping['sphone'] ?? ''))),
         ];
+    }
+
+    if (trim((string)($shipping['sname'] ?? '')) === '') {
+        $shipping['sname'] = trim(
+            trim((string)($billing['first_name'] ?? '')) . ' ' . trim((string)($billing['last_name'] ?? ''))
+        );
+    }
+    foreach (
+        [
+            'sphone' => 'phone',
+            'saddress1' => 'address1',
+            'saddress2' => 'address2',
+            'scity' => 'city',
+            'sstate' => 'state',
+            'szip' => 'zip',
+            'scountry' => 'country',
+        ] as $sk => $bk
+    ) {
+        if (trim((string)($shipping[$sk] ?? '')) === '' && trim((string)($billing[$bk] ?? '')) !== '') {
+            $shipping[$sk] = $billing[$bk];
+        }
     }
 
     return ['billing' => $billing, 'shipping' => $shipping];

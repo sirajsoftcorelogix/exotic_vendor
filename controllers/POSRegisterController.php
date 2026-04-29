@@ -2788,8 +2788,12 @@ class POSRegisterController
         $billing = [];
         $shipping = [];
 
-        // $customerId = $_POST['customer_id'] ?? 0;
-        $customerId = $_POST['customer_id'] ?? ($_SESSION['pos_customer_id'] ?? 0);
+        $rawCustomerId = $_POST['customer_id'] ?? null;
+        if ($rawCustomerId !== null && $rawCustomerId !== '') {
+            $customerId = (int)$rawCustomerId;
+        } else {
+            $customerId = (int)($_SESSION['pos_customer_id'] ?? 0);
+        }
 
         /* ---------- STEP 1 : EXISTING CUSTOMER ---------- */
         if ($customerId > 0) {
@@ -2860,8 +2864,14 @@ class POSRegisterController
             ];
         }
 
-        // Step 3: explicit confirmation popup values from POS UI override defaults.
-        if ((int)($_POST['confirm_address_submit'] ?? 0) === 1) {
+        // Step 3: confirmation popup from POS UI (may arrive without confirm_address_submit if POST was truncated).
+        $confirmFlag = trim((string)($_POST['confirm_address_submit'] ?? ''));
+        $applyConfirmPopup = ($confirmFlag === '1')
+            || (
+                trim((string)($_POST['confirm_first_name'] ?? '')) !== ''
+                && trim((string)($_POST['confirm_phone'] ?? '')) !== ''
+            );
+        if ($applyConfirmPopup) {
             $confirmShippingFirst = trim((string)($_POST['confirm_sfirst_name'] ?? ''));
             $confirmShippingLast = trim((string)($_POST['confirm_slast_name'] ?? ''));
             $confirmShippingFull = trim((string)($_POST['confirm_sname'] ?? ''));
@@ -2896,17 +2906,43 @@ class POSRegisterController
                 "sphone" => trim((string)($_POST['confirm_sphone'] ?? ($shipping['sphone'] ?? ''))),
             ];
         }
-        // echo '<pre>';
-        // print_r($billing);
-        // exit;
+
+        // Default shipping to billing when shipping rows are blank (walk-in / same-as-billing).
+        if (trim((string)($shipping['sname'] ?? '')) === '') {
+            $shipping['sname'] = trim(
+                trim((string)($billing['first_name'] ?? '')) . ' ' . trim((string)($billing['last_name'] ?? ''))
+            );
+        }
+        foreach (
+            [
+                'sphone' => 'phone',
+                'saddress1' => 'address1',
+                'saddress2' => 'address2',
+                'scity' => 'city',
+                'sstate' => 'state',
+                'szip' => 'zip',
+                'scountry' => 'country',
+            ] as $sk => $bk
+        ) {
+            if (trim((string)($shipping[$sk] ?? '')) === '' && trim((string)($billing[$bk] ?? '')) !== '') {
+                $shipping[$sk] = $billing[$bk];
+            }
+        }
 
         /* ================= VALIDATION ================= */
-        if (!$billing['first_name'] || !$billing['phone'] || !$billing['state'] || !$billing['zip']) {
+        $bFirst = trim((string)($billing['first_name'] ?? ''));
+        $bPhone = trim((string)($billing['phone'] ?? ''));
+        $bState = trim((string)($billing['state'] ?? ''));
+        $bZip = trim((string)($billing['zip'] ?? ''));
+        if ($bFirst === '' || $bPhone === '' || $bState === '' || $bZip === '') {
             echo json_encode(["success" => false, "message" => "Billing missing"]);
             exit;
         }
 
-        if (!$shipping['sname'] || !$shipping['sphone'] || !$shipping['sstate']) {
+        $sName = trim((string)($shipping['sname'] ?? ''));
+        $sPhone = trim((string)($shipping['sphone'] ?? ''));
+        $sState = trim((string)($shipping['sstate'] ?? ''));
+        if ($sName === '' || $sPhone === '' || $sState === '') {
             echo json_encode(["success" => false, "message" => "Shipping missing"]);
             exit;
         }
