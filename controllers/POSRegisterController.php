@@ -2306,6 +2306,62 @@ class POSRegisterController
         return '';
     }
 
+    /**
+     * GET /cart/retrieve may nest payload under "data" like the product API.
+     */
+    private function unwrapCartRetrievePayload(array $data): array
+    {
+        if (!empty($data['data']) && is_array($data['data'])) {
+            $inner = $data['data'];
+            unset($data['data']);
+
+            return array_merge($data, $inner);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Raw checkoutdata node from cart retrieve JSON (must match POST /order/create payload source).
+     */
+    private function checkoutdataFromCartRetrieveBody(array $data)
+    {
+        foreach (['checkoutdata', 'checkoutData', 'CheckOutData'] as $k) {
+            if (!array_key_exists($k, $data)) {
+                continue;
+            }
+            $v = $data[$k];
+            if ($v === null) {
+                continue;
+            }
+            if (is_string($v) && trim($v) === '') {
+                continue;
+            }
+            if (is_array($v) && $v === []) {
+                continue;
+            }
+
+            return $v;
+        }
+
+        return $data['checkoutdata'] ?? '';
+    }
+
+    private function cartHasUsableCheckoutdata(array $cartData): bool
+    {
+        $raw = $cartData['checkoutdata'] ?? null;
+        if ($raw === null) {
+            return false;
+        }
+        if (is_string($raw)) {
+            return trim($raw) !== '';
+        }
+        if (is_array($raw)) {
+            return $raw !== [];
+        }
+
+        return $raw !== '';
+    }
 
     public function get_cart()
     {
@@ -2319,7 +2375,7 @@ class POSRegisterController
         $res = $this->exotic_api_call('/cart/retrieve', 'GET', $cartRetrieveQuery);
         $cartApiRequestMeta = $this->buildCartRetrieveRequestMeta($cartRetrieveQuery);
 
-        $data = $res['data'] ?? [];
+        $data = $this->unwrapCartRetrievePayload($res['data'] ?? []);
 
         $lineBuild = $this->buildPosCartLinesAndTotals(
             !empty($data['cartitems']) && is_array($data['cartitems']) ? $data['cartitems'] : [],
@@ -2344,7 +2400,7 @@ class POSRegisterController
             'coupon_applied' => $financials['coupon_applied'],
             'custom_discount' => $financials['custom_discount'],
             'grand_total' => $financials['grand_total'],
-            'checkoutdata' => $data['checkoutdata'] ?? '',
+            'checkoutdata' => $this->checkoutdataFromCartRetrieveBody($data),
             'codcharges' => $financials['codcharges'],
             // POS register is INR billing; do not inherit API fx_type (can return USD/$).
             'currency' => 'INR',
@@ -2772,10 +2828,10 @@ class POSRegisterController
             : ('store.' . gmdate('YmdHis'));
         $store_payment_details = $storeId . '|' . $paymentType . '|' . $effectiveTransactionId;
 
-        /* ================= CART ================= */
+        /* ================= CART (GET /cart/retrieve) ================= */
         $cartData = $this->get_cart();
 
-        if (empty($cartData['checkoutdata'])) {
+        if (!$this->cartHasUsableCheckoutdata($cartData)) {
             echo json_encode([
                 "success" => false,
                 "message" => "Cart empty"
@@ -2947,10 +3003,21 @@ class POSRegisterController
             exit;
         }
 
+        /* ================= Fresh cart snapshot for order/create (checkoutdata must match latest retrieve) ================= */
+        $orderCartSnapshot = $this->get_cart();
+        if (!$this->cartHasUsableCheckoutdata($orderCartSnapshot)) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Cart empty — refresh cart and try again.",
+            ]);
+            exit;
+        }
+
         /* ================= COD ================= */
-        if ($paymentType == 'cod' && $cartData['codcharges'] > 0) {
+        $codchargesSnap = (float)($orderCartSnapshot['codcharges'] ?? 0);
+        if ($paymentType == 'cod' && $codchargesSnap > 0) {
             $cod = "1";
-            $codCharges = (string)$cartData['codcharges'];
+            $codCharges = (string)$codchargesSnap;
         } else {
             $cod = "0";
             $codCharges = "0";
@@ -2972,8 +3039,8 @@ class POSRegisterController
             "card_cvv" => $_POST['card_cvv'] ?? ''
         ];
 
-        /* ================= FINAL DATA ================= */
-        $serializedCheckoutdata = $this->serializeCheckoutdataForOrder($cartData['checkoutdata'] ?? '');
+        /* ================= FINAL DATA (checkoutdata sourced from GET /cart/retrieve via get_cart()) ================= */
+        $serializedCheckoutdata = $this->serializeCheckoutdataForOrder($orderCartSnapshot['checkoutdata'] ?? '');
         $postData = array_merge([
             "payment_type" => $paymentType,
             "buynow" => "0",
