@@ -505,17 +505,18 @@ function modify_express_shipping($cartid, $action)
 function cart_serialize_checkoutdata_for_order($checkoutdata): string
 {
     if (is_string($checkoutdata)) {
-        return trim($checkoutdata);
+        $s = trim($checkoutdata);
+        if ($s === '') {
+            return '';
+        }
+
+        return serialize($s);
     }
     if (is_array($checkoutdata)) {
-        $encoded = json_encode($checkoutdata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-
-        return is_string($encoded) ? $encoded : '';
+        return serialize($checkoutdata);
     }
     if (is_object($checkoutdata)) {
-        $encoded = json_encode($checkoutdata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-
-        return is_string($encoded) ? $encoded : '';
+        return serialize($checkoutdata);
     }
 
     return '';
