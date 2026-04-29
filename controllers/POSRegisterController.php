@@ -2420,6 +2420,9 @@ class POSRegisterController
             'grand_total' => $financials['grand_total'],
             'checkoutdata' => $this->checkoutdataFromCartRetrieveBody($data),
             'codcharges' => $financials['codcharges'],
+            // Use normalized values echoed by cart/retrieve for downstream order/create query consistency.
+            'discountcoupondetails_effective' => (string)($data['discountcoupondetails'] ?? $coupon),
+            'giftvoucherdetails_effective' => (string)($data['giftvoucherdetails'] ?? $voucher),
             // POS register is INR billing; do not inherit API fx_type (can return USD/$).
             'currency' => 'INR',
             'cart_api_http_code' => (int)($res['code'] ?? 0),
@@ -2562,6 +2565,7 @@ class POSRegisterController
         header("Location: ?page=pos_register");
         exit;
     }
+    
     public function toggle_addon()
     {
         $cartref = $_POST['cartref'] ?? '';
@@ -2615,6 +2619,7 @@ class POSRegisterController
         header("Location: ?page=pos_register");
         exit;
     }
+
     public function change_qty()
     {
         $cartref = $_POST['cartref'] ?? '';
@@ -3132,8 +3137,15 @@ class POSRegisterController
             "store_payment_details" => $store_payment_details
         ], $billing, $shipping, $razorpay, $card);
 
-        $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
-        $orderCreateQuery = ['discountcoupondetails' => $coupon];
+        $effectiveCoupon = trim((string)($orderCartSnapshot['discountcoupondetails_effective'] ?? ''));
+        $effectiveVoucher = trim((string)($orderCartSnapshot['giftvoucherdetails_effective'] ?? ''));
+        $orderCreateQuery = [];
+        if ($effectiveCoupon !== '') {
+            $orderCreateQuery['discountcoupondetails'] = $effectiveCoupon;
+        }
+        if ($effectiveVoucher !== '') {
+            $orderCreateQuery['giftvoucherdetails'] = $effectiveVoucher;
+        }
 
         $apiResult = $this->exotic_api_call('/order/create', 'POST', $orderCreateQuery, $postData);
         $orderApiDebug = $this->buildOrderCreateApiDebug(
