@@ -14,6 +14,46 @@ function cart_unwrap_product_api_payload(array $data): array
     return $data;
 }
 
+/** Raw checkoutdata from GET /cart/retrieve body (after unwrap); aligns with POSRegisterController::checkoutdataFromCartRetrieveBody */
+function cart_checkoutdata_from_retrieve_body(array $data)
+{
+    foreach (['checkoutdata', 'checkoutData', 'CheckOutData'] as $k) {
+        if (!array_key_exists($k, $data)) {
+            continue;
+        }
+        $v = $data[$k];
+        if ($v === null) {
+            continue;
+        }
+        if (is_string($v) && trim($v) === '') {
+            continue;
+        }
+        if (is_array($v) && $v === []) {
+            continue;
+        }
+
+        return $v;
+    }
+
+    return $data['checkoutdata'] ?? '';
+}
+
+function cart_has_usable_checkoutdata(array $cartData): bool
+{
+    $raw = $cartData['checkoutdata'] ?? null;
+    if ($raw === null) {
+        return false;
+    }
+    if (is_string($raw)) {
+        return trim($raw) !== '';
+    }
+    if (is_array($raw)) {
+        return $raw !== [];
+    }
+
+    return $raw !== '';
+}
+
 /** Catalog rows for matching cart_entry → price (incl. express shipping row when present). */
 function cart_product_addon_catalog(array $productApiResult): array
 {
@@ -189,17 +229,18 @@ function get_cart()
 {
     global $conn;
     $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
+    $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
 
     $res = exotic_api_call(
         '/cart/retrieve',
         'GET',
         [
             'discountcoupondetails' => $coupon,
-            'giftvoucherdetails' => ''
+            'giftvoucherdetails' => $voucher,
         ]
     );
 
-    $data = $res['data'] ?? [];
+    $data = cart_unwrap_product_api_payload($res['data'] ?? []);
 
     $items = [];
     $subtotal = 0;
@@ -327,7 +368,8 @@ function get_cart()
         'gst' => $gst,
         'discount' => $discount,
         'grand_total' => $grand_total,
-        'checkoutdata' => $data['checkoutdata'] ?? ''
+        'checkoutdata' => cart_checkoutdata_from_retrieve_body($data),
+        'codcharges' => (float)($data['codcharges_if_chosen'] ?? 0),
     ];
 }
 
@@ -660,6 +702,11 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
 
     $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
 
+    // Always take checkoutdata (and cod line) from live GET /cart/retrieve, not stale caller data.
+    $liveCart = get_cart();
+    $cartData['checkoutdata'] = $liveCart['checkoutdata'];
+    $cartData['codcharges'] = $liveCart['codcharges'] ?? ($cartData['codcharges'] ?? 0);
+
     $allowedApiPaymentTypes = [
         'offline',
         'cc',
@@ -712,6 +759,13 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
     $transactionId = trim((string)($_POST['transaction_id'] ?? ''));
     $effectiveTransactionId = $transactionId !== '' ? $transactionId : ('store.' . gmdate('YmdHis'));
     $store_payment_details = $storeId . '|' . $apiPaymentType . '|' . $effectiveTransactionId;
+
+    if (!cart_has_usable_checkoutdata($cartData)) {
+        return [
+            'success' => false,
+            'message' => 'Cart empty or checkout session expired.',
+        ];
+    }
 
     $serializedCheckoutdata = cart_serialize_checkoutdata_for_order($cartData['checkoutdata'] ?? '');
     if ($serializedCheckoutdata === '') {
