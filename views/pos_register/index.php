@@ -781,8 +781,61 @@ $couponApiHttpMeta = $couponApiDebugInitial
   var btn = document.getElementById('btnOpenCouponApiModal');
   var closeBtn = document.getElementById('couponApiResponseClose');
   var overlay = document.getElementById('couponApiResponseOverlay');
+  var pre = document.getElementById('couponApiResponsePre');
+  function pretty(obj) {
+    try {
+      return JSON.stringify(obj, null, 2);
+    } catch (e) {
+      return String(obj);
+    }
+  }
+  function buildCouponDebugView(payload) {
+    if (!payload || typeof payload !== 'object') {
+      return String(payload || '{}');
+    }
+    var lines = [];
+    var ts = payload.timestamp || '-';
+    var http = payload.http_code != null ? String(payload.http_code) : '-';
+    var request = payload.request || {};
+    var response = payload.response_normalized || payload.response || {};
+    var fallbackProbe = payload.fallback_probe || null;
+    lines.push('Coupon API Debug');
+    lines.push('Timestamp: ' + ts);
+    lines.push('HTTP: ' + http);
+    lines.push('');
+    lines.push('Request');
+    lines.push('-------');
+    lines.push(pretty({
+      method: request.method || 'GET',
+      url: request.url || '',
+      query_params: request.query_params || {},
+      headers: request.headers || {},
+    }));
+    lines.push('');
+    lines.push('Response');
+    lines.push('--------');
+    lines.push(pretty(response));
+    if (fallbackProbe) {
+      lines.push('');
+      lines.push('Fallback Probe');
+      lines.push('--------------');
+      lines.push(pretty(fallbackProbe));
+    }
+    return lines.join('\n');
+  }
+  function formatCouponDebugPre() {
+    if (!pre) return;
+    var raw = pre.textContent || '{}';
+    try {
+      var parsed = JSON.parse(raw);
+      pre.textContent = buildCouponDebugView(parsed);
+    } catch (e) {
+      // keep original text if it's not valid JSON
+    }
+  }
   function openCouponApiModal() {
     if (!modal) return;
+    formatCouponDebugPre();
     modal.classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
   }
@@ -794,6 +847,7 @@ $couponApiHttpMeta = $couponApiDebugInitial
   if (btn) btn.addEventListener('click', openCouponApiModal);
   if (closeBtn) closeBtn.addEventListener('click', closeCouponApiModal);
   if (overlay) overlay.addEventListener('click', closeCouponApiModal);
+  formatCouponDebugPre();
 })();
 </script>
 <?php
