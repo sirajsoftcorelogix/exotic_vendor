@@ -817,6 +817,11 @@
                 value="<?php echo htmlspecialchars(number_format((float)($products['price_india'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>"
                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
             >
+            <div class="mt-3 space-y-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p><span class="font-medium">GST %:</span> <span id="priceIndiaGstPercent"><?php echo htmlspecialchars(number_format((float)($products['gst'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?></span>%</p>
+                <p><span class="font-medium">GST Amount:</span> ₹<span id="priceIndiaGstAmount">0.00</span></p>
+                <p><span class="font-medium">Amount After GST:</span> ₹<span id="priceIndiaAfterGst">0.00</span></p>
+            </div>
             <p class="text-xs text-gray-500 mt-1">Displayed card value includes GST.</p>
         </div>
         <div class="flex justify-end gap-3 mt-6">
@@ -1326,10 +1331,35 @@ function closePermaAvailableModal() {
 
 function openPriceIndiaModal() {
     document.getElementById('priceIndiaModal').classList.remove('hidden');
+    updatePriceIndiaGstLabels();
 }
 
 function closePriceIndiaModal() {
     document.getElementById('priceIndiaModal').classList.add('hidden');
+}
+
+function updatePriceIndiaGstLabels() {
+    var input = document.getElementById('input_price_india');
+    var gstAmtEl = document.getElementById('priceIndiaGstAmount');
+    var afterGstEl = document.getElementById('priceIndiaAfterGst');
+    if (!input || !gstAmtEl || !afterGstEl) {
+        return;
+    }
+    var value = parseFloat(String(input.value || '').trim());
+    if (Number.isNaN(value) || value < 0) {
+        value = 0;
+    }
+    var gstPercent = parseFloat(<?php echo json_encode((float)($products['gst'] ?? 0)); ?>) || 0;
+    var gstAmount = value * (gstPercent / 100);
+    var amountAfterGst = value + gstAmount;
+    gstAmtEl.textContent = gstAmount.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+    afterGstEl.textContent = amountAfterGst.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
 }
 
 function submitPriceIndiaUpdate() {
@@ -1377,6 +1407,14 @@ function submitPriceIndiaUpdate() {
         showProfileStatusModal('An error occurred while updating Price India.', 'error', false);
     });
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    var priceIndiaInput = document.getElementById('input_price_india');
+    if (priceIndiaInput) {
+        priceIndiaInput.addEventListener('input', updatePriceIndiaGstLabels);
+        updatePriceIndiaGstLabels();
+    }
+});
 
 function submitPermanentlyAvailableUpdate() {
     const sel = document.getElementById('input_permanently_available');
