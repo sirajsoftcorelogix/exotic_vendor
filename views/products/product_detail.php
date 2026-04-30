@@ -820,7 +820,10 @@
             <div class="mt-3 space-y-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
                 <p><span class="font-medium">GST %:</span> <span id="priceIndiaGstPercent"><?php echo htmlspecialchars(number_format((float)($products['gst'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?></span>%</p>
                 <p><span class="font-medium">GST Amount:</span> ₹<span id="priceIndiaGstAmount">0.00</span></p>
-                <p><span class="font-medium">Amount After GST:</span> ₹<span id="priceIndiaAfterGst">0.00</span></p>
+                <div class="mt-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2">
+                    <p class="text-[11px] font-semibold tracking-wide text-emerald-800 uppercase">Amount After GST</p>
+                    <p class="text-lg font-bold leading-tight text-emerald-700">₹<span id="priceIndiaAfterGst">0.00</span></p>
+                </div>
             </div>
             <p class="text-xs text-gray-500 mt-1">Displayed card value includes GST.</p>
         </div>
@@ -1329,9 +1332,39 @@ function closePermaAvailableModal() {
     document.getElementById('permaAvailableModal').classList.add('hidden');
 }
 
+var currentPriceIndiaGstPercent = parseFloat(<?php echo json_encode((float)($products['gst'] ?? 0)); ?>) || 0;
+
 function openPriceIndiaModal() {
-    document.getElementById('priceIndiaModal').classList.remove('hidden');
-    updatePriceIndiaGstLabels();
+    var modal = document.getElementById('priceIndiaModal');
+    var input = document.getElementById('input_price_india');
+    var gstPercentEl = document.getElementById('priceIndiaGstPercent');
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+    fetch('index.php?page=products&action=get_price_india_snapshot&product_id=' + encodeURIComponent(<?php echo json_encode((int)($products['id'] ?? 0)); ?>), {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        if (res && res.success) {
+            if (input && res.price_india !== undefined) {
+                input.value = Number(res.price_india).toFixed(2);
+            }
+            if (res.gst_percent !== undefined) {
+                currentPriceIndiaGstPercent = parseFloat(res.gst_percent) || 0;
+            }
+            if (gstPercentEl) {
+                gstPercentEl.textContent = currentPriceIndiaGstPercent.toFixed(2);
+            }
+            updatePriceIndiaGstLabels();
+        } else if (res && res.message) {
+            showProfileStatusModal(res.message, 'error', false);
+        }
+    })
+    .catch(function () {
+        showProfileStatusModal('Could not load fresh Price India data.', 'error', false);
+    });
 }
 
 function closePriceIndiaModal() {
@@ -1340,6 +1373,7 @@ function closePriceIndiaModal() {
 
 function updatePriceIndiaGstLabels() {
     var input = document.getElementById('input_price_india');
+    var gstPercentEl = document.getElementById('priceIndiaGstPercent');
     var gstAmtEl = document.getElementById('priceIndiaGstAmount');
     var afterGstEl = document.getElementById('priceIndiaAfterGst');
     if (!input || !gstAmtEl || !afterGstEl) {
@@ -1349,7 +1383,10 @@ function updatePriceIndiaGstLabels() {
     if (Number.isNaN(value) || value < 0) {
         value = 0;
     }
-    var gstPercent = parseFloat(<?php echo json_encode((float)($products['gst'] ?? 0)); ?>) || 0;
+    var gstPercent = currentPriceIndiaGstPercent;
+    if (gstPercentEl) {
+        gstPercentEl.textContent = gstPercent.toFixed(2);
+    }
     var gstAmount = value * (gstPercent / 100);
     var amountAfterGst = value + gstAmount;
     gstAmtEl.textContent = gstAmount.toLocaleString('en-IN', {
@@ -1371,7 +1408,7 @@ function submitPriceIndiaUpdate() {
         return;
     }
 
-    const gstPercent = parseFloat(<?php echo json_encode((float)($products['gst'] ?? 0)); ?>) || 0;
+    const gstPercent = currentPriceIndiaGstPercent;
     const displayWithGst = (value * (1 + (gstPercent / 100))).toFixed(2);
 
     fetch('index.php?page=products&action=update_price_india', {
