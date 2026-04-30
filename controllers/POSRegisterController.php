@@ -3217,7 +3217,11 @@ class POSRegisterController
         }
 
         $apiResult = $this->exotic_api_call('/order/create', 'POST', $orderCreateQuery, $postData);
-        $retryMeta = ['attempted_plain_checkoutdata_retry' => false, 'retry_reason' => ''];
+        $retryMeta = [
+            'attempted_plain_checkoutdata_retry' => false,
+            'attempted_no_coupon_retry' => false,
+            'retry_reason' => '',
+        ];
         $primaryResponse = $apiResult['data'] ?? [];
         $primaryError = trim((string)($primaryResponse['error'] ?? $primaryResponse['message'] ?? ''));
         $primaryHttp = (int)($apiResult['code'] ?? 0);
@@ -3246,6 +3250,34 @@ class POSRegisterController
                 $retryMeta['retry_used_for_final_result'] = false;
                 $retryMeta['retry_http_code'] = $retryHttp;
                 $retryMeta['retry_error'] = (string)($retryResponse['error'] ?? $retryResponse['message'] ?? '');
+            }
+        }
+        // If still failing with "Missing order data", retry once with coupon/voucher removed
+        // to eliminate cart-token vs coupon-query mismatch.
+        $finalResponseAfterPlain = $apiResult['data'] ?? [];
+        $finalErrAfterPlain = trim((string)($finalResponseAfterPlain['error'] ?? $finalResponseAfterPlain['message'] ?? ''));
+        $finalHttpAfterPlain = (int)($apiResult['code'] ?? 0);
+        $shouldRetryWithoutCoupon = (
+            !empty($orderCreateQuery)
+            && $finalHttpAfterPlain >= 400
+            && stripos($finalErrAfterPlain, 'missing order data') !== false
+        );
+        if ($shouldRetryWithoutCoupon) {
+            $retryMeta['attempted_no_coupon_retry'] = true;
+            $retryMeta['no_coupon_retry_reason'] = $finalErrAfterPlain;
+            $retryNoCouponQuery = [];
+            $retryNoCouponResult = $this->exotic_api_call('/order/create', 'POST', $retryNoCouponQuery, $postData);
+            $retryNoCouponResponse = $retryNoCouponResult['data'] ?? [];
+            $retryNoCouponHttp = (int)($retryNoCouponResult['code'] ?? 0);
+            $retryNoCouponOk = $retryNoCouponHttp < 400 && !empty($retryNoCouponResponse) && empty($retryNoCouponResponse['error']);
+            if ($retryNoCouponOk) {
+                $orderCreateQuery = $retryNoCouponQuery;
+                $apiResult = $retryNoCouponResult;
+                $retryMeta['no_coupon_retry_used_for_final_result'] = true;
+            } else {
+                $retryMeta['no_coupon_retry_used_for_final_result'] = false;
+                $retryMeta['no_coupon_retry_http_code'] = $retryNoCouponHttp;
+                $retryMeta['no_coupon_retry_error'] = (string)($retryNoCouponResponse['error'] ?? $retryNoCouponResponse['message'] ?? '');
             }
         }
         $orderApiDebug = $this->buildOrderCreateApiDebug(
