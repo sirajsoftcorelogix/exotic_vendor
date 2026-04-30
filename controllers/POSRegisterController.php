@@ -1710,6 +1710,17 @@ class POSRegisterController
         return [];
     }
 
+    private function normalizeCheckoutdataToken($checkoutdata): string
+    {
+        if (is_string($checkoutdata)) {
+            return trim($checkoutdata);
+        } elseif (is_scalar($checkoutdata)) {
+            return trim((string)$checkoutdata);
+        } else {
+            return '';
+        }
+    }
+
     /**
      * @param string      $endpoint   Path beginning with "/", e.g. "/cart/retrieve"
      * @param string|null $apiBaseUrl Base URL without trailing slash. Default API JSON gateway:
@@ -1742,9 +1753,10 @@ class POSRegisterController
         //     'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
         //     'User-Agent: ExoticPOS-Web/1.0'
         // ];
+        $deviceId = $this->resolveApiDeviceId();
         $headers = [
             'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
-            'x-api-deviceid: POS-Store_1',
+            'x-api-deviceid: ' . $deviceId,
             'x-api-appplayerid: POS-Web-Terminal',
             'x-api-countrycode: IN',
             // Keep API-issued euid in session; do not use local user id here.
@@ -1824,6 +1836,43 @@ class POSRegisterController
     }
 
     /**
+     * Use real store/warehouse label for x-api-deviceid.
+     * Falls back to POS-Store_<warehouse_id> / POS-Store_1.
+     */
+    private function resolveApiDeviceId(): string
+    {
+        $fallbackId = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($fallbackId <= 0) {
+            $fallbackId = 1;
+        }
+        $fallback = 'POS-Store_' . $fallbackId;
+
+        if (empty($_SESSION['warehouse_id'])) {
+            return $fallback;
+        }
+
+        global $conn;
+        if (empty($conn)) {
+            return $fallback;
+        }
+
+        try {
+            $usersModel = new User($conn);
+            $warehouse = $usersModel->getWarehouseById((int)$_SESSION['warehouse_id']);
+            $name = trim((string)($warehouse['address_title'] ?? ''));
+            if ($name === '') {
+                return $fallback;
+            }
+            // Header-safe normalization.
+            $name = preg_replace('/\s+/', '_', $name);
+            $name = preg_replace('/[^A-Za-z0-9_\-]/', '', (string)$name);
+            return $name !== '' ? $name : $fallback;
+        } catch (\Throwable $e) {
+            return $fallback;
+        }
+    }
+
+    /**
      * Debug payload for POS "Order create API" modal (matches cart API debug shape).
      */
     private function buildOrderCreateApiDebug(array $queryParams, array $postData, array $apiResult, array $posContext = []): array
@@ -1861,7 +1910,7 @@ class POSRegisterController
                 'post_body' => $bodyForLog,
                 'headers' => [
                     'x-api-key' => '(redacted)',
-                    'x-api-deviceid' => 'POS-Store_1',
+                    'x-api-deviceid' => $this->resolveApiDeviceId(),
                     'x-api-appplayerid' => 'POS-Web-Terminal',
                     'x-api-countrycode' => 'IN',
                     // Must match exotic_api_call() header value.
@@ -1887,6 +1936,9 @@ class POSRegisterController
                 'length' => strlen($cdStr),
                 'preview' => strlen($cdStr) > 80 ? substr($cdStr, 0, 80) . '…' : $cdStr,
             ];
+        }
+        if (array_key_exists('cart_api_checkoutdata', $posContext)) {
+            $out['request']['cart_api_checkoutdata'] = $posContext['cart_api_checkoutdata'];
         }
         if ($rawPreview !== '') {
             $out['response_raw_preview'] = $rawPreview;
@@ -2308,7 +2360,7 @@ class POSRegisterController
             'query_params' => $query,
             'headers' => [
                 'x-api-key' => '(redacted)',
-                'x-api-deviceid' => 'POS-Store_1',
+                'x-api-deviceid' => $this->resolveApiDeviceId(),
                 'x-api-appplayerid' => 'POS-Web-Terminal',
                 'x-api-countrycode' => 'IN',
                 // Must match exotic_api_call() header value.
@@ -2329,49 +2381,6 @@ class POSRegisterController
         }
 
         return $data;
-    }
-
-    /**
-     * Order API expects checkoutdata as serialized string.
-     */
-    private function serializeCheckoutdataForOrder($checkoutdata): string
-    {
-        if (is_string($checkoutdata)) {
-            $s = trim($checkoutdata);
-            if ($s === '') {
-                return '';
-            }
-
-            return serialize($s);
-        }
-        if (is_array($checkoutdata)) {
-            return serialize($checkoutdata);
-        }
-        if (is_object($checkoutdata)) {
-            return serialize($checkoutdata);
-        }
-
-        return '';
-    }
-
-    /**
-     * Raw checkoutdata token as returned by /cart/retrieve (non-serialized fallback).
-     */
-    private function plainCheckoutdataForOrder($checkoutdata): string
-    {
-        if (is_string($checkoutdata)) {
-            return trim($checkoutdata);
-        }
-        if (is_array($checkoutdata)) {
-            $encoded = json_encode($checkoutdata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            return is_string($encoded) ? $encoded : '';
-        }
-        if (is_object($checkoutdata)) {
-            $encoded = json_encode($checkoutdata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            return is_string($encoded) ? $encoded : '';
-        }
-
-        return '';
     }
 
     /**
@@ -3195,15 +3204,15 @@ class POSRegisterController
         $card = $paymentExtra['card'];
 
         /* ================= FINAL DATA (checkoutdata sourced from GET /cart/retrieve via get_cart()) ================= */
-        $serializedCheckoutdata = $this->serializeCheckoutdataForOrder($orderCartSnapshot['checkoutdata'] ?? '');
         $postData = array_merge([
             "payment_type" => $paymentType,
             "buynow" => "0",
-            "checkoutdata" => $serializedCheckoutdata,
+            "checkoutdata" => $orderCartSnapshot['checkoutdata'] ?? '',
             "cod" => $cod,
             "codcharges" => $codCharges,
             "store_payment_details" => $store_payment_details
         ], $billing, $shipping, $razorpay, $card);
+        $postData['checkoutdata'] = $this->normalizeCheckoutdataToken($postData['checkoutdata'] ?? '');
 
         $effectiveCouponRaw = trim((string)($orderCartSnapshot['discountcoupondetails_effective'] ?? ''));
         $effectiveCoupon = $this->normalizeCouponForOrderCreateQuery($effectiveCouponRaw);
@@ -3218,53 +3227,21 @@ class POSRegisterController
 
         $apiResult = $this->exotic_api_call('/order/create', 'POST', $orderCreateQuery, $postData);
         $retryMeta = [
-            'attempted_plain_checkoutdata_retry' => false,
             'attempted_no_coupon_retry' => false,
-            'retry_reason' => '',
         ];
-        $primaryResponse = $apiResult['data'] ?? [];
-        $primaryError = trim((string)($primaryResponse['error'] ?? $primaryResponse['message'] ?? ''));
-        $primaryHttp = (int)($apiResult['code'] ?? 0);
-        $plainCheckoutdata = $this->plainCheckoutdataForOrder($orderCartSnapshot['checkoutdata'] ?? '');
-        $serializedCheckoutdata = (string)($postData['checkoutdata'] ?? '');
-        $shouldRetryWithPlain = (
-            $plainCheckoutdata !== ''
-            && $plainCheckoutdata !== $serializedCheckoutdata
-            && $primaryHttp >= 400
-            && stripos($primaryError, 'missing order data') !== false
-        );
-        if ($shouldRetryWithPlain) {
-            $retryMeta['attempted_plain_checkoutdata_retry'] = true;
-            $retryMeta['retry_reason'] = $primaryError;
-            $retryPostData = $postData;
-            $retryPostData['checkoutdata'] = $plainCheckoutdata;
-            $retryResult = $this->exotic_api_call('/order/create', 'POST', $orderCreateQuery, $retryPostData);
-            $retryResponse = $retryResult['data'] ?? [];
-            $retryHttp = (int)($retryResult['code'] ?? 0);
-            $retryOk = $retryHttp < 400 && !empty($retryResponse) && empty($retryResponse['error']);
-            if ($retryOk) {
-                $postData = $retryPostData;
-                $apiResult = $retryResult;
-                $retryMeta['retry_used_for_final_result'] = true;
-            } else {
-                $retryMeta['retry_used_for_final_result'] = false;
-                $retryMeta['retry_http_code'] = $retryHttp;
-                $retryMeta['retry_error'] = (string)($retryResponse['error'] ?? $retryResponse['message'] ?? '');
-            }
-        }
         // If still failing with "Missing order data", retry once with coupon/voucher removed
         // to eliminate cart-token vs coupon-query mismatch.
-        $finalResponseAfterPlain = $apiResult['data'] ?? [];
-        $finalErrAfterPlain = trim((string)($finalResponseAfterPlain['error'] ?? $finalResponseAfterPlain['message'] ?? ''));
-        $finalHttpAfterPlain = (int)($apiResult['code'] ?? 0);
+        $finalResponse = $apiResult['data'] ?? [];
+        $finalErr = trim((string)($finalResponse['error'] ?? $finalResponse['message'] ?? ''));
+        $finalHttp = (int)($apiResult['code'] ?? 0);
         $shouldRetryWithoutCoupon = (
             !empty($orderCreateQuery)
-            && $finalHttpAfterPlain >= 400
-            && stripos($finalErrAfterPlain, 'missing order data') !== false
+            && $finalHttp >= 400
+            && stripos($finalErr, 'missing order data') !== false
         );
         if ($shouldRetryWithoutCoupon) {
             $retryMeta['attempted_no_coupon_retry'] = true;
-            $retryMeta['no_coupon_retry_reason'] = $finalErrAfterPlain;
+            $retryMeta['no_coupon_retry_reason'] = $finalErr;
             $retryNoCouponQuery = [];
             $retryNoCouponResult = $this->exotic_api_call('/order/create', 'POST', $retryNoCouponQuery, $postData);
             $retryNoCouponResponse = $retryNoCouponResult['data'] ?? [];
@@ -3291,6 +3268,7 @@ class POSRegisterController
                 'transaction_id' => $transactionId,
                 'customer_id' => (int)$customerId,
                 'note' => $note,
+                'cart_api_checkoutdata' => $postData['checkoutdata'] ?? '',
                 'retry_meta' => $retryMeta,
             ]
         );
