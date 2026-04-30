@@ -4545,6 +4545,44 @@ class ProductsController {
         exit;
     }
 
+    public function getPriceIndiaSnapshot()
+    {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $productId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+
+            $priceIndia = (float)($product['price_india'] ?? 0);
+            $gstPercent = max(0.0, (float)($product['gst'] ?? 0));
+            $gstAmount = $priceIndia * ($gstPercent / 100);
+            $amountAfterGst = $priceIndia + $gstAmount;
+
+            echo json_encode([
+                'success' => true,
+                'price_india' => round($priceIndia, 2),
+                'gst_percent' => round($gstPercent, 2),
+                'gst_amount' => round($gstAmount, 2),
+                'amount_after_gst' => round($amountAfterGst, 2),
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     /**
      * Set permanently_available on frontend via vendor product/modify API.
      */
