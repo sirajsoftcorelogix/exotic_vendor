@@ -3092,6 +3092,24 @@ class POSRegisterController
         return ['razorpay' => $razorpay, 'card' => $card];
     }
 
+    /**
+     * /order/create expects coupon id in query param (e.g. APPTEST), not expanded
+     * cart string variants like APPTEST|d|1.
+     */
+    private function normalizeCouponForOrderCreateQuery(string $couponRaw): string
+    {
+        $s = trim($couponRaw);
+        if ($s === '') {
+            return '';
+        }
+        if (strpos($s, '|') !== false) {
+            $parts = explode('|', $s);
+            return trim((string)($parts[0] ?? ''));
+        }
+
+        return $s;
+    }
+
     public function create_order()
     {
         global $conn;
@@ -3187,7 +3205,8 @@ class POSRegisterController
             "store_payment_details" => $store_payment_details
         ], $billing, $shipping, $razorpay, $card);
 
-        $effectiveCoupon = trim((string)($orderCartSnapshot['discountcoupondetails_effective'] ?? ''));
+        $effectiveCouponRaw = trim((string)($orderCartSnapshot['discountcoupondetails_effective'] ?? ''));
+        $effectiveCoupon = $this->normalizeCouponForOrderCreateQuery($effectiveCouponRaw);
         $effectiveVoucher = trim((string)($orderCartSnapshot['giftvoucherdetails_effective'] ?? ''));
         $orderCreateQuery = [];
         if ($effectiveCoupon !== '') {
