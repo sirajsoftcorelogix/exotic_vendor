@@ -1925,6 +1925,11 @@ class POSRegisterController
             ],
             'http_code' => (int)($apiResult['code'] ?? 0),
             'response' => is_array($parsed) ? $parsed : [],
+            // Explicitly expose the exact result from create-order call point.
+            'api_result' => [
+                'code' => (int)($apiResult['code'] ?? 0),
+                'data' => is_array($parsed) ? $parsed : [],
+            ],
         ];
 
         // Helpful when upstream errors are generic (e.g. "Missing order data").
@@ -1942,6 +1947,7 @@ class POSRegisterController
         }
         if ($rawPreview !== '') {
             $out['response_raw_preview'] = $rawPreview;
+            $out['api_result']['raw_preview'] = $rawPreview;
         }
 
         return $out;
