@@ -57,37 +57,12 @@ function cart_has_usable_checkoutdata(array $cartData): bool
 function cart_normalize_checkoutdata_token($checkoutdata): string
 {
     if (is_string($checkoutdata)) {
-        $raw = trim($checkoutdata);
+        return trim($checkoutdata);
     } elseif (is_scalar($checkoutdata)) {
-        $raw = trim((string)$checkoutdata);
+        return trim((string)$checkoutdata);
     } else {
         return '';
     }
-    if ($raw === '') {
-        return '';
-    }
-    if (preg_match('/^s:\d+:"(.*)";$/s', $raw, $m)) {
-        return trim((string)$m[1]);
-    }
-    if (preg_match('/^s:\d+:\\"(.*)\\";$/s', $raw, $m)) {
-        return trim(stripcslashes((string)$m[1]));
-    }
-    $rawUnslashed = stripslashes($raw);
-    if ($rawUnslashed !== $raw) {
-        if (preg_match('/^s:\d+:"(.*)";$/s', $rawUnslashed, $m)) {
-            return trim((string)$m[1]);
-        }
-        $u2 = @unserialize($rawUnslashed);
-        if (is_string($u2)) {
-            return trim($u2);
-        }
-    }
-    $unserialized = @unserialize($raw);
-    if (is_string($unserialized)) {
-        return trim($unserialized);
-    }
-
-    return $raw;
 }
 
 /** Catalog rows for matching cart_entry → price (incl. express shipping row when present). */
@@ -781,7 +756,7 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
         ];
     }
 
-    $serializedCheckoutdata = cart_normalize_checkoutdata_token($cartData['checkoutdata'] ?? '');
+    $checkoutdataToken = cart_normalize_checkoutdata_token($cartData['checkoutdata'] ?? '');
 
     $razorpay = [
         'razorpay_order_id' => $_POST['razorpay_order_id'] ?? '',
@@ -801,7 +776,7 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
         [
             'payment_type' => $apiPaymentType,
             'buynow' => '0',
-            'checkoutdata' => $serializedCheckoutdata,
+            'checkoutdata' => $checkoutdataToken,
             'cod' => $cod,
             'codcharges' => $codCharges,
             'store_payment_details' => $store_payment_details,
