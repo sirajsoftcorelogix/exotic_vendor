@@ -500,29 +500,6 @@ function modify_express_shipping($cartid, $action)
 }
 
 /**
- * Order API expects checkoutdata as serialized string (same as POSRegisterController::serializeCheckoutdataForOrder).
- */
-function cart_serialize_checkoutdata_for_order($checkoutdata): string
-{
-    if (is_string($checkoutdata)) {
-        $s = trim($checkoutdata);
-        if ($s === '') {
-            return '';
-        }
-
-        return serialize($s);
-    }
-    if (is_array($checkoutdata)) {
-        return serialize($checkoutdata);
-    }
-    if (is_object($checkoutdata)) {
-        return serialize($checkoutdata);
-    }
-
-    return '';
-}
-
-/**
  * Map legacy POS payment labels to /order/create payment_type values.
  */
 function cart_map_payment_type_for_order_api(string $paymentType): string
@@ -768,13 +745,7 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
         ];
     }
 
-    $serializedCheckoutdata = cart_serialize_checkoutdata_for_order($cartData['checkoutdata'] ?? '');
-    if ($serializedCheckoutdata === '') {
-        return [
-            'success' => false,
-            'message' => 'Cart empty or checkout session expired.',
-        ];
-    }
+    $serializedCheckoutdata = serialize($cartData['checkoutdata'] ?? '');
 
     $razorpay = [
         'razorpay_order_id' => $_POST['razorpay_order_id'] ?? '',
