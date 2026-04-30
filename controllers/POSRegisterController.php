@@ -1751,19 +1751,32 @@ class POSRegisterController
             'x-api-euid:' . (string)($_SESSION['x_api_euid'] ?? ''),
             'User-Agent: ExoticPOS'
         ];
+        // Forward optional evolving API session headers when available.
+        if (!empty($_SESSION['x_api_jwt'])) {
+            $headers[] = 'x-api-jwt:' . (string)$_SESSION['x_api_jwt'];
+        }
+        if (!empty($_SESSION['x_api_browsehistory'])) {
+            $headers[] = 'x-api-browsehistory:' . (string)$_SESSION['x_api_browsehistory'];
+        }
+        if (!empty($_SESSION['x_api_etd'])) {
+            $headers[] = 'x-api-etd:' . (string)$_SESSION['x_api_etd'];
+        }
+        if (!empty($_SESSION['x_api_etd_pincode'])) {
+            $headers[] = 'x-api-etd-pincode:' . (string)$_SESSION['x_api_etd_pincode'];
+        }
 
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
-        $capturedEuid = null;
-        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$capturedEuid) {
+        $capturedHeaders = [];
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$capturedHeaders) {
             $len = strlen($headerLine);
             $header = explode(':', $headerLine, 2);
             if (count($header) < 2) {
                 return $len;
             }
             $name = strtolower(trim($header[0]));
-            if ($name === 'x-api-euid') {
-                $capturedEuid = trim($header[1]);
+            if (in_array($name, ['x-api-euid', 'x-api-jwt', 'x-api-browsehistory', 'x-api-etd', 'x-api-etd-pincode'], true)) {
+                $capturedHeaders[$name] = trim($header[1]);
             }
             return $len;
         });
@@ -1783,8 +1796,20 @@ class POSRegisterController
 
         curl_close($ch);
 
-        if (!empty($capturedEuid)) {
-            $_SESSION['x_api_euid'] = $capturedEuid;
+        if (!empty($capturedHeaders['x-api-euid'])) {
+            $_SESSION['x_api_euid'] = $capturedHeaders['x-api-euid'];
+        }
+        if (!empty($capturedHeaders['x-api-jwt'])) {
+            $_SESSION['x_api_jwt'] = $capturedHeaders['x-api-jwt'];
+        }
+        if (!empty($capturedHeaders['x-api-browsehistory'])) {
+            $_SESSION['x_api_browsehistory'] = $capturedHeaders['x-api-browsehistory'];
+        }
+        if (!empty($capturedHeaders['x-api-etd'])) {
+            $_SESSION['x_api_etd'] = $capturedHeaders['x-api-etd'];
+        }
+        if (!empty($capturedHeaders['x-api-etd-pincode'])) {
+            $_SESSION['x_api_etd_pincode'] = $capturedHeaders['x-api-etd-pincode'];
         }
 
         $body = (string)$response;
@@ -1842,6 +1867,10 @@ class POSRegisterController
                     // Must match exotic_api_call() header value.
                     // exotic_api_call() uses $_SESSION['x_api_euid'] captured from previous API responses.
                     'x-api-euid' => (string)($_SESSION['x_api_euid'] ?? ''),
+                    'x-api-jwt' => !empty($_SESSION['x_api_jwt']) ? '(present)' : '',
+                    'x-api-browsehistory' => (string)($_SESSION['x_api_browsehistory'] ?? ''),
+                    'x-api-etd' => (string)($_SESSION['x_api_etd'] ?? ''),
+                    'x-api-etd-pincode' => (string)($_SESSION['x_api_etd_pincode'] ?? ''),
                     'User-Agent' => 'ExoticPOS',
                 ],
             ],
@@ -2284,6 +2313,10 @@ class POSRegisterController
                 'x-api-countrycode' => 'IN',
                 // Must match exotic_api_call() header value.
                 'x-api-euid' => (string)($_SESSION['x_api_euid'] ?? ''),
+                'x-api-jwt' => !empty($_SESSION['x_api_jwt']) ? '(present)' : '',
+                'x-api-browsehistory' => (string)($_SESSION['x_api_browsehistory'] ?? ''),
+                'x-api-etd' => (string)($_SESSION['x_api_etd'] ?? ''),
+                'x-api-etd-pincode' => (string)($_SESSION['x_api_etd_pincode'] ?? ''),
                 'User-Agent' => 'ExoticPOS',
             ],
         ];
@@ -2316,6 +2349,26 @@ class POSRegisterController
         }
         if (is_object($checkoutdata)) {
             return serialize($checkoutdata);
+        }
+
+        return '';
+    }
+
+    /**
+     * Raw checkoutdata token as returned by /cart/retrieve (non-serialized fallback).
+     */
+    private function plainCheckoutdataForOrder($checkoutdata): string
+    {
+        if (is_string($checkoutdata)) {
+            return trim($checkoutdata);
+        }
+        if (is_array($checkoutdata)) {
+            $encoded = json_encode($checkoutdata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            return is_string($encoded) ? $encoded : '';
+        }
+        if (is_object($checkoutdata)) {
+            $encoded = json_encode($checkoutdata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            return is_string($encoded) ? $encoded : '';
         }
 
         return '';
@@ -3145,6 +3198,37 @@ class POSRegisterController
         }
 
         $apiResult = $this->exotic_api_call('/order/create', 'POST', $orderCreateQuery, $postData);
+        $retryMeta = ['attempted_plain_checkoutdata_retry' => false, 'retry_reason' => ''];
+        $primaryResponse = $apiResult['data'] ?? [];
+        $primaryError = trim((string)($primaryResponse['error'] ?? $primaryResponse['message'] ?? ''));
+        $primaryHttp = (int)($apiResult['code'] ?? 0);
+        $plainCheckoutdata = $this->plainCheckoutdataForOrder($orderCartSnapshot['checkoutdata'] ?? '');
+        $serializedCheckoutdata = (string)($postData['checkoutdata'] ?? '');
+        $shouldRetryWithPlain = (
+            $plainCheckoutdata !== ''
+            && $plainCheckoutdata !== $serializedCheckoutdata
+            && $primaryHttp >= 400
+            && stripos($primaryError, 'missing order data') !== false
+        );
+        if ($shouldRetryWithPlain) {
+            $retryMeta['attempted_plain_checkoutdata_retry'] = true;
+            $retryMeta['retry_reason'] = $primaryError;
+            $retryPostData = $postData;
+            $retryPostData['checkoutdata'] = $plainCheckoutdata;
+            $retryResult = $this->exotic_api_call('/order/create', 'POST', $orderCreateQuery, $retryPostData);
+            $retryResponse = $retryResult['data'] ?? [];
+            $retryHttp = (int)($retryResult['code'] ?? 0);
+            $retryOk = $retryHttp < 400 && !empty($retryResponse) && empty($retryResponse['error']);
+            if ($retryOk) {
+                $postData = $retryPostData;
+                $apiResult = $retryResult;
+                $retryMeta['retry_used_for_final_result'] = true;
+            } else {
+                $retryMeta['retry_used_for_final_result'] = false;
+                $retryMeta['retry_http_code'] = $retryHttp;
+                $retryMeta['retry_error'] = (string)($retryResponse['error'] ?? $retryResponse['message'] ?? '');
+            }
+        }
         $orderApiDebug = $this->buildOrderCreateApiDebug(
             $orderCreateQuery,
             $postData,
@@ -3156,6 +3240,7 @@ class POSRegisterController
                 'transaction_id' => $transactionId,
                 'customer_id' => (int)$customerId,
                 'note' => $note,
+                'retry_meta' => $retryMeta,
             ]
         );
         $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
