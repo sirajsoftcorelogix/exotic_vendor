@@ -3229,4 +3229,17 @@ class product
         $stmt->bind_param('di', $price, $productId);
         return $stmt->execute();
     }
+
+    public function setProductPriceUsd($productId, $priceUsd)
+    {
+        $productId = (int)$productId;
+        $price = (float)$priceUsd;
+        $sql = 'UPDATE vp_products SET price = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('di', $price, $productId);
+        return $stmt->execute();
+    }
 }
