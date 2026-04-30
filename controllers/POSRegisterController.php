@@ -3328,9 +3328,44 @@ class POSRegisterController
         exit;
     }
 
+    /**
+     * Receipt date in Asia/Kolkata, e.g. "26th Sep 2026".
+     */
+    private function formatReceiptDateOrdinalIndia(): string
+    {
+        try {
+            $dt = new DateTime('now', new DateTimeZone('Asia/Kolkata'));
+        } catch (\Throwable $e) {
+            $dt = new DateTime('now');
+        }
+
+        $day = (int)$dt->format('j');
+        if ($day >= 11 && $day <= 13) {
+            $suffix = 'th';
+        } else {
+            switch ($day % 10) {
+                case 1:
+                    $suffix = 'st';
+                    break;
+                case 2:
+                    $suffix = 'nd';
+                    break;
+                case 3:
+                    $suffix = 'rd';
+                    break;
+                default:
+                    $suffix = 'th';
+            }
+        }
+
+        return $day . $suffix . ' ' . $dt->format('M Y');
+    }
+
     public function order_confirmation()
     {
         is_login();
+        global $conn;
+
         $orderId = trim((string)($_GET['order_id'] ?? ''));
         $paymentType = trim((string)($_GET['payment_type'] ?? 'offline'));
         $paymentStage = trim((string)($_GET['payment_stage'] ?? 'final'));
@@ -3338,18 +3373,55 @@ class POSRegisterController
         $transactionId = trim((string)($_GET['transaction_id'] ?? ''));
         $importStatus = trim((string)($_GET['import_status'] ?? 'unknown'));
 
+        $warehouseName = '';
+        if (!empty($_SESSION['warehouse_id']) && $conn) {
+            require_once 'models/user/user.php';
+            $usersModel = new User($conn);
+            $warehouse = $usersModel->getWarehouseById((int)$_SESSION['warehouse_id']);
+            $warehouseName = trim((string)($warehouse['address_title'] ?? ''));
+            if ($warehouseName === '') {
+                $warehouseName = 'Warehouse #' . (int)$_SESSION['warehouse_id'];
+            }
+        }
+        if ($warehouseName === '') {
+            $warehouseName = '—';
+        }
+
+        $paymentModeLabels = [
+            'offline' => 'Cash / Offline',
+            'cc' => 'Credit / Debit Card',
+            'razorpay' => 'Razorpay',
+            'cod' => 'Cash on Delivery',
+            'bank_transfer' => 'Bank Transfer',
+            'pos_machine' => 'POS Machine',
+            'specialpay' => 'Special Payment',
+            'cheque' => 'Cheque',
+            'demand_draft' => 'Demand Draft',
+        ];
+        $paymentModeLabel = $paymentModeLabels[strtolower($paymentType)] ?? ucfirst(str_replace('_', ' ', $paymentType));
+
+        $receiptNumber = $orderId !== ''
+            ? 'EI-POS-' . preg_replace('/[^A-Za-z0-9\-]/', '-', $orderId)
+            : 'EI-POS-PENDING';
+
+        $receiptDateFormatted = $this->formatReceiptDateOrdinalIndia();
+
         $invoicePreviewUrl = 'index.php?page=invoice&action=preview&id=' . rawurlencode($orderId);
         $paymentHistoryUrl = 'index.php?page=orders&action=list';
 
         renderTemplate('views/pos_register/order_confirmation.php', [
             'order_id' => $orderId,
             'payment_type' => $paymentType,
+            'payment_mode_label' => $paymentModeLabel,
             'payment_stage' => $paymentStage,
             'amount' => $amount,
             'transaction_id' => $transactionId,
             'import_status' => $importStatus,
             'invoice_preview_url' => $invoicePreviewUrl,
             'payment_history_url' => $paymentHistoryUrl,
+            'warehouse_name' => $warehouseName,
+            'receipt_number' => $receiptNumber,
+            'receipt_date_formatted' => $receiptDateFormatted,
         ]);
     }
 
