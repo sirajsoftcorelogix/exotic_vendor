@@ -1793,11 +1793,18 @@ class POSRegisterController
             return $len;
         });
 
-        if ($method === 'POST' && $postData) {
+        if ($method === 'POST' && $postData !== null) {
             $headers[] = 'Content-Type: application/x-www-form-urlencoded';
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            if (is_array($postData)) {
+                $encodedPostData = http_build_query($postData);
+            } elseif (is_string($postData)) {
+                $encodedPostData = $postData;
+            } else {
+                $encodedPostData = (string)$postData;
+            }
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $encodedPostData);
         }
 
         $response = curl_exec($ch);
@@ -1883,6 +1890,14 @@ class POSRegisterController
         }
 
         $bodyForLog = $postData;
+        $bodyFormEncodedForLog = '';
+        if (is_array($postData)) {
+            $bodyFormEncodedForLog = http_build_query($postData);
+        } elseif (is_string($postData)) {
+            $bodyFormEncodedForLog = $postData;
+        } elseif ($postData !== null) {
+            $bodyFormEncodedForLog = (string)$postData;
+        }
         if (!empty($bodyForLog['cardnumber'])) {
             $bodyForLog['cardnumber'] = '(redacted)';
         }
@@ -1908,6 +1923,7 @@ class POSRegisterController
                 'url' => $url,
                 'query_params' => $queryParams,
                 'post_body' => $bodyForLog,
+                'post_body_form_encoded' => $bodyFormEncodedForLog,
                 'headers' => [
                     'x-api-key' => '(redacted)',
                     'x-api-deviceid' => $this->resolveApiDeviceId(),
