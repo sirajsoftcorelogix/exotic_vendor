@@ -66,8 +66,21 @@ function cart_normalize_checkoutdata_token($checkoutdata): string
     if ($raw === '') {
         return '';
     }
-    if (preg_match('/^s:\d+:(?:"|\\\\")(.*)(?:"|\\\\");$/s', $raw, $m)) {
-        return trim(stripcslashes($m[1]));
+    if (preg_match('/^s:\d+:"(.*)";$/s', $raw, $m)) {
+        return trim((string)$m[1]);
+    }
+    if (preg_match('/^s:\d+:\\"(.*)\\";$/s', $raw, $m)) {
+        return trim(stripcslashes((string)$m[1]));
+    }
+    $rawUnslashed = stripslashes($raw);
+    if ($rawUnslashed !== $raw) {
+        if (preg_match('/^s:\d+:"(.*)";$/s', $rawUnslashed, $m)) {
+            return trim((string)$m[1]);
+        }
+        $u2 = @unserialize($rawUnslashed);
+        if (is_string($u2)) {
+            return trim($u2);
+        }
     }
     $unserialized = @unserialize($raw);
     if (is_string($unserialized)) {
