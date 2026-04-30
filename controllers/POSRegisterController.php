@@ -2282,7 +2282,8 @@ class POSRegisterController
                 'x-api-deviceid' => 'POS-Store_1',
                 'x-api-appplayerid' => 'POS-Web-Terminal',
                 'x-api-countrycode' => 'IN',
-                'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
+                // Must match exotic_api_call() header value.
+                'x-api-euid' => (string)($_SESSION['x_api_euid'] ?? ''),
                 'User-Agent' => 'ExoticPOS',
             ],
         ];
