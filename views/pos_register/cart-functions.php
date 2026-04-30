@@ -745,7 +745,12 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
         ];
     }
 
-    $serializedCheckoutdata = serialize($cartData['checkoutdata'] ?? '');
+    $checkoutdataRaw = $cartData['checkoutdata'] ?? '';
+    if (is_string($checkoutdataRaw)) {
+        $serializedCheckoutdata = trim($checkoutdataRaw);
+    } else {
+        $serializedCheckoutdata = serialize($checkoutdataRaw);
+    }
 
     $razorpay = [
         'razorpay_order_id' => $_POST['razorpay_order_id'] ?? '',
