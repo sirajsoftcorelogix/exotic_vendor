@@ -548,12 +548,15 @@
     <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
       <h3 class="font-semibold mb-3 flex items-center gap-2 text-gray-800"><i class="fas fa-receipt text-emerald-600"></i>Price</h3>
       <div class="space-y-2.5 text-sm">
-        <div class="flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+        <div class="flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100 relative">
           <span class="text-gray-700"><i class="fas fa-tag mr-1 px-2 py-1 rounded text-xs text-green-600 bg-green-100"></i>Price India</span>
           <div class="text-right shrink-0">
-            <span class="font-semibold text-gray-900 block leading-tight">₹<?php echo htmlspecialchars($priceIndiaWithGstFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+            <span id="priceIndiaDisplay" class="font-semibold text-gray-900 block leading-tight">₹<?php echo htmlspecialchars($priceIndiaWithGstFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
             <span class="text-[10px] text-gray-500 leading-tight block mt-0.5">(GST Included)</span>
           </div>
+          <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-emerald-700" onclick="openPriceIndiaModal()" title="Edit Price India">
+            <i class="fas fa-pencil-alt text-[10px]"></i>
+          </button>
         </div>
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
           <span class="text-gray-700"><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span class="font-semibold text-gray-900">$<?php echo htmlspecialchars($usdPriceFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
@@ -796,6 +799,29 @@
         <div class="flex justify-end gap-3 mt-6">
             <button type="button" onclick="closePermaAvailableModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
             <button type="button" onclick="submitPermanentlyAvailableUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
+        </div>
+    </div>
+</div>
+<div id="priceIndiaModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="closePriceIndiaModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Price India</h2>
+        <p class="text-sm text-gray-500 mb-4">Update local DB and sync this variant to storefront Product API.</p>
+        <div>
+            <label for="input_price_india" class="block text-sm font-medium text-gray-600 mb-1">Amount</label>
+            <input
+                type="number"
+                id="input_price_india"
+                min="0"
+                step="0.01"
+                value="<?php echo htmlspecialchars(number_format((float)($products['price_india'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+            <p class="text-xs text-gray-500 mt-1">Displayed card value includes GST.</p>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closePriceIndiaModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitPriceIndiaUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
         </div>
     </div>
 </div>
@@ -1296,6 +1322,60 @@ function openPermaAvailableModal() {
 
 function closePermaAvailableModal() {
     document.getElementById('permaAvailableModal').classList.add('hidden');
+}
+
+function openPriceIndiaModal() {
+    document.getElementById('priceIndiaModal').classList.remove('hidden');
+}
+
+function closePriceIndiaModal() {
+    document.getElementById('priceIndiaModal').classList.add('hidden');
+}
+
+function submitPriceIndiaUpdate() {
+    const input = document.getElementById('input_price_india');
+    const raw = input ? String(input.value || '').trim() : '';
+    const value = parseFloat(raw);
+    if (raw === '' || Number.isNaN(value) || value < 0) {
+        showProfileStatusModal('Please enter a valid non-negative Price India.', 'error', false);
+        return;
+    }
+
+    const gstPercent = parseFloat(<?php echo json_encode((float)($products['gst'] ?? 0)); ?>) || 0;
+    const displayWithGst = (value * (1 + (gstPercent / 100))).toFixed(2);
+
+    fetch('index.php?page=products&action=update_price_india', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+            price_india: value
+        })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        if (res && res.success) {
+            closePriceIndiaModal();
+            var disp = document.getElementById('priceIndiaDisplay');
+            if (disp) {
+                disp.textContent = '₹' + Number(displayWithGst).toLocaleString('en-IN', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+            var msg = res.message ? res.message : 'Price India updated.';
+            if (res.vendor_sync && res.vendor_sync.success === false && res.vendor_sync.message) {
+                showProfileStatusModal(msg, 'error', false);
+            } else {
+                showProfileStatusModal(msg, 'success', true);
+            }
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Update failed.', 'error', false);
+        }
+    })
+    .catch(function () {
+        showProfileStatusModal('An error occurred while updating Price India.', 'error', false);
+    });
 }
 
 function submitPermanentlyAvailableUpdate() {

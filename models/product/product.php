@@ -3216,4 +3216,17 @@ class product
         $stmt->bind_param('ii', $flag, $productId);
         return $stmt->execute();
     }
+
+    public function setProductPriceIndia($productId, $priceIndia)
+    {
+        $productId = (int)$productId;
+        $price = (float)$priceIndia;
+        $sql = 'UPDATE vp_products SET price_india = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('di', $price, $productId);
+        return $stmt->execute();
+    }
 }
