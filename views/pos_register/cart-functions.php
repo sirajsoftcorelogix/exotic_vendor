@@ -54,24 +54,24 @@ function cart_has_usable_checkoutdata(array $cartData): bool
     return $raw !== '';
 }
 
-/**
- * If checkoutdata is already serialized as s:N:"..."; then unwrap to raw token.
- */
-function cart_normalize_checkoutdata_token($checkoutdata)
+function cart_normalize_checkoutdata_token($checkoutdata): string
 {
-    if (!is_string($checkoutdata)) {
-        return $checkoutdata;
+    if (is_string($checkoutdata)) {
+        $raw = trim($checkoutdata);
+    } elseif (is_scalar($checkoutdata)) {
+        $raw = trim((string)$checkoutdata);
+    } else {
+        return '';
     }
-    $raw = trim($checkoutdata);
     if ($raw === '') {
         return '';
     }
-    if (!preg_match('/^s:\d+:"(?:.|\n)*";$/', $raw)) {
-        return $raw;
+    if (preg_match('/^s:\d+:(?:"|\\\\")(.*)(?:"|\\\\");$/s', $raw, $m)) {
+        return trim(stripcslashes($m[1]));
     }
-    $unserialized = @unserialize($raw, ['allowed_classes' => false]);
+    $unserialized = @unserialize($raw);
     if (is_string($unserialized)) {
-        return $unserialized;
+        return trim($unserialized);
     }
 
     return $raw;
@@ -768,13 +768,7 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
         ];
     }
 
-    $checkoutdataRaw = $cartData['checkoutdata'] ?? '';
-    $checkoutdataNormalized = cart_normalize_checkoutdata_token($checkoutdataRaw);
-    if (is_string($checkoutdataNormalized)) {
-        $serializedCheckoutdata = trim($checkoutdataNormalized);
-    } else {
-        $serializedCheckoutdata = serialize($checkoutdataNormalized);
-    }
+    $serializedCheckoutdata = cart_normalize_checkoutdata_token($cartData['checkoutdata'] ?? '');
 
     $razorpay = [
         'razorpay_order_id' => $_POST['razorpay_order_id'] ?? '',
