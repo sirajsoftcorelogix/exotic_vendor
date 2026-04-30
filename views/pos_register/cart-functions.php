@@ -54,6 +54,29 @@ function cart_has_usable_checkoutdata(array $cartData): bool
     return $raw !== '';
 }
 
+/**
+ * If checkoutdata is already serialized as s:N:"..."; then unwrap to raw token.
+ */
+function cart_normalize_checkoutdata_token($checkoutdata)
+{
+    if (!is_string($checkoutdata)) {
+        return $checkoutdata;
+    }
+    $raw = trim($checkoutdata);
+    if ($raw === '') {
+        return '';
+    }
+    if (!preg_match('/^s:\d+:"(?:.|\n)*";$/', $raw)) {
+        return $raw;
+    }
+    $unserialized = @unserialize($raw, ['allowed_classes' => false]);
+    if (is_string($unserialized)) {
+        return $unserialized;
+    }
+
+    return $raw;
+}
+
 /** Catalog rows for matching cart_entry → price (incl. express shipping row when present). */
 function cart_product_addon_catalog(array $productApiResult): array
 {
@@ -746,10 +769,11 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
     }
 
     $checkoutdataRaw = $cartData['checkoutdata'] ?? '';
-    if (is_string($checkoutdataRaw)) {
-        $serializedCheckoutdata = trim($checkoutdataRaw);
+    $checkoutdataNormalized = cart_normalize_checkoutdata_token($checkoutdataRaw);
+    if (is_string($checkoutdataNormalized)) {
+        $serializedCheckoutdata = trim($checkoutdataNormalized);
     } else {
-        $serializedCheckoutdata = serialize($checkoutdataRaw);
+        $serializedCheckoutdata = serialize($checkoutdataNormalized);
     }
 
     $razorpay = [
