@@ -646,6 +646,11 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->updatePublishedStatus();
                 break;
+            case 'update_price_india':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updatePriceIndia();
+                break;
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
