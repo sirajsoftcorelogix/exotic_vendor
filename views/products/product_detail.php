@@ -550,7 +550,7 @@
       <div class="space-y-2.5 text-sm">
         <div class="flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100 relative">
           <span class="text-gray-700"><i class="fas fa-tag mr-1 px-2 py-1 rounded text-xs text-green-600 bg-green-100"></i>Price India</span>
-          <div class="text-right shrink-0">
+          <div class="text-right shrink-0" style="margin-right: 3px;">
             <span id="priceIndiaDisplay" class="font-semibold text-gray-900 block leading-tight">₹<?php echo htmlspecialchars($priceIndiaWithGstFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
             <span class="text-[10px] text-gray-500 leading-tight block mt-0.5">(GST Included)</span>
           </div>
