@@ -31,7 +31,7 @@ $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : []
           <!-- Row 1: logo + thick rule -->
           <div class="flex items-center gap-3 px-4 pt-4 pb-3 sm:px-6">
             <div class="flex shrink-0 flex-col gap-0.5">
-              <img src="images/EI_Logo_130x27_SVG_1.svg" width="130" height="27" alt="Exotic India" class="h-[27px] w-[130px] max-w-full object-contain object-left" />
+              <img src="images/EI_Logo_130x27_SVG_1.svg" width="260" height="54" alt="Exotic India" class="h-[54px] w-[260px] max-w-full object-contain object-left" />
               <div class="text-[9px] font-medium uppercase tracking-[0.18em] text-neutral-500"><?= $h($receipt_company_tagline ?? '') ?></div>
             </div>
             <div class="h-[3px] min-w-0 flex-1 bg-black"></div>
