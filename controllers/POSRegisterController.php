@@ -3359,13 +3359,11 @@ class POSRegisterController
                 $short = pos_payment_resolve_short_code_for_warehouse($conn, $wid);
                 $receiptNumber = pos_payment_generate_next_receipt_number($conn, $short);
                 $amountPost = isset($_POST['amount']) ? (float)$_POST['amount'] : 0;
-                $userIdIns = (int)($_SESSION['user_id'] ?? 0);
-                $orderPkIns = ctype_digit(trim((string)$orderId)) ? (int)$orderId : 0;
+                $userIdIns = pos_payment_resolve_session_user_id();
                 $onStrIns = trim((string)$orderId);
 
                 $insertRes = pos_payment_insert_row(
                     $conn,
-                    $orderPkIns,
                     $onStrIns,
                     $receiptNumber,
                     (int)$customerId,
@@ -3381,6 +3379,10 @@ class POSRegisterController
                 $posReceiptMeta['receipt_number'] = $receiptNumber;
                 $posReceiptMeta['payment_id'] = $insertRes['payment_id'];
                 $posReceiptMeta['warehouse_id_used'] = $insertRes['warehouse_id_used'];
+                if ($insertRes['success']) {
+                    $posReceiptMeta['order_amount'] = $insertRes['order_amount'] ?? null;
+                    $posReceiptMeta['pending_amount'] = $insertRes['pending_amount'] ?? null;
+                }
                 if (!$insertRes['success']) {
                     $posReceiptMeta['payment_receipt_saved'] = false;
                     $posReceiptMeta['pos_payment_insert_sql_error'] = (string)($insertRes['error'] ?? 'insert failed');
@@ -3395,6 +3397,8 @@ class POSRegisterController
                     'warehouse_id_used' => $insertRes['warehouse_id_used'],
                     'payment_id' => $insertRes['payment_id'],
                     'error' => $insertRes['error'],
+                    'order_amount' => $insertRes['order_amount'] ?? null,
+                    'pending_amount' => $insertRes['pending_amount'] ?? null,
                 ];
                 $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
             } catch (Throwable $e) {

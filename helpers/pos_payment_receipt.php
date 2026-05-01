@@ -125,6 +125,61 @@ function pos_payment_generate_next_invoice_number(mysqli $conn, string $shortCod
  *
  * @return int 0 if no exotic_address row exists
  */
+/**
+ * Logged-in vp_users.id from session (supports both user_id and user['id'] shapes).
+ */
+function pos_payment_resolve_session_user_id(): int
+{
+    if (!empty($_SESSION['user_id'])) {
+        return (int)$_SESSION['user_id'];
+    }
+    if (!empty($_SESSION['user']['id'])) {
+        return (int)$_SESSION['user']['id'];
+    }
+
+    return 0;
+}
+
+/**
+ * Order total (vp_orders) and balance remaining after this payment is applied (pos_payments exclude new row).
+ *
+ * @return array{order_amount: float, pending_amount: float}
+ */
+function pos_payment_compute_order_snapshots(mysqli $conn, string $orderNumber, float $thisPaymentAmount): array
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return ['order_amount' => 0.0, 'pending_amount' => 0.0];
+    }
+
+    $orderTotal = 0.0;
+    $stmt = $conn->prepare('SELECT IFNULL(SUM(finalprice), 0) AS t FROM vp_orders WHERE order_number = ?');
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $orderTotal = round((float)($row['t'] ?? 0), 2);
+    }
+
+    $paidPrior = 0.0;
+    $stmt2 = $conn->prepare('SELECT IFNULL(SUM(payment_amount), 0) AS s FROM pos_payments WHERE order_number = ?');
+    if ($stmt2) {
+        $stmt2->bind_param('s', $orderNumber);
+        $stmt2->execute();
+        $row2 = $stmt2->get_result()->fetch_assoc();
+        $stmt2->close();
+        $paidPrior = round((float)($row2['s'] ?? 0), 2);
+    }
+
+    $pendingAfter = round($orderTotal - $paidPrior - $thisPaymentAmount, 2);
+
+    return [
+        'order_amount' => $orderTotal,
+        'pending_amount' => $pendingAfter,
+    ];
+}
+
 function pos_payment_fallback_warehouse_id(mysqli $conn): int
 {
     $queries = [
@@ -143,14 +198,14 @@ function pos_payment_fallback_warehouse_id(mysqli $conn): int
 }
 
 /**
- * Insert one pos_payments row. Uses concrete warehouse FK; omits customer_id when <= 0 so NULL/DEFAULT applies.
+ * Insert one pos_payments row (no order_id column — link by order_number only).
+ * Uses concrete warehouse FK; omits customer_id when <= 0 so NULL/DEFAULT applies.
  * If FK fails with a positive customer_id, retries once without customer_id (handles missing vp_customers rows).
  *
- * @return array{success:bool, payment_id:int, warehouse_id_used:int, error:?string}
+ * @return array{success:bool, payment_id:int, warehouse_id_used:int, error:?string, order_amount?:float, pending_amount?:float}
  */
 function pos_payment_insert_row(
     mysqli $conn,
-    int $orderPk,
     string $orderNumber,
     string $receiptNumber,
     int $customerId,
@@ -173,10 +228,14 @@ function pos_payment_insert_row(
         ];
     }
 
+    $snap = pos_payment_compute_order_snapshots($conn, $orderNumber, $amount);
+    $orderAmtSnap = $snap['order_amount'];
+    $pendingAmtSnap = $snap['pending_amount'];
+
     if ($customerId > 0) {
         $stmt = $conn->prepare(
-            'INSERT INTO pos_payments (order_id, order_number, receipt_number, customer_id, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-             VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
+            'INSERT INTO pos_payments (order_number, receipt_number, customer_id, payment_stage, payment_mode, payment_amount, order_amount, pending_amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
         );
         if (!$stmt) {
             return [
@@ -184,18 +243,21 @@ function pos_payment_insert_row(
                 'payment_id' => 0,
                 'warehouse_id_used' => $whEff,
                 'error' => 'Prepare failed (with customer): ' . $conn->error,
+                'order_amount' => $orderAmtSnap,
+                'pending_amount' => $pendingAmtSnap,
             ];
         }
         $cid = $customerId;
         $stmt->bind_param(
-            'ississdssii',
-            $orderPk,
+            'ssissdddssii',
             $orderNumber,
             $receiptNumber,
             $cid,
             $paymentStage,
             $paymentMode,
             $amount,
+            $orderAmtSnap,
+            $pendingAmtSnap,
             $transactionId,
             $note,
             $userId,
@@ -210,7 +272,6 @@ function pos_payment_insert_row(
             if ($retryWithoutCustomerIfFkFails && $isFk) {
                 return pos_payment_insert_row(
                     $conn,
-                    $orderPk,
                     $orderNumber,
                     $receiptNumber,
                     0,
@@ -225,19 +286,32 @@ function pos_payment_insert_row(
                 );
             }
 
-            return ['success' => false, 'payment_id' => 0, 'warehouse_id_used' => $whEff, 'error' => $err];
+            return [
+                'success' => false,
+                'payment_id' => 0,
+                'warehouse_id_used' => $whEff,
+                'error' => $err,
+                'order_amount' => $orderAmtSnap,
+                'pending_amount' => $pendingAmtSnap,
+            ];
         }
 
         $newId = (int)$conn->insert_id;
         $stmt->close();
 
-        return ['success' => true, 'payment_id' => $newId, 'warehouse_id_used' => $whEff, 'error' => null];
+        return [
+            'success' => true,
+            'payment_id' => $newId,
+            'warehouse_id_used' => $whEff,
+            'error' => null,
+            'order_amount' => $orderAmtSnap,
+            'pending_amount' => $pendingAmtSnap,
+        ];
     }
 
-    /* No customer_id column → allows NULL when walk-in customer is not selected */
     $stmt = $conn->prepare(
-        'INSERT INTO pos_payments (order_id, order_number, receipt_number, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-         VALUES (?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
+        'INSERT INTO pos_payments (order_number, receipt_number, payment_stage, payment_mode, payment_amount, order_amount, pending_amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
     );
     if (!$stmt) {
         return [
@@ -245,16 +319,19 @@ function pos_payment_insert_row(
             'payment_id' => 0,
             'warehouse_id_used' => $whEff,
             'error' => 'Prepare failed (no customer column): ' . $conn->error,
+            'order_amount' => $orderAmtSnap,
+            'pending_amount' => $pendingAmtSnap,
         ];
     }
     $stmt->bind_param(
-        'issssdssii',
-        $orderPk,
+        'ssssdddssii',
         $orderNumber,
         $receiptNumber,
         $paymentStage,
         $paymentMode,
         $amount,
+        $orderAmtSnap,
+        $pendingAmtSnap,
         $transactionId,
         $note,
         $userId,
@@ -265,10 +342,24 @@ function pos_payment_insert_row(
         $err = $stmt->error;
         $stmt->close();
 
-        return ['success' => false, 'payment_id' => 0, 'warehouse_id_used' => $whEff, 'error' => $err];
+        return [
+            'success' => false,
+            'payment_id' => 0,
+            'warehouse_id_used' => $whEff,
+            'error' => $err,
+            'order_amount' => $orderAmtSnap,
+            'pending_amount' => $pendingAmtSnap,
+        ];
     }
     $newId = (int)$conn->insert_id;
     $stmt->close();
 
-    return ['success' => true, 'payment_id' => $newId, 'warehouse_id_used' => $whEff, 'error' => null];
+    return [
+        'success' => true,
+        'payment_id' => $newId,
+        'warehouse_id_used' => $whEff,
+        'error' => null,
+        'order_amount' => $orderAmtSnap,
+        'pending_amount' => $pendingAmtSnap,
+    ];
 }

@@ -22,6 +22,7 @@ class User
             //if (password_verify($password, $user['password'])) {
             @session_start();
             $_SESSION['user'] = $user;
+            $_SESSION['user_id'] = (int)($user['id'] ?? 0);
             $_SESSION['warehouse_id'] = $user['warehouse_id'];
             assignAPIToken($user["id"]); // Insert Token for Chat
             return true;

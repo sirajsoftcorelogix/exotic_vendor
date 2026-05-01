@@ -124,7 +124,7 @@
         <!-- AMOUNT -->
         <div class="section" style="text-align:center;">
             <div class="title">Amount Paid</div>
-            <div class="amount">₹ <?= number_format($payment['amount'], 2) ?></div>
+            <div class="amount">₹ <?= number_format((float)($payment['payment_amount'] ?? $payment['amount'] ?? 0), 2) ?></div>
         </div>
 
         <!-- NOTE -->
