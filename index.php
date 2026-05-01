@@ -652,6 +652,26 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->updatePublishedStatus();
                 break;
+            case 'update_price_india':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updatePriceIndia();
+                break;
+            case 'get_price_india_snapshot':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->getPriceIndiaSnapshot();
+                break;
+            case 'update_usd_price':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateUsdPrice();
+                break;
+            case 'get_usd_price_snapshot':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->getUsdPriceSnapshot();
+                break;
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
@@ -1023,12 +1043,21 @@ switch ($page) {
             case 'create-order':
                 $controller->create_order();
                 break;
+            case 'order-confirmation':
+                $controller->order_confirmation();
+                break;
 
             case 'add-customer':
                 $controller->add_customer();
                 break;
             case 'set-customer':
                 $controller->set_customer();
+                break;
+            case 'customer-search':
+                $controller->customer_search();
+                break;
+            case 'customer-order-info':
+                $controller->customer_order_info();
                 break;
             case 'apply_custom_discount':
                 $controller->apply_custom_discount();

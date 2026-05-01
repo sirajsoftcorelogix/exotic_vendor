@@ -1,78 +1,129 @@
-<div class="max-w-7xl mx-auto space-y-6">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
     <!-- Page Header -->
-    <div class="flex flex-wrap items-center justify-between gap-4">
-        <!-- Header Section with Filters and Actions -->
-        <div class="bg-white rounded-xl shadow-md p-4 flex flex-wrap items-center justify-between gap-4 flex-grow mt-[10px]">
-            <!-- Filters -->
-            <form method="get" id="filterForm">
-                <input type="hidden" name="page" value="vendors">
-                <input type="hidden" name="action" value="list">
-                <div class="flex flex-wrap items-center gap-4">
-                    <div class="flex items-center gap-2">
-                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M14 1H1L5.5 6.5V12L8.5 14V6.5L14 1Z" stroke="#797A7C" stroke-width="2" stroke-linejoin="round"/>
-                        </svg>
-                        <span class="text-gray-600 font-medium">Filters:</span>
-                    </div>
-                    <div class="flex flex-wrap items-left gap-4">
-                        <div class="relative flex items-left gap-2">
-                            <input type="text" name="search_text" placeholder="Search by name, email or phone" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 250px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
-                        </div>
-                    </div>
-                    <div class="relative">
-                        <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="category_filter" id="category_filter">
-                            <option value="" selected>All Categories</option>
-                            <?php foreach($category[0] as $key => $value): ?>
-                                <?php if ($value['parent_id'] == 0): ?>
-                                    <optgroup label="<?php echo $value['category_name']; ?>">
-                                        <?php foreach($category[$value['id']] as $subKey => $subValue): 
-                                            if ($subValue['parent_id'] == $value['id']): ?>
-                                                <option value="<?php echo $subValue['id']; ?>" title="<?php echo $subValue['category_name']; ?>" <?php echo ($data['category_filter'] == $subValue['id']) ? "selected" : ""?>><?php echo $subValue['category_name']; ?></option>
-                                        <?php endif; endforeach; ?>
-                                    </optgroup>
-                                <?php endif; ?>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="relative">
-                        <select style="width: 132px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="team_filter" id="team_filter">
-                            <option value="" selected>All Teams</option>
-                            <?php foreach($teamList as $team): ?>
-                                <option value="<?php echo $team['id']; ?>" <?php echo ($data['team_filter'] == $team['id']) ? "selected" : ""?>><?php echo $team['team_name']; ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div class="relative">
-                        <select style="width: 120px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
-                            <option value="" selected>All Status</option>
-                            <option value="active" <?php echo ($data['status_filter'] == "active") ? "selected" : ""?>>Active</option>
-                            <option value="inactive" <?php echo ($data['status_filter'] == "inactive") ? "selected" : ""?>>Inactive</option>
-                            <option value="blacklisted" <?php echo ($data['status_filter'] == "blacklisted") ? "selected" : ""?>>Blacklisted</option>
-                        </select>
-                    </div>
-                    <div class="relative">
-                        <input type="submit" value="Search" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2">
-                    </div>
-                    <div class="relative">
-                        <input type="button" value="Clear" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 800; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="font-bold rounded-lg flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white" onclick="document.getElementById('filterForm').reset();window.location='?page=vendors&action=list';">
-                    </div>
+    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04]">
+        <div class="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-sky-200/15 blur-2xl" aria-hidden="true"></div>
+        <div class="relative px-5 py-7 sm:px-8 sm:py-9 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+            <div class="min-w-0 max-w-3xl">
+                <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+                        <i class="fas fa-truck-loading text-[11px]" aria-hidden="true"></i>
+                    </span>
+                    <span>Procurement · Vendor management</span>
                 </div>
-            </form>
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
+                    Vendor's <span class="text-amber-800">Listing</span>
+                </h1>
+                <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+                    Search suppliers by vendor profile details, group, team, and status with quick actions for editing and banking.
+                </p>
+            </div>
+            <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">
+                <?php if (isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1): ?>
+                    <button id="sync-vendors-api-btn"
+                        class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-amber-300 bg-white text-amber-800 text-sm font-semibold shadow-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap">
+                        <i class="fas fa-sync-alt text-xs opacity-95" aria-hidden="true"></i>
+                        Pull from Admin
+                    </button>
+                <?php endif; ?>
+                <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'add')): ?>
+                    <button id="open-vendor-popup-btn"
+                        class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap w-full sm:w-auto">
+                        <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
+                        Add Vendor
+                    </button>
+                <?php endif; ?>
+            </div>
         </div>
-        <!-- Add User Button -->
-        <?php
-        if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'add')) {
-        ?>
-        <button style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%; margin-right:10px;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2 mt-[10px]" id="open-vendor-popup-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-            </svg>Add Vendor</button>
-        <?php } ?>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
+        <div class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 border-b border-amber-100/80">
+            <div class="flex items-center gap-3 min-w-0">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
+                    <i class="fas fa-filter text-sm" aria-hidden="true"></i>
+                </span>
+                <div class="min-w-0">
+                    <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
+                    <p class="text-xs text-gray-200 mt-0.5 hidden sm:block">Find vendors by name, id, group, category, team, and status.</p>
+                </div>
+            </div>
+        </div>
+        <form method="get" id="filterForm" class="p-5">
+            <input type="hidden" name="page" value="vendors">
+            <input type="hidden" name="action" value="list">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-5 gap-y-4">
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Search</label>
+                    <input type="text" name="search_text" placeholder="Search by name, vendor id, groupname, email, or phone"
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
+                        value="<?php echo htmlspecialchars($data['search'] ?? ''); ?>" autocomplete="off">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Group Name</label>
+                    <?php $groupnameOptions = array('textiles','paintings','sculptures','jewelry','homeandliving',''); ?>
+                    <select name="groupname_filter"
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="">All Groups</option>
+                        <?php foreach ($groupnameOptions as $groupOpt): ?>
+                            <?php if ($groupOpt === '') continue; ?>
+                            <option value="<?php echo htmlspecialchars($groupOpt); ?>" <?php echo (($data['groupname_filter'] ?? '') === $groupOpt) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupOpt, MB_CASE_TITLE, 'UTF-8') : ucwords($groupOpt)); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+                    <select class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" name="category_filter" id="category_filter">
+                        <option value="" selected>All Categories</option>
+                        <?php foreach($category[0] as $key => $value): ?>
+                            <?php if ($value['parent_id'] == 0): ?>
+                                <optgroup label="<?php echo $value['category_name']; ?>">
+                                    <?php foreach($category[$value['id']] as $subKey => $subValue):
+                                        if ($subValue['parent_id'] == $value['id']): ?>
+                                            <option value="<?php echo $subValue['id']; ?>" title="<?php echo $subValue['category_name']; ?>" <?php echo ($data['category_filter'] == $subValue['id']) ? "selected" : "";?>><?php echo $subValue['category_name']; ?></option>
+                                    <?php endif; endforeach; ?>
+                                </optgroup>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Team</label>
+                    <select class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" name="team_filter" id="team_filter">
+                        <option value="" selected>All Teams</option>
+                        <?php foreach($teamList as $team): ?>
+                            <option value="<?php echo $team['id']; ?>" <?php echo ($data['team_filter'] == $team['id']) ? "selected" : "";?>><?php echo $team['team_name']; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+                    <select class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" name="status_filter" id="status_filter">
+                        <option value="" selected>All Status</option>
+                        <option value="active" <?php echo ($data['status_filter'] == "active") ? "selected" : "";?>>Active</option>
+                        <option value="inactive" <?php echo ($data['status_filter'] == "inactive") ? "selected" : "";?>>Inactive</option>
+                        <option value="blacklisted" <?php echo ($data['status_filter'] == "blacklisted") ? "selected" : "";?>>Blacklisted</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-5 flex flex-wrap items-center gap-3">
+                <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
+                    <i class="fas fa-search text-xs opacity-90" aria-hidden="true"></i>
+                    Apply filters
+                </button>
+                <button type="button" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition"
+                    onclick="document.getElementById('filterForm').reset();window.location='?page=vendors&action=list';">
+                    Reset
+                </button>
+            </div>
+        </form>
     </div>
 
     <!-- Vendor Listing -->
-    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
         <div class="p-6">
             <!-- <div id="deleteMsgBox" style="margin-top: 10px; margin: botton 10px;" class="text-sm font-bold"></div> -->
             <!-- Success Modal -->
@@ -91,22 +142,22 @@
             </div>
             <div class="text-sm font-bold text-green-600 mb-4" id="messageDiv"><?php echo $_SESSION["mapping_message"] ?? ""; unset($_SESSION["mapping_message"]); ?></div>
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
+                <table class="min-w-full text-left">
                     <thead>
-                    <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor Name</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Contact Person</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text" nowrap>Agent Name</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Phone</th>
+                    <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">#</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Vendor Name</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Groupname</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap" nowrap>Vendor ID</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Phone</th>
                         <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th> -->
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">City</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">State</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Status</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Action</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">City</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">State</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Status</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Action</th>
                     </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+                    <tbody class="divide-y divide-gray-100">
                     <?php if (!empty($vendors)): ?>
                         <?php
                             $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
@@ -126,18 +177,63 @@
                             $counter = ($page - 1) * $limit;
                         ?>
                         <?php foreach ($vendors as $index => $vendor): ?>
-                            <tr class="table-content-text">
-                                <td class="px-6 py-4 whitespace-wrap"><?= ++$counter ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name'] ?? '') ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['contact_name'] ?? '') ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= ($vendor['agent_name']!="") ? htmlspecialchars($vendor['agent_name']) : "" ?></td>
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone'] ?? '') ?></td>
-                                <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email'] ?? '') ?></td> -->
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['city'] ?? '') ?></td>
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['state'] ?? '') ?></td>
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars(ucfirst($vendor['is_active'] ?? '')) ?>
+                            <tr class="hover:bg-amber-50/40 transition-colors">
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= ++$counter ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm font-semibold text-gray-900"><?= htmlspecialchars($vendor['vendor_name'] ?? '') ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700">
+                                    <?php
+                                        $groupNameRaw = trim((string)($vendor['groupname'] ?? ''));
+                                        $groupNameDisplay = '';
+                                        if ($groupNameRaw !== '') {
+                                            $parts = array_filter(array_map('trim', explode(',', $groupNameRaw)), static function ($v) {
+                                                return $v !== '';
+                                            });
+                                            $normalized = [];
+                                            foreach ($parts as $part) {
+                                                $slug = strtolower($part);
+                                                $map = [
+                                                    'painting' => 'Paintings',
+                                                    'sculpture' => 'Sculptures',
+                                                    'textile' => 'Textiles',
+                                                    'jewelry' => 'Jewelry',
+                                                    'book' => 'Book',
+                                                    'homeandliving' => 'Home And Living',
+                                                ];
+                                                if (isset($map[$slug])) {
+                                                    $normalized[] = $map[$slug];
+                                                } elseif (function_exists('mb_convert_case')) {
+                                                    $normalized[] = mb_convert_case($part, MB_CASE_TITLE, 'UTF-8');
+                                                } else {
+                                                    $normalized[] = ucwords(strtolower($part));
+                                                }
+                                            }
+                                            $groupNameDisplay = implode(', ', $normalized);
+                                        }
+                                    ?>
+                                    <?= htmlspecialchars($groupNameDisplay) ?>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= !empty($vendor['vendor_id']) ? htmlspecialchars((string)$vendor['vendor_id']) : '-' ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= htmlspecialchars($vendor['vendor_phone'] ?? '') ?></td>
+                                <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email'] ?? '') ?></td> -->
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= htmlspecialchars($vendor['city'] ?? '') ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= htmlspecialchars($vendor['state'] ?? '') ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm">
+                                    <?php
+                                        $vendorStatus = strtolower(trim((string)($vendor['is_active'] ?? '')));
+                                        $vendorStatusClass = 'bg-slate-50 text-slate-700 ring-slate-500/15';
+                                        if ($vendorStatus === 'active') {
+                                            $vendorStatusClass = 'bg-emerald-50 text-emerald-800 ring-emerald-600/20';
+                                        } elseif ($vendorStatus === 'inactive') {
+                                            $vendorStatusClass = 'bg-amber-50 text-amber-900 ring-amber-600/25';
+                                        } elseif ($vendorStatus === 'blacklisted') {
+                                            $vendorStatusClass = 'bg-gray-100 text-gray-700 ring-gray-500/20';
+                                        }
+                                    ?>
+                                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset <?php echo $vendorStatusClass; ?>">
+                                        <?= htmlspecialchars(ucfirst($vendor['is_active'] ?? '')) ?>
+                                    </span>
+                                </td>
+                                <td class="px-5 py-4 whitespace-nowrap text-sm font-medium">
                                     <!-- Three-dot menu container -->
                                     <div class="menu-wrapper">
                                         <button class="menu-button" onclick="toggleMenu(this)">
@@ -163,7 +259,15 @@
                         
                     <?php else: ?>
                         <tr>
-                            <td colspan="12" class="px-6 py-4 text-center text-gray-500">No vendors found.</td>
+                            <td colspan="12" class="px-6 py-16 text-center text-gray-500">
+                                <div class="mx-auto flex max-w-sm flex-col items-center">
+                                    <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
+                                        <i class="fas fa-inbox" aria-hidden="true"></i>
+                                    </span>
+                                    <p class="text-base font-medium text-gray-900">No vendors match</p>
+                                    <p class="mt-1 text-sm text-gray-500">Try changing filters or add a new vendor.</p>
+                                </div>
+                            </td>
                         </tr>
                     <?php endif; ?>
                     </tbody>
@@ -174,30 +278,29 @@
 
     <!-- Pagination Logic -->
     <?php if (!empty($vendors)): ?>
-        <div class="bg-white rounded-xl shadow-md p-4">
-            <div class="flex items-center justify-center">
-                <div class="flex items-center gap-4 text-sm text-gray-600">
+        <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4">
+            <div class="flex flex-wrap items-center justify-center gap-3 text-sm text-gray-600">
                     <?php
                     if ($total_pages > 1): ?>          
                     <!-- Prev Button -->
-                    <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
+                    <a class="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
                     href="?page=vendors&action=list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?>">
                         &laquo; Prev
                     </a>
                     <!-- Page Slots -->
                     <?php for ($i = $start; $i <= $end; $i++): ?>
-                        <a class="page-link px-2 py-1 rounded <?= $i == $page ? 'bg-black text-white font-bold' : 'bg-gray-100 text-gray-700' ?>"
+                        <a class="inline-flex items-center px-3 py-1.5 rounded-lg <?= $i == $page ? 'bg-amber-600 text-white font-bold' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50' ?>"
                         href="?page=vendors&action=list&page_no=<?= $i ?>&limit=<?= $limit ?>">
                             <?= $i ?>
                         </a>
                     <?php endfor; ?>
                     <!-- Next Button -->
-                    <a class="page-link px-2 py-1 rounded <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
+                    <a class="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
                     href="?page=vendors&action=list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?>">
                         Next &raquo;
                     </a>
                     <?php endif; ?>
-                    <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
+                    <select id="rows-per-page" class="px-2 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
                             onchange="location.href='?page=vendors&action=list&page_no=1&limit=' + this.value;">
                         <?php foreach ([10, 20, 50, 100] as $opt): ?>
                             <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
@@ -205,7 +308,6 @@
                             </option>
                         <?php endforeach; ?>
                     </select>
-                </div>
             </div>
         </div>
     <?php endif; ?>
@@ -315,16 +417,26 @@
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <!--add groupname dropdown-->
+                            <!-- Groupname checkboxes -->
                             <div class="mt-2">
-                                <label for="groupname" class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
-                                <select class="form-input w-full mt-1" name="groupname" id="groupname" required>
-                                    <option value="" disabled selected>Select Group Name</option>
+                                <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
+                                <div id="groupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
                                     <?php foreach($groupnameList as $key => $value): ?>
-                                        <option value="<?php echo $value; ?>"><?php echo ucfirst($value); ?></option>
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="groupname[]" value="<?php echo htmlspecialchars($value); ?>">
+                                            <span><?php echo htmlspecialchars(ucfirst($value)); ?></span>
+                                        </label>
                                     <?php endforeach; ?>
-
-                                </select>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <label for="addWebpage" class="text-sm font-medium text-gray-700">Webpage</label>
+                                <div class="mt-1 flex items-center gap-2">
+                                    <input type="hidden" name="addWebpage" value="0">
+                                    <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="addWebpage" id="addWebpage" value="1" checked>
+                                    <label for="addWebpage" class="text-sm text-gray-700">Allow webpage</label>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">Whether to allow a webpage for this vendor.</p>
                             </div>
                         </div>
 
@@ -332,18 +444,18 @@
                         <div class="pt-4">
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Address</h3>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Address <span class="text-red-500">*</span></label>
-                                <input type="text" class="form-input w-full mt-1" required name="addAddress" id="addAddress" />
+                                <label class="text-sm font-medium text-gray-700">Address</label>
+                                <input type="text" class="form-input w-full mt-1" name="addAddress" id="addAddress" />
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">City <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="addCity" id="addCity" />
+                                    <label class="text-sm font-medium text-gray-700">City</label>
+                                    <input type="text" class="form-input w-full mt-1" name="addCity" id="addCity" />
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">State <span class="text-red-500">*</span></label>
+                                    <label class="text-sm font-medium text-gray-700">State</label>
                                     <span id="addStateBlock">
-                                        <select class="form-input w-full mt-1" required name="addState" id="addState">
+                                        <select class="form-input w-full mt-1" name="addState" id="addState">
                                             <?php foreach($stateList as $item): ?>
                                                 <option value="<?php echo $item["name"];?>"><?php echo $item["name"];?></option>
                                             <?php endforeach?>
@@ -351,16 +463,16 @@
                                     </span>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Country <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="addCountry" id="addCountry" onchange="fetchStates(this.value, 'AddForm');">
+                                    <label class="text-sm font-medium text-gray-700">Country</label>
+                                    <select class="form-input w-full mt-1" name="addCountry" id="addCountry" onchange="fetchStates(this.value, 'AddForm');">
                                         <?php foreach($countryList as $item): ?>
                                             <option value="<?php echo $item["name"];?>" <?php if($item["name"]=="India") { echo "selected"; }?>><?php echo $item["name"];?></option>
                                         <?php endforeach?>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Postal Code <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="addPostalCode" id="addPostalCode" />
+                                    <label class="text-sm font-medium text-gray-700">Postal Code</label>
+                                    <input type="text" class="form-input w-full mt-1" name="addPostalCode" id="addPostalCode" />
                                 </div>
                             </div>
                         </div>
@@ -532,16 +644,26 @@
                                 </select>
                                 
                             </div>
-                            <!--add groupname dropdown-->
+                            <!-- Groupname checkboxes -->
                             <div class="mt-2">
-                                <label for="editGroupname" class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
-                                <select class="form-input w-full mt-1" name="editGroupname" id="editGroupname" required>
-                                    <option value="" disabled selected>Select Group Name</option>
+                                <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
+                                <div id="editGroupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
                                     <?php foreach($groupnameList as $key => $value): ?>
-                                        <option value="<?php echo $value; ?>"><?php echo ucfirst($value); ?></option>
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editGroupname[]" value="<?php echo htmlspecialchars($value); ?>">
+                                            <span><?php echo htmlspecialchars(ucfirst($value)); ?></span>
+                                        </label>
                                     <?php endforeach; ?>
-
-                                </select>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <label for="editWebpage" class="text-sm font-medium text-gray-700">Webpage</label>
+                                <div class="mt-1 flex items-center gap-2">
+                                    <input type="hidden" name="editWebpage" value="0">
+                                    <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editWebpage" id="editWebpage" value="1" checked>
+                                    <label for="editWebpage" class="text-sm text-gray-700">Allow webpage</label>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">Whether to allow a webpage for this vendor.</p>
                             </div>
                         </div>
 
@@ -549,18 +671,18 @@
                         <div class="pt-4">
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Address</h3>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Address <span class="text-red-500">*</span></label>
-                                <input type="text" class="form-input w-full mt-1" required name="editAddress" id="editAddress" />
+                                <label class="text-sm font-medium text-gray-700">Address</label>
+                                <input type="text" class="form-input w-full mt-1" name="editAddress" id="editAddress" />
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">City <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="editCity" id="editCity" />
+                                    <label class="text-sm font-medium text-gray-700">City</label>
+                                    <input type="text" class="form-input w-full mt-1" name="editCity" id="editCity" />
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">State <span class="text-red-500">*</span></label>
+                                    <label class="text-sm font-medium text-gray-700">State</label>
                                     <span id="editStateBlock">
-                                        <select class="form-input w-full mt-1" required name="editState" id="editState">
+                                        <select class="form-input w-full mt-1" name="editState" id="editState">
                                             <?php foreach($stateList as $item): ?>
                                                 <option value="<?php echo $item["name"];?>"><?php echo $item["name"];?></option>
                                             <?php endforeach?>
@@ -568,16 +690,16 @@
                                     </span>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Country <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="editCountry" id="editCountry" onchange="fetchStates(this.value, 'EditForm');">
+                                    <label class="text-sm font-medium text-gray-700">Country</label>
+                                    <select class="form-input w-full mt-1" name="editCountry" id="editCountry" onchange="fetchStates(this.value, 'EditForm');">
                                         <?php foreach($countryList as $item): ?>
                                             <option value="<?php echo $item["name"];?>" <?php if($item["name"]=="India") { echo "selected"; }?>><?php echo $item["name"];?></option>
                                         <?php endforeach?>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Postal Code <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="editPostalCode" id="editPostalCode" />
+                                    <label class="text-sm font-medium text-gray-700">Postal Code</label>
+                                    <input type="text" class="form-input w-full mt-1" name="editPostalCode" id="editPostalCode" />
                                 </div>
                             </div>
                         </div>
@@ -720,6 +842,82 @@
 <!-- JavaScript to handle popup and form submission -->
 <script>
     const myDiv = document.getElementById('messageDiv');
+    const VENDOR_FLASH_KEY = 'vendor_list_flash_message';
+    function persistVendorFlash(message, isSuccess) {
+        try {
+            localStorage.setItem(VENDOR_FLASH_KEY, JSON.stringify({
+                message: String(message || ''),
+                isSuccess: !!isSuccess
+            }));
+        } catch (e) {}
+    }
+    function showPersistedVendorFlashIfAny() {
+        try {
+            const raw = localStorage.getItem(VENDOR_FLASH_KEY);
+            if (!raw) return;
+            localStorage.removeItem(VENDOR_FLASH_KEY);
+            const payload = JSON.parse(raw);
+            if (payload && payload.message) {
+                showVendorTopMessage(payload.message, !!payload.isSuccess);
+            }
+        } catch (e) {}
+    }
+    function showVendorTopMessage(message, isSuccess) {
+        if (!myDiv) return;
+        myDiv.classList.remove('text-green-600', 'text-red-600');
+        myDiv.classList.add(isSuccess ? 'text-green-600' : 'text-red-600');
+        myDiv.textContent = message || '';
+    }
+    function redirectToVendorListWithFlash(message, isSuccess) {
+        persistVendorFlash(message, isSuccess);
+        window.location.href = '?page=vendors&action=list';
+    }
+    showPersistedVendorFlashIfAny();
+
+    const syncVendorsApiBtn = document.getElementById('sync-vendors-api-btn');
+    if (syncVendorsApiBtn) {
+        syncVendorsApiBtn.addEventListener('click', function () {
+            if (syncVendorsApiBtn.dataset.loading === '1') return;
+            syncVendorsApiBtn.dataset.loading = '1';
+            syncVendorsApiBtn.disabled = true;
+            const originalHtml = syncVendorsApiBtn.innerHTML;
+            syncVendorsApiBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs opacity-95" aria-hidden="true"></i> Syncing...';
+            showVendorTopMessage('Syncing vendors from API, please wait...', true);
+
+            fetch('index.php?page=vendors&action=fetchAllVendors', {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data && data.success) {
+                    const inserted = Number(data.inserted || 0);
+                    const updated = Number(data.updated || 0);
+                    const total = Number(data.total || 0);
+                    showVendorTopMessage('Vendor sync complete. Inserted: ' + inserted + ', Updated: ' + updated + ', Total: ' + total + '.', true);
+                    setTimeout(function () {
+                        window.location.reload();
+                    }, 900);
+                    return;
+                }
+                const errMsg = (data && data.message) ? data.message : 'Vendor sync failed.';
+                showVendorTopMessage(errMsg, false);
+                redirectToVendorListWithFlash(errMsg, false);
+            })
+            .catch(function () {
+                const errMsg = 'Vendor sync request failed. Please try again.';
+                showVendorTopMessage(errMsg, false);
+                redirectToVendorListWithFlash(errMsg, false);
+            })
+            .finally(function () {
+                syncVendorsApiBtn.dataset.loading = '0';
+                syncVendorsApiBtn.disabled = false;
+                syncVendorsApiBtn.innerHTML = originalHtml;
+            });
+        });
+    }
+
     // Clear the div after 5000 milliseconds (5 seconds)
     if (myDiv) {
         setTimeout(() => {
@@ -1036,9 +1234,9 @@
         if(countryId === "") return;
         if(countryId !== "India") {
             if(formType === 'AddForm') {
-                document.getElementById('addStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" required name="addState" id="addState" />';
+                document.getElementById('addStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" name="addState" id="addState" />';
             } else {
-                document.getElementById('editStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" required name="editState" id="editState" />';
+                document.getElementById('editStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" name="editState" id="editState" />';
             }
             return;
         } else {
@@ -1054,7 +1252,6 @@
                     stateSelect.id = "addState";
                     stateSelect.name = "addState";
                     stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-                    stateSelect.required = true;
 
                     // Populate the select element with options
                     let states = Array.isArray(data) ? data : [data]; 
@@ -1073,7 +1270,6 @@
                     stateSelect.id = "editState";
                     stateSelect.name = "editState";
                     stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-                    stateSelect.required = true;
 
                     // Populate the select element with options
                     let states = Array.isArray(data) ? data : [data]; 
@@ -1150,22 +1346,20 @@
                 }
                 
                 if (!apiSuccess && data.api_response) {
-                    msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
-                        ⚠️ API Response: ${data.api_response}
-                    </div>`;
-                    msgBox.focus();
-                    msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                    let apiErrorMessage = 'Vendor API sync failed after add.';
+                    try {
+                        const parsed = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
+                        apiErrorMessage = (parsed && parsed.message) ? parsed.message : apiErrorMessage;
+                    } catch (e) {}
+                    redirectToVendorListWithFlash(apiErrorMessage, false);
+                    return;
                 }
                 
                 setTimeout(() => {
                     location.reload();
                 }, 1500); // refresh after 1 sec
             } else {
-                msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
-                    ❌ ${data.message}
-                </div>`;
-                msgBox.focus();
-                msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                redirectToVendorListWithFlash(data.message || 'Add vendor failed.', false);
             }
         });
     };
@@ -1189,14 +1383,16 @@
                 })
                 .then(res => res.json())
                 .then(data => {
+                    if (!data.success) {
+                        redirectToVendorListWithFlash(data.message || 'Delete vendor failed.', false);
+                        return;
+                    }
                     const title = document.getElementById("modalTitle");
                     var type = "error";
                     title.innerText = "Error ⚠️";
                     title.className = "text-2xl font-bold text-red-600 mb-4";
-                    if(data.success) {
-                        title.innerText = "Success 🎉";
-                        title.className = "text-2xl font-bold text-green-600 mb-4";
-                    }
+                    title.innerText = "Success 🎉";
+                    title.className = "text-2xl font-bold text-green-600 mb-4";
 
                     document.getElementById("showMessage").innerText = data.message;
                     const modal = document.getElementById("deleteMsgBox");
@@ -1211,6 +1407,7 @@
                 })
                 .catch(err => {
                     console.error("AJAX Error:", err);
+                    redirectToVendorListWithFlash('Delete request failed. Please try again.', false);
                 });
             });
         });
@@ -1250,7 +1447,14 @@
             document.getElementById("editAddress").value = vendor.address;
             document.getElementById("editCity").value = vendor.city;
             document.getElementById("editCountry").value = vendor.country;
-            document.getElementById("editGroupname").value = vendor.groupname;
+            document.getElementById("editWebpage").checked = String(vendor.webpage ?? '1') === '1';
+            const selectedGroups = String(vendor.groupname || '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+            document.querySelectorAll('#editGroupname input[name="editGroupname[]"]').forEach(function (cb) {
+                cb.checked = selectedGroups.includes(cb.value);
+            });
             
             document.getElementById("editAgentIds").value = vendor.agent_id;
             
@@ -1259,7 +1463,7 @@
             //document.getElementById("editTeamMember").value = vendor.agent_id;
 
             if(vendor.country !== "India") {
-                document.getElementById("editStateBlock").innerHTML = '<input type="text" class="form-input w-full mt-1" required name="editState" id="editState" value="' + vendor.state + '" />';
+                document.getElementById("editStateBlock").innerHTML = '<input type="text" class="form-input w-full mt-1" name="editState" id="editState" value="' + vendor.state + '" />';
                 document.getElementById("editPreviousState").value = vendor.state;
             } else {
                 // Fetch states from the server
@@ -1273,7 +1477,6 @@
                     stateSelect.id = "editState";
                     stateSelect.name = "editState";
                     stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-                    stateSelect.required = true;
 
                     // Populate the select element with options
                     let states = Array.isArray(data) ? data : [data]; 
@@ -1387,22 +1590,20 @@
                 }
                 
                 if (!apiSuccess && data.api_response) {
-                    msgBox.innerHTML = `<div style="color: orange; padding: 10px; background: #fff0e0; border: 1px solid #aa0;">
-                        ⚠️ API Response: ${data.api_response}
-                    </div>`;
-                    msgBox.focus();
-                    msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                    let apiErrorMessage = 'Vendor API sync failed after edit.';
+                    try {
+                        const parsed = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
+                        apiErrorMessage = (parsed && parsed.message) ? parsed.message : apiErrorMessage;
+                    } catch (e) {}
+                    redirectToVendorListWithFlash(apiErrorMessage, false);
+                    return;
                 }
                 
                 setTimeout(() => {
                     window.location.href = '?page=vendors&action=list';
                 }, 1000); // redirect after 1 sec
             } else {
-                msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
-                    ❌ ${data.message}
-                </div>`;
-                msgBox.focus();
-                msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                redirectToVendorListWithFlash(data.message || 'Edit vendor failed.', false);
             }
         });
     };

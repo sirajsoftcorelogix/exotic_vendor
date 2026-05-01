@@ -81,7 +81,7 @@
         <div class="header">
             <div>
                 <h2>PAYMENT RECEIPT</h2>
-                <div>Receipt No: #<?= $payment['id'] ?></div>
+                <div>Receipt No: <?= htmlspecialchars(trim((string)($payment['receipt_number'] ?? '')) !== '' ? (string)$payment['receipt_number'] : '#' . (int)$payment['id']) ?></div>
             </div>
 
             <div style="text-align:right;">
@@ -124,7 +124,7 @@
         <!-- AMOUNT -->
         <div class="section" style="text-align:center;">
             <div class="title">Amount Paid</div>
-            <div class="amount">₹ <?= number_format($payment['amount'], 2) ?></div>
+            <div class="amount">₹ <?= number_format((float)($payment['payment_amount'] ?? $payment['amount'] ?? 0), 2) ?></div>
         </div>
 
         <!-- NOTE -->

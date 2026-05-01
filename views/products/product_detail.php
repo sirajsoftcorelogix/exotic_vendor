@@ -548,15 +548,22 @@
     <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
       <h3 class="font-semibold mb-3 flex items-center gap-2 text-gray-800"><i class="fas fa-receipt text-emerald-600"></i>Price</h3>
       <div class="space-y-2.5 text-sm">
-        <div class="flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+        <div class="flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100 relative">
           <span class="text-gray-700"><i class="fas fa-tag mr-1 px-2 py-1 rounded text-xs text-green-600 bg-green-100"></i>Price India</span>
-          <div class="text-right shrink-0">
-            <span class="font-semibold text-gray-900 block leading-tight">₹<?php echo htmlspecialchars($priceIndiaWithGstFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+          <div class="text-right shrink-0" style="margin-right: 5px;">
+            <span id="priceIndiaDisplay" class="font-semibold text-gray-900 block leading-tight">₹<?php echo htmlspecialchars($priceIndiaWithGstFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
             <span class="text-[10px] text-gray-500 leading-tight block mt-0.5">(GST Included)</span>
           </div>
+          <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-emerald-700" onclick="openPriceIndiaModal()" title="Edit Price India">
+            <i class="fas fa-pencil-alt text-[10px]"></i>
+          </button>
         </div>
-        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
-          <span class="text-gray-700"><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span><span class="font-semibold text-gray-900">$<?php echo htmlspecialchars($usdPriceFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100 relative">
+          <span class="text-gray-700"><i class="fas fa-dollar-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>USD Price</span>
+          <span id="usdPriceDisplay" class="font-semibold text-gray-900" style="margin-right: 12px;">$<?php echo htmlspecialchars($usdPriceFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+          <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-emerald-700" onclick="openUsdPriceModal()" title="Edit USD Price">
+            <i class="fas fa-pencil-alt text-[10px]"></i>
+          </button>
         </div>
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
           <span class="text-gray-700"><i class="fas fa-percent px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Permanent Discount</span><span class="font-semibold text-gray-900"><?php echo htmlspecialchars($permanentDiscountFmt, ENT_QUOTES, 'UTF-8'); ?>%</span>
@@ -796,6 +803,59 @@
         <div class="flex justify-end gap-3 mt-6">
             <button type="button" onclick="closePermaAvailableModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
             <button type="button" onclick="submitPermanentlyAvailableUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
+        </div>
+    </div>
+</div>
+<div id="priceIndiaModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="closePriceIndiaModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Price India</h2>
+        <p class="text-sm text-gray-500 mb-4">Update local DB and sync this variant to storefront Product API.</p>
+        <div>
+            <label for="input_price_india" class="block text-sm font-medium text-gray-600 mb-1">Amount</label>
+            <input
+                type="number"
+                id="input_price_india"
+                min="0"
+                step="0.01"
+                value="<?php echo htmlspecialchars(number_format((float)($products['price_india'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+            <div class="mt-3 space-y-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p><span class="font-medium">GST %:</span> <span id="priceIndiaGstPercent"><?php echo htmlspecialchars(number_format((float)($products['gst'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?></span>%</p>
+                <p><span class="font-medium">GST Amount:</span> ₹<span id="priceIndiaGstAmount">0.00</span></p>
+                <div class="mt-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2">
+                    <p class="text-[11px] font-semibold tracking-wide text-emerald-800 uppercase">Amount After GST</p>
+                    <p class="text-lg font-bold leading-tight text-emerald-700">₹<span id="priceIndiaAfterGst">0.00</span></p>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Displayed card value includes GST.</p>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closePriceIndiaModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitPriceIndiaUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
+        </div>
+    </div>
+</div>
+<div id="usdPriceModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="closeUsdPriceModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">USD Price</h2>
+        <p class="text-sm text-gray-500 mb-4">Update local DB and sync this variant to storefront Product API.</p>
+        <div>
+            <label for="input_usd_price" class="block text-sm font-medium text-gray-600 mb-1">Amount (USD)</label>
+            <input
+                type="number"
+                id="input_usd_price"
+                min="0"
+                step="0.01"
+                value="<?php echo htmlspecialchars(number_format((float)($products['price'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closeUsdPriceModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitUsdPriceUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
         </div>
     </div>
 </div>
@@ -1297,6 +1357,199 @@ function openPermaAvailableModal() {
 function closePermaAvailableModal() {
     document.getElementById('permaAvailableModal').classList.add('hidden');
 }
+
+var currentPriceIndiaGstPercent = parseFloat(<?php echo json_encode((float)($products['gst'] ?? 0)); ?>) || 0;
+
+function openPriceIndiaModal() {
+    var modal = document.getElementById('priceIndiaModal');
+    var input = document.getElementById('input_price_india');
+    var gstPercentEl = document.getElementById('priceIndiaGstPercent');
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+    fetch('index.php?page=products&action=get_price_india_snapshot&product_id=' + encodeURIComponent(<?php echo json_encode((int)($products['id'] ?? 0)); ?>), {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        if (res && res.success) {
+            if (input && res.price_india !== undefined) {
+                input.value = Number(res.price_india).toFixed(2);
+            }
+            if (res.gst_percent !== undefined) {
+                currentPriceIndiaGstPercent = parseFloat(res.gst_percent) || 0;
+            }
+            if (gstPercentEl) {
+                gstPercentEl.textContent = currentPriceIndiaGstPercent.toFixed(2);
+            }
+            updatePriceIndiaGstLabels();
+        } else if (res && res.message) {
+            showProfileStatusModal(res.message, 'error', false);
+        }
+    })
+    .catch(function () {
+        showProfileStatusModal('Could not load fresh Price India data.', 'error', false);
+    });
+}
+
+function closePriceIndiaModal() {
+    document.getElementById('priceIndiaModal').classList.add('hidden');
+}
+
+function openUsdPriceModal() {
+    var modal = document.getElementById('usdPriceModal');
+    var input = document.getElementById('input_usd_price');
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+    fetch('index.php?page=products&action=get_usd_price_snapshot&product_id=' + encodeURIComponent(<?php echo json_encode((int)($products['id'] ?? 0)); ?>), {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        if (res && res.success) {
+            if (input && res.price !== undefined) {
+                input.value = Number(res.price).toFixed(2);
+            }
+        } else if (res && res.message) {
+            showProfileStatusModal(res.message, 'error', false);
+        }
+    })
+    .catch(function () {
+        showProfileStatusModal('Could not load fresh USD Price data.', 'error', false);
+    });
+}
+
+function closeUsdPriceModal() {
+    document.getElementById('usdPriceModal').classList.add('hidden');
+}
+
+function submitUsdPriceUpdate() {
+    const input = document.getElementById('input_usd_price');
+    const raw = input ? String(input.value || '').trim() : '';
+    const value = parseFloat(raw);
+    if (raw === '' || Number.isNaN(value) || value < 0) {
+        showProfileStatusModal('Please enter a valid non-negative USD Price.', 'error', false);
+        return;
+    }
+
+    fetch('index.php?page=products&action=update_usd_price', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+            price: value
+        })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        if (res && res.success) {
+            closeUsdPriceModal();
+            var disp = document.getElementById('usdPriceDisplay');
+            if (disp) {
+                disp.textContent = '$' + Number(value).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+            var msg = res.message ? res.message : 'USD Price updated.';
+            if (res.vendor_sync && res.vendor_sync.success === false && res.vendor_sync.message) {
+                showProfileStatusModal(msg, 'error', false);
+            } else {
+                showProfileStatusModal(msg, 'success', true);
+            }
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Update failed.', 'error', false);
+        }
+    })
+    .catch(function () {
+        showProfileStatusModal('An error occurred while updating USD Price.', 'error', false);
+    });
+}
+
+function updatePriceIndiaGstLabels() {
+    var input = document.getElementById('input_price_india');
+    var gstPercentEl = document.getElementById('priceIndiaGstPercent');
+    var gstAmtEl = document.getElementById('priceIndiaGstAmount');
+    var afterGstEl = document.getElementById('priceIndiaAfterGst');
+    if (!input || !gstAmtEl || !afterGstEl) {
+        return;
+    }
+    var value = parseFloat(String(input.value || '').trim());
+    if (Number.isNaN(value) || value < 0) {
+        value = 0;
+    }
+    var gstPercent = currentPriceIndiaGstPercent;
+    if (gstPercentEl) {
+        gstPercentEl.textContent = gstPercent.toFixed(2);
+    }
+    var gstAmount = value * (gstPercent / 100);
+    var amountAfterGst = value + gstAmount;
+    gstAmtEl.textContent = gstAmount.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+    afterGstEl.textContent = amountAfterGst.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function submitPriceIndiaUpdate() {
+    const input = document.getElementById('input_price_india');
+    const raw = input ? String(input.value || '').trim() : '';
+    const value = parseFloat(raw);
+    if (raw === '' || Number.isNaN(value) || value < 0) {
+        showProfileStatusModal('Please enter a valid non-negative Price India.', 'error', false);
+        return;
+    }
+
+    const gstPercent = currentPriceIndiaGstPercent;
+    const displayWithGst = (value * (1 + (gstPercent / 100))).toFixed(2);
+
+    fetch('index.php?page=products&action=update_price_india', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+            price_india: value
+        })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        if (res && res.success) {
+            closePriceIndiaModal();
+            var disp = document.getElementById('priceIndiaDisplay');
+            if (disp) {
+                disp.textContent = '₹' + Number(displayWithGst).toLocaleString('en-IN', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+            var msg = res.message ? res.message : 'Price India updated.';
+            if (res.vendor_sync && res.vendor_sync.success === false && res.vendor_sync.message) {
+                showProfileStatusModal(msg, 'error', false);
+            } else {
+                showProfileStatusModal(msg, 'success', true);
+            }
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Update failed.', 'error', false);
+        }
+    })
+    .catch(function () {
+        showProfileStatusModal('An error occurred while updating Price India.', 'error', false);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var priceIndiaInput = document.getElementById('input_price_india');
+    if (priceIndiaInput) {
+        priceIndiaInput.addEventListener('input', updatePriceIndiaGstLabels);
+        updatePriceIndiaGstLabels();
+    }
+});
 
 function submitPermanentlyAvailableUpdate() {
     const sel = document.getElementById('input_permanently_available');

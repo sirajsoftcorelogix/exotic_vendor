@@ -88,8 +88,15 @@ class pos
             $types .= "d";
         }
 
-        // Show only in-stock products in current warehouse.
-        $where .= " AND sm.running_stock > 0 ";
+        // Stock scope: align with stock report (getStockReport) — default is "all" rows with a movement row.
+        $stockFilter = strtolower(trim((string)$stockFilter));
+        if ($stockFilter === 'out') {
+            $where .= ' AND sm.running_stock = 0 ';
+        } elseif ($stockFilter === 'low') {
+            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
+        } elseif ($stockFilter === 'in') {
+            $where .= ' AND sm.running_stock > 0 ';
+        }
 
         /* ================= ORDER ================= */
         $allowedColumns = [
@@ -100,7 +107,8 @@ class pos
             'color',
             'image',
             'stock_qty',
-            'price'
+            'price',
+            'price_india'
         ];
 
         if (!in_array($orderColumn, $allowedColumns, true)) {
@@ -114,6 +122,9 @@ class pos
             $orderExpr = 'sm.running_stock';
         } elseif ($orderColumn === 'price') {
             $orderExpr = $sellPriceExpr;
+        } elseif ($orderColumn === 'price_india') {
+            // POS sorting requirement: use India base price (not GST-inclusive display price)
+            $orderExpr = 'IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice)';
         }
 
         $stockFrom = "
@@ -159,7 +170,7 @@ class pos
         (IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) * (1 + IFNULL(p.gst, 0) / 100)) AS price
     $stockFrom
     $where
-    ORDER BY $orderExpr $orderDir
+    ORDER BY $orderExpr $orderDir, p.id ASC
     LIMIT ?, ?
     ";
 
@@ -175,8 +186,21 @@ class pos
         $rows = $result->fetch_all(MYSQLI_ASSOC);
         $dataStmt->close();
 
+        // Filtered count with exactly same join + where conditions (stable pagination).
+        $countSql = "SELECT COUNT(*) AS cnt $stockFrom $where";
+        $countStmt = $this->db->prepare($countSql);
+        $countTypes = "ii" . $types;
+        $countParams = array_merge([(int)$warehouseId, (int)$warehouseId], $params);
+        $countStmt->bind_param($countTypes, ...$countParams);
+        $countStmt->execute();
+        $countRow = $countStmt->get_result()->fetch_assoc();
+        $countStmt->close();
+        $recordsFiltered = (int)($countRow['cnt'] ?? 0);
+
         return [
-            'data'            => $rows
+            'data' => $rows,
+            'recordsFiltered' => $recordsFiltered,
+            'recordsTotal' => $recordsFiltered,
         ];
     }
     public function getProductsDataTable_bk(

@@ -115,6 +115,17 @@ class vendor
     }
     public function addVendor($data)
     {
+        $groupnameValue = '';
+        if (isset($data['groupname'])) {
+            if (is_array($data['groupname'])) {
+                $groups = array_values(array_unique(array_filter(array_map('trim', $data['groupname']), static function ($v) {
+                    return $v !== '';
+                })));
+                $groupnameValue = implode(',', $groups);
+            } else {
+                $groupnameValue = trim((string)$data['groupname']);
+            }
+        }
         // Vendor Name
         if (!empty($data['addVendorName'])) {
             $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_name = ?";
@@ -201,7 +212,7 @@ class vendor
             $data['addTeam'],
             $data['addTeamMember'],
             $data['addStatus'],
-            $data['groupname']
+            $groupnameValue
         );
         if ($stmt->execute()) {
             // Get the last inserted vendor id
@@ -225,6 +236,17 @@ class vendor
     }
     public function updateVendor($id, $data)
     {
+        $groupnameValue = '';
+        if (isset($data['editGroupname'])) {
+            if (is_array($data['editGroupname'])) {
+                $groups = array_values(array_unique(array_filter(array_map('trim', $data['editGroupname']), static function ($v) {
+                    return $v !== '';
+                })));
+                $groupnameValue = implode(',', $groups);
+            } else {
+                $groupnameValue = trim((string)$data['editGroupname']);
+            }
+        }
         $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param(
@@ -248,7 +270,7 @@ class vendor
             $data['editTeam'],
             $data['editTeamMember'],
             $data['editStatus'],
-            $data['editGroupname'],
+            $groupnameValue,
             $id
         );
         if ($stmt->execute()) {
@@ -285,16 +307,10 @@ class vendor
     }
     public function deleteVendor($id)
     {
-        // Check if Order(s) exists
-        $checkOrdersSql = "SELECT id FROM vp_orders WHERE vendor_id = ?";
-        $checkOrdersStmt = $this->conn->prepare($checkOrdersSql);
-        $checkOrdersStmt->bind_param('i', $id);
-        $checkOrdersStmt->execute();
-        $checkOrdersStmt->store_result();
-        if ($checkOrdersStmt->num_rows > 0) {
-            return ['success' => false, 'message' => 'Vendor can not be deleted. Order(s) exists in the database.'];
+        $guard = $this->canDeleteVendor((int)$id);
+        if (empty($guard['success'])) {
+            return $guard;
         }
-        $checkOrdersStmt->close();
 
         // Delete Bank details of the Vendor
         $sql = "DELETE FROM vendor_bank_details WHERE vendor_id = ?";
@@ -313,7 +329,60 @@ class vendor
             'message' => 'Delete failed: ' . $stmt->error . '. Please try again later.'
         ];
     }
-    public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '', $category_filter = '', $team_filter = '')
+
+    public function canDeleteVendor(int $id): array
+    {
+        if ($id <= 0) {
+            return ['success' => false, 'message' => 'Invalid vendor ID.'];
+        }
+
+        // Existing guard: vp_orders
+        $checkOrdersSql = "SELECT id FROM vp_orders WHERE vendor_id = ? LIMIT 1";
+        $checkOrdersStmt = $this->conn->prepare($checkOrdersSql);
+        $checkOrdersStmt->bind_param('i', $id);
+        $checkOrdersStmt->execute();
+        $checkOrdersStmt->store_result();
+        if ($checkOrdersStmt->num_rows > 0) {
+            $checkOrdersStmt->close();
+            return ['success' => false, 'message' => 'Vendor cannot be deleted because it is mapped in vp_orders.'];
+        }
+        $checkOrdersStmt->close();
+
+        // New guard: vp_inbound (mapped via vendor_code)
+        $checkInboundSql = "SELECT id FROM vp_inbound WHERE vendor_code = ? LIMIT 1";
+        $checkInboundStmt = $this->conn->prepare($checkInboundSql);
+        $checkInboundStmt->bind_param('i', $id);
+        $checkInboundStmt->execute();
+        $checkInboundStmt->store_result();
+        if ($checkInboundStmt->num_rows > 0) {
+            $checkInboundStmt->close();
+            return ['success' => false, 'message' => 'Vendor cannot be deleted because it is mapped in vp_inbound.'];
+        }
+        $checkInboundStmt->close();
+
+        // Required guard: vp_products.vendor_id
+        $colRes = $this->conn->query("SHOW COLUMNS FROM vp_products LIKE 'vendor_id'");
+        if ($colRes && $colRes->num_rows > 0) {
+            $checkProductsSql = "SELECT id FROM vp_products WHERE vendor_id = ? LIMIT 1";
+            $checkProductsStmt = $this->conn->prepare($checkProductsSql);
+            if ($checkProductsStmt) {
+                $checkProductsStmt->bind_param('i', $id);
+                $checkProductsStmt->execute();
+                $checkProductsStmt->store_result();
+                if ($checkProductsStmt->num_rows > 0) {
+                    $checkProductsStmt->close();
+                    return ['success' => false, 'message' => 'Vendor cannot be deleted because it is mapped in vp_products.vendor_id.'];
+                }
+                $checkProductsStmt->close();
+            }
+        } else {
+            // Fail-safe: do not allow delete when required mapping column is absent.
+            return ['success' => false, 'message' => 'Vendor cannot be deleted because vp_products.vendor_id column is missing.'];
+        }
+
+        return ['success' => true, 'message' => 'Vendor can be deleted.'];
+    }
+    public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '', $category_filter = '', $team_filter = '', $groupname_filter = '')
     {
         // sanitize
         $page = (int)$page;
@@ -330,11 +399,11 @@ class vendor
         if (!empty($search) && !empty($status_filter)) {
             $search = $this->conn->real_escape_string($search);
             $status_filter = $this->conn->real_escape_string($status_filter);
-            $where = "WHERE (vendor_name LIKE '%$search%' OR contact_name LIKE '%$search%' OR vendor_email LIKE '%$search%' OR vendor_phone LIKE '%$search%' OR city LIKE '%$search%' OR state LIKE '%$search%') AND is_active = '$status_filter'";
+            $where = "WHERE (vp.vendor_id LIKE '%$search%' OR vp.groupname LIKE '%$search%' OR vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%') AND vp.is_active = '$status_filter'";
         } else {
             if (!empty($search)) {
                 $search = $this->conn->real_escape_string($search);
-                $where = "WHERE vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%'";
+                $where = "WHERE vp.vendor_id LIKE '%$search%' OR vp.groupname LIKE '%$search%' OR vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%'";
             }
 
             if (!empty($status_filter)) {
@@ -351,6 +420,15 @@ class vendor
             }
         }
 
+        if (!empty($groupname_filter)) {
+            $groupname_filter = $this->conn->real_escape_string($groupname_filter);
+            if ($where === '') {
+                $where = "WHERE vp.groupname LIKE '%$groupname_filter%'";
+            } else {
+                $where .= " AND vp.groupname LIKE '%$groupname_filter%'";
+            }
+        }
+
         // total records
         $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id AND vu.is_deleted = 0 LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where");
         $rowCount = $resultCount->fetch_assoc();
@@ -358,7 +436,7 @@ class vendor
         $totalPages = ceil($totalRecords / $limit);
 
         // fetch data
-        $sql = "SELECT vp.*, vu.name AS agent_name, GROUP_CONCAT(DISTINCT vc.category_id) AS categories, GROUP_CONCAT(DISTINCT vvtm.team_id) AS teams FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id AND vu.is_deleted = 0 LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where GROUP BY vp.id LIMIT $limit OFFSET $offset";
+        $sql = "SELECT vp.*, vu.name AS agent_name, GROUP_CONCAT(DISTINCT vc.category_id) AS categories, GROUP_CONCAT(DISTINCT vvtm.team_id) AS teams FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id AND vu.is_deleted = 0 LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where GROUP BY vp.id ORDER BY CASE WHEN vp.vendor_id IS NULL OR TRIM(vp.vendor_id) = '' THEN 1 ELSE 0 END ASC, vp.vendor_id DESC, vp.id DESC LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
 
@@ -910,16 +988,15 @@ class vendor
                 $vendorName = substr(trim((string)$vendorName), 0, 150);
                 $groupname = substr(trim((string)$groupname), 0, 100);
 
-                // Check if vendor exists by vendor_name
-                $checkStmt = $this->conn->prepare('SELECT id FROM vp_vendors WHERE vendor_name = ?');
-                $checkStmt->bind_param('s', $vendorName);
+                // Compare by vendor_id (authoritative key from Admin API)
+                $checkStmt = $this->conn->prepare('SELECT id, groupname FROM vp_vendors WHERE vendor_id = ? LIMIT 1');
+                $checkStmt->bind_param('s', $vendorId);
                 $checkStmt->execute();
                 $result = $checkStmt->get_result();
                 $existing = $result ? $result->fetch_assoc() : null;
                 $checkStmt->close();
 
                 if ($existing) {
-                    // Get the existing groupname
                     $existingId = (int)$existing['id'];
                     $getGroupStmt = $this->conn->prepare('SELECT groupname FROM vp_vendors WHERE id = ?');
                     $getGroupStmt->bind_param('i', $existingId);
@@ -952,7 +1029,7 @@ class vendor
                     }
                     $updateStmt->close();
                 } else {
-                    // Insert if vendor_name doesn't exist
+                    // Insert if vendor_id not found
                     $insertStmt = $this->conn->prepare('INSERT INTO vp_vendors (vendor_id, vendor_name, groupname, country, is_active) VALUES (?, ?, ?, \'India\', \'active\')');
                     $insertStmt->bind_param('sss', $vendorId, $vendorName, $groupname);
                     if ($insertStmt->execute()) {

@@ -4600,6 +4600,214 @@ class ProductsController
         exit;
     }
 
+    public function updatePriceIndia()
+    {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            if (!is_array($data) || empty($data['product_id'])) {
+                throw new Exception('Invalid data received');
+            }
+            $productId = (int)$data['product_id'];
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+            if (!array_key_exists('price_india', $data) || $data['price_india'] === '' || !is_numeric($data['price_india'])) {
+                throw new Exception('price_india must be numeric');
+            }
+            $newVal = (float)$data['price_india'];
+            if ($newVal < 0) {
+                throw new Exception('price_india cannot be negative');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+            $current = (float)($product['price_india'] ?? 0);
+            if (abs($current - $newVal) < 0.00001) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'No change.',
+                    'price_india' => round($newVal, 2),
+                    'vendor_sync' => ['success' => true, 'message' => 'Skipped (already set).'],
+                ]);
+                exit;
+            }
+
+            $ok = $productModel->setProductPriceIndia($productId, $newVal);
+            if (!$ok) {
+                throw new Exception('Could not update price_india');
+            }
+
+            $fresh = $productModel->getProduct($productId);
+            $vendorSync = $fresh ? $this->syncPriceIndiaToVendorFrontend($fresh, $newVal) : [
+                'success' => false,
+                'message' => 'Updated locally but could not reload product for vendor sync.',
+            ];
+
+            $message = 'Price India updated.';
+            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+                $message .= ' ' . $vendorSync['message'];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'price_india' => round($newVal, 2),
+                'vendor_sync' => $vendorSync,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function getPriceIndiaSnapshot()
+    {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $productId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+
+            $priceIndia = (float)($product['price_india'] ?? 0);
+            $gstPercent = max(0.0, (float)($product['gst'] ?? 0));
+            $gstAmount = $priceIndia * ($gstPercent / 100);
+            $amountAfterGst = $priceIndia + $gstAmount;
+
+            echo json_encode([
+                'success' => true,
+                'price_india' => round($priceIndia, 2),
+                'gst_percent' => round($gstPercent, 2),
+                'gst_amount' => round($gstAmount, 2),
+                'amount_after_gst' => round($amountAfterGst, 2),
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function updateUsdPrice()
+    {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            if (!is_array($data) || empty($data['product_id'])) {
+                throw new Exception('Invalid data received');
+            }
+            $productId = (int)$data['product_id'];
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+            if (!array_key_exists('price', $data) || $data['price'] === '' || !is_numeric($data['price'])) {
+                throw new Exception('USD price must be numeric');
+            }
+            $newVal = (float)$data['price'];
+            if ($newVal < 0) {
+                throw new Exception('USD price cannot be negative');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+            $current = (float)($product['price'] ?? 0);
+            if (abs($current - $newVal) < 0.00001) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'No change.',
+                    'price' => round($newVal, 2),
+                    'vendor_sync' => ['success' => true, 'message' => 'Skipped (already set).'],
+                ]);
+                exit;
+            }
+
+            $ok = $productModel->setProductPriceUsd($productId, $newVal);
+            if (!$ok) {
+                throw new Exception('Could not update USD price');
+            }
+
+            $fresh = $productModel->getProduct($productId);
+            $vendorSync = $fresh ? $this->syncUsdPriceToVendorFrontend($fresh, $newVal) : [
+                'success' => false,
+                'message' => 'Updated locally but could not reload product for vendor sync.',
+            ];
+
+            $message = 'USD Price updated.';
+            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+                $message .= ' ' . $vendorSync['message'];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'price' => round($newVal, 2),
+                'vendor_sync' => $vendorSync,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function getUsdPriceSnapshot()
+    {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $productId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+
+            echo json_encode([
+                'success' => true,
+                'price' => round((float)($product['price'] ?? 0), 2),
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     /**
      * Set permanently_available on frontend via vendor product/modify API.
      */
@@ -4727,6 +4935,136 @@ class ProductsController
         return [
             'success' => $apiSuccess,
             'message' => $decoded['message'] ?? ($apiSuccess ? 'Vendor published sync completed.' : 'Vendor sync failed.'),
+            'http_code' => $httpCode,
+            'response' => $decoded,
+        ];
+    }
+
+    /**
+     * Set price_india on frontend via vendor product/modify API.
+     */
+    private function syncPriceIndiaToVendorFrontend(array $product, float $value): array
+    {
+        $itemCode = trim((string)($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
+        }
+
+        $size = trim((string)($product['size'] ?? ''));
+        $color = trim((string)($product['color'] ?? ''));
+
+        $url = 'https://www.exoticindia.com/vendor-api/product/modify'
+            . '?itemcode=' . urlencode($itemCode)
+            . '&size=' . urlencode($size)
+            . '&color=' . urlencode($color);
+
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+        $postData = [
+            'price_india' => $value,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false) {
+            return ['success' => false, 'message' => 'Vendor API request failed: ' . $curlErr];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            return [
+                'success' => ($httpCode >= 200 && $httpCode < 300),
+                'message' => ($httpCode >= 200 && $httpCode < 300)
+                    ? 'Vendor price sync completed.'
+                    : 'Vendor API returned non-JSON response.',
+                'http_code' => $httpCode,
+                'raw_response' => $response,
+            ];
+        }
+
+        $apiSuccess = isset($decoded['success']) ? (bool)$decoded['success'] : ($httpCode >= 200 && $httpCode < 300);
+        return [
+            'success' => $apiSuccess,
+            'message' => $decoded['message'] ?? ($apiSuccess ? 'Vendor price_india sync completed.' : 'Vendor sync failed.'),
+            'http_code' => $httpCode,
+            'response' => $decoded,
+        ];
+    }
+
+    /**
+     * Set USD price (price) on frontend via vendor product/modify API.
+     */
+    private function syncUsdPriceToVendorFrontend(array $product, float $value): array
+    {
+        $itemCode = trim((string)($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
+        }
+
+        $size = trim((string)($product['size'] ?? ''));
+        $color = trim((string)($product['color'] ?? ''));
+
+        $url = 'https://www.exoticindia.com/vendor-api/product/modify'
+            . '?itemcode=' . urlencode($itemCode)
+            . '&size=' . urlencode($size)
+            . '&color=' . urlencode($color);
+
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+        $postData = [
+            'price' => $value,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false) {
+            return ['success' => false, 'message' => 'Vendor API request failed: ' . $curlErr];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            return [
+                'success' => ($httpCode >= 200 && $httpCode < 300),
+                'message' => ($httpCode >= 200 && $httpCode < 300)
+                    ? 'Vendor USD price sync completed.'
+                    : 'Vendor API returned non-JSON response.',
+                'http_code' => $httpCode,
+                'raw_response' => $response,
+            ];
+        }
+
+        $apiSuccess = isset($decoded['success']) ? (bool)$decoded['success'] : ($httpCode >= 200 && $httpCode < 300);
+        return [
+            'success' => $apiSuccess,
+            'message' => $decoded['message'] ?? ($apiSuccess ? 'Vendor USD price sync completed.' : 'Vendor sync failed.'),
             'http_code' => $httpCode,
             'response' => $decoded,
         ];

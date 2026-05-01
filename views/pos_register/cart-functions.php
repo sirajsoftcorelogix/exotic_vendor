@@ -14,6 +14,57 @@ function cart_unwrap_product_api_payload(array $data): array
     return $data;
 }
 
+/** Raw checkoutdata from GET /cart/retrieve body (after unwrap); aligns with POSRegisterController::checkoutdataFromCartRetrieveBody */
+function cart_checkoutdata_from_retrieve_body(array $data)
+{
+    foreach (['checkoutdata', 'checkoutData', 'CheckOutData'] as $k) {
+        if (!array_key_exists($k, $data)) {
+            continue;
+        }
+        $v = $data[$k];
+        if ($v === null) {
+            continue;
+        }
+        if (is_string($v) && trim($v) === '') {
+            continue;
+        }
+        if (is_array($v) && $v === []) {
+            continue;
+        }
+
+        return $v;
+    }
+
+    return $data['checkoutdata'] ?? '';
+}
+
+function cart_has_usable_checkoutdata(array $cartData): bool
+{
+    $raw = $cartData['checkoutdata'] ?? null;
+    if ($raw === null) {
+        return false;
+    }
+    if (is_string($raw)) {
+        return trim($raw) !== '';
+    }
+    if (is_array($raw)) {
+        return $raw !== [];
+    }
+
+    return $raw !== '';
+}
+
+function cart_normalize_checkoutdata_token($checkoutdata): string
+{
+    if (is_string($checkoutdata)) {
+        return trim($checkoutdata);
+    } elseif (is_scalar($checkoutdata)) {
+        return trim((string)$checkoutdata);
+    } else {
+        return '';
+    }
+}
+
 /** Catalog rows for matching cart_entry → price (incl. express shipping row when present). */
 function cart_product_addon_catalog(array $productApiResult): array
 {
@@ -130,13 +181,14 @@ function cart_resolve_india_price_from_vp($mysqli, string $code): float
     return 0.0;
 }
 
-function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null)
+function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null)
 {
     // echo "<pre>";
     // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
     // exit;
 
-    $url = 'https://www.exoticindia.com/api' . $endpoint;
+    $base = $apiBaseUrl ?? 'https://www.exoticindia.com/api';
+    $url = rtrim($base, '/') . $endpoint;
     if ($params) {
         $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
     }
@@ -176,7 +228,11 @@ function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = n
 
     curl_close($ch);
 
-    return ['data' => json_decode($response, true) ?: [], 'code' => $httpCode];
+    $body = (string)$response;
+    $decoded = json_decode($body, true);
+    $data = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : [];
+
+    return ['data' => $data, 'code' => $httpCode, 'raw' => $body];
 }
 
 
@@ -184,17 +240,18 @@ function get_cart()
 {
     global $conn;
     $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
+    $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
 
     $res = exotic_api_call(
         '/cart/retrieve',
         'GET',
         [
             'discountcoupondetails' => $coupon,
-            'giftvoucherdetails' => ''
+            'giftvoucherdetails' => $voucher,
         ]
     );
 
-    $data = $res['data'] ?? [];
+    $data = cart_unwrap_product_api_payload($res['data'] ?? []);
 
     $items = [];
     $subtotal = 0;
@@ -322,7 +379,8 @@ function get_cart()
         'gst' => $gst,
         'discount' => $discount,
         'grand_total' => $grand_total,
-        'checkoutdata' => $data['checkoutdata'] ?? ''
+        'checkoutdata' => cart_checkoutdata_from_retrieve_body($data),
+        'codcharges' => (float)($data['codcharges_if_chosen'] ?? 0),
     ];
 }
 
@@ -407,10 +465,18 @@ function apply_coupon($couponId)
         'GET',
         [
             'couponid' => $couponId
-        ]
+        ],
+        null,
+        'https://www.exoticindia.com'
     );
 
     $response = $result['data'] ?? [];
+    if ($response === [] && !empty($result['raw'])) {
+        $rd = json_decode((string)$result['raw'], true);
+        if (json_last_error() === JSON_ERROR_NONE && is_string($rd) && $rd !== '') {
+            $response = ['discountcoupondetails' => $rd];
+        }
+    }
     // echo '<pre>'; print_r($result); exit;
     // Example response: "APP05|P|5"
     if (!empty($response) && !isset($response['error'])) {
@@ -444,6 +510,179 @@ function modify_express_shipping($cartid, $action)
     );
 }
 
+/**
+ * Map legacy POS payment labels to /order/create payment_type values.
+ */
+function cart_map_payment_type_for_order_api(string $paymentType): string
+{
+    $t = strtolower(trim($paymentType));
+    $map = [
+        'cash' => 'offline',
+        'card' => 'cc',
+        'offline' => 'offline',
+        'cc' => 'cc',
+        'razorpay' => 'razorpay',
+        'cod' => 'cod',
+        'bank_transfer' => 'bank_transfer',
+        'pos_machine' => 'pos_machine',
+        'specialpay' => 'specialpay',
+        'cheque' => 'cheque',
+        'demand_draft' => 'demand_draft',
+    ];
+
+    return $map[$t] ?? 'offline';
+}
+
+/**
+ * Billing + shipping for order/create from vp_order_info, session POS customer form, or confirm-address POST.
+ * Mirrors POSRegisterController::create_order customer resolution.
+ *
+ * @return array{billing: array, shipping: array}
+ */
+function cart_resolve_order_billing_shipping_for_api($mysqli): array
+{
+    $billing = [];
+    $shipping = [];
+
+    $rawCustomerId = $_POST['customer_id'] ?? null;
+    if ($rawCustomerId !== null && $rawCustomerId !== '') {
+        $customerId = (int)$rawCustomerId;
+    } else {
+        $customerId = (int)($_SESSION['pos_customer_id'] ?? 0);
+    }
+
+    if ($customerId > 0 && $mysqli) {
+        $stmt = $mysqli->prepare('SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('i', $customerId);
+            $stmt->execute();
+            $info = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if ($info) {
+                $billing = [
+                    'first_name' => $info['first_name'],
+                    'last_name' => $info['last_name'],
+                    'email' => $info['email'],
+                    'phone' => $info['mobile'],
+                    'address1' => $info['address_line1'],
+                    'address2' => $info['address_line2'],
+                    'city' => $info['city'],
+                    'state' => $info['state'],
+                    'zip' => $info['zipcode'],
+                    'country' => $info['country'] ?: 'IN',
+                    'gstin' => $info['gstin'],
+                ];
+
+                $shipping = [
+                    'sname' => trim($info['shipping_first_name'] . ' ' . $info['shipping_last_name']),
+                    'saddress1' => $info['shipping_address_line1'],
+                    'saddress2' => $info['shipping_address_line2'],
+                    'scity' => $info['shipping_city'],
+                    'sstate' => $info['shipping_state'],
+                    'szip' => $info['shipping_zipcode'],
+                    'scountry' => $info['shipping_country'] ?: 'IN',
+                    'sphone' => $info['shipping_mobile'],
+                ];
+            }
+        }
+    }
+
+    if (empty($billing) && !empty($_SESSION['pos_customer_form'])) {
+        $form = $_SESSION['pos_customer_form'];
+
+        $billing = [
+            'first_name' => trim($form['first_name'] ?? ''),
+            'last_name' => trim($form['last_name'] ?? ''),
+            'email' => trim($form['cus_email'] ?? ''),
+            'phone' => trim($form['mobile'] ?? ''),
+            'address1' => trim($form['address_line1'] ?? ''),
+            'address2' => trim($form['address_line2'] ?? ''),
+            'city' => trim($form['city'] ?? ''),
+            'state' => trim($form['state'] ?? ''),
+            'zip' => trim($form['zipcode'] ?? ''),
+            'country' => 'IN',
+            'gstin' => trim($form['gstin'] ?? ''),
+        ];
+
+        $shipping = [
+            'sname' => trim(($form['shipping_first_name'] ?? '') . ' ' . ($form['shipping_last_name'] ?? '')),
+            'saddress1' => trim($form['shipping_address_line1'] ?? ''),
+            'saddress2' => trim($form['shipping_address_line2'] ?? ''),
+            'scity' => trim($form['shipping_city'] ?? ''),
+            'sstate' => trim($form['shipping_state'] ?? ''),
+            'szip' => trim($form['shipping_zipcode'] ?? ''),
+            'scountry' => 'IN',
+            'sphone' => trim($form['shipping_mobile'] ?? ''),
+        ];
+    }
+
+    $confirmFlag = trim((string)($_POST['confirm_address_submit'] ?? ''));
+    $applyConfirmPopup = ($confirmFlag === '1')
+        || (
+            trim((string)($_POST['confirm_first_name'] ?? '')) !== ''
+            && trim((string)($_POST['confirm_phone'] ?? '')) !== ''
+        );
+    if ($applyConfirmPopup) {
+        $confirmShippingFirst = trim((string)($_POST['confirm_sfirst_name'] ?? ''));
+        $confirmShippingLast = trim((string)($_POST['confirm_slast_name'] ?? ''));
+        $confirmShippingFull = trim((string)($_POST['confirm_sname'] ?? ''));
+        $resolvedShippingName = trim($confirmShippingFirst . ' ' . $confirmShippingLast);
+        if ($resolvedShippingName === '') {
+            $resolvedShippingName = $confirmShippingFull;
+        }
+        if ($resolvedShippingName === '') {
+            $resolvedShippingName = trim((string)($shipping['sname'] ?? ''));
+        }
+        $billing = [
+            'first_name' => trim((string)($_POST['confirm_first_name'] ?? ($billing['first_name'] ?? ''))),
+            'last_name' => trim((string)($_POST['confirm_last_name'] ?? ($billing['last_name'] ?? ''))),
+            'email' => trim((string)($_POST['confirm_email'] ?? ($billing['email'] ?? ''))),
+            'phone' => trim((string)($_POST['confirm_phone'] ?? ($billing['phone'] ?? ''))),
+            'address1' => trim((string)($_POST['confirm_address1'] ?? ($billing['address1'] ?? ''))),
+            'address2' => trim((string)($_POST['confirm_address2'] ?? ($billing['address2'] ?? ''))),
+            'city' => trim((string)($_POST['confirm_city'] ?? ($billing['city'] ?? ''))),
+            'state' => trim((string)($_POST['confirm_state'] ?? ($billing['state'] ?? ''))),
+            'zip' => trim((string)($_POST['confirm_zip'] ?? ($billing['zip'] ?? ''))),
+            'country' => trim((string)($_POST['confirm_country'] ?? ($billing['country'] ?? 'IN'))),
+            'gstin' => trim((string)($_POST['confirm_gstin'] ?? ($billing['gstin'] ?? ''))),
+        ];
+        $shipping = [
+            'sname' => $resolvedShippingName,
+            'saddress1' => trim((string)($_POST['confirm_saddress1'] ?? ($shipping['saddress1'] ?? ''))),
+            'saddress2' => trim((string)($_POST['confirm_saddress2'] ?? ($shipping['saddress2'] ?? ''))),
+            'scity' => trim((string)($_POST['confirm_scity'] ?? ($shipping['scity'] ?? ''))),
+            'sstate' => trim((string)($_POST['confirm_sstate'] ?? ($shipping['sstate'] ?? ''))),
+            'szip' => trim((string)($_POST['confirm_szip'] ?? ($shipping['szip'] ?? ''))),
+            'scountry' => trim((string)($_POST['confirm_scountry'] ?? ($shipping['scountry'] ?? 'IN'))),
+            'sphone' => trim((string)($_POST['confirm_sphone'] ?? ($shipping['sphone'] ?? ''))),
+        ];
+    }
+
+    if (trim((string)($shipping['sname'] ?? '')) === '') {
+        $shipping['sname'] = trim(
+            trim((string)($billing['first_name'] ?? '')) . ' ' . trim((string)($billing['last_name'] ?? ''))
+        );
+    }
+    foreach (
+        [
+            'sphone' => 'phone',
+            'saddress1' => 'address1',
+            'saddress2' => 'address2',
+            'scity' => 'city',
+            'sstate' => 'state',
+            'szip' => 'zip',
+            'scountry' => 'country',
+        ] as $sk => $bk
+    ) {
+        if (trim((string)($shipping[$sk] ?? '')) === '' && trim((string)($billing[$bk] ?? '')) !== '') {
+            $shipping[$sk] = $billing[$bk];
+        }
+    }
+
+    return ['billing' => $billing, 'shipping' => $shipping];
+}
+
 
 // function create_order($cartData, $paymentType = 'cod')
 function create_order($cartData, $paymentType = 'cash', $note = '')
@@ -451,59 +690,102 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
     global $conn; // mysqli connection
 
     $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
-    // echo "<pre>";
-    // print_r($paymentType);
-    // exit;
-    $postData = [
-        "payment_type" => "cod",
-        "buynow" => "0",
 
-        // IMPORTANT → put checkoutdata from cart/retrieve here
-        'checkoutdata' => $cartData['checkoutdata'],
+    // Always take checkoutdata (and cod line) from live GET /cart/retrieve, not stale caller data.
+    $liveCart = get_cart();
+    $cartData['checkoutdata'] = $liveCart['checkoutdata'];
+    $cartData['codcharges'] = $liveCart['codcharges'] ?? ($cartData['codcharges'] ?? 0);
 
-        // "cardnumber" => "",
-        // "cardexpmonth" => "",
-        // "cardexpyear" => "",
-        // "card_cvv" => "",
+    $allowedApiPaymentTypes = [
+        'offline',
+        'cc',
+        'razorpay',
+        'cod',
+        'bank_transfer',
+        'pos_machine',
+        'specialpay',
+        'cheque',
+        'demand_draft',
+    ];
+    $postPayment = trim((string)($_POST['payment_type'] ?? ''));
+    if ($postPayment !== '' && in_array($postPayment, $allowedApiPaymentTypes, true)) {
+        $apiPaymentType = $postPayment;
+    } else {
+        $apiPaymentType = cart_map_payment_type_for_order_api($paymentType);
+    }
 
-        // "razorpay_order_id" => "",
-        // "razorpay_payment_id" => "",
-        // "razorpay_signature" => "",
+    $resolved = cart_resolve_order_billing_shipping_for_api($conn);
+    $billing = $resolved['billing'];
+    $shipping = $resolved['shipping'];
 
-        // "magiccheckout_done" => "",
-        // "paypal_transaction_status" => "",
-        // "paypal_transaction_id" => "",
+    if (empty($billing['first_name']) || empty($billing['phone']) || empty($billing['state']) || empty($billing['zip'])) {
+        return [
+            'success' => false,
+            'message' => 'Customer billing details are required. Select a customer or complete the POS customer form before placing the order.',
+        ];
+    }
 
-        "cod" => "0",
-        "codcharges" => "0",
+    if (empty($shipping['sname']) || empty($shipping['sphone']) || empty($shipping['sstate'])) {
+        return [
+            'success' => false,
+            'message' => 'Shipping details are required. Complete shipping address and contact on the POS customer form.',
+        ];
+    }
 
-        "first_name" => $_SESSION['user']['name'] ?? "POS",
-        "last_name" => "User",
-        "email" => "test@example.com",
+    $codchargesVal = (float)($cartData['codcharges'] ?? 0);
+    if ($apiPaymentType === 'cod' && $codchargesVal > 0) {
+        $cod = '1';
+        $codCharges = (string)$codchargesVal;
+    } else {
+        $cod = '0';
+        $codCharges = '0';
+    }
 
-        "address1" => "Test Address",
-        "address2" => "",
+    $storeId = (string)((int)($_SESSION['warehouse_id'] ?? 0));
+    if ($storeId === '0' || $storeId === '') {
+        $storeId = 'store';
+    }
+    $transactionId = trim((string)($_POST['transaction_id'] ?? ''));
+    $effectiveTransactionId = $transactionId !== '' ? $transactionId : ('store.' . gmdate('YmdHis'));
+    $store_payment_details = $storeId . '|' . $apiPaymentType . '|' . $effectiveTransactionId;
 
-        "city" => "Ahmedabad",
-        "state" => "Gujarat",
-        "zip" => "380001",
-        "country" => "IN",
-        "phone" => $_SESSION['user']['phone'] ?? "9999999999",
+    if (!cart_has_usable_checkoutdata($cartData)) {
+        return [
+            'success' => false,
+            'message' => 'Cart empty or checkout session expired.',
+        ];
+    }
 
-        "gstin" => "",
+    $checkoutdataToken = cart_normalize_checkoutdata_token($cartData['checkoutdata'] ?? '');
 
-        "sname" => "Test User",
-        "saddress1" => "Test Address",
-        "saddress2" => "",
-
-        "scity" => "Ahmedabad",
-        "sstate" => "Gujarat",
-        "szip" => "380001",
-        "scountry" => "IN",
-        "sphone" => "9999999999"
+    $razorpay = [
+        'razorpay_order_id' => $_POST['razorpay_order_id'] ?? '',
+        'razorpay_payment_id' => $_POST['razorpay_payment_id'] ?? '',
+        'razorpay_signature' => $_POST['razorpay_signature'] ?? '',
+        'magiccheckout_done' => $_POST['magiccheckout_done'] ?? '',
     ];
 
+    $card = [
+        'cardnumber' => $_POST['cardnumber'] ?? '',
+        'cardexpmonth' => $_POST['cardexpmonth'] ?? '',
+        'cardexpyear' => $_POST['cardexpyear'] ?? '',
+        'card_cvv' => $_POST['card_cvv'] ?? '',
+    ];
 
+    $postData = array_merge(
+        [
+            'payment_type' => $apiPaymentType,
+            'buynow' => '0',
+            'checkoutdata' => $checkoutdataToken,
+            'cod' => $cod,
+            'codcharges' => $codCharges,
+            'store_payment_details' => $store_payment_details,
+        ],
+        $billing,
+        $shipping,
+        $razorpay,
+        $card
+    );
 
     $result = exotic_api_call(
         '/order/create',
@@ -555,7 +837,7 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
         $stmt->bind_param(
             "isdiissss",
             $orderId,
-            $paymentType,
+            $apiPaymentType,
             $amount,
             $totalQty,
             $source,
@@ -617,8 +899,6 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
             "api_response" => $result
         ];
     }
-
-    exit;
 }
 
 function get_orders()

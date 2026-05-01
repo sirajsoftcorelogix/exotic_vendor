@@ -1,5 +1,6 @@
 <?php
 
+require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
 require_once 'models/user/user.php';
 require_once 'models/PosInvoice/invoice.php';
 require_once 'models/order/order.php';
@@ -74,15 +75,20 @@ class PaymentsController
         $sql = "
 SELECT 
     p.id,
-    p.order_id,
     p.order_number,
+    p.receipt_number,
     p.payment_date,
-    p.amount,
-       p.order_id,
+    p.payment_amount AS amount,
+    p.order_amount,
+    p.pending_amount AS balance_snapshot,
     p.payment_mode,
     p.payment_stage,
     u.name AS user_name,
     w.address_title AS warehouse,
+    (
+        SELECT MIN(o.id) FROM vp_orders o 
+        WHERE o.order_number COLLATE utf8mb4_unicode_ci = p.order_number COLLATE utf8mb4_unicode_ci
+    ) AS order_id,
 
     (
         IFNULL(
@@ -96,14 +102,14 @@ SELECT
         -
         IFNULL(
             (
-                SELECT SUM(p2.amount) 
+                SELECT SUM(p2.payment_amount) 
                 FROM pos_payments p2 
                 WHERE p2.order_number COLLATE utf8mb4_unicode_ci
                       = p.order_number COLLATE utf8mb4_unicode_ci
                 AND p2.id <= p.id
             ), 0
         )
-    ) AS pending_amount
+    ) AS pending_balance
 
 FROM pos_payments p
 
@@ -136,20 +142,41 @@ WHERE 1=1
             $types .= "s";
         }
 
-        if (!empty($_GET['order_number'])) {
-            $sql .= " AND p.order_number LIKE ?";
-            $params[] = "%" . $_GET['order_number'] . "%";
-            $types .= "s";
+        $orderPkFilter = (
+            isset($_GET['order_id'])
+            && $_GET['order_id'] !== ''
+            && ctype_digit((string)$_GET['order_id'])
+        ) ? (int)$_GET['order_id'] : 0;
+
+        if ($orderPkFilter > 0) {
+            $onStmt = $conn->prepare('SELECT order_number FROM vp_orders WHERE id = ? LIMIT 1');
+            $filterOrderNum = '';
+            if ($onStmt) {
+                $onStmt->bind_param('i', $orderPkFilter);
+                $onStmt->execute();
+                $onRow = $onStmt->get_result()->fetch_assoc();
+                $onStmt->close();
+                $filterOrderNum = trim((string)($onRow['order_number'] ?? ''));
+            }
+            if ($filterOrderNum !== '') {
+                $sql .= ' AND p.order_number = ?';
+                $params[] = $filterOrderNum;
+                $types .= 's';
+            }
+        } elseif (!empty($_GET['order_number'])) {
+            $sql .= ' AND p.order_number LIKE ?';
+            $params[] = '%' . $_GET['order_number'] . '%';
+            $types .= 's';
         }
 
         if (!empty($_GET['amount_min'])) {
-            $sql .= " AND p.amount >= ?";
+            $sql .= " AND p.payment_amount >= ?";
             $params[] = $_GET['amount_min'];
             $types .= "d";
         }
 
         if (!empty($_GET['amount_max'])) {
-            $sql .= " AND p.amount <= ?";
+            $sql .= " AND p.payment_amount <= ?";
             $params[] = $_GET['amount_max'];
             $types .= "d";
         }
@@ -268,30 +295,30 @@ WHERE 1=1
             exit;
         }
 
-        // get order info from first payment
-        $stmt = $conn->prepare("
-        SELECT order_number, customer_id
-        FROM pos_payments
-        WHERE order_id = ?
-        ORDER BY id ASC
-        LIMIT 1
-    ");
-        $stmt->bind_param("i", $order_id);
-        $stmt->execute();
-        $order = $stmt->get_result()->fetch_assoc();
+        $order_id = (int)$order_id;
+        $stmtVo = $conn->prepare('SELECT order_number, customer_id FROM vp_orders WHERE id = ? LIMIT 1');
+        $order = null;
+        if ($stmtVo) {
+            $stmtVo->bind_param('i', $order_id);
+            $stmtVo->execute();
+            $order = $stmtVo->get_result()->fetch_assoc();
+            $stmtVo->close();
+        }
 
-        if (!$order) {
-            echo json_encode(["success" => false, "message" => "No previous payment found"]);
+        if (!$order || trim((string)($order['order_number'] ?? '')) === '') {
+            echo json_encode(["success" => false, "message" => "Order not found"]);
             exit;
         }
 
+        $orderNumKey = trim((string)$order['order_number']);
+
         // total paid
-        $stmt2 = $conn->prepare("
+        $stmt2 = $conn->prepare('
         SELECT SUM(amount) as paid
         FROM pos_payments
-        WHERE order_id = ?
-    ");
-        $stmt2->bind_param("i", $order_id);
+        WHERE order_number = ?
+    ');
+        $stmt2->bind_param('s', $orderNumKey);
         $stmt2->execute();
 
         $paid = $stmt2->get_result()->fetch_assoc()['paid'] ?? 0;
@@ -308,77 +335,101 @@ WHERE 1=1
     {
         global $conn;
 
-        $order_id = $_POST['order_id'];
-        // echo $order_id;
-        // exit;
-        $amount = $_POST['amount'];
-        $mode = $_POST['payment_type'];
-        $stage = $_POST['payment_stage'];
-        $transaction = $_POST['transaction_id'];
-        $note = $_POST['note'];
+        $postOrderKey = trim((string)($_POST['order_id'] ?? ''));
+        $amount = isset($_POST['amount']) ? (float)$_POST['amount'] : 0;
+        $mode = $_POST['payment_type'] ?? '';
+        $stage = $_POST['payment_stage'] ?? 'final';
+        $transaction = (string)($_POST['transaction_id'] ?? '');
+        $note = (string)($_POST['note'] ?? '');
 
-        $user_id = $_SESSION['user_id'] ?? 0;
-        $warehouse_id = $_SESSION['warehouse_id'] ?? 0;
+        $user_id = pos_payment_resolve_session_user_id();
+        $warehouse_id = (int)($_SESSION['warehouse_id'] ?? 0);
+        $postOrderInt = (ctype_digit($postOrderKey) && $postOrderKey !== '') ? (int)$postOrderKey : 0;
 
-        // fetch order info from FIRST payment
-        $stmt = $conn->prepare("
-        SELECT order_number, customer_id
-        FROM pos_payments
-        WHERE order_id = ?
-        ORDER BY id ASC
-        LIMIT 1
-    ");
-        $stmt->bind_param("i", $order_id);
-        $stmt->execute();
-        $order = $stmt->get_result()->fetch_assoc();
+        $orderNumberStr = '';
+        $customerId = 0;
+        $vpRow = null;
+        $anchor = null;
 
-        if (!$order) {
+        if ($postOrderInt > 0) {
+            $stmt = $conn->prepare('SELECT id, order_number, customer_id FROM vp_orders WHERE id = ? ORDER BY id ASC LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $postOrderInt);
+                $stmt->execute();
+                $vpRow = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+            }
+        }
+        if (!$vpRow && $postOrderKey !== '') {
+            $stmt = $conn->prepare('SELECT id, order_number, customer_id FROM vp_orders WHERE order_number = ? ORDER BY id ASC LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('s', $postOrderKey);
+                $stmt->execute();
+                $vpRow = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+            }
+        }
+
+        if ($vpRow) {
+            $orderNumberStr = (string)($vpRow['order_number'] ?? '');
+            $customerId = (int)($vpRow['customer_id'] ?? 0);
+        } elseif ($postOrderKey !== '') {
+            $stmt = $conn->prepare('SELECT order_number, customer_id FROM pos_payments WHERE order_number = ? ORDER BY id ASC LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('s', $postOrderKey);
+                $stmt->execute();
+                $anchor = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($anchor) {
+                    $orderNumberStr = (string)($anchor['order_number'] ?? '');
+                    $customerId = (int)($anchor['customer_id'] ?? 0);
+                }
+            }
+        }
+
+        if ($orderNumberStr === '') {
             echo json_encode(["success" => false, "message" => "Order data missing"]);
             exit;
         }
 
-        $order_number = $order['order_number'];
-        $customer_id = $order['customer_id'];
+        try {
+            $short = pos_payment_resolve_short_code_for_warehouse($conn, $warehouse_id);
+            $receiptNumber = pos_payment_generate_next_receipt_number($conn, $short);
+        } catch (Throwable $e) {
+            echo json_encode(['success' => false, 'message' => 'Receipt number error: ' . $e->getMessage()]);
+            exit;
+        }
 
-        $stmt2 = $conn->prepare("
-        INSERT INTO pos_payments
-        (order_id, order_number, customer_id, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-        VALUES (?,?,?,?,?,?,?,?,NOW(),?,?, 'INR', 'success', NOW())
-    ");
-
-        // $stmt2->bind_param(
-        //     "iisdsdssii",
-        //     $order_id,
-        //     $order_number,
-        //     $customer_id,
-        //     $stage,
-        //     $mode,
-        //     $amount,
-        //     $transaction,
-        //     $note,
-        //     $user_id,
-        //     $warehouse_id
-        // );
-        $stmt2->bind_param(
-            "iiissdssii",
-            $order_id,
-            $order_number,
-            $customer_id,
+        $insertRes = pos_payment_insert_row(
+            $conn,
+            $orderNumberStr,
+            $receiptNumber,
+            $customerId,
             $stage,
             $mode,
             $amount,
             $transaction,
             $note,
             $user_id,
-            $warehouse_id
+            $warehouse_id,
+            true
         );
-        $stmt2->execute();
-        $paymentId = $conn->insert_id;
+        if (!$insertRes['success']) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Payment save failed: ' . ($insertRes['error'] ?? 'unknown'),
+                'warehouse_id_used' => $insertRes['warehouse_id_used'],
+                'order_amount' => $insertRes['order_amount'] ?? null,
+                'pending_amount' => $insertRes['pending_amount'] ?? null,
+            ]);
+            exit;
+        }
+        $newPaymentId = $insertRes['payment_id'];
 
         /* 🔥 FINAL PAYMENT → UPDATE INVOICE */
         if ($stage === 'final') {
 
-            $order_number_safe = $conn->real_escape_string($order_number);
+            $order_number_safe = $conn->real_escape_string($orderNumberStr);
 
             $inv = $conn->query("
             SELECT id 
@@ -421,7 +472,13 @@ WHERE 1=1
         //     ");
         //         }
         //     }
-        echo json_encode(["success" => true]);
+        echo json_encode([
+            'success' => true,
+            'receipt_number' => $receiptNumber,
+            'payment_id' => $newPaymentId,
+            'order_amount' => $insertRes['order_amount'] ?? null,
+            'pending_amount' => $insertRes['pending_amount'] ?? null,
+        ]);
         exit;
     }
 
@@ -447,7 +504,7 @@ WHERE 1=1
 
         // total paid
         $res2 = $conn->query("
-        SELECT SUM(amount) as paid 
+        SELECT SUM(payment_amount) as paid 
         FROM pos_payments 
         WHERE order_number = '$orderNumber'
     ");
@@ -475,20 +532,23 @@ WHERE 1=1
         $note = $_POST['note'];
         $date = $_POST['payment_date'];
 
-        $stmt = $conn->prepare("
+        $editorUserId = pos_payment_resolve_session_user_id();
+
+        $stmt = $conn->prepare('
         UPDATE pos_payments 
-        SET amount=?, payment_mode=?, payment_stage=?, transaction_id=?, note=?, payment_date=?
+        SET payment_amount=?, payment_mode=?, payment_stage=?, transaction_id=?, note=?, payment_date=?, user_id=?
         WHERE id=?
-    ");
+    ');
 
         $stmt->bind_param(
-            "dsssssi",
+            'dsssssii',
             $amount,
             $mode,
             $stage,
             $transaction,
             $note,
             $date,
+            $editorUserId,
             $id
         );
 
@@ -503,15 +563,22 @@ WHERE 1=1
 
         $id = $_GET['id'];
 
-        $stmt = $conn->prepare("SELECT * FROM pos_payments WHERE id=?");
-        $stmt->bind_param("i", $id);
+        $stmt = $conn->prepare(
+            'SELECT p.*,
+                (
+                    SELECT MIN(o.id) FROM vp_orders o
+                    WHERE o.order_number COLLATE utf8mb4_unicode_ci = p.order_number COLLATE utf8mb4_unicode_ci
+                ) AS order_id
+             FROM pos_payments p WHERE p.id = ?'
+        );
+        $stmt->bind_param('i', $id);
         $stmt->execute();
 
         $payment = $stmt->get_result()->fetch_assoc();
 
         echo json_encode([
-            "success" => true,
-            "payment" => $payment
+            'success' => true,
+            'payment' => $payment,
         ]);
     }
 }

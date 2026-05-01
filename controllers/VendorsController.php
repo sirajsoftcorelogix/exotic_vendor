@@ -20,6 +20,7 @@ class VendorsController {
         global $teamModel;
 
         $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
+        $groupname_filter = isset($_GET['groupname_filter']) ? trim($_GET['groupname_filter']) : '';
         $status_filter = isset($_GET['status_filter']) ? trim($_GET['status_filter']) : '';
         $category_filter = isset($_GET['category_filter']) ? trim($_GET['category_filter']) : '';
         $team_filter = isset($_GET['team_filter']) ? trim($_GET['team_filter']) : '';
@@ -28,7 +29,7 @@ class VendorsController {
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Users per page, default 5
         $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
 
-        $vendors_data = $vendorsModel->getAllVendorsListing($page_no, $limit, $search, $status_filter, $category_filter, $team_filter);
+        $vendors_data = $vendorsModel->getAllVendorsListing($page_no, $limit, $search, $status_filter, $category_filter, $team_filter, $groupname_filter);
 
         $countryList = $countryModel->getAllCountries();
         $stateList = $stateModel->getAllStates(105); // India ID = 105
@@ -45,6 +46,7 @@ class VendorsController {
             'limit'        => $limit,
             'totalRecords' => $vendors_data["totalRecords"],
             'status_filter'=> $status_filter,
+            'groupname_filter'=> $groupname_filter,
             'category_filter'=> $category_filter,
             'team_filter'=> $team_filter,
             'countryList' => $countryList["countries"],
@@ -64,27 +66,40 @@ class VendorsController {
             $id = isset($data['id']) ? (int)$data['id'] : 0;
             if ($id > 0) {
                 $result = $vendorsModel->updateVendor($id, $data);
-                // call external API if vendor does not have remote vendor_id
+                // Call external vendor API after local update:
+                // - vendormodify if remote vendor_id exists
+                // - vendorcreate if remote vendor_id is missing
                 if (isset($result['success']) && $result['success'] === true) {
                     $vendor = $vendorsModel->getVendorById($id);
-                    if (empty($vendor['vendor_id'])) {
-                        $postData = [
-                            'name' => isset($data['editVendorName']) ? trim($data['editVendorName']) : '',
-                            'groupname' => $data['editGroupname'] ?? '',
-                            'vendor_type' => 'vendor_'.$data['editGroupname'] ?? '',
-                            'webpage' => '1'
-                        ];
+                    $editGroups = $data['editGroupname'] ?? '';
+                    if (is_array($editGroups)) {
+                        $editGroups = implode(',', array_values(array_unique(array_filter(array_map('trim', $editGroups), static function ($v) {
+                            return $v !== '';
+                        }))));
+                    } else {
+                        $editGroups = trim((string)$editGroups);
+                    }
+                    $editVendorType = $this->resolveVendorTypeFromGroups($editGroups);
+                    $postData = [
+                        'name' => isset($data['editVendorName']) ? trim($data['editVendorName']) : '',
+                        'groupname' => $editGroups,
+                        'vendor_type' => $editVendorType,
+                        'webpage' => (isset($data['editWebpage']) && (string)$data['editWebpage'] === '1') ? '1' : '0'
+                    ];
+
+                    $remoteVendorId = trim((string)($vendor['vendor_id'] ?? ''));
+                    if ($remoteVendorId !== '') {
+                        $postData['vendor_id'] = $remoteVendorId;
+                        $result['api_response'] = $this->modifyVendorExternal($postData);
+                    } else {
                         $createApiResponse = $this->createVendorExternal($postData);
-                        $result['api_response'] = $createApiResponse; // Include API response in the result for debugging
-                        // Update vendor with remote vendor_id from API response
+                        $result['api_response'] = $createApiResponse;
                         if (!empty($createApiResponse)) {
                             $apiData = json_decode($createApiResponse, true);
                             if (is_array($apiData) && isset($apiData['vendor_id'])) {
-                                $remoteVendorId = $apiData['vendor_id'];
-                                $updateResult = $vendorsModel->updateVendorRemoteId($id, $remoteVendorId);
+                                $vendorsModel->updateVendorRemoteId($id, $apiData['vendor_id']);
                             }
                         }
-                        //echo "test response: ".print_r($result, true); // Debugging line to check API response
                     }
                 }
             } else {
@@ -93,12 +108,27 @@ class VendorsController {
                 // Call external API if vendor creation was successful
                 if (isset($result['success']) && $result['success'] === true) {
                     $localVendorId = $result['inserted_id'] ?? 0;
+                    $addGroups = $data['groupname'] ?? '';
+                    if (is_array($addGroups)) {
+                        $addGroups = implode(',', array_values(array_unique(array_filter(array_map('trim', $addGroups), static function ($v) {
+                            return $v !== '';
+                        }))));
+                    } else {
+                        $addGroups = trim((string)$addGroups);
+                    }
+                    $addVendorType = '';
+                    if ($addGroups !== '') {
+                        $first = trim((string)explode(',', $addGroups)[0]);
+                        if ($first !== '') {
+                            $addVendorType = 'vendor_' . $first;
+                        }
+                    }
                     
                     $postData = [
                         'name' => isset($data['addVendorName']) ? trim($data['addVendorName']) : '',
-                        'groupname' => $data['groupname'] ?? '',
-                        'vendor_type' => 'vendor_'.$data['groupname'] ?? '',
-                        'webpage' => '1'
+                        'groupname' => $addGroups,
+                        'vendor_type' => $addVendorType,
+                        'webpage' => (isset($data['addWebpage']) && (string)$data['addWebpage'] === '1') ? '1' : '0'
                     ];
                     $createApiResponse = $this->createVendorExternal($postData);
                     $result['api_response'] = $createApiResponse; // Include API response in the result
@@ -147,12 +177,134 @@ class VendorsController {
             return $apiResponse;
         }
     }
+
+    private function resolveVendorTypeFromGroups(string $groupsCsv): string
+    {
+        $first = trim((string)explode(',', $groupsCsv)[0]);
+        if ($first === '') {
+            return '';
+        }
+        $key = strtolower($first);
+        $map = [
+            'sculptures' => 'vendor_sculptures',
+            'sculpture' => 'vendor_sculptures',
+            'statues' => 'vendor_statues',
+            'homeandliving' => 'vendor_homeandliving',
+            'paintings' => 'vendor_paintings',
+            'textiles' => 'vendor_textiles',
+            'jewelry' => 'vendor_jewelry',
+            'book' => 'vendor_book',
+        ];
+        return $map[$key] ?? ('vendor_' . $key);
+    }
+
+    public function modifyVendorExternal(array $postData): string
+    {
+        if (empty($postData['vendor_id'])) {
+            return json_encode(['success' => false, 'message' => 'vendor_id is required for vendormodify']);
+        }
+
+        $apiUrl = 'https://www.exoticindia.com/vendor-api/product/vendormodify';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded'
+        ];
+
+        $ch = curl_init($apiUrl);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $apiResponse = curl_exec($ch);
+        $apiError = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($apiResponse === false) {
+            error_log('Vendor modify API call failed: ' . $apiError);
+            return json_encode(['success' => false, 'message' => 'Vendor modify API call failed', 'error' => $apiError]);
+        }
+
+        error_log('Vendor modify API response: HTTP ' . $httpCode);
+        return (string)$apiResponse;
+    }
+    public function deleteVendorExternal($vendorId){
+        $vendorId = trim((string)$vendorId);
+        if ($vendorId === '') {
+            return ['success' => false, 'message' => 'Remote vendor_id is missing.'];
+        }
+
+        $apiUrl = 'https://www.exoticindia.com/vendor-api/product/vendordelete';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded'
+        ];
+
+        $ch = curl_init($apiUrl);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(['vendor_id' => $vendorId]));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $apiResponse = curl_exec($ch);
+        $apiError = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($apiResponse === false) {
+            return ['success' => false, 'message' => 'Vendor delete API call failed: ' . $apiError];
+        }
+
+        $decoded = json_decode((string)$apiResponse, true);
+        if ($httpCode >= 400) {
+            $msg = is_array($decoded) && !empty($decoded['message']) ? (string)$decoded['message'] : 'HTTP ' . $httpCode;
+            return ['success' => false, 'message' => 'Vendor delete API failed: ' . $msg];
+        }
+
+        if (is_array($decoded)) {
+            if ((isset($decoded['success']) && $decoded['success'] === false) || (isset($decoded['status']) && strtolower((string)$decoded['status']) === 'error')) {
+                $msg = !empty($decoded['message']) ? (string)$decoded['message'] : 'Remote delete returned failure.';
+                return ['success' => false, 'message' => 'Vendor delete API failed: ' . $msg];
+            }
+        }
+
+        return ['success' => true, 'message' => 'Remote vendor deleted.'];
+    }
     public function delete() {
         global $vendorsModel;
         // Try to get id from JSON or POST
         $data = json_decode(file_get_contents('php://input'), true);
         $id = isset($data['id']) ? (int)$data['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
         if ($id > 0) {
+            $vendor = $vendorsModel->getVendorById($id);
+            if (!$vendor || !is_array($vendor)) {
+                echo json_encode(['success' => false, 'message' => 'Vendor not found.']);
+                exit;
+            }
+
+            $guard = $vendorsModel->canDeleteVendor($id);
+            if (empty($guard['success'])) {
+                echo json_encode($guard);
+                exit;
+            }
+
+            $remoteVendorId = trim((string)($vendor['vendor_id'] ?? ''));
+            if ($remoteVendorId !== '') {
+                $remoteDelete = $this->deleteVendorExternal($remoteVendorId);
+                if (empty($remoteDelete['success'])) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $remoteDelete['message'] ?? 'Remote vendor delete failed.'
+                    ]);
+                    exit;
+                }
+            }
+
             $result = $vendorsModel->deleteVendor($id);
             echo json_encode($result);
         } else {

@@ -1,17 +1,21 @@
 $(function () {
   let productApiCache = {};
   let currentPage = 1;
-  const perPage = 12;
+  const perPage = 48;
   let currentCategory = '';
 
   let isLoading = false;
   let hasMore = true;
+  let totalPages = 1;
 
   let loadedKeys = new Set();
   let productsByKey = new Map();
 
   const $cards = $('#productsCards');
-  const $scrollWrapper = $cards.parent();
+  const $listHost = $('#productsListContainer');
+  const $pagePrev = $('#productsPagePrev');
+  const $pageNext = $('#productsPageNext');
+  const $pageInfo = $('#productsPageInfo');
 
   // ────────────────────────────────────────────────
   // HELPERS (needed for products & modal)
@@ -39,7 +43,7 @@ $(function () {
   function showLoader(show) {
     if (show) {
       if (!$('#productsLoader').length) {
-        $scrollWrapper.append(
+        $listHost.append(
           '<div id="productsLoader" class="text-center text-xs text-gray-500 py-4">Loading...</div>'
         );
       }
@@ -260,6 +264,7 @@ $(function () {
   let activeModalKey = null;
   /** When set from `stock_qty`, qty controls cannot exceed this (warehouse running stock). */
   let modalWarehouseMaxQty = null;
+  let modalPreselectedAddonEntries = [];
 
   function openModal() {
     $modal.removeClass('hidden');
@@ -275,6 +280,8 @@ $(function () {
     $('#pmSiblingSkus').empty();
     $('#pmSiblingSkusWrapper').addClass('hidden');
     $('#modal_stock_check_code').val('');
+    $('#modal_options').val('');
+    modalPreselectedAddonEntries = [];
     $('#pmQtySummary').empty().addClass('hidden');
     $('#pmModalPrice').addClass('hidden').text('');
   }
@@ -330,6 +337,31 @@ $(function () {
     return Number.isFinite(n) ? n : 1;
   }
 
+  function normalizeAddonEntries(entries) {
+    if (!Array.isArray(entries)) return [];
+    const out = [];
+    const seen = new Set();
+    entries.forEach(function (v) {
+      const s = String(v || '').trim();
+      if (!s) return;
+      const k = s.toLowerCase();
+      if (seen.has(k)) return;
+      seen.add(k);
+      out.push(s);
+    });
+    return out;
+  }
+
+  function applyPreselectedAddonsToModal(entries) {
+    const wanted = normalizeAddonEntries(entries);
+    const wantedLower = new Set(wanted.map(function (x) { return x.toLowerCase(); }));
+    $('#productModal .addon-checkbox').each(function () {
+      const entry = String($(this).data('entry') || '').trim().toLowerCase();
+      $(this).prop('checked', entry && wantedLower.has(entry));
+    });
+    $('#modal_options').val(wanted.join('|'));
+  }
+
   $pmQtyDec.on('click', function () {
     const max = modalWarehouseMaxQty;
     if (typeof max === 'number' && max === 0) return;
@@ -344,6 +376,15 @@ $(function () {
   });
 
   $('#productModal').find('form[action*="cart-add"]').on('submit', function (e) {
+    const selectedEntries = [];
+    $('#productModal .addon-checkbox:checked').each(function () {
+      const entry = $(this).data('entry');
+      if (entry) {
+        selectedEntries.push(String(entry));
+      }
+    });
+    $('#modal_options').val(selectedEntries.join('|'));
+
     const max = modalWarehouseMaxQty;
     const q = parseInt(String($('#modal_qty').val()), 10);
     const qtyNum = Number.isFinite(q) ? q : 0;
@@ -666,19 +707,43 @@ data-code="${lookupCode}">
     });
   }
 
+  function updatePaginationUi(pageCount) {
+    const resolvedTotalPages = Number.isFinite(pageCount) && pageCount > 0
+      ? pageCount
+      : totalPages;
+    const hasPageCount = Number.isFinite(resolvedTotalPages) && resolvedTotalPages > 0;
+    if ($pageInfo.length) {
+      $pageInfo.text(
+        hasPageCount
+          ? ('Loaded Page ' + String(currentPage) + ' of ' + String(resolvedTotalPages))
+          : ('Page ' + String(currentPage))
+      );
+    }
+    if ($pagePrev.length) {
+      $pagePrev.prop('disabled', currentPage <= 1 || isLoading);
+    }
+    if ($pageNext.length) {
+      $pageNext.prop('disabled', !hasMore || isLoading);
+    }
+  }
+
   function fetchProducts(page = 1, append = false) {
     if (isLoading) return;
     if (append && !hasMore) return;
 
     isLoading = true;
+    updatePaginationUi();
     showLoader(true);
     const sortBy = $('#sortBy').val();
     const minPrice = $('#minPrice').val();
     const maxPrice = $('#maxPrice').val();
-    const stockFilter = $('#stockFilter').val();
-    // Search input matches by SKU and/or product name
-    const productCode = $('#searchName').val();
-    const productName = $('#searchName').val();
+    const $stockFilterEl = $('#stockFilter');
+    // Align POS listing default with stock report compare URL (stock_status=in).
+    const stockFilter = $stockFilterEl.length ? String($stockFilterEl.val() || 'in') : 'in';
+    // One search box: same semantics as stock report (title OR item_code OR sku).
+    const searchVal = String($('#searchName').val() || '').trim();
+    const productName = searchVal;
+    const productCode = '';
     const requestedPage = page;
 
     $.ajax({
@@ -699,6 +764,8 @@ data-code="${lookupCode}">
       success: function (res) {
         const rows = res.data || [];
         currentPage = requestedPage;
+        const pagesFromApi = parseInt(res.total_pages, 10);
+        totalPages = Number.isFinite(pagesFromApi) && pagesFromApi > 0 ? pagesFromApi : 1;
 
         if (res.has_more != null) {
           hasMore = !!res.has_more;
@@ -708,7 +775,9 @@ data-code="${lookupCode}">
           hasMore = rows.length === perPage;
         }
 
+        // Incremental pagination: append when loading next page.
         renderProducts(rows, append);
+        updatePaginationUi(totalPages);
       },
       error: function (xhr, status, err) {
         console.error('Error loading products', err);
@@ -716,6 +785,7 @@ data-code="${lookupCode}">
       complete: function () {
         isLoading = false;
         showLoader(false);
+        updatePaginationUi();
       }
     });
   }
@@ -723,8 +793,9 @@ data-code="${lookupCode}">
   function resetAndLoad() {
     currentPage = 1;
     hasMore = true;
+    totalPages = 1;
     fetchProducts(1, false);
-    $scrollWrapper.scrollTop(0);
+    updatePaginationUi();
   }
   $('#applyFilterBtn').on('click', function () {
     resetAndLoad();
@@ -772,15 +843,29 @@ data-code="${lookupCode}">
 
     let code = $(this).data('code');
     if (!code) return;
-    openProductModalByCode(code);
+    openProductModalByCode(code, []);
   });
-  function openProductModalByCode(code) {
+  $(document).on('click', '.pos-cart-item', function (e) {
+    if ($(e.target).closest('form,button,input,a,select,textarea,label').length) {
+      return;
+    }
+    const code = String($(this).data('product-code') || '').trim();
+    const selectedEntriesRaw = String($(this).data('selected-entries') || '').trim();
+    const selectedEntries = selectedEntriesRaw
+      ? selectedEntriesRaw.split('|').map(function (x) { return String(x || '').trim(); }).filter(Boolean)
+      : [];
     if (!code) return;
+    openProductModalByCode(code, selectedEntries);
+  });
+  function openProductModalByCode(code, preselectedAddonEntries = []) {
+    if (!code) return;
+    modalPreselectedAddonEntries = normalizeAddonEntries(preselectedAddonEntries);
     openModal();
 
     //  CACHE HIT
     if (productApiCache[code]) {
       renderProductModal(productApiCache[code], code);
+      applyPreselectedAddonsToModal(modalPreselectedAddonEntries);
       return;
     }
 
@@ -800,6 +885,7 @@ data-code="${lookupCode}">
         productApiCache[code] = p;
         //  USE EXISTING MODAL FUNCTION
         renderProductModal(p, code);
+        applyPreselectedAddonsToModal(modalPreselectedAddonEntries);
       }
     });
   }
@@ -820,7 +906,7 @@ data-code="${lookupCode}">
       .then(function (data) {
         if (data && data.success && data.current_available === false && data.message) {
           alert(data.message);
-          openProductModalByCode(codeForPopup);
+          openProductModalByCode(codeForPopup, []);
         }
       })
       .catch(function () {
@@ -1056,17 +1142,18 @@ data-code="${lookupCode}">
     fetchSuggest($searchName.val());
   });
 
-  $scrollWrapper.on('scroll', function () {
-    const scrollTop = $(this).scrollTop();
-    const scrollHeight = this.scrollHeight;
-    const containerHeight = $(this).innerHeight();
-
-    if (scrollTop + containerHeight >= scrollHeight - 150) {
-      if (!isLoading && hasMore) {
-        fetchProducts(currentPage + 1, true);
-      }
-    }
-  });
+  if ($pagePrev.length) {
+    $pagePrev.on('click', function () {
+      if (isLoading) return;
+      resetAndLoad();
+    });
+  }
+  if ($pageNext.length) {
+    $pageNext.on('click', function () {
+      if (isLoading || !hasMore) return;
+      fetchProducts(currentPage + 1, true);
+    });
+  }
 
   // Initial load – products only
   resetAndLoad();

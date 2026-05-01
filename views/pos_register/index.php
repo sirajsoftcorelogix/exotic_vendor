@@ -1,6 +1,78 @@
-<div class="min-h-screen">
+<div class="min-h-screen pos-register-page">
+  <script>
+    document.documentElement.classList.add('pos-page-hide-scrollbars');
+  </script>
+  <style>
+    .pos-register-page {
+      font-size: 14px;
+      line-height: 1.45;
+      color: #334155;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Hide all scrollbars on POS screen (scroll/touch still works) */
+    html.pos-page-hide-scrollbars {
+      overflow-x: hidden;
+    }
+    html.pos-page-hide-scrollbars,
+    html.pos-page-hide-scrollbars body,
+    .pos-register-page,
+    .pos-register-page * {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    html.pos-page-hide-scrollbars::-webkit-scrollbar,
+    html.pos-page-hide-scrollbars body::-webkit-scrollbar,
+    .pos-register-page *::-webkit-scrollbar {
+      width: 0 !important;
+      height: 0 !important;
+      background: transparent;
+    }
+
+    /* Consistent typography scale across POS */
+    .pos-register-page .text-xs {
+      font-size: 0.8125rem !important; /* 13px */
+      line-height: 1.35 !important;
+    }
+    .pos-register-page .text-sm {
+      font-size: 0.875rem !important; /* 14px */
+      line-height: 1.45 !important;
+    }
+    .pos-register-page .text-base {
+      font-size: 0.95rem !important; /* ~15px */
+      line-height: 1.5 !important;
+    }
+    .pos-register-page [class*="text-[8px]"],
+    .pos-register-page [class*="text-[9px]"],
+    .pos-register-page [class*="text-[10px]"],
+    .pos-register-page [class*="text-[11px]"],
+    .pos-register-page [class*="text-[12px]"] {
+      font-size: 0.8125rem !important;
+      line-height: 1.35 !important;
+    }
+
+    /* Standardize controls */
+    .pos-register-page input,
+    .pos-register-page select,
+    .pos-register-page textarea,
+    .pos-register-page button {
+      font-size: 0.875rem;
+      line-height: 1.35;
+    }
+    .pos-register-page label {
+      font-size: 0.8125rem;
+      line-height: 1.35;
+    }
+    .pos-register-page h1,
+    .pos-register-page h2,
+    .pos-register-page h3 {
+      letter-spacing: 0.01em;
+    }
+  </style>
   <script>
     window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
+    window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
   </script>
   <a href="test_create_order_static();"></a>
   <!-- ===== TOP BAR ===== -->
@@ -140,10 +212,25 @@
 
         </div>
         <!-- Product Card -->
-        <div class="mt-3 h-[70vh] overflow-y-auto no-scrollbar">
+        <div id="productsListContainer" class="mt-3">
           <div
             class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
             id="productsCards">
+          </div>
+          <div id="productsPagination" class="mt-4 flex items-center justify-between border-t border-slate-200 pt-3">
+            <button
+              type="button"
+              id="productsPagePrev"
+              class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              Reset
+            </button>
+            <span id="productsPageInfo" class="text-sm text-slate-600">Page 1 of 1</span>
+            <button
+              type="button"
+              id="productsPageNext"
+              class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              Load More
+            </button>
           </div>
         </div>
       </div>
@@ -160,73 +247,53 @@
     <aside class="col-span-12 lg:col-span-3">
       <div class="px-4 py-3 border-b">
 
-        <label class="text-xs text-gray-500">Customer</label>
+        <label class="text-sm text-gray-500">Customer</label>
 
         <div class="flex gap-2 mt-1">
 
           <select id="customerSelect"
             name="customer_id"
-            class="w-full border rounded-lg px-3 py-2 text-sm">
-
-            <option value="">Select Customer</option>
-
-            <?php foreach ($customers as $c): ?>
-
-              <option value="<?= $c['id'] ?>"
-                data-name="<?= htmlspecialchars($c['name']) ?>"
-                data-phone="<?= htmlspecialchars($c['phone']) ?>"
-                data-email="<?= htmlspecialchars($c['email']) ?>"
-                <?= (!empty($_SESSION['pos_customer_id']) && $_SESSION['pos_customer_id'] == $c['id']) ? 'selected' : '' ?>>
-
-                <?= htmlspecialchars($c['name']) ?> | <?= $c['phone'] ?> | <?= $c['email'] ?>
-
-              </option>
-
-            <?php endforeach; ?>
-
+            class="w-full border rounded-lg px-3 py-2.5 text-base"
+            aria-label="Search customer">
           </select>
 
           <button onclick="openCustomerModal()"
-            class="bg-orange-600 text-white px-3 rounded-lg text-sm hover:bg-orange-700">
+            class="bg-orange-600 text-white px-3 py-2 rounded-lg text-base hover:bg-orange-700">
             +
           </button>
 
 
         </div>
-        <div class="mt-2 text-[11px] text-slate-600 space-y-0.5">
-          <div id="selectedCustomerName" class="font-semibold text-slate-800">Walk-in Customer</div>
-          <div id="selectedCustomerPhone" class="text-slate-500">-</div>
-        </div>
 
       </div>
       <div class="sticky top-4 rounded-2xl bg-white border shadow-sm overflow-hidden">
         <div class="px-4 py-3 border-b">
-          <div id="selectedCustomerNameCart" class="text-sm font-semibold text-center text-slate-800">Walk-in Customer</div>
-          <div id="selectedCustomerPhoneCart" class="text-[11px] text-slate-500 text-center">-</div>
+          <div id="selectedCustomerNameCart" class="text-base font-semibold text-center text-slate-800">Walk-in Customer</div>
+          <div id="selectedCustomerPhoneCart" class="text-sm text-slate-500 text-center">-</div>
         </div>
 
         <?php if (isset($_SESSION['cart_success'])): ?>
-          <div class="text-green-600 text-xs mb-2 px-4">
+          <div class="text-green-600 text-sm mb-2 px-4">
             <?= $_SESSION['cart_success'] ?>
           </div>
           <?php unset($_SESSION['cart_success']); ?>
         <?php endif; ?>
 
         <?php if (!empty($_SESSION['cart_error'])): ?>
-          <div class="text-red-600 text-xs mb-2 px-4">
+          <div class="text-red-600 text-sm mb-2 px-4">
             <?= htmlspecialchars((string)$_SESSION['cart_error']) ?>
           </div>
           <?php unset($_SESSION['cart_error']); ?>
         <?php endif; ?>
 
-        <div class="px-4 py-3 space-y-4 text-[12px]">
+        <div class="px-4 py-3 space-y-4 text-sm">
 
           <!-- PRODUCTS -->
           <div class="space-y-3" id="cartItems">
 
             <?php if (empty($cart)): ?>
 
-              <div class="py-8 text-center text-gray-400 text-xs">
+              <div class="py-8 text-center text-gray-400 text-sm">
                 Your cart is empty
               </div>
 
@@ -234,23 +301,53 @@
 
               <?php foreach ($cart as $item): ?>
 
-                <div class="flex gap-3">
+                <?php
+                $cartItemCode = trim((string)($item['item_code'] ?? $item['itemcode'] ?? $item['code'] ?? $item['sku'] ?? ''));
+                $cartSelectedEntries = [];
+                if (!empty($item['selected_entries']) && is_array($item['selected_entries'])) {
+                  foreach ($item['selected_entries'] as $se) {
+                    $se = trim((string)$se);
+                    if ($se !== '') {
+                      $cartSelectedEntries[] = $se;
+                    }
+                  }
+                }
+                ?>
+                <div
+                  class="flex gap-3 pos-cart-item cursor-pointer"
+                  data-product-code="<?= htmlspecialchars($cartItemCode) ?>"
+                  data-selected-entries="<?= htmlspecialchars(implode('|', $cartSelectedEntries)) ?>">
 
                   <img
                     src="<?= htmlspecialchars($item['imageurl'] ?? 'https://dummyimage.com/80x80/e5e7eb/6b7280&text=No+Image') ?>"
-                    class="h-12 w-12 rounded-lg bg-slate-50 object-contain">
+                    class="h-14 w-14 shrink-0 rounded-lg bg-slate-50 object-contain">
 
                   <div class="flex-1 min-w-0">
 
-                    <div class="text-[9px] leading-snug line-clamp-2">
-                      <?= htmlspecialchars($item['name']) ?>
-                    </div>
-
-                    <div class="mt-1 flex items-center justify-between">
-                      <span class="text-orange-600 font-semibold">
+                    <div class="mt-0.5 flex items-start justify-between gap-2">
+                      <div class="text-xs leading-snug line-clamp-2 text-slate-800 sm:text-sm">
+                        <?= htmlspecialchars($item['name']) ?>
+                      </div>
+                      <span class="shrink-0 text-sm font-semibold text-orange-600 sm:text-base">
                         <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['price'], 2) ?>
                       </span>
                     </div>
+
+                    <?php if (!empty($item['addons_display']) && is_array($item['addons_display'])): ?>
+                      <div class="mt-1.5 flex flex-wrap gap-1.5">
+                        <?php foreach ($item['addons_display'] as $adl): ?>
+                          <span class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] leading-snug text-slate-700"
+                            title="<?= htmlspecialchars((string)($adl['title'] ?? '')) ?>">
+                            <?= htmlspecialchars((string)($adl['title'] ?? '')) ?>
+                            <?php if (!empty($adl['value']) && (float)$adl['value'] > 0): ?>
+                              <span class="text-orange-600 font-semibold tabular-nums">
+                                +<?= currencySymbol($cartData['currency']) ?><?= number_format((float)$adl['value'], 2) ?>
+                              </span>
+                            <?php endif; ?>
+                          </span>
+                        <?php endforeach; ?>
+                      </div>
+                    <?php endif; ?>
 
                     <div class="mt-2 flex items-center justify-between">
 
@@ -263,10 +360,10 @@
                           <button type="submit"
                             name="newqty"
                             value="<?= $item['quantity'] - 1 ?>"
-                            class="h-6 w-6 text-slate-600">−</button>
+                            class="h-7 w-7 text-sm text-slate-600">−</button>
                         </form>
 
-                        <span class="h-6 w-7 flex items-center justify-center font-semibold">
+                        <span class="h-7 min-w-[1.75rem] flex items-center justify-center text-sm font-semibold tabular-nums">
                           <?= $item['quantity'] ?>
                         </span>
 
@@ -276,7 +373,7 @@
                           <button type="submit"
                             name="newqty"
                             value="<?= $item['quantity'] + 1 ?>"
-                            class="h-6 w-6 text-slate-600">+</button>
+                            class="h-7 w-7 text-sm text-slate-600">+</button>
                         </form>
 
                       </div>
@@ -285,7 +382,7 @@
                       <form method="POST" action="?page=pos_register&action=remove-item">
                         <!-- <input type="hidden" name="action" value="remove"> -->
                         <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
-                        <button type="submit" class="text-[10px] text-red-600 hover:underline">
+                        <button type="submit" class="text-xs text-red-600 hover:underline sm:text-sm">
                           Remove
                         </button>
                       </form>
@@ -324,11 +421,11 @@
                     <div>
 
 
-                      <div class="text-[9px] text-green-900 leading-tight">
+                      <div class="text-xs text-green-900 leading-snug sm:text-sm">
                         <?= htmlspecialchars($item['shipping_title'] ?? 'Express Shipping') ?>
                       </div>
 
-                      <div class="text-[11px] font-semibold text-green-900">
+                      <div class="text-sm font-semibold text-green-900 sm:text-base">
                         <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['shipping_per_unit'], 2) ?>
                       </div>
 
@@ -371,6 +468,11 @@
 
 
           <?php $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? ''; ?>
+          <?php
+          $couponApiDebug = $cartData['cart_api_body']['coupon_discount_debug'] ?? [];
+          $couponApiRawValue = $couponApiDebug['payload_coupon_discount']
+            ?? ($cartData['cart_api_body']['couponreduction'] ?? 0);
+          ?>
 
           <?php if (empty($coupon)): ?>
 
@@ -381,12 +483,12 @@
 
               <input
                 name="coupon"
-                class="w-2/3 rounded-lg border px-2 py-2 text-xs"
+                class="w-2/3 rounded-lg border px-2 py-2.5 text-sm"
                 placeholder="Coupon/Discount Code">
 
               <button
                 type="submit"
-                class="w-1/3 rounded-lg bg-black px-4 py-2 text-xs text-white">
+                class="w-1/3 rounded-lg bg-black px-4 py-2.5 text-sm text-white">
                 Apply
               </button>
 
@@ -397,7 +499,7 @@
             <!-- COUPON APPLIED -->
             <div class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
 
-              <span class="text-[11px] text-green-700 font-semibold">
+              <span class="text-sm text-green-700 font-semibold">
                 Coupon Applied: <?= htmlspecialchars(explode('|', $coupon)[0]) ?>
               </span>
 
@@ -406,7 +508,7 @@
 
                 <button
                   type="submit"
-                  class="text-[11px] text-red-600 font-semibold hover:underline">
+                  class="text-sm text-red-600 font-semibold hover:underline">
                   Remove
                 </button>
 
@@ -414,11 +516,15 @@
 
             </div>
 
+            <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              API Coupon Value: <?= currencySymbol($cartData['currency']) ?> <?= number_format((float)$couponApiRawValue, 2) ?>
+            </div>
+
           <?php endif; ?>
           <?php if (!empty($cartData['custom_discount']) && $cartData['custom_discount'] > 0): ?>
             <div class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
 
-              <span class="text-[11px] text-green-700 font-semibold">
+              <span class="text-sm text-green-700 font-semibold">
                 Custom Discount
                 (- <?= currencySymbol($cartData['currency']) ?>
                 <?= number_format($cartData['custom_discount'], 2) ?>)
@@ -427,17 +533,17 @@
               <form method="POST" action="?page=pos_register&action=remove-custom-discount">
                 <button
                   type="submit"
-                  class="text-[11px] text-green-600 font-semibold hover:underline">
+                  class="text-sm text-green-600 font-semibold hover:underline">
                   Remove
                 </button>
               </form>
 
             </div>
           <?php endif; ?>
-          <div id="couponMessage" class="text-[11px]"></div>
+          <div id="couponMessage" class="text-sm"></div>
           <?php if (isset($_SESSION['coupon_message'])): ?>
 
-            <div class="text-[11px] mt-1
+            <div class="text-sm mt-1
         <?= $_SESSION['coupon_status'] == 'success'
               ? 'text-green-600'
               : 'text-red-600' ?>">
@@ -496,53 +602,80 @@
 
           <?php endif; ?>
           <!-- TOTALS -->
-          <div class="pt-2 border-t space-y-1.5">
-            <?php if (!empty($cartData['discount'])): ?>
+          <?php
+          //print_array($cartData);
+          $rawSubtotal = (float)($cartData['subtotal'] ?? 0);
+          $gstTotal = (float)($cartData['gst'] ?? 0);
+          $couponDiscount = (float)($cartData['coupon_discount'] ?? 0);
+          $customDiscount = (float)($cartData['custom_discount'] ?? 0);
+          $totalDiscount = $couponDiscount + $customDiscount;
+          // Subtotal is already GST-inclusive.
+          $computedGrandTotal = max(0, $rawSubtotal - $totalDiscount);
+          $displayGrandTotal = (float)($cartData['grand_total'] ?? 0);
+          if ($totalDiscount > 0 && abs($displayGrandTotal - $computedGrandTotal) > 0.01) {
+            // Keep discount effect visible even if API returns a stale grand total.
+            $displayGrandTotal = $computedGrandTotal;
+          }
+          ?>
+          <div class="pt-2 border-t space-y-2 text-sm">
+            <div class="flex justify-between text-slate-600">
+              <span>Sub Total</span>
+              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($rawSubtotal, 2) ?></span>
+            </div>
+            <?php if (!empty($cartData['custom_discount'])): ?>
+              <div class="flex justify-between text-green-600">
+                <span>Custom Discount</span>
+                <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['custom_discount'], 2) ?></span>
+              </div>
+            <?php endif; ?>
+            <?php if (!empty($cartData['coupon_discount'])): ?>
               <div class="flex justify-between text-green-600">
                 <span>Coupon Discount</span>
-                <span>- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['discount'], 2) ?></span>
+                <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['coupon_discount'], 2) ?></span>
               </div>
             <?php endif; ?>
             <div class="flex justify-between text-slate-600">
-              <span>Sub Total</span>
-              <span><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['subtotal'] ?? 0, 2) ?></span>
+              <span>GST Total</span>
+              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($gstTotal, 2) ?></span>
             </div>
 
-            <div class="flex justify-between text-slate-600">
-              <span>GST</span>
-              <span><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['gst'] ?? 0, 2) ?></span>
-            </div>
-
-            <div class="flex justify-between font-semibold text-slate-900">
+            <div class="flex justify-between text-base font-semibold text-slate-900">
               <span>Total</span>
-              <span><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['grand_total'] ?? 0, 2) ?></span>
+              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($displayGrandTotal, 2) ?></span>
             </div>
 
           </div>
 
           <!-- ACTION -->
           <button id="applyCustomDiscountBtn"
-            class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold">
+            class="w-full rounded-xl bg-orange-600 py-3 text-base text-white font-semibold">
             Apply Cash Discount
           </button>
 
           <button
             onclick="openPaymentModal()"
-            class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold hover:bg-orange-700">
+            class="w-full rounded-xl bg-orange-600 py-3 text-base text-white font-semibold hover:bg-orange-700">
             Proceed to Payment
           </button>
 
           <button
             type="button"
             id="btnOpenCartApiModal"
-            class="mt-2 w-full text-center text-[11px] text-slate-500 hover:text-slate-800 underline decoration-slate-400">
+            class="mt-2 w-full text-center text-sm text-slate-500 hover:text-slate-800 underline decoration-slate-400">
             View Cart API request &amp; response
           </button>
 
           <button
             type="button"
+            id="btnOpenCouponApiModal"
+            class="mt-1 w-full text-center text-sm text-slate-500 hover:text-slate-800 underline decoration-slate-400">
+            View coupon API request &amp; response
+          </button>
+
+          <button
+            type="button"
             id="btnOpenOrderCreateApiModal"
-            class="mt-1 w-full text-center text-[11px] text-slate-500 hover:text-slate-800 underline decoration-slate-400">
+            class="mt-1 w-full text-center text-sm text-slate-500 hover:text-slate-800 underline decoration-slate-400">
             View order create API request &amp; response
           </button>
 
@@ -603,6 +736,118 @@
   if (btn) btn.addEventListener('click', openCartApiModal);
   if (closeBtn) closeBtn.addEventListener('click', closeCartApiModal);
   if (overlay) overlay.addEventListener('click', closeCartApiModal);
+})();
+</script>
+
+<?php
+$couponApiDebugInitial = $_SESSION['pos_coupon_api_debug'] ?? null;
+$couponApiPrePayload = $couponApiDebugInitial ?: [
+    'message' => 'No coupon API call recorded yet. Apply a coupon code to capture GET https://www.exoticindia.com/cart/addcoupon request and response here (including invalid or expired responses).',
+];
+$couponApiPreJson = json_encode(
+    $couponApiPrePayload,
+    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+);
+$couponApiHttpMeta = $couponApiDebugInitial
+    ? 'HTTP ' . (int)($couponApiDebugInitial['http_code'] ?? 0) . ' · GET /cart/addcoupon'
+    : '—';
+?>
+<!-- Coupon add API debug (GET https://www.exoticindia.com/cart/addcoupon) -->
+<div id="couponApiResponseModal" class="fixed inset-0 z-[10000] hidden">
+  <div id="couponApiResponseOverlay" class="absolute inset-0 bg-black/50"></div>
+  <div class="relative mx-auto mt-8 w-[95%] max-w-4xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[88vh]">
+    <div class="flex items-center justify-between gap-3 border-b px-4 py-3 shrink-0">
+      <h2 class="text-sm font-semibold text-gray-900">Coupon API request &amp; response</h2>
+      <button type="button" id="couponApiResponseClose" class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100">
+        ✕
+      </button>
+    </div>
+    <div class="px-4 py-3 overflow-auto text-xs leading-relaxed">
+      <p class="text-[11px] text-slate-500 mb-2">
+        <span class="font-medium text-slate-700"><?= htmlspecialchars($couponApiHttpMeta, ENT_QUOTES, 'UTF-8') ?></span>
+        · Last <code class="bg-slate-100 px-1 rounded">GET /cart/addcoupon</code> used when you clicked Apply on the coupon field
+      </p>
+      <pre id="couponApiResponsePre" class="whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-200 p-3 font-mono text-[11px] text-slate-800"><?= htmlspecialchars(
+          $couponApiPreJson !== false ? $couponApiPreJson : '{}',
+          ENT_QUOTES,
+          'UTF-8'
+      ) ?></pre>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var modal = document.getElementById('couponApiResponseModal');
+  var btn = document.getElementById('btnOpenCouponApiModal');
+  var closeBtn = document.getElementById('couponApiResponseClose');
+  var overlay = document.getElementById('couponApiResponseOverlay');
+  var pre = document.getElementById('couponApiResponsePre');
+  function pretty(obj) {
+    try {
+      return JSON.stringify(obj, null, 2);
+    } catch (e) {
+      return String(obj);
+    }
+  }
+  function buildCouponDebugView(payload) {
+    if (!payload || typeof payload !== 'object') {
+      return String(payload || '{}');
+    }
+    var lines = [];
+    var ts = payload.timestamp || '-';
+    var http = payload.http_code != null ? String(payload.http_code) : '-';
+    var request = payload.request || {};
+    var response = payload.response_normalized || payload.response || {};
+    var fallbackProbe = payload.fallback_probe || null;
+    lines.push('Coupon API Debug');
+    lines.push('Timestamp: ' + ts);
+    lines.push('HTTP: ' + http);
+    lines.push('');
+    lines.push('Request');
+    lines.push('-------');
+    lines.push(pretty({
+      method: request.method || 'GET',
+      url: request.url || '',
+      query_params: request.query_params || {},
+      headers: request.headers || {},
+    }));
+    lines.push('');
+    lines.push('Response');
+    lines.push('--------');
+    lines.push(pretty(response));
+    if (fallbackProbe) {
+      lines.push('');
+      lines.push('Fallback Probe');
+      lines.push('--------------');
+      lines.push(pretty(fallbackProbe));
+    }
+    return lines.join('\n');
+  }
+  function formatCouponDebugPre() {
+    if (!pre) return;
+    var raw = pre.textContent || '{}';
+    try {
+      var parsed = JSON.parse(raw);
+      pre.textContent = buildCouponDebugView(parsed);
+    } catch (e) {
+      // keep original text if it's not valid JSON
+    }
+  }
+  function openCouponApiModal() {
+    if (!modal) return;
+    formatCouponDebugPre();
+    modal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeCouponApiModal() {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+  if (btn) btn.addEventListener('click', openCouponApiModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeCouponApiModal);
+  if (overlay) overlay.addEventListener('click', closeCouponApiModal);
+  formatCouponDebugPre();
 })();
 </script>
 <?php
@@ -1039,7 +1284,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           <input
             type="number"
             id="payment_amount"
-            value="<?= $cartData['grand_total'] ?? 0 ?>"
+            value="<?= $displayGrandTotal ?? ($cartData['grand_total'] ?? 0) ?>"
             class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
         </div>
 
@@ -1100,6 +1345,64 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
     </div>
 
+  </div>
+</div>
+<!-- ADDRESS CONFIRMATION MODAL -->
+<div id="addressConfirmModal" class="fixed inset-0 z-[10000] hidden">
+  <div class="absolute inset-0 bg-black/40" onclick="closeAddressConfirmModal()"></div>
+  <div class="relative mx-auto mt-10 w-[96%] max-w-4xl rounded-2xl bg-white shadow-xl">
+    <div class="flex items-center justify-between border-b px-6 py-4">
+      <h2 class="text-lg font-semibold">Confirm Billing &amp; Shipping Details</h2>
+      <button type="button" onclick="closeAddressConfirmModal()" class="text-xl text-gray-500 hover:text-gray-800">✕</button>
+    </div>
+    <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
+      <div class="space-y-3">
+        <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_first_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="First Name">
+          <input id="confirm_last_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Last Name">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_email" class="w-full border rounded px-3 py-2 text-sm" placeholder="Email">
+          <input id="confirm_phone" class="w-full border rounded px-3 py-2 text-sm" placeholder="Phone">
+        </div>
+        <input id="confirm_address1" class="w-full border rounded px-3 py-2 text-sm" placeholder="Address 1">
+        <input id="confirm_address2" class="w-full border rounded px-3 py-2 text-sm" placeholder="Address 2">
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_city" class="w-full border rounded px-3 py-2 text-sm" placeholder="City">
+          <input id="confirm_state" class="w-full border rounded px-3 py-2 text-sm" placeholder="State">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_zip" class="w-full border rounded px-3 py-2 text-sm" placeholder="ZIP">
+          <input id="confirm_country" class="w-full border rounded px-3 py-2 text-sm" placeholder="Country">
+        </div>
+        <input id="confirm_gstin" class="w-full border rounded px-3 py-2 text-sm" placeholder="GSTIN (optional)">
+      </div>
+      <div class="space-y-3">
+        <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_sfirst_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping First Name">
+          <input id="confirm_slast_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Last Name">
+        </div>
+        <input id="confirm_sphone" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Phone">
+        <input id="confirm_saddress1" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 1">
+        <input id="confirm_saddress2" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 2">
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_scity" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping City">
+          <input id="confirm_sstate" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping State">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="confirm_szip" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping ZIP">
+          <input id="confirm_scountry" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Country">
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-end gap-3 border-t px-6 py-4">
+      <button type="button" onclick="closeAddressConfirmModal()" class="rounded-lg bg-gray-300 px-5 py-2 text-gray-700 hover:bg-gray-400">Cancel</button>
+      <button type="button" id="confirmAddressSubmitBtn" class="rounded-lg bg-orange-600 px-5 py-2 text-white hover:bg-orange-700">
+        Confirm &amp; Submit Order
+      </button>
+    </div>
   </div>
 </div>
 <!-- DISCOUNT MODAL -->
@@ -1369,6 +1672,177 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
     document.getElementById("paymentModal").classList.add("hidden");
   }
 
+  function openAddressConfirmModal() {
+    document.getElementById("addressConfirmModal").classList.remove("hidden");
+  }
+
+  function closeAddressConfirmModal() {
+    document.getElementById("addressConfirmModal").classList.add("hidden");
+  }
+
+  function getSelectedCustomerId() {
+    var fromSelect = typeof jQuery !== "undefined" ? jQuery("#customerSelect").val() : document.getElementById("customerSelect").value;
+    if (Array.isArray(fromSelect)) {
+      fromSelect = fromSelect[0] || "";
+    }
+    return (fromSelect && String(fromSelect)) || (window.POS_SESSION_CUSTOMER_ID && String(window.POS_SESSION_CUSTOMER_ID)) || "";
+  }
+
+  function setAddressConfirmFields(payload) {
+    var billing = (payload && payload.billing) || {};
+    var shipping = (payload && payload.shipping) || {};
+    function firstNonEmpty() {
+      for (var i = 0; i < arguments.length; i++) {
+        var v = arguments[i];
+        if (v != null && String(v).trim() !== "") return String(v).trim();
+      }
+      return "";
+    }
+    var shippingName = firstNonEmpty(
+      shipping.sname,
+      [shipping.shipping_first_name, shipping.shipping_last_name].filter(Boolean).join(" "),
+      [shipping.first_name, shipping.last_name].filter(Boolean).join(" ")
+    );
+    var shippingNameParts = shippingName.split(/\s+/).filter(Boolean);
+    var shippingFirstName = firstNonEmpty(
+      shipping.shipping_first_name,
+      shipping.first_name,
+      shippingNameParts[0] || ""
+    );
+    var shippingLastName = firstNonEmpty(
+      shipping.shipping_last_name,
+      shipping.last_name,
+      shippingNameParts.length > 1 ? shippingNameParts.slice(1).join(" ") : ""
+    );
+    var map = {
+      // Billing: support normalized keys + DB/raw aliases.
+      confirm_first_name: firstNonEmpty(billing.first_name, billing.billing_first_name),
+      confirm_last_name: firstNonEmpty(billing.last_name, billing.billing_last_name),
+      confirm_email: firstNonEmpty(billing.email, billing.cus_email, billing.billing_email),
+      confirm_phone: firstNonEmpty(billing.phone, billing.mobile, billing.billing_mobile),
+      confirm_address1: firstNonEmpty(billing.address1, billing.address_line1, billing.billing_address_line1),
+      confirm_address2: firstNonEmpty(billing.address2, billing.address_line2, billing.billing_address_line2),
+      confirm_city: firstNonEmpty(billing.city),
+      confirm_state: firstNonEmpty(billing.state),
+      confirm_zip: firstNonEmpty(billing.zip, billing.zipcode),
+      confirm_country: firstNonEmpty(billing.country, "IN"),
+      confirm_gstin: firstNonEmpty(billing.gstin),
+
+      // Shipping: support normalized keys + DB/raw aliases.
+      confirm_sfirst_name: shippingFirstName,
+      confirm_slast_name: shippingLastName,
+      confirm_saddress1: firstNonEmpty(shipping.saddress1, shipping.shipping_address_line1, shipping.address1, shipping.address_line1),
+      confirm_saddress2: firstNonEmpty(shipping.saddress2, shipping.shipping_address_line2, shipping.address2, shipping.address_line2),
+      confirm_scity: firstNonEmpty(shipping.scity, shipping.shipping_city, shipping.city),
+      confirm_sstate: firstNonEmpty(shipping.sstate, shipping.shipping_state, shipping.state),
+      confirm_szip: firstNonEmpty(shipping.szip, shipping.shipping_zipcode, shipping.zip, shipping.zipcode),
+      confirm_scountry: firstNonEmpty(shipping.scountry, shipping.shipping_country, shipping.country, "IN"),
+      confirm_sphone: firstNonEmpty(shipping.sphone, shipping.shipping_mobile, shipping.mobile, shipping.phone)
+    };
+    Object.keys(map).forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = map[id];
+    });
+  }
+
+  /** When shipping is blank but billing is present, mirror billing into shipping (same-as-billing / walk-in). */
+  function applyShippingFallbackFromBilling() {
+    function read(id) {
+      var el = document.getElementById(id);
+      return el ? String(el.value || "").trim() : "";
+    }
+    function write(id, v) {
+      var el = document.getElementById(id);
+      if (el) el.value = v;
+    }
+    var sf = read("confirm_sfirst_name");
+    var sl = read("confirm_slast_name");
+    if (sf === "" && sl === "") {
+      var bf = read("confirm_first_name");
+      var bl = read("confirm_last_name");
+      if (bf !== "") {
+        write("confirm_sfirst_name", bf);
+        write("confirm_slast_name", bl);
+      }
+    }
+    if (read("confirm_sphone") === "" && read("confirm_phone") !== "") {
+      write("confirm_sphone", read("confirm_phone"));
+    }
+    if (read("confirm_saddress1") === "" && read("confirm_address1") !== "") {
+      write("confirm_saddress1", read("confirm_address1"));
+    }
+    if (read("confirm_saddress2") === "" && read("confirm_address2") !== "") {
+      write("confirm_saddress2", read("confirm_address2"));
+    }
+    if (read("confirm_scity") === "" && read("confirm_city") !== "") {
+      write("confirm_scity", read("confirm_city"));
+    }
+    if (read("confirm_sstate") === "" && read("confirm_state") !== "") {
+      write("confirm_sstate", read("confirm_state"));
+    }
+    if (read("confirm_szip") === "" && read("confirm_zip") !== "") {
+      write("confirm_szip", read("confirm_zip"));
+    }
+    if (read("confirm_scountry") === "" && read("confirm_country") !== "") {
+      write("confirm_scountry", read("confirm_country"));
+    }
+  }
+
+  function getAddressConfirmPayload() {
+    var read = function(id) {
+      var el = document.getElementById(id);
+      return el ? String(el.value || "").trim() : "";
+    };
+    var shippingFirstName = read("confirm_sfirst_name");
+    var shippingLastName = read("confirm_slast_name");
+    var shippingFullName = [shippingFirstName, shippingLastName].filter(Boolean).join(" ").trim();
+    return {
+      confirm_address_submit: "1",
+      confirm_first_name: read("confirm_first_name"),
+      confirm_last_name: read("confirm_last_name"),
+      confirm_email: read("confirm_email"),
+      confirm_phone: read("confirm_phone"),
+      confirm_address1: read("confirm_address1"),
+      confirm_address2: read("confirm_address2"),
+      confirm_city: read("confirm_city"),
+      confirm_state: read("confirm_state"),
+      confirm_zip: read("confirm_zip"),
+      confirm_country: read("confirm_country"),
+      confirm_gstin: read("confirm_gstin"),
+      confirm_sfirst_name: shippingFirstName,
+      confirm_slast_name: shippingLastName,
+      // Keep combined name for backward compatibility on server side.
+      confirm_sname: shippingFullName,
+      confirm_saddress1: read("confirm_saddress1"),
+      confirm_saddress2: read("confirm_saddress2"),
+      confirm_scity: read("confirm_scity"),
+      confirm_sstate: read("confirm_sstate"),
+      confirm_szip: read("confirm_szip"),
+      confirm_scountry: read("confirm_scountry"),
+      confirm_sphone: read("confirm_sphone")
+    };
+  }
+
+  function loadAndOpenAddressConfirm(customerId) {
+    fetch("index.php?page=pos_register&action=customer-order-info&customer_id=" + encodeURIComponent(customerId), {
+      credentials: "same-origin",
+      headers: { "Accept": "application/json" }
+    })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (!data || !data.success) {
+          showToast("Could not load customer address info.", "red");
+          return;
+        }
+        setAddressConfirmFields(data);
+        applyShippingFallbackFromBilling();
+        openAddressConfirmModal();
+      })
+      .catch(function() {
+        showToast("Could not load customer address info.", "red");
+      });
+  }
+
   function showPaymentModalOrderApiRecord(debug) {
     var panel = document.getElementById("paymentModalOrderApiPanel");
     var pre = document.getElementById("paymentModalOrderApiPre");
@@ -1397,25 +1871,22 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
     document.getElementById("placeOrderBtn").addEventListener("click", function() {
 
-      var fromSelect = typeof jQuery !== "undefined" ? jQuery("#customerSelect").val() : document.getElementById("customerSelect").value;
-      if (Array.isArray(fromSelect)) {
-        fromSelect = fromSelect[0] || "";
-      }
-      var customerId = (fromSelect && String(fromSelect)) || (window.POS_SESSION_CUSTOMER_ID && String(window.POS_SESSION_CUSTOMER_ID)) || "";
+      var customerId = getSelectedCustomerId();
 
       if (!customerId) {
         showToast("⚠ Please select customer first", "red");
-        if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
+          if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
           jQuery("#customerSelect").select2("open");
         } else {
-          document.getElementById("customerSelect").focus();
+          var cs = document.getElementById("customerSelect");
+          if (cs) cs.focus();
         }
         return;
       }
 
       let paymentStage = document.getElementById("payment_stage").value;
       let paymentAmount = parseFloat(document.getElementById("payment_amount").value);
-      let grandTotal = parseFloat("<?= $cartData['grand_total'] ?? 0 ?>");
+      let grandTotal = parseFloat("<?= $displayGrandTotal ?? ($cartData['grand_total'] ?? 0) ?>");
 
       if (!paymentAmount || paymentAmount <= 0) {
         showToast("⚠ Payment amount must be greater than 0", "red");
@@ -1447,12 +1918,27 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
       }
 
-      // continue existing code
-      createOrderNow();
+      loadAndOpenAddressConfirm(customerId);
     });
+
+    var confirmAddressSubmitBtn = document.getElementById("confirmAddressSubmitBtn");
+    if (confirmAddressSubmitBtn) {
+      confirmAddressSubmitBtn.addEventListener("click", function() {
+        var payload = getAddressConfirmPayload();
+        if (!payload.confirm_first_name || !payload.confirm_phone || !payload.confirm_state || !payload.confirm_zip) {
+          showToast("⚠ Billing details are incomplete.", "red");
+          return;
+        }
+        if (!payload.confirm_sfirst_name || !payload.confirm_sphone || !payload.confirm_sstate) {
+          showToast("⚠ Shipping details are incomplete.", "red");
+          return;
+        }
+        createOrderNow(payload);
+      });
+    }
   });
 
-  function createOrderNow() {
+  function createOrderNow(addressPayload) {
 
     let paymentType = document.getElementById("payment_mode").value;
     let paymentStage = document.getElementById("payment_stage").value;
@@ -1484,7 +1970,11 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       cid = cid[0];
     }
     formData.append("customer_id", cid || window.POS_SESSION_CUSTOMER_ID || "");
-
+    if (addressPayload && typeof addressPayload === "object") {
+      Object.keys(addressPayload).forEach(function(k) {
+        formData.append(k, addressPayload[k]);
+      });
+    }
     fetch("index.php?page=pos_register&action=create-order", {
         method: "POST",
         credentials: "same-origin",
@@ -1504,9 +1994,8 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           }
         });
       })
-      .then(function (wrapped) {
+      .then(function(wrapped) {
         if (wrapped.parseError) {
-          console.error("create-order: not JSON (status " + wrapped.res.status + ")", wrapped.raw.slice(0, 800));
           var parseDbg = {
             triggered_from: "payment_modal",
             parse_error: true,
@@ -1517,35 +2006,73 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
             window.setOrderCreateApiDebugPayload(parseDbg);
           }
           showPaymentModalOrderApiRecord(parseDbg);
-          showToast("Server did not return JSON. See Order create API in this window or use Full JSON.", "red");
+          if (typeof window.openOrderCreateApiResponseModal === "function") {
+            window.openOrderCreateApiResponseModal();
+          }
+          showToast("Order API response was not valid JSON.", "red");
           return;
         }
 
-        var data = wrapped.data;
-        if (data.order_api_debug && typeof window.setOrderCreateApiDebugPayload === "function") {
-          window.setOrderCreateApiDebugPayload(data.order_api_debug);
-          if (!data.success) {
-            showPaymentModalOrderApiRecord(data.order_api_debug);
+        var data = wrapped.data || {};
+        var apiDebug = data.order_api_debug || {
+          timestamp: new Date().toISOString(),
+          triggered_from: "payment_modal",
+          message_only: true,
+          message: data.message || "Order create response received.",
+          request: {
+            method: "POST",
+            url: "index.php?page=pos_register&action=create-order",
+            post_body: {}
           }
+        };
+
+        if (typeof window.setOrderCreateApiDebugPayload === "function") {
+          window.setOrderCreateApiDebugPayload(apiDebug);
+        }
+        showPaymentModalOrderApiRecord(apiDebug);
+        if (typeof window.openOrderCreateApiResponseModal === "function") {
+          window.openOrderCreateApiResponseModal();
         }
 
-        if (data.success) {
+        if (!data.success) {
+          showToast(data.message || "Order creation failed.", "red");
+          return;
+        }
 
-          closePaymentModal();
-          showToast("✓ Order Created", "green");
+        var orderId = data.order_id || "";
+        if (!orderId && data.api_response) {
+          orderId =
+            data.api_response.orderid ||
+            data.api_response.order_id ||
+            data.api_response.order_no ||
+            "";
+        }
+        if (!orderId) {
+          showToast("Order created but order ID was missing in response.", "red");
+          return;
+        }
 
-          importOrder(data.orderid, function() {
-            autoCreateInvoiceThenPreview(data.orderid);
+        closeAddressConfirmModal();
+        closePaymentModal();
+        showToast("✓ Order created on API: " + orderId, "blue");
+        importOrder(orderId, function(importOk) {
+          var paymentSummary = data.payment_summary || {};
+          var qs = new URLSearchParams({
+            page: "pos_register",
+            action: "order-confirmation",
+            order_id: String(orderId || ""),
+            payment_type: String(paymentSummary.payment_type || paymentType || ""),
+            payment_stage: String(paymentSummary.payment_stage || paymentStage || ""),
+            amount: String(paymentSummary.amount || paymentAmount || ""),
+            transaction_id: String(paymentSummary.transaction_id || transactionId || ""),
+            import_status: importOk ? "success" : "failed"
           });
-
-        } else {
-          showToast(data.message || "Order failed", "red");
-        }
-
+          window.location.href = "index.php?" + qs.toString();
+        });
       })
       .catch(function (err) {
         console.error(err);
-        showToast(err.message || "Order request failed", "red");
+        showToast(err.message || "Order creation request failed.", "red");
       });
 
   }
@@ -1566,12 +2093,13 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           showToast("✓ Order imported & Invoice created", "blue");
 
           setTimeout(() => {
-            if (callback) callback();
+            if (callback) callback(true, text);
           }, 800);
 
         } else {
 
           showToast("Import failed", "red");
+          if (callback) callback(false, text);
 
         }
 
@@ -1579,6 +2107,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       .catch(err => {
         console.error(err);
         showToast("✗ Import request failed", "red");
+        if (callback) callback(false, '');
       });
   }
 
@@ -1660,6 +2189,18 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
             opt.setAttribute("data-email", data.customer.email || "");
             $s.append(opt);
             $s.val(idStr).trigger("change");
+            fetch("index.php?page=pos_register&action=set-customer", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Requested-With": "XMLHttpRequest"
+              },
+              body: "customer_id=" + encodeURIComponent(idStr)
+            });
+            if (typeof updatePosCustomerLabels === "function") {
+              updatePosCustomerLabels(data.customer.name, data.customer.phone);
+            }
           } else {
             var option = document.createElement("option");
             option.value = idStr;
@@ -1670,6 +2211,18 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
             select.appendChild(option);
             select.value = idStr;
             select.dispatchEvent(new Event("change", { bubbles: true }));
+            fetch("index.php?page=pos_register&action=set-customer", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Requested-With": "XMLHttpRequest"
+              },
+              body: "customer_id=" + encodeURIComponent(idStr)
+            });
+            if (typeof updatePosCustomerLabels === "function") {
+              updatePosCustomerLabels(data.customer.name, data.customer.phone);
+            }
           }
 
           showToast("✓ Customer saved", "green");
@@ -1684,37 +2237,14 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 </script>
 
 <script>
-  document.getElementById("customerSelect").addEventListener("change", function() {
-
-    var id = this.value;
-    window.POS_SESSION_CUSTOMER_ID = id ? String(id) : "";
-
-    fetch("index.php?page=pos_register&action=set-customer", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: "customer_id=" + encodeURIComponent(id)
-    });
-
-    var selected = this.options[this.selectedIndex];
-    var name = selected ? selected.getAttribute("data-name") : null;
-    var phone = selected ? selected.getAttribute("data-phone") : null;
-
-    var nameText = name || "Walk-in Customer";
-    var phoneText = phone || "-";
-
-    var nameEl = document.getElementById("selectedCustomerName");
-    var phoneEl = document.getElementById("selectedCustomerPhone");
+  function updatePosCustomerLabels(name, phone) {
+    var nameText = (name != null && String(name).trim() !== "") ? String(name).trim() : "Walk-in Customer";
+    var phoneText = (phone != null && String(phone).trim() !== "") ? String(phone).trim() : "-";
     var nameCartEl = document.getElementById("selectedCustomerNameCart");
     var phoneCartEl = document.getElementById("selectedCustomerPhoneCart");
-    if (nameEl) nameEl.textContent = nameText;
-    if (phoneEl) phoneEl.textContent = phoneText;
     if (nameCartEl) nameCartEl.textContent = nameText;
     if (phoneCartEl) phoneCartEl.textContent = phoneText;
-
-  });
+  }
 </script>
 
 <script>
@@ -1773,51 +2303,80 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
     var $cust = $('#customerSelect');
     $cust.select2({
-      placeholder: "Search Customer",
+      placeholder: "Type at least 2 characters to search…",
       allowClear: true,
       width: '100%',
-
-      matcher: function(params, data) {
-
-        if ($.trim(params.term) === '') {
-          return data;
-        }
-
-        if (!data.element) return data;
-
-        let term = params.term.toLowerCase();
-        let el = $(data.element);
-
-        let name = String(el.data('name') || '').toLowerCase();
-        let phone = String(el.data('phone') || '').toLowerCase();
-        let email = String(el.data('email') || '').toLowerCase();
-        let text = String(data.text || '').toLowerCase();
-
-        if (
-          name.includes(term) ||
-          phone.includes(term) ||
-          email.includes(term) ||
-          text.includes(term)
-        ) {
-          return data;
-        }
-
-        return null;
+      minimumInputLength: 2,
+      ajax: {
+        url: "index.php?page=pos_register&action=customer-search",
+        type: "GET",
+        dataType: "json",
+        delay: 320,
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        data: function (params) {
+          return { q: params.term || "" };
+        },
+        processResults: function (data) {
+          if (!data || !data.success || !Array.isArray(data.customers)) {
+            return { results: [] };
+          }
+          return {
+            results: data.customers.map(function (c) {
+              var disp = c.display || ((c.name || "") + " | " + (c.phone || "") + (c.email ? " | " + c.email : ""));
+              return {
+                id: String(c.id),
+                text: disp,
+                name: c.name || "",
+                phone: c.phone || "",
+                email: c.email || ""
+              };
+            })
+          };
+        },
+        cache: true
       },
-
       templateResult: formatCustomer,
       templateSelection: formatCustomerSelection
     });
 
-    $cust.on("select2:clear", function() {
-      window.POS_SESSION_CUSTOMER_ID = "";
+    $cust.on("select2:select", function (e) {
+      var d = e.params.data;
+      window.POS_SESSION_CUSTOMER_ID = d.id ? String(d.id) : "";
+      fetch("index.php?page=pos_register&action=set-customer", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: "customer_id=" + encodeURIComponent(d.id || "")
+      });
+      updatePosCustomerLabels(d.name, d.phone);
     });
 
-    var initialVal = $cust.val();
-    if (initialVal) {
-      $cust.trigger("change");
-    } else if (window.POS_SESSION_CUSTOMER_ID) {
-      $cust.val(String(window.POS_SESSION_CUSTOMER_ID)).trigger("change");
+    $cust.on("select2:clear", function () {
+      window.POS_SESSION_CUSTOMER_ID = "";
+      fetch("index.php?page=pos_register&action=set-customer", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: "customer_id="
+      });
+      updatePosCustomerLabels("", "");
+    });
+
+    if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.id) {
+      var ic = window.POS_INITIAL_CUSTOMER;
+      var opt = new Option(ic.text || ic.name || "", String(ic.id), true, true);
+      opt.setAttribute("data-name", ic.name || "");
+      opt.setAttribute("data-phone", ic.phone || "");
+      opt.setAttribute("data-email", ic.email || "");
+      $cust.append(opt);
+      $cust.val(String(ic.id)).trigger("change");
+      updatePosCustomerLabels(ic.name, ic.phone);
     }
 
   });
@@ -1826,17 +2385,24 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
     if (!data.id) return data.text;
 
-    let el = $(data.element);
-
-    let name = el.data('name') || data.text;
-    let phone = el.data('phone') || '';
-    let email = el.data('email') || '';
+    var name = data.name || "";
+    var phone = data.phone || "";
+    var email = data.email || "";
+    if ((!name || !phone) && data.element) {
+      var el = $(data.element);
+      name = name || String(el.data("name") || "");
+      phone = phone || String(el.data("phone") || "");
+      email = email || String(el.data("email") || "");
+    }
+    if (!name) {
+      name = String(data.text || "").split("|")[0].trim();
+    }
 
     return $(`
         <div>
             <div style="font-weight:600">${name}</div>
             <div style="font-size:11px;color:#777">
-                ${phone} ${email ? ' | ' + email : ''}
+                ${phone}${email ? " | " + email : ""}
             </div>
         </div>
     `);
@@ -1846,9 +2412,10 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
     if (!data.id) return data.text;
 
-    let el = $(data.element);
-    let name = el.data('name');
-
+    var name = data.name || "";
+    if (!name && data.element) {
+      name = $(data.element).data("name") || "";
+    }
     return name || data.text;
   }
 </script>

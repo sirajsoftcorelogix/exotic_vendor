@@ -31,6 +31,13 @@ class POSRegisterController
         global $conn;   // use existing DB connection
         $usersModel = new User($conn);   //  create instance
 
+        if ((int)($_SESSION['warehouse_id'] ?? 0) <= 0 && $conn instanceof mysqli) {
+            $defWh = $this->getDefaultWarehouseRow($conn);
+            if ($defWh !== null && !empty($defWh['id'])) {
+                $_SESSION['warehouse_id'] = $defWh['id'];
+            }
+        }
+
         $warehouseName = 'No Warehouse';
 
         if (!empty($_SESSION['warehouse_id'])) {
@@ -42,7 +49,27 @@ class POSRegisterController
         $categories = ['allProducts' => 'All Products'] + $categories;
 
         $customerModel = new Customer($conn);
-        $customers = $customerModel->getAllCustomers(500, 0, []);
+        $selected_customer = null;
+        if (!empty($_SESSION['pos_customer_id'])) {
+            $cid = (int)$_SESSION['pos_customer_id'];
+            if ($cid > 0) {
+                $row = $customerModel->getCustomerById($cid);
+                if (!empty($row['id'])) {
+                    $nm = (string)($row['name'] ?? '');
+                    $ph = (string)($row['phone'] ?? '');
+                    $em = (string)($row['email'] ?? '');
+                    $selected_customer = [
+                        'id' => (int)$row['id'],
+                        'name' => $nm,
+                        'phone' => $ph,
+                        'email' => $em,
+                        'text' => trim($nm . ' | ' . $ph . ($em !== '' ? ' | ' . $em : '')),
+                    ];
+                } else {
+                    unset($_SESSION['pos_customer_id']);
+                }
+            }
+        }
         // slug => svg icon
         $categoryIcons = [
             'allProducts' => '
@@ -96,8 +123,124 @@ class POSRegisterController
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
             'cartData' => $this->get_cart(),
-            'customers' => $customers
+            'selected_customer' => $selected_customer,
         ]);
+    }
+
+    /**
+     * JSON autocomplete for POS customer field (vp_customers). Requires q length >= 2.
+     */
+    public function customer_search()
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+        $len = function_exists('mb_strlen') ? mb_strlen($q, 'UTF-8') : strlen($q);
+        if ($len < 2) {
+            echo json_encode(['success' => true, 'customers' => []], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        require_once 'models/customer/Customer.php';
+        global $conn;
+        $customerModel = new Customer($conn);
+        $customers = $customerModel->searchCustomersForPos($q, 40);
+
+        echo json_encode([
+            'success' => true,
+            'customers' => $customers,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
+     * Fetch latest billing/shipping info used for POS order create confirmation popup.
+     */
+    public function customer_order_info()
+    {
+        is_login();
+        global $conn;
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+        $billing = [];
+        $shipping = [];
+
+        if ($customerId > 0) {
+            $stmt = $conn->prepare("SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param("i", $customerId);
+                $stmt->execute();
+                $info = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($info) {
+                    $billing = [
+                        "first_name" => trim((string)($info['first_name'] ?? '')),
+                        "last_name" => trim((string)($info['last_name'] ?? '')),
+                        "email" => trim((string)($info['email'] ?? '')),
+                        "phone" => trim((string)($info['mobile'] ?? '')),
+                        "address1" => trim((string)($info['address_line1'] ?? '')),
+                        "address2" => trim((string)($info['address_line2'] ?? '')),
+                        "city" => trim((string)($info['city'] ?? '')),
+                        "state" => trim((string)($info['state'] ?? '')),
+                        "zip" => trim((string)($info['zipcode'] ?? '')),
+                        "country" => trim((string)($info['country'] ?? 'IN')),
+                        "gstin" => trim((string)($info['gstin'] ?? '')),
+                    ];
+                    $shipping = [
+                        "sname" => trim((string)(($info['shipping_first_name'] ?? '') . ' ' . ($info['shipping_last_name'] ?? ''))),
+                        "saddress1" => trim((string)($info['shipping_address_line1'] ?? '')),
+                        "saddress2" => trim((string)($info['shipping_address_line2'] ?? '')),
+                        "scity" => trim((string)($info['shipping_city'] ?? '')),
+                        "sstate" => trim((string)($info['shipping_state'] ?? '')),
+                        "szip" => trim((string)($info['shipping_zipcode'] ?? '')),
+                        "scountry" => trim((string)($info['shipping_country'] ?? 'IN')),
+                        "sphone" => trim((string)($info['shipping_mobile'] ?? '')),
+                    ];
+                }
+            }
+        }
+
+        if ((empty($billing) || empty($shipping)) && !empty($_SESSION['pos_customer_form'])) {
+            $form = $_SESSION['pos_customer_form'];
+            if (empty($billing)) {
+                $billing = [
+                    "first_name" => trim((string)($form['first_name'] ?? '')),
+                    "last_name" => trim((string)($form['last_name'] ?? '')),
+                    "email" => trim((string)($form['cus_email'] ?? '')),
+                    "phone" => trim((string)($form['mobile'] ?? '')),
+                    "address1" => trim((string)($form['address_line1'] ?? '')),
+                    "address2" => trim((string)($form['address_line2'] ?? '')),
+                    "city" => trim((string)($form['city'] ?? '')),
+                    "state" => trim((string)($form['state'] ?? '')),
+                    "zip" => trim((string)($form['zipcode'] ?? '')),
+                    "country" => "IN",
+                    "gstin" => trim((string)($form['gstin'] ?? '')),
+                ];
+            }
+            if (empty($shipping)) {
+                $shipping = [
+                    "sname" => trim((string)(($form['shipping_first_name'] ?? '') . ' ' . ($form['shipping_last_name'] ?? ''))),
+                    "saddress1" => trim((string)($form['shipping_address_line1'] ?? '')),
+                    "saddress2" => trim((string)($form['shipping_address_line2'] ?? '')),
+                    "scity" => trim((string)($form['shipping_city'] ?? '')),
+                    "sstate" => trim((string)($form['shipping_state'] ?? '')),
+                    "szip" => trim((string)($form['shipping_zipcode'] ?? '')),
+                    "scountry" => "IN",
+                    "sphone" => trim((string)($form['shipping_mobile'] ?? '')),
+                ];
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'billing' => $billing,
+            'shipping' => $shipping,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
     }
 
     public function stockReport()
@@ -240,7 +383,7 @@ class POSRegisterController
     public function productsAjax()
     {
         $pageNo  = $_GET['page_no'] ?? 1;
-        $perPage = $_GET['per_page'] ?? 12;
+        $perPage = $_GET['per_page'] ?? 48;
 
         $start  = ($pageNo - 1) * $perPage;
         // Fastest POS: fetch one extra row to decide has_more (avoid COUNT(*))
@@ -249,23 +392,29 @@ class POSRegisterController
         $searchValue = $_GET['search']['value'] ?? '';
 
         $category    = $_GET['category'] ?? '';
-        $productName = $_GET['product_name'] ?? '';
-        $productCode = $_GET['product_code'] ?? '';
+        $productName = trim((string)($_GET['product_name'] ?? ''));
+        $productCode = trim((string)($_GET['product_code'] ?? ''));
+        // Same text in both fields (current POS UI) would AND two LIKE blocks and drop title-only matches.
+        if ($productName !== '' && $productCode !== '' && $productName === $productCode) {
+            $productCode = '';
+        }
 
         $minPrice = $_GET['min_price'] ?? '';
         $maxPrice = $_GET['max_price'] ?? '';
+        // Match stock report default: all rows with latest movement for warehouse (in|out|low|all).
+        $stockFilter = strtolower(trim((string)($_GET['stock_filter'] ?? 'all')));
 
         // SORT
         $sortBy = $_GET['sort_by'] ?? '';
 
         switch ($sortBy) {
             case 'price_low_high':
-                $orderColumn = 'itemprice';
+                $orderColumn = 'price_india';
                 $orderDir = 'asc';
                 break;
 
             case 'price_high_low':
-                $orderColumn = 'itemprice';
+                $orderColumn = 'price_india';
                 $orderDir = 'desc';
                 break;
 
@@ -294,14 +443,17 @@ class POSRegisterController
             $category,
             $productCode,
             $minPrice,
-            $maxPrice
+            $maxPrice,
+            $stockFilter
         );
 
         $rows = $result['data'] ?? [];
-        $hasMore = count($rows) > (int)$perPage;
-        if ($hasMore) {
+        $totalFiltered = (int)($result['recordsFiltered'] ?? 0);
+        if (count($rows) > (int)$perPage) {
             $rows = array_slice($rows, 0, (int)$perPage);
         }
+        $hasMore = ((int)$pageNo * (int)$perPage) < $totalFiltered;
+        $totalPages = $perPage > 0 ? (int)ceil($totalFiltered / (int)$perPage) : 1;
 
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
@@ -309,7 +461,9 @@ class POSRegisterController
             'data' => $rows,
             'current_page' => $pageNo,
             'has_more' => $hasMore,
-            'per_page' => (int)$perPage
+            'per_page' => (int)$perPage,
+            'total_rows' => $totalFiltered,
+            'total_pages' => $totalPages
         ]);
         exit;
     }
@@ -538,6 +692,166 @@ class POSRegisterController
     }
 
     /**
+     * vp_products.gst fallback only (matches mergeGstPercentField / POS product modal).
+     */
+    private function fetchVpProductGstFallbackRow($conn, string $code): array
+    {
+        if ($code === '' || !$conn) {
+            return [];
+        }
+        $stmt = $conn->prepare(
+            'SELECT gst FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ss', $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return is_array($row) ? $row : [];
+    }
+
+    /**
+     * GST % for a cart line: same keys as Exotic `/product/code` (see mergeGstPercentField): gst_rate, gst_percent, gst.
+     * Cart line keys can override when present; unwrapped product payload fills typical API fields.
+     */
+    private function resolveCartLineGstPercent(array $cartLineItem, array $productApiResult, $conn): float
+    {
+        $productData = $this->unwrapProductApiResponse($productApiResult['data'] ?? []);
+        $merged = array_merge($cartLineItem, $productData);
+        $dbRow = $this->fetchVpProductGstFallbackRow($conn, trim((string)($cartLineItem['code'] ?? '')));
+
+        return $this->resolveGstPercentAsNumber($merged, $dbRow);
+    }
+
+    /**
+     * Coupon discount rupees from GET /cart/retrieve JSON.
+     * Primary key matches legacy POS cart helper (views/pos_register/cart-functions.php): couponreduction.
+     * Fallback: orderremarks.coupon_reduce (same shape as order detail templates).
+     */
+    private function resolveCartRetrieveCouponDiscount(array $data): float
+    {
+        if (array_key_exists('couponreduction', $data) && is_numeric($data['couponreduction'])) {
+            $v = (float)$data['couponreduction'];
+            if ($v > 0) {
+                return $v;
+            }
+        }
+        if (
+            !empty($data['orderremarks'])
+            && is_array($data['orderremarks'])
+            && isset($data['orderremarks']['coupon_reduce'])
+            && is_numeric($data['orderremarks']['coupon_reduce'])
+        ) {
+            $v = (float)$data['orderremarks']['coupon_reduce'];
+
+            return $v > 0 ? $v : 0.0;
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * First positive numeric value from a payload node by candidate keys.
+     */
+    private function pickFirstPositiveNumeric(array $node, array $keys): float
+    {
+        foreach ($keys as $k) {
+            if (array_key_exists($k, $node) && is_numeric($node[$k])) {
+                $v = (float)$node[$k];
+                if ($v > 0) {
+                    return $v;
+                }
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Decode checkoutdata that may be array/json/base64-json.
+     */
+    private function decodeCheckoutdataNode($checkoutdata): array
+    {
+        if (is_array($checkoutdata)) {
+            return $checkoutdata;
+        }
+        $s = trim((string)$checkoutdata);
+        if ($s === '') {
+            return [];
+        }
+        $decoded = json_decode($s, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+        $b = base64_decode($s, true);
+        if ($b === false || $b === '') {
+            return [];
+        }
+        $decoded2 = json_decode($b, true);
+
+        return is_array($decoded2) ? $decoded2 : [];
+    }
+
+    /**
+     * Coupon discount in rupees: root fields, then JSON (or base64+JSON) checkoutdata.
+     * The API may omit couponreduction on the root but still include it in checkoutdata.
+     */
+    private function extractCartRetrieveCouponDiscountRupees(array $data): float
+    {
+        $v = $this->resolveCartRetrieveCouponDiscount($data);
+        if ($v > 0) {
+            return $v;
+        }
+        $rootAlt = $this->pickFirstPositiveNumeric(
+            $data,
+            ['coupon_reduction', 'couponreduce', 'coupon_reduce', 'coupondiscount', 'coupon_discount']
+        );
+        if ($rootAlt > 0) {
+            return $rootAlt;
+        }
+
+        $checkoutNode = $this->decodeCheckoutdataNode($data['checkoutdata'] ?? null);
+        if ($checkoutNode === []) {
+            return 0.0;
+        }
+        $tryNode = static function (array $node): float {
+            foreach (['couponreduction', 'coupon_reduction', 'couponreduce', 'coupon_reduce', 'coupondiscount', 'coupon_discount'] as $k) {
+                if (array_key_exists($k, $node) && is_numeric($node[$k])) {
+                    $x = (float)$node[$k];
+                    if ($x > 0) {
+                        return $x;
+                    }
+                }
+            }
+            if (!empty($node['orderremarks']) && is_array($node['orderremarks'])
+                && isset($node['orderremarks']['coupon_reduce']) && is_numeric($node['orderremarks']['coupon_reduce'])) {
+                $x = (float)$node['orderremarks']['coupon_reduce'];
+
+                return $x > 0 ? $x : 0.0;
+            }
+
+            return 0.0;
+        };
+        $fromCheckout = $tryNode($checkoutNode);
+        if ($fromCheckout > 0) {
+            return $fromCheckout;
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Total GST rupees from GET /cart/retrieve JSON root (same key as views/pos_register/cart-functions.php): gstamount.
+     */
+    private function resolveCartRetrieveGstTotal(array $data): float
+    {
+        return $this->pickFirstPositiveNumeric($data, ['gstamount']);
+    }
+
+    /**
      * Addon list from /product/code (unwrapped), including express row for cart_entry matching.
      *
      * @return array<int, array<string, mixed>>
@@ -627,6 +941,98 @@ class POSRegisterController
         }
 
         return $addonsSumPerUnit;
+    }
+
+    /**
+     * Human-readable addon lines for POS cart UI (non-express; express has its own row).
+     *
+     * @param array<int, array<string, mixed>> $addonsFromApi
+     * @param array<int, string> $selectedEntries
+     * @param array<int, array<string, mixed>> $catalog
+     * @return array<int, array{title: string, value: float, cart_entry: string}>
+     */
+    private function buildPosCartAddonDisplayLines(
+        array $addonsFromApi,
+        array $selectedEntries,
+        array $catalog
+    ): array {
+        $lines = [];
+        $seen = [];
+
+        $resolveTitle = static function (string $cartEntry, string $fallbackName) use ($catalog): string {
+            $ce = trim($cartEntry);
+            $name = trim($fallbackName);
+            if ($name !== '') {
+                return $name;
+            }
+            if ($ce === '') {
+                return '';
+            }
+            foreach ($catalog as $opt) {
+                if (strcasecmp(trim((string)($opt['cart_entry'] ?? '')), $ce) === 0) {
+                    return trim((string)($opt['title'] ?? '')) ?: $ce;
+                }
+            }
+
+            return $ce;
+        };
+
+        foreach ($addonsFromApi as $ad) {
+            if (!is_array($ad)) {
+                continue;
+            }
+            $ce = trim((string)($ad['cart_entry'] ?? ''));
+            $title = $resolveTitle($ce, (string)($ad['name'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            if (stripos($title, 'express') !== false) {
+                continue;
+            }
+            if ($ce !== '') {
+                $seen[strtolower($ce)] = true;
+            }
+            $lines[] = [
+                'title' => $title,
+                'value' => (float)($ad['value'] ?? 0),
+                'cart_entry' => $ce,
+            ];
+        }
+
+        foreach ($selectedEntries as $entry) {
+            $entry = trim((string)$entry);
+            if ($entry === '') {
+                continue;
+            }
+            if (isset($seen[strtolower($entry)])) {
+                continue;
+            }
+            $seen[strtolower($entry)] = true;
+
+            $title = $resolveTitle($entry, '');
+            if ($title === '') {
+                $title = $entry;
+            }
+            if (stripos($title, 'express') !== false) {
+                continue;
+            }
+
+            $price = 0.0;
+            foreach ($catalog as $opt) {
+                if (strcasecmp(trim((string)($opt['cart_entry'] ?? '')), $entry) === 0) {
+                    $price = (float)($opt['price'] ?? 0);
+                    break;
+                }
+            }
+
+            $lines[] = [
+                'title' => $title,
+                'value' => $price,
+                'cart_entry' => $entry,
+            ];
+        }
+
+        return $lines;
     }
 
     /** First usable image path/URL from a /product/code JSON payload. */
@@ -761,6 +1167,39 @@ class POSRegisterController
             'id' => (int)$row['id'],
             'address_title' => trim((string)($row['address_title'] ?? '')),
         ];
+    }
+
+    /**
+     * Single-line footer text from exotic_address row marked is_default (receipt / printouts).
+     */
+    private function getDefaultExoticAddressFooterString(mysqli $conn): string
+    {
+        $stmt = $conn->prepare(
+            'SELECT display_name, address_title, `address` FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) {
+            return '';
+        }
+        $disp = trim((string)($row['display_name'] ?? ''));
+        $title = trim((string)($row['address_title'] ?? ''));
+        $addr = trim(preg_replace('/\s+/u', ' ', strip_tags((string)($row['address'] ?? ''))));
+        $parts = [];
+        if ($disp !== '') {
+            $parts[] = $disp;
+        }
+        if ($addr !== '') {
+            $parts[] = $addr;
+        } elseif ($title !== '') {
+            $parts[] = $title;
+        }
+
+        return trim(implode(', ', $parts));
     }
 
     /**
@@ -1256,18 +1695,6 @@ class POSRegisterController
             $headers[] = 'x-api-euid: ' . $_SESSION['x_api_euid'];
         }
 
-        // Debug: log equivalent curl request
-        $curlParts = [];
-        $curlParts[] = 'curl -X POST';
-        foreach ($headers as $h) {
-            $curlParts[] = '-H ' . escapeshellarg($h);
-        }
-        $curlParts[] = escapeshellarg($url);
-        $curlParts[] = '--data ' . escapeshellarg(http_build_query($postData));
-        print('[POS cart-add] ' . implode(' ', $curlParts));
-        die;
-
-
         $capturedEuid = null;
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -1289,8 +1716,6 @@ class POSRegisterController
         });
 
         $response = curl_exec($ch);
-        // print_r($response);
-        die;
         $error = curl_error($ch);
         $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -1325,13 +1750,32 @@ class POSRegisterController
         return [];
     }
 
-    public  function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null)
+    private function normalizeCheckoutdataToken($checkoutdata): string
+    {
+        if (is_string($checkoutdata)) {
+            return trim($checkoutdata);
+        } elseif (is_scalar($checkoutdata)) {
+            return trim((string)$checkoutdata);
+        } else {
+            return '';
+        }
+    }
+
+    /**
+     * @param string      $endpoint   Path beginning with "/", e.g. "/cart/retrieve"
+     * @param string|null $apiBaseUrl Base URL without trailing slash. Default API JSON gateway:
+     *                                "https://www.exoticindia.com/api".
+     *                                Site cart helpers (documented separately from /api/) use
+     *                                "https://www.exoticindia.com" — e.g. GET /cart/addcoupon.
+     */
+    public function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null)
     {
         // echo "<pre>";
         // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
         // exit;
 
-        $url = 'https://www.exoticindia.com/api' . $endpoint;
+        $base = $apiBaseUrl ?? 'https://www.exoticindia.com/api';
+        $url = rtrim($base, '/') . $endpoint;
         if ($params) {
             $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
         }
@@ -1349,21 +1793,58 @@ class POSRegisterController
         //     'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
         //     'User-Agent: ExoticPOS-Web/1.0'
         // ];
+        $deviceId = $this->resolveApiDeviceId();
         $headers = [
-            // 'Content-Type: application/x-www-form-urlencoded',
             'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
-            'x-api-deviceid: POS-Store_1',
+            'x-api-deviceid: ' . $deviceId,
             'x-api-appplayerid: POS-Web-Terminal',
             'x-api-countrycode: IN',
-            'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
+            // Keep API-issued euid in session; do not use local user id here.
+            'x-api-euid:' . (string)($_SESSION['x_api_euid'] ?? ''),
             'User-Agent: ExoticPOS'
         ];
+        // Forward optional evolving API session headers when available.
+        if (!empty($_SESSION['x_api_jwt'])) {
+            $headers[] = 'x-api-jwt:' . (string)$_SESSION['x_api_jwt'];
+        }
+        if (!empty($_SESSION['x_api_browsehistory'])) {
+            $headers[] = 'x-api-browsehistory:' . (string)$_SESSION['x_api_browsehistory'];
+        }
+        if (!empty($_SESSION['x_api_etd'])) {
+            $headers[] = 'x-api-etd:' . (string)$_SESSION['x_api_etd'];
+        }
+        if (!empty($_SESSION['x_api_etd_pincode'])) {
+            $headers[] = 'x-api-etd-pincode:' . (string)$_SESSION['x_api_etd_pincode'];
+        }
 
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
-        if ($method === 'POST' && $postData) {
+        $capturedHeaders = [];
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$capturedHeaders) {
+            $len = strlen($headerLine);
+            $header = explode(':', $headerLine, 2);
+            if (count($header) < 2) {
+                return $len;
+            }
+            $name = strtolower(trim($header[0]));
+            if (in_array($name, ['x-api-euid', 'x-api-jwt', 'x-api-browsehistory', 'x-api-etd', 'x-api-etd-pincode'], true)) {
+                $capturedHeaders[$name] = trim($header[1]);
+            }
+            return $len;
+        });
+
+        if ($method === 'POST' && $postData !== null) {
+            $headers[] = 'Content-Type: application/x-www-form-urlencoded';
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            if (is_array($postData)) {
+                $encodedPostData = http_build_query($postData);
+            } elseif (is_string($postData)) {
+                $encodedPostData = $postData;
+            } else {
+                $encodedPostData = (string)$postData;
+            }
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $encodedPostData);
         }
 
         $response = curl_exec($ch);
@@ -1373,6 +1854,22 @@ class POSRegisterController
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         curl_close($ch);
+
+        if (!empty($capturedHeaders['x-api-euid'])) {
+            $_SESSION['x_api_euid'] = $capturedHeaders['x-api-euid'];
+        }
+        if (!empty($capturedHeaders['x-api-jwt'])) {
+            $_SESSION['x_api_jwt'] = $capturedHeaders['x-api-jwt'];
+        }
+        if (!empty($capturedHeaders['x-api-browsehistory'])) {
+            $_SESSION['x_api_browsehistory'] = $capturedHeaders['x-api-browsehistory'];
+        }
+        if (!empty($capturedHeaders['x-api-etd'])) {
+            $_SESSION['x_api_etd'] = $capturedHeaders['x-api-etd'];
+        }
+        if (!empty($capturedHeaders['x-api-etd-pincode'])) {
+            $_SESSION['x_api_etd_pincode'] = $capturedHeaders['x-api-etd-pincode'];
+        }
 
         $body = (string)$response;
         $decoded = json_decode($body, true);
@@ -1386,6 +1883,43 @@ class POSRegisterController
     }
 
     /**
+     * Use real store/warehouse label for x-api-deviceid.
+     * Falls back to POS-Store_<warehouse_id> / POS-Store_1.
+     */
+    private function resolveApiDeviceId(): string
+    {
+        $fallbackId = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($fallbackId <= 0) {
+            $fallbackId = 1;
+        }
+        $fallback = 'POS-Store_' . $fallbackId;
+
+        if (empty($_SESSION['warehouse_id'])) {
+            return $fallback;
+        }
+
+        global $conn;
+        if (empty($conn)) {
+            return $fallback;
+        }
+
+        try {
+            $usersModel = new User($conn);
+            $warehouse = $usersModel->getWarehouseById((int)$_SESSION['warehouse_id']);
+            $name = trim((string)($warehouse['address_title'] ?? ''));
+            if ($name === '') {
+                return $fallback;
+            }
+            // Header-safe normalization.
+            $name = preg_replace('/\s+/', '_', $name);
+            $name = preg_replace('/[^A-Za-z0-9_\-]/', '', (string)$name);
+            return $name !== '' ? $name : $fallback;
+        } catch (\Throwable $e) {
+            return $fallback;
+        }
+    }
+
+    /**
      * Debug payload for POS "Order create API" modal (matches cart API debug shape).
      */
     private function buildOrderCreateApiDebug(array $queryParams, array $postData, array $apiResult, array $posContext = []): array
@@ -1396,6 +1930,14 @@ class POSRegisterController
         }
 
         $bodyForLog = $postData;
+        $bodyFormEncodedForLog = '';
+        if (is_array($postData)) {
+            $bodyFormEncodedForLog = http_build_query($postData);
+        } elseif (is_string($postData)) {
+            $bodyFormEncodedForLog = $postData;
+        } elseif ($postData !== null) {
+            $bodyFormEncodedForLog = (string)$postData;
+        }
         if (!empty($bodyForLog['cardnumber'])) {
             $bodyForLog['cardnumber'] = '(redacted)';
         }
@@ -1421,20 +1963,47 @@ class POSRegisterController
                 'url' => $url,
                 'query_params' => $queryParams,
                 'post_body' => $bodyForLog,
+                'post_body_form_encoded' => $bodyFormEncodedForLog,
                 'headers' => [
                     'x-api-key' => '(redacted)',
-                    'x-api-deviceid' => 'POS-Store_1',
+                    'x-api-deviceid' => $this->resolveApiDeviceId(),
                     'x-api-appplayerid' => 'POS-Web-Terminal',
                     'x-api-countrycode' => 'IN',
-                    'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
+                    // Must match exotic_api_call() header value.
+                    // exotic_api_call() uses $_SESSION['x_api_euid'] captured from previous API responses.
+                    'x-api-euid' => (string)($_SESSION['x_api_euid'] ?? ''),
+                    'x-api-jwt' => !empty($_SESSION['x_api_jwt']) ? '(present)' : '',
+                    'x-api-browsehistory' => (string)($_SESSION['x_api_browsehistory'] ?? ''),
+                    'x-api-etd' => (string)($_SESSION['x_api_etd'] ?? ''),
+                    'x-api-etd-pincode' => (string)($_SESSION['x_api_etd_pincode'] ?? ''),
                     'User-Agent' => 'ExoticPOS',
                 ],
             ],
             'http_code' => (int)($apiResult['code'] ?? 0),
             'response' => is_array($parsed) ? $parsed : [],
+            // Explicitly expose the exact result from create-order call point.
+            'api_result' => [
+                'code' => (int)($apiResult['code'] ?? 0),
+                'data' => is_array($parsed) ? $parsed : [],
+            ],
         ];
+
+        // Helpful when upstream errors are generic (e.g. "Missing order data").
+        if (array_key_exists('checkoutdata', $postData)) {
+            $cd = $postData['checkoutdata'];
+            $cdStr = is_string($cd) ? $cd : (is_scalar($cd) ? (string)$cd : '');
+            $out['request']['checkoutdata_debug'] = [
+                'type' => gettype($cd),
+                'length' => strlen($cdStr),
+                'preview' => strlen($cdStr) > 80 ? substr($cdStr, 0, 80) . '…' : $cdStr,
+            ];
+        }
+        if (array_key_exists('cart_api_checkoutdata', $posContext)) {
+            $out['request']['cart_api_checkoutdata'] = $posContext['cart_api_checkoutdata'];
+        }
         if ($rawPreview !== '') {
             $out['response_raw_preview'] = $rawPreview;
+            $out['api_result']['raw_preview'] = $rawPreview;
         }
 
         return $out;
@@ -1460,6 +2029,478 @@ class POSRegisterController
         }
     }
 
+    private function resolveAddonAmount(array $ad): float
+    {
+        foreach (['value', 'price', 'amount'] as $k) {
+            if (isset($ad[$k]) && $ad[$k] !== '' && is_numeric($ad[$k])) {
+                return (float)$ad[$k];
+            }
+        }
+
+        return 0.0;
+    }
+
+    private function buildAddonCartEntry(array $ad, float $amount): string
+    {
+        $cartEntry = trim((string)($ad['cart_entry'] ?? ''));
+        if ($cartEntry !== '') {
+            return $cartEntry;
+        }
+
+        return stripos((string)($ad['name'] ?? ''), 'Express') !== false
+            ? 'OPTIONALS_EXPRESS:_blank_:' . $amount
+            : 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amount;
+    }
+
+    /**
+     * @return array{addons: array<int,array<string,mixed>>, selected_entries: array<int,string>}
+     */
+    private function extractCartAddonsAndEntries(array $item): array
+    {
+        $addons = [];
+        $selectedEntries = [];
+
+        if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
+            foreach ($item['addons_selected'] as $ad) {
+                if (!is_array($ad)) {
+                    continue;
+                }
+                $amt = $this->resolveAddonAmount($ad);
+                $cartEntry = $this->buildAddonCartEntry($ad, $amt);
+                $addons[] = [
+                    'name' => $ad['name'] ?? '',
+                    'value' => $amt,
+                    'cart_entry' => $cartEntry,
+                ];
+                $selectedEntries[] = $cartEntry;
+            }
+        }
+
+        $optStr = trim((string)($item['options'] ?? ''));
+        if ($optStr !== '') {
+            $optParts = strpos($optStr, '|') !== false ? explode('|', $optStr) : explode(',', $optStr);
+            foreach ($optParts as $chunk) {
+                $chunk = trim((string)$chunk);
+                if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
+                    $selectedEntries[] = $chunk;
+                }
+            }
+        }
+
+        return [
+            'addons' => $addons,
+            'selected_entries' => $selectedEntries,
+        ];
+    }
+
+    /**
+     * @return array{product_res: array<string,mixed>, all_addons: array<int,array<string,mixed>>, unit_base: float, addons_display: array<int,array<string,mixed>>}
+     */
+    private function resolveCartLineCatalogAndPrice(array $item, $conn, array $addons, array $selectedEntries): array
+    {
+        $productRes = $this->exotic_api_call('/product/code', 'GET', [
+            'code' => $item['code']
+        ]);
+        $allAddons = $this->productApiAddonCatalogList($productRes);
+
+        $unitBase = (float)($item['price'] ?? 0);
+        $vpIndia = $this->resolveIndiaSellPriceFromVp($conn, trim((string)($item['code'] ?? '')));
+        if ($vpIndia > 0) {
+            $unitBase = $vpIndia;
+        }
+
+        return [
+            'product_res' => $productRes,
+            'all_addons' => $allAddons,
+            'unit_base' => $unitBase,
+            'addons_display' => $this->buildPosCartAddonDisplayLines($addons, $selectedEntries, $allAddons),
+        ];
+    }
+
+    private function resolveAddonUnitSum(
+        array $addons,
+        array $selectedEntries,
+        array $allAddons,
+        bool $expressSelected,
+        float $shippingPerUnit
+    ): float {
+        $addonsSumPerUnit = 0.0;
+        foreach ($addons as $a) {
+            $addonsSumPerUnit += (float)($a['value'] ?? 0);
+        }
+        if ($addonsSumPerUnit <= 0 && $selectedEntries !== [] && $allAddons !== []) {
+            $addonsSumPerUnit = $this->sumAddonPricesFromCatalogMatches($selectedEntries, $allAddons);
+        }
+
+        return $this->mergeExpressShippingIntoAddonUnitSum(
+            $addonsSumPerUnit,
+            $addons,
+            $selectedEntries,
+            $allAddons,
+            $expressSelected,
+            $shippingPerUnit
+        );
+    }
+
+    /**
+     * Build one normalized POS cart line plus computed totals for subtotal/shipping/gst.
+     *
+     * @return array{
+     *   item: array<string,mixed>,
+     *   taxable_line: float,
+     *   shipping_component: float,
+     *   gst_line: float
+     * }
+     */
+    private function buildPosCartLineFromApiItem(array $item, $conn): array
+    {
+        $shipping_per_unit = (float)($item['express_shipping_cost'] ?? 0);
+        $lineQty = max(1, (int)($item['quantity'] ?? 1));
+        $shipping = $shipping_per_unit * $lineQty;
+        $expressSelected = (bool)($item['express_shipping_chosen'] ?? false);
+
+        $addonData = $this->extractCartAddonsAndEntries($item);
+        $addons = $addonData['addons'];
+        $selectedEntries = $addonData['selected_entries'];
+
+        $lineContext = $this->resolveCartLineCatalogAndPrice($item, $conn, $addons, $selectedEntries);
+        $productRes = $lineContext['product_res'];
+        $allAddons = $lineContext['all_addons'];
+        $unitBase = $lineContext['unit_base'];
+        $addonsDisplay = $lineContext['addons_display'];
+
+        $addonsSumPerUnit = $this->resolveAddonUnitSum(
+            $addons,
+            $selectedEntries,
+            $allAddons,
+            $expressSelected,
+            $shipping_per_unit
+        );
+        $taxableLine = ($unitBase + $addonsSumPerUnit) * $lineQty;
+        $gstPercent = $this->resolveCartLineGstPercent($item, $productRes, $conn);
+        $gstLine = round(($taxableLine * $gstPercent) / 100, 2);
+
+        return [
+            'item' => [
+                'item_code' => $item['code'] ?? '',
+                'cartref' => $item['cartref'] ?? '',
+                'name' => $item['name'] ?? '',
+                'imageurl' => $item['imageurl'] ?? '',
+                'price' => $unitBase,
+                'quantity' => $lineQty,
+                'shipping' => $shipping,
+                'shipping_per_unit' => $shipping_per_unit,
+                'shipping_title' => $item['express_shipping_option']['title'] ?? '',
+                'shipping_longtitle' => $item['express_shipping_option']['longtitle'] ?? '',
+                'express_selected' => $expressSelected,
+                'addons' => $addons,
+                'selected_entries' => $selectedEntries,
+                'addons_display' => $addonsDisplay,
+            ],
+            'taxable_line' => $taxableLine,
+            'shipping_component' => $expressSelected ? $shipping : 0.0,
+            'gst_line' => $gstLine,
+        ];
+    }
+
+    /**
+     * Convert raw /cart/retrieve rows into normalized cart lines and running totals.
+     *
+     * @return array{items: array<int,array<string,mixed>>, subtotal: float, shipping_total: float, gst_computed: float}
+     */
+    private function buildPosCartLinesAndTotals(array $cartItems, $conn): array
+    {
+        $items = [];
+        $subtotal = 0.0;
+        $shipping_total = 0.0;
+        $gst_computed = 0.0;
+
+        foreach ($cartItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $line = $this->buildPosCartLineFromApiItem($item, $conn);
+            $items[] = $line['item'];
+            $subtotal += (float)$line['taxable_line'];
+            $shipping_total += (float)$line['shipping_component'];
+            $gst_computed += (float)$line['gst_line'];
+        }
+
+        return [
+            'items' => $items,
+            'subtotal' => $subtotal,
+            'shipping_total' => $shipping_total,
+            'gst_computed' => $gst_computed,
+        ];
+    }
+
+    private function inferMissingCouponDiscount(
+        float $couponDiscount,
+        bool $couponApplied,
+        float $apiTotal,
+        float $subtotal,
+        float $customDiscount
+    ): float {
+        if (!($couponDiscount <= 0 && $couponApplied && $apiTotal > 0)) {
+            return $couponDiscount;
+        }
+        // Subtotal is already GST-inclusive in POS totals.
+        $inferredCoupon = ($subtotal - $customDiscount) - $apiTotal;
+        if ($inferredCoupon > 0.01) {
+            return round($inferredCoupon, 2);
+        }
+
+        return $couponDiscount;
+    }
+
+    /**
+     * Parse coupon amount from discountcoupondetails formats like:
+     * CODE|P|10  => 10% of subtotal
+     * CODE|F|100 => fixed 100
+     */
+    private function deriveCouponDiscountFromCouponString(string $coupon, float $subtotal): float
+    {
+        $coupon = trim($coupon);
+        if ($coupon === '' || strpos($coupon, '|') === false) {
+            return 0.0;
+        }
+        $parts = explode('|', $coupon);
+        if (count($parts) < 3) {
+            return 0.0;
+        }
+        $type = strtoupper(trim((string)$parts[1]));
+        $rawValue = trim((string)$parts[2]);
+        if (!is_numeric($rawValue)) {
+            return 0.0;
+        }
+        $value = (float)$rawValue;
+        if ($value <= 0) {
+            return 0.0;
+        }
+        if ($type === 'P' || $type === '%' || $type === 'PERCENT') {
+            return round(($subtotal * $value) / 100, 2);
+        }
+        return round($value, 2);
+    }
+
+    private function buildCouponStringParseDebug(string $coupon, float $subtotal): array
+    {
+        $raw = trim($coupon);
+        $out = [
+            'raw_coupon' => $raw,
+            'parsed' => false,
+            'code' => '',
+            'type' => '',
+            'raw_value' => '',
+            'computed_discount' => 0.0,
+        ];
+        if ($raw === '' || strpos($raw, '|') === false) {
+            return $out;
+        }
+        $parts = explode('|', $raw);
+        if (count($parts) < 3) {
+            return $out;
+        }
+        $type = strtoupper(trim((string)$parts[1]));
+        $rawValue = trim((string)$parts[2]);
+        if (!is_numeric($rawValue)) {
+            return $out;
+        }
+        $value = (float)$rawValue;
+        if ($value <= 0) {
+            return $out;
+        }
+        $computed = ($type === 'P' || $type === '%' || $type === 'PERCENT')
+            ? round(($subtotal * $value) / 100, 2)
+            : round($value, 2);
+
+        $out['parsed'] = true;
+        $out['code'] = trim((string)$parts[0]);
+        $out['type'] = $type;
+        $out['raw_value'] = $rawValue;
+        $out['computed_discount'] = $computed;
+
+        return $out;
+    }
+
+    private function resolveGrandTotalFromApi(
+        float $apiTotal,
+        float $subtotal,
+        float $gst,
+        float $totalDiscount,
+        float $couponDiscount
+    ): float {
+        // Subtotal is GST-inclusive, so do not add GST again.
+        $computedPayable = $subtotal - $totalDiscount;
+        if ($apiTotal <= 0) {
+            return $computedPayable;
+        }
+        $apiTotalLooksLikePreTaxSubtotal = ($gst > 0.01 && abs($apiTotal - $subtotal) < 0.05);
+        if ($apiTotalLooksLikePreTaxSubtotal) {
+            // totalamount matches taxable subtotal only; do not use it as grand total.
+            return $computedPayable;
+        }
+        if ($couponDiscount > 0 && $apiTotal > ($computedPayable + 0.01)) {
+            // Coupon applied on API but totalamount didn't drop — prefer computed checkout total.
+            return $computedPayable;
+        }
+
+        return $apiTotal;
+    }
+
+    /**
+     * Resolve coupon/custom/gst/grand-total fallbacks from cart payload + computed lines.
+     *
+     * @return array{
+     *   codcharges: float,
+     *   coupon_applied: bool,
+     *   coupon_discount: float,
+     *   custom_discount: float,
+     *   gst: float,
+     *   grand_total: float,
+     *   coupon_debug: array<string,mixed>
+     * }
+     */
+    private function resolveCartFinancials(array $data, string $coupon, float $subtotal, float $gstComputed): array
+    {
+        $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
+        $coupon_applied = trim($coupon) !== '';
+        $coupon_discount = $this->extractCartRetrieveCouponDiscountRupees($data);
+        $couponDiscountFromPayload = $coupon_discount;
+        $custom_discount = (float)($data['customreduction'] ?? 0);
+        $gst = $this->resolveCartRetrieveGstTotal($data);
+        if ($gstComputed > 0) {
+            $gst = round($gstComputed, 2);
+        }
+        $apiTotal = isset($data['totalamount']) && is_numeric($data['totalamount']) ? (float)$data['totalamount'] : 0.0;
+        $couponStringDebug = $this->buildCouponStringParseDebug($coupon, $subtotal);
+        $couponDiscountFromString = 0.0;
+        if ($coupon_discount <= 0 && $coupon_applied) {
+            $coupon_discount = $this->deriveCouponDiscountFromCouponString($coupon, $subtotal);
+            $couponDiscountFromString = $coupon_discount;
+        }
+
+        $total_discount = $coupon_discount + $custom_discount;
+        $couponBeforeInfer = $coupon_discount;
+        $coupon_discount = $this->inferMissingCouponDiscount(
+            $coupon_discount,
+            $coupon_applied,
+            $apiTotal,
+            $subtotal,
+            $custom_discount
+        );
+        $total_discount = $coupon_discount + $custom_discount;
+        $grand_total = $this->resolveGrandTotalFromApi($apiTotal, $subtotal, $gst, $total_discount, $coupon_discount);
+        $couponDiscountFromInference = max(0, round($coupon_discount - $couponBeforeInfer, 2));
+
+        return [
+            'codcharges' => $codcharges,
+            'coupon_applied' => $coupon_applied,
+            'coupon_discount' => $coupon_discount,
+            'custom_discount' => $custom_discount,
+            'gst' => $gst,
+            'grand_total' => $grand_total,
+            'coupon_debug' => [
+                'coupon_applied' => $coupon_applied,
+                'payload_coupon_discount' => $couponDiscountFromPayload,
+                'string_parse' => $couponStringDebug,
+                'string_coupon_discount' => $couponDiscountFromString,
+                'inferred_coupon_discount' => $couponDiscountFromInference,
+                'final_coupon_discount' => $coupon_discount,
+                'subtotal_for_calc' => $subtotal,
+                'gst_for_calc' => $gst,
+                'api_totalamount' => $apiTotal,
+            ],
+        ];
+    }
+
+    private function buildCartRetrieveRequestMeta(array $query): array
+    {
+        return [
+            'method' => 'GET',
+            'url' => 'https://www.exoticindia.com/api/cart/retrieve?' . http_build_query($query),
+            'query_params' => $query,
+            'headers' => [
+                'x-api-key' => '(redacted)',
+                'x-api-deviceid' => $this->resolveApiDeviceId(),
+                'x-api-appplayerid' => 'POS-Web-Terminal',
+                'x-api-countrycode' => 'IN',
+                // Must match exotic_api_call() header value.
+                'x-api-euid' => (string)($_SESSION['x_api_euid'] ?? ''),
+                'x-api-jwt' => !empty($_SESSION['x_api_jwt']) ? '(present)' : '',
+                'x-api-browsehistory' => (string)($_SESSION['x_api_browsehistory'] ?? ''),
+                'x-api-etd' => (string)($_SESSION['x_api_etd'] ?? ''),
+                'x-api-etd-pincode' => (string)($_SESSION['x_api_etd_pincode'] ?? ''),
+                'User-Agent' => 'ExoticPOS',
+            ],
+        ];
+    }
+
+    private function stripCartItemsFromDebugBody(array $data): array
+    {
+        if (isset($data['cartitems'])) {
+            unset($data['cartitems']);
+        }
+
+        return $data;
+    }
+
+    /**
+     * GET /cart/retrieve may nest payload under "data" like the product API.
+     */
+    private function unwrapCartRetrievePayload(array $data): array
+    {
+        if (!empty($data['data']) && is_array($data['data'])) {
+            $inner = $data['data'];
+            unset($data['data']);
+
+            return array_merge($data, $inner);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Raw checkoutdata node from cart retrieve JSON (must match POST /order/create payload source).
+     */
+    private function checkoutdataFromCartRetrieveBody(array $data)
+    {
+        foreach (['checkoutdata', 'checkoutData', 'CheckOutData'] as $k) {
+            if (!array_key_exists($k, $data)) {
+                continue;
+            }
+            $v = $data[$k];
+            if ($v === null) {
+                continue;
+            }
+            if (is_string($v) && trim($v) === '') {
+                continue;
+            }
+            if (is_array($v) && $v === []) {
+                continue;
+            }
+
+            return $v;
+        }
+
+        return $data['checkoutdata'] ?? '';
+    }
+
+    private function cartHasUsableCheckoutdata(array $cartData): bool
+    {
+        $raw = $cartData['checkoutdata'] ?? null;
+        if ($raw === null) {
+            return false;
+        }
+        if (is_string($raw)) {
+            return trim($raw) !== '';
+        }
+        if (is_array($raw)) {
+            return $raw !== [];
+        }
+
+        return $raw !== '';
+    }
 
     public function get_cart()
     {
@@ -1471,162 +2512,42 @@ class POSRegisterController
             'giftvoucherdetails' => $voucher,
         ];
         $res = $this->exotic_api_call('/cart/retrieve', 'GET', $cartRetrieveQuery);
+        $cartApiRequestMeta = $this->buildCartRetrieveRequestMeta($cartRetrieveQuery);
 
-        $cartRetrieveUrl = 'https://www.exoticindia.com/api/cart/retrieve?' . http_build_query($cartRetrieveQuery);
+        $data = $this->unwrapCartRetrievePayload($res['data'] ?? []);
 
-        $cartApiRequestMeta = [
-            'method' => 'GET',
-            'url' => $cartRetrieveUrl,
-            'query_params' => $cartRetrieveQuery,
-            'headers' => [
-                'x-api-key' => '(redacted)',
-                'x-api-deviceid' => 'POS-Store_1',
-                'x-api-appplayerid' => 'POS-Web-Terminal',
-                'x-api-countrycode' => 'IN',
-                'x-api-euid' => (string)($_SESSION['user']['id'] ?? ''),
-                'User-Agent' => 'ExoticPOS',
-            ],
-        ];
+        $lineBuild = $this->buildPosCartLinesAndTotals(
+            !empty($data['cartitems']) && is_array($data['cartitems']) ? $data['cartitems'] : [],
+            $conn
+        );
+        $items = $lineBuild['items'];
+        $subtotal = $lineBuild['subtotal'];
+        $shipping_total = $lineBuild['shipping_total'];
+        $gst_computed = $lineBuild['gst_computed'];
+        // Keep Sub Total as pre-discount line sum; discount is shown separately in UI.
+        $display_subtotal = $subtotal;
+        $financials = $this->resolveCartFinancials($data, (string)$coupon, $subtotal, $gst_computed);
+        $cartApiBodyForDebug = $this->stripCartItemsFromDebugBody($data);
+        $cartApiBodyForDebug['coupon_discount_debug'] = $financials['coupon_debug'];
 
-        $data = $res['data'] ?? [];
-
-        $items = [];
-        $subtotal = 0;
-        $shipping_total = 0;
-        if (!empty($data['cartitems'])) {
-
-            foreach ($data['cartitems'] as $item) {
-
-                // $shipping = (float)($item['express_shipping_cost'] ?? 0);
-                $shipping_per_unit = (float)($item['express_shipping_cost'] ?? 0);
-                $shipping = $shipping_per_unit * (int)$item['quantity'];
-                // $expressSelected = $item['express_shipping_chosen'] ?? false;
-                $expressSelected = $item['express_shipping_chosen'] ?? false;
-                $addons = [];
-                $selectedEntries = [];
-
-                if (!empty($item['addons_selected']) && is_array($item['addons_selected'])) {
-                    foreach ($item['addons_selected'] as $ad) {
-                        if (!is_array($ad)) {
-                            continue;
-                        }
-
-                        $amt = 0.0;
-                        foreach (['value', 'price', 'amount'] as $k) {
-                            if (isset($ad[$k]) && $ad[$k] !== '' && is_numeric($ad[$k])) {
-                                $amt = (float)$ad[$k];
-                                break;
-                            }
-                        }
-
-                        $cartEntry = trim((string)($ad['cart_entry'] ?? ''));
-                        if ($cartEntry === '') {
-                            if (stripos((string)($ad['name'] ?? ''), 'Express') !== false) {
-                                $cartEntry = 'OPTIONALS_EXPRESS:_blank_:' . $amt;
-                            } else {
-                                $cartEntry = 'OPTIONALS_SCULPTURES_LACQUER:_blank_:' . $amt;
-                            }
-                        }
-
-                        $addons[] = [
-                            'name' => $ad['name'] ?? '',
-                            'value' => $amt,
-                            'cart_entry' => $cartEntry,
-                        ];
-                        $selectedEntries[] = $cartEntry;
-                    }
-                }
-
-                $optStr = trim((string)($item['options'] ?? ''));
-                if ($optStr !== '') {
-                    foreach (explode('|', $optStr) as $chunk) {
-                        $chunk = trim($chunk);
-                        if ($chunk !== '' && !in_array($chunk, $selectedEntries, true)) {
-                            $selectedEntries[] = $chunk;
-                        }
-                    }
-                }
-
-                $productRes = $this->exotic_api_call('/product/code', 'GET', [
-                    'code' => $item['code']
-                ]);
-
-                $all_addons = $this->productApiAddonCatalogList($productRes);
-
-                $unitBase = (float)$item['price'];
-                $vpIndia = $this->resolveIndiaSellPriceFromVp($conn, trim((string)$item['code']));
-                if ($vpIndia > 0) {
-                    $unitBase = $vpIndia;
-                }
-
-                $items[] = [
-                    'item_code' => $item['code'],
-                    'cartref' => $item['cartref'],
-                    'name' => $item['name'],
-                    'imageurl' => $item['imageurl'],
-                    'price' => $unitBase,
-                    'quantity' => (int)$item['quantity'],
-                    'shipping' => $shipping,
-                    'shipping_per_unit' => $shipping_per_unit,
-                    'shipping_title' => $item['express_shipping_option']['title'] ?? '',
-                    'shipping_longtitle' => $item['express_shipping_option']['longtitle'] ?? '',
-                    'express_selected' => $expressSelected,
-                    'addons' => $addons,
-                    'all_addons' => $all_addons, //  NOW ALWAYS ARRAY
-                    'selected_entries' => $selectedEntries
-                ];
-
-                // Subtotal = Σ ((unit item price + sum of addon prices per unit) × quantity)
-                $addonsSumPerUnit = 0.0;
-                foreach ($addons as $a) {
-                    $addonsSumPerUnit += (float)($a['value'] ?? 0);
-                }
-                if ($addonsSumPerUnit <= 0 && $selectedEntries !== [] && $all_addons !== []) {
-                    $addonsSumPerUnit = $this->sumAddonPricesFromCatalogMatches($selectedEntries, $all_addons);
-                }
-                $addonsSumPerUnit = $this->mergeExpressShippingIntoAddonUnitSum(
-                    $addonsSumPerUnit,
-                    $addons,
-                    $selectedEntries,
-                    $all_addons,
-                    (bool)$expressSelected,
-                    $shipping_per_unit
-                );
-                $unitLine = $unitBase + $addonsSumPerUnit;
-                $subtotal += $unitLine * (int)$item['quantity'];
-
-                // Add shipping only if selected
-                if ($expressSelected) {
-                    $shipping_total += $shipping;
-                }
-            }
-        }
-
-        $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
-        $discount = (float)($data['couponreduction'] ?? 0);
-        $gst = (float)($data['gstamount'] ?? 0);
-        $custom_discount = (float)($data['customreduction'] ?? 0);
-        // $custom_discount = (float)($_SESSION['custom_discount'] ?? 0);
-        $total_discount = $discount + $custom_discount;
-     $final_subtotal = $subtotal - $total_discount; 
-        $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
-
-        // $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
-        $grand_total = (float)($data['totalamount'] ?? 0);
         return [
             'items' => $items,
-            'subtotal' => $final_subtotal,
+            'subtotal' => $display_subtotal,
             'shipping_total' => $shipping_total,
-            'gst' => $gst,
-            'discount' => $discount,
-            'custom_discount' => $custom_discount,
-            'grand_total' => $grand_total,
-            'checkoutdata' => $data['checkoutdata'] ?? '',
-            'codcharges' => $codcharges,
+            'gst' => $financials['gst'],
+            'coupon_discount' => $financials['coupon_discount'],
+            'coupon_applied' => $financials['coupon_applied'],
+            'custom_discount' => $financials['custom_discount'],
+            'grand_total' => $financials['grand_total'],
+            'checkoutdata' => $this->checkoutdataFromCartRetrieveBody($data),
+            'codcharges' => $financials['codcharges'],
+            // Use normalized values echoed by cart/retrieve for downstream order/create query consistency.
+            'discountcoupondetails_effective' => (string)($data['discountcoupondetails'] ?? $coupon),
+            'giftvoucherdetails_effective' => (string)($data['giftvoucherdetails'] ?? $voucher),
             // POS register is INR billing; do not inherit API fx_type (can return USD/$).
             'currency' => 'INR',
             'cart_api_http_code' => (int)($res['code'] ?? 0),
-            'cart_api_body' => $data,
+            'cart_api_body' => $cartApiBodyForDebug,
             'cart_api_request' => $cartApiRequestMeta,
         ];
     }
@@ -1636,15 +2557,12 @@ class POSRegisterController
         $code      = $_POST['code'] ?? '';
         $qty       = $_POST['qty'] ?? 1;
         $variation = trim($_POST['variation'] ?? '');
-        $options   = $_POST['options'] ?? '';
+        $rawOptions = $_POST['options'] ?? '';
         $buyNow    = false;
-        $optionsArray = $_POST['options'] ?? [];
+        $optionsArray = is_array($rawOptions) ? $rawOptions : [];
+        $optionsString = is_string($rawOptions) ? trim($rawOptions) : '';
         $toggleOption = $_POST['toggle_option'] ?? '';
         $checked      = $_POST['checked'] ?? 0;
-        // ensure array
-        if (!is_array($optionsArray)) {
-            $optionsArray = [];
-        }
 
         // ✅ ADD / REMOVE LOGIC
         if (!empty($toggleOption)) {
@@ -1662,10 +2580,6 @@ class POSRegisterController
             }
         }
 
-        // ✅ FINAL OPTIONS STRING
-        if (!empty($optionsArray)) {
-            $postArray['options'] = implode(',', $optionsArray);
-        }
         // echo '<pre>';
         // print_r($options);
         // exit;
@@ -1710,16 +2624,27 @@ class POSRegisterController
                 header("Location: ?page=pos_register&error=invalid_variation");
                 exit;
             }
-
             list($size, $color) = explode(':', $variation) + ['', ''];
             $variation = trim($size) . ':' . trim($color);
 
             $postArray['variation'] = $variation;
         }
 
-
-        if (!empty($options)) {
-            $postArray['options'] = trim($options);
+        if ($optionsString !== '') {
+            $postArray['options'] = $optionsString;
+        } elseif (!empty($optionsArray)) {
+            $normalized = [];
+            foreach ($optionsArray as $o) {
+                $o = trim((string)$o);
+                if ($o !== '') {
+                    $normalized[] = $o;
+                }
+            }
+            $normalized = array_values(array_unique($normalized));
+            if ($normalized !== []) {
+                // Match toggle_addon / cart retrieve (pipe-separated cart_entry tokens)
+                $postArray['options'] = implode('|', $normalized);
+            }
         }
 
         $postData = http_build_query($postArray);
@@ -1728,13 +2653,40 @@ class POSRegisterController
         // echo '<pre>';
         // print_r($result);
         // exit;
-        if (empty($result['data']['cartref'])) {
-            $_SESSION['cart_error'] = $result['data']['error'] ?? 'Cart add failed';
+        $apiData = is_array($result['data'] ?? null) ? $result['data'] : [];
+        $cartAddOk = !empty($apiData['cartref']);
+        if (!$cartAddOk && !empty($apiData['cartitems']) && is_array($apiData['cartitems'])) {
+            foreach ($apiData['cartitems'] as $ci) {
+                if (!is_array($ci)) {
+                    continue;
+                }
+                if (!empty($ci['cartref'])) {
+                    $cartAddOk = true;
+                    break;
+                }
+            }
+        }
+
+        if (!$cartAddOk) {
+            $apiMsg = trim((string)($result['data']['error'] ?? $result['data']['message'] ?? ''));
+            if ($apiMsg === '') {
+                $raw = trim((string)($result['raw'] ?? ''));
+                if ($raw !== '') {
+                    $apiMsg = function_exists('mb_substr')
+                        ? mb_substr($raw, 0, 220, 'UTF-8')
+                        : substr($raw, 0, 220);
+                }
+            }
+            $httpCode = (int)($result['code'] ?? 0);
+            $_SESSION['cart_error'] = 'Cart add failed'
+                . ($httpCode > 0 ? ' (HTTP ' . $httpCode . ')' : '')
+                . ($apiMsg !== '' ? ': ' . $apiMsg : '');
         }
 
         header("Location: ?page=pos_register");
         exit;
     }
+    
     public function toggle_addon()
     {
         $cartref = $_POST['cartref'] ?? '';
@@ -1788,6 +2740,7 @@ class POSRegisterController
         header("Location: ?page=pos_register");
         exit;
     }
+
     public function change_qty()
     {
         $cartref = $_POST['cartref'] ?? '';
@@ -1836,32 +2789,119 @@ class POSRegisterController
     }
 
 
+    /**
+     * Documented endpoint: GET https://www.exoticindia.com/cart/addcoupon?couponid=...
+     * Response includes discountcoupondetails for subsequent cart query strings.
+     * `/cart/addcoupon` may return a JSON object (preferred) or a JSON-encoded string
+     * like "CODE|P|10". exotic_api_call() only keeps decoded arrays, so plain strings
+     * must be normalized here or the coupon is silently ignored.
+     */
+    private function normalizeCouponApiResponse(array $apiResult): array
+    {
+        $data = $apiResult['data'] ?? [];
+        if (is_array($data) && $data !== []) {
+            return $data;
+        }
+        $raw = (string)($apiResult['raw'] ?? '');
+        if ($raw === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return [];
+        }
+        if (is_string($decoded) && $decoded !== '') {
+            return ['discountcoupondetails' => $decoded];
+        }
+        return is_array($decoded) ? $decoded : [];
+    }
+
     public function apply_coupon()
     {
-        $couponId = $_POST['coupon'] ?? '';
+        $couponId = trim((string)($_POST['coupon'] ?? ''));
 
-        if (empty($couponId)) {
-            header("Location: ?page=pos_register");
+        if ($couponId === '') {
+            $_SESSION['coupon_message'] = 'Coupon code required';
+            $_SESSION['coupon_status'] = 'error';
+            header('Location: ?page=pos_register');
             exit;
         }
+
+        $couponQuery = ['couponid' => $couponId];
+        $couponUrl = 'https://www.exoticindia.com/cart/addcoupon?' . http_build_query($couponQuery);
 
         $result = $this->exotic_api_call(
             '/cart/addcoupon',
             'GET',
-            [
-                'couponid' => $couponId
-            ]
+            $couponQuery,
+            null,
+            'https://www.exoticindia.com'
         );
 
-        $response = $result['data'] ?? '';
+        $httpCode = (int)($result['code'] ?? 0);
+        $httpOk = $httpCode >= 200 && $httpCode < 300;
 
-        if (!empty($response) && !isset($response['error'])) {
+        $response = $this->normalizeCouponApiResponse($result);
+        $apiError = trim((string)($response['error'] ?? ''));
 
-            // store string coupon
-            $_SESSION['discount_coupon'] = $response;
+        $fallbackProbe = null;
+        if ($httpOk && ($response === [] || $apiError !== '')) {
+            $probeQuery = ['discountcoupondetails' => $couponId];
+            $probeResult = $this->exotic_api_call('/cart/retrieve', 'GET', $probeQuery);
+            $probeData = $probeResult['data'] ?? [];
+            $probeError = trim((string)($probeData['error'] ?? ($probeData['message'] ?? '')));
+            $probeLooksValid = (
+                ((int)($probeResult['code'] ?? 0) >= 200 && (int)($probeResult['code'] ?? 0) < 300)
+                && $probeError === ''
+                && (!empty($probeData['checkoutdata']) || !empty($probeData['cartitems']))
+            );
+            if ($probeLooksValid) {
+                $response = ['discountcoupondetails' => $couponId];
+                $apiError = '';
+            }
+            $fallbackProbe = [
+                'used_entered_coupon_as_discountcoupondetails' => true,
+                'request' => [
+                    'method' => 'GET',
+                    'url' => 'https://www.exoticindia.com/api/cart/retrieve?' . http_build_query($probeQuery),
+                    'query_params' => $probeQuery,
+                ],
+                'http_code' => (int)($probeResult['code'] ?? 0),
+                'response_raw' => (string)($probeResult['raw'] ?? ''),
+                'response_error' => $probeError,
+                'accepted' => $probeLooksValid,
+            ];
         }
 
-        header("Location: ?page=pos_register");
+        $_SESSION['pos_coupon_api_debug'] = [
+            'timestamp' => date('c'),
+            'request' => [
+                'method' => 'GET',
+                'url' => $couponUrl,
+                'query_params' => $couponQuery,
+            ],
+            'http_code' => $httpCode,
+            'response_body_raw' => (string)($result['raw'] ?? ''),
+            'response_normalized' => $response,
+        ];
+        if ($fallbackProbe !== null) {
+            $_SESSION['pos_coupon_api_debug']['fallback_probe'] = $fallbackProbe;
+        }
+
+        if ($httpOk && $apiError === '' && $response !== []) {
+            $_SESSION['discount_coupon'] = $response;
+            $_SESSION['coupon_message'] = 'Coupon applied successfully';
+            $_SESSION['coupon_status'] = 'success';
+        } else {
+            $_SESSION['coupon_message'] = $apiError !== ''
+                ? $apiError
+                : (!$httpOk
+                    ? ('Coupon request failed (HTTP ' . $httpCode . ')')
+                    : 'Invalid or expired coupon');
+            $_SESSION['coupon_status'] = 'error';
+        }
+
+        header('Location: ?page=pos_register');
         exit;
     }
 
@@ -1888,74 +2928,67 @@ class POSRegisterController
         exit;
     }
 
-    public function create_order()
+    private function buildStorePaymentDetails(string $paymentType, string $transactionId): string
     {
-        global $conn;
-
-        $this->clearBufferedHttpOutput();
-        header('Content-Type: application/json; charset=utf-8');
-        $allowedPaymentTypes = [
-            'offline',
-            'cod',
-            'razorpay',
-            'cc',
-            'bank_transfer',
-            'pos_machine',
-            'specialpay',
-            'cheque',
-            'demand_draft',
-        ];
-        $paymentType = $_POST['payment_type'] ?? 'offline';
-        if (!in_array($paymentType, $allowedPaymentTypes, true)) {
-            $paymentType = 'offline';
-        }
-        $paymentStage = $_POST['payment_stage'] ?? 'final';
-        if (!in_array($paymentStage, ['final', 'partial', 'advance'], true)) {
-            $paymentStage = 'final';
-        }
-        $note = $_POST['note'] ?? '';
-
-        $transactionId = $_POST['transaction_id'] ?? '';
-
-        /* ================= USER / STORE ================= */
-        $userModel = new User($conn);
-        $user_id = $_SESSION['user']['id'] ?? 0;
-        $user = $userModel->getUserById($user_id);
-        $warehouse_name = $user['warehouse_name'] ?? 'POS';
-
-        $store_payment_details = $warehouse_name . "_" . $paymentType . "_" . $transactionId . "_" . $note;
-
-        /* ================= CART ================= */
-        $cartData = $this->get_cart();
-
-        if (empty($cartData['checkoutdata'])) {
-            echo json_encode([
-                "success" => false,
-                "message" => "Cart empty"
-            ]);
-            exit;
+        $storeId = (string)((int)($_SESSION['warehouse_id'] ?? 0));
+        if ($storeId === '0' || $storeId === '') {
+            $storeId = 'store';
         }
 
+        // Required format: STORE_ID|PAYMENT_MODE|TRANSACTION_ID
+        // If no transaction ID is provided (cash/offline etc.), send store.<UTC TIMESTAMP>.
+        $effectiveTransactionId = $transactionId !== ''
+            ? $transactionId
+            : ('store.' . gmdate('YmdHis'));
 
-        /* ================= CUSTOMER ================= */
+        return $storeId . '|' . $paymentType . '|' . $effectiveTransactionId;
+    }
 
+    private function extractOrderIdFromCreateResponse(array $response): string
+    {
+        foreach (['orderid', 'order_id', 'order_no', 'id'] as $key) {
+            if (!empty($response[$key])) {
+                return (string)$response[$key];
+            }
+        }
+
+        if (!empty($response['order']) && is_array($response['order'])) {
+            foreach (['orderid', 'order_id', 'order_no', 'id'] as $key) {
+                if (!empty($response['order'][$key])) {
+                    return (string)$response['order'][$key];
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Resolve billing/shipping for POS order/create from:
+     * - latest vp_order_info row for existing customer
+     * - $_SESSION['pos_customer_form'] for new customers
+     * - optional confirm-address POST override
+     */
+    private function resolveCustomerBillingShippingForOrder(mysqli $conn): array
+    {
         $billing = [];
         $shipping = [];
 
-        // $customerId = $_POST['customer_id'] ?? 0;
-        $customerId = $_POST['customer_id'] ?? ($_SESSION['pos_customer_id'] ?? 0);
+        $rawCustomerId = $_POST['customer_id'] ?? null;
+        if ($rawCustomerId !== null && $rawCustomerId !== '') {
+            $customerId = (int)$rawCustomerId;
+        } else {
+            $customerId = (int)($_SESSION['pos_customer_id'] ?? 0);
+        }
 
-        /* ---------- STEP 1 : EXISTING CUSTOMER ---------- */
+        // Existing customer: pull last known billing/shipping from vp_order_info
         if ($customerId > 0) {
-
             $stmt = $conn->prepare("SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1");
             $stmt->bind_param("i", $customerId);
             $stmt->execute();
             $info = $stmt->get_result()->fetch_assoc();
 
             if ($info) {
-
-                /*  EXISTING CUSTOMER WITH ORDER HISTORY */
                 $billing = [
                     "first_name" => $info['first_name'],
                     "last_name" => $info['last_name'],
@@ -1967,7 +3000,7 @@ class POSRegisterController
                     "state" => $info['state'],
                     "zip" => $info['zipcode'],
                     "country" => $info['country'] ?: 'IN',
-                    "gstin" => $info['gstin']
+                    "gstin" => $info['gstin'],
                 ];
 
                 $shipping = [
@@ -1978,14 +3011,13 @@ class POSRegisterController
                     "sstate" => $info['shipping_state'],
                     "szip" => $info['shipping_zipcode'],
                     "scountry" => $info['shipping_country'] ?: 'IN',
-                    "sphone" => $info['shipping_mobile']
+                    "sphone" => $info['shipping_mobile'],
                 ];
             }
         }
 
-        /* ---------- STEP 2 : NEW CUSTOMER (SESSION FORM) ---------- */
+        // New customer form fallback
         if (empty($billing) && !empty($_SESSION['pos_customer_form'])) {
-
             $form = $_SESSION['pos_customer_form'];
 
             $billing = [
@@ -1999,7 +3031,7 @@ class POSRegisterController
                 "state" => trim($form['state'] ?? ''),
                 "zip" => trim($form['zipcode'] ?? ''),
                 "country" => "IN",
-                "gstin" => trim($form['gstin'] ?? '')
+                "gstin" => trim($form['gstin'] ?? ''),
             ];
 
             $shipping = [
@@ -2010,35 +3042,110 @@ class POSRegisterController
                 "sstate" => trim($form['shipping_state'] ?? ''),
                 "szip" => trim($form['shipping_zipcode'] ?? ''),
                 "scountry" => "IN",
-                "sphone" => trim($form['shipping_mobile'] ?? '')
+                "sphone" => trim($form['shipping_mobile'] ?? ''),
             ];
         }
-        // echo '<pre>';
-        // print_r($billing);
-        // exit;
 
-        /* ================= VALIDATION ================= */
-        if (!$billing['first_name'] || !$billing['phone'] || !$billing['state'] || !$billing['zip']) {
-            echo json_encode(["success" => false, "message" => "Billing missing"]);
-            exit;
+        // Confirmation popup override
+        $confirmFlag = trim((string)($_POST['confirm_address_submit'] ?? ''));
+        $applyConfirmPopup = ($confirmFlag === '1')
+            || (
+                trim((string)($_POST['confirm_first_name'] ?? '')) !== ''
+                && trim((string)($_POST['confirm_phone'] ?? '')) !== ''
+            );
+
+        if ($applyConfirmPopup) {
+            $confirmShippingFirst = trim((string)($_POST['confirm_sfirst_name'] ?? ''));
+            $confirmShippingLast = trim((string)($_POST['confirm_slast_name'] ?? ''));
+            $confirmShippingFull = trim((string)($_POST['confirm_sname'] ?? ''));
+            $resolvedShippingName = trim($confirmShippingFirst . ' ' . $confirmShippingLast);
+            if ($resolvedShippingName === '') {
+                $resolvedShippingName = $confirmShippingFull;
+            }
+            if ($resolvedShippingName === '') {
+                $resolvedShippingName = trim((string)($shipping['sname'] ?? ''));
+            }
+
+            $billing = [
+                "first_name" => trim((string)($_POST['confirm_first_name'] ?? ($billing['first_name'] ?? ''))),
+                "last_name" => trim((string)($_POST['confirm_last_name'] ?? ($billing['last_name'] ?? ''))),
+                "email" => trim((string)($_POST['confirm_email'] ?? ($billing['email'] ?? ''))),
+                "phone" => trim((string)($_POST['confirm_phone'] ?? ($billing['phone'] ?? ''))),
+                "address1" => trim((string)($_POST['confirm_address1'] ?? ($billing['address1'] ?? ''))),
+                "address2" => trim((string)($_POST['confirm_address2'] ?? ($billing['address2'] ?? ''))),
+                "city" => trim((string)($_POST['confirm_city'] ?? ($billing['city'] ?? ''))),
+                "state" => trim((string)($_POST['confirm_state'] ?? ($billing['state'] ?? ''))),
+                "zip" => trim((string)($_POST['confirm_zip'] ?? ($billing['zip'] ?? ''))),
+                "country" => trim((string)($_POST['confirm_country'] ?? ($billing['country'] ?? 'IN'))),
+                "gstin" => trim((string)($_POST['confirm_gstin'] ?? ($billing['gstin'] ?? ''))),
+            ];
+
+            $shipping = [
+                "sname" => $resolvedShippingName,
+                "saddress1" => trim((string)($_POST['confirm_saddress1'] ?? ($shipping['saddress1'] ?? ''))),
+                "saddress2" => trim((string)($_POST['confirm_saddress2'] ?? ($shipping['saddress2'] ?? ''))),
+                "scity" => trim((string)($_POST['confirm_scity'] ?? ($shipping['scity'] ?? ''))),
+                "sstate" => trim((string)($_POST['confirm_sstate'] ?? ($shipping['sstate'] ?? ''))),
+                "szip" => trim((string)($_POST['confirm_szip'] ?? ($shipping['szip'] ?? ''))),
+                "scountry" => trim((string)($_POST['confirm_scountry'] ?? ($shipping['scountry'] ?? 'IN'))),
+                "sphone" => trim((string)($_POST['confirm_sphone'] ?? ($shipping['sphone'] ?? ''))),
+            ];
         }
 
-        if (!$shipping['sname'] || !$shipping['sphone'] || !$shipping['sstate']) {
-            echo json_encode(["success" => false, "message" => "Shipping missing"]);
-            exit;
+        // Default shipping to billing when shipping rows are blank (walk-in / same-as-billing).
+        if (trim((string)($shipping['sname'] ?? '')) === '') {
+            $shipping['sname'] = trim(
+                trim((string)($billing['first_name'] ?? '')) . ' ' . trim((string)($billing['last_name'] ?? ''))
+            );
         }
 
-        /* ================= COD ================= */
-
-        if ($paymentType == 'cod' && $cartData['codcharges'] > 0) {
-            $cod = "1";
-            $codCharges = (string)$cartData['codcharges'];
-        } else {
-            $cod = "0";
-            $codCharges = "0";
+        foreach (
+            [
+                'sphone' => 'phone',
+                'saddress1' => 'address1',
+                'saddress2' => 'address2',
+                'scity' => 'city',
+                'sstate' => 'state',
+                'szip' => 'zip',
+                'scountry' => 'country',
+            ] as $sk => $bk
+        ) {
+            if (trim((string)($shipping[$sk] ?? '')) === '' && trim((string)($billing[$bk] ?? '')) !== '') {
+                $shipping[$sk] = $billing[$bk];
+            }
         }
 
-        /* ================= RAZORPAY ================= */
+        // Validation
+        $bFirst = trim((string)($billing['first_name'] ?? ''));
+        $bPhone = trim((string)($billing['phone'] ?? ''));
+        $bState = trim((string)($billing['state'] ?? ''));
+        $bZip = trim((string)($billing['zip'] ?? ''));
+        if ($bFirst === '' || $bPhone === '' || $bState === '' || $bZip === '') {
+            return ['success' => false, 'message' => 'Billing missing'];
+        }
+
+        $sName = trim((string)($shipping['sname'] ?? ''));
+        $sPhone = trim((string)($shipping['sphone'] ?? ''));
+        $sState = trim((string)($shipping['sstate'] ?? ''));
+        if ($sName === '' || $sPhone === '' || $sState === '') {
+            return ['success' => false, 'message' => 'Shipping missing'];
+        }
+
+        return ['success' => true, 'billing' => $billing, 'shipping' => $shipping];
+    }
+
+    private function resolveCodForPayment(string $paymentType, array $cartSnapshot): array
+    {
+        $codchargesSnap = (float)($cartSnapshot['codcharges'] ?? 0);
+        if ($paymentType === 'cod' && $codchargesSnap > 0) {
+            return ['cod' => '1', 'codcharges' => (string)$codchargesSnap];
+        }
+
+        return ['cod' => '0', 'codcharges' => '0'];
+    }
+
+    private function buildRazorpayAndCardFromPost(): array
+    {
         $razorpay = [
             "razorpay_order_id" => $_POST['razorpay_order_id'] ?? '',
             "razorpay_payment_id" => $_POST['razorpay_payment_id'] ?? '',
@@ -2046,7 +3153,6 @@ class POSRegisterController
             "magiccheckout_done" => $_POST['magiccheckout_done'] ?? ''
         ];
 
-        /* ================= CARD ================= */
         $card = [
             "cardnumber" => $_POST['cardnumber'] ?? '',
             "cardexpmonth" => $_POST['cardexpmonth'] ?? '',
@@ -2054,31 +3160,169 @@ class POSRegisterController
             "card_cvv" => $_POST['card_cvv'] ?? ''
         ];
 
-        /* ================= FINAL DATA ================= */
+        return ['razorpay' => $razorpay, 'card' => $card];
+    }
+
+    /**
+     * /order/create expects coupon id in query param (e.g. APPTEST), not expanded
+     * cart string variants like APPTEST|d|1.
+     */
+    private function normalizeCouponForOrderCreateQuery(string $couponRaw): string
+    {
+        $s = trim($couponRaw);
+        if ($s === '') {
+            return '';
+        }
+        if (strpos($s, '|') !== false) {
+            $parts = explode('|', $s);
+            return trim((string)($parts[0] ?? ''));
+        }
+
+        return $s;
+    }
+
+    public function create_order()
+    {
+        global $conn;
+
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        $allowedPaymentTypes = [
+            'offline',
+            'cc',
+            'razorpay',
+            'cod',
+            'bank_transfer',
+            'pos_machine',
+            'specialpay',
+            'cheque',
+            'demand_draft',
+        ];
+        $paymentType = trim((string)($_POST['payment_type'] ?? 'offline'));
+        if (!in_array($paymentType, $allowedPaymentTypes, true)) {
+            $paymentType = 'offline';
+        }
+        $paymentStage = $_POST['payment_stage'] ?? 'final';
+        if (!in_array($paymentStage, ['final', 'partial', 'advance'], true)) {
+            $paymentStage = 'final';
+        }
+        $note = $_POST['note'] ?? '';
+
+        $transactionId = trim((string)($_POST['transaction_id'] ?? ''));
+
+        /* ================= USER / STORE ================= */
+        $store_payment_details = $this->buildStorePaymentDetails($paymentType, $transactionId);
+
+        /* ================= CART (GET /cart/retrieve) ================= */
+        $cartData = $this->get_cart();
+
+        if (!$this->cartHasUsableCheckoutdata($cartData)) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Cart empty"
+            ]);
+            exit;
+        }
+
+        /* ================= CUSTOMER ================= */
+        // Resolve customer billing/shipping (includes validation + confirm popup overrides).
+        $rawCustomerId = $_POST['customer_id'] ?? null;
+        if ($rawCustomerId !== null && $rawCustomerId !== '') {
+            $customerId = (int)$rawCustomerId;
+        } else {
+            $customerId = (int)($_SESSION['pos_customer_id'] ?? 0);
+        }
+
+        $resolvedCustomer = $this->resolveCustomerBillingShippingForOrder($conn);
+        if (empty($resolvedCustomer['success'])) {
+            echo json_encode([
+                "success" => false,
+                "message" => $resolvedCustomer['message'] ?? 'Customer missing',
+            ]);
+            exit;
+        }
+
+        $billing = $resolvedCustomer['billing'];
+        $shipping = $resolvedCustomer['shipping'];
+
+        /* ================= Fresh cart snapshot for order/create (checkoutdata must match latest retrieve) ================= */
+        $orderCartSnapshot = $this->get_cart();
+        if (!$this->cartHasUsableCheckoutdata($orderCartSnapshot)) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Cart empty — refresh cart and try again.",
+            ]);
+            exit;
+        }
+
+        /* ================= COD ================= */
+        $codResolved = $this->resolveCodForPayment($paymentType, $orderCartSnapshot);
+        $cod = $codResolved['cod'];
+        $codCharges = $codResolved['codcharges'];
+
+        /* ================= RAZORPAY / CARD ================= */
+        $paymentExtra = $this->buildRazorpayAndCardFromPost();
+        $razorpay = $paymentExtra['razorpay'];
+        $card = $paymentExtra['card'];
+
+        /* ================= FINAL DATA (checkoutdata sourced from GET /cart/retrieve via get_cart()) ================= */
         $postData = array_merge([
             "payment_type" => $paymentType,
             "buynow" => "0",
-            "checkoutdata" => $cartData['checkoutdata'], // RAW !!!
+            "checkoutdata" => $orderCartSnapshot['checkoutdata'] ?? '',
             "cod" => $cod,
             "codcharges" => $codCharges,
             "store_payment_details" => $store_payment_details
         ], $billing, $shipping, $razorpay, $card);
+        $postData['checkoutdata'] = $this->normalizeCheckoutdataToken($postData['checkoutdata'] ?? '');
 
-        $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
-        $orderCreateQuery = ['discountcoupondetails' => $coupon];
+        $effectiveCouponRaw = trim((string)($orderCartSnapshot['discountcoupondetails_effective'] ?? ''));
+        $effectiveCoupon = $this->normalizeCouponForOrderCreateQuery($effectiveCouponRaw);
+        $effectiveVoucher = trim((string)($orderCartSnapshot['giftvoucherdetails_effective'] ?? ''));
+        $orderCreateQuery = [];
+        if ($effectiveCoupon !== '') {
+            $orderCreateQuery['discountcoupondetails'] = $effectiveCoupon;
+        }
+        if ($effectiveVoucher !== '') {
+            $orderCreateQuery['giftvoucherdetails'] = $effectiveVoucher;
+        }
 
-        /* ================= API CALL ================= */
-        $result = $this->exotic_api_call(
-            '/order/create',
-            'POST',
-            $orderCreateQuery,
-            $postData
+        $apiResult = $this->exotic_api_call('/order/create', 'POST', $orderCreateQuery, $postData);
+        $retryMeta = [
+            'attempted_no_coupon_retry' => false,
+        ];
+        // If still failing with "Missing order data", retry once with coupon/voucher removed
+        // to eliminate cart-token vs coupon-query mismatch.
+        $finalResponse = $apiResult['data'] ?? [];
+        $finalErr = trim((string)($finalResponse['error'] ?? $finalResponse['message'] ?? ''));
+        $finalHttp = (int)($apiResult['code'] ?? 0);
+        $shouldRetryWithoutCoupon = (
+            !empty($orderCreateQuery)
+            && $finalHttp >= 400
+            && stripos($finalErr, 'missing order data') !== false
         );
-
+        if ($shouldRetryWithoutCoupon) {
+            $retryMeta['attempted_no_coupon_retry'] = true;
+            $retryMeta['no_coupon_retry_reason'] = $finalErr;
+            $retryNoCouponQuery = [];
+            $retryNoCouponResult = $this->exotic_api_call('/order/create', 'POST', $retryNoCouponQuery, $postData);
+            $retryNoCouponResponse = $retryNoCouponResult['data'] ?? [];
+            $retryNoCouponHttp = (int)($retryNoCouponResult['code'] ?? 0);
+            $retryNoCouponOk = $retryNoCouponHttp < 400 && !empty($retryNoCouponResponse) && empty($retryNoCouponResponse['error']);
+            if ($retryNoCouponOk) {
+                $orderCreateQuery = $retryNoCouponQuery;
+                $apiResult = $retryNoCouponResult;
+                $retryMeta['no_coupon_retry_used_for_final_result'] = true;
+            } else {
+                $retryMeta['no_coupon_retry_used_for_final_result'] = false;
+                $retryMeta['no_coupon_retry_http_code'] = $retryNoCouponHttp;
+                $retryMeta['no_coupon_retry_error'] = (string)($retryNoCouponResponse['error'] ?? $retryNoCouponResponse['message'] ?? '');
+            }
+        }
         $orderApiDebug = $this->buildOrderCreateApiDebug(
             $orderCreateQuery,
             $postData,
-            $result,
+            $apiResult,
             [
                 'payment_type' => $paymentType,
                 'payment_stage' => $paymentStage,
@@ -2086,76 +3330,607 @@ class POSRegisterController
                 'transaction_id' => $transactionId,
                 'customer_id' => (int)$customerId,
                 'note' => $note,
+                'cart_api_checkoutdata' => $postData['checkoutdata'] ?? '',
+                'retry_meta' => $retryMeta,
             ]
         );
         $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
 
-        if (empty($result['data']['orderid'])) {
+        $response = $apiResult['data'] ?? [];
+        $httpCode = (int)($apiResult['code'] ?? 0);
+
+        if ($httpCode >= 400 || empty($response) || !empty($response['error'])) {
             echo json_encode([
                 "success" => false,
-                "message" => "Order API failed",
+                "message" => $response['error'] ?? $response['message'] ?? "Order create API failed",
                 "order_api_debug" => $orderApiDebug,
+                "api_response" => $response,
             ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
-        } else {
-            $orderId = $result['data']['orderid'];
-            // $orderNumber = $result['data']['ordernumber'] ?? $orderId;
-            $orderNumber = $result['data']['orderid'];
-            $warehouseId = $_SESSION['warehouse_id'];
-            $userId = $_SESSION['user']['id'];
-            $amount = $_POST['amount'];
-            $transactionId = $_POST['transaction_id'];
-            $note = $_POST['note'];
-            $paymentDate = date('Y-m-d');
-            $stmt = $conn->prepare("
-            INSERT INTO pos_payments 
-            (order_id, order_number, customer_id, warehouse_id, user_id,payment_stage, payment_mode, amount, transaction_id, note, payment_date)VALUES (?,?,?,?,?,?,?,?,?,?,?)");
-
-            // $stmt->bind_param(
-            //     "isiisssdsss",
-            //     $orderId,
-            //     $orderNumber,
-            //     $customerId,
-            //     $_SESSION['warehouse_id'],
-            //     $_SESSION['user']['id'],
-            //     $_POST['payment_stage'],
-            //     $_POST['payment_type'],
-            //     $_POST['amount'],
-            //     $_POST['transaction_id'],
-            //     $_POST['note'],
-            //     date('Y-m-d')
-            // );
-            $stmt->bind_param(
-                "isiisssdsss",
-                $orderId,
-                $orderNumber,
-                $customerId,
-                $warehouseId,
-                $userId,
-                $paymentStage,
-                $paymentType,
-                $amount,
-                $transactionId,
-                $note,
-                $paymentDate
-            );
-            $stmt->execute();
         }
 
-        $this->clearRemoteCartLines($cartData['items'] ?? []);
-        unset($_SESSION['gift_voucher']);
-        unset($_SESSION['cart_error']);
+        $orderId = $this->extractOrderIdFromCreateResponse($response);
 
-        unset($_SESSION['discount_coupon']);
-        unset($_SESSION['pos_customer_form']);
-        unset($_SESSION['pos_customer_id']);
-        unset($_SESSION['custom_discount']);
-        // echo '<pre>'; print_r($result); exit;
-        echo json_encode([
+        $posReceiptMeta = [];
+        if ($conn instanceof mysqli && $orderId !== null && $orderId !== '') {
+            try {
+                require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+                $wid = (int)($_SESSION['warehouse_id'] ?? 0);
+                $short = pos_payment_resolve_short_code_for_warehouse($conn, $wid);
+                $receiptNumber = pos_payment_generate_next_receipt_number($conn, $short);
+                $amountPost = isset($_POST['amount']) ? (float)$_POST['amount'] : 0;
+                $userIdIns = pos_payment_resolve_session_user_id();
+                $onStrIns = trim((string)$orderId);
+
+                $insertRes = pos_payment_insert_row(
+                    $conn,
+                    $onStrIns,
+                    $receiptNumber,
+                    (int)$customerId,
+                    (string)$paymentStage,
+                    (string)$paymentType,
+                    $amountPost,
+                    $transactionId,
+                    (string)$note,
+                    $userIdIns,
+                    $wid,
+                    true
+                );
+                $posReceiptMeta['receipt_number'] = $receiptNumber;
+                $posReceiptMeta['payment_id'] = $insertRes['payment_id'];
+                $posReceiptMeta['warehouse_id_used'] = $insertRes['warehouse_id_used'];
+                if ($insertRes['success']) {
+                    $posReceiptMeta['order_amount'] = $insertRes['order_amount'] ?? null;
+                    $posReceiptMeta['pending_amount'] = $insertRes['pending_amount'] ?? null;
+                }
+                if (!$insertRes['success']) {
+                    $posReceiptMeta['payment_receipt_saved'] = false;
+                    $posReceiptMeta['pos_payment_insert_sql_error'] = (string)($insertRes['error'] ?? 'insert failed');
+                } else {
+                    $posReceiptMeta['payment_receipt_saved'] = true;
+                }
+                $orderApiDebug['pos_payment_insert'] = [
+                    'attempted' => true,
+                    'order_number' => $onStrIns,
+                    'receipt_number' => $receiptNumber,
+                    'success' => $insertRes['success'],
+                    'warehouse_id_used' => $insertRes['warehouse_id_used'],
+                    'payment_id' => $insertRes['payment_id'],
+                    'error' => $insertRes['error'],
+                    'order_amount' => $insertRes['order_amount'] ?? null,
+                    'pending_amount' => $insertRes['pending_amount'] ?? null,
+                ];
+                $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
+            } catch (Throwable $e) {
+                $posReceiptMeta['payment_receipt_saved'] = false;
+                $posReceiptMeta['pos_payment_insert_exception'] = $e->getMessage();
+                $orderApiDebug['pos_payment_insert'] = [
+                    'attempted' => true,
+                    'success' => false,
+                    'exception' => $e->getMessage(),
+                ];
+                $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
+            }
+        }
+
+        echo json_encode(array_merge([
             "success" => true,
-            "orderid" => $result['data']['orderid'],
+            "message" => $response['message'] ?? "Order created successfully",
+            "order_id" => $orderId,
+            "payment_summary" => [
+                "payment_type" => (string)$paymentType,
+                "payment_stage" => (string)$paymentStage,
+                "amount" => (string)($_POST['amount'] ?? ''),
+                "transaction_id" => (string)$transactionId,
+                "store_payment_details" => (string)$store_payment_details,
+            ],
+            "api_response" => $response,
             "order_api_debug" => $orderApiDebug,
-        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        ], $posReceiptMeta), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /** @return float[] */
+    private function parseGstSplitForReceiptLine(float $gstPercent, float $gstAmountFull, bool $intraState): array
+    {
+        if ($gstAmountFull <= 0 || $gstPercent <= 0) {
+            return [
+                'sgst_rate' => 0.0,
+                'sgst_amt' => 0.0,
+                'cgst_rate' => 0.0,
+                'cgst_amt' => 0.0,
+                'igst_rate' => 0.0,
+                'igst_amt' => 0.0,
+            ];
+        }
+        $halfPct = round($gstPercent / 2, 3);
+        if ($intraState) {
+            $halfAmt = round($gstAmountFull / 2, 2);
+            return [
+                'sgst_rate' => $halfPct,
+                'sgst_amt' => $halfAmt,
+                'cgst_rate' => $halfPct,
+                'cgst_amt' => $halfAmt,
+                'igst_rate' => 0.0,
+                'igst_amt' => 0.0,
+            ];
+        }
+
+        return [
+            'sgst_rate' => 0.0,
+            'sgst_amt' => 0.0,
+            'cgst_rate' => 0.0,
+            'cgst_amt' => 0.0,
+            'igst_rate' => $gstPercent,
+            'igst_amt' => round($gstAmountFull, 2),
+        ];
+    }
+
+    /**
+     * Data for printable POS receipt (items from vp_orders after import; addresses from vp_order_info).
+     *
+     * @return array<string, mixed>
+     */
+    private function buildPaymentReceiptContext(
+        $conn,
+        string $orderId,
+        string $paymentType,
+        string $paymentStage,
+        string $paymentModeLabel,
+        string $amountStr,
+        string $transactionId,
+        string $receiptNumber,
+        string $receiptDateFormatted,
+        string $warehouseName
+    ): array {
+        $defaults = [
+            'receipt_has_order_data' => false,
+            'receipt_lines' => [],
+            'receipt_billing_block' => [],
+            'receipt_shipping_block' => [],
+            'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+            'receipt_company_gstin' => '07AADCE1400C1ZJ',
+            'receipt_company_pan' => 'AADCE1400C',
+            'receipt_company_tagline' => 'AUTHENTIC · CURATED · HERITAGE',
+            'receipt_office_footer' => 'EXOTIC INDIA ART PVT LTD, A-16/1, Wazirpur Industrial Estate, Delhi 110052, India',
+            'receipt_place_of_supply' => '—',
+            'receipt_banner_text' => '',
+            'receipt_title_main' => 'PAYMENT RECEIPT',
+            'receipt_payment_stage_label' => ucfirst(trim($paymentStage) !== '' ? $paymentStage : 'final'),
+            'receipt_payment_mode_detail' => $paymentModeLabel,
+            'receipt_subtotal_goods' => 0.0,
+            'receipt_gst_total' => 0.0,
+            'receipt_agg_sgst' => 0.0,
+            'receipt_agg_cgst' => 0.0,
+            'receipt_agg_igst' => 0.0,
+            'receipt_qty_total' => 0.0,
+            'receipt_coupon_discount' => 0.0,
+            'receipt_gift_discount' => 0.0,
+            'receipt_cash_discount' => 0.0,
+            'receipt_grand_total' => 0.0,
+            'receipt_amount_received' => 0.0,
+            'receipt_pending_amount' => 0.0,
+            'receipt_amount_in_words' => '',
+            'receipt_terms' => [
+                'E.&O.E. — All refunds as per applicable company policies.',
+                'Disputes subject to jurisdiction of Courts at Delhi, India.',
+                'This document is digitally generated during POS checkout.',
+            ],
+            'receipt_signature_date' => '',
+        ];
+
+        if (!$conn instanceof mysqli) {
+            $defaults['receipt_banner_text'] = 'Receipt details could not load (database connection unavailable).';
+
+            return $defaults;
+        }
+
+        $footerFromDb = $this->getDefaultExoticAddressFooterString($conn);
+        if ($footerFromDb !== '') {
+            $defaults['receipt_office_footer'] = $footerFromDb;
+        }
+
+        if ($orderId === '') {
+            $defaults['receipt_banner_text'] = 'Payment acknowledgement (order reference pending).';
+            try {
+                $dt = new DateTime('now', new DateTimeZone('Asia/Kolkata'));
+                $defaults['receipt_signature_date'] = $dt->format('d-m-Y');
+            } catch (\Throwable $e) {
+                $defaults['receipt_signature_date'] = date('d-m-Y');
+            }
+
+            return $defaults;
+        }
+
+        try {
+            $dtSign = new DateTime('now', new DateTimeZone('Asia/Kolkata'));
+            $defaults['receipt_signature_date'] = $dtSign->format('d-m-Y');
+        } catch (\Throwable $e) {
+            $defaults['receipt_signature_date'] = date('d-m-Y');
+        }
+
+        $stageLc = strtolower(trim($paymentStage));
+        $defaults['receipt_title_main'] = $stageLc === 'advance'
+            ? 'ADVANCE RECEIPT'
+            : 'PAYMENT RECEIPT';
+
+        $amtReceived = is_numeric(trim($amountStr)) ? (float)trim($amountStr) : 0.0;
+
+        require_once __DIR__ . '/../models/order/order.php';
+        $ordersModel = new Order($conn);
+
+        /** @var array<int,array<string,mixed>>|null $lines */
+        $lines = $ordersModel->getOrderByOrderNumber($orderId);
+        if (!is_array($lines)) {
+            $lines = [];
+        }
+
+        /** @var array<string,mixed>|null $addr */
+        $addr = $ordersModel->getAddressInfoByOrderNumber($orderId);
+        if (!is_array($addr)) {
+            $addr = [];
+        }
+
+        $billState = trim(strtolower((string)($addr['state'] ?? '')));
+        $shipState = trim(strtolower((string)($addr['shipping_state'] ?? '')));
+        $billCountry = trim(strtoupper((string)($addr['country'] ?? 'IN')));
+        $shipCountry = trim(strtoupper((string)($addr['shipping_country'] ?? '')));
+        if ($billCountry === '') {
+            $billCountry = 'IN';
+        }
+        if ($shipCountry === '') {
+            $shipCountry = 'IN';
+        }
+        $intraSameState = (
+            ($billCountry === 'IN' || $billCountry === 'INDIA')
+            && ($shipCountry === 'IN' || $shipCountry === 'INDIA')
+            && $billState !== ''
+            && $shipState !== ''
+            && $billState === $shipState
+        ) || (
+            ($billCountry === 'IN' || $billCountry === 'INDIA')
+            && ($shipCountry === 'IN' || $shipCountry === 'INDIA')
+            && $billState === ''
+            && $shipState === ''
+        );
+
+        $pos = '';
+        if ($shipState !== '') {
+            $pos = strtoupper(trim((string)($addr['shipping_state'] ?? '')));
+        }
+        elseif ($billState !== '') {
+            $pos = strtoupper(trim((string)($addr['state'] ?? '')));
+        }
+        elseif ($warehouseName !== '' && $warehouseName !== '—') {
+            $pos = trim($warehouseName);
+        }
+        $defaults['receipt_place_of_supply'] = $pos !== '' ? $pos : '—';
+
+        $billingName = trim(trim((string)($addr['first_name'] ?? '')) . ' ' . trim((string)($addr['last_name'] ?? '')));
+        if ($billingName === '') {
+            $billingName = '—';
+        }
+        $billingLines = [$billingName];
+        if (trim((string)($addr['company'] ?? '')) !== '') {
+            $billingLines[] = trim((string)$addr['company']);
+        }
+        $a1 = trim((string)($addr['address_line1'] ?? ''));
+        $a2 = trim((string)($addr['address_line2'] ?? ''));
+        if ($a1 !== '') {
+            $billingLines[] = $a1;
+        }
+        if ($a2 !== '') {
+            $billingLines[] = $a2;
+        }
+        $bcity = trim((string)($addr['city'] ?? ''));
+        $bstate = trim((string)($addr['state'] ?? ''));
+        $bz = trim((string)($addr['zipcode'] ?? ''));
+        if ($bcity !== '' || $bstate !== '') {
+            $billingLines[] = trim(implode(', ', array_filter([$bcity, $bstate], static fn ($x) => $x !== '')));
+        }
+        if ($bz !== '') {
+            $billingLines[] = 'Pin Code : ' . $bz;
+        }
+        if (trim((string)($addr['mobile'] ?? '')) !== '') {
+            $billingLines[] = 'Tel : ' . trim((string)$addr['mobile']);
+        }
+        if (trim((string)($addr['gstin'] ?? '')) !== '') {
+            $billingLines[] = 'GSTIN : ' . trim((string)$addr['gstin']);
+        }
+        $defaults['receipt_billing_block'] = $billingLines;
+
+        $shippingName = trim(trim((string)($addr['shipping_first_name'] ?? '')) . ' ' . trim((string)($addr['shipping_last_name'] ?? '')));
+        if ($shippingName === '') {
+            $shippingName = $billingName;
+        }
+        $shippingLines = [$shippingName];
+        if (trim((string)($addr['shipping_company'] ?? '')) !== '') {
+            $shippingLines[] = trim((string)$addr['shipping_company']);
+        }
+        $sa1 = trim((string)($addr['shipping_address_line1'] ?? ''));
+        $sa2 = trim((string)($addr['shipping_address_line2'] ?? ''));
+        if ($sa1 !== '') {
+            $shippingLines[] = $sa1;
+        }
+        if ($sa2 !== '') {
+            $shippingLines[] = $sa2;
+        }
+        $scity = trim((string)($addr['shipping_city'] ?? ''));
+        $sstate = trim((string)($addr['shipping_state'] ?? ''));
+        $sz = trim((string)($addr['shipping_zipcode'] ?? ''));
+        if ($scity !== '' || $sstate !== '') {
+            $shippingLines[] = trim(implode(', ', array_filter([$scity, $sstate], static fn ($x) => $x !== '')));
+        }
+        if ($sz !== '') {
+            $shippingLines[] = 'Pin Code : ' . $sz;
+        }
+        if (trim((string)($addr['shipping_mobile'] ?? '')) !== '') {
+            $shippingLines[] = 'Tel : ' . trim((string)$addr['shipping_mobile']);
+        }
+
+        // Shipping GST often same as billing for B2C; show blank if absent.
+        $shippingGst = trim((string)($addr['gstin'] ?? ''));
+        if ($shippingGst !== '') {
+            $shippingLines[] = 'GSTIN : ' . $shippingGst;
+        }
+        $defaults['receipt_shipping_block'] = $shippingLines !== [] ? $shippingLines : $billingLines;
+
+        $couponDisc = isset($addr['coupon_reduce']) ? (float)$addr['coupon_reduce'] : 0.0;
+        if ($couponDisc <= 0 && isset($lines[0]['coupon_reduce'])) {
+            $couponDisc = (float)$lines[0]['coupon_reduce'];
+        }
+        $giftDisc = isset($addr['giftvoucher_reduce']) ? (float)$addr['giftvoucher_reduce'] : 0.0;
+        $addrGrand = isset($addr['total']) ? (float)$addr['total'] : 0.0;
+
+        $receiptLines = [];
+        $sumGoods = 0.0;
+        $sumGst = 0.0;
+        $sumQty = 0.0;
+        $sumSgstAmt = 0.0;
+        $sumCgstAmt = 0.0;
+        $sumIgstAmt = 0.0;
+
+        foreach ($lines as $idx => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sn = $idx + 1;
+            $title = trim((string)($row['title'] ?? ''));
+            if ($title === '') {
+                $title = trim((string)($row['item_code'] ?? 'Item'));
+            }
+            $options = trim((string)($row['options'] ?? ''));
+            if ($options !== '' && strlen($options) < 260) {
+                $title .= ' · ' . $options;
+            }
+            $qty = (float)($row['quantity'] ?? 1);
+            if ($qty <= 0) {
+                $qty = 1.0;
+            }
+            $unit = (float)($row['itemprice'] ?? 0);
+            $lineTot = (float)($row['finalprice'] ?? 0);
+            if ($lineTot <= 0 && $unit > 0) {
+                $lineTot = $unit * $qty;
+            }
+            $gstPct = (float)($row['gst'] ?? 0);
+            $gstAmount = $gstPct > 0 ? ($lineTot - ($lineTot / (1 + $gstPct / 100.0))) : 0.0;
+            $split = $this->parseGstSplitForReceiptLine($gstPct, $gstAmount, $intraSameState);
+
+            $receiptLines[] = [
+                'sn' => $sn,
+                'title' => $title,
+                'hsn' => trim((string)($row['hsn'] ?? '')),
+                'qty' => $qty,
+                'unit_price' => $unit,
+                'sgst_rate' => $split['sgst_rate'],
+                'sgst_amt' => $split['sgst_amt'],
+                'cgst_rate' => $split['cgst_rate'],
+                'cgst_amt' => $split['cgst_amt'],
+                'igst_rate' => $split['igst_rate'],
+                'igst_amt' => $split['igst_amt'],
+                'line_total' => $lineTot,
+            ];
+
+            $sumGoods += $lineTot;
+            $sumGst += $gstAmount;
+            $sumQty += $qty;
+            $sumSgstAmt += $split['sgst_amt'];
+            $sumCgstAmt += $split['cgst_amt'];
+            $sumIgstAmt += $split['igst_amt'];
+        }
+
+        $defaults['receipt_has_order_data'] = $lines !== [];
+
+        // Cash discount placeholder (not modeled on import row).
+        $cashDisc = 0.0;
+        $grand = $addrGrand > 0 ? $addrGrand : max(0.0, $sumGoods - $couponDisc - $giftDisc - $cashDisc);
+
+        $defaults['receipt_subtotal_goods'] = $sumGoods;
+        $defaults['receipt_gst_total'] = $sumGst;
+        $defaults['receipt_qty_total'] = $sumQty;
+        $defaults['receipt_coupon_discount'] = $couponDisc;
+        $defaults['receipt_gift_discount'] = $giftDisc;
+        $defaults['receipt_cash_discount'] = $cashDisc;
+        $defaults['receipt_grand_total'] = $grand;
+        $defaults['receipt_lines'] = $receiptLines;
+        $defaults['receipt_agg_sgst'] = $sumSgstAmt;
+        $defaults['receipt_agg_cgst'] = $sumCgstAmt;
+        $defaults['receipt_agg_igst'] = $sumIgstAmt;
+
+        $defaults['receipt_amount_received'] = $amtReceived;
+        $defaults['receipt_pending_amount'] = max(0.0, round($grand - $amtReceived, 2));
+
+        if (function_exists('numberToWords')) {
+            $defaults['receipt_amount_in_words'] = 'Rs. ' . numberToWords((float)$grand) . ' Only';
+        } else {
+            $defaults['receipt_amount_in_words'] = 'Rs. ' . number_format($grand, 2, '.', ',') . ' Only';
+        }
+
+        // Row‑4 banner: same sentence pattern as print template (amount = payment taken on this slip).
+        $formattedAmt = number_format($amtReceived, 2, '.', '');
+        if ($stageLc === 'advance') {
+            $banner = 'Advance for Rs. ' . $formattedAmt . ' received with thanks against following items';
+        } elseif ($stageLc === 'partial') {
+            $banner = 'Partial payment of Rs. ' . $formattedAmt . ' received with thanks against following items';
+        } else {
+            $banner = 'Payment of Rs. ' . $formattedAmt . ' received with thanks against following items';
+        }
+        $defaults['receipt_banner_text'] = $banner;
+
+        return $defaults;
+    }
+
+    /**
+     * Receipt date in Asia/Kolkata, e.g. "26th Sep 2026".
+     */
+    private function formatReceiptDateOrdinalIndia(): string
+    {
+        try {
+            $dt = new DateTime('now', new DateTimeZone('Asia/Kolkata'));
+        } catch (\Throwable $e) {
+            $dt = new DateTime('now');
+        }
+
+        $day = (int)$dt->format('j');
+        if ($day >= 11 && $day <= 13) {
+            $suffix = 'th';
+        } else {
+            switch ($day % 10) {
+                case 1:
+                    $suffix = 'st';
+                    break;
+                case 2:
+                    $suffix = 'nd';
+                    break;
+                case 3:
+                    $suffix = 'rd';
+                    break;
+                default:
+                    $suffix = 'th';
+            }
+        }
+
+        return $day . $suffix . ' ' . $dt->format('M Y');
+    }
+
+    public function order_confirmation()
+    {
+        is_login();
+        global $conn;
+
+        $orderId = trim((string)($_GET['order_id'] ?? ''));
+        $paymentType = trim((string)($_GET['payment_type'] ?? 'offline'));
+        $paymentStage = trim((string)($_GET['payment_stage'] ?? 'final'));
+        $amount = trim((string)($_GET['amount'] ?? ''));
+        $transactionId = trim((string)($_GET['transaction_id'] ?? ''));
+        $importStatus = trim((string)($_GET['import_status'] ?? 'unknown'));
+
+        $warehouseName = '';
+        if (!empty($_SESSION['warehouse_id']) && $conn) {
+            require_once 'models/user/user.php';
+            $usersModel = new User($conn);
+            $warehouse = $usersModel->getWarehouseById((int)$_SESSION['warehouse_id']);
+            $warehouseName = trim((string)($warehouse['address_title'] ?? ''));
+            if ($warehouseName === '') {
+                $warehouseName = 'Warehouse #' . (int)$_SESSION['warehouse_id'];
+            }
+        }
+        if ($warehouseName === '' && $conn instanceof mysqli) {
+            $defWh = $this->getDefaultWarehouseRow($conn);
+            if ($defWh !== null) {
+                $warehouseName = trim((string)($defWh['address_title'] ?? ''));
+            }
+        }
+        if ($warehouseName === '') {
+            $warehouseName = '—';
+        }
+
+        $paymentModeLabels = [
+            'offline' => 'Cash / Offline',
+            'cc' => 'Credit / Debit Card',
+            'razorpay' => 'Razorpay',
+            'cod' => 'Cash on Delivery',
+            'bank_transfer' => 'Bank Transfer',
+            'pos_machine' => 'POS Machine',
+            'specialpay' => 'Special Payment',
+            'cheque' => 'Cheque',
+            'demand_draft' => 'Demand Draft',
+        ];
+        $paymentModeLabel = $paymentModeLabels[strtolower($paymentType)] ?? ucfirst(str_replace('_', ' ', $paymentType));
+
+        $receiptNumber = $orderId !== ''
+            ? 'EI-POS-' . preg_replace('/[^A-Za-z0-9\-]/', '-', $orderId)
+            : 'EI-POS-PENDING';
+
+        if ($conn instanceof mysqli && trim($orderId) !== '') {
+            $invStmt = $conn->prepare(
+                'SELECT receipt_number FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+            );
+            if ($invStmt) {
+                $orderKeyInv = trim((string)$orderId);
+                $invStmt->bind_param('s', $orderKeyInv);
+                $invStmt->execute();
+                $invRow = $invStmt->get_result()->fetch_assoc();
+                $invStmt->close();
+                $invVal = trim((string)($invRow['receipt_number'] ?? ''));
+                if ($invVal !== '') {
+                    $receiptNumber = $invVal;
+                }
+            }
+        }
+
+        $receiptDateFormatted = $this->formatReceiptDateOrdinalIndia();
+
+        $invoicePreviewUrl = 'index.php?page=invoice&action=preview&id=' . rawurlencode($orderId);
+        $paymentHistoryQuery = ['page' => 'payments', 'action' => 'list'];
+        $paymentHistoryFilterNumber = trim($orderId);
+        $paymentHistoryPk = ctype_digit(trim($orderId)) ? (int)$orderId : 0;
+        if ($paymentHistoryPk > 0 && $conn instanceof mysqli) {
+            $onStmt = $conn->prepare('SELECT order_number FROM vp_orders WHERE id = ? LIMIT 1');
+            if ($onStmt) {
+                $onStmt->bind_param('i', $paymentHistoryPk);
+                $onStmt->execute();
+                $onRow = $onStmt->get_result()->fetch_assoc();
+                $onStmt->close();
+                $resolved = trim((string)($onRow['order_number'] ?? ''));
+                if ($resolved !== '') {
+                    $paymentHistoryFilterNumber = $resolved;
+                }
+            }
+            $paymentHistoryQuery['order_id'] = (string)$paymentHistoryPk;
+        }
+        if ($paymentHistoryFilterNumber !== '') {
+            $paymentHistoryQuery['order_number'] = $paymentHistoryFilterNumber;
+        }
+        $paymentHistoryUrl = 'index.php?' . http_build_query($paymentHistoryQuery);
+
+        $receiptContext = $this->buildPaymentReceiptContext(
+            $conn,
+            $orderId,
+            $paymentType,
+            $paymentStage,
+            $paymentModeLabel,
+            $amount,
+            $transactionId,
+            $receiptNumber,
+            $receiptDateFormatted,
+            $warehouseName
+        );
+
+        renderTemplate('views/pos_register/order_confirmation.php', array_merge([
+            'order_id' => $orderId,
+            'payment_type' => $paymentType,
+            'payment_mode_label' => $paymentModeLabel,
+            'payment_stage' => $paymentStage,
+            'amount' => $amount,
+            'transaction_id' => $transactionId,
+            'import_status' => $importStatus,
+            'invoice_preview_url' => $invoicePreviewUrl,
+            'payment_history_url' => $paymentHistoryUrl,
+            'warehouse_name' => $warehouseName,
+            'receipt_number' => $receiptNumber,
+            'receipt_date_formatted' => $receiptDateFormatted,
+        ], $receiptContext));
     }
 
     public function add_customer()
@@ -2295,11 +4070,13 @@ class POSRegisterController
 
     public function remove_coupon()
     {
+        // Per API docs: delete coupon by omitting discountcoupondetails on cart requests.
         if (isset($_SESSION['discount_coupon'])) {
             unset($_SESSION['discount_coupon']);
         }
 
-        $_SESSION['coupon_status'] = "success";
+        $_SESSION['coupon_message'] = 'Coupon removed';
+        $_SESSION['coupon_status'] = 'success';
 
         header("Location: ?page=pos_register");
         exit;

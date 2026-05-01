@@ -1,3 +1,13 @@
+<?php
+$paymentsPrefillOrderId = (
+    isset($_GET['order_id'])
+    && $_GET['order_id'] !== ''
+    && ctype_digit((string)$_GET['order_id'])
+) ? (string)(int)$_GET['order_id'] : '';
+$paymentsPrefillOrderNumber = isset($_GET['order_number'])
+    ? (string)$_GET['order_number']
+    : '';
+?>
 <div class="min-h-screen bg-gray-50">
 
     <!-- HEADER -->
@@ -22,6 +32,8 @@
         <!-- FILTER BOX -->
         <div class="bg-white rounded-xl border p-4 mb-4">
 
+            <input type="hidden" id="payments_filter_order_id" value="<?= htmlspecialchars($paymentsPrefillOrderId, ENT_QUOTES, 'UTF-8') ?>">
+
             <div class="grid grid-cols-7 gap-3 text-xs">
 
                 <div>
@@ -39,6 +51,7 @@
                 <div>
                     <label>Order Number</label>
                     <input type="text" id="order_number"
+                        value="<?= htmlspecialchars($paymentsPrefillOrderNumber, ENT_QUOTES, 'UTF-8') ?>"
                         class="w-full border rounded px-2 py-2">
                 </div>
 
@@ -285,6 +298,19 @@
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         document.getElementById('payment_date').max = new Date().toISOString().split('T')[0];
+        try {
+            const qs = new URLSearchParams(window.location.search);
+            const preOrderNum = qs.get('order_number');
+            const preOrderId = qs.get('order_id');
+            const onInput = document.getElementById('order_number');
+            const oidHidden = document.getElementById('payments_filter_order_id');
+            if (preOrderNum !== null && onInput) {
+                onInput.value = preOrderNum;
+            }
+            if (preOrderId !== null && oidHidden) {
+                oidHidden.value = preOrderId;
+            }
+        } catch (e) {}
         loadPayments();
     });
 
@@ -293,7 +319,9 @@
     function loadPayments() {
 
 
-    let url = `?page=payments&action=list_ajax&from_date=${document.getElementById('from_date').value}&to_date=${document.getElementById('to_date').value}&order_number=${document.getElementById('order_number').value}&payment_mode=${document.getElementById('payment_mode').value}&amount_min=${document.getElementById('amount_min').value}&amount_max=${document.getElementById('amount_max').value}`;
+    const oidEl = document.getElementById('payments_filter_order_id');
+    const oidParam = oidEl && oidEl.value ? `&order_id=${encodeURIComponent(oidEl.value)}` : '';
+    let url = `?page=payments&action=list_ajax&from_date=${encodeURIComponent(document.getElementById('from_date').value)}&to_date=${encodeURIComponent(document.getElementById('to_date').value)}&order_number=${encodeURIComponent(document.getElementById('order_number').value)}&payment_mode=${encodeURIComponent(document.getElementById('payment_mode').value)}&amount_min=${encodeURIComponent(document.getElementById('amount_min').value)}&amount_max=${encodeURIComponent(document.getElementById('amount_max').value)}${oidParam}`;
 
 
         fetch(url)
@@ -316,16 +344,18 @@
 
                     html += `
     <tr class="border-t hover:bg-gray-50">
-        <td class="p-3">#${p.id}</td>
+        <td class="p-3">${(String(p.receipt_number || '').trim() !== '')
+            ? String(p.receipt_number).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+            : ('#' + p.id)}</td>
         <td class="p-3">${p.order_number ?? ''}</td>
         <td class="p-3">${p.payment_date ?? ''}</td>
         <td class="p-3">${p.warehouse ?? ''}</td>
   
         <td class="p-3 font-semibold">
-     ₹ ${p.amount} <br>
+     ₹ ${p.amount ?? p.payment_amount ?? ''} <br>
    
 </td>
-<td> <span class="text-red-600 text-xs"> ₹ ${p.pending_amount ?? 0}</span></td>
+<td> <span class="text-red-600 text-xs"> ₹ ${p.pending_balance ?? 0}</span></td>
         <td class="p-3">${p.payment_mode ?? ''}</td>
         <td class="p-3">${p.payment_stage ?? ''}</td>
         <td class="p-3">${p.user_name ?? ''}</td>
@@ -435,7 +465,7 @@
     document.getElementById("payment_order_label").innerText = p.order_number;
 
     // ⭐ KEEP ORIGINAL PAYMENT AMOUNT
-    document.getElementById("payment_amount").value = p.amount;
+    document.getElementById("payment_amount").value = (p.payment_amount != null && p.payment_amount !== '') ? p.payment_amount : (p.amount ?? '');
 
     document.getElementById("payment_stage").value = p.payment_stage;
     document.getElementById("payment_type").value = p.payment_mode;

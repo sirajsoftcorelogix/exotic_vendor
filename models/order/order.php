@@ -1204,26 +1204,29 @@ class Order{
         return $paymentTypes;
     }
     public function addVendorIfNotExists($vendor_name) {
-        // Check if vendor already exists
-        $sql = "SELECT id FROM vp_vendors WHERE vendor_name = ?";
+        $vendor_name = trim((string)$vendor_name);
+        if ($vendor_name === '') {
+            return ['success' => false, 'vendor_id' => 0, 'message' => 'Vendor name is empty.'];
+        }
+
+        // Case-insensitive lookup to avoid duplicates by casing/spacing.
+        $sql = "SELECT id FROM vp_vendors WHERE TRIM(LOWER(vendor_name)) = TRIM(LOWER(?)) LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('s', $vendor_name);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
             $row = $result->fetch_assoc();
-            return ['success' => true, 'vendor_id' => $row['id'], 'message' => 'Vendor already exists.'];
+            return ['success' => true, 'vendor_id' => (int)$row['id'], 'message' => 'Vendor already exists.'];
         }
 
-        // Insert new vendor
         $sql = "INSERT INTO vp_vendors (vendor_name) VALUES (?)";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('s', $vendor_name);
         if ($stmt->execute()) {
-            return ['success' => true, 'vendor_id' => $stmt->insert_id, 'message' => 'Vendor added successfully.'];
-        } else {
-            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+            return ['success' => true, 'vendor_id' => (int)$stmt->insert_id, 'message' => 'Vendor added successfully.'];
         }
+        return ['success' => false, 'vendor_id' => 0, 'message' => 'Database error: ' . $stmt->error];
     }
     public function fetchOrdersForUpdate(){
         //1= shipped !=cancelled !=return ORDERS
@@ -1479,8 +1482,8 @@ class Order{
         return $stmt->insert_id;
     }
     public function getAddressInfoByOrderNumber($order_number) {
-        $sql = "SELECT * FROM address_info WHERE order_number = ?";
-        $stmt = $this->db->prepare($sql);   
+        $sql = "SELECT * FROM vp_order_info WHERE order_number = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
         $stmt->bind_param('s', $order_number);
         $stmt->execute();
         $result = $stmt->get_result();
