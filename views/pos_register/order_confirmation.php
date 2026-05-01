@@ -30,16 +30,9 @@ $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : []
         <div id="paymentReceiptSection" class="receipt-sheet overflow-hidden rounded-lg border border-slate-900 bg-white text-black shadow-lg print:border-0 print:shadow-none">
           <!-- Row 1: logo + thick rule -->
           <div class="flex items-center gap-3 px-4 pt-4 pb-3 sm:px-6">
-            <div class="flex shrink-0 items-center gap-2">
-              <svg class="text-orange-600" width="46" height="46" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <circle cx="24" cy="24" r="23" stroke="currentColor" stroke-width="2" fill="#fff"/>
-                <path fill="currentColor" d="M24 10c8 14 14 22 14 26a14 14 0 01-28 0c0-4 6-12 14-26z"/>
-                <circle cx="24" cy="28" r="4" fill="#fff"/>
-              </svg>
-              <div>
-                <div class="font-serif text-xl font-semibold lowercase tracking-wide text-neutral-900">exotic india</div>
-                <div class="text-[9px] font-medium uppercase tracking-[0.18em] text-neutral-500"><?= $h($receipt_company_tagline ?? '') ?></div>
-              </div>
+            <div class="flex shrink-0 flex-col gap-0.5">
+              <img src="images/EI_Logo_130x27_SVG_1.svg" width="130" height="27" alt="Exotic India" class="h-[27px] w-[130px] max-w-full object-contain object-left" />
+              <div class="text-[9px] font-medium uppercase tracking-[0.18em] text-neutral-500"><?= $h($receipt_company_tagline ?? '') ?></div>
             </div>
             <div class="h-[3px] min-w-0 flex-1 bg-black"></div>
           </div>
@@ -208,15 +201,9 @@ $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : []
           <!-- Footer -->
           <div class="border-t border-neutral-300 px-4 py-4 sm:px-6">
             <div class="flex flex-col items-start gap-4 sm:flex-row sm:justify-between sm:gap-8">
-              <div class="flex items-center gap-2">
-                <svg class="text-orange-600 shrink-0" width="36" height="36" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="2" fill="#fff"/>
-                  <path fill="currentColor" d="M24 13c7 13 13 21 13 23a13 13 0 01-26 0c0-2 6-10 13-23z"/>
-                </svg>
-                <div>
-                  <div class="font-serif text-sm lowercase font-semibold text-neutral-900">exotic india</div>
-                  <div class="text-[8px] uppercase tracking-[0.2em] text-neutral-500"><?= $h($receipt_company_tagline ?? '') ?></div>
-                </div>
+              <div class="flex flex-col gap-0.5">
+                <img src="images/EI_Logo_130x27_SVG_1.svg" width="104" height="22" alt="Exotic India" class="h-[22px] w-[104px] max-w-full object-contain object-left" />
+                <div class="text-[8px] uppercase tracking-[0.2em] text-neutral-500"><?= $h($receipt_company_tagline ?? '') ?></div>
               </div>
               <div class="max-w-md text-[10px] leading-relaxed text-neutral-700">
                 <span class="font-bold text-neutral-900">Head Office</span><br>
