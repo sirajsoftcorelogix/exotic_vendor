@@ -3351,7 +3351,61 @@ class POSRegisterController
 
         $orderId = $this->extractOrderIdFromCreateResponse($response);
 
-        echo json_encode([
+        $posReceiptMeta = [];
+        if ($conn instanceof mysqli && $orderId !== null && $orderId !== '') {
+            try {
+                require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+                $wid = (int)($_SESSION['warehouse_id'] ?? 0);
+                $short = pos_payment_resolve_short_code_for_warehouse($conn, $wid);
+                $invoiceNumber = pos_payment_generate_next_invoice_number($conn, $short);
+                $amountPost = isset($_POST['amount']) ? (float)$_POST['amount'] : 0;
+                $userIdIns = (int)($_SESSION['user_id'] ?? 0);
+                $orderPkIns = ctype_digit(trim((string)$orderId)) ? (int)$orderId : 0;
+
+                $stIns = $conn->prepare('
+                    INSERT INTO pos_payments
+                    (order_id, order_number, invoice_number, customer_id, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())
+                ');
+                if ($stIns) {
+                    $custIns = $customerId;
+                    $amtIns = $amountPost;
+                    $stageIns = $paymentStage;
+                    $modeIns = $paymentType;
+                    $trIns = $transactionId;
+                    $noteIns = (string)$note;
+                    $onStrIns = trim((string)$orderId);
+
+                    $stIns->bind_param(
+                        'ississdssii',
+                        $orderPkIns,
+                        $onStrIns,
+                        $invoiceNumber,
+                        $custIns,
+                        $stageIns,
+                        $modeIns,
+                        $amtIns,
+                        $trIns,
+                        $noteIns,
+                        $userIdIns,
+                        $wid
+                    );
+                    if ($stIns->execute()) {
+                        $posReceiptMeta['invoice_number'] = $invoiceNumber;
+                        $posReceiptMeta['payment_id'] = (int)$conn->insert_id;
+                    } else {
+                        $posReceiptMeta['pos_payment_insert_sql_error'] = $stIns->error;
+                    }
+                    $stIns->close();
+                } else {
+                    $posReceiptMeta['pos_payment_insert_sql_error'] = $conn->error;
+                }
+            } catch (Throwable $e) {
+                $posReceiptMeta['pos_payment_insert_exception'] = $e->getMessage();
+            }
+        }
+
+        echo json_encode(array_merge([
             "success" => true,
             "message" => $response['message'] ?? "Order created successfully",
             "order_id" => $orderId,
@@ -3364,7 +3418,7 @@ class POSRegisterController
             ],
             "api_response" => $response,
             "order_api_debug" => $orderApiDebug,
-        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        ], $posReceiptMeta), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 
@@ -3799,6 +3853,23 @@ class POSRegisterController
         $receiptNumber = $orderId !== ''
             ? 'EI-POS-' . preg_replace('/[^A-Za-z0-9\-]/', '-', $orderId)
             : 'EI-POS-PENDING';
+
+        if ($conn instanceof mysqli && trim($orderId) !== '') {
+            $invStmt = $conn->prepare(
+                'SELECT invoice_number FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+            );
+            if ($invStmt) {
+                $orderKeyInv = trim((string)$orderId);
+                $invStmt->bind_param('s', $orderKeyInv);
+                $invStmt->execute();
+                $invRow = $invStmt->get_result()->fetch_assoc();
+                $invStmt->close();
+                $invVal = trim((string)($invRow['invoice_number'] ?? ''));
+                if ($invVal !== '') {
+                    $receiptNumber = $invVal;
+                }
+            }
+        }
 
         $receiptDateFormatted = $this->formatReceiptDateOrdinalIndia();
 

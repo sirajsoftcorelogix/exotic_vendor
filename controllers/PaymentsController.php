@@ -1,5 +1,6 @@
 <?php
 
+require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
 require_once 'models/user/user.php';
 require_once 'models/PosInvoice/invoice.php';
 require_once 'models/order/order.php';
@@ -308,62 +309,126 @@ WHERE 1=1
     {
         global $conn;
 
-        $order_id = $_POST['order_id'];
-        // echo $order_id;
-        // exit;
-        $amount = $_POST['amount'];
-        $mode = $_POST['payment_type'];
-        $stage = $_POST['payment_stage'];
-        $transaction = $_POST['transaction_id'];
-        $note = $_POST['note'];
+        $postOrderKey = trim((string)($_POST['order_id'] ?? ''));
+        $amount = isset($_POST['amount']) ? (float)$_POST['amount'] : 0;
+        $mode = $_POST['payment_type'] ?? '';
+        $stage = $_POST['payment_stage'] ?? 'final';
+        $transaction = (string)($_POST['transaction_id'] ?? '');
+        $note = (string)($_POST['note'] ?? '');
 
-        $user_id = $_SESSION['user_id'] ?? 0;
-        $warehouse_id = $_SESSION['warehouse_id'] ?? 0;
+        $user_id = (int)($_SESSION['user_id'] ?? 0);
+        $warehouse_id = (int)($_SESSION['warehouse_id'] ?? 0);
+        $postOrderInt = (ctype_digit($postOrderKey) && $postOrderKey !== '') ? (int)$postOrderKey : 0;
 
-        // fetch order info from FIRST payment
-        $stmt = $conn->prepare("
-        SELECT order_number, customer_id
-        FROM pos_payments
-        WHERE order_id = ?
-        ORDER BY id ASC
-        LIMIT 1
-    ");
-        $stmt->bind_param("i", $order_id);
-        $stmt->execute();
-        $order = $stmt->get_result()->fetch_assoc();
+        $anchor = null;
+        $orderPkForInsert = 0;
+        $orderNumberStr = '';
+        $customerId = 0;
 
-        if (!$order) {
+        if ($postOrderInt > 0) {
+            $stmt = $conn->prepare('
+                SELECT order_number, customer_id, order_id
+                FROM pos_payments
+                WHERE order_id = ?
+                ORDER BY id ASC
+                LIMIT 1
+            ');
+            if ($stmt) {
+                $stmt->bind_param('i', $postOrderInt);
+                $stmt->execute();
+                $anchor = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+            }
+        }
+
+        if (!$anchor && $postOrderKey !== '') {
+            $stmt = $conn->prepare('
+                SELECT order_number, customer_id, order_id
+                FROM pos_payments
+                WHERE order_number = ?
+                ORDER BY id ASC
+                LIMIT 1
+            ');
+            if ($stmt) {
+                $stmt->bind_param('s', $postOrderKey);
+                $stmt->execute();
+                $anchor = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+            }
+        }
+
+        if ($anchor) {
+            $orderNumberStr = (string)($anchor['order_number'] ?? '');
+            $customerId = (int)($anchor['customer_id'] ?? 0);
+            $orderPkForInsert = (int)($anchor['order_id'] ?? 0);
+            if ($orderPkForInsert <= 0 && ctype_digit((string)$orderNumberStr)) {
+                $orderPkForInsert = (int)$orderNumberStr;
+            }
+        }
+
+        $vpRow = null;
+        if (!$anchor || $anchor['order_number'] === '' || ($anchor['customer_id'] ?? 0) <= 0) {
+            if ($postOrderInt > 0) {
+                $stmt = $conn->prepare('SELECT id, order_number, customer_id FROM vp_orders WHERE id = ? ORDER BY id ASC LIMIT 1');
+                if ($stmt) {
+                    $stmt->bind_param('i', $postOrderInt);
+                    $stmt->execute();
+                    $vpRow = $stmt->get_result()->fetch_assoc();
+                    $stmt->close();
+                }
+            }
+            if (!$vpRow && $postOrderKey !== '') {
+                $stmt = $conn->prepare('SELECT id, order_number, customer_id FROM vp_orders WHERE order_number = ? ORDER BY id ASC LIMIT 1');
+                if ($stmt) {
+                    $stmt->bind_param('s', $postOrderKey);
+                    $stmt->execute();
+                    $vpRow = $stmt->get_result()->fetch_assoc();
+                    $stmt->close();
+                }
+            }
+        }
+
+        if ($vpRow && (!empty($vpRow['order_number']))) {
+            $orderPkForInsert = (int)($vpRow['id'] ?? $orderPkForInsert);
+            $orderNumberStr = (string)$vpRow['order_number'];
+            $customerId = (int)$vpRow['customer_id'];
+        } elseif (!$anchor) {
             echo json_encode(["success" => false, "message" => "Order data missing"]);
+            exit;
+        } elseif (!$vpRow && $customerId <= 0) {
+            echo json_encode(["success" => false, "message" => "Order data missing (customer unknown)"]);
             exit;
         }
 
-        $order_number = $order['order_number'];
-        $customer_id = $order['customer_id'];
+        if ($orderNumberStr === '' && $anchor) {
+            $orderNumberStr = (string)($anchor['order_number'] ?? '');
+        }
 
-        $stmt2 = $conn->prepare("
-        INSERT INTO pos_payments
-        (order_id, order_number, customer_id, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-        VALUES (?,?,?,?,?,?,?,?,NOW(),?,?, 'INR', 'success', NOW())
-    ");
+        try {
+            $short = pos_payment_resolve_short_code_for_warehouse($conn, $warehouse_id);
+            $invoiceNumber = pos_payment_generate_next_invoice_number($conn, $short);
+        } catch (Throwable $e) {
+            echo json_encode(['success' => false, 'message' => 'Receipt number error: ' . $e->getMessage()]);
+            exit;
+        }
 
-        // $stmt2->bind_param(
-        //     "iisdsdssii",
-        //     $order_id,
-        //     $order_number,
-        //     $customer_id,
-        //     $stage,
-        //     $mode,
-        //     $amount,
-        //     $transaction,
-        //     $note,
-        //     $user_id,
-        //     $warehouse_id
-        // );
+        $stmt2 = $conn->prepare('
+            INSERT INTO pos_payments
+            (order_id, order_number, invoice_number, customer_id, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())
+        ');
+
+        if (!$stmt2) {
+            echo json_encode(['success' => false, 'message' => 'Insert prepare failed: ' . $conn->error]);
+            exit;
+        }
+
         $stmt2->bind_param(
-            "iiissdssii",
-            $order_id,
-            $order_number,
-            $customer_id,
+            'ississdssii',
+            $orderPkForInsert,
+            $orderNumberStr,
+            $invoiceNumber,
+            $customerId,
             $stage,
             $mode,
             $amount,
@@ -372,13 +437,18 @@ WHERE 1=1
             $user_id,
             $warehouse_id
         );
-        $stmt2->execute();
-        $paymentId = $conn->insert_id;
+        if (!$stmt2->execute()) {
+            echo json_encode(['success' => false, 'message' => 'Payment save failed: ' . $stmt2->error]);
+            $stmt2->close();
+            exit;
+        }
+        $newPaymentId = (int)$conn->insert_id;
+        $stmt2->close();
 
         /* 🔥 FINAL PAYMENT → UPDATE INVOICE */
         if ($stage === 'final') {
 
-            $order_number_safe = $conn->real_escape_string($order_number);
+            $order_number_safe = $conn->real_escape_string($orderNumberStr);
 
             $inv = $conn->query("
             SELECT id 
@@ -421,7 +491,11 @@ WHERE 1=1
         //     ");
         //         }
         //     }
-        echo json_encode(["success" => true]);
+        echo json_encode([
+            'success' => true,
+            'invoice_number' => $invoiceNumber,
+            'payment_id' => $newPaymentId,
+        ]);
         exit;
     }
 
