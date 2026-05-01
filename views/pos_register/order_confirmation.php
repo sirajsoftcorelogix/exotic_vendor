@@ -224,7 +224,7 @@ if ($receipt_download_filename_base === '') {
         <div class="no-print flex flex-wrap gap-3">
           <button type="button" onclick="printPaymentReceipt()" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Print / Save as PDF</button>
           <p class="basis-full text-xs text-slate-500">When you choose “Save as PDF”, the suggested file name uses your receipt number (Chrome, Edge and most Chromium browsers).</p>
-          <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Payment History</a>
+          <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Payment History</a>
           <a href="<?= $h((string)($invoice_preview_url ?? '#')) ?>" target="_blank" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Print Invoice</a>
           <a href="index.php?page=pos_register&action=list" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to POS</a>
         </div>
