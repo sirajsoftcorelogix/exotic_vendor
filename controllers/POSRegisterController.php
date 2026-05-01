@@ -3878,7 +3878,27 @@ class POSRegisterController
         $receiptDateFormatted = $this->formatReceiptDateOrdinalIndia();
 
         $invoicePreviewUrl = 'index.php?page=invoice&action=preview&id=' . rawurlencode($orderId);
-        $paymentHistoryUrl = 'index.php?page=orders&action=list';
+        $paymentHistoryQuery = ['page' => 'payments', 'action' => 'list'];
+        $paymentHistoryFilterNumber = trim($orderId);
+        $paymentHistoryPk = ctype_digit(trim($orderId)) ? (int)$orderId : 0;
+        if ($paymentHistoryPk > 0 && $conn instanceof mysqli) {
+            $onStmt = $conn->prepare('SELECT order_number FROM vp_orders WHERE id = ? LIMIT 1');
+            if ($onStmt) {
+                $onStmt->bind_param('i', $paymentHistoryPk);
+                $onStmt->execute();
+                $onRow = $onStmt->get_result()->fetch_assoc();
+                $onStmt->close();
+                $resolved = trim((string)($onRow['order_number'] ?? ''));
+                if ($resolved !== '') {
+                    $paymentHistoryFilterNumber = $resolved;
+                }
+            }
+            $paymentHistoryQuery['order_id'] = (string)$paymentHistoryPk;
+        }
+        if ($paymentHistoryFilterNumber !== '') {
+            $paymentHistoryQuery['order_number'] = $paymentHistoryFilterNumber;
+        }
+        $paymentHistoryUrl = 'index.php?' . http_build_query($paymentHistoryQuery);
 
         $receiptContext = $this->buildPaymentReceiptContext(
             $conn,
