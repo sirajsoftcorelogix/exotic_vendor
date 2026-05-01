@@ -22,6 +22,8 @@
         <!-- FILTER BOX -->
         <div class="bg-white rounded-xl border p-4 mb-4">
 
+            <input type="hidden" id="payments_filter_order_id" value="">
+
             <div class="grid grid-cols-7 gap-3 text-xs">
 
                 <div>
@@ -293,7 +295,9 @@
     function loadPayments() {
 
 
-    let url = `?page=payments&action=list_ajax&from_date=${document.getElementById('from_date').value}&to_date=${document.getElementById('to_date').value}&order_number=${document.getElementById('order_number').value}&payment_mode=${document.getElementById('payment_mode').value}&amount_min=${document.getElementById('amount_min').value}&amount_max=${document.getElementById('amount_max').value}`;
+    const oidEl = document.getElementById('payments_filter_order_id');
+    const oidParam = oidEl && oidEl.value ? `&order_id=${encodeURIComponent(oidEl.value)}` : '';
+    let url = `?page=payments&action=list_ajax&from_date=${encodeURIComponent(document.getElementById('from_date').value)}&to_date=${encodeURIComponent(document.getElementById('to_date').value)}&order_number=${encodeURIComponent(document.getElementById('order_number').value)}&payment_mode=${encodeURIComponent(document.getElementById('payment_mode').value)}&amount_min=${encodeURIComponent(document.getElementById('amount_min').value)}&amount_max=${encodeURIComponent(document.getElementById('amount_max').value)}${oidParam}`;
 
 
         fetch(url)

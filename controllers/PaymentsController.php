@@ -137,10 +137,20 @@ WHERE 1=1
             $types .= "s";
         }
 
-        if (!empty($_GET['order_number'])) {
-            $sql .= " AND p.order_number LIKE ?";
-            $params[] = "%" . $_GET['order_number'] . "%";
-            $types .= "s";
+        $orderPkFilter = (
+            isset($_GET['order_id'])
+            && $_GET['order_id'] !== ''
+            && ctype_digit((string)$_GET['order_id'])
+        ) ? (int)$_GET['order_id'] : 0;
+
+        if ($orderPkFilter > 0) {
+            $sql .= ' AND p.order_id = ?';
+            $params[] = $orderPkFilter;
+            $types .= 'i';
+        } elseif (!empty($_GET['order_number'])) {
+            $sql .= ' AND p.order_number LIKE ?';
+            $params[] = '%' . $_GET['order_number'] . '%';
+            $types .= 's';
         }
 
         if (!empty($_GET['amount_min'])) {
