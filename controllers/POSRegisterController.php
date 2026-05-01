@@ -3328,6 +3328,351 @@ class POSRegisterController
         exit;
     }
 
+    /** @return float[] */
+    private function parseGstSplitForReceiptLine(float $gstPercent, float $gstAmountFull, bool $intraState): array
+    {
+        if ($gstAmountFull <= 0 || $gstPercent <= 0) {
+            return [
+                'sgst_rate' => 0.0,
+                'sgst_amt' => 0.0,
+                'cgst_rate' => 0.0,
+                'cgst_amt' => 0.0,
+                'igst_rate' => 0.0,
+                'igst_amt' => 0.0,
+            ];
+        }
+        $halfPct = round($gstPercent / 2, 3);
+        if ($intraState) {
+            $halfAmt = round($gstAmountFull / 2, 2);
+            return [
+                'sgst_rate' => $halfPct,
+                'sgst_amt' => $halfAmt,
+                'cgst_rate' => $halfPct,
+                'cgst_amt' => $halfAmt,
+                'igst_rate' => 0.0,
+                'igst_amt' => 0.0,
+            ];
+        }
+
+        return [
+            'sgst_rate' => 0.0,
+            'sgst_amt' => 0.0,
+            'cgst_rate' => 0.0,
+            'cgst_amt' => 0.0,
+            'igst_rate' => $gstPercent,
+            'igst_amt' => round($gstAmountFull, 2),
+        ];
+    }
+
+    /**
+     * Data for printable POS receipt (items from vp_orders after import; addresses from address_info).
+     *
+     * @return array<string, mixed>
+     */
+    private function buildPaymentReceiptContext(
+        $conn,
+        string $orderId,
+        string $paymentType,
+        string $paymentStage,
+        string $paymentModeLabel,
+        string $amountStr,
+        string $transactionId,
+        string $receiptNumber,
+        string $receiptDateFormatted,
+        string $warehouseName
+    ): array {
+        $defaults = [
+            'receipt_has_order_data' => false,
+            'receipt_lines' => [],
+            'receipt_billing_block' => [],
+            'receipt_shipping_block' => [],
+            'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+            'receipt_company_gstin' => '07AADCE1400C1ZJ',
+            'receipt_company_pan' => 'AADCE1400C',
+            'receipt_company_tagline' => 'AUTHENTIC · CURATED · HERITAGE',
+            'receipt_office_footer' => 'EXOTIC INDIA ART PVT LTD, A-16/1, Wazirpur Industrial Estate, Delhi 110052, India',
+            'receipt_place_of_supply' => '—',
+            'receipt_banner_text' => '',
+            'receipt_title_main' => 'PAYMENT RECEIPT',
+            'receipt_payment_stage_label' => ucfirst(trim($paymentStage) !== '' ? $paymentStage : 'final'),
+            'receipt_payment_mode_detail' => $paymentModeLabel,
+            'receipt_subtotal_goods' => 0.0,
+            'receipt_gst_total' => 0.0,
+            'receipt_agg_sgst' => 0.0,
+            'receipt_agg_cgst' => 0.0,
+            'receipt_agg_igst' => 0.0,
+            'receipt_qty_total' => 0.0,
+            'receipt_coupon_discount' => 0.0,
+            'receipt_gift_discount' => 0.0,
+            'receipt_cash_discount' => 0.0,
+            'receipt_grand_total' => 0.0,
+            'receipt_amount_received' => 0.0,
+            'receipt_pending_amount' => 0.0,
+            'receipt_amount_in_words' => '',
+            'receipt_terms' => [
+                'E.&O.E. — All refunds as per applicable company policies.',
+                'Disputes subject to jurisdiction of Courts at Delhi, India.',
+                'This document is digitally generated during POS checkout.',
+            ],
+            'receipt_signature_date' => '',
+        ];
+
+        if (!$conn instanceof mysqli) {
+            $defaults['receipt_banner_text'] = 'Receipt details could not load (database connection unavailable).';
+
+            return $defaults;
+        }
+
+        if ($orderId === '') {
+            $defaults['receipt_banner_text'] = 'Payment acknowledgement (order reference pending).';
+            try {
+                $dt = new DateTime('now', new DateTimeZone('Asia/Kolkata'));
+                $defaults['receipt_signature_date'] = $dt->format('d-m-Y');
+            } catch (\Throwable $e) {
+                $defaults['receipt_signature_date'] = date('d-m-Y');
+            }
+
+            return $defaults;
+        }
+
+        try {
+            $dtSign = new DateTime('now', new DateTimeZone('Asia/Kolkata'));
+            $defaults['receipt_signature_date'] = $dtSign->format('d-m-Y');
+        } catch (\Throwable $e) {
+            $defaults['receipt_signature_date'] = date('d-m-Y');
+        }
+
+        $stageLc = strtolower(trim($paymentStage));
+        $defaults['receipt_title_main'] = $stageLc === 'advance'
+            ? 'ADVANCE RECEIPT'
+            : 'PAYMENT RECEIPT';
+
+        $amtReceived = is_numeric(trim($amountStr)) ? (float)trim($amountStr) : 0.0;
+
+        require_once __DIR__ . '/../models/order/order.php';
+        $ordersModel = new Order($conn);
+
+        /** @var array<int,array<string,mixed>>|null $lines */
+        $lines = $ordersModel->getOrderByOrderNumber($orderId);
+        if (!is_array($lines)) {
+            $lines = [];
+        }
+
+        /** @var array<string,mixed>|null $addr */
+        $addr = $ordersModel->getAddressInfoByOrderNumber($orderId);
+        if (!is_array($addr)) {
+            $addr = [];
+        }
+
+        $billState = trim(strtolower((string)($addr['state'] ?? '')));
+        $shipState = trim(strtolower((string)($addr['shipping_state'] ?? '')));
+        $billCountry = trim(strtoupper((string)($addr['country'] ?? 'IN')));
+        $shipCountry = trim(strtoupper((string)($addr['shipping_country'] ?? '')));
+        if ($billCountry === '') {
+            $billCountry = 'IN';
+        }
+        if ($shipCountry === '') {
+            $shipCountry = 'IN';
+        }
+        $intraSameState = (
+            ($billCountry === 'IN' || $billCountry === 'INDIA')
+            && ($shipCountry === 'IN' || $shipCountry === 'INDIA')
+            && $billState !== ''
+            && $shipState !== ''
+            && $billState === $shipState
+        ) || (
+            ($billCountry === 'IN' || $billCountry === 'INDIA')
+            && ($shipCountry === 'IN' || $shipCountry === 'INDIA')
+            && $billState === ''
+            && $shipState === ''
+        );
+
+        $pos = '';
+        if ($shipState !== '') {
+            $pos = strtoupper(trim((string)($addr['shipping_state'] ?? '')));
+        }
+        elseif ($billState !== '') {
+            $pos = strtoupper(trim((string)($addr['state'] ?? '')));
+        }
+        elseif ($warehouseName !== '' && $warehouseName !== '—') {
+            $pos = trim($warehouseName);
+        }
+        $defaults['receipt_place_of_supply'] = $pos !== '' ? $pos : '—';
+
+        $billingName = trim(trim((string)($addr['first_name'] ?? '')) . ' ' . trim((string)($addr['last_name'] ?? '')));
+        if ($billingName === '') {
+            $billingName = '—';
+        }
+        $billingLines = [$billingName];
+        if (trim((string)($addr['company'] ?? '')) !== '') {
+            $billingLines[] = trim((string)$addr['company']);
+        }
+        $a1 = trim((string)($addr['address_line1'] ?? ''));
+        $a2 = trim((string)($addr['address_line2'] ?? ''));
+        if ($a1 !== '') {
+            $billingLines[] = $a1;
+        }
+        if ($a2 !== '') {
+            $billingLines[] = $a2;
+        }
+        $bcity = trim((string)($addr['city'] ?? ''));
+        $bstate = trim((string)($addr['state'] ?? ''));
+        $bz = trim((string)($addr['zipcode'] ?? ''));
+        if ($bcity !== '' || $bstate !== '') {
+            $billingLines[] = trim(implode(', ', array_filter([$bcity, $bstate], static fn ($x) => $x !== '')));
+        }
+        if ($bz !== '') {
+            $billingLines[] = 'Pin Code : ' . $bz;
+        }
+        if (trim((string)($addr['mobile'] ?? '')) !== '') {
+            $billingLines[] = 'Tel : ' . trim((string)$addr['mobile']);
+        }
+        if (trim((string)($addr['gstin'] ?? '')) !== '') {
+            $billingLines[] = 'GSTIN : ' . trim((string)$addr['gstin']);
+        }
+        $defaults['receipt_billing_block'] = $billingLines;
+
+        $shippingName = trim(trim((string)($addr['shipping_first_name'] ?? '')) . ' ' . trim((string)($addr['shipping_last_name'] ?? '')));
+        if ($shippingName === '') {
+            $shippingName = $billingName;
+        }
+        $shippingLines = [$shippingName];
+        if (trim((string)($addr['shipping_company'] ?? '')) !== '') {
+            $shippingLines[] = trim((string)$addr['shipping_company']);
+        }
+        $sa1 = trim((string)($addr['shipping_address_line1'] ?? ''));
+        $sa2 = trim((string)($addr['shipping_address_line2'] ?? ''));
+        if ($sa1 !== '') {
+            $shippingLines[] = $sa1;
+        }
+        if ($sa2 !== '') {
+            $shippingLines[] = $sa2;
+        }
+        $scity = trim((string)($addr['shipping_city'] ?? ''));
+        $sstate = trim((string)($addr['shipping_state'] ?? ''));
+        $sz = trim((string)($addr['shipping_zipcode'] ?? ''));
+        if ($scity !== '' || $sstate !== '') {
+            $shippingLines[] = trim(implode(', ', array_filter([$scity, $sstate], static fn ($x) => $x !== '')));
+        }
+        if ($sz !== '') {
+            $shippingLines[] = 'Pin Code : ' . $sz;
+        }
+        if (trim((string)($addr['shipping_mobile'] ?? '')) !== '') {
+            $shippingLines[] = 'Tel : ' . trim((string)$addr['shipping_mobile']);
+        }
+
+        // Shipping GST often same as billing for B2C; show blank if absent.
+        $shippingGst = trim((string)($addr['gstin'] ?? ''));
+        if ($shippingGst !== '') {
+            $shippingLines[] = 'GSTIN : ' . $shippingGst;
+        }
+        $defaults['receipt_shipping_block'] = $shippingLines !== [] ? $shippingLines : $billingLines;
+
+        $couponDisc = isset($addr['coupon_reduce']) ? (float)$addr['coupon_reduce'] : 0.0;
+        if ($couponDisc <= 0 && isset($lines[0]['coupon_reduce'])) {
+            $couponDisc = (float)$lines[0]['coupon_reduce'];
+        }
+        $giftDisc = isset($addr['giftvoucher_reduce']) ? (float)$addr['giftvoucher_reduce'] : 0.0;
+        $addrGrand = isset($addr['total']) ? (float)$addr['total'] : 0.0;
+
+        $receiptLines = [];
+        $sumGoods = 0.0;
+        $sumGst = 0.0;
+        $sumQty = 0.0;
+        $sumSgstAmt = 0.0;
+        $sumCgstAmt = 0.0;
+        $sumIgstAmt = 0.0;
+
+        foreach ($lines as $idx => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sn = $idx + 1;
+            $title = trim((string)($row['title'] ?? ''));
+            if ($title === '') {
+                $title = trim((string)($row['item_code'] ?? 'Item'));
+            }
+            $options = trim((string)($row['options'] ?? ''));
+            if ($options !== '' && strlen($options) < 260) {
+                $title .= ' · ' . $options;
+            }
+            $qty = (float)($row['quantity'] ?? 1);
+            if ($qty <= 0) {
+                $qty = 1.0;
+            }
+            $unit = (float)($row['itemprice'] ?? 0);
+            $lineTot = (float)($row['finalprice'] ?? 0);
+            if ($lineTot <= 0 && $unit > 0) {
+                $lineTot = $unit * $qty;
+            }
+            $gstPct = (float)($row['gst'] ?? 0);
+            $gstAmount = $gstPct > 0 ? ($lineTot - ($lineTot / (1 + $gstPct / 100.0))) : 0.0;
+            $split = $this->parseGstSplitForReceiptLine($gstPct, $gstAmount, $intraSameState);
+
+            $receiptLines[] = [
+                'sn' => $sn,
+                'title' => $title,
+                'hsn' => trim((string)($row['hsn'] ?? '')),
+                'qty' => $qty,
+                'unit_price' => $unit,
+                'sgst_rate' => $split['sgst_rate'],
+                'sgst_amt' => $split['sgst_amt'],
+                'cgst_rate' => $split['cgst_rate'],
+                'cgst_amt' => $split['cgst_amt'],
+                'igst_rate' => $split['igst_rate'],
+                'igst_amt' => $split['igst_amt'],
+                'line_total' => $lineTot,
+            ];
+
+            $sumGoods += $lineTot;
+            $sumGst += $gstAmount;
+            $sumQty += $qty;
+            $sumSgstAmt += $split['sgst_amt'];
+            $sumCgstAmt += $split['cgst_amt'];
+            $sumIgstAmt += $split['igst_amt'];
+        }
+
+        $defaults['receipt_has_order_data'] = $lines !== [];
+
+        // Cash discount placeholder (not modeled on import row).
+        $cashDisc = 0.0;
+        $grand = $addrGrand > 0 ? $addrGrand : max(0.0, $sumGoods - $couponDisc - $giftDisc - $cashDisc);
+
+        $defaults['receipt_subtotal_goods'] = $sumGoods;
+        $defaults['receipt_gst_total'] = $sumGst;
+        $defaults['receipt_qty_total'] = $sumQty;
+        $defaults['receipt_coupon_discount'] = $couponDisc;
+        $defaults['receipt_gift_discount'] = $giftDisc;
+        $defaults['receipt_cash_discount'] = $cashDisc;
+        $defaults['receipt_grand_total'] = $grand;
+        $defaults['receipt_lines'] = $receiptLines;
+        $defaults['receipt_agg_sgst'] = $sumSgstAmt;
+        $defaults['receipt_agg_cgst'] = $sumCgstAmt;
+        $defaults['receipt_agg_igst'] = $sumIgstAmt;
+
+        $defaults['receipt_amount_received'] = $amtReceived;
+        $defaults['receipt_pending_amount'] = max(0.0, round($grand - $amtReceived, 2));
+
+        if (function_exists('numberToWords')) {
+            $defaults['receipt_amount_in_words'] = 'Rs. ' . numberToWords((float)$grand) . ' Only';
+        } else {
+            $defaults['receipt_amount_in_words'] = 'Rs. ' . number_format($grand, 2, '.', ',') . ' Only';
+        }
+
+        $formattedAmt = number_format($amtReceived, 2, '.', '');
+        if ($stageLc === 'advance') {
+            $banner = 'Advance for Rs. ' . $formattedAmt . ' received with thanks against following items.';
+        } elseif ($stageLc === 'partial') {
+            $banner = 'Partial payment of Rs. ' . $formattedAmt . ' received with thanks against following items.';
+        } else {
+            $stLabel = ucfirst(trim($paymentStage) !== '' ? $paymentStage : 'final');
+            $banner = 'Payment of Rs. ' . $formattedAmt . ' (' . $paymentModeLabel . ', ' . $stLabel . ') received with thanks against following items.';
+        }
+        $defaults['receipt_banner_text'] = $banner;
+
+        return $defaults;
+    }
+
     /**
      * Receipt date in Asia/Kolkata, e.g. "26th Sep 2026".
      */
@@ -3409,7 +3754,20 @@ class POSRegisterController
         $invoicePreviewUrl = 'index.php?page=invoice&action=preview&id=' . rawurlencode($orderId);
         $paymentHistoryUrl = 'index.php?page=orders&action=list';
 
-        renderTemplate('views/pos_register/order_confirmation.php', [
+        $receiptContext = $this->buildPaymentReceiptContext(
+            $conn,
+            $orderId,
+            $paymentType,
+            $paymentStage,
+            $paymentModeLabel,
+            $amount,
+            $transactionId,
+            $receiptNumber,
+            $receiptDateFormatted,
+            $warehouseName
+        );
+
+        renderTemplate('views/pos_register/order_confirmation.php', array_merge([
             'order_id' => $orderId,
             'payment_type' => $paymentType,
             'payment_mode_label' => $paymentModeLabel,
@@ -3422,7 +3780,7 @@ class POSRegisterController
             'warehouse_name' => $warehouseName,
             'receipt_number' => $receiptNumber,
             'receipt_date_formatted' => $receiptDateFormatted,
-        ]);
+        ], $receiptContext));
     }
 
     public function add_customer()
