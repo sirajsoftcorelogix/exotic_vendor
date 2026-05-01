@@ -113,3 +113,156 @@ function pos_payment_generate_next_invoice_number(mysqli $conn, string $shortCod
         throw $e;
     }
 }
+
+/**
+ * Resolved warehouse row id for FK (session unset or invalid).
+ *
+ * @return int 0 if no exotic_address row exists
+ */
+function pos_payment_fallback_warehouse_id(mysqli $conn): int
+{
+    $queries = [
+        'SELECT id FROM exotic_address WHERE is_active = 1 ORDER BY is_default DESC, id ASC LIMIT 1',
+        'SELECT id FROM exotic_address WHERE is_active = 1 ORDER BY id ASC LIMIT 1',
+        'SELECT id FROM exotic_address ORDER BY id ASC LIMIT 1',
+    ];
+    foreach ($queries as $sql) {
+        $res = @$conn->query($sql);
+        if ($res && ($row = $res->fetch_assoc()) && !empty($row['id'])) {
+            return (int)$row['id'];
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * Insert one pos_payments row. Uses concrete warehouse FK; omits customer_id when <= 0 so NULL/DEFAULT applies.
+ * If FK fails with a positive customer_id, retries once without customer_id (handles missing vp_customers rows).
+ *
+ * @return array{success:bool, payment_id:int, warehouse_id_used:int, error:?string}
+ */
+function pos_payment_insert_row(
+    mysqli $conn,
+    int $orderPk,
+    string $orderNumber,
+    string $invoiceNumber,
+    int $customerId,
+    string $paymentStage,
+    string $paymentMode,
+    float $amount,
+    string $transactionId,
+    string $note,
+    int $userId,
+    int $warehouseId,
+    bool $retryWithoutCustomerIfFkFails = true
+): array {
+    $whEff = $warehouseId > 0 ? $warehouseId : pos_payment_fallback_warehouse_id($conn);
+    if ($whEff <= 0) {
+        return [
+            'success' => false,
+            'payment_id' => 0,
+            'warehouse_id_used' => 0,
+            'error' => 'No warehouse row in exotic_address (warehouse_id FK). Add an active warehouse or set session warehouse.',
+        ];
+    }
+
+    if ($customerId > 0) {
+        $stmt = $conn->prepare(
+            'INSERT INTO pos_payments (order_id, order_number, invoice_number, customer_id, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
+        );
+        if (!$stmt) {
+            return [
+                'success' => false,
+                'payment_id' => 0,
+                'warehouse_id_used' => $whEff,
+                'error' => 'Prepare failed (with customer): ' . $conn->error,
+            ];
+        }
+        $cid = $customerId;
+        $stmt->bind_param(
+            'ississdssii',
+            $orderPk,
+            $orderNumber,
+            $invoiceNumber,
+            $cid,
+            $paymentStage,
+            $paymentMode,
+            $amount,
+            $transactionId,
+            $note,
+            $userId,
+            $whEff
+        );
+
+        if (!$stmt->execute()) {
+            $err = $stmt->error;
+            $errno = (int)$conn->errno;
+            $stmt->close();
+            $isFk = ($errno === 1452 || $errno === 1216 || str_contains(strtolower($err), 'foreign key constraint'));
+            if ($retryWithoutCustomerIfFkFails && $isFk) {
+                return pos_payment_insert_row(
+                    $conn,
+                    $orderPk,
+                    $orderNumber,
+                    $invoiceNumber,
+                    0,
+                    $paymentStage,
+                    $paymentMode,
+                    $amount,
+                    $transactionId,
+                    $note,
+                    $userId,
+                    $warehouseId,
+                    false
+                );
+            }
+
+            return ['success' => false, 'payment_id' => 0, 'warehouse_id_used' => $whEff, 'error' => $err];
+        }
+
+        $newId = (int)$conn->insert_id;
+        $stmt->close();
+
+        return ['success' => true, 'payment_id' => $newId, 'warehouse_id_used' => $whEff, 'error' => null];
+    }
+
+    /* No customer_id column → allows NULL when walk-in customer is not selected */
+    $stmt = $conn->prepare(
+        'INSERT INTO pos_payments (order_id, order_number, invoice_number, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
+         VALUES (?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
+    );
+    if (!$stmt) {
+        return [
+            'success' => false,
+            'payment_id' => 0,
+            'warehouse_id_used' => $whEff,
+            'error' => 'Prepare failed (no customer column): ' . $conn->error,
+        ];
+    }
+    $stmt->bind_param(
+        'ississdssii',
+        $orderPk,
+        $orderNumber,
+        $invoiceNumber,
+        $paymentStage,
+        $paymentMode,
+        $amount,
+        $transactionId,
+        $note,
+        $userId,
+        $whEff
+    );
+
+    if (!$stmt->execute()) {
+        $err = $stmt->error;
+        $stmt->close();
+
+        return ['success' => false, 'payment_id' => 0, 'warehouse_id_used' => $whEff, 'error' => $err];
+    }
+    $newId = (int)$conn->insert_id;
+    $stmt->close();
+
+    return ['success' => true, 'payment_id' => $newId, 'warehouse_id_used' => $whEff, 'error' => null];
+}
