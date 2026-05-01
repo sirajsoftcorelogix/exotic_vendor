@@ -412,19 +412,8 @@ WHERE 1=1
             exit;
         }
 
-        $stmt2 = $conn->prepare('
-            INSERT INTO pos_payments
-            (order_id, order_number, invoice_number, customer_id, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-            VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())
-        ');
-
-        if (!$stmt2) {
-            echo json_encode(['success' => false, 'message' => 'Insert prepare failed: ' . $conn->error]);
-            exit;
-        }
-
-        $stmt2->bind_param(
-            'ississdssii',
+        $insertRes = pos_payment_insert_row(
+            $conn,
             $orderPkForInsert,
             $orderNumberStr,
             $invoiceNumber,
@@ -435,15 +424,18 @@ WHERE 1=1
             $transaction,
             $note,
             $user_id,
-            $warehouse_id
+            $warehouse_id,
+            true
         );
-        if (!$stmt2->execute()) {
-            echo json_encode(['success' => false, 'message' => 'Payment save failed: ' . $stmt2->error]);
-            $stmt2->close();
+        if (!$insertRes['success']) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Payment save failed: ' . ($insertRes['error'] ?? 'unknown'),
+                'warehouse_id_used' => $insertRes['warehouse_id_used'],
+            ]);
             exit;
         }
-        $newPaymentId = (int)$conn->insert_id;
-        $stmt2->close();
+        $newPaymentId = $insertRes['payment_id'];
 
         /* 🔥 FINAL PAYMENT → UPDATE INVOICE */
         if ($stage === 'final') {

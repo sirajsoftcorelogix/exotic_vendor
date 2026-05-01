@@ -3361,47 +3361,51 @@ class POSRegisterController
                 $amountPost = isset($_POST['amount']) ? (float)$_POST['amount'] : 0;
                 $userIdIns = (int)($_SESSION['user_id'] ?? 0);
                 $orderPkIns = ctype_digit(trim((string)$orderId)) ? (int)$orderId : 0;
+                $onStrIns = trim((string)$orderId);
 
-                $stIns = $conn->prepare('
-                    INSERT INTO pos_payments
-                    (order_id, order_number, invoice_number, customer_id, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())
-                ');
-                if ($stIns) {
-                    $custIns = $customerId;
-                    $amtIns = $amountPost;
-                    $stageIns = $paymentStage;
-                    $modeIns = $paymentType;
-                    $trIns = $transactionId;
-                    $noteIns = (string)$note;
-                    $onStrIns = trim((string)$orderId);
-
-                    $stIns->bind_param(
-                        'ississdssii',
-                        $orderPkIns,
-                        $onStrIns,
-                        $invoiceNumber,
-                        $custIns,
-                        $stageIns,
-                        $modeIns,
-                        $amtIns,
-                        $trIns,
-                        $noteIns,
-                        $userIdIns,
-                        $wid
-                    );
-                    if ($stIns->execute()) {
-                        $posReceiptMeta['invoice_number'] = $invoiceNumber;
-                        $posReceiptMeta['payment_id'] = (int)$conn->insert_id;
-                    } else {
-                        $posReceiptMeta['pos_payment_insert_sql_error'] = $stIns->error;
-                    }
-                    $stIns->close();
+                $insertRes = pos_payment_insert_row(
+                    $conn,
+                    $orderPkIns,
+                    $onStrIns,
+                    $invoiceNumber,
+                    (int)$customerId,
+                    (string)$paymentStage,
+                    (string)$paymentType,
+                    $amountPost,
+                    $transactionId,
+                    (string)$note,
+                    $userIdIns,
+                    $wid,
+                    true
+                );
+                $posReceiptMeta['invoice_number'] = $invoiceNumber;
+                $posReceiptMeta['payment_id'] = $insertRes['payment_id'];
+                $posReceiptMeta['warehouse_id_used'] = $insertRes['warehouse_id_used'];
+                if (!$insertRes['success']) {
+                    $posReceiptMeta['payment_receipt_saved'] = false;
+                    $posReceiptMeta['pos_payment_insert_sql_error'] = (string)($insertRes['error'] ?? 'insert failed');
                 } else {
-                    $posReceiptMeta['pos_payment_insert_sql_error'] = $conn->error;
+                    $posReceiptMeta['payment_receipt_saved'] = true;
                 }
+                $orderApiDebug['pos_payment_insert'] = [
+                    'attempted' => true,
+                    'order_number' => $onStrIns,
+                    'invoice_number' => $invoiceNumber,
+                    'success' => $insertRes['success'],
+                    'warehouse_id_used' => $insertRes['warehouse_id_used'],
+                    'payment_id' => $insertRes['payment_id'],
+                    'error' => $insertRes['error'],
+                ];
+                $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
             } catch (Throwable $e) {
+                $posReceiptMeta['payment_receipt_saved'] = false;
                 $posReceiptMeta['pos_payment_insert_exception'] = $e->getMessage();
+                $orderApiDebug['pos_payment_insert'] = [
+                    'attempted' => true,
+                    'success' => false,
+                    'exception' => $e->getMessage(),
+                ];
+                $_SESSION['pos_order_create_api_debug'] = $orderApiDebug;
             }
         }
 
