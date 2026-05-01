@@ -98,10 +98,10 @@ if ($receipt_download_filename_base === '') {
           </div>
           </div>
 
-          <!-- Items -->
-          <div class="overflow-x-auto px-2 pb-4 pt-1 sm:px-4">
+          <!-- Items (tighter top/bottom vs header + summary) -->
+          <div class="-mt-2 -mb-2 overflow-x-auto px-2 pb-0 pt-0 sm:-mt-2.5 sm:px-4 print:-mt-1.5 print:-mb-1 print:pb-0">
             <?php if (empty($lines)): ?>
-              <p class="px-3 py-6 text-center text-[11px] text-neutral-600">
+              <p class="px-3 py-3 text-center text-[11px] text-neutral-600">
                 No line items loaded yet — run order import first, then refresh this page after import succeeds.
               </p>
             <?php else: ?>
@@ -162,7 +162,7 @@ if ($receipt_download_filename_base === '') {
           </div>
 
           <!-- Summary -->
-          <div class="border-t border-neutral-300 px-4 py-8 sm:px-6 sm:py-10">
+          <div class="border-t border-neutral-300 px-4 pb-8 pt-4 sm:px-6 sm:pb-10 sm:pt-5 print:pt-3">
             <div class="grid gap-10 sm:grid-cols-2 sm:gap-12">
               <div class="space-y-3 text-[10px] text-neutral-800">
                 <?php $cd = $receipt_cash_discount ?? 0; ?>
