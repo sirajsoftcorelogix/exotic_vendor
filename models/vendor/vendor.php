@@ -1,13 +1,16 @@
 <?php
-class vendor {
+class vendor
+{
     /** Stamped on vp_vendors rows created/updated from vendor-api/products/vendorlist import */
     public const VENDORLIST_IMPORT_USER_ID = 1000;
 
     private $conn;
-    public function __construct($conn) {
+    public function __construct($conn)
+    {
         $this->conn = $conn;
     }
-    public function getAllVendors() {
+    public function getAllVendors()
+    {
         $sql = "SELECT * FROM vp_vendors WHERE is_active=1 ORDER BY contact_name ASC";
         $result = $this->conn->query($sql);
         $vendors = [];
@@ -18,7 +21,8 @@ class vendor {
         }
         return $vendors;
     }
-    public function getVendorById($id) {
+    public function getVendorById($id)
+    {
         $sql = "SELECT * FROM vp_vendors WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $id);
@@ -26,7 +30,8 @@ class vendor {
         $result = $stmt->get_result();
         return $result->fetch_assoc();
     }
-    public function getBankDetailsById($vendor_id) {
+    public function getBankDetailsById($vendor_id)
+    {
         global $secretKey;
         if (isset($secretKey)) {
             $sql = "SELECT vendor_id,
@@ -44,18 +49,25 @@ class vendor {
             return ['success' => false, 'message' => 'Secret key is not set. Cannot encrypt bank details.'];
         }
     }
-    public function saveBankDetails($data) {
+    public function saveBankDetails($data)
+    {
         global $secretKey;
         if (isset($secretKey)) {
             $sql = "INSERT INTO vendor_bank_details (vendor_id, account_holder_name, account_number, ifsc_code, bank_name, branch_name, is_active) VALUES (?, AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), ?) ON DUPLICATE KEY UPDATE account_holder_name = VALUES(account_holder_name), account_number = VALUES(account_number), ifsc_code = VALUES(ifsc_code), bank_name = VALUES(bank_name), branch_name = VALUES(branch_name), is_active = VALUES(is_active)";
             $stmt = $this->conn->prepare($sql);
-            $stmt->bind_param('issssssssssi',
+            $stmt->bind_param(
+                'issssssssssi',
                 $data['vendor_id'],
-                $data['account_name'], $secretKey,
-                $data['account_number'], $secretKey,
-                $data['ifsc_code'], $secretKey,
-                $data['bank_name'], $secretKey,
-                $data['branch_name'], $secretKey,
+                $data['account_name'],
+                $secretKey,
+                $data['account_number'],
+                $secretKey,
+                $data['ifsc_code'],
+                $secretKey,
+                $data['bank_name'],
+                $secretKey,
+                $data['branch_name'],
+                $secretKey,
                 $data['bdStatus'],
             );
             if ($stmt->execute()) {
@@ -68,20 +80,27 @@ class vendor {
         } else {
             return ['success' => false, 'message' => 'Secret key is not set. Cannot encrypt bank details.'];
         }
-        
     }
-    public function updateBankDetails($data) {
+    public function updateBankDetails($data)
+    {
         global $secretKey;
         if (isset($secretKey)) {
             $sql = "UPDATE vendor_bank_details SET account_holder_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), account_number = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), ifsc_code = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), bank_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), branch_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), is_active = ? WHERE vendor_id = ?";
             $stmt = $this->conn->prepare($sql);
-            $stmt->bind_param('ssssssssssii', 
-                $data['account_name'], $secretKey, 
-                $data['account_number'], $secretKey,
-                $data['ifsc_code'], $secretKey,
-                $data['bank_name'], $secretKey,
-                $data['branch_name'], $secretKey,
-                $data['bdStatus'], $data["vendor_id"]
+            $stmt->bind_param(
+                'ssssssssssii',
+                $data['account_name'],
+                $secretKey,
+                $data['account_number'],
+                $secretKey,
+                $data['ifsc_code'],
+                $secretKey,
+                $data['bank_name'],
+                $secretKey,
+                $data['branch_name'],
+                $secretKey,
+                $data['bdStatus'],
+                $data["vendor_id"]
             );
             if ($stmt->execute()) {
                 return ['success' => true, 'message' => 'Bank details updated successfully.'];
@@ -94,7 +113,8 @@ class vendor {
             return ['success' => false, 'message' => 'Secret key is not set. Cannot encrypt bank details.'];
         }
     }
-    public function addVendor($data) {
+    public function addVendor($data)
+    {
         // Vendor Name
         if (!empty($data['addVendorName'])) {
             $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_name = ?";
@@ -159,7 +179,8 @@ class vendor {
         $vendorCode = generateVendorCode($this->conn);
         $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active, groupname) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssssssssssssssssiiiss',
+        $stmt->bind_param(
+            'ssssssssssssssssiiiss',
             $vendorCode,
             $data['addVendorName'],
             $data['addContactPerson'],
@@ -188,24 +209,26 @@ class vendor {
             $cat_status = $tm_status = '';
             // Add vendor categories if provided
             if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
-               $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
+                $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
             }
             // Add vendor teams
             if (!empty($data['addTeam']) && is_array($data['addTeam'])) {
-               $tm_status = $this->addVendorTeams($vendor_id, $data['addTeam']);
+                $tm_status = $this->addVendorTeams($vendor_id, $data['addTeam']);
             }
 
-            return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status, 'team_status' => $tm_status,'inserted_id' => $vendor_id];
+            return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status, 'team_status' => $tm_status, 'inserted_id' => $vendor_id];
         }
         return [
             'success' => false,
             'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
         ];
     }
-    public function updateVendor($id, $data) {
+    public function updateVendor($id, $data)
+    {
         $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('sssssssssssssssiiissi', 
+        $stmt->bind_param(
+            'sssssssssssssssiiissi',
             $data['editVendorName'],
             $data['editContactPerson'],
             $data['editEmail'],
@@ -234,20 +257,21 @@ class vendor {
             $cat_status = $tm_status = '';
             // Add vendor categories if provided
             if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
-               $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
+                $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
             }
             // Add vendor teams
             if (!empty($data['editTeam']) && is_array($data['editTeam'])) {
-               $tm_status = $this->addVendorTeams($vendor_id, $data['editTeam']);
+                $tm_status = $this->addVendorTeams($vendor_id, $data['editTeam']);
             }
-            return ['success' => true, 'message' => 'Vendor updated successfully.','cat_status'=>$cat_status, 'team_status' => $tm_status];
+            return ['success' => true, 'message' => 'Vendor updated successfully.', 'cat_status' => $cat_status, 'team_status' => $tm_status];
         }
         return [
             'success' => false,
             'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
         ];
     }
-    public function updateVendorRemoteId($vendorId, $remoteVendorId) {
+    public function updateVendorRemoteId($vendorId, $remoteVendorId)
+    {
         $sql = "UPDATE vp_vendors SET vendor_id = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('si', $remoteVendorId, $vendorId);
@@ -259,7 +283,8 @@ class vendor {
             'message' => 'Update failed: ' . $stmt->error
         ];
     }
-    public function deleteVendor($id) {
+    public function deleteVendor($id)
+    {
         // Check if Order(s) exists
         $checkOrdersSql = "SELECT id FROM vp_orders WHERE vendor_id = ?";
         $checkOrdersStmt = $this->conn->prepare($checkOrdersSql);
@@ -288,7 +313,8 @@ class vendor {
             'message' => 'Delete failed: ' . $stmt->error . '. Please try again later.'
         ];
     }
-    public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '', $category_filter = '', $team_filter = '') {
+    public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '', $category_filter = '', $team_filter = '')
+    {
         // sanitize
         $page = (int)$page;
         if ($page < 1) $page = 1;
@@ -312,15 +338,15 @@ class vendor {
             }
 
             if (!empty($status_filter)) {
-                $search = $this->conn->real_escape_string($status_filter);   
+                $search = $this->conn->real_escape_string($status_filter);
                 $where = "WHERE vp.is_active = '$status_filter'";
             }
             if (!empty($category_filter)) {
-                $search = $this->conn->real_escape_string($category_filter);   
+                $search = $this->conn->real_escape_string($category_filter);
                 $where = "WHERE vc.category_id = '$category_filter'";
             }
             if (!empty($team_filter)) {
-                $search = $this->conn->real_escape_string($team_filter);   
+                $search = $this->conn->real_escape_string($team_filter);
                 $where = "WHERE vvtm.team_id = '$team_filter'";
             }
         }
@@ -350,22 +376,24 @@ class vendor {
             'search'       => $search
         ];
     }
-    public function listCategory(){
+    public function listCategory()
+    {
         $sql = "SELECT * FROM vp_vendor_category WHERE is_active=1 ORDER BY parent_id ASC, category_name ASC";
         $result = $this->conn->query($sql);
         $category = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-            $parent_id = $row['parent_id'];
-            if (!isset($category[$parent_id])) {
-                $category[$parent_id] = [];
-            }
-            $category[$parent_id][] = $row;
+                $parent_id = $row['parent_id'];
+                if (!isset($category[$parent_id])) {
+                    $category[$parent_id] = [];
+                }
+                $category[$parent_id][] = $row;
             }
         }
         return $category;
     }
-    public function addVendorCategory($vendor_id,$category){       
+    public function addVendorCategory($vendor_id, $category)
+    {
         if (empty($vendor_id)) {
             return ['success' => false, 'message' => 'Vendor ID is required.'];
         }
@@ -392,7 +420,8 @@ class vendor {
 
         return ['success' => true, 'message' => 'Categories updated successfully.'];
     }
-    public function addVendorTeams($vendor_id,$category){       
+    public function addVendorTeams($vendor_id, $category)
+    {
         if (empty($vendor_id)) {
             return ['success' => false, 'message' => 'Vendor ID is required.'];
         }
@@ -419,7 +448,8 @@ class vendor {
 
         return ['success' => true, 'message' => 'Categories updated successfully.'];
     }
-    public function getVendorCategories($vendor_id) {
+    public function getVendorCategories($vendor_id)
+    {
         $sql = "SELECT category_id FROM vendors_category WHERE vendor_id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $vendor_id);
@@ -431,8 +461,9 @@ class vendor {
         }
         return $categories;
     }
-    public function getVendorTeams($v_id) {
-        $sql = "SELECT team_id FROM vp_vendor_team_mapping WHERE vendor_id = ".$v_id;
+    public function getVendorTeams($v_id)
+    {
+        $sql = "SELECT team_id FROM vp_vendor_team_mapping WHERE vendor_id = " . $v_id;
         $result = $this->conn->query($sql);
         $vTeamMembers = [];
         if ($result && $result->num_rows > 0) {
@@ -442,12 +473,13 @@ class vendor {
         }
         return $vTeamMembers;
     }
-    public function getTeamMembers($team_id) {
-        $sql = "SELECT vu.id as user_id, vu.name, vt.id as team_id, vt.team_name FROM vp_users AS vu INNER JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id INNER JOIN vp_teams AS vt ON vutm.team_id = vt.id WHERE vu.is_active = 1 AND vu.is_deleted = 0 AND vutm.team_id IN (".$team_id.") ORDER BY vt.team_name, vu.id ASC";
+    public function getTeamMembers($team_id)
+    {
+        $sql = "SELECT vu.id as user_id, vu.name, vt.id as team_id, vt.team_name FROM vp_users AS vu INNER JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id INNER JOIN vp_teams AS vt ON vutm.team_id = vt.id WHERE vu.is_active = 1 AND vu.is_deleted = 0 AND vutm.team_id IN (" . $team_id . ") ORDER BY vt.team_name, vu.id ASC";
         $result = $this->conn->query($sql);
         $teamMembers = [];
         if ($result && $result->num_rows > 0) {
-            while($row = mysqli_fetch_assoc($result)) {
+            while ($row = mysqli_fetch_assoc($result)) {
                 $teamId = $row['team_id'];
                 if (!isset($teamMembers[$teamId])) {
                     $teamMembers[$teamId] = [
@@ -465,7 +497,8 @@ class vendor {
         echo json_encode(array_values($teamMembers));
         exit;
     }
-    public function searchVendors($term) {
+    public function searchVendors($term)
+    {
         $term = $this->conn->real_escape_string($term);
         $sql = "SELECT * FROM vp_vendors WHERE vendor_name LIKE '%$term%' LIMIT 10";
         $result = $this->conn->query($sql);
@@ -477,7 +510,21 @@ class vendor {
         }
         return $vendors;
     }
-    public function checkVendorName($val) {
+    public function searchRemoteVendors($term)
+    {
+        $term = $this->conn->real_escape_string($term);
+        $sql = "SELECT * FROM vp_vendors WHERE vendor_id > 0 AND vendor_name LIKE '%$term%' LIMIT 10";
+        $result = $this->conn->query($sql);
+        $vendors = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $vendors[] = $row;
+            }
+        }
+        return $vendors;
+    }
+    public function checkVendorName($val)
+    {
         $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_name = ?");
         $stmt->bind_param("s", $val);
         $stmt->execute();
@@ -485,7 +532,8 @@ class vendor {
         $response = ['exists' => $stmt->num_rows > 0];
         return $response;
     }
-    public function checkEmail($email) {
+    public function checkEmail($email)
+    {
         $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
@@ -493,7 +541,8 @@ class vendor {
         $response = ['exists' => $stmt->num_rows > 0];
         return $response;
     }
-    public function checkPhoneNumber($val) {
+    public function checkPhoneNumber($val)
+    {
         $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_phone = ?");
         $stmt->bind_param("s", $val);
         $stmt->execute();
@@ -501,7 +550,8 @@ class vendor {
         $response = ['exists' => $stmt->num_rows > 0];
         return $response;
     }
-    public function getProductsByVendorId($vendor_id) {
+    public function getProductsByVendorId($vendor_id)
+    {
         $sql = "SELECT vp.id, vp.item_code, vp.title, vp.sku FROM vp_products AS vp INNER JOIN vp_vendor_products_mapping AS vvpm ON vp.id = vvpm.product_id WHERE vvpm.vendor_id = ? AND vp.is_active = 1 ORDER BY vp.title ASC";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $vendor_id);
@@ -513,7 +563,8 @@ class vendor {
         }
         return $products;
     }
-    public function getProductByCode($item_code) {
+    public function getProductByCode($item_code)
+    {
         $item_code = $this->conn->real_escape_string($item_code);
         $sql = "SELECT id, item_code, title, sku, `image` FROM vp_products WHERE item_code = ? AND is_active = 1";
         $stmt = $this->conn->prepare($sql);
@@ -522,7 +573,8 @@ class vendor {
         $result = $stmt->get_result();
         return $result->fetch_assoc();
     }
-    public function getmappingProductsByVendorId($vendor_id) {
+    public function getmappingProductsByVendorId($vendor_id)
+    {
         $sql = "SELECT p.id, p.item_code, p.title, p.sku, p.image, vpm.item_code AS mapped_item_code FROM vp_products AS p INNER JOIN vp_vendor_products_mapping AS vpm ON p.id = vpm.product_id WHERE vpm.vendor_id = ? AND p.is_active = 1 ORDER BY p.title ASC";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $vendor_id);
@@ -534,7 +586,8 @@ class vendor {
         }
         return $products;
     }
-    public function saveVendorProductsMapping($vendor_id, $product_ids, $item_codes = []) {
+    public function saveVendorProductsMapping($vendor_id, $product_ids, $item_codes = [])
+    {
         // Delete existing mappings
         $deleteSql = "DELETE FROM vp_vendor_products_mapping WHERE vendor_id = ?";
         $deleteStmt = $this->conn->prepare($deleteSql);
@@ -545,7 +598,7 @@ class vendor {
         // Insert new mappings
         $insertSql = "INSERT INTO vp_vendor_products_mapping (vendor_id, product_id, item_code) VALUES (?, ?, ?)";
         $insertStmt = $this->conn->prepare($insertSql);
-        $i=0;
+        $i = 0;
         foreach ($product_ids as $product_id) {
             $insertStmt->bind_param('iis', $vendor_id, $product_id, $item_codes[$i]);
             $insertStmt->execute();
@@ -555,20 +608,21 @@ class vendor {
 
         return ['success' => true, 'message' => 'Vendor products mapping updated successfully.'];
     }
-    public function updateVendorCode() {
+    public function updateVendorCode()
+    {
         $sql = "SELECT id, vendor_code FROM vp_vendors WHERE vendor_code IS NULL OR vendor_code = ''";
         $stmt = $this->conn->prepare($sql);
         $stmt->execute();
         $result = $stmt->get_result();
-        
+
         while ($row = $result->fetch_assoc()) {
-            if(empty($row['vendor_code'])) {
+            if (empty($row['vendor_code'])) {
                 $newCode = generateVendorCode($this->conn);
                 $sql = "UPDATE vp_vendors SET vendor_code = ? WHERE id = ?";
                 $stmt = $this->conn->prepare($sql);
                 $vendorId = $row['id'];
                 $stmt->bind_param('si', $newCode, $vendorId);
-                $stmt->execute();                
+                $stmt->execute();
             }
         }
         return ['success' => true, 'message' => 'Vendor codes updated successfully.'];
@@ -577,7 +631,8 @@ class vendor {
     /**
      * Normalize vendorlist API JSON into rows: [['remote_id' => string, 'name' => string], ...]
      */
-    public function normalizeVendorlistApiResponse($decoded): array {
+    public function normalizeVendorlistApiResponse($decoded): array
+    {
         $out = [];
         if (!is_array($decoded)) {
             return $out;
@@ -616,7 +671,8 @@ class vendor {
      * Vendorlist API — many backends return 400 on GET and expect POST JSON instead.
      * Tries several request shapes and returns the first HTTP 200/201 with parseable JSON.
      */
-    public function fetchVendorlistFromApi(string $groupname, string $apiBaseUrl = 'https://www.exoticindia.com'): array {
+    public function fetchVendorlistFromApi(string $groupname, string $apiBaseUrl = 'https://www.exoticindia.com'): array
+    {
         $groupname = trim($groupname);
         if ($groupname === '') {
             return ['success' => false, 'message' => 'groupname is required.', 'rows' => []];
@@ -726,7 +782,8 @@ class vendor {
     /**
      * Insert or update one vendor keyed by vendor_code + groupname; always sets user_id = VENDORLIST_IMPORT_USER_ID (1000).
      */
-    public function upsertVendorFromVendorlist(string $remoteVendorId, string $vendorName, string $groupname): array {
+    public function upsertVendorFromVendorlist(string $remoteVendorId, string $vendorName, string $groupname): array
+    {
         $remoteVendorId = substr(trim($remoteVendorId), 0, 30);
         $vendorName = substr(trim($vendorName), 0, 150);
         $groupname = substr(trim($groupname), 0, 100);
@@ -769,7 +826,8 @@ class vendor {
     /**
      * Fetch vendorlist for groupname and upsert all rows with user_id = 1000.
      */
-    public function importVendorlistForGroup(string $groupname, bool $dryRun = true, string $apiBaseUrl = 'https://www.exoticindia.com'): array {
+    public function importVendorlistForGroup(string $groupname, bool $dryRun = true, string $apiBaseUrl = 'https://www.exoticindia.com'): array
+    {
         $fetch = $this->fetchVendorlistFromApi($groupname, $apiBaseUrl);
         if (!$fetch['success']) {
             return [
@@ -825,32 +883,33 @@ class vendor {
             'attempt_used' => $fetch['attempt_used'] ?? null,
         ];
     }
-    public function saveVendorsFromAPI($vendors){
+    public function saveVendorsFromAPI($vendors)
+    {
         if (!is_array($vendors) || empty($vendors)) {
             return ['success' => false, 'message' => 'Invalid vendors data'];
         }
-        
+
         $inserted = 0;
         $updated = 0;
         $errors = [];
-        
+
         foreach ($vendors as $groupname => $vendorList) {
             if (!is_array($vendorList)) {
                 continue;
             }
-            
+
             foreach ($vendorList as $vendor) {
                 $vendorId = $vendor['id'] ?? null;
                 $vendorName = $vendor['name'] ?? null;
-                
+
                 if ($vendorId === null || $vendorName === null) {
                     continue;
                 }
-                
+
                 $vendorId = substr(trim((string)$vendorId), 0, 30);
                 $vendorName = substr(trim((string)$vendorName), 0, 150);
                 $groupname = substr(trim((string)$groupname), 0, 100);
-                
+
                 // Check if vendor exists by vendor_name
                 $checkStmt = $this->conn->prepare('SELECT id FROM vp_vendors WHERE vendor_name = ?');
                 $checkStmt->bind_param('s', $vendorName);
@@ -858,7 +917,7 @@ class vendor {
                 $result = $checkStmt->get_result();
                 $existing = $result ? $result->fetch_assoc() : null;
                 $checkStmt->close();
-                
+
                 if ($existing) {
                     // Get the existing groupname
                     $existingId = (int)$existing['id'];
@@ -868,9 +927,9 @@ class vendor {
                     $groupRes = $getGroupStmt->get_result();
                     $groupRow = $groupRes->fetch_assoc();
                     $getGroupStmt->close();
-                    
+
                     $existingGroupname = !empty($groupRow['groupname']) ? trim($groupRow['groupname']) : '';
-                    
+
                     // Append new groupname with comma separator if not already present
                     if (!empty($existingGroupname)) {
                         $groupnames = array_map('trim', explode(',', $existingGroupname));
@@ -882,7 +941,7 @@ class vendor {
                     } else {
                         $newGroupname = $groupname;
                     }
-                    
+
                     // Update vendor_id and groupname if vendor_name exists
                     $updateStmt = $this->conn->prepare('UPDATE vp_vendors SET vendor_id = ?, groupname = ? WHERE id = ?');
                     $updateStmt->bind_param('sss', $vendorId, $newGroupname, $existingId);
@@ -905,7 +964,7 @@ class vendor {
                 }
             }
         }
-        
+
         return [
             'success' => empty($errors),
             'message' => empty($errors) ? 'Done' : implode('; ', array_slice($errors, 0, 5)),
@@ -915,7 +974,8 @@ class vendor {
             'error_count' => count($errors)
         ];
     }
-    public function getVendorsByGroup($groupname) {
+    public function getVendorsByGroup($groupname)
+    {
         $sql = "SELECT id, vendor_id, vendor_name FROM vp_vendors WHERE FIND_IN_SET(?, groupname) > 0 AND is_active = 'active'";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('s', $groupname);
@@ -927,7 +987,8 @@ class vendor {
         }
         return $vendors;
     }
-    public function getGroupnames($categoryIds) {
+    public function getGroupnames($categoryIds)
+    {
         //categoryIds is array, we need to fetch distinct parent_id for all categoryIds and then fetch category_name for those parent_id and return comma separated
         $sql = "SELECT DISTINCT parent_id FROM vp_vendor_category WHERE id IN (" . implode(',', array_fill(0, count($categoryIds), '?')) . ")";
         $stmt = $this->conn->prepare($sql);
@@ -938,11 +999,11 @@ class vendor {
         while ($row = $result->fetch_assoc()) {
             $parentIds[] = $row['parent_id'];
         }
-        
+
         if (empty($parentIds)) {
             return '';
         }
-        
+
         // Now fetch category_name for those parent_ids
         $sql = "SELECT category_name FROM vp_vendor_category WHERE id IN (" . implode(',', array_fill(0, count($parentIds), '?')) . ")";
         $stmt = $this->conn->prepare($sql);
@@ -953,9 +1014,7 @@ class vendor {
         while ($row = $result->fetch_assoc()) {
             $categoryNames[] = $row['category_name'];
         }
-        
-        return implode(',', $categoryNames);
 
+        return implode(',', $categoryNames);
     }
 }
-?>

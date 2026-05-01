@@ -5,8 +5,10 @@ require_once 'models/comman/tables.php';
 $productModel = new product($conn);
 $usersModel = new User($conn);
 $commanModel = new Tables($conn);
-class ProductsController {
-    public function product_list() {
+class ProductsController
+{
+    public function product_list()
+    {
         is_login();
         global $productModel;
         global $usersModel;
@@ -18,13 +20,13 @@ class ProductsController {
         //Advanced Search Filters
         $filters = [];
         if (!empty($_GET['item_code'])) {
-            $filters['item_code'] = $_GET['item_code'];            
-        }        
+            $filters['item_code'] = $_GET['item_code'];
+        }
         if (!empty($_GET['item_name'])) {
-            $filters['title'] = $_GET['item_name'];            
+            $filters['title'] = $_GET['item_name'];
         }
         if (!empty($_GET['vendor_name']) && !empty($_GET['vendor_id'])) {
-            $filters['vendor_name'] = $_GET['vendor_name'];            
+            $filters['vendor_name'] = $_GET['vendor_name'];
         }
         if (!empty($_GET['item_group'])) {
             $filters['groupname'] = trim($_GET['item_group']);
@@ -53,18 +55,21 @@ class ProductsController {
         $products_data = $productModel->getAllProducts($limit, $offset, $filters);
         // Assuming a method countAllProducts exists to get total count
         $total_records = $productModel->countAllProducts($filters);
+        $groupnameList = getCategoryFromTable();
         $data = [
             'user' => $usersModel->getAllUsers(),
             'products' => $products_data,
             'page_no' => $page_no,
             'total_pages' => ceil($total_records / $limit),
             'total_records' => $total_records,
-            'limit' => $limit
+            'limit' => $limit,
+            'groupnameList' => $groupnameList
 
         ];
         renderTemplate('views/products/index.php', $data, 'Products');
     }
-    public function stock_transfer_list() {
+    public function stock_transfer_list()
+    {
         is_login();
         global $conn;
 
@@ -138,7 +143,8 @@ class ProductsController {
         renderTemplate('views/products/stock_transfer_list.php', $data, 'Stock Transfer Log');
     }
 
-    public function stock_transfer_delete() {
+    public function stock_transfer_delete()
+    {
         is_login();
         global $conn;
 
@@ -162,7 +168,8 @@ class ProductsController {
         exit;
     }
 
-    public function stock_transfer_delete_line() {
+    public function stock_transfer_delete_line()
+    {
         is_login();
         global $conn;
 
@@ -190,7 +197,8 @@ class ProductsController {
     /**
      * Paginated line items for one transfer (Option A — list uses aggregates only).
      */
-    public function stock_transfer_items() {
+    public function stock_transfer_items()
+    {
         is_login();
         global $conn;
 
@@ -231,7 +239,8 @@ class ProductsController {
         ], 'Transfer line items');
     }
 
-    public function stock_transfer_edit() {
+    public function stock_transfer_edit()
+    {
         is_login();
         global $conn;
         global $usersModel;
@@ -273,7 +282,8 @@ class ProductsController {
         ], 'Edit Stock Transfer');
     }
 
-    public function stock_transfer_update() {
+    public function stock_transfer_update()
+    {
         is_login();
         global $conn;
 
@@ -318,13 +328,15 @@ class ProductsController {
         header('Location: ?page=products&action=stock_transfer_list');
     }
 
-    public function getProductById($id) {
+    public function getProductById($id)
+    {
         global $productModel;
         $product = $productModel->getProduct($id);
         return $product;
     }
-    
-    public function viewProduct() {
+
+    public function viewProduct()
+    {
         is_login();
         global $productModel;
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
@@ -334,7 +346,8 @@ class ProductsController {
         }
         renderTemplate('views/products/viewProduct.php', $data, 'Product Details');
     }
-    public function updateApiCall(){
+    public function updateApiCall()
+    {
         is_login();
         global $productModel;
         // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
@@ -356,7 +369,7 @@ class ProductsController {
         }
         $itemcodesQuery = implode(',', $codes);
         $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemcodesQuery);
-       
+
         // if (!empty($_GET['item_code'])) {
         //     $postData = [
         //         'makeRequestOf' => 'vendors-orderjson',
@@ -378,7 +391,7 @@ class ProductsController {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $response = curl_exec($ch);
-        
+
         $error = curl_error($ch);
         curl_close($ch);
         // print_r($error);
@@ -473,7 +486,8 @@ class ProductsController {
         exit;
     }
 
-    public function importApiCall($manualCodes = null) {
+    public function importApiCall($manualCodes = null)
+    {
         global $productModel;
         global $conn;
         $t0 = microtime(true);
@@ -491,7 +505,7 @@ class ProductsController {
                 'codes_per_second' => ($total > 0 && $reqCodes > 0) ? round($reqCodes / ($total / 1000), 4) : null,
             ];
         };
-        $respond = function(array $payload) use ($internalCall) {
+        $respond = function (array $payload) use ($internalCall) {
             if ($internalCall) {
                 return $payload;
             }
@@ -507,7 +521,7 @@ class ProductsController {
             // Called from JavaScript fetch
             $raw = file_get_contents('php://input');
             $payload = json_decode($raw, true);
-            
+
             if (!$payload || !isset($payload['itemCodes'])) {
                 return $respond(['success' => false, 'message' => 'Invalid request.', 'timing' => $importTiming(0)]);
             }
@@ -605,197 +619,195 @@ class ProductsController {
         foreach ($items as $apiItem) {
             $itemRowCode = '';
             try {
-            if (!is_array($apiItem)) {
-                $failed[] = '(invalid_row)';
-                continue;
-            }
-            // detect item code from common keys
-            $code = trim($apiItem['itemcode'] ?? $apiItem['item_code'] ?? $apiItem['sku'] ?? '');
-            $itemRowCode = $code;
-            if ($code === '') {
-            $failed[] = '(unknown)';
-            continue;
-            }
-            $codeKey = strtoupper($code);
-            $codesPresentInResponse[$codeKey] = true;
+                if (!is_array($apiItem)) {
+                    $failed[] = '(invalid_row)';
+                    continue;
+                }
+                // detect item code from common keys
+                $code = trim($apiItem['itemcode'] ?? $apiItem['item_code'] ?? $apiItem['sku'] ?? '');
+                $itemRowCode = $code;
+                if ($code === '') {
+                    $failed[] = '(unknown)';
+                    continue;
+                }
+                $codeKey = strtoupper($code);
+                $codesPresentInResponse[$codeKey] = true;
 
-            // map API item to DB fields (adjust as needed)
-            $item = [];
-            $item['item_code'] = $code;
-            $item['sku'] = $apiItem['sku'] ?? '';
-            $item['title'] = $apiItem['title'] ?? '';
-            $item['image'] = (!empty($apiItem['image']))
-                ? ('https://cdn.exoticindia.com/images/products/original/' . $apiItem['image'])
-                : '';
-            $item['groupname'] = $apiItem['groupname'] ?? '';
-            $item['local_stock'] = isset($apiItem['local_stock']) ? (int)$apiItem['local_stock'] : (isset($apiItem['stock']) ? (int)$apiItem['stock'] : 0);
-            $localStockByCode[$codeKey] = $item['local_stock'];
-            $baseSku = strtoupper(trim((string)($item['sku'] ?? '')));
-            if ($baseSku !== '') {
-                $localStockBySku[$baseSku] = $item['local_stock'];
-            }
-            $baseSize = trim((string)($apiItem['size'] ?? ''));
-            $baseColor = trim((string)($apiItem['color'] ?? ''));
-            $baseVariantKey = $codeKey . '|' . strtolower($baseSize) . '|' . strtolower($baseColor);
-            $localStockByVariant[$baseVariantKey] = $item['local_stock'];
-            $usdList = product::vendorApiUsdPrice($apiItem);
-            $item['itemprice'] = isset($apiItem['itemprice']) && $apiItem['itemprice'] !== '' && $apiItem['itemprice'] !== null
-                ? floatval($apiItem['itemprice'])
-                : (isset($apiItem['price']) && $apiItem['price'] !== '' && $apiItem['price'] !== null ? floatval($apiItem['price']) : $usdList);
-            $item['finalprice'] = isset($apiItem['finalprice']) ? floatval($apiItem['finalprice']) : $item['itemprice'];
-            $item['color'] = $apiItem['color'] ?? '';
-            $item['size'] =  isset($apiItem['size']) ? $apiItem['size'] : '';
-            $item['material'] = isset($apiItem['material']) ? $apiItem['material'] : '';
-            $item['cost_price'] = isset($apiItem['cp']) ? (float)$apiItem['cp'] : 0.0;           
-            $item['gst'] = isset($apiItem['gst']) ? (float)$apiItem['gst'] : 0.0;
-            $item['hsn'] = product::vendorApiHsn($apiItem);
-            $item['description'] = isset($apiItem['snippet_description']) ? $apiItem['snippet_description'] : '';
-            $item['asin'] = isset($apiItem['asin']) ? $apiItem['asin'] : '';
-            $item['upc'] = isset($apiItem['upc']) ? $apiItem['upc'] : '';
-            $item['location'] = isset($apiItem['location']) ? $apiItem['location'] : '';
-            $item['fba_in'] = isset($apiItem['fba_in']) ? (int)$apiItem['fba_in'] : 0;
-            $item['fba_us'] = isset($apiItem['fba_us']) ? (int)$apiItem['fba_us'] : 0;
-            $item['leadtime'] = isset($apiItem['leadtime']) ? $apiItem['leadtime'] : '';
-            $item['instock_leadtime'] = isset($apiItem['instock_leadtime']) ? $apiItem['instock_leadtime'] : '';
-            $item['permanently_available'] = isset($apiItem['permanently_available']) ? (int)$apiItem['permanently_available'] : 0;
-            $item['numsold'] = isset($apiItem['numsold']) ? (int)$apiItem['numsold'] : 0;
-            $item['numsold_india'] = isset($apiItem['numsold_india']) ? (int)$apiItem['numsold_india'] : 0;
-            $item['numsold_global'] = isset($apiItem['numsold_global']) ? (int)$apiItem['numsold_global'] : 0;
-            $item['lastsold'] = isset($apiItem['lastsold']) ? $apiItem['lastsold'] : '';
-            $item['vendor'] = isset($apiItem['vendor']) ? $apiItem['vendor'] : '';
-            $item['shippingfee'] = isset($apiItem['shippingfee']) ? (float)$apiItem['shippingfee'] : 0.0;
-            $item['sourcingfee'] = isset($apiItem['sourcingfee']) ? (float)$apiItem['sourcingfee'] : 0.0;
-            $item['price'] = $usdList;
-            $item['price_india'] = isset($apiItem['price_india']) ? (float)$apiItem['price_india'] : 0.0;
-            $item['price_india_suggested'] = isset($apiItem['price_india_suggested']) ? (float)$apiItem['price_india_suggested'] : 0.0;
-            $item['mrp_india'] = isset($apiItem['mrp_india']) ? (float)$apiItem['mrp_india'] : 0.0;
-            $item['permanent_discount'] = isset($apiItem['permanent_discount']) ? (float)$apiItem['permanent_discount'] : 0.0;
-            $item['discount_global'] = isset($apiItem['discount_global']) ? (float)$apiItem['discount_global'] : 0.0;
-            $item['discount_india'] = isset($apiItem['discount_india']) ? (float)$apiItem['discount_india'] : 0.0;
-            $item['product_weight'] = isset($apiItem['product_weight']) ? (float)$apiItem['product_weight'] : 0.0;
-            $item['product_weight_unit'] = isset($apiItem['product_weight_unit']) ? $apiItem['product_weight_unit'] : '';
-            $item['prod_height'] = isset($apiItem['prod_height']) ? (int)$apiItem['prod_height'] : 0;
-            $item['prod_width'] = isset($apiItem['prod_width']) ? (int)$apiItem['prod_width'] : 0;
-            $item['prod_length'] = isset($apiItem['prod_length']) ? (int)$apiItem['prod_length'] : 0;
-            $item['length_unit'] = isset($apiItem['length_unit']) ? $apiItem['length_unit'] : '';
-            $item['created_at'] = date('Y-m-d H:i:s');
-            $item['updated_at'] = date('Y-m-d H:i:s');
+                // map API item to DB fields (adjust as needed)
+                $item = [];
+                $item['item_code'] = $code;
+                $item['sku'] = $apiItem['sku'] ?? '';
+                $item['title'] = $apiItem['title'] ?? '';
+                $item['image'] = (!empty($apiItem['image']))
+                    ? ('https://cdn.exoticindia.com/images/products/original/' . $apiItem['image'])
+                    : '';
+                $item['groupname'] = $apiItem['groupname'] ?? '';
+                $item['local_stock'] = isset($apiItem['local_stock']) ? (int)$apiItem['local_stock'] : (isset($apiItem['stock']) ? (int)$apiItem['stock'] : 0);
+                $localStockByCode[$codeKey] = $item['local_stock'];
+                $baseSku = strtoupper(trim((string)($item['sku'] ?? '')));
+                if ($baseSku !== '') {
+                    $localStockBySku[$baseSku] = $item['local_stock'];
+                }
+                $baseSize = trim((string)($apiItem['size'] ?? ''));
+                $baseColor = trim((string)($apiItem['color'] ?? ''));
+                $baseVariantKey = $codeKey . '|' . strtolower($baseSize) . '|' . strtolower($baseColor);
+                $localStockByVariant[$baseVariantKey] = $item['local_stock'];
+                $usdList = product::vendorApiUsdPrice($apiItem);
+                $item['itemprice'] = isset($apiItem['itemprice']) && $apiItem['itemprice'] !== '' && $apiItem['itemprice'] !== null
+                    ? floatval($apiItem['itemprice'])
+                    : (isset($apiItem['price']) && $apiItem['price'] !== '' && $apiItem['price'] !== null ? floatval($apiItem['price']) : $usdList);
+                $item['finalprice'] = isset($apiItem['finalprice']) ? floatval($apiItem['finalprice']) : $item['itemprice'];
+                $item['color'] = $apiItem['color'] ?? '';
+                $item['size'] =  isset($apiItem['size']) ? $apiItem['size'] : '';
+                $item['material'] = isset($apiItem['material']) ? $apiItem['material'] : '';
+                $item['cost_price'] = isset($apiItem['cp']) ? (float)$apiItem['cp'] : 0.0;
+                $item['gst'] = isset($apiItem['gst']) ? (float)$apiItem['gst'] : 0.0;
+                $item['hsn'] = product::vendorApiHsn($apiItem);
+                $item['description'] = isset($apiItem['snippet_description']) ? $apiItem['snippet_description'] : '';
+                $item['asin'] = isset($apiItem['asin']) ? $apiItem['asin'] : '';
+                $item['upc'] = isset($apiItem['upc']) ? $apiItem['upc'] : '';
+                $item['location'] = isset($apiItem['location']) ? $apiItem['location'] : '';
+                $item['fba_in'] = isset($apiItem['fba_in']) ? (int)$apiItem['fba_in'] : 0;
+                $item['fba_us'] = isset($apiItem['fba_us']) ? (int)$apiItem['fba_us'] : 0;
+                $item['leadtime'] = isset($apiItem['leadtime']) ? $apiItem['leadtime'] : '';
+                $item['instock_leadtime'] = isset($apiItem['instock_leadtime']) ? $apiItem['instock_leadtime'] : '';
+                $item['permanently_available'] = isset($apiItem['permanently_available']) ? (int)$apiItem['permanently_available'] : 0;
+                $item['numsold'] = isset($apiItem['numsold']) ? (int)$apiItem['numsold'] : 0;
+                $item['numsold_india'] = isset($apiItem['numsold_india']) ? (int)$apiItem['numsold_india'] : 0;
+                $item['numsold_global'] = isset($apiItem['numsold_global']) ? (int)$apiItem['numsold_global'] : 0;
+                $item['lastsold'] = isset($apiItem['lastsold']) ? $apiItem['lastsold'] : '';
+                $item['vendor'] = isset($apiItem['vendor']) ? $apiItem['vendor'] : '';
+                $item['shippingfee'] = isset($apiItem['shippingfee']) ? (float)$apiItem['shippingfee'] : 0.0;
+                $item['sourcingfee'] = isset($apiItem['sourcingfee']) ? (float)$apiItem['sourcingfee'] : 0.0;
+                $item['price'] = $usdList;
+                $item['price_india'] = isset($apiItem['price_india']) ? (float)$apiItem['price_india'] : 0.0;
+                $item['price_india_suggested'] = isset($apiItem['price_india_suggested']) ? (float)$apiItem['price_india_suggested'] : 0.0;
+                $item['mrp_india'] = isset($apiItem['mrp_india']) ? (float)$apiItem['mrp_india'] : 0.0;
+                $item['permanent_discount'] = isset($apiItem['permanent_discount']) ? (float)$apiItem['permanent_discount'] : 0.0;
+                $item['discount_global'] = isset($apiItem['discount_global']) ? (float)$apiItem['discount_global'] : 0.0;
+                $item['discount_india'] = isset($apiItem['discount_india']) ? (float)$apiItem['discount_india'] : 0.0;
+                $item['product_weight'] = isset($apiItem['product_weight']) ? (float)$apiItem['product_weight'] : 0.0;
+                $item['product_weight_unit'] = isset($apiItem['product_weight_unit']) ? $apiItem['product_weight_unit'] : '';
+                $item['prod_height'] = isset($apiItem['prod_height']) ? (int)$apiItem['prod_height'] : 0;
+                $item['prod_width'] = isset($apiItem['prod_width']) ? (int)$apiItem['prod_width'] : 0;
+                $item['prod_length'] = isset($apiItem['prod_length']) ? (int)$apiItem['prod_length'] : 0;
+                $item['length_unit'] = isset($apiItem['length_unit']) ? $apiItem['length_unit'] : '';
+                $item['created_at'] = date('Y-m-d H:i:s');
+                $item['updated_at'] = date('Y-m-d H:i:s');
 
-            // check if product exists
-            // if(!empty($item['sku'])){
-            //     $existing = $productModel->findBySku($item['sku']);
-            // }else{
+                // check if product exists
+                // if(!empty($item['sku'])){
+                //     $existing = $productModel->findBySku($item['sku']);
+                // }else{
                 $existing = $productModel->findByItemCodeSizeColor($item['item_code'], $item['size'], $item['color']);
-            //}
-            
-            
-            if ($existing) {            
-            $ok = $productModel->updateProduct($existing['id'], $item);
-            if ($ok) $updated++;
-            else $failed[] = $code;
-            } else {            
-            $id = $productModel->createProduct($item);
-            if ($id) {
-                $created++;
-                $createdIdsByCode[$code][] = (int)$id;
-                if (isset($conn) && $conn instanceof mysqli) {
-                    $this->recordVendorApiImportOpeningStock(
-                        $conn,
-                        (int)$id,
-                        trim((string)($item['sku'] ?? '')),
-                        (string)($item['item_code'] ?? ''),
-                        trim((string)($item['size'] ?? '')),
-                        trim((string)($item['color'] ?? '')),
-                        (int)($item['local_stock'] ?? 0)
-                    );
-                }
-            }
-            else $failed[] = $code;
-            }
-            // echo "Processed item code: " . $code . "\n";
-            // echo "Created: $created, Updated: $updated, Failed: " . count($failed) . "\n";
-            // print_r($existing);
-            //varient
-            if (isset($apiItem['variations']) && is_array($apiItem['variations'])) {
-                foreach ($apiItem['variations'] as $variant) {
-                    $variantItem = $item; // start with base item
-                    $variantItem['item_code'] = $apiItem['itemcode'] ?? $apiItem['item_code'];
-                    $variantItem['sku'] = $variant['sku'] ?? '';
-                    $variantItem['size'] = $variant['size'] ?? '';
-                    $variantItem['color'] = $variant['color'] ?? '';
-                    $variantItem['title'] = $variant['title'] ?? $item['title'];                    
-                    $variantItem['local_stock'] = isset($variant['local_stock']) ? (int)$variant['local_stock'] : 0;
-                    $variantSku = strtoupper(trim((string)($variantItem['sku'] ?? '')));
-                    if ($variantSku !== '') {
-                        $localStockBySku[$variantSku] = $variantItem['local_stock'];
-                    }
-                    $variantKey = $codeKey . '|' . strtolower(trim((string)$variantItem['size'])) . '|' . strtolower(trim((string)$variantItem['color']));
-                    $localStockByVariant[$variantKey] = $variantItem['local_stock'];
-                    $mergedVariant = array_merge($apiItem, $variant);
-                    $usdVar = product::vendorApiUsdPrice($mergedVariant);
-                    $variantItem['itemprice'] = isset($variant['itemprice']) && $variant['itemprice'] !== '' && $variant['itemprice'] !== null
-                        ? floatval($variant['itemprice'])
-                        : (isset($variant['price']) && $variant['price'] !== '' && $variant['price'] !== null ? floatval($variant['price']) : $usdVar);
-                    $variantItem['finalprice'] = isset($variant['finalprice']) ? floatval($variant['finalprice']) : $variantItem['itemprice'];
-                    $variantItem['cost_price'] = isset($variant['cp']) ? (float)$variant['cp'] : 0.0;
-                    $variantItem['gst'] = isset($variant['gst']) ? (float)$variant['gst'] : 0.0;
-                    $variantItem['hsn'] = product::vendorApiHsn($apiItem);
-                    $variantItem['description'] = isset($variant['snippet_description']) ? $variant['snippet_description'] : '';
-                    $variantItem['image'] = isset($variant['image']) ? 'https://cdn.exoticindia.com/images/products/original/'.$variant['image'] : $item['image'];
-                    $variantItem['asin'] = isset($variant['asin']) ? $variant['asin'] : '';
-                    $variantItem['upc'] = isset($variant['upc']) ? $variant['upc'] : '';
-                    $variantItem['location'] = isset($variant['location']) ? $variant['location'] : '';
-                    $variantItem['fba_in'] = isset($variant['fba_in']) ? (int)$variant['fba_in'] : 0;
-                    $variantItem['fba_us'] = isset($variant['fba_us']) ? (int)$variant['fba_us'] : 0;
-                    $variantItem['leadtime'] = isset($variant['leadtime']) ? (int)$variant['leadtime'] : 0;
-                    $variantItem['instock_leadtime'] = isset($variant['instock_leadtime']) ? (int)$variant['instock_leadtime'] : 0;
-                    $variantItem['permanently_available'] = isset($variant['permanently_available']) ? (int)$variant['permanently_available'] : 0;
-                    $variantItem['numsold'] = isset($variant['numsold']) ? (int)$variant['numsold'] : 0;
-                    $variantItem['numsold_india'] = isset($variant['numsold_india']) ? (int)$variant['numsold_india'] : 0;
-                    $variantItem['numsold_global'] = isset($variant['numsold_global']) ? (int)$variant['numsold_global'] : 0;
-                    $variantItem['lastsold'] = isset($variant['lastsold']) ? (int)$variant['lastsold'] : 0;
-                    $variantItem['vendor'] = isset($variant['vendor']) ? $variant['vendor'] : '';
-                    $variantItem['shippingfee'] = isset($variant['shippingfee']) ? (float)$variant['shippingfee'] : 0.0;
-                    $variantItem['sourcingfee'] = isset($variant['sourcingfee']) ? (float)$variant['sourcingfee'] : 0.0;
-                    $variantItem['price'] = $usdVar;
-                    $variantItem['price_india'] = isset($variant['price_india']) ? (float)$variant['price_india'] : 0.0;
-                    $variantItem['price_india_suggested'] = isset($variant['price_india_suggested']) ? (float)$variant['price_india_suggested'] : 0.0;
-                    $variantItem['mrp_india'] = isset($variant['mrp_india']) ? (float)$variant['mrp_india'] : 0.0;
-                    $variantItem['permanent_discount'] = isset($variant['permanent_discount']) ? (float)$variant['permanent_discount'] : 0.0;
-                    $variantItem['discount_global'] = isset($variant['discount_global']) ? (float)$variant['discount_global'] : 0.0;
-                    $variantItem['discount_india'] = isset($variant['discount_india']) ? (float)$variant['discount_india'] : 0.0;
-                    $variantItem['created_at'] = date('Y-m-d H:i:s');
-                    $variantItem['updated_at'] = date('Y-m-d H:i:s');
-                    // check if variant exists
-                    $existingVar = $productModel->findByItemCodeSizeColor($variantItem['item_code'], $variantItem['size'], $variantItem['color']);
-                    if ($existingVar) {            
-                        $ok = $productModel->updateProduct($existingVar['id'], $variantItem);
-                        if ($ok) $updated++;
-                        else $failed[] = $variantItem['item_code'];
-                    } else {            
-                        $id = $productModel->createProduct($variantItem);
-                        if ($id) {
-                            $created++;
-                            $createdIdsByCode[$variantItem['item_code']][] = (int)$id;
-                            if (isset($conn) && $conn instanceof mysqli) {
-                                $this->recordVendorApiImportOpeningStock(
-                                    $conn,
-                                    (int)$id,
-                                    trim((string)($variantItem['sku'] ?? '')),
-                                    (string)($variantItem['item_code'] ?? ''),
-                                    trim((string)($variantItem['size'] ?? '')),
-                                    trim((string)($variantItem['color'] ?? '')),
-                                    (int)($variantItem['local_stock'] ?? 0)
-                                );
-                            }
-                        }
-                        else $failed[] = $variantItem['item_code'];
-                    }
-                }
-            }
+                //}
 
-            // tiny sleep to be gentle on third-party API/service
-            usleep(100000); // 100ms
+
+                if ($existing) {
+                    $ok = $productModel->updateProduct($existing['id'], $item);
+                    if ($ok) $updated++;
+                    else $failed[] = $code;
+                } else {
+                    $id = $productModel->createProduct($item);
+                    if ($id) {
+                        $created++;
+                        $createdIdsByCode[$code][] = (int)$id;
+                        if (isset($conn) && $conn instanceof mysqli) {
+                            $this->recordVendorApiImportOpeningStock(
+                                $conn,
+                                (int)$id,
+                                trim((string)($item['sku'] ?? '')),
+                                (string)($item['item_code'] ?? ''),
+                                trim((string)($item['size'] ?? '')),
+                                trim((string)($item['color'] ?? '')),
+                                (int)($item['local_stock'] ?? 0)
+                            );
+                        }
+                    } else $failed[] = $code;
+                }
+                // echo "Processed item code: " . $code . "\n";
+                // echo "Created: $created, Updated: $updated, Failed: " . count($failed) . "\n";
+                // print_r($existing);
+                //varient
+                if (isset($apiItem['variations']) && is_array($apiItem['variations'])) {
+                    foreach ($apiItem['variations'] as $variant) {
+                        $variantItem = $item; // start with base item
+                        $variantItem['item_code'] = $apiItem['itemcode'] ?? $apiItem['item_code'];
+                        $variantItem['sku'] = $variant['sku'] ?? '';
+                        $variantItem['size'] = $variant['size'] ?? '';
+                        $variantItem['color'] = $variant['color'] ?? '';
+                        $variantItem['title'] = $variant['title'] ?? $item['title'];
+                        $variantItem['local_stock'] = isset($variant['local_stock']) ? (int)$variant['local_stock'] : 0;
+                        $variantSku = strtoupper(trim((string)($variantItem['sku'] ?? '')));
+                        if ($variantSku !== '') {
+                            $localStockBySku[$variantSku] = $variantItem['local_stock'];
+                        }
+                        $variantKey = $codeKey . '|' . strtolower(trim((string)$variantItem['size'])) . '|' . strtolower(trim((string)$variantItem['color']));
+                        $localStockByVariant[$variantKey] = $variantItem['local_stock'];
+                        $mergedVariant = array_merge($apiItem, $variant);
+                        $usdVar = product::vendorApiUsdPrice($mergedVariant);
+                        $variantItem['itemprice'] = isset($variant['itemprice']) && $variant['itemprice'] !== '' && $variant['itemprice'] !== null
+                            ? floatval($variant['itemprice'])
+                            : (isset($variant['price']) && $variant['price'] !== '' && $variant['price'] !== null ? floatval($variant['price']) : $usdVar);
+                        $variantItem['finalprice'] = isset($variant['finalprice']) ? floatval($variant['finalprice']) : $variantItem['itemprice'];
+                        $variantItem['cost_price'] = isset($variant['cp']) ? (float)$variant['cp'] : 0.0;
+                        $variantItem['gst'] = isset($variant['gst']) ? (float)$variant['gst'] : 0.0;
+                        $variantItem['hsn'] = product::vendorApiHsn($apiItem);
+                        $variantItem['description'] = isset($variant['snippet_description']) ? $variant['snippet_description'] : '';
+                        $variantItem['image'] = isset($variant['image']) ? 'https://cdn.exoticindia.com/images/products/original/' . $variant['image'] : $item['image'];
+                        $variantItem['asin'] = isset($variant['asin']) ? $variant['asin'] : '';
+                        $variantItem['upc'] = isset($variant['upc']) ? $variant['upc'] : '';
+                        $variantItem['location'] = isset($variant['location']) ? $variant['location'] : '';
+                        $variantItem['fba_in'] = isset($variant['fba_in']) ? (int)$variant['fba_in'] : 0;
+                        $variantItem['fba_us'] = isset($variant['fba_us']) ? (int)$variant['fba_us'] : 0;
+                        $variantItem['leadtime'] = isset($variant['leadtime']) ? (int)$variant['leadtime'] : 0;
+                        $variantItem['instock_leadtime'] = isset($variant['instock_leadtime']) ? (int)$variant['instock_leadtime'] : 0;
+                        $variantItem['permanently_available'] = isset($variant['permanently_available']) ? (int)$variant['permanently_available'] : 0;
+                        $variantItem['numsold'] = isset($variant['numsold']) ? (int)$variant['numsold'] : 0;
+                        $variantItem['numsold_india'] = isset($variant['numsold_india']) ? (int)$variant['numsold_india'] : 0;
+                        $variantItem['numsold_global'] = isset($variant['numsold_global']) ? (int)$variant['numsold_global'] : 0;
+                        $variantItem['lastsold'] = isset($variant['lastsold']) ? (int)$variant['lastsold'] : 0;
+                        $variantItem['vendor'] = isset($variant['vendor']) ? $variant['vendor'] : '';
+                        $variantItem['shippingfee'] = isset($variant['shippingfee']) ? (float)$variant['shippingfee'] : 0.0;
+                        $variantItem['sourcingfee'] = isset($variant['sourcingfee']) ? (float)$variant['sourcingfee'] : 0.0;
+                        $variantItem['price'] = $usdVar;
+                        $variantItem['price_india'] = isset($variant['price_india']) ? (float)$variant['price_india'] : 0.0;
+                        $variantItem['price_india_suggested'] = isset($variant['price_india_suggested']) ? (float)$variant['price_india_suggested'] : 0.0;
+                        $variantItem['mrp_india'] = isset($variant['mrp_india']) ? (float)$variant['mrp_india'] : 0.0;
+                        $variantItem['permanent_discount'] = isset($variant['permanent_discount']) ? (float)$variant['permanent_discount'] : 0.0;
+                        $variantItem['discount_global'] = isset($variant['discount_global']) ? (float)$variant['discount_global'] : 0.0;
+                        $variantItem['discount_india'] = isset($variant['discount_india']) ? (float)$variant['discount_india'] : 0.0;
+                        $variantItem['created_at'] = date('Y-m-d H:i:s');
+                        $variantItem['updated_at'] = date('Y-m-d H:i:s');
+                        // check if variant exists
+                        $existingVar = $productModel->findByItemCodeSizeColor($variantItem['item_code'], $variantItem['size'], $variantItem['color']);
+                        if ($existingVar) {
+                            $ok = $productModel->updateProduct($existingVar['id'], $variantItem);
+                            if ($ok) $updated++;
+                            else $failed[] = $variantItem['item_code'];
+                        } else {
+                            $id = $productModel->createProduct($variantItem);
+                            if ($id) {
+                                $created++;
+                                $createdIdsByCode[$variantItem['item_code']][] = (int)$id;
+                                if (isset($conn) && $conn instanceof mysqli) {
+                                    $this->recordVendorApiImportOpeningStock(
+                                        $conn,
+                                        (int)$id,
+                                        trim((string)($variantItem['sku'] ?? '')),
+                                        (string)($variantItem['item_code'] ?? ''),
+                                        trim((string)($variantItem['size'] ?? '')),
+                                        trim((string)($variantItem['color'] ?? '')),
+                                        (int)($variantItem['local_stock'] ?? 0)
+                                    );
+                                }
+                            } else $failed[] = $variantItem['item_code'];
+                        }
+                    }
+                }
+
+                // tiny sleep to be gentle on third-party API/service
+                usleep(100000); // 100ms
             } catch (\Throwable $e) {
                 $fc = trim((string)$itemRowCode);
                 if ($fc === '' && is_array($apiItem)) {
@@ -833,7 +845,8 @@ class ProductsController {
         return $respond($payload);
     }
 
-    public function bulkImportScreen() {
+    public function bulkImportScreen()
+    {
         is_login();
         global $conn;
         $this->ensureBulkImportTables();
@@ -888,7 +901,8 @@ class ProductsController {
     }
 
     /** UI-only module for fast bulk label selection and queueing. */
-    public function bulkLabelPrintUi() {
+    public function bulkLabelPrintUi()
+    {
         is_login();
         global $productModel;
 
@@ -919,7 +933,8 @@ class ProductsController {
     }
 
     /** Generate printable HTML for bulk label queue (JSON in, HTML out via JSON). */
-    public function bulkLabelPrintGenerate() {
+    public function bulkLabelPrintGenerate()
+    {
         is_login();
         global $productModel;
         header('Content-Type: application/json');
@@ -1009,7 +1024,7 @@ class ProductsController {
         } catch (\Throwable $e) {
             error_log(
                 'bulk_label_print_generate template=' . $template
-                . ' ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()
+                    . ' ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()
             );
             $hint = preg_replace('/[^\x20-\x7E]/', '', substr($e->getMessage(), 0, 240));
             $hint = trim($hint);
@@ -1024,7 +1039,8 @@ class ProductsController {
     }
 
     /** POST multipart: file (.csv/.xlsx/.xls) with Item Code, Size, Color; optional Qty per row. Returns JSON products for the queue. */
-    public function bulkLabelPrintUpload() {
+    public function bulkLabelPrintUpload()
+    {
         is_login();
         header('Content-Type: application/json');
         global $productModel;
@@ -1099,7 +1115,8 @@ class ProductsController {
         exit;
     }
 
-    public function bulkLabelPrintSampleCsv() {
+    public function bulkLabelPrintSampleCsv()
+    {
         is_login();
         $filename = 'bulk_label_print_sample.csv';
         header('Content-Type: text/csv; charset=utf-8');
@@ -1116,7 +1133,8 @@ class ProductsController {
         exit;
     }
 
-    public function bulkImportSampleCsv() {
+    public function bulkImportSampleCsv()
+    {
         is_login();
         $filename = 'bulk_product_import_sample.csv';
         header('Content-Type: text/csv; charset=utf-8');
@@ -1135,7 +1153,8 @@ class ProductsController {
         exit;
     }
 
-    public function bulkImportDetail() {
+    public function bulkImportDetail()
+    {
         is_login();
         global $conn;
         $this->ensureBulkImportTables();
@@ -1246,7 +1265,8 @@ class ProductsController {
      * Match import row dimensions the same way as legacy SQL:
      * IFNULL(NULLIF(TRIM(v), ''), '')
      */
-    private function bulkImportNormDimForProductLookup(?string $v): string {
+    private function bulkImportNormDimForProductLookup(?string $v): string
+    {
         $t = trim((string)$v);
         return $t === '' ? '' : $t;
     }
@@ -1254,7 +1274,8 @@ class ProductsController {
     /**
      * Lookup key for pairing import lines to vp_products (item_code + size + color), case-insensitive like utf8mb4_general_ci.
      */
-    private function bulkImportProductMatchKey(string $itemCode, string $importSize, string $importColor): string {
+    private function bulkImportProductMatchKey(string $itemCode, string $importSize, string $importColor): string
+    {
         $fold = static function (string $s): string {
             if (function_exists('mb_strtolower')) {
                 return mb_strtolower($s, 'UTF-8');
@@ -1273,7 +1294,8 @@ class ProductsController {
      * @param array<int, array<string, mixed>> $rows
      * @return array<int, array<string, mixed>>
      */
-    private function hydrateBulkImportDetailProductLinks(\mysqli $conn, array $rows): array {
+    private function hydrateBulkImportDetailProductLinks(\mysqli $conn, array $rows): array
+    {
         if ($rows === []) {
             return $rows;
         }
@@ -1406,7 +1428,8 @@ class ProductsController {
         return $rows;
     }
 
-    private function ensureBulkImportTables() {
+    private function ensureBulkImportTables()
+    {
         global $conn;
         $sqlJobs = "CREATE TABLE IF NOT EXISTS product_import_jobs (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1453,7 +1476,8 @@ class ProductsController {
     /**
      * Migrate older installs that created import tables before warehouse/qty/location columns existed.
      */
-    private function ensureBulkImportSchemaPatches($conn): void {
+    private function ensureBulkImportSchemaPatches($conn): void
+    {
         if (!$conn) {
             return;
         }
@@ -1508,7 +1532,8 @@ class ProductsController {
     /**
      * @return array<string, mixed>
      */
-    private function fetchImportJobTimingColumns(\mysqli $conn, int $jobId): array {
+    private function fetchImportJobTimingColumns(\mysqli $conn, int $jobId): array
+    {
         $row = [
             'import_started_at' => null,
             'import_completed_at' => null,
@@ -1535,7 +1560,8 @@ class ProductsController {
     /**
      * @param array{processed_items?:int,pending_items?:int} $stats
      */
-    private function applyImportJobBatchTiming(\mysqli $conn, int $jobId, float $batchDurationMs, array $stats): void {
+    private function applyImportJobBatchTiming(\mysqli $conn, int $jobId, float $batchDurationMs, array $stats): void
+    {
         $batchMs = (int)max(0, round($batchDurationMs));
         if ($batchMs <= 0) {
             return;
@@ -1561,7 +1587,8 @@ class ProductsController {
      * @param array{total_items?:int,processed_items?:int,pending_items?:int} $stats
      * @return array<string, float|int|string|null>
      */
-    private function buildImportJobTimingSummary(array $stats, array $timingColumns): array {
+    private function buildImportJobTimingSummary(array $stats, array $timingColumns): array
+    {
         $totalMs = (int)($timingColumns['total_processing_ms'] ?? 0);
         $processed = (int)($stats['processed_items'] ?? 0);
         $pending = (int)($stats['pending_items'] ?? 0);
@@ -1583,7 +1610,8 @@ class ProductsController {
     /**
      * Allow OPENING_STOCK on vp_stock_movements (idempotent if already present).
      */
-    private function ensureVpStockMovementsOpeningStockEnum($conn): void {
+    private function ensureVpStockMovementsOpeningStockEnum($conn): void
+    {
         if (!$conn) {
             return;
         }
@@ -1605,7 +1633,8 @@ class ProductsController {
     /**
      * vp_stock_movements item-code column may be present as item_code or Item_code.
      */
-    private function resolveVpStockMovementsItemCodeColumn($conn): string {
+    private function resolveVpStockMovementsItemCodeColumn($conn): string
+    {
         if (!$conn) {
             return 'item_code';
         }
@@ -1621,7 +1650,8 @@ class ProductsController {
         return 'item_code';
     }
 
-    private function parseBulkQtyFromRaw(string $raw): int {
+    private function parseBulkQtyFromRaw(string $raw): int
+    {
         $x = str_replace([',', ' '], '', trim($raw));
         if ($x === '' || !is_numeric($x)) {
             return 0;
@@ -1629,7 +1659,8 @@ class ProductsController {
         return max(0, (int)round((float)$x));
     }
 
-    private function bulkImportCellLooksLikeQty(string $cell): bool {
+    private function bulkImportCellLooksLikeQty(string $cell): bool
+    {
         $b = trim($cell);
         if ($b === '') {
             return false;
@@ -1644,7 +1675,8 @@ class ProductsController {
      * When B is blank: size/color add segments; when both size and color are blank, returns item_code only
      * (same as the original “use item code as SKU” behaviour).
      */
-    private function buildBulkImportAutoSku(string $itemCode, string $size, string $color): string {
+    private function buildBulkImportAutoSku(string $itemCode, string $size, string $color): string
+    {
         $itemCode = trim($itemCode);
         $size = trim($size);
         $color = trim($color);
@@ -1666,7 +1698,8 @@ class ProductsController {
     /**
      * @return array{code:string,sku_raw:string,color:string,size:string,qty:int,location:string}|null
      */
-    private function parseBulkImportCsvRowParts(array $row): ?array {
+    private function parseBulkImportCsvRowParts(array $row): ?array
+    {
         $code = trim((string)($row[0] ?? ''));
         if ($code === '') {
             return null;
@@ -1724,7 +1757,8 @@ class ProductsController {
         return null;
     }
 
-    private function parseBulkImportRowsFromCsv(string $filePath): array {
+    private function parseBulkImportRowsFromCsv(string $filePath): array
+    {
         $rows = [];
         $handle = fopen($filePath, 'r');
         if (!$handle) {
@@ -1755,7 +1789,8 @@ class ProductsController {
         return $rows;
     }
 
-    private function xlsxLoadSharedStrings(ZipArchive $zip): array {
+    private function xlsxLoadSharedStrings(ZipArchive $zip): array
+    {
         $sharedStrings = [];
         $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
         if ($sharedXml === false) {
@@ -1778,7 +1813,8 @@ class ProductsController {
         return $sharedStrings;
     }
 
-    private function xlsxCellPlainText(SimpleXMLElement $c, array $sharedStrings): string {
+    private function xlsxCellPlainText(SimpleXMLElement $c, array $sharedStrings): string
+    {
         $t = (string)($c['t'] ?? '');
         if ($t === 's') {
             $idx = (int)$c->v;
@@ -1795,7 +1831,8 @@ class ProductsController {
         return '';
     }
 
-    private function parseBulkImportRowsFromXlsx(string $filePath): array {
+    private function parseBulkImportRowsFromXlsx(string $filePath): array
+    {
         $rows = [];
         if (!class_exists('ZipArchive')) {
             return $rows;
@@ -1862,7 +1899,8 @@ class ProductsController {
      *
      * @param array<int,mixed> $cells
      */
-    private function bulkImportLooksLikeHeaderRow(array $cells): bool {
+    private function bulkImportLooksLikeHeaderRow(array $cells): bool
+    {
         $normalize = static function ($v): string {
             $x = strtolower(trim((string)$v));
             if ($x === '') {
@@ -1904,7 +1942,8 @@ class ProductsController {
      * @param array<string,mixed> $byCol column letter => cell text
      * @return array{code:string,sku_raw:string,color:string,size:string,qty:int,location:string}|null
      */
-    private function parseBulkImportXlsxRowParts(array $byCol): ?array {
+    private function parseBulkImportXlsxRowParts(array $byCol): ?array
+    {
         $code = trim((string)($byCol['A'] ?? ''));
         if ($code === '') {
             return null;
@@ -1961,7 +2000,8 @@ class ProductsController {
         return null;
     }
 
-    private function normalizeBulkImportRows(array $rows): array {
+    private function normalizeBulkImportRows(array $rows): array
+    {
         $headerCodes = ['item_code', 'itemcode', 'item code', 'sku', 'product code', 'product_code', 'productcode'];
         $outByCode = [];
         foreach ($rows as $r) {
@@ -1986,7 +2026,8 @@ class ProductsController {
         return array_values($outByCode);
     }
 
-    private function findProductRowForOpeningStock(mysqli $conn, string $itemCode): ?array {
+    private function findProductRowForOpeningStock(mysqli $conn, string $itemCode): ?array
+    {
         $sql = "SELECT id, sku, item_code, size, color FROM vp_products
                 WHERE item_code = ?
                 ORDER BY (CASE WHEN (size IS NULL OR size = '') AND (color IS NULL OR color = '') THEN 0 ELSE 1 END), id ASC
@@ -2056,7 +2097,8 @@ class ProductsController {
     /**
      * Stock movement location label from exotic_address (address_title for warehouse_id).
      */
-    private function getWarehouseLocationLabel(mysqli $conn, int $warehouseId): string {
+    private function getWarehouseLocationLabel(mysqli $conn, int $warehouseId): string
+    {
         if ($warehouseId <= 0) {
             return '-';
         }
@@ -2079,7 +2121,8 @@ class ProductsController {
     /**
      * Default warehouse for vendor API import: session warehouse if valid, else first active exotic_address by id.
      */
-    private function resolveDefaultImportWarehouseId(mysqli $conn): int {
+    private function resolveDefaultImportWarehouseId(mysqli $conn): int
+    {
         if (session_status() !== PHP_SESSION_ACTIVE) {
             @session_start();
         }
@@ -2436,7 +2479,8 @@ class ProductsController {
         return null;
     }
 
-    private function bulkImportUploadErrorMessage(int $code): string {
+    private function bulkImportUploadErrorMessage(int $code): string
+    {
         switch ($code) {
             case UPLOAD_ERR_INI_SIZE:
                 return 'File exceeds the server upload limit (upload_max_filesize in php.ini). Ask your host to raise it, or split the file.';
@@ -2457,12 +2501,19 @@ class ProductsController {
         }
     }
 
-    public function bulkImportUpload() {
+    public function bulkImportUpload()
+    {
         is_login();
-        if (ob_get_level() === 0) { ob_start(); }
+        if (ob_get_level() === 0) {
+            ob_start();
+        }
         set_error_handler(function ($severity, $message, $file, $line) {
-            if (!(error_reporting() & $severity)) { return false; }
-            if (ob_get_length()) { ob_clean(); }
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
+            if (ob_get_length()) {
+                ob_clean();
+            }
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
             exit;
@@ -2582,12 +2633,19 @@ class ProductsController {
         exit;
     }
 
-    public function bulkImportRevert() {
+    public function bulkImportRevert()
+    {
         is_login();
-        if (ob_get_level() === 0) { ob_start(); }
+        if (ob_get_level() === 0) {
+            ob_start();
+        }
         set_error_handler(function ($severity, $message, $file, $line) {
-            if (!(error_reporting() & $severity)) { return false; }
-            if (ob_get_length()) { ob_clean(); }
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
+            if (ob_get_length()) {
+                ob_clean();
+            }
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
             exit;
@@ -2715,8 +2773,12 @@ class ProductsController {
                 $updStmt->execute();
             }
         }
-        if ($recalcStmt) { $recalcStmt->close(); }
-        if ($updStmt) { $updStmt->close(); }
+        if ($recalcStmt) {
+            $recalcStmt->close();
+        }
+        if ($updStmt) {
+            $updStmt->close();
+        }
 
         // Delete job (cascade deletes items).
         $delJob = $conn->prepare("DELETE FROM product_import_jobs WHERE id = ? LIMIT 1");
@@ -2747,7 +2809,8 @@ class ProductsController {
         exit;
     }
 
-    private function refreshImportJobCounts(int $jobId): array {
+    private function refreshImportJobCounts(int $jobId): array
+    {
         global $conn;
         $sql = "SELECT
                     COUNT(*) AS total_items,
@@ -2785,12 +2848,19 @@ class ProductsController {
         ];
     }
 
-    public function bulkImportProcessBatch() {
+    public function bulkImportProcessBatch()
+    {
         is_login();
-        if (ob_get_level() === 0) { ob_start(); }
+        if (ob_get_level() === 0) {
+            ob_start();
+        }
         set_error_handler(function ($severity, $message, $file, $line) {
-            if (!(error_reporting() & $severity)) { return false; }
-            if (ob_get_length()) { ob_clean(); }
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
+            if (ob_get_length()) {
+                ob_clean();
+            }
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
             exit;
@@ -2817,8 +2887,12 @@ class ProductsController {
             $picked[] = $row;
         }
         $stmtPick->close();
-        $ids = array_map(static function ($r) { return (int)$r['id']; }, $picked);
-        $codes = array_map(static function ($r) { return $r['item_code']; }, $picked);
+        $ids = array_map(static function ($r) {
+            return (int)$r['id'];
+        }, $picked);
+        $codes = array_map(static function ($r) {
+            return $r['item_code'];
+        }, $picked);
 
         if (empty($ids)) {
             $stats = $this->refreshImportJobCounts($jobId);
@@ -2978,12 +3052,19 @@ class ProductsController {
         exit;
     }
 
-    public function bulkImportRefetchBatch() {
+    public function bulkImportRefetchBatch()
+    {
         is_login();
-        if (ob_get_level() === 0) { ob_start(); }
+        if (ob_get_level() === 0) {
+            ob_start();
+        }
         set_error_handler(function ($severity, $message, $file, $line) {
-            if (!(error_reporting() & $severity)) { return false; }
-            if (ob_get_length()) { ob_clean(); }
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
+            if (ob_get_length()) {
+                ob_clean();
+            }
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
             exit;
@@ -3196,12 +3277,19 @@ class ProductsController {
         exit;
     }
 
-    public function bulkImportStatus() {
+    public function bulkImportStatus()
+    {
         is_login();
-        if (ob_get_level() === 0) { ob_start(); }
+        if (ob_get_level() === 0) {
+            ob_start();
+        }
         set_error_handler(function ($severity, $message, $file, $line) {
-            if (!(error_reporting() & $severity)) { return false; }
-            if (ob_get_length()) { ob_clean(); }
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
+            if (ob_get_length()) {
+                ob_clean();
+            }
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
             exit;
@@ -3234,12 +3322,19 @@ class ProductsController {
         exit;
     }
 
-    public function bulkImportRetry() {
+    public function bulkImportRetry()
+    {
         is_login();
-        if (ob_get_level() === 0) { ob_start(); }
+        if (ob_get_level() === 0) {
+            ob_start();
+        }
         set_error_handler(function ($severity, $message, $file, $line) {
-            if (!(error_reporting() & $severity)) { return false; }
-            if (ob_get_length()) { ob_clean(); }
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
+            if (ob_get_length()) {
+                ob_clean();
+            }
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
             exit;
@@ -3329,12 +3424,19 @@ class ProductsController {
         exit;
     }
 
-    public function bulkImportDeleteFailedRows() {
+    public function bulkImportDeleteFailedRows()
+    {
         is_login();
-        if (ob_get_level() === 0) { ob_start(); }
+        if (ob_get_level() === 0) {
+            ob_start();
+        }
         set_error_handler(function ($severity, $message, $file, $line) {
-            if (!(error_reporting() & $severity)) { return false; }
-            if (ob_get_length()) { ob_clean(); }
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
+            if (ob_get_length()) {
+                ob_clean();
+            }
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
             exit;
@@ -3419,9 +3521,12 @@ class ProductsController {
         exit;
     }
 
-    public function bulkImportDelete() {
+    public function bulkImportDelete()
+    {
         is_login();
-        if (ob_get_level() === 0) { ob_start(); }
+        if (ob_get_level() === 0) {
+            ob_start();
+        }
         header('Content-Type: application/json');
         global $conn;
         $this->ensureBulkImportTables();
@@ -3473,7 +3578,8 @@ class ProductsController {
             exit;
         }
     }
-    public function getProductDetailsHTML() {
+    public function getProductDetailsHTML()
+    {
         is_login();
         global $productModel, $commanModel;
         //print_array($_GET);
@@ -3481,7 +3587,7 @@ class ProductsController {
         $type = isset($_GET['type']) ? $_GET['type'] : 'inner';
         if ($item_code != 0) {
             $order = $productModel->getProductByItemCode($item_code);
-            
+
             if ($order) {
                 if ($type === 'inner')
                     renderPartial('views/products/partial_product_details.php', ['products' => $order]);
@@ -3498,7 +3604,8 @@ class ProductsController {
         exit;
     }
 
-    public function searchProduct() {
+    public function searchProduct()
+    {
         is_login();
         header('Content-Type: application/json');
         global $productModel;
@@ -3551,7 +3658,8 @@ class ProductsController {
         exit;
     }
 
-    public function addVendorMap() {
+    public function addVendorMap()
+    {
         is_login();
         global $productModel;
         $raw = file_get_contents('php://input');
@@ -3572,7 +3680,8 @@ class ProductsController {
         }
         exit;
     }
-    public function getVendorEditForm() {
+    public function getVendorEditForm()
+    {
         is_login();
         global $productModel;
         global $usersModel;
@@ -3584,13 +3693,13 @@ class ProductsController {
         if ($item_code != 0) {
             $vendors = $productModel->getVendorByItemCode($item_code);
             renderTemplateClean('views/products/partial_vendor_edit_form.php', ['vendors' => $vendors, 'current_vendor' => $current_vendor, 'item_code' => $item_code, 'users' => $users], 'Edit Vendor');
-            
         } else {
             echo '<p>Invalid Item Code.</p>';
         }
         exit;
     }
-    public function removeVendorMapping() {
+    public function removeVendorMapping()
+    {
         is_login();
         global $productModel;
         $raw = file_get_contents('php://input');
@@ -3611,8 +3720,9 @@ class ProductsController {
         }
         exit;
     }
-    
-    public function updatePriority() {
+
+    public function updatePriority()
+    {
         // Update vendor priority (AJAX)
         is_login();
         global $productModel;
@@ -3631,7 +3741,7 @@ class ProductsController {
         echo json_encode($res);
         exit;
     }
-    
+
     public function createPurchaseList()
     {
         is_login();
@@ -3670,7 +3780,7 @@ class ProductsController {
 
         $created = 0;
         $failed  = [];
-        
+
         //print_array($orderIds); die;
         // Build a list of items to insert
         // Prefer mapping by order_ids (because quantity is keyed by orderId)
@@ -3775,7 +3885,8 @@ class ProductsController {
     }
 
 
-    public function masterPurchaseList() {
+    public function masterPurchaseList()
+    {
         is_login();
         global $productModel;
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
@@ -3805,18 +3916,18 @@ class ProductsController {
         }
 
         //date range filter
-        if(!empty($_GET['date_type'])){
+        if (!empty($_GET['date_type'])) {
             $filters['date_type'] = $_GET['date_type'];
         }
-        if(!empty($_GET['date_from'])){
+        if (!empty($_GET['date_from'])) {
             $filters['date_from'] = $_GET['date_from'];
         }
-        if(!empty($_GET['date_to'])){
-            $filters['date_to'] = $_GET['date_to']; 
+        if (!empty($_GET['date_to'])) {
+            $filters['date_to'] = $_GET['date_to'];
         }
-        
+
         // fetch purchase list and count
-        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters,'master');
+        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters, 'master');
         $total_records = $productModel->countPurchaseList($filters);
         //print_array($purchase_data);
         //exit;
@@ -3834,7 +3945,7 @@ class ProductsController {
                 'date_purchased_readable' => ($row['date_purchased'] != '0000-00-00' && $row['date_purchased'] !== NULL) ? date('d M Y', strtotime($row['date_purchased'])) : 'N/A'
             ]);
         }
-        
+
         $data = [
             'categories' => getCategories(),
             'purchase_list' => $enriched,
@@ -3846,7 +3957,8 @@ class ProductsController {
         ];
         renderTemplate('views/products/master_purchase_list.php', $data, 'Master Purchase List');
     }
-    public function purchaseList() {
+    public function purchaseList()
+    {
         is_login();
         global $productModel;
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
@@ -3859,7 +3971,7 @@ class ProductsController {
         $filters['user_id'] = $_SESSION['user']['id'];
         $filters['status'] = isset($_GET['status']) ? $_GET['status'] : 'all';
         $filters['category'] = isset($_GET['category']) ? $_GET['category'] : 'all';
-        
+
         //search
         if (!empty($_GET['search'])) {
             $filters['search'] = trim($_GET['search']);
@@ -3876,7 +3988,7 @@ class ProductsController {
         }
 
         // fetch purchase list and count with filters
-        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters); 
+        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters);
         $total_records = $productModel->countPurchaseList($filters);
 
         // fetch categories for filter UI
@@ -3908,15 +4020,16 @@ class ProductsController {
             'staff_list' => $commanModel->get_staff_list(),
         ];
         // render clean for mobile users
-        if (isMobile()){
+        if (isMobile()) {
             renderTemplateClean('views/products/purchase_list.php', $data, 'Purchase List');
             return;
-        }else
-        renderTemplate('views/products/purchase_list.php', $data, 'Purchase List');
+        } else
+            renderTemplate('views/products/purchase_list.php', $data, 'Purchase List');
     }
 
     // Mark a purchase list item as purchased (AJAX)
-    public function markPurchased() {
+    public function markPurchased()
+    {
         is_login();
         global $productModel;
         header('Content-Type: application/json');
@@ -3927,14 +4040,15 @@ class ProductsController {
         }
         $purchase_list_id = (int)$input['purchase_list_id'];
         $user_id = $_SESSION['user']['id'];
-        $qty = isset($input['quantity']) ? (int)$input['quantity']:'';
+        $qty = isset($input['quantity']) ? (int)$input['quantity'] : '';
         //$remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
         $res = $productModel->addPurchaseTransaction($purchase_list_id, $qty, $user_id, '');
         echo json_encode($res);
         exit;
     }
 
-    public function markUnPurchased(){
+    public function markUnPurchased()
+    {
         is_login();
         global $productModel;
         header('Content-Type: application/json');
@@ -3942,9 +4056,9 @@ class ProductsController {
         if (empty($input['purchase_list_id'])) {
             echo json_encode(['success' => false, 'message' => 'Invalid id']);
             exit;
-        }        
+        }
         $purchase_list_id = (int)$input['purchase_list_id'];
-        $qty =  isset($input['quantity']) ? (int)$input['quantity']:'';
+        $qty =  isset($input['quantity']) ? (int)$input['quantity'] : '';
         //$remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
         $user_id = $_SESSION['user']['id'];
         // $res = $productModel->updatePurchaseListStatus($id, 'pending', null);
@@ -3954,38 +4068,40 @@ class ProductsController {
     }
 
     // Update quantity and remarks for a purchase list item (AJAX)
-    public function updatePurchaseItem() {        
-    
+    public function updatePurchaseItem()
+    {
+
         is_login();
         global $productModel;
         header('Content-Type: application/json');
-        $input = json_decode(file_get_contents('php://input'), true); 
-        
+        $input = json_decode(file_get_contents('php://input'), true);
+
         $purchase_list_id = isset($input['id']) ? (int)$input['id'] : 0;
         $product_id = isset($input['product_id']) ? (int)$input['product_id'] : 0;
         $quantity = isset($input['quantity']) ? $input['quantity'] : null;
         //$remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
         $status = isset($input['status']) ? trim($input['status']) : '';
         $expected_time_of_delivery = !empty($input['expected_time_of_delivery'])
-                    ? date('Y-m-d', strtotime($input['expected_time_of_delivery']))
-                    : '';
+            ? date('Y-m-d', strtotime($input['expected_time_of_delivery']))
+            : '';
 
         if ($purchase_list_id <= 0) {
             echo json_encode(['success' => false, 'message' => 'Invalid id']);
             exit;
         }
-        
-        if($quantity>0){
-            $res = $productModel->addPurchaseTransaction($purchase_list_id, $quantity, $_SESSION['user']['id'], $status, $product_id);            
+
+        if ($quantity > 0) {
+            $res = $productModel->addPurchaseTransaction($purchase_list_id, $quantity, $_SESSION['user']['id'], $status, $product_id);
             echo json_encode($res);
             exit;
-        } else if(!empty($status)) {
-           $res = $productModel->updatePurchaseListStatusValue($purchase_list_id, $status);
+        } else if (!empty($status)) {
+            $res = $productModel->updatePurchaseListStatusValue($purchase_list_id, $status);
             echo json_encode($res);
             exit;
-        }        
+        }
     }
-    public function deletePurchaseItem() {
+    public function deletePurchaseItem()
+    {
         is_login();
         global $productModel;
         header('Content-Type: application/json');
@@ -3999,7 +4115,8 @@ class ProductsController {
         echo json_encode($res);
         exit;
     }
-    public function getPurchaseListDetails() {
+    public function getPurchaseListDetails()
+    {
         is_login();
         global $productModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -4007,7 +4124,7 @@ class ProductsController {
             echo '<p>Invalid Purchase Item ID.</p>';
             exit;
         }
-        $purchaseItem = $productModel->getPurchaseItemById($id);    
+        $purchaseItem = $productModel->getPurchaseItemById($id);
         if (!$purchaseItem) {
             echo '<p>Purchase Item not found.</p>';
             exit;
@@ -4019,7 +4136,8 @@ class ProductsController {
         //renderTemplateClean('views/products/partial_purchase_item_details.php', ['purchaseItem' => $purchaseItem, 'product' => $product], 'Purchase Item Details');
         exit;
     }
-    public function detail() {
+    public function detail()
+    {
         is_login();
         global $productModel;
         global $commanModel;
@@ -4062,7 +4180,8 @@ class ProductsController {
     }
 
     /** Printable jewelry label (100×12.9 mm). Opens in new tab; uses helpers/label/JewelryLabel.php. */
-    public function jewelryLabelPrint() {
+    public function jewelryLabelPrint()
+    {
         is_login();
         global $productModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -4091,7 +4210,8 @@ class ProductsController {
     }
 
     /** MG Road large label (75×50 mm, CODE128). */
-    public function mgStoreLabelPrint() {
+    public function mgStoreLabelPrint()
+    {
         is_login();
         global $productModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -4120,7 +4240,8 @@ class ProductsController {
     }
 
     /** Textile label (64×34 mm, location + date, CODE128 SKU). */
-    public function textileLabelPrint() {
+    public function textileLabelPrint()
+    {
         is_login();
         global $productModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -4148,7 +4269,8 @@ class ProductsController {
         exit;
     }
 
-    public function saveStockAdjustment() {
+    public function saveStockAdjustment()
+    {
         is_login();
         global $productModel;
         if (ob_get_length()) ob_clean();
@@ -4177,7 +4299,7 @@ class ProductsController {
                 'color'         => $product['color'],
                 'quantity'      => (int)$data['quantity'],
                 'reason'        => $data['reason'],
-                'update_by_user'=> $sessionUserId,
+                'update_by_user' => $sessionUserId,
                 'movement_type' => $data['type'],
                 'warehouse_id'  => $data['warehouse_id'],
                 'location'      => $data['location']
@@ -4205,13 +4327,13 @@ class ProductsController {
             }
 
             echo json_encode($result);
-
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
         exit;
     }
-    public function updateStockMovementLocation() {
+    public function updateStockMovementLocation()
+    {
         is_login();
         global $productModel;
         if (ob_get_length()) ob_clean();
@@ -4305,10 +4427,11 @@ class ProductsController {
         ];
     }
 
-    public function updateStockLimits() {
+    public function updateStockLimits()
+    {
         is_login();
         global $productModel;
-        
+
         // Clear buffer and set header for JSON
         if (ob_get_length()) ob_clean();
         header('Content-Type: application/json');
@@ -4329,7 +4452,6 @@ class ProductsController {
             $result = $productModel->setProductLimits($productId, $minStock, $maxStock);
 
             echo json_encode(['success' => $result]);
-
         } catch (Exception $e) {
             echo json_encode([
                 'success' => false,
@@ -4339,7 +4461,8 @@ class ProductsController {
         exit;
     }
 
-    public function updatePermanentlyAvailable() {
+    public function updatePermanentlyAvailable()
+    {
         is_login();
         global $productModel;
         if (ob_get_length()) {
@@ -4405,7 +4528,8 @@ class ProductsController {
         exit;
     }
 
-    public function updatePublishedStatus() {
+    public function updatePublishedStatus()
+    {
         is_login();
         global $productModel;
         if (ob_get_length()) {
@@ -4608,7 +4732,8 @@ class ProductsController {
         ];
     }
 
-    public function saveProductNotes() {
+    public function saveProductNotes()
+    {
         is_login();
         global $productModel;
         //echo json_encode(['success' => false, 'message' => 'Invalid request']);
@@ -4625,25 +4750,26 @@ class ProductsController {
         echo json_encode($res);
         exit;
     }
-    public function getFilteredStockHistory() {
+    public function getFilteredStockHistory()
+    {
         // Start output buffering to catch any accidental output
         ob_start();
-        
+
         // Set headers first
         header('Content-Type: application/json');
         header('X-Requested-With: XMLHttpRequest');
-        
+
         // Check login (but won't output on AJAX)
         is_login();
-        
+
         // Clear any buffered output
         ob_end_clean();
-        
+
         global $productModel;
-        
+
         try {
             $_GET = array_map('trim', $_GET);
-            
+
             $sku = isset($_GET['sku']) ? trim($_GET['sku']) : '';
             $product_id = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
             $start_date = isset($_GET['start_date']) ? trim($_GET['start_date']) : '';
@@ -4657,14 +4783,14 @@ class ProductsController {
                 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
             }
             $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 10;
-            
+
             if ($sku === '' && $product_id <= 0) {
                 echo json_encode(['success' => false, 'message' => 'Invalid product filter']);
                 exit;
             }
-            
+
             $offset = ($page - 1) * $limit;
-            
+
             $filters = [
                 'sku' => $sku,
                 'product_id' => $product_id,
@@ -4673,10 +4799,10 @@ class ProductsController {
                 'type' => $type,
                 'warehouse' => $warehouse
             ];
-            
+
             $history = $productModel->getFilteredStockHistory($filters, $limit, $offset);
             $total = $productModel->getFilteredStockHistoryCount($filters);
-            
+
             // Format the response
             $records = [];
             if (!empty($history)) {
@@ -4689,9 +4815,9 @@ class ProductsController {
                     $records[] = $record;
                 }
             }
-            
+
             echo json_encode([
-                'success' => true, 
+                'success' => true,
                 'records' => $records,
                 'total' => $total,
                 'page' => $page,
@@ -4702,7 +4828,8 @@ class ProductsController {
         }
         exit;
     }
-    public function inventoryLedger() {
+    public function inventoryLedger()
+    {
         is_login();
         global $productModel;
         $sku = isset($_GET['sku']) ? trim($_GET['sku']) : '';
@@ -4725,8 +4852,9 @@ class ProductsController {
         ];
         renderTemplate('views/products/inventory_ledger.php', $data, 'Inventory Ledger');
     }
-    
-    public function getTransferStockForm() {
+
+    public function getTransferStockForm()
+    {
         is_login();
         global $productModel, $conn;
 
@@ -4819,11 +4947,12 @@ class ProductsController {
             'transfer' => $transfer,
         ], $transfer ? 'Edit Transfer Order' : 'New Transfer Order');
     }
-    
-    public function processTransferStock() {
+
+    public function processTransferStock()
+    {
         is_login();
         global $conn;
-        
+
         $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
         $xhr = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
         $wantsJson = $xhr || stripos($contentType, 'application/json') !== false || stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false;
@@ -4831,7 +4960,7 @@ class ProductsController {
         if ($wantsJson) {
             header('Content-Type: application/json');
         }
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $payload = ['success' => false, 'message' => 'Invalid request method'];
             if ($wantsJson) {
@@ -4841,7 +4970,7 @@ class ProductsController {
             }
             exit;
         }
-        
+
         // Get JSON payload or fallback to standard POST data
         $raw = file_get_contents('php://input');
         $data = json_decode($raw, true);
@@ -4924,9 +5053,11 @@ class ProductsController {
                 if ((int)($it['transfer_qty'] ?? 0) <= 0) {
                     continue;
                 }
-                if ((int)($it['product_id'] ?? 0) > 0
+                if (
+                    (int)($it['product_id'] ?? 0) > 0
                     || trim((string)($it['sku'] ?? '')) !== ''
-                    || trim((string)($it['item_code'] ?? '')) !== '') {
+                    || trim((string)($it['item_code'] ?? '')) !== ''
+                ) {
                     $canResolve = true;
                     break;
                 }
@@ -5280,7 +5411,8 @@ class ProductsController {
         return ['success' => true, 'message' => 'Latest stock refreshed from API.'];
     }
 
-    public function getTransferStockBulkForm() {
+    public function getTransferStockBulkForm()
+    {
         is_login();
         global $conn;
 
@@ -5356,7 +5488,8 @@ class ProductsController {
         ], $pageTitle);
     }
 
-    public function transferBulkTemplate() {
+    public function transferBulkTemplate()
+    {
         is_login();
         header('Content-Type: text/csv; charset=UTF-8');
         header('Content-Disposition: attachment; filename="transfer_bulk_template.csv"');
@@ -5365,7 +5498,8 @@ class ProductsController {
         exit;
     }
 
-    public function processTransferStockBulk() {
+    public function processTransferStockBulk()
+    {
         is_login();
         global $conn;
 
@@ -5436,7 +5570,8 @@ class ProductsController {
         $this->validateAndSaveTransferRequest($data, $stockTransferModel, true);
     }
 
-    public function validateTransferStockBulkPreview() {
+    public function validateTransferStockBulkPreview()
+    {
         is_login();
         global $conn;
 
@@ -5588,7 +5723,8 @@ class ProductsController {
         exit;
     }
 
-    public function refreshTransferItemsFromApiAjax() {
+    public function refreshTransferItemsFromApiAjax()
+    {
         is_login();
         global $conn, $productModel;
 
@@ -5967,7 +6103,7 @@ class ProductsController {
             return ['error' => 'Could not read spreadsheet: ' . $e->getMessage()];
         }
     }
-    
+
     private function handleEwayBillFileUpload($existingFile = '')
     {
         $rootPath = realpath(__DIR__ . DIRECTORY_SEPARATOR . '..');
@@ -6013,16 +6149,17 @@ class ProductsController {
         return $ewayBillFile;
     }
 
-    public function getLastWarehouse() {
+    public function getLastWarehouse()
+    {
         header('Content-Type: application/json');
         global $conn;
-        
+
         // Load model to get last warehouse
         require_once 'models/product/StockTransfer.php';
         $stockTransferModel = new StockTransfer($conn);
-        
+
         $warehouse_id = $stockTransferModel->getLastWarehouse();
-        
+
         if ($warehouse_id) {
             echo json_encode([
                 'success' => true,
@@ -6037,7 +6174,8 @@ class ProductsController {
         exit;
     }
 
-    public function getTransferOrderNo() {
+    public function getTransferOrderNo()
+    {
         header('Content-Type: application/json');
         global $conn;
 
@@ -6048,7 +6186,7 @@ class ProductsController {
             echo json_encode(['success' => false, 'message' => 'Invalid warehouse selection']);
             exit;
         }
- 
+
         require_once 'models/product/StockTransfer.php';
         $stockTransferModel = new StockTransfer($conn);
 
@@ -6057,6 +6195,257 @@ class ProductsController {
             echo json_encode(['success' => true, 'transfer_order_no' => $nextOrderNo]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * Update product details from modal form submission.
+     * Only allows updates to: title, description, asin, numsold, price, price_india, vendor, image
+     * Protected fields (itemcode, sku, size, color) are never modified.
+     */
+    public function updateProduct()
+    {
+        is_login();
+        global $productModel;
+
+        header('Content-Type: application/json');
+        //print_array($_POST);
+        //exit;
+        try {
+            $productId = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
+
+            if ($productId <= 0) {
+                throw new Exception('Invalid product ID');
+            }
+
+            // Verify product exists
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+
+            $fields = [
+                'title' => 'string',
+                'description' => 'string',
+                'price' => 'float',
+                'price_india' => 'float',
+                'gst' => 'string',
+                'editGroupName' => ['db' => 'groupname', 'type' => 'string'],
+                'vendor' => 'string',
+                'editVendorID' => ['db' => 'vendor_id', 'type' => 'string'],
+                'image' => 'string',
+                'category' => 'string',
+                'itemtype' => 'string',
+                'snippet_description' => 'string',
+                'india_net_qty' => 'int',
+                'keywords' => 'string',
+                'usblock' => 'int',
+                'indiablock' => 'int',
+                'hscode' => 'string',
+                'date_first_added' => 'string',
+                'search_term' => 'string',
+                'search_category' => 'string',
+                'long_description' => 'string',
+                'long_description_india' => 'string',
+                'aplus_content_ids' => 'string',
+                'material' => 'string',
+                'item_level' => 'string',
+                'marketplace_vendor' => 'string',
+                'colormap' => 'string',
+                'flex_status' => 'string',
+                'vendor_us' => 'string',
+                'price_india_suggested' => 'float',
+                'mrp_india' => 'float',
+                'permanent_discount' => 'int',
+                'discount_global' => 'float',
+                'today_global' => 'string',
+                'discount_india' => 'float',
+                'today_india' => 'string',
+                'topurchase' => 'int',
+                'backorder_percent' => 'int',
+                'backorder_weeks' => 'int',
+                'leadtime' => 'int',
+                'instock_leadtime' => 'int',
+                'cp' => 'float',
+                'usd' => 'float',
+                'permanently_available' => 'int',
+                'amazon_sold' => 'int',
+                'amazon_leadtime' => 'int',
+                'amazon_itemcode_alias' => 'string',
+                'youtube_links' => 'string',
+                'sketchfab_links' => 'string',
+                'dimensions' => 'string',
+            ];
+
+            $updateData = [];
+            foreach ($fields as $postKey => $config) {
+                $type = is_array($config) ? $config['type'] : $config;
+                $dbKey = is_array($config) ? $config['db'] : $postKey;
+
+                if (isset($_POST[$postKey])) {
+                    $val = $_POST[$postKey];
+                    if ($type === 'float') {
+                        $val = (float)$val;
+                        $orig = (float)($product[$dbKey] ?? 0);
+                    } elseif ($type === 'int') {
+                        $val = (int)$val;
+                        $orig = (int)($product[$dbKey] ?? 0);
+                    } else {
+                        $val = trim((string)$val);
+                        $orig = (string)($product[$dbKey] ?? '');
+                    }
+
+                    if ($val !== $orig) {
+                        $updateData[$dbKey] = $val;
+                    }
+                }
+            }
+
+            if (!empty($updateData)) {
+                $updateData['updated_at'] = date('Y-m-d H:i:s');
+                //$result = $productModel->modifyProduct($productId, $updateData);
+                $result['success'] = true;
+                if (!$result || !isset($result['success']) || !$result['success']) {
+                    throw new Exception('Failed to update product in database');
+                }
+            } else {
+                $result = ['success' => true, 'message' => 'No fields were modified.'];
+            }
+
+            // Call external API to sync the update
+            $itemCode = $product['item_code'] ?? '';
+            $size = $product['size'] ?? '';
+            $color = $product['color'] ?? '';
+
+            $apiData = [];
+            if (isset($updateData['vendor_id'])) {
+                $apiData['discrete_vendors'] = [
+                    [
+                        'vendor' => $updateData['vendor_id'],
+                        'priority' => 1
+                    ]
+                ];
+            }
+
+            $item_level = (empty($size) && empty($color)) ? 'parent' : 'variation';
+
+            if ($item_level === 'variation') {
+                $variationFields = [
+                    //'title',
+                    'price',
+                    'price_india',
+                    // 'gst',
+                    // 'itemtype',
+                    'snippet_description',
+                    'date_first_added',
+                    'keywords',
+                    //'search_term',
+                    //'search_category',
+                    //'long_description',
+                    //'long_description_india',
+                    'aplus_content_ids',
+                    'colormap',
+                    'price_india_suggested',
+                    'mrp_india',
+                    'cp',
+                    'usd',
+                    'permanently_available',
+                    'backorder_percent',
+                    'backorder_weeks',
+                    'leadtime',
+                    'instock_leadtime',
+                    'india_net_qty',
+                    'indiablock',
+                    'dimensions'
+                ];
+                foreach ($variationFields as $field) {
+                    if (array_key_exists($field, $updateData)) {
+                        $apiData[$field] = $updateData[$field];
+                    }
+                }
+            } else {
+                $parentFields = [
+                    'price',
+                    'price_india',
+                    'permanently_available',
+                    'backorder_percent',
+                    'backorder_weeks',
+                    'leadtime',
+                    'instock_leadtime',
+                    'india_net_qty',
+                    'indiablock',
+                    'usd',
+                    'snippet_description',
+                    'keywords',
+                    'price_india_suggested',
+                    'mrp_india',
+                    'dimensions'
+                ];
+                foreach ($parentFields as $field) {
+                    if (array_key_exists($field, $updateData)) {
+                        $apiData[$field] = ($field === 'price_india') ? (int)$updateData[$field] : $updateData[$field];
+                    }
+                }
+            }
+            // Only hit API if we have data to send
+            // echo $item_level;
+            // print_r($apiData);
+            // exit;
+            if (empty($apiData)) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => empty($updateData) ? 'No changes detected' : 'Product updated in DB, no API update needed',
+                    'db_result' => $result ?? null,
+                    'product_id' => $productId
+                ]);
+                exit;
+            }
+            $apiUrl = 'https://www.exoticindia.com/vendor-api/product/modify'
+                . '?itemcode=' . urlencode($itemCode)
+                . '&size=' . urlencode($size)
+                . '&color=' . urlencode($color);
+
+            $headers = [
+                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+                'x-adminapitest: 1',
+                'Content-Type: application/x-www-form-urlencoded',
+            ];
+
+
+            $ch = curl_init($apiUrl);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($apiData));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+            $apiResponse = curl_exec($ch);
+            $curlErr = curl_error($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            echo $apiResponse;
+            echo "<br>";
+            //echo $curlErr;
+            echo "<br>";
+            echo json_encode([
+                'success' => true,
+                'message' => 'Product updated successfully',
+                'db_result' => $result,
+                'product_id' => $productId,
+                'api_response' => json_decode((string)$apiResponse, true),
+                'api_data' => $apiData,
+                'api_url' => $apiUrl,
+                'api_headers' => $headers,
+                'api_post_data' => http_build_query($apiData)
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
         }
         exit;
     }

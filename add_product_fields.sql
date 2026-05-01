@@ -1,0 +1,52 @@
+ALTER TABLE vp_products 
+ADD COLUMN category VARCHAR(255) NULL,
+ADD COLUMN itemtype VARCHAR(255) NULL,
+ADD COLUMN snippet_description TEXT NULL,
+ADD COLUMN india_net_qty INT DEFAULT 0,
+ADD COLUMN keywords VARCHAR(255) NULL,
+ADD COLUMN usblock TINYINT(1) DEFAULT 0,
+ADD COLUMN indiablock TINYINT(1) DEFAULT 0,
+ADD COLUMN hscode VARCHAR(255) NULL,
+ADD COLUMN date_first_added DATE NULL,
+ADD COLUMN search_term VARCHAR(255) NULL,
+ADD COLUMN search_category VARCHAR(255) NULL,
+ADD COLUMN long_description TEXT NULL,
+ADD COLUMN long_description_india TEXT NULL,
+ADD COLUMN aplus_content_ids VARCHAR(255) NULL,
+
+ADD COLUMN item_level VARCHAR(255) NULL,
+ADD COLUMN marketplace_vendor VARCHAR(255) NULL,
+ADD COLUMN colormap VARCHAR(255) NULL,
+ADD COLUMN flex_status VARCHAR(255) NULL,
+ADD COLUMN vendor_us VARCHAR(255) NULL,
+
+ADD COLUMN today_global VARCHAR(255) NULL,
+
+ADD COLUMN today_india VARCHAR(255) NULL,
+ADD COLUMN topurchase INT DEFAULT 0,
+ADD COLUMN backorder_percent INT DEFAULT 0,
+ADD COLUMN backorder_weeks INT DEFAULT 0,
+
+
+ADD COLUMN cp DECIMAL(10,2) DEFAULT 0.00,
+ADD COLUMN usd DECIMAL(10,2) DEFAULT 0.00,
+
+ADD COLUMN amazon_sold INT DEFAULT 0,
+ADD COLUMN amazon_leadtime INT DEFAULT 0,
+ADD COLUMN amazon_itemcode_alias VARCHAR(255) NULL,
+ADD COLUMN youtube_links VARCHAR(255) NULL,
+ADD COLUMN sketchfab_links VARCHAR(255) NULL,
+ADD COLUMN dimensions VARCHAR(255) NULL;
+
+
+
+--All ready added
+ADD COLUMN material VARCHAR(255) NULL,
+ADD COLUMN price_india_suggested DECIMAL(10,2) DEFAULT 0.00,
+ADD COLUMN mrp_india DECIMAL(10,2) DEFAULT 0.00,
+ADD COLUMN permanent_discount INT DEFAULT 0,
+ADD COLUMN discount_global DECIMAL(10,2) DEFAULT 0.00,
+ADD COLUMN discount_india DECIMAL(10,2) DEFAULT 0.00,
+ADD COLUMN leadtime INT DEFAULT 0,
+ADD COLUMN instock_leadtime INT DEFAULT 0,
+ADD COLUMN permanently_available TINYINT(1) DEFAULT 0,
