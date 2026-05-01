@@ -475,7 +475,7 @@ $where";
     }
     public function getAllWarehouses()
     {
-        $sql = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
+        $sql = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY is_default DESC, address_title ASC";
         $result = $this->db->query($sql);
         $warehouses = [];
         if ($result) {
