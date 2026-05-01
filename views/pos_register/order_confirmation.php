@@ -27,7 +27,7 @@ $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : []
         </div>
 
         <!-- Printable receipt -->
-        <div id="paymentReceiptSection" class="receipt-sheet overflow-hidden rounded-lg border border-slate-900 bg-white text-black shadow-lg print:border-0 print:shadow-none">
+        <div id="paymentReceiptSection" class="receipt-sheet mx-auto w-full max-w-[210mm] overflow-hidden rounded-lg border border-slate-900 bg-white text-black shadow-lg print:mx-0 print:max-w-none print:w-full print:overflow-visible print:rounded-none print:border-0 print:shadow-none">
           <!-- Row 1: logo + thick rule -->
           <div class="flex items-center gap-3 px-4 pt-4 pb-3 sm:px-6">
             <div class="flex shrink-0 flex-col gap-0.5">
@@ -225,27 +225,75 @@ $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : []
 </div>
 
 <style>
+  /* A4 portrait (210 × 297 mm); printer margins inset content */
+  @page {
+    size: A4 portrait;
+    margin: 14mm 16mm;
+  }
+
   @media print {
     .no-print {
       display: none !important;
     }
+
+    html,
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #fff !important;
+      font-size: 10pt;
+      line-height: 1.35;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
     body * {
       visibility: hidden;
     }
+
     #paymentReceiptSection,
     #paymentReceiptSection * {
       visibility: visible;
     }
+
     #paymentReceiptSection {
       position: absolute;
       left: 0;
       top: 0;
       width: 100%;
-      border: none;
+      max-width: none;
+      box-sizing: border-box;
+      border: none !important;
       box-shadow: none !important;
     }
-    .receipt-sheet table {
-      font-size: 8pt;
+
+    /* Table fits printable width (no forced horizontal scroll bar) */
+    #paymentReceiptSection .overflow-x-auto {
+      overflow: visible !important;
+    }
+
+    #paymentReceiptSection table {
+      width: 100% !important;
+      min-width: 0 !important;
+      font-size: 8.5pt;
+      table-layout: auto;
+    }
+
+    #paymentReceiptSection th,
+    #paymentReceiptSection td {
+      padding: 0.2rem 0.15rem !important;
+    }
+
+    #paymentReceiptSection img {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+
+  /* Screen preview: inner padding echoes ~16 mm side rhythm */
+  @media screen {
+    #paymentReceiptSection.receipt-sheet {
+      box-sizing: border-box;
     }
   }
 </style>
