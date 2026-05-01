@@ -1,3 +1,13 @@
+<?php
+$paymentsPrefillOrderId = (
+    isset($_GET['order_id'])
+    && $_GET['order_id'] !== ''
+    && ctype_digit((string)$_GET['order_id'])
+) ? (string)(int)$_GET['order_id'] : '';
+$paymentsPrefillOrderNumber = isset($_GET['order_number'])
+    ? (string)$_GET['order_number']
+    : '';
+?>
 <div class="min-h-screen bg-gray-50">
 
     <!-- HEADER -->
@@ -22,7 +32,7 @@
         <!-- FILTER BOX -->
         <div class="bg-white rounded-xl border p-4 mb-4">
 
-            <input type="hidden" id="payments_filter_order_id" value="">
+            <input type="hidden" id="payments_filter_order_id" value="<?= htmlspecialchars($paymentsPrefillOrderId, ENT_QUOTES, 'UTF-8') ?>">
 
             <div class="grid grid-cols-7 gap-3 text-xs">
 
@@ -41,6 +51,7 @@
                 <div>
                     <label>Order Number</label>
                     <input type="text" id="order_number"
+                        value="<?= htmlspecialchars($paymentsPrefillOrderNumber, ENT_QUOTES, 'UTF-8') ?>"
                         class="w-full border rounded px-2 py-2">
                 </div>
 
@@ -287,6 +298,19 @@
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         document.getElementById('payment_date').max = new Date().toISOString().split('T')[0];
+        try {
+            const qs = new URLSearchParams(window.location.search);
+            const preOrderNum = qs.get('order_number');
+            const preOrderId = qs.get('order_id');
+            const onInput = document.getElementById('order_number');
+            const oidHidden = document.getElementById('payments_filter_order_id');
+            if (preOrderNum !== null && onInput) {
+                onInput.value = preOrderNum;
+            }
+            if (preOrderId !== null && oidHidden) {
+                oidHidden.value = preOrderId;
+            }
+        } catch (e) {}
         loadPayments();
     });
 
