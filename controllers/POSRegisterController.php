@@ -31,6 +31,13 @@ class POSRegisterController
         global $conn;   // use existing DB connection
         $usersModel = new User($conn);   //  create instance
 
+        if ((int)($_SESSION['warehouse_id'] ?? 0) <= 0 && $conn instanceof mysqli) {
+            $defWh = $this->getDefaultWarehouseRow($conn);
+            if ($defWh !== null && !empty($defWh['id'])) {
+                $_SESSION['warehouse_id'] = $defWh['id'];
+            }
+        }
+
         $warehouseName = 'No Warehouse';
 
         if (!empty($_SESSION['warehouse_id'])) {
@@ -1160,6 +1167,39 @@ class POSRegisterController
             'id' => (int)$row['id'],
             'address_title' => trim((string)($row['address_title'] ?? '')),
         ];
+    }
+
+    /**
+     * Single-line footer text from exotic_address row marked is_default (receipt / printouts).
+     */
+    private function getDefaultExoticAddressFooterString(mysqli $conn): string
+    {
+        $stmt = $conn->prepare(
+            'SELECT display_name, address_title, `address` FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) {
+            return '';
+        }
+        $disp = trim((string)($row['display_name'] ?? ''));
+        $title = trim((string)($row['address_title'] ?? ''));
+        $addr = trim(preg_replace('/\s+/u', ' ', strip_tags((string)($row['address'] ?? ''))));
+        $parts = [];
+        if ($disp !== '') {
+            $parts[] = $disp;
+        }
+        if ($addr !== '') {
+            $parts[] = $addr;
+        } elseif ($title !== '') {
+            $parts[] = $title;
+        }
+
+        return trim(implode(', ', $parts));
     }
 
     /**
@@ -3365,7 +3405,7 @@ class POSRegisterController
     }
 
     /**
-     * Data for printable POS receipt (items from vp_orders after import; addresses from address_info).
+     * Data for printable POS receipt (items from vp_orders after import; addresses from vp_order_info).
      *
      * @return array<string, mixed>
      */
@@ -3421,6 +3461,11 @@ class POSRegisterController
             $defaults['receipt_banner_text'] = 'Receipt details could not load (database connection unavailable).';
 
             return $defaults;
+        }
+
+        $footerFromDb = $this->getDefaultExoticAddressFooterString($conn);
+        if ($footerFromDb !== '') {
+            $defaults['receipt_office_footer'] = $footerFromDb;
         }
 
         if ($orderId === '') {
@@ -3726,6 +3771,12 @@ class POSRegisterController
             $warehouseName = trim((string)($warehouse['address_title'] ?? ''));
             if ($warehouseName === '') {
                 $warehouseName = 'Warehouse #' . (int)$_SESSION['warehouse_id'];
+            }
+        }
+        if ($warehouseName === '' && $conn instanceof mysqli) {
+            $defWh = $this->getDefaultWarehouseRow($conn);
+            if ($defWh !== null) {
+                $warehouseName = trim((string)($defWh['address_title'] ?? ''));
             }
         }
         if ($warehouseName === '') {

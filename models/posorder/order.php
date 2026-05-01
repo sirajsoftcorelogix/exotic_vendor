@@ -1466,7 +1466,7 @@ class Order
     }
     public function getAddressInfoByOrderNumber($order_number)
     {
-        $sql = "SELECT * FROM address_info WHERE order_number = ?";
+        $sql = "SELECT * FROM vp_order_info WHERE order_number = ? LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('s', $order_number);
         $stmt->execute();
