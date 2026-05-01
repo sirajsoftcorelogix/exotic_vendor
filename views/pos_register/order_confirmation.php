@@ -33,7 +33,7 @@ if ($receipt_download_filename_base === '') {
         </div>
 
         <!-- Printable receipt -->
-        <div id="paymentReceiptSection" class="receipt-sheet flex flex-col gap-8 sm:gap-10 print:gap-8 mx-auto w-full max-w-[210mm] overflow-hidden rounded-lg border border-slate-900 bg-white text-black shadow-lg print:mx-0 print:max-w-none print:w-full print:overflow-visible print:rounded-none print:border-0 print:shadow-none">
+        <div id="paymentReceiptSection" class="receipt-sheet flex flex-col gap-5 sm:gap-6 print:gap-5 mx-auto w-full max-w-[210mm] overflow-hidden rounded-lg border border-slate-900 bg-white text-black shadow-lg print:mx-0 print:max-w-none print:w-full print:overflow-visible print:rounded-none print:border-0 print:shadow-none">
           <!-- Row 1: logo + thick rule -->
           <div class="flex items-center gap-3 px-4 pt-2 pb-2 sm:px-6">
             <div class="flex shrink-0 flex-col gap-0.5">
@@ -61,9 +61,10 @@ if ($receipt_download_filename_base === '') {
             </div>
           </div>
 
-          <!-- Row 3: Bill To / Ship To -->
+          <!-- Rows 3 + 4: Bill/Ship tucked under payment banner (no large flex gap between) -->
+          <div class="flex flex-col gap-0">
           <div class="grid grid-cols-1 gap-px bg-neutral-300 sm:grid-cols-2">
-            <div class="bg-white px-4 py-5 sm:px-6">
+            <div class="bg-white px-4 py-4 sm:px-6 sm:py-4">
               <div class="flex items-stretch gap-2">
                 <div class="w-1 shrink-0 bg-orange-500"></div>
                 <div class="min-w-0 flex-1">
@@ -76,7 +77,7 @@ if ($receipt_download_filename_base === '') {
                 </div>
               </div>
             </div>
-            <div class="bg-white px-4 py-5 sm:px-6">
+            <div class="bg-white px-4 py-4 sm:px-6 sm:py-4">
               <div class="flex items-stretch gap-2">
                 <div class="w-1 shrink-0 bg-orange-500"></div>
                 <div class="min-w-0 flex-1">
@@ -92,12 +93,13 @@ if ($receipt_download_filename_base === '') {
           </div>
 
           <!-- Row 4: payment banner -->
-          <div class="border-y border-neutral-900 bg-neutral-900 px-4 py-5 text-center text-[11px] font-semibold leading-snug text-white sm:text-sm sm:py-6">
+          <div class="border-y border-neutral-900 bg-neutral-900 px-4 py-3.5 text-center text-[11px] font-semibold leading-snug text-white sm:text-sm sm:py-4">
             <?= $h($receipt_banner_text ?? '') ?> <span class="font-normal text-neutral-300">Stage: <?= $h(ucfirst(trim((string)($payment_stage ?? 'final')))) ?> · <?= $h($payment_mode_label ?? '') ?></span>
+          </div>
           </div>
 
           <!-- Items -->
-          <div class="overflow-x-auto px-2 py-4 sm:px-4">
+          <div class="overflow-x-auto px-2 pb-4 pt-1 sm:px-4">
             <?php if (empty($lines)): ?>
               <p class="px-3 py-6 text-center text-[11px] text-neutral-600">
                 No line items loaded yet — run order import first, then refresh this page after import succeeds.
@@ -105,24 +107,24 @@ if ($receipt_download_filename_base === '') {
             <?php else: ?>
               <table class="w-full min-w-[760px] border-collapse text-[10px]">
                 <thead>
-                  <tr class="border-b border-neutral-800 bg-neutral-100 text-neutral-900">
-                    <th class="border border-neutral-300 px-1.5 py-2 font-semibold" rowspan="2">S.No.</th>
-                    <th class="border border-neutral-300 px-1.5 py-2 font-semibold" rowspan="2">Description of Goods</th>
-                    <th class="border border-neutral-300 px-1.5 py-2 font-semibold" rowspan="2">HSN</th>
-                    <th class="border border-neutral-300 px-1.5 py-2 font-semibold" rowspan="2">Qty</th>
-                    <th class="border border-neutral-300 px-1.5 py-2 font-semibold" rowspan="2">Price (₹)</th>
-                    <th class="border border-neutral-300 px-1.5 py-2 text-center font-semibold" colspan="2">SGST</th>
-                    <th class="border border-neutral-300 px-1.5 py-2 text-center font-semibold" colspan="2">CGST</th>
-                    <th class="border border-neutral-300 px-1.5 py-2 text-center font-semibold" colspan="2">IGST</th>
-                    <th class="border border-neutral-300 px-1.5 py-2 font-semibold" rowspan="2">Total ₹</th>
+                  <tr class="border-b border-neutral-800 bg-neutral-100 text-neutral-900 leading-tight">
+                    <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">S.No.</th>
+                    <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">Description of Goods</th>
+                    <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">HSN</th>
+                    <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">Qty</th>
+                    <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">Price (₹)</th>
+                    <th class="border border-neutral-300 px-1 py-1 text-center font-semibold" colspan="2">SGST</th>
+                    <th class="border border-neutral-300 px-1 py-1 text-center font-semibold" colspan="2">CGST</th>
+                    <th class="border border-neutral-300 px-1 py-1 text-center font-semibold" colspan="2">IGST</th>
+                    <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">Total ₹</th>
                   </tr>
-                  <tr class="border-b border-neutral-800 bg-neutral-50 text-neutral-900">
-                    <th class="border border-neutral-300 px-1.5 py-1.5 font-medium">%</th>
-                    <th class="border border-neutral-300 px-1.5 py-1.5 font-medium">Amt</th>
-                    <th class="border border-neutral-300 px-1.5 py-1.5 font-medium">%</th>
-                    <th class="border border-neutral-300 px-1.5 py-1.5 font-medium">Amt</th>
-                    <th class="border border-neutral-300 px-1.5 py-1.5 font-medium">%</th>
-                    <th class="border border-neutral-300 px-1.5 py-1.5 font-medium">Amt</th>
+                  <tr class="border-b border-neutral-800 bg-neutral-50 text-neutral-900 leading-tight">
+                    <th class="border border-neutral-300 px-1 py-0.5 font-medium">%</th>
+                    <th class="border border-neutral-300 px-1 py-0.5 font-medium">Amt</th>
+                    <th class="border border-neutral-300 px-1 py-0.5 font-medium">%</th>
+                    <th class="border border-neutral-300 px-1 py-0.5 font-medium">Amt</th>
+                    <th class="border border-neutral-300 px-1 py-0.5 font-medium">%</th>
+                    <th class="border border-neutral-300 px-1 py-0.5 font-medium">Amt</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -286,8 +288,12 @@ if ($receipt_download_filename_base === '') {
       table-layout: auto;
     }
 
-    #paymentReceiptSection th,
-    #paymentReceiptSection td {
+    #paymentReceiptSection thead th {
+      padding: 0.13rem 0.15rem !important;
+      line-height: 1.15 !important;
+    }
+
+    #paymentReceiptSection tbody td {
       padding: 0.39rem 0.22rem !important;
     }
 
