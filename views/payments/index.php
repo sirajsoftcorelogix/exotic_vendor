@@ -352,10 +352,10 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         <td class="p-3">${p.warehouse ?? ''}</td>
   
         <td class="p-3 font-semibold">
-     ₹ ${p.amount} <br>
+     ₹ ${p.amount ?? p.payment_amount ?? ''} <br>
    
 </td>
-<td> <span class="text-red-600 text-xs"> ₹ ${p.pending_amount ?? 0}</span></td>
+<td> <span class="text-red-600 text-xs"> ₹ ${p.pending_balance ?? 0}</span></td>
         <td class="p-3">${p.payment_mode ?? ''}</td>
         <td class="p-3">${p.payment_stage ?? ''}</td>
         <td class="p-3">${p.user_name ?? ''}</td>
@@ -465,7 +465,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     document.getElementById("payment_order_label").innerText = p.order_number;
 
     // ⭐ KEEP ORIGINAL PAYMENT AMOUNT
-    document.getElementById("payment_amount").value = p.amount;
+    document.getElementById("payment_amount").value = (p.payment_amount != null && p.payment_amount !== '') ? p.payment_amount : (p.amount ?? '');
 
     document.getElementById("payment_stage").value = p.payment_stage;
     document.getElementById("payment_type").value = p.payment_mode;

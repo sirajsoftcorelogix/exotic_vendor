@@ -52,15 +52,15 @@ class PosInvoiceController
         c.name AS customer_name,
 
         IFNULL((
-            SELECT SUM(amount) 
-            FROM pos_payments 
-            WHERE invoice_id = i.id
+            SELECT SUM(pp.payment_amount)
+            FROM pos_payments pp
+            WHERE pp.order_number COLLATE utf8mb4_unicode_ci = i.order_number COLLATE utf8mb4_unicode_ci
         ),0) AS paid_amount,
 
         i.total_amount - IFNULL((
-            SELECT SUM(amount) 
-            FROM pos_payments 
-            WHERE invoice_id = i.id
+            SELECT SUM(pp.payment_amount)
+            FROM pos_payments pp
+            WHERE pp.order_number COLLATE utf8mb4_unicode_ci = i.order_number COLLATE utf8mb4_unicode_ci
         ),0) AS due_amount
 
     FROM vp_invoices i
@@ -235,7 +235,7 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
             exit;
         }
 
-        $orderNumber = $payment['order_id'];
+        $orderNumber = (string)($payment['order_number'] ?? '');
 
         // ✅ FIND EXISTING INVOICE
         $invoice = $conn->query("
@@ -255,13 +255,6 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
                 WHERE id = " . $invoice['id'] . "
             ");
             }
-
-            // ✅ LINK PAYMENT
-            $conn->query("
-            UPDATE pos_payments 
-            SET invoice_id = " . $invoice['id'] . "
-            WHERE id = $paymentId
-        ");
 
             echo json_encode([
                 "success" => true,
@@ -657,7 +650,7 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
         // ✅ GET PAYMENT STAGE
         $payment = $conn->query("
         SELECT * FROM pos_payments 
-        WHERE order_id = '" . $conn->real_escape_string($orderNumber) . "'
+        WHERE order_number = '" . $conn->real_escape_string($orderNumber) . "'
         ORDER BY id DESC LIMIT 1
     ")->fetch_assoc();
 
@@ -754,7 +747,7 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
         // ✅ get payment stage
         $payment = $conn->query("
         SELECT * FROM pos_payments 
-        WHERE order_id = '$orderNumber'
+        WHERE order_number = '$orderNumber'
         ORDER BY id DESC LIMIT 1
     ")->fetch_assoc();
 
