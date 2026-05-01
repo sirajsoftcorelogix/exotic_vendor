@@ -6,6 +6,12 @@ $h = static function ($s): string {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 };
 $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : [];
+$rn = trim((string)($receipt_number ?? ''));
+$receipt_download_filename_base = $rn !== '' ? preg_replace('/[^A-Za-z0-9_.-]+/u', '-', $rn) : 'payment-receipt';
+$receipt_download_filename_base = trim((string)preg_replace('/-+/', '-', $receipt_download_filename_base), '-_.');
+if ($receipt_download_filename_base === '') {
+    $receipt_download_filename_base = 'payment-receipt';
+}
 ?>
 <div class="min-h-screen bg-slate-50">
   <div class="mx-auto max-w-5xl px-4 py-8">
@@ -29,7 +35,7 @@ $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : []
         <!-- Printable receipt -->
         <div id="paymentReceiptSection" class="receipt-sheet mx-auto w-full max-w-[210mm] overflow-hidden rounded-lg border border-slate-900 bg-white text-black shadow-lg print:mx-0 print:max-w-none print:w-full print:overflow-visible print:rounded-none print:border-0 print:shadow-none">
           <!-- Row 1: logo + thick rule -->
-          <div class="flex items-center gap-3 px-4 pt-4 pb-3 sm:px-6">
+          <div class="flex items-center gap-3 px-4 pt-4 pb-6 sm:px-6">
             <div class="flex shrink-0 flex-col gap-0.5">
               <img src="images/EI_Logo_130x27_SVG_1.svg" width="260" height="54" alt="Exotic India" class="h-[54px] w-[260px] max-w-full object-contain object-left" />
               <div class="text-[9px] font-medium uppercase tracking-[0.18em] text-neutral-500"><?= $h($receipt_company_tagline ?? '') ?></div>
@@ -38,7 +44,7 @@ $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : []
           </div>
 
           <!-- Row 2 -->
-          <div class="grid grid-cols-1 gap-6 border-b border-neutral-300 px-4 pb-5 sm:grid-cols-2 sm:px-6">
+          <div class="grid grid-cols-1 gap-6 border-b border-neutral-300 px-4 pt-4 pb-5 sm:grid-cols-2 sm:px-6">
             <div class="text-[11px] leading-relaxed">
               <div class="font-bold uppercase tracking-wide text-neutral-900"><?= $h($receipt_company_legal_name ?? 'EXOTIC INDIA ART PVT LTD') ?></div>
               <div class="mt-1"><span class="font-semibold">GST No:</span> <?= $h($receipt_company_gstin ?? '') ?></div>
@@ -214,7 +220,8 @@ $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : []
         </div>
 
         <div class="no-print flex flex-wrap gap-3">
-          <button type="button" onclick="printPaymentReceipt()" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Print Payment Receipt</button>
+          <button type="button" onclick="printPaymentReceipt()" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Print / Save as PDF</button>
+          <p class="basis-full text-xs text-slate-500">When you choose “Save as PDF”, the suggested file name uses your receipt number (Chrome, Edge and most Chromium browsers).</p>
           <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Payment History</a>
           <a href="<?= $h((string)($invoice_preview_url ?? '#')) ?>" target="_blank" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Print Invoice</a>
           <a href="index.php?page=pos_register&action=list" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to POS</a>
@@ -228,7 +235,7 @@ $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : []
   /* A4 portrait (210 × 297 mm); printer margins inset content */
   @page {
     size: A4 portrait;
-    margin: 14mm 16mm;
+    margin: 20mm 24mm;
   }
 
   @media print {
@@ -299,7 +306,35 @@ $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : []
 </style>
 
 <script>
-  function printPaymentReceipt() {
+(function () {
+  var receiptSuggestedName = <?= json_encode($receipt_download_filename_base, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+  window.printPaymentReceipt = function printPaymentReceipt() {
+    var origTitle = document.title;
+    document.title = receiptSuggestedName || origTitle;
+
+    var restored = false;
+    var fallbackTimer = null;
+
+    function restoreTitle() {
+      if (restored) {
+        return;
+      }
+      restored = true;
+      document.title = origTitle;
+      window.removeEventListener('afterprint', onAfterPrint);
+      if (fallbackTimer !== null) {
+        window.clearTimeout(fallbackTimer);
+      }
+    }
+    function onAfterPrint() {
+      restoreTitle();
+    }
+
+    window.addEventListener('afterprint', onAfterPrint);
+    fallbackTimer = window.setTimeout(restoreTitle, 6000);
+
     window.print();
-  }
+  };
+})();
 </script>
