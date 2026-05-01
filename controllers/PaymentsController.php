@@ -77,6 +77,7 @@ SELECT
     p.id,
     p.order_id,
     p.order_number,
+    p.receipt_number,
     p.payment_date,
     p.amount,
        p.order_id,
@@ -416,7 +417,7 @@ WHERE 1=1
 
         try {
             $short = pos_payment_resolve_short_code_for_warehouse($conn, $warehouse_id);
-            $invoiceNumber = pos_payment_generate_next_invoice_number($conn, $short);
+            $receiptNumber = pos_payment_generate_next_receipt_number($conn, $short);
         } catch (Throwable $e) {
             echo json_encode(['success' => false, 'message' => 'Receipt number error: ' . $e->getMessage()]);
             exit;
@@ -426,7 +427,7 @@ WHERE 1=1
             $conn,
             $orderPkForInsert,
             $orderNumberStr,
-            $invoiceNumber,
+            $receiptNumber,
             $customerId,
             $stage,
             $mode,
@@ -495,7 +496,7 @@ WHERE 1=1
         //     }
         echo json_encode([
             'success' => true,
-            'invoice_number' => $invoiceNumber,
+            'receipt_number' => $receiptNumber,
             'payment_id' => $newPaymentId,
         ]);
         exit;

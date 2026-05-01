@@ -81,7 +81,7 @@
         <div class="header">
             <div>
                 <h2>PAYMENT RECEIPT</h2>
-                <div>Receipt No: #<?= $payment['id'] ?></div>
+                <div>Receipt No: <?= htmlspecialchars(trim((string)($payment['receipt_number'] ?? '')) !== '' ? (string)$payment['receipt_number'] : '#' . (int)$payment['id']) ?></div>
             </div>
 
             <div style="text-align:right;">

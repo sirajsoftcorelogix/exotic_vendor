@@ -3357,7 +3357,7 @@ class POSRegisterController
                 require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
                 $wid = (int)($_SESSION['warehouse_id'] ?? 0);
                 $short = pos_payment_resolve_short_code_for_warehouse($conn, $wid);
-                $invoiceNumber = pos_payment_generate_next_invoice_number($conn, $short);
+                $receiptNumber = pos_payment_generate_next_receipt_number($conn, $short);
                 $amountPost = isset($_POST['amount']) ? (float)$_POST['amount'] : 0;
                 $userIdIns = (int)($_SESSION['user_id'] ?? 0);
                 $orderPkIns = ctype_digit(trim((string)$orderId)) ? (int)$orderId : 0;
@@ -3367,7 +3367,7 @@ class POSRegisterController
                     $conn,
                     $orderPkIns,
                     $onStrIns,
-                    $invoiceNumber,
+                    $receiptNumber,
                     (int)$customerId,
                     (string)$paymentStage,
                     (string)$paymentType,
@@ -3378,7 +3378,7 @@ class POSRegisterController
                     $wid,
                     true
                 );
-                $posReceiptMeta['invoice_number'] = $invoiceNumber;
+                $posReceiptMeta['receipt_number'] = $receiptNumber;
                 $posReceiptMeta['payment_id'] = $insertRes['payment_id'];
                 $posReceiptMeta['warehouse_id_used'] = $insertRes['warehouse_id_used'];
                 if (!$insertRes['success']) {
@@ -3390,7 +3390,7 @@ class POSRegisterController
                 $orderApiDebug['pos_payment_insert'] = [
                     'attempted' => true,
                     'order_number' => $onStrIns,
-                    'invoice_number' => $invoiceNumber,
+                    'receipt_number' => $receiptNumber,
                     'success' => $insertRes['success'],
                     'warehouse_id_used' => $insertRes['warehouse_id_used'],
                     'payment_id' => $insertRes['payment_id'],
@@ -3860,7 +3860,7 @@ class POSRegisterController
 
         if ($conn instanceof mysqli && trim($orderId) !== '') {
             $invStmt = $conn->prepare(
-                'SELECT invoice_number FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+                'SELECT receipt_number FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1'
             );
             if ($invStmt) {
                 $orderKeyInv = trim((string)$orderId);
@@ -3868,7 +3868,7 @@ class POSRegisterController
                 $invStmt->execute();
                 $invRow = $invStmt->get_result()->fetch_assoc();
                 $invStmt->close();
-                $invVal = trim((string)($invRow['invoice_number'] ?? ''));
+                $invVal = trim((string)($invRow['receipt_number'] ?? ''));
                 if ($invVal !== '') {
                     $receiptNumber = $invVal;
                 }

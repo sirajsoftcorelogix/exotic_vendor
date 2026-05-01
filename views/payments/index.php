@@ -344,7 +344,9 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
                     html += `
     <tr class="border-t hover:bg-gray-50">
-        <td class="p-3">#${p.id}</td>
+        <td class="p-3">${(String(p.receipt_number || '').trim() !== '')
+            ? String(p.receipt_number).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+            : ('#' + p.id)}</td>
         <td class="p-3">${p.order_number ?? ''}</td>
         <td class="p-3">${p.payment_date ?? ''}</td>
         <td class="p-3">${p.warehouse ?? ''}</td>

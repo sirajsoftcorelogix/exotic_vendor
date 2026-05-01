@@ -1,7 +1,7 @@
 <?php
 
 /**
- * POS payment receipt / pos_payments.invoice_number:
+ * POS payment receipt / pos_payments.receipt_number:
  * {short_code}{YYMMDD}{NN} — e.g. KN25050101
  * YYMMDD = calendar day in Asia/Kolkata; NN = 01–99, increments per short_code per day.
  */
@@ -59,11 +59,11 @@ function pos_payment_resolve_short_code_for_warehouse(mysqli $conn, int $warehou
 }
 
 /**
- * Next invoice_number for today: shortCode + YYMMDD + NN (locking matching rows).
+ * Next receipt_number for today: shortCode + YYMMDD + NN (locking matching rows).
  *
  * @throws RuntimeException when NN would exceed 99 for this code and date
  */
-function pos_payment_generate_next_invoice_number(mysqli $conn, string $shortCode): string
+function pos_payment_generate_next_receipt_number(mysqli $conn, string $shortCode): string
 {
     $prefix = pos_payment_normalize_short_code($shortCode);
     $ymd = pos_payment_receipt_ymd_suffix();
@@ -76,8 +76,8 @@ function pos_payment_generate_next_invoice_number(mysqli $conn, string $shortCod
     try {
         $like = $base . '%';
         $stmt = $conn->prepare(
-            'SELECT invoice_number FROM pos_payments
-             WHERE invoice_number IS NOT NULL AND invoice_number != \'\' AND invoice_number LIKE ?
+            'SELECT receipt_number FROM pos_payments
+             WHERE receipt_number IS NOT NULL AND receipt_number != \'\' AND receipt_number LIKE ?
              FOR UPDATE'
         );
         if (!$stmt) {
@@ -89,8 +89,8 @@ function pos_payment_generate_next_invoice_number(mysqli $conn, string $shortCod
         $maxNn = 0;
         $re = '/^' . preg_quote($base, '/') . '(\d{2})$/';
         while ($row = $res->fetch_assoc()) {
-            $inv = trim((string)($row['invoice_number'] ?? ''));
-            if ($inv !== '' && preg_match($re, $inv, $m)) {
+            $rn = trim((string)($row['receipt_number'] ?? ''));
+            if ($rn !== '' && preg_match($re, $rn, $m)) {
                 $maxNn = max($maxNn, (int)$m[1]);
             }
         }
@@ -112,6 +112,12 @@ function pos_payment_generate_next_invoice_number(mysqli $conn, string $shortCod
         $conn->rollback();
         throw $e;
     }
+}
+
+/** @deprecated Use pos_payment_generate_next_receipt_number() */
+function pos_payment_generate_next_invoice_number(mysqli $conn, string $shortCode): string
+{
+    return pos_payment_generate_next_receipt_number($conn, $shortCode);
 }
 
 /**
@@ -146,7 +152,7 @@ function pos_payment_insert_row(
     mysqli $conn,
     int $orderPk,
     string $orderNumber,
-    string $invoiceNumber,
+    string $receiptNumber,
     int $customerId,
     string $paymentStage,
     string $paymentMode,
@@ -169,7 +175,7 @@ function pos_payment_insert_row(
 
     if ($customerId > 0) {
         $stmt = $conn->prepare(
-            'INSERT INTO pos_payments (order_id, order_number, invoice_number, customer_id, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
+            'INSERT INTO pos_payments (order_id, order_number, receipt_number, customer_id, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
              VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
         );
         if (!$stmt) {
@@ -185,7 +191,7 @@ function pos_payment_insert_row(
             'ississdssii',
             $orderPk,
             $orderNumber,
-            $invoiceNumber,
+            $receiptNumber,
             $cid,
             $paymentStage,
             $paymentMode,
@@ -206,7 +212,7 @@ function pos_payment_insert_row(
                     $conn,
                     $orderPk,
                     $orderNumber,
-                    $invoiceNumber,
+                    $receiptNumber,
                     0,
                     $paymentStage,
                     $paymentMode,
@@ -230,8 +236,8 @@ function pos_payment_insert_row(
 
     /* No customer_id column → allows NULL when walk-in customer is not selected */
     $stmt = $conn->prepare(
-        'INSERT INTO pos_payments (order_id, order_number, invoice_number, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-         VALUES (?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
+        'INSERT INTO pos_payments (order_id, order_number, receipt_number, payment_stage, payment_mode, amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
+         VALUES (?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
     );
     if (!$stmt) {
         return [
@@ -242,10 +248,10 @@ function pos_payment_insert_row(
         ];
     }
     $stmt->bind_param(
-        'ississdssii',
+        'issssdssii',
         $orderPk,
         $orderNumber,
-        $invoiceNumber,
+        $receiptNumber,
         $paymentStage,
         $paymentMode,
         $amount,
