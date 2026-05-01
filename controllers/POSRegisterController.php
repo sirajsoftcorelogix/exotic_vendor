@@ -3704,14 +3704,14 @@ class POSRegisterController
             $defaults['receipt_amount_in_words'] = 'Rs. ' . number_format($grand, 2, '.', ',') . ' Only';
         }
 
+        // Row‑4 banner: same sentence pattern as print template (amount = payment taken on this slip).
         $formattedAmt = number_format($amtReceived, 2, '.', '');
         if ($stageLc === 'advance') {
-            $banner = 'Advance for Rs. ' . $formattedAmt . ' received with thanks against following items.';
+            $banner = 'Advance for Rs. ' . $formattedAmt . ' received with thanks against following items';
         } elseif ($stageLc === 'partial') {
-            $banner = 'Partial payment of Rs. ' . $formattedAmt . ' received with thanks against following items.';
+            $banner = 'Partial payment of Rs. ' . $formattedAmt . ' received with thanks against following items';
         } else {
-            $stLabel = ucfirst(trim($paymentStage) !== '' ? $paymentStage : 'final');
-            $banner = 'Payment of Rs. ' . $formattedAmt . ' (' . $paymentModeLabel . ', ' . $stLabel . ') received with thanks against following items.';
+            $banner = 'Payment of Rs. ' . $formattedAmt . ' received with thanks against following items';
         }
         $defaults['receipt_banner_text'] = $banner;
 
