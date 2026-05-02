@@ -1762,11 +1762,35 @@ class POSRegisterController
     }
 
     /**
+     * cart/retrieve often returns checkoutdata like "cartId|INR|amount" where amount matches stale totalamount.
+     * When POS reconciles grand total from current lines, rewrite the last pipe segment to that payable amount.
+     */
+    private function reconcileCheckoutdataTokenAmount(string $token, float $computedGrand): string
+    {
+        $t = trim($token);
+        if ($t === '' || strpos($t, '|') === false) {
+            return $t;
+        }
+        $parts = explode('|', $t);
+        if (count($parts) < 3) {
+            return $t;
+        }
+        $amt = round(max(0.0, $computedGrand), 2);
+        // Match API style: integer string when whole rupees, else 2 decimals.
+        $parts[count($parts) - 1] = (abs($amt - round($amt)) < 0.001)
+            ? (string)(int)round($amt)
+            : number_format($amt, 2, '.', '');
+
+        return implode('|', $parts);
+    }
+
+    /**
      * @param string      $endpoint   Path beginning with "/", e.g. "/cart/retrieve"
      * @param string|null $apiBaseUrl Base URL without trailing slash. Default API JSON gateway:
      *                                "https://www.exoticindia.com/api".
      *                                Site cart helpers (documented separately from /api/) use
-     *                                "https://www.exoticindia.com" — e.g. GET /cart/addcoupon.
+     *                                "https://www.exoticindia.com" — e.g. GET /cart/addcoupon,
+     *                                GET /cart/delete?cartid= (cartref from retrieve).
      */
     public function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null)
     {
@@ -2019,7 +2043,7 @@ class POSRegisterController
     }
 
     /**
-     * Remove every line item from the Exotic India cart API (qty 0 per cartref), same as POS "Remove".
+     * Remove every line item from the Exotic India cart (documented GET /cart/delete?cartid=cartref).
      */
     private function clearRemoteCartLines(array $items): void
     {
@@ -2031,10 +2055,7 @@ class POSRegisterController
             if ($cartref === '') {
                 continue;
             }
-            $this->exotic_api_call('/cart/modifyqty', 'GET', [
-                'cartid' => $cartref,
-                'newqty' => 0,
-            ]);
+            $this->exoticCartDeleteLine($cartref);
         }
     }
 
@@ -2537,6 +2558,38 @@ class POSRegisterController
         $display_subtotal = $subtotal;
         $financials = $this->resolveCartFinancials($data, (string)$coupon, $subtotal, $gst_computed);
         $cartApiBodyForDebug = $this->stripCartItemsFromDebugBody($data);
+        $financials['coupon_debug']['api_totalamount_raw'] = isset($data['totalamount']) && is_numeric($data['totalamount'])
+            ? (float)$data['totalamount']
+            : null;
+        // Payable total from current cartitems only (subtotal ex‑GST lines + shipping + GST − discounts).
+        // GET /cart/retrieve totalamount can stay high after an item was removed until the session/checkout token catches up — do not show that stale figure.
+        $computedGrand = max(
+            0.0,
+            round(
+                $subtotal + $shipping_total + $financials['gst'] - $financials['coupon_discount'] - $financials['custom_discount'],
+                2
+            )
+        );
+        $checkoutdataOut = $this->checkoutdataFromCartRetrieveBody($data);
+        if ($items !== []) {
+            $apiGrand = (float)$financials['grand_total'];
+            if (abs($apiGrand - $computedGrand) > 0.05) {
+                $financials['grand_total'] = $computedGrand;
+                $financials['coupon_debug']['grand_total_reconciled_from_lines'] = true;
+                $financials['coupon_debug']['grand_total_before_reconcile'] = $apiGrand;
+                $financials['coupon_debug']['grand_total_computed_from_lines'] = $computedGrand;
+                $cdNorm = $this->normalizeCheckoutdataToken($checkoutdataOut);
+                if ($cdNorm !== '') {
+                    $cdFixed = $this->reconcileCheckoutdataTokenAmount($cdNorm, $computedGrand);
+                    if ($cdFixed !== $cdNorm) {
+                        $checkoutdataOut = $cdFixed;
+                        $financials['coupon_debug']['checkoutdata_amount_reconciled'] = true;
+                        $financials['coupon_debug']['checkoutdata_before'] = $cdNorm;
+                        $financials['coupon_debug']['checkoutdata_after'] = $cdFixed;
+                    }
+                }
+            }
+        }
         $cartApiBodyForDebug['coupon_discount_debug'] = $financials['coupon_debug'];
 
         return [
@@ -2548,7 +2601,7 @@ class POSRegisterController
             'coupon_applied' => $financials['coupon_applied'],
             'custom_discount' => $financials['custom_discount'],
             'grand_total' => $financials['grand_total'],
-            'checkoutdata' => $this->checkoutdataFromCartRetrieveBody($data),
+            'checkoutdata' => $checkoutdataOut,
             'codcharges' => $financials['codcharges'],
             // Use normalized values echoed by cart/retrieve for downstream order/create query consistency.
             'discountcoupondetails_effective' => (string)($data['discountcoupondetails'] ?? $coupon),
@@ -2750,33 +2803,93 @@ class POSRegisterController
         exit;
     }
 
+    /**
+     * Query params Exotic /cart/modifyqty expects cart session alignment with /cart/retrieve.
+     *
+     * @return array<string, string>
+     */
+    private function cartModifyQtySessionParams(): array
+    {
+        $coupon = '';
+        if (!empty($_SESSION['discount_coupon'])) {
+            $coupon = is_array($_SESSION['discount_coupon'])
+                ? (string)($_SESSION['discount_coupon']['discountcoupondetails'] ?? '')
+                : (string)$_SESSION['discount_coupon'];
+        }
+        $voucher = (string)($_SESSION['gift_voucher']['giftvoucherdetails'] ?? '');
+
+        return [
+            'discountcoupondetails' => $coupon,
+            'giftvoucherdetails' => $voucher,
+        ];
+    }
+
+    /**
+     * Documented: GET https://www.exoticindia.com/cart/delete?cartid= — use cartref as cartid.
+     * Base host must be site root, not /api.
+     *
+     * @return array{data: array, code: int, raw: string}
+     */
+    private function exoticCartDeleteLine(string $cartref): array
+    {
+        $cartref = trim($cartref);
+        if ($cartref === '') {
+            return ['data' => [], 'code' => 0, 'raw' => ''];
+        }
+
+        return $this->exotic_api_call(
+            '/cart/delete',
+            'GET',
+            ['cartid' => $cartref],
+            null,
+            'https://www.exoticindia.com'
+        );
+    }
+
     public function change_qty()
     {
-        $cartref = $_POST['cartref'] ?? '';
+        $cartref = trim((string)($_POST['cartref'] ?? ''));
         $qty = (int)($_POST['newqty'] ?? 1);
 
-        $cartData = $this->get_cart();
-        $itemCode = '';
-        foreach ($cartData['items'] ?? [] as $item) {
-            if (($item['cartref'] ?? '') === $cartref) {
-                $itemCode = trim((string)($item['item_code'] ?? ''));
-                break;
-            }
-        }
-        if ($itemCode !== '') {
-            global $conn;
-            $stockErr = $this->validateQtyAgainstWarehouse($conn, $itemCode, $qty);
-            if ($stockErr !== null) {
-                $_SESSION['cart_error'] = $stockErr;
-                header("Location: ?page=pos_register");
-                exit;
-            }
+        if ($cartref === '') {
+            $_SESSION['cart_error'] = 'Could not change quantity (missing cart line id). Refresh the page and try again.';
+            header("Location: ?page=pos_register");
+            exit;
         }
 
-        $this->exotic_api_call('/cart/modifyqty', 'GET', [
-            'cartid' => $cartref,
-            'newqty' => $qty
-        ]);
+        if ($qty < 1) {
+            $modRes = $this->exoticCartDeleteLine($cartref);
+        } else {
+            $cartData = $this->get_cart();
+            $itemCode = '';
+            foreach ($cartData['items'] ?? [] as $item) {
+                if (($item['cartref'] ?? '') === $cartref) {
+                    $itemCode = trim((string)($item['item_code'] ?? ''));
+                    break;
+                }
+            }
+            if ($itemCode !== '') {
+                global $conn;
+                $stockErr = $this->validateQtyAgainstWarehouse($conn, $itemCode, $qty);
+                if ($stockErr !== null) {
+                    $_SESSION['cart_error'] = $stockErr;
+                    header("Location: ?page=pos_register");
+                    exit;
+                }
+            }
+
+            $modifyParams = array_merge($this->cartModifyQtySessionParams(), [
+                'cartid' => $cartref,
+                'newqty' => $qty,
+            ]);
+            $modRes = $this->exotic_api_call('/cart/modifyqty', 'GET', $modifyParams);
+        }
+        $modCode = (int)($modRes['code'] ?? 0);
+        if ($modCode < 200 || $modCode >= 300) {
+            $_SESSION['cart_error'] = $qty < 1
+                ? 'Could not remove item from cart (HTTP ' . $modCode . ').'
+                : 'Could not update quantity (HTTP ' . $modCode . ').';
+        }
 
         header("Location: ?page=pos_register");
         exit;
@@ -2784,14 +2897,19 @@ class POSRegisterController
 
     public function remove_item()
     {
-        $cartref = $_POST['cartref'] ?? '';
+        $cartref = trim((string)($_POST['cartref'] ?? ''));
 
-        $qty = 0;
+        if ($cartref === '') {
+            $_SESSION['cart_error'] = 'Could not remove item (missing cart line id). Refresh the page and try again.';
+            header("Location: ?page=pos_register");
+            exit;
+        }
 
-        $this->exotic_api_call('/cart/modifyqty', 'GET', [
-            'cartid' => $cartref,
-            'newqty' => $qty
-        ]);
+        $modRes = $this->exoticCartDeleteLine($cartref);
+        $modCode = (int)($modRes['code'] ?? 0);
+        if ($modCode < 200 || $modCode >= 300) {
+            $_SESSION['cart_error'] = 'Could not remove item from cart (HTTP ' . $modCode . '). The line may still appear until the cart syncs — try again.';
+        }
 
         header("Location: ?page=pos_register");
         exit;
