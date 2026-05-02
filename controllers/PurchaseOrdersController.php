@@ -1,4 +1,4 @@
-<?php 
+<?php
 require 'vendor/autoload.php';
 
 require_once 'models/order/purchaseOrder.php';
@@ -28,9 +28,11 @@ $poInvoiceModel = new POInvoice($conn);
 $productModel = new Product($conn);
 $grnModel = new grn($conn);
 global $root_path;
- 
-class PurchaseOrdersController {
-    public function index() {
+
+class PurchaseOrdersController
+{
+    public function index()
+    {
         is_login();
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
@@ -50,7 +52,7 @@ class PurchaseOrdersController {
         if (!empty($_GET['exclude_completed']) && (string)$_GET['exclude_completed'] === '1') {
             $filters['exclude_completed'] = true;
         }
-        if(!empty($_GET['po_from']) && !empty($_GET['po_to'])){
+        if (!empty($_GET['po_from']) && !empty($_GET['po_to'])) {
             $filters['po_from'] = $_GET['po_from'];
             $filters['po_to'] = $_GET['po_to'];
         }
@@ -78,12 +80,12 @@ class PurchaseOrdersController {
         }
         if (!empty($_GET['po_type'])) {
             $filters['po_type'] = $_GET['po_type'];
-        }else{
+        } else {
             $filters['po_type'] = 'normal';
         }
         // Fetch all purchase orders
         $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders($filters);
-       
+
         // Calculate total pages
         $total_orders = count($purchaseOrders);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
@@ -103,7 +105,8 @@ class PurchaseOrdersController {
             'status_filter' => $_GET['status_filter'] ?? '',
         ], 'Manage Purchase Orders');
     }
-    public function stockPurchase() {
+    public function stockPurchase()
+    {
         is_login();
         global $purchaseOrdersModel;
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
@@ -122,7 +125,7 @@ class PurchaseOrdersController {
         if (!empty($_GET['exclude_completed']) && (string)$_GET['exclude_completed'] === '1') {
             $filters['exclude_completed'] = true;
         }
-        if(!empty($_GET['po_from']) && !empty($_GET['po_to'])){
+        if (!empty($_GET['po_from']) && !empty($_GET['po_to'])) {
             $filters['po_from'] = $_GET['po_from'];
             $filters['po_to'] = $_GET['po_to'];
         }
@@ -150,7 +153,7 @@ class PurchaseOrdersController {
         }
         if (!empty($_GET['po_type'])) {
             $filters['po_type'] = $_GET['po_type'];
-        }else{
+        } else {
             $filters['po_type'] = 'custom';
         }
         // Fetch all purchase orders
@@ -170,10 +173,11 @@ class PurchaseOrdersController {
             'status_filter' => $_GET['status_filter'] ?? '',
         ], 'Manage Purchase Orders');
     }
-    public function createPurchaseOrder(){
+    public function createPurchaseOrder()
+    {
         is_login();
         global $purchaseOrdersModel;
-        global $ordersModel;        
+        global $ordersModel;
         global $vendorsModel;
         global $domain;
         global $usersModel;
@@ -181,18 +185,17 @@ class PurchaseOrdersController {
         //print_r($_POST);
         $itemIds = isset($_POST['poitem']) ? $_POST['poitem'] : [];
         if (empty($itemIds)) {
-            if(isset($_SESSION['poitem']) && !empty($_SESSION['poitem'])){
+            if (isset($_SESSION['poitem']) && !empty($_SESSION['poitem'])) {
                 $itemIds = $_SESSION['poitem'];
-            }else{
+            } else {
                 // No items selected, handle the error (e.g., redirect back with an error message)
                 // For simplicity, we'll just exit here
                 //echo json_encode(['success' => false, 'message' => 'No items selected for Purchase Order.']);
                 renderTemplate('views/errors/not_found.php', ['message' => 'No items selected for Purchase Order.'], 'No items selected for Purchase Order');
                 exit;
             }
-            
         }
-        if(!empty($itemIds)){
+        if (!empty($itemIds)) {
             $_SESSION['poitem'] = $itemIds;
         }
         //check if any of the selected orders is already in a purchase order
@@ -200,13 +203,13 @@ class PurchaseOrdersController {
             $order = $ordersModel->getOrderById($id);
             //print_array($order);
             if ($order && $order['po_id'] > 0) {
-                renderTemplate('views/errors/error.php', ['message' => ['type'=>'error','text'=>'One or more selected orders are already included in a Purchase Order.']], 'Error');
+                renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'One or more selected orders are already included in a Purchase Order.']], 'Error');
                 exit;
             }
         }
         $data = [];
         foreach ($itemIds as $id) {
-            $data['data'][] = $ordersModel->getOrderById($id);            
+            $data['data'][] = $ordersModel->getOrderById($id);
         }
         $data['vendors'] = $vendorsModel->getAllVendors();
         //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
@@ -220,7 +223,8 @@ class PurchaseOrdersController {
         renderTemplate('views/purchase_orders/create.php', $data, 'Create Purchase Order');
         exit;
     }
-    public function createPurchaseOrderPost() {        
+    public function createPurchaseOrderPost()
+    {
         global $purchaseOrderItemsModel;
         global $purchaseOrdersModel;
         global $ordersModel;
@@ -229,7 +233,7 @@ class PurchaseOrdersController {
         $user_id = isset($_POST['user_id']) ? $_POST['user_id'] : '';
         $deliveryDueDate = isset($_POST['delivery_due_date']) ? $_POST['delivery_due_date'] : '';
         $deliveryAddress = isset($_POST['delivery_address']) ? $_POST['delivery_address'] : '';
-        $total_gst = isset($_POST['total_gst']) ? $_POST['total_gst'] : [];        
+        $total_gst = isset($_POST['total_gst']) ? $_POST['total_gst'] : [];
         $quantity = isset($_POST['quantity']) ? $_POST['quantity'] : [];
         $rate = isset($_POST['rate']) ? $_POST['rate'] : [];
         //$total = isset($_POST['total']) ? $_POST['total'] : 0;
@@ -237,8 +241,8 @@ class PurchaseOrdersController {
         $subtotal = isset($_POST['subtotal']) ? $_POST['subtotal'] : 0;
         $shipping_cost = isset($_POST['shipping_cost']) ? $_POST['shipping_cost'] : 0;
         $gst = isset($_POST['gst']) ? $_POST['gst'] : [];
-        $orderid = isset($_POST['orderid']) ? $_POST['orderid'] : []; 
-        $data = isset($_POST) ? $_POST : [];  
+        $orderid = isset($_POST['orderid']) ? $_POST['orderid'] : [];
+        $data = isset($_POST) ? $_POST : [];
         $terms_and_conditions = isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '';
         $status = isset($_POST['status']) ? $_POST['status'] : 'pending';
         $item_code = isset($_POST['item_code']) ? $_POST['item_code'] : [];
@@ -309,19 +313,18 @@ class PurchaseOrdersController {
 
         //Update order status        
         $statusupdate = [];
-        foreach($orderid as $index=>$id){
-           $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing', $po_number, $poId, $deliveryDueDate);
+        foreach ($orderid as $index => $id) {
+            $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing', $po_number, $poId, $deliveryDueDate);
         }
-        
-        
+
+
         // If everything is successful, return success response
-        echo json_encode(['success' => true, 'message' => 'Purchase Order created successfully.', 'po_id' => $poId, 'status'=>$statusupdate,'orderid'=>$orderid]);
+        echo json_encode(['success' => true, 'message' => 'Purchase Order created successfully.', 'po_id' => $poId, 'status' => $statusupdate, 'orderid' => $orderid]);
         exit;
-
-
     }
-   
-    public function cancelPurchaseOrder() {
+
+    public function cancelPurchaseOrder()
+    {
         global $purchaseOrdersModel;
         global $ordersModel;
 
@@ -346,7 +349,8 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true, 'message' => 'Purchase Order cancelled successfully.', 'status' => $statusUpdate]);
         exit;
     }
-    function viewPurchaseOrder(){
+    function viewPurchaseOrder()
+    {
         is_login();
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
@@ -367,7 +371,7 @@ class PurchaseOrdersController {
         $data = [];
         $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
         if (!$purchaseOrder) {
-            renderTemplate('views/errors/error.php', ['message' => ['type'=>'error','text'=>'Purchase Order not found.']], 'Error');
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Purchase Order not found.']], 'Error');
             return;
         }
         $data['purchaseOrder'] = $purchaseOrder;
@@ -377,8 +381,8 @@ class PurchaseOrdersController {
         //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
         $data['domain'] = $domain;
         //print_array($purchaseOrder);        
-        $data['invoice'] = $poInvoiceModel->getInvoiceByPOId($poId,'invoice');
-        $data['proforma'] = $poInvoiceModel->getInvoiceByPOId($poId,'performa');
+        $data['invoice'] = $poInvoiceModel->getInvoiceByPOId($poId, 'invoice');
+        $data['proforma'] = $poInvoiceModel->getInvoiceByPOId($poId, 'performa');
         // If invoice exists and is a group invoice (mapped to multiple POs), fetch mapped PO details
         if (!empty($data['invoice'])) {
             $data['group_invoice_items'] = $poInvoiceModel->getPOsByInvoiceId($data['invoice']['id']);
@@ -395,27 +399,27 @@ class PurchaseOrdersController {
         $data['challan'] = $poInvoiceModel->getChallanByPoId($poId);
         $data['grns'] = $grnModel->getGrnsByPoId($poId);
         //print_array($data['payment']);
-       
-        
+
+
         $address = $commanModel->get_exotic_address();
-        foreach($address as $addr){
-            if($addr['id'] == $purchaseOrder['delivery_address']){
+        foreach ($address as $addr) {
+            if ($addr['id'] == $purchaseOrder['delivery_address']) {
                 $data['purchaseOrder']['delivery_address'] = $addr['address'];
                 break;
             }
         }
         $users = $usersModel->getAllUsers();
-        foreach($users as $id => $user){
-            if($id == $purchaseOrder['user_id']){
+        foreach ($users as $id => $user) {
+            if ($id == $purchaseOrder['user_id']) {
                 $data['purchaseOrder']['user_name'] = $user;
                 break;
             }
-        }   
+        }
         $data['users'] = $users;
-         //print_array($data);
-         // Render the create purchase order form
-         //echo json_encode(['success' => true, 'data' => $purchaseOrder]);
-         //exit;
+        //print_array($data);
+        // Render the create purchase order form
+        //echo json_encode(['success' => true, 'data' => $purchaseOrder]);
+        //exit;
         renderTemplate('views/purchase_orders/view.php', $data, 'View Purchase Order');
 
         if (!$purchaseOrder) {
@@ -426,11 +430,12 @@ class PurchaseOrdersController {
         //echo json_encode(['success' => true, 'data' => $purchaseOrder]);
         exit;
     }
-    function addPayment() {
+    function addPayment()
+    {
         global $purchaseOrdersModel;
         global $poInvoiceModel;
         global $vendorsModel;
-        
+
         $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
         $invoiceId = isset($_POST['invoice_id']) ? $_POST['invoice_id'] : 0;
         $vendorId = isset($_POST['vendor_id']) ? $_POST['vendor_id'] : 0;
@@ -449,11 +454,10 @@ class PurchaseOrdersController {
         $vendorBankName = isset($_POST['vendor_bank_name']) ? $_POST['vendor_bank_name'] : '';
         $vendorBankIfscCode = isset($_POST['vendor_bank_ifsc_code']) ? $_POST['vendor_bank_ifsc_code'] : '';
         $vendorBranchName = isset($_POST['vendor_branch_name']) ? $_POST['vendor_branch_name'] : '';
-        if( !$vendorBankAccountNumber || !$vendorBankAccountName || !$vendorBankName || !$vendorBankIfscCode || !$vendorBranchName ) {
-           
+        if (!$vendorBankAccountNumber || !$vendorBankAccountName || !$vendorBankName || !$vendorBankIfscCode || !$vendorBranchName) {
+
             echo json_encode(['success' => false, 'message' => 'Vendor bank details are required.']);
             exit;
-           
         }
         // if(!$invoiceId){
         //     echo json_encode(['success' => false, 'message' => 'Invoice ID is required.']);
@@ -493,8 +497,9 @@ class PurchaseOrdersController {
         // If everything is successful, return success response
         echo json_encode(['success' => true, 'message' => 'Payment added successfully.']);
         exit;
-    }   
-    function getPayments(){
+    }
+    function getPayments()
+    {
         global $poInvoiceModel;
         $Id = isset($_GET['id']) ? $_GET['id'] : 0;
         if (!$Id) {
@@ -507,10 +512,11 @@ class PurchaseOrdersController {
             exit;
         }
         echo json_encode(['success' => true, 'data' => $payments]);
-        exit;        
+        exit;
     }
-    function removePayment(){
-        is_login();       
+    function removePayment()
+    {
+        is_login();
         global $poInvoiceModel;
         $Id = isset($_REQUEST['id']) ? $_REQUEST['id'] : 0;
         if (!$Id) {
@@ -523,9 +529,10 @@ class PurchaseOrdersController {
             exit;
         }
         echo json_encode(['success' => true, 'message' => 'Payment deleted successfully.']);
-        exit;        
+        exit;
     }
-    function editPurchaseOrder() {
+    function editPurchaseOrder()
+    {
         is_login();
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
@@ -563,7 +570,8 @@ class PurchaseOrdersController {
         //echo json_encode(['success' => true, 'data' => $purchaseOrder]);
         exit;
     }
-    function updatePurchaseOrderPost() {
+    function updatePurchaseOrderPost()
+    {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
 
@@ -586,7 +594,7 @@ class PurchaseOrdersController {
             'terms_and_conditions' => isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '',
             'status' => isset($_POST['status']) ? $_POST['status'] : 'pending',
         ];
-        
+
         // Update the purchase order
         $isUpdated = $purchaseOrdersModel->updatePurchaseOrder($poId, $poData);
         if (!$isUpdated) {
@@ -610,10 +618,10 @@ class PurchaseOrdersController {
                 'quantity' => isset($quantity[$index]) ? $quantity[$index] : 0,
                 'price' => isset($price[$index]) ? $price[$index] : 0,
                 'amount' => isset($price[$index]) ? $price[$index] * (1 + ($gstValue / 100)) * (isset($quantity[$index]) ? $quantity[$index] : 0) : 0,
-                
+
             ];
             $id = isset($_POST['item_ids'][$index]) ? $_POST['item_ids'][$index] : 0;
-            
+
             $itemId = $purchaseOrderItemsModel->updatePurchaseOrderItems($id, $items);
             if (!$itemId) {
                 $itemsUpdated = false;
@@ -631,14 +639,15 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true, 'message' => 'Purchase Order updated successfully.']);
         exit;
     }
-    function viewOrderItems() {
+    function viewOrderItems()
+    {
         global $ordersModel;
 
         $search = isset($_GET['search']) ? $_GET['search'] : 0;
 
         if (!$search) {
             $orderItems = $ordersModel->getOrderItems('');
-        }else{
+        } else {
             $orderItems = $ordersModel->getOrderItems($search);
         }
         if ($orderItems === false) {
@@ -650,7 +659,8 @@ class PurchaseOrdersController {
         echo json_encode($orderItems);
         exit;
     }
-    public function updateStatus() {
+    public function updateStatus()
+    {
         global $purchaseOrdersModel;
         global $commanModel;
         $po_id = $_POST['po_id'] ?? 0;
@@ -688,7 +698,8 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true]);
         exit;
     }
-    public function deletePurchaseOrder() {
+    public function deletePurchaseOrder()
+    {
         global $purchaseOrdersModel;
         global $ordersModel;
         global $purchaseOrderItemsModel;
@@ -710,14 +721,14 @@ class PurchaseOrdersController {
         if (!$isItemsDeleted) {
             echo json_encode(['success' => false, 'message' => 'Failed to delete Purchase Order items.']);
             exit;
-        }   
+        }
         // Delete the purchase order
         $isDeleted = $purchaseOrdersModel->deletePurchaseOrder($poId);
         if (!$isDeleted) {
             echo json_encode(['success' => false, 'message' => 'Failed to delete Purchase Order.']);
             exit;
         }
-        
+
         // Update order status
         $statusUpdate = $ordersModel->updateOrderStatusByPO($poId, 'pending');
 
@@ -725,7 +736,8 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true, 'message' => 'Purchase Order deleted successfully.', 'status' => $statusUpdate]);
         exit;
     }
-    function downloadPurchaseOrder_old() {
+    function downloadPurchaseOrder_old()
+    {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
 
@@ -740,11 +752,11 @@ class PurchaseOrdersController {
         if (!$purchaseOrder) {
             echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
             exit;
-        }else{
+        } else {
             // Fetch purchase order items
             $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
             //print_array($purchaseOrderItems);
-           
+
             if ($purchaseOrderItems === false) {
                 echo json_encode(['success' => false, 'message' => 'Failed to fetch Purchase Order items.']);
                 exit;
@@ -754,7 +766,7 @@ class PurchaseOrdersController {
                 $tbody .= '<tr>';
                 $tbody .= '<td style="width:5% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
                 $tbody .= '<td style="width:30% !important; border:1px solid #000; padding:6px;">';
-                $tbody .= '<b>' . htmlspecialchars($item['title']) . ' |</b><br>';                
+                $tbody .= '<b>' . htmlspecialchars($item['title']) . ' |</b><br>';
                 $tbody .= '</td>';
                 $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['hsn']) . '</td>';
                 $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
@@ -762,11 +774,10 @@ class PurchaseOrdersController {
                 $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['gst']) . '%</td>';
                 $tbody .= '<td style="width:16% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
                 $tbody .= '</tr>';
-                
             }
         }
-        
-        
+
+
         // // Generate PDF or any other format for download
         // require_once('vendor/tc/vendor/autoload.php'); // Adjust path if needed
 
@@ -790,7 +801,7 @@ class PurchaseOrdersController {
         $pdf->SetMargins(10, 10, 10);
         $pdf->AddPage();
         $fontname = TCPDF_FONTS::addTTFfont('vendor/tc/fonts/MangalRegular.ttf', 'TrueTypeUnicode', '', 96);
-        $pdf->SetFont($fontname, '', 14, '', false);    
+        $pdf->SetFont($fontname, '', 14, '', false);
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
         // Define HTML content
         $html = str_replace(
@@ -808,7 +819,8 @@ class PurchaseOrdersController {
         //echo json_encode(['success' => true, 'message' => 'Purchase Order downloaded successfully.']);
         //exit;
     }
-    function downloadPurchaseOrder($generateOnly = 0) {    
+    function downloadPurchaseOrder($generateOnly = 0)
+    {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
         global $vendorsModel;
@@ -816,7 +828,7 @@ class PurchaseOrdersController {
 
         $design_format = 'smallImageWithPrice';
         $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
-        if($generateOnly){
+        if ($generateOnly) {
             $poId = $generateOnly;
         }
         //download as design format required
@@ -824,7 +836,7 @@ class PurchaseOrdersController {
         if (isset($_POST['design_format']) && isset($_POST['po_id'])) {
             $design_format = $_POST['design_format'];
             $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
-        } 
+        }
         if (!$poId) {
             echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
             exit;
@@ -834,55 +846,55 @@ class PurchaseOrdersController {
         if (!$purchaseOrder) {
             echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
             exit;
-        }else{
+        } else {
             // Fetch purchase order items
             $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
             //$purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemFromProduct($poId);
             //$purchaseOrderItems = $purchaseOrderItemsModel->getPoItemByIdProduct($poId);
             //print_array($purchaseOrderItems);
-           
+
             if ($purchaseOrderItems === false) {
                 echo json_encode(['success' => false, 'message' => 'Failed to fetch Purchase Order items.']);
                 exit;
             }
-            
+
             $user = $usersModel->getUserById($purchaseOrder['user_id']);
             $contactPerson = '';
-            if($user){
-                $contactPerson = 'Contact Person: '.$user['name'].'<br>';
-                $contactPerson .= 'Phone: '.$user['phone'].'<br>';
+            if ($user) {
+                $contactPerson = 'Contact Person: ' . $user['name'] . '<br>';
+                $contactPerson .= 'Phone: ' . $user['phone'] . '<br>';
                 $purchaseOrder['created_by'] = $user['name'];
                 $purchaseOrder['created_email'] = $user['email'];
             }
             //vendor info
             $vendorInfo = '';
             $vendor = $vendorsModel->getVendorById($purchaseOrder['vendor_id']);
-            if($vendor && !empty($vendor['address'])){
-                
+            if ($vendor && !empty($vendor['address'])) {
+
                 $vendorInfo = '<span style="font-size:14px; font-weight:bold;">' . htmlspecialchars($vendor['vendor_name'] ?? '') . '</span><br>';
-                $vendorInfo .= htmlspecialchars($vendor['address']); 
-                $vendorInfo .= ', '.htmlspecialchars($vendor['city']);               
-                $vendorInfo .= ', '.htmlspecialchars($vendor['state']);
-                $vendorInfo .= ', '.htmlspecialchars($vendor['country']).' - '.$vendor['postal_code'];
+                $vendorInfo .= htmlspecialchars($vendor['address']);
+                $vendorInfo .= ', ' . htmlspecialchars($vendor['city']);
+                $vendorInfo .= ', ' . htmlspecialchars($vendor['state']);
+                $vendorInfo .= ', ' . htmlspecialchars($vendor['country']) . ' - ' . $vendor['postal_code'];
                 $vendorInfo .= '<span style="font-size:12px;">';
-                if(!empty($vendor['vendor_phone'])){
-                    $vendorInfo .= '<br>Phone: '.htmlspecialchars($vendor['vendor_phone']);
+                if (!empty($vendor['vendor_phone'])) {
+                    $vendorInfo .= '<br>Phone: ' . htmlspecialchars($vendor['vendor_phone']);
                 }
-                if(!empty($vendor['vendor_email'])){
-                    $vendorInfo .= '<br>Email: '.htmlspecialchars($vendor['vendor_email']);
+                if (!empty($vendor['vendor_email'])) {
+                    $vendorInfo .= '<br>Email: ' . htmlspecialchars($vendor['vendor_email']);
                 }
-                
-                if(!empty($vendor['contact_person'])){
-                    $vendorInfo .= '<br>Contact Person: '.htmlspecialchars($vendor['contact_person']);
+
+                if (!empty($vendor['contact_person'])) {
+                    $vendorInfo .= '<br>Contact Person: ' . htmlspecialchars($vendor['contact_person']);
                 }
-                if(!empty($vendor['gst_number'])){
-                    $vendorInfo .= '<br>GST No.: '.htmlspecialchars($vendor['gst_number']);
+                if (!empty($vendor['gst_number'])) {
+                    $vendorInfo .= '<br>GST No.: ' . htmlspecialchars($vendor['gst_number']);
                 }
-                if(!empty($vendor['pan_number'])){
-                    $vendorInfo .= '<br>PAN No.: '.htmlspecialchars($vendor['pan_number']);
+                if (!empty($vendor['pan_number'])) {
+                    $vendorInfo .= '<br>PAN No.: ' . htmlspecialchars($vendor['pan_number']);
                 }
                 $vendorInfo .= '</span>';
-            }else{
+            } else {
                 $vendorInfo = 'N/A';
             }
             $fontMap = [
@@ -892,22 +904,24 @@ class PurchaseOrdersController {
                 'gujarati' => 'noto_gujarati',
                 'english' => 'sans-serif', // fallback
             ];
-            require_once 'Text/LanguageDetect.php'; 
+            require_once 'Text/LanguageDetect.php';
             $detector = new Text_LanguageDetect();
-            
-            $tbody = ''; $thead= ''; $summary_rows = '';
+
+            $tbody = '';
+            $thead = '';
+            $summary_rows = '';
             foreach ($purchaseOrderItems as $index => $item) {
                 $text = explode(':', $item['title']);
                 $lang1 = $detector->detectSimple($text[0]); // returns 'hi', 'ta', etc.
                 $lang2 = isset($text[1]) ? $detector->detectSimple($text[1]) : 'english';
                 $font = $fontMap[$lang1] ?? 'sans-serif'; // fallback if unknown
                 $font2 = $fontMap[$lang2] ?? 'sans-serif'; // fallback if unknown
-                if($design_format == 'smallImageWithPrice'){ 
-                $tbody .= '<tr>';
-                $tbody .= '<td style="width:5% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
-                $tbody .= '<td style="width:37% !important; border:1px solid #000; padding:6px;">';
-                //$tbody .= '<p style="font-family: ' . $font . ';">' . $text[0] . ' | ' . $font . '</p>'.'<p style="font-family: ' . $font2 . ';">' . $text[1] . ' | ' . $lang2 . '</p>';
-                $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '');
+                if ($design_format == 'smallImageWithPrice') {
+                    $tbody .= '<tr>';
+                    $tbody .= '<td style="width:5% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
+                    $tbody .= '<td style="width:37% !important; border:1px solid #000; padding:6px;">';
+                    //$tbody .= '<p style="font-family: ' . $font . ';">' . $text[0] . ' | ' . $font . '</p>'.'<p style="font-family: ' . $font2 . ';">' . $text[1] . ' | ' . $lang2 . '</p>';
+                    $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '');
                     if (!empty($item['prod_height']) || !empty($item['prod_width']) || !empty($item['prod_length'])) {
                         $tbody .= ' <br> Dimensions: ';
                         if ($item['prod_height'] != '0.00') {
@@ -932,33 +946,32 @@ class PurchaseOrdersController {
                     if (!empty($item['material'])) {
                         $tbody .= ' Material: ' . htmlspecialchars($item['material']);
                     }*/
-                $tbody .= '</p>';
-                $tbody .= '<td style="width:13% !important; border:1px solid #000; text-align:center;"><img src="' . htmlspecialchars($item['image']) . '" style="width:auto; max-height:150px;"></td>';
-                $tbody .= '<td style="width:8% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
-                //if($item['price'] < 0){                
-                $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['price'], 2) . '</td>';
-                $tbody .= '<td style="width:8% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['gst']) . '%</td>';
-                $tbody .= '<td style="width:16% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
-                //}
-                $tbody .= '</tr>';
-                
-                }else if($design_format == 'largeImageWithoutPrice'){
+                    $tbody .= '</p>';
+                    $tbody .= '<td style="width:13% !important; border:1px solid #000; text-align:center;"><img src="' . htmlspecialchars($item['image']) . '" style="width:auto; max-height:150px;"></td>';
+                    $tbody .= '<td style="width:8% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
+                    //if($item['price'] < 0){                
+                    $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['price'], 2) . '</td>';
+                    $tbody .= '<td style="width:8% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['gst']) . '%</td>';
+                    $tbody .= '<td style="width:16% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
+                    //}
+                    $tbody .= '</tr>';
+                } else if ($design_format == 'largeImageWithoutPrice') {
                     $tbody .= '<tr style="border:1px solid #000;">';
                     $tbody .= '<td style="width:50%; padding:20px; vertical-align:top;">';
                     $tbody .= '<p> <b>Order details:</b> <br><br>' . htmlspecialchars($item['title'] ?? '') . ' <br>';
                     if (!empty($item['prod_height']) || !empty($item['prod_width']) || !empty($item['prod_length'])) {
                         $tbody .= '<b>Dimensions:</b>';
                         if ($item['prod_height'] != '0.00') {
-                        $tbody .= '<br> Height:' . $item['prod_height'] ;
+                            $tbody .= '<br> Height:' . $item['prod_height'];
                         }
                         if ($item['prod_width'] != '0.00') {
-                        $tbody .=  '<br> Width:' . htmlspecialchars($item['prod_width'] ?? '');
+                            $tbody .=  '<br> Width:' . htmlspecialchars($item['prod_width'] ?? '');
                         }
                         if ($item['prod_length'] != '0.00') {
-                        $tbody .=   '<br> Depth:' . htmlspecialchars($item['prod_length'] ?? '') . $item['length_unit'].' <br>';
+                            $tbody .=   '<br> Depth:' . htmlspecialchars($item['prod_length'] ?? '') . $item['length_unit'] . ' <br>';
                         }
                         if ($item['product_weight'] != '0.00') {
-                        $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight']) . $item['product_weight_unit']. '<br>';
+                            $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight']) . $item['product_weight_unit'] . '<br>';
                         }
                     }
                     $tbody .= '</p>';
@@ -967,23 +980,23 @@ class PurchaseOrdersController {
                     $tbody .=  '<img src="' . htmlspecialchars($item['image'] ?? '') . '" style="width:auto; max-height:400px;">';
                     $tbody .= '</td>';
                     $tbody .= '</tr>';
-                }else if($design_format == 'largeImageWithPrice'){
+                } else if ($design_format == 'largeImageWithPrice') {
                     $tbody .= '<tr style="border:1px solid #000;">';
                     $tbody .= '<td style="width:50%; padding:20px; vertical-align:top;">';
                     $tbody .= '<p> <b>Order details:</b> <br><br>' . htmlspecialchars($item['title'] ?? '') . ' <br>';
                     if (!empty($item['prod_height']) || !empty($item['prod_width']) || !empty($item['prod_length'])) {
                         $tbody .= '<b>Dimensions:</b>';
                         if ($item['prod_height'] != '0.00') {
-                        $tbody .= '<br> Height:' . $item['prod_height'] ;
+                            $tbody .= '<br> Height:' . $item['prod_height'];
                         }
                         if ($item['prod_width'] != '0.00') {
-                        $tbody .=  '<br> Width:' . htmlspecialchars($item['prod_width'] ?? '');
+                            $tbody .=  '<br> Width:' . htmlspecialchars($item['prod_width'] ?? '');
                         }
                         if ($item['prod_length'] != '0.00') {
-                        $tbody .=   '<br> Depth:' . htmlspecialchars($item['prod_length'] ?? '') . $item['length_unit']. ' <br>';
+                            $tbody .=   '<br> Depth:' . htmlspecialchars($item['prod_length'] ?? '') . $item['length_unit'] . ' <br>';
                         }
                         if ($item['product_weight'] != '0.00') {
-                        $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight']) . $item['product_weight_unit']. '<br>';
+                            $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight']) . $item['product_weight_unit'] . '<br>';
                         }
                     }
                     $tbody .= '</p>';
@@ -999,62 +1012,60 @@ class PurchaseOrdersController {
                     $tbody .=  '<img src="' . htmlspecialchars($item['image'] ?? '') . '" style="width:auto; max-height:400px;">';
                     $tbody .= '</td>';
                     $tbody .= '</tr>';
-                } else if($design_format == 'smallImageWithoutPrice'){ 
-                $tbody .= '<tr>';
-                $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
-                $tbody .= '<td style="width:50% !important; border:1px solid #000; padding:6px;">';
-                //$tbody .= '<p style="font-family: ' . $font . ';">' . $text[0] . ' | ' . $font . '</p>'.'<p style="font-family: ' . $font2 . ';">' . $text[1] . ' | ' . $lang2 . '</p>';
-                $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '');
-                if (!empty($item['prod_height']) || !empty($item['prod_width']) || !empty($item['prod_length'])) {
-                    $tbody .= ' <br> Dimensions: ';
-                    if ($item['prod_height'] != '0.00') {
-                        $tbody .= ' Height: ' . htmlspecialchars($item['prod_height']);
+                } else if ($design_format == 'smallImageWithoutPrice') {
+                    $tbody .= '<tr>';
+                    $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
+                    $tbody .= '<td style="width:50% !important; border:1px solid #000; padding:6px;">';
+                    //$tbody .= '<p style="font-family: ' . $font . ';">' . $text[0] . ' | ' . $font . '</p>'.'<p style="font-family: ' . $font2 . ';">' . $text[1] . ' | ' . $lang2 . '</p>';
+                    $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '');
+                    if (!empty($item['prod_height']) || !empty($item['prod_width']) || !empty($item['prod_length'])) {
+                        $tbody .= ' <br> Dimensions: ';
+                        if ($item['prod_height'] != '0.00') {
+                            $tbody .= ' Height: ' . htmlspecialchars($item['prod_height']);
+                        }
+                        if ($item['prod_width'] != '0.00') {
+                            $tbody .= ' Width: ' . htmlspecialchars($item['prod_width']);
+                        }
+                        if ($item['prod_length'] != '0.00') {
+                            $tbody .= ' Depth: ' . $item['prod_length'] . $item['length_unit'];
+                        }
+                        if ($item['product_weight'] != '0.00') {
+                            $tbody .= ' Weight: ' . $item['product_weight'] . $item['product_weight_unit'];
+                        }
                     }
-                    if ($item['prod_width'] != '0.00') {
-                        $tbody .= ' Width: ' . htmlspecialchars($item['prod_width']);
-                    }
-                    if ($item['prod_length'] != '0.00') {
-                        $tbody .= ' Depth: ' . $item['prod_length'] . $item['length_unit'];
-                    }
-                    if ($item['product_weight'] != '0.00') {
-                        $tbody .= ' Weight: ' . $item['product_weight'] . $item['product_weight_unit'];
-                    }
+                    $tbody .= '</p>';
+                    $tbody .= '<td style="width:20% !important; border:1px solid #000; text-align:center;"><img src="' . htmlspecialchars($item['image']) . '" style="width:auto; max-height:150px;"></td>';
+                    $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
+
+                    $tbody .= '</tr>';
                 }
-                $tbody .= '</p>';
-                $tbody .= '<td style="width:20% !important; border:1px solid #000; text-align:center;"><img src="' . htmlspecialchars($item['image']) . '" style="width:auto; max-height:150px;"></td>';
-                $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
-                
-                $tbody .= '</tr>';
-                
-                }
-                
             }
-            if($design_format == 'smallImageWithPrice'){
+            if ($design_format == 'smallImageWithPrice') {
                 $summary_rows .= '
                         <table>
                             <tr>
                                 <th style="padding:5px 10px; text-align:right; font: size 17px; font-weight:bold;">Subtotal:</th>
-                                <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['subtotal'].'</td>
+                                <td style="padding:5px 10px; text-align:right; font-size:17px;">' . $purchaseOrder['subtotal'] . '</td>
                             </tr>
                             <tr>
                                 <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">Shipping:</th>
-                                <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['shipping_cost'].'</td>
+                                <td style="padding:5px 10px; text-align:right; font-size:17px;">' . $purchaseOrder['shipping_cost'] . '</td>
                             </tr>
                             <tr>
                                 <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">GST:</th>
-                                <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['total_gst'].'</td>
+                                <td style="padding:5px 10px; text-align:right; font-size:17px;">' . $purchaseOrder['total_gst'] . '</td>
                             </tr>
                             <tr>
                                 <th style="padding-left:5px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;"> Grand Total:</th>
-                                <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">'.$purchaseOrder['total_cost'].'</td>
+                                <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">' . $purchaseOrder['total_cost'] . '</td>
                             </tr>
                         </table>
                     ';
             }
         }
-       
+
         //require_once('vendor/autoload.php');
-        define('_MPDF_TTFONTPATH',  __DIR__ . '/../templates/fonts/');      
+        define('_MPDF_TTFONTPATH',  __DIR__ . '/../templates/fonts/');
 
         $mpdf = new \Mpdf\Mpdf([
             'mode' => 'utf-8',
@@ -1067,7 +1078,7 @@ class PurchaseOrdersController {
             'R' => 'NotoSansDevanagari-Regular.ttf',
             'useOTL' => 0xFF,
         ];
-        
+
         $mpdf->fontdata['noto_tamil'] = [
             'R' => 'NotoSansTamil-Regular.ttf',
             'useOTL' => 0xFF,
@@ -1080,8 +1091,8 @@ class PurchaseOrdersController {
             'R' => 'NotoSansGujarati-Regular.ttf',
             'useOTL' => 0xFF,
         ];
-        if($design_format == 'smallImageWithPrice' ){
-        
+        if ($design_format == 'smallImageWithPrice') {
+
             $thead = '<tr>    
                 <th style="width:5% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">#</th>
                 <th style="width:37% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:left; font-size:11px;">Description</th>
@@ -1090,27 +1101,27 @@ class PurchaseOrdersController {
                 <th style="width:13% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:right; font-size:11px;">Unit Price</th>
                 <th style="width:8% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">GST</th>
                 <th style="width:16% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:right; font-size:11px;">Amount</th>
-            </tr>';     
-        }else if($design_format == 'largeImageWithoutPrice' || $design_format == 'largeImageWithPrice'){
+            </tr>';
+        } else if ($design_format == 'largeImageWithoutPrice' || $design_format == 'largeImageWithPrice') {
             /*$thead = '<tr>    
                 <th style="width:50% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:left; font-size:11px;">Description</th>
                 <th style="width:50% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Image</th>
             </tr>';*/
             $thead = '';
-        } else if($design_format == 'smallImageWithoutPrice' ){
-        
+        } else if ($design_format == 'smallImageWithoutPrice') {
+
             $thead = '<tr>    
                 <th style="width:10% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">#</th>
                 <th style="width:50% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:left; font-size:11px;">Description</th>
                 <th style="width:20% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Image</th>
                 <th style="width:10% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Qty</th>                
-            </tr>';     
+            </tr>';
         }
         $term = '<div style="font-size:10px; font-weight:bold; margin-bottom:10px;">Terms & Conditions</div>' . nl2br($purchaseOrder['terms_and_conditions']);
-        if(empty($purchaseOrder['terms_and_conditions'])){
+        if (empty($purchaseOrder['terms_and_conditions'])) {
             $term = '';
         }
-       // Generate QR code for PO number or any URL/text
+        // Generate QR code for PO number or any URL/text
         /*$result = (new Builder())
         ->data(base_url('?page=grns&action=create&po_id=').$purchaseOrder['po_number']) // or any URL/text
         ->size(200)
@@ -1124,23 +1135,23 @@ class PurchaseOrdersController {
 
         //$qrCode = new QrCode(base_url('?page=grns&action=create&po_id=').$purchaseOrder['po_number']);
         $qrCode = new Endroid\QrCode\QrCode(
-            data: base_url('?page=grns&action=create&po_id='.$poId),
+            data: base_url('?page=grns&action=create&po_id=' . $poId),
             size: 400,
             margin: 10
         );
         //$qrCode->margin(10);
 
         $writer = new Endroid\QrCode\Writer\PngWriter();
-        $result = $writer->write($qrCode);       
+        $result = $writer->write($qrCode);
         $qrBase64 = base64_encode($result->getString());
 
         // Step 4: Create <img> tag for embedding in mPDF
-        $qrImgTag = '<img src="data:image/png;base64,'.$qrBase64.'" style="width:150px; height:150px;">';        
-   
+        $qrImgTag = '<img src="data:image/png;base64,' . $qrBase64 . '" style="width:150px; height:150px;">';
+
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
-        
+
         $html = str_replace(
-            ['{{po_number}}', '{{date}}', '{{delivery_due}}','{{thead}}', '{{tbody}}', '{{summary_rows}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}', '{{qr_code}}'],
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{thead}}', '{{tbody}}', '{{summary_rows}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}', '{{qr_code}}'],
             [
                 $purchaseOrder['po_number'],
                 date('d M Y', strtotime($purchaseOrder['created_at'])),
@@ -1164,20 +1175,20 @@ class PurchaseOrdersController {
         //     <p style="font-family: noto_gujarati;">ગુજરાતી: હેલો વર્લ્ડ</p>
         //     ';
         $mpdf->WriteHTML($html);
-        if($generateOnly){
+        if ($generateOnly) {
             $filePath = __DIR__ . '/../generated_pdfs/' . $purchaseOrder['po_number'] . '.pdf';
             $mpdf->Output($filePath, 'F'); // Save the PDF to a file
             return $filePath; // Return the file path for further use
-        }else{
+        } else {
             $mpdf->Output($purchaseOrder['po_number'] . '.pdf', 'D');
         }
-
     }
-    function toggleStar() {
+    function toggleStar()
+    {
         global $purchaseOrdersModel;
 
         $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
-       
+
         if (!$poId) {
             echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
             exit;
@@ -1193,11 +1204,12 @@ class PurchaseOrdersController {
         // If everything is successful, return success response
         echo json_encode(['success' => true, 'message' => 'Star flag toggled successfully.', 'flag_star' => $isToggled]);
         exit;
-    }   
-    function emailToVendor() {
+    }
+    function emailToVendor()
+    {
         global $purchaseOrdersModel;
         global $vendorsModel;
-        
+
         $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
 
         if (!$poId) {
@@ -1220,7 +1232,7 @@ class PurchaseOrdersController {
         // Here you would typically generate the PDF and attach it to the email
         $pdfFilePath = $this->downloadPurchaseOrder($poId); // This will generate the PDF
         $attachments = [];
-        
+
         if (file_exists($pdfFilePath)) {
             $attachments[] = $pdfFilePath;
         }
@@ -1270,7 +1282,8 @@ class PurchaseOrdersController {
         }
         exit;
     }
-    function uploadInvoice() {
+    function uploadInvoice()
+    {
         global $purchaseOrdersModel;
         global $poInvoiceModel;
         $poIdRaw = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
@@ -1290,10 +1303,10 @@ class PurchaseOrdersController {
             echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID(s).']);
             exit;
         }
-        
-        
+
+
         if (!isset($_FILES['file_input']) || $_FILES['file_input']['error'] !== 0) {
-            if(isset($id) && $id){
+            if (isset($id) && $id) {
                 //update without file
                 $poInvoiceData = [
                     //'po_id' => $poId,
@@ -1411,8 +1424,9 @@ class PurchaseOrdersController {
             echo json_encode(['success' => false, 'message' => 'There was an error moving the uploaded file.']);
         }
     }
-    
-    public function previewPDF() {
+
+    public function previewPDF()
+    {
         global $vendorsModel;
         global $usersModel;
         // Collect POST data (from form, not DB)
@@ -1432,9 +1446,9 @@ class PurchaseOrdersController {
 
         $user = $usersModel->getUserById($user_id);
         $contactPerson = '';
-        if($user){
-            $contactPerson = 'Contact Person: '.$user['name'].'<br>';
-            $contactPerson .= 'Phone: '.$user['phone'].'<br>';
+        if ($user) {
+            $contactPerson = 'Contact Person: ' . $user['name'] . '<br>';
+            $contactPerson .= 'Phone: ' . $user['phone'] . '<br>';
             $purchaseOrder['created_by'] = $user['name'];
             $purchaseOrder['created_email'] = $user['email'];
         }
@@ -1442,34 +1456,34 @@ class PurchaseOrdersController {
         // Fetch vendor info
         $vendorInfo = '';
         $vendor = $vendorsModel->getVendorById($vendor_id);
-        if($vendor && !empty($vendor['address'])){
-            
+        if ($vendor && !empty($vendor['address'])) {
+
             $vendorInfo = '<span style="font-size:14px; font-weight:bold;">' . htmlspecialchars($vendor['vendor_name'] ?? '') . '</span><br>';
-            $vendorInfo .= htmlspecialchars($vendor['address']);            
-            $vendorInfo .= ', '.htmlspecialchars($vendor['city']);               
-            $vendorInfo .= ', '.htmlspecialchars($vendor['state']);
-            $vendorInfo .= ', '.htmlspecialchars($vendor['country']).' - '.$vendor['postal_code'];
+            $vendorInfo .= htmlspecialchars($vendor['address']);
+            $vendorInfo .= ', ' . htmlspecialchars($vendor['city']);
+            $vendorInfo .= ', ' . htmlspecialchars($vendor['state']);
+            $vendorInfo .= ', ' . htmlspecialchars($vendor['country']) . ' - ' . $vendor['postal_code'];
             $vendorInfo .= '<span style="font-size:12px;">';
-            if(!empty($vendor['vendor_phone'])){
-                $vendorInfo .= '<br>Phone: '.htmlspecialchars($vendor['vendor_phone']);
+            if (!empty($vendor['vendor_phone'])) {
+                $vendorInfo .= '<br>Phone: ' . htmlspecialchars($vendor['vendor_phone']);
             }
-            if(!empty($vendor['vendor_email'])){
-                $vendorInfo .= '<br>Email: '.htmlspecialchars($vendor['vendor_email']);
+            if (!empty($vendor['vendor_email'])) {
+                $vendorInfo .= '<br>Email: ' . htmlspecialchars($vendor['vendor_email']);
             }
             // if(!empty($vendor['website'])){
             //     $vendorInfo .= '<br>Website: '.htmlspecialchars($vendor['website']);
             // }
-            if(!empty($vendor['contact_person'])){
-                $vendorInfo .= '<br>Contact Person: '.htmlspecialchars($vendor['contact_person']);
+            if (!empty($vendor['contact_person'])) {
+                $vendorInfo .= '<br>Contact Person: ' . htmlspecialchars($vendor['contact_person']);
             }
-            if(!empty($vendor['gst_number'])){
-                $vendorInfo .= '<br>GST No.: '.htmlspecialchars($vendor['gst_number']);
+            if (!empty($vendor['gst_number'])) {
+                $vendorInfo .= '<br>GST No.: ' . htmlspecialchars($vendor['gst_number']);
             }
-            if(!empty($vendor['pan_number'])){
-                    $vendorInfo .= '<br>PAN No.: '.htmlspecialchars($vendor['pan_number']);
-                }
+            if (!empty($vendor['pan_number'])) {
+                $vendorInfo .= '<br>PAN No.: ' . htmlspecialchars($vendor['pan_number']);
+            }
             $vendorInfo .= '</span>';
-        }else{
+        } else {
             $vendorInfo = 'N/A';
         }
         // Build tbody from items
@@ -1497,25 +1511,25 @@ class PurchaseOrdersController {
                         <table>
                             <tr>
                                 <th style="padding:5px 10px; text-align:right; font: size 17px; font-weight:bold;">Subtotal:</th>
-                                <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$data['subtotal'].'</td>
+                                <td style="padding:5px 10px; text-align:right; font-size:17px;">' . $data['subtotal'] . '</td>
                             </tr>
                            
                             <tr>
                                 <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">GST:</th>
-                                <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$data['total_gst'].'</td>
+                                <td style="padding:5px 10px; text-align:right; font-size:17px;">' . $data['total_gst'] . '</td>
                             </tr>
                             <tr>
                                 <th style="padding-left:5px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;"> Grand Total:</th>
-                                <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">'.$data['grand_total'].'</td>
+                                <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">' . $data['grand_total'] . '</td>
                             </tr>
                         </table>
                     ';
-            
+
 
         // Load template
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
         $html = str_replace(
-            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{summary_rows}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}','{{qr_code}}'],
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{summary_rows}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}', '{{qr_code}}'],
             [$po_number, $date, $delivery_due, $tbody,  $summary_rows, $terms, $vendorInfo, $contactPerson, ''],
             $temphtml
         );
@@ -1537,7 +1551,7 @@ class PurchaseOrdersController {
             'R' => 'NotoSansDevanagari-Regular.ttf',
             'useOTL' => 0xFF,
         ];
-        
+
         $mpdf->fontdata['noto_tamil'] = [
             'R' => 'NotoSansTamil-Regular.ttf',
             'useOTL' => 0xFF,
@@ -1555,7 +1569,7 @@ class PurchaseOrdersController {
         // Save to temp file
         $fileName = 'po_preview_' . uniqid() . '.pdf';
         //$filePath = sys_get_temp_dir() . '/' . $fileName;
-        $mpdf->Output('tmp/'.$fileName, 'F');
+        $mpdf->Output('tmp/' . $fileName, 'F');
 
         // Return URL to temp file (make sure your web server can serve from /tmp or move to a public temp folder)
         echo json_encode([
@@ -1566,11 +1580,12 @@ class PurchaseOrdersController {
         ]);
         exit;
     }
-    public function getPoDetails() {
+    public function getPoDetails()
+    {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
         global $poInvoiceModel;
-        $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;        
+        $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
         $invoiceType = isset($_GET['invoice_type']) ? $_GET['invoice_type'] : 'invoice'; // default to 'invoice'
         if (!$poId) {
             echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
@@ -1581,11 +1596,11 @@ class PurchaseOrdersController {
             echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
             exit;
         }
-        
+
         $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
         $poInvoice = $poInvoiceModel->getInvoiceByPoId($poId, $invoiceType);
         if ($poInvoice && isset($poInvoice['invoice_date'])) {
-        $poInvoice['invoice_date'] = date('Y-m-d', strtotime($poInvoice['invoice_date']));
+            $poInvoice['invoice_date'] = date('Y-m-d', strtotime($poInvoice['invoice_date']));
         }
 
         echo json_encode(['success' => true, 'data' => [
@@ -1595,7 +1610,8 @@ class PurchaseOrdersController {
         ]]);
         exit;
     }
-    public function deleteInvoice() {
+    public function deleteInvoice()
+    {
         global $poInvoiceModel;
 
         $invoiceId = isset($_POST['invoice_id']) ? $_POST['invoice_id'] : 0;
@@ -1613,7 +1629,7 @@ class PurchaseOrdersController {
 
         //$invoicePath = __DIR__ . '/../' . ($invoice['invoice_type'] === 'performa' ? $invoice['performa'] : $invoice['invoice']);
         $invoicePath = __DIR__ . '/../' . $invoice['invoice'];
-         // Delete the file from the server if it exists
+        // Delete the file from the server if it exists
         if (file_exists($invoicePath)) {
             unlink($invoicePath); // Delete the file
         }
@@ -1627,7 +1643,8 @@ class PurchaseOrdersController {
 
         echo json_encode(['success' => true, 'message' => 'Invoice deleted successfully.']);
     }
-    public function getPO(){
+    public function getPO()
+    {
         // echo 'hedayat';
         // print_array($_POST);
         global $purchaseOrdersModel;
@@ -1640,10 +1657,11 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true, 'data' => $purchaseOrder]);
         exit;
     }
-    public function addChallan(){
+    public function addChallan()
+    {
         global $poInvoiceModel;
         global $purchaseOrdersModel;
-        
+
         $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
         if (!$poId) {
             echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
@@ -1659,7 +1677,7 @@ class PurchaseOrdersController {
             echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
             exit;
         }
-        
+
         // file upload handling can be added here if needed
         if (!empty($_FILES['delivery_challan_copy']['name'])) {
             if ($_FILES['delivery_challan_copy']['error'] !== 0) {
@@ -1670,7 +1688,7 @@ class PurchaseOrdersController {
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0755, true);
             }
-            
+
             $fileTmpPath = $_FILES['delivery_challan_copy']['tmp_name'];
             $fileName = $_FILES['delivery_challan_copy']['name'];
             $fileSize = $_FILES['delivery_challan_copy']['size'];
@@ -1737,7 +1755,8 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true, 'message' => 'Challan added successfully.']);
         exit;
     }
-    public function getChallans(){
+    public function getChallans()
+    {
         global $poInvoiceModel;
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if (!$id) {
@@ -1748,7 +1767,8 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true, 'data' => $challans]);
         exit;
     }
-    public function deleteChallan() {
+    public function deleteChallan()
+    {
         global $poInvoiceModel;
 
         $challanId = isset($_REQUEST['id']) ? $_REQUEST['id'] : 0;
@@ -1778,24 +1798,46 @@ class PurchaseOrdersController {
 
         echo json_encode(['success' => true, 'message' => 'Challan deleted successfully.']);
     }
-    public function vendorSearch(){
+    public function vendorSearch()
+    {
         global $vendorsModel;
         $term = isset($_GET['query']) ? $_GET['query'] : '';
         $vendors = $vendorsModel->searchVendors($term);
         echo json_encode(['success' => true, 'data' => $vendors]);
         exit;
     }
-    public function customPO(){
+    public function remoteVendorSearch()
+    {
+        global $vendorsModel;
+        $query = isset($_GET['query']) ? $_GET['query'] : '';
+        $vendors = $vendorsModel->searchRemoteVendors($query);
+        $data = [];
+        if (is_array($vendors)) {
+            foreach ($vendors as $v) {
+                if (isset($v['vendor_id']) && $v['vendor_id'] > 0) {
+                    $data[] = [
+                        'id' => $v['vendor_id'],
+                        'text' => $v['vendor_name'],
+                        'vendor_name' => $v['vendor_name'],
+                        'vendor_code' => $v['vendor_code'],
+                    ];
+                }
+            }
+        }
+        echo json_encode($data);
+    }
+    public function customPO()
+    {
         global $vendorsModel;
         global $usersModel;
         global $commanModel;
         global $domain;
         global $productModel;
-       
-        $itemIds = isset($_POST['cpoitem']) ? $_POST['cpoitem'] : [];            
+
+        $itemIds = isset($_POST['cpoitem']) ? $_POST['cpoitem'] : [];
         $data = [];
         foreach ($itemIds as $id) {
-            $data['data'][] = $productModel->getProduct($id);            
+            $data['data'][] = $productModel->getProduct($id);
         }
         //print_array($data['data']);
         //$vendors = $vendorsModel->getAllVendors();
@@ -1808,17 +1850,17 @@ class PurchaseOrdersController {
         $data['templates'] = $commanModel->get_payment_terms_and_conditions();
         renderTemplate('views/purchase_orders/custom_po.php', $data, 'Create Custom Purchase Order');
     }
-    function productItems() {
+    function productItems()
+    {
         global $productModel;
 
         $search = isset($_GET['search']) ? $_GET['search'] : 0;
         $type = isset($_GET['type']) ? $_GET['type'] : '';
-        if($type == 'item_code'){
+        if ($type == 'item_code') {
             $orderItems = $productModel->getProductItemsByCode($search);
-
-        }elseif (!$search) {
+        } elseif (!$search) {
             $orderItems = $productModel->getProductItems('');
-        }else{
+        } else {
             $orderItems = $productModel->getProductItems($search);
         }
         if ($orderItems === false) {
@@ -1830,7 +1872,8 @@ class PurchaseOrdersController {
         echo json_encode($orderItems);
         exit;
     }
-    function customPOSave() {
+    function customPOSave()
+    {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
         global $domain;
@@ -1842,7 +1885,7 @@ class PurchaseOrdersController {
             echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
             exit;
         }
-        
+
         // Prepare purchase order data
         $purchaseOrderData = [
             'po_number' => '',
@@ -1876,9 +1919,9 @@ class PurchaseOrdersController {
         }
         //print_array($_FILES);
         // Save purchase order items
-         // Create purchase order items
+        // Create purchase order items
         $itemsCreated = true;
-        foreach ($data['gst'] as $index => $gstValue) {            
+        foreach ($data['gst'] as $index => $gstValue) {
             // image upload and save logic
             $filesArray = null;
             if (isset($_FILES['image'])) {
@@ -1912,16 +1955,15 @@ class PurchaseOrdersController {
                     $fileNameCmps = explode('.', $fileName);
                     $fileExtension = strtolower(end($fileNameCmps));
                     $allowedfileExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-                    
+
                     if (in_array($fileExtension, $allowedfileExtensions)) {
                         $newFileName = 'POITEM_' . $poId . '_' . $index . '_' . time() . '.' . $fileExtension;
                         $dest_path = $uploadDir . $newFileName;
-                        $imgPath = $domain.'/uploads/po_items/' . $newFileName;
+                        $imgPath = $domain . '/uploads/po_items/' . $newFileName;
                         //set permissions                        
                         if (move_uploaded_file($fileTmp, $dest_path)) {
                             // store relative web path                                                       
                             @chmod($dest_path, 0644);
-
                         } else {
                             // failed to move, keep existing POST image if provided
                             $imgPath = isset($data['img'][$index]) ? $data['img'][$index] : '';

@@ -328,6 +328,9 @@ switch ($page) {
             case 'stock_purchase':
                 $controller->stockPurchase();
                 break;
+            case 'remote_vendor_search':
+                $controller->remoteVendorSearch();
+                break;
             default:
                 $controller->index();
                 break;
@@ -564,6 +567,9 @@ switch ($page) {
                 break;
             case 'update_purchase_item':
                 $controller->updatePurchaseItem();
+                break;
+            case 'update_product':
+                $controller->updateProduct();
                 break;
             case 'purchase_list':
                 $controller->purchaseList();
