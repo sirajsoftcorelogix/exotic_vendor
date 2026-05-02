@@ -1604,7 +1604,7 @@ class Order
         }
 
         call_user_func_array([$stmt, 'bind_param'], $bindParams);
-        echo $stmt->$sql;
+        //echo $stmt->$sql;
         if (!$stmt->execute()) {
             throw new Exception("Execute failed: " . $stmt->error);
         }
