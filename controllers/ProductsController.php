@@ -5826,6 +5826,20 @@ class ProductsController
         ], $pageTitle);
     }
 
+    /**
+     * Clears nested output buffers (see index.php ob_start) and avoids printing PHP notices as HTML,
+     * so stock-transfer AJAX responses stay valid JSON for fetch().json().
+     */
+    private function prepareJsonAjaxResponse(): void
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        if (function_exists('ini_set')) {
+            ini_set('display_errors', '0');
+        }
+    }
+
     public function transferBulkTemplate()
     {
         is_login();
@@ -5840,6 +5854,8 @@ class ProductsController
     {
         is_login();
         global $conn;
+
+        $this->prepareJsonAjaxResponse();
 
         header('Content-Type: application/json');
 
@@ -5912,6 +5928,8 @@ class ProductsController
     {
         is_login();
         global $conn;
+
+        $this->prepareJsonAjaxResponse();
 
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -6065,6 +6083,8 @@ class ProductsController
     {
         is_login();
         global $conn, $productModel;
+
+        $this->prepareJsonAjaxResponse();
 
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
