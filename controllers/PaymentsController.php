@@ -285,6 +285,7 @@ WHERE 1=1
         $payment = $stmt->get_result()->fetch_assoc();
 
         require 'views/payments/receipt.php';
+        exit;
     }
     public function add_payment()
     {

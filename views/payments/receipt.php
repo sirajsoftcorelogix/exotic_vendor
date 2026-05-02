@@ -8,7 +8,15 @@
 <head>
     <title>Payment Receipt</title>
 
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+
         body {
             font-family: Arial, sans-serif;
             background: #fff;
@@ -78,7 +86,15 @@
     <div class="receipt-box">
 
         <!-- HEADER -->
-        <div class="header">
+        <div class="flex items-center gap-3 px-4 pt-2 pb-2 sm:px-6">
+            <div class="flex shrink-0 flex-col gap-0.5">
+                <img src="images/EI_Logo_130x27_SVG_1.svg" width="260" height="54" alt="Exotic India" class="h-[54px] w-[260px] max-w-full object-contain object-left">
+                <div class="text-[9px] font-medium uppercase tracking-[0.18em] text-neutral-500">AUTHENTIC · CURATED · HERITAGE</div>
+            </div>
+            <div class="flex-1 h-[3px] bg-black"></div>
+        </div>
+        <!--Row 1-->
+        <div class="header mt-4">
             <div>
                 <h2>PAYMENT RECEIPT</h2>
                 <div>Receipt No: <?= htmlspecialchars(trim((string)($payment['receipt_number'] ?? '')) !== '' ? (string)$payment['receipt_number'] : '#' . (int)$payment['id']) ?></div>
