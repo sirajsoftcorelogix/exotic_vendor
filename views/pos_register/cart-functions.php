@@ -187,6 +187,14 @@ function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = n
     // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
     // exit;
 
+    $ep = '/' . ltrim((string)$endpoint, '/');
+    if (strtoupper((string)$method) === 'POST' && rtrim($ep, '/') === '/order/create'
+            && is_file(dirname(__DIR__, 2) . '/.pos_skip_exotic_order_create_api')) {
+        $d = ['orderid' => 'LOCAL-' . gmdate('YmdHis')];
+        $j = json_encode($d);
+        return ['data' => $d, 'code' => 200, 'raw' => $j];
+    }
+
     $base = $apiBaseUrl ?? 'https://www.exoticindia.com/api';
     $url = rtrim($base, '/') . $endpoint;
     if ($params) {
@@ -699,15 +707,15 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
 
     $allowedApiPaymentTypes = [
         'Cash',
-        'cc',
-        'razorpay',
-        'cod',
-        'bank_transfer',
-        'pos_machine',
-        'specialpay',
-        'cheque',
-        'demand_draft',
-        'upi',
+        'Card',
+        'UPI',
+        'POS machine',
+        'Razorpay',
+        'Bank Transfer',
+        'Cheque',
+        'Demand Draft',
+        'Cash on Delivery',
+        'Special Payment',
     ];
     $postPayment = trim((string)($_POST['payment_type'] ?? ''));
     if ($postPayment !== '' && in_array($postPayment, $allowedApiPaymentTypes, true)) {
