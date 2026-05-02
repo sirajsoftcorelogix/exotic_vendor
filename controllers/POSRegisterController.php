@@ -3144,6 +3144,45 @@ class POSRegisterController
         return ['cod' => '0', 'codcharges' => '0'];
     }
 
+    /**
+     * Map POS Payment Mode field values to /order/create payment_type slugs.
+     * Ensures store_payment_details middle segment matches the selected mode (not forced offline).
+     */
+    private function normalizePosPaymentTypeForOrderCreate(string $raw): string
+    {
+        $allowed = [
+            'offline',
+            'cc',
+            'razorpay',
+            'cod',
+            'bank_transfer',
+            'pos_machine',
+            'specialpay',
+            'cheque',
+            'demand_draft',
+            'upi',
+        ];
+
+        $t = strtolower(trim($raw));
+        if ($t === '') {
+            return 'offline';
+        }
+
+        $labelMap = [
+            'cash' => 'offline',
+            'card' => 'cc',
+        ];
+        if (isset($labelMap[$t])) {
+            $t = $labelMap[$t];
+        }
+
+        if (in_array($t, $allowed, true)) {
+            return $t;
+        }
+
+        return 'offline';
+    }
+
     private function buildRazorpayAndCardFromPost(): array
     {
         $razorpay = [
@@ -3187,21 +3226,7 @@ class POSRegisterController
 
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
-        $allowedPaymentTypes = [
-            'offline',
-            'cc',
-            'razorpay',
-            'cod',
-            'bank_transfer',
-            'pos_machine',
-            'specialpay',
-            'cheque',
-            'demand_draft',
-        ];
-        $paymentType = trim((string)($_POST['payment_type'] ?? 'offline'));
-        if (!in_array($paymentType, $allowedPaymentTypes, true)) {
-            $paymentType = 'offline';
-        }
+        $paymentType = $this->normalizePosPaymentTypeForOrderCreate((string)($_POST['payment_type'] ?? 'offline'));
         $paymentStage = $_POST['payment_stage'] ?? 'final';
         if (!in_array($paymentStage, ['final', 'partial', 'advance'], true)) {
             $paymentStage = 'final';
@@ -3866,6 +3891,7 @@ class POSRegisterController
             'specialpay' => 'Special Payment',
             'cheque' => 'Cheque',
             'demand_draft' => 'Demand Draft',
+            'upi' => 'UPI',
         ];
         $paymentModeLabel = $paymentModeLabels[strtolower($paymentType)] ?? ucfirst(str_replace('_', ' ', $paymentType));
 

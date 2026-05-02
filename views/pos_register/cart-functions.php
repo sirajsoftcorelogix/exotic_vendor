@@ -528,6 +528,7 @@ function cart_map_payment_type_for_order_api(string $paymentType): string
         'specialpay' => 'specialpay',
         'cheque' => 'cheque',
         'demand_draft' => 'demand_draft',
+        'upi' => 'upi',
     ];
 
     return $map[$t] ?? 'offline';
@@ -697,7 +698,7 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
     $cartData['codcharges'] = $liveCart['codcharges'] ?? ($cartData['codcharges'] ?? 0);
 
     $allowedApiPaymentTypes = [
-        'offline',
+        'Cash',
         'cc',
         'razorpay',
         'cod',
@@ -706,6 +707,7 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
         'specialpay',
         'cheque',
         'demand_draft',
+        'upi',
     ];
     $postPayment = trim((string)($_POST['payment_type'] ?? ''));
     if ($postPayment !== '' && in_array($postPayment, $allowedApiPaymentTypes, true)) {
