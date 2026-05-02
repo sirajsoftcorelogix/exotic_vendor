@@ -3210,6 +3210,14 @@ class POSRegisterController
 
         $transactionId = trim((string)($_POST['transaction_id'] ?? ''));
 
+        if ($paymentType === 'razorpay' && $transactionId === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Razorpay payment requires a transaction ID.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
         /* ================= USER / STORE ================= */
         $store_payment_details = $this->buildStorePaymentDetails($paymentType, $transactionId);
 
@@ -3264,6 +3272,9 @@ class POSRegisterController
         $paymentExtra = $this->buildRazorpayAndCardFromPost();
         $razorpay = $paymentExtra['razorpay'];
         $card = $paymentExtra['card'];
+        if ($paymentType === 'razorpay' && $transactionId !== '') {
+            $razorpay['razorpay_payment_id'] = $transactionId;
+        }
 
         /* ================= FINAL DATA (checkoutdata sourced from GET /cart/retrieve via get_cart()) ================= */
         $postData = array_merge([
