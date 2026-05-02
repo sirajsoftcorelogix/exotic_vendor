@@ -1782,6 +1782,7 @@ class POSRegisterController
             return ['data' => $d, 'code' => 200, 'raw' => $j];
         }
 
+        
         $base = $apiBaseUrl ?? 'https://www.exoticindia.com/api';
         $url = rtrim($base, '/') . $endpoint;
         if ($params) {
