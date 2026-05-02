@@ -103,8 +103,9 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         <th class="p-3 text-left">Order Number</th>
                         <th class="p-3 text-left">Payment Date</th>
                         <th class="p-3 text-left">Show Room</th>
-                        <th class="p-3 text-left">Amount</th>
-                        <th class="p-3 text-left">Amount</th>
+                        <th class="p-3 text-left">Order Amount</th>
+                        <th class="p-3 text-left">Payment Amount</th>
+                        <th class="p-3 text-left">Balance Amount</th>
                         <th class="p-3 text-left">Mode</th>
                         <th class="p-3 text-left">Stage</th>
                         <th class="p-3 text-left">User</th>
@@ -128,7 +129,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
 </div>
 <div id="paymentModal" class="fixed inset-0 z-[9999] hidden">
-  
+
     <!-- overlay -->
     <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closePaymentModal()"></div>
 
@@ -146,9 +147,9 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                 ✕
             </button>
         </div>
- <div id="payment_error_box"
-        class="hidden mx-6 mt-4 bg-red-50 border border-red-300 text-red-700 text-sm px-4 py-3 rounded-lg">
-    </div>
+        <div id="payment_error_box"
+            class="hidden mx-6 mt-4 bg-red-50 border border-red-300 text-red-700 text-sm px-4 py-3 rounded-lg">
+        </div>
         <!-- body -->
         <div class="p-6 space-y-6">
 
@@ -319,9 +320,9 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     function loadPayments() {
 
 
-    const oidEl = document.getElementById('payments_filter_order_id');
-    const oidParam = oidEl && oidEl.value ? `&order_id=${encodeURIComponent(oidEl.value)}` : '';
-    let url = `?page=payments&action=list_ajax&from_date=${encodeURIComponent(document.getElementById('from_date').value)}&to_date=${encodeURIComponent(document.getElementById('to_date').value)}&order_number=${encodeURIComponent(document.getElementById('order_number').value)}&payment_mode=${encodeURIComponent(document.getElementById('payment_mode').value)}&amount_min=${encodeURIComponent(document.getElementById('amount_min').value)}&amount_max=${encodeURIComponent(document.getElementById('amount_max').value)}${oidParam}`;
+        const oidEl = document.getElementById('payments_filter_order_id');
+        const oidParam = oidEl && oidEl.value ? `&order_id=${encodeURIComponent(oidEl.value)}` : '';
+        let url = `?page=payments&action=list_ajax&from_date=${encodeURIComponent(document.getElementById('from_date').value)}&to_date=${encodeURIComponent(document.getElementById('to_date').value)}&order_number=${encodeURIComponent(document.getElementById('order_number').value)}&payment_mode=${encodeURIComponent(document.getElementById('payment_mode').value)}&amount_min=${encodeURIComponent(document.getElementById('amount_min').value)}&amount_max=${encodeURIComponent(document.getElementById('amount_max').value)}${oidParam}`;
 
 
         fetch(url)
@@ -350,7 +351,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         <td class="p-3">${p.order_number ?? ''}</td>
         <td class="p-3">${p.payment_date ?? ''}</td>
         <td class="p-3">${p.warehouse ?? ''}</td>
-  
+        <td class="p-3">${p.order_amount ?? ''}</td>
         <td class="p-3 font-semibold">
      ₹ ${p.amount ?? p.payment_amount ?? ''} <br>
    
@@ -443,54 +444,57 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     }
     async function editPayment(id) {
 
-    clearPaymentError();
+        clearPaymentError();
 
-    let res = await fetch(`?page=payments&action=get_single_payment&id=${id}`);
-    let data = await res.json();
+        let res = await fetch(`?page=payments&action=get_single_payment&id=${id}`);
+        let data = await res.json();
 
-    if (!data.success) {
-        showPaymentError("Payment load failed");
-        return;
+        if (!data.success) {
+            showPaymentError("Payment load failed");
+            return;
+        }
+
+        let p = data.payment;
+
+        // open modal
+        document.getElementById("paymentModal").classList.remove("hidden");
+
+        // edit mode
+        document.getElementById("edit_payment_id").value = p.id;
+        document.getElementById("payment_order_id").value = p.order_id;
+
+        document.getElementById("payment_order_label").innerText = p.order_number;
+
+        // ⭐ KEEP ORIGINAL PAYMENT AMOUNT
+        document.getElementById("payment_amount").value = (p.payment_amount != null && p.payment_amount !== '') ? p.payment_amount : (p.amount ?? '');
+
+        document.getElementById("payment_stage").value = p.payment_stage;
+        document.getElementById("payment_type").value = p.payment_mode;
+        document.getElementById("transaction_id").value = p.transaction_id;
+        document.getElementById("payment_note").value = p.note;
+        document.getElementById("payment_date").value = p.payment_date;
+
+        // ⭐ NOW LOAD PENDING
+        fetch(`?page=payments&action=get_payment_summary&order_number=${p.order_number}`)
+            .then(res => res.json())
+            .then(sum => {
+
+                if (!sum.success) return;
+
+                let currentPaymentAmt = parseFloat((p.payment_amount != null && p.payment_amount !== '') ? p.payment_amount : (p.amount ?? 0));
+                if (isNaN(currentPaymentAmt)) currentPaymentAmt = 0;
+
+                CURRENT_PENDING = parseFloat(sum.pending) + currentPaymentAmt;
+
+                document.getElementById("payment_pending_label").innerText =
+                    "₹ " + CURRENT_PENDING;
+
+            });
+
+        // change UI
+        document.getElementById("paymentModalTitle").innerText = "Edit Payment";
+        document.getElementById("paymentSaveBtn").innerText = "Update Payment";
     }
-
-    let p = data.payment;
-
-    // open modal
-    document.getElementById("paymentModal").classList.remove("hidden");
-
-    // edit mode
-    document.getElementById("edit_payment_id").value = p.id;
-    document.getElementById("payment_order_id").value = p.order_id;
-
-    document.getElementById("payment_order_label").innerText = p.order_number;
-
-    // ⭐ KEEP ORIGINAL PAYMENT AMOUNT
-    document.getElementById("payment_amount").value = (p.payment_amount != null && p.payment_amount !== '') ? p.payment_amount : (p.amount ?? '');
-
-    document.getElementById("payment_stage").value = p.payment_stage;
-    document.getElementById("payment_type").value = p.payment_mode;
-    document.getElementById("transaction_id").value = p.transaction_id;
-    document.getElementById("payment_note").value = p.note;
-    document.getElementById("payment_date").value = p.payment_date;
-
-    // ⭐ NOW LOAD PENDING
-    fetch(`?page=payments&action=get_payment_summary&order_number=${p.order_number}`)
-        .then(res => res.json())
-        .then(sum => {
-
-            if (!sum.success) return;
-
-            CURRENT_PENDING = parseFloat(sum.pending);
-
-            document.getElementById("payment_pending_label").innerText =
-                "₹ " + CURRENT_PENDING;
-
-        });
-
-    // change UI
-    document.getElementById("paymentModalTitle").innerText = "Edit Payment";
-    document.getElementById("paymentSaveBtn").innerText = "Update Payment";
-}
     async function deletePayment(id) {
 
         if (!confirm("Delete this payment ?")) return;
@@ -535,8 +539,17 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
         document.getElementById("paymentModal").classList.remove("hidden");
 
+        document.getElementById("edit_payment_id").value = "";
         document.getElementById("payment_order_id").value = orderId;
         document.getElementById("payment_order_label").innerText = orderNumber;
+
+        document.getElementById("payment_stage").value = "final";
+        document.getElementById("transaction_id").value = "";
+        document.getElementById("payment_note").value = "";
+        document.getElementById("payment_date").value = new Date().toISOString().split('T')[0];
+
+        document.getElementById("paymentModalTitle").innerText = "Add Payment";
+        document.getElementById("paymentSaveBtn").innerText = "Confirm Payment";
 
         fetch(`?page=payments&action=get_payment_summary&order_number=${orderNumber}`)
             .then(res => res.json())
@@ -585,59 +598,59 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     /* ================= SAVE PAYMENT ================= */
     function savePayment() {
 
-    clearPaymentError();
+        clearPaymentError();
 
-    let editId = document.getElementById("edit_payment_id").value;
-    let stage = document.getElementById('payment_stage').value;
-    let amount = parseFloat(document.getElementById('payment_amount').value);
+        let editId = document.getElementById("edit_payment_id").value;
+        let stage = document.getElementById('payment_stage').value;
+        let amount = parseFloat(document.getElementById('payment_amount').value);
 
-    if (!amount || amount <= 0) {
-        showPaymentError("Amount must be greater than 0");
-        return;
-    }
-
-    // ⭐ FINAL STRICT VALIDATION
-    if (stage === "final") {
-
-        if (amount !== CURRENT_PENDING) {
-            showPaymentError("Final payment must be exactly pending amount ₹ " + CURRENT_PENDING);
+        if (!amount || amount <= 0) {
+            showPaymentError("Amount must be greater than 0");
             return;
         }
 
-    }
+        // ⭐ FINAL STRICT VALIDATION
+        if (stage === "final") {
 
-    let formData = new FormData();
+            if (amount !== CURRENT_PENDING) {
+                showPaymentError("Final payment must be exactly pending amount ₹ " + CURRENT_PENDING);
+                return;
+            }
 
-    formData.append('order_id', document.getElementById('payment_order_id').value);
-    formData.append('amount', amount);
-    formData.append('payment_type', document.getElementById('payment_type').value);
-    formData.append('payment_stage', stage);
-    formData.append('transaction_id', document.getElementById('transaction_id').value);
-    formData.append('note', document.getElementById('payment_note').value);
-    formData.append('payment_date', document.getElementById('payment_date').value);
-
-    let url = editId
-        ? 'index.php?page=payments&action=update_payment'
-        : 'index.php?page=payments&action=save_payment';
-
-    if (editId) formData.append('id', editId);
-
-    fetch(url, {
-        method: 'POST',
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-
-        if (!data.success) {
-            showPaymentError(data.message || "Save failed");
-            return;
         }
 
-        closePaymentModal();
-        loadPayments();
-    });
-}
+        let formData = new FormData();
+
+        formData.append('order_id', document.getElementById('payment_order_id').value);
+        formData.append('amount', amount);
+        formData.append('payment_type', document.getElementById('payment_type').value);
+        formData.append('payment_stage', stage);
+        formData.append('transaction_id', document.getElementById('transaction_id').value);
+        formData.append('note', document.getElementById('payment_note').value);
+        formData.append('payment_date', document.getElementById('payment_date').value);
+
+        let url = editId ?
+            'index.php?page=payments&action=update_payment' :
+            'index.php?page=payments&action=save_payment';
+
+        if (editId) formData.append('id', editId);
+
+        fetch(url, {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+
+                if (!data.success) {
+                    showPaymentError(data.message || "Save failed");
+                    return;
+                }
+
+                closePaymentModal();
+                loadPayments();
+            });
+    }
 
     /* ================= FINAL INVOICE ================= */
 
