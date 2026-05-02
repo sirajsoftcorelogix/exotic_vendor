@@ -448,9 +448,21 @@ function add_to_cart($code, $qty, $variation = '', $options = '', $buyNow = fals
 }
 function change_qty($cartref, $newqty)
 {
+    $q = (int)$newqty;
+    // Same gateway session as /cart/retrieve (x-api-euid). Site www…/cart/delete is cookie-based and does not clear this cart.
+    $coupon = '';
+    if (!empty($_SESSION['discount_coupon'])) {
+        $coupon = is_array($_SESSION['discount_coupon'])
+            ? (string)($_SESSION['discount_coupon']['discountcoupondetails'] ?? '')
+            : (string)$_SESSION['discount_coupon'];
+    }
+    $voucher = (string)($_SESSION['gift_voucher']['giftvoucherdetails'] ?? '');
+
     return exotic_api_call('/cart/modifyqty', 'GET', [
+        'discountcoupondetails' => $coupon,
+        'giftvoucherdetails' => $voucher,
         'cartid' => $cartref,
-        'newqty' => $newqty
+        'newqty' => $q < 1 ? 0 : $q,
     ]);
 }
 
@@ -751,9 +763,11 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
         $codCharges = '0';
     }
 
-    $storeId = (string)((int)($_SESSION['warehouse_id'] ?? 0));
-    if ($storeId === '0' || $storeId === '') {
-        $storeId = 'store';
+    $wid = (int)($_SESSION['warehouse_id'] ?? 0);
+    $storeId = 'store';
+    if ($conn instanceof mysqli) {
+        require_once __DIR__ . '/../../helpers/pos_payment_receipt.php';
+        $storeId = pos_payment_resolve_short_code_for_warehouse($conn, $wid);
     }
     $transactionId = trim((string)($_POST['transaction_id'] ?? ''));
     $effectiveTransactionId = $transactionId !== '' ? $transactionId : ('store.' . gmdate('YmdHis'));
