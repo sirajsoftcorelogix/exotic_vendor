@@ -520,6 +520,7 @@ WHERE 1=1
             'paid' => $paid,
             'pending' => $pending
         ]);
+        exit;
     }
     public function update_payment()
     {
@@ -557,6 +558,7 @@ WHERE 1=1
         $stmt->execute();
 
         echo json_encode(["success" => true]);
+        exit;
     }
     public function get_single_payment()
     {
@@ -582,5 +584,6 @@ WHERE 1=1
             'success' => true,
             'payment' => $payment,
         ]);
+        exit;
     }
 }
