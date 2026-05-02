@@ -1248,12 +1248,15 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
           <select name="payment_type" id="payment_mode"
             class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
               <option value="Cash">Cash</option>
-              <option value="pos_machine">POS machine</option>
+              <option value="Card">Credit / Debit Card</option>
               <option value="upi">UPI</option>
-              <option value="cheque">Cheque</option>
+              <option value="pos_machine">POS machine</option>
               <option value="razorpay">Razorpay</option>
               <option value="bank_transfer">Bank Transfer</option>
+              <option value="cheque">Cheque</option>
               <option value="demand_draft">Demand Draft</option>
+              <option value="cod">Cash on Delivery</option>
+              <option value="specialpay">Special Payment</option>
           </select>
         </div>
         <!-- Payment Date -->
