@@ -1782,7 +1782,7 @@ class POSRegisterController
             return ['data' => $d, 'code' => 200, 'raw' => $j];
         }
 
-        
+
         $base = $apiBaseUrl ?? 'https://www.exoticindia.com/api';
         $url = rtrim($base, '/') . $endpoint;
         if ($params) {
@@ -3931,7 +3931,6 @@ class POSRegisterController
 
         $receiptDateFormatted = $this->formatReceiptDateOrdinalIndia();
 
-        $invoicePreviewUrl = 'index.php?page=invoice&action=preview&id=' . rawurlencode($orderId);
         $paymentHistoryQuery = ['page' => 'payments', 'action' => 'list'];
         $paymentHistoryFilterNumber = trim($orderId);
         $paymentHistoryPk = ctype_digit(trim($orderId)) ? (int)$orderId : 0;
@@ -3967,6 +3966,44 @@ class POSRegisterController
             $warehouseName
         );
 
+        // Tax invoice PDF (same as Invoices → Download): only after invoice exists and full payment on this receipt.
+        $orderNumberForInvoice = trim((string)$orderId);
+        if ($conn instanceof mysqli && $orderNumberForInvoice !== '' && ctype_digit($orderNumberForInvoice)) {
+            $onStmt = $conn->prepare('SELECT order_number FROM vp_orders WHERE id = ? LIMIT 1');
+            if ($onStmt) {
+                $pk = (int)$orderNumberForInvoice;
+                $onStmt->bind_param('i', $pk);
+                $onStmt->execute();
+                $onRow = $onStmt->get_result()->fetch_assoc();
+                $onStmt->close();
+                $resolvedOn = trim((string)($onRow['order_number'] ?? ''));
+                if ($resolvedOn !== '') {
+                    $orderNumberForInvoice = $resolvedOn;
+                }
+            }
+        }
+
+        $invoicePdfUrl = '';
+        $showInvoicePdfButton = false;
+        $invoicePdfDisabledHint = '';
+        if ($conn instanceof mysqli && $orderNumberForInvoice !== '') {
+            require_once __DIR__ . '/../models/invoice/invoice.php';
+            $invoiceModelForPdf = new Invoice($conn);
+            $invoiceHdr = $invoiceModelForPdf->getActiveInvoiceForOrderNumber($orderNumberForInvoice);
+            $pendingAmt = (float)($receiptContext['receipt_pending_amount'] ?? 0);
+            $stageFinal = strtolower(trim($paymentStage)) === 'final';
+            $fullyPaid = $pendingAmt <= 0.009;
+
+            if (!empty($invoiceHdr['id']) && $stageFinal && $fullyPaid) {
+                $showInvoicePdfButton = true;
+                $invoicePdfUrl = 'index.php?page=invoices&action=generate_pdf&invoice_id=' . (int)$invoiceHdr['id'];
+            } elseif (empty($invoiceHdr['id'])) {
+                $invoicePdfDisabledHint = 'Tax invoice PDF is available after the order is imported and invoiced.';
+            } elseif (!$stageFinal || !$fullyPaid) {
+                $invoicePdfDisabledHint = 'Print Invoice is enabled when payment stage is Final and pending amount is zero.';
+            }
+        }
+
         renderTemplate('views/pos_register/order_confirmation.php', array_merge([
             'order_id' => $orderId,
             'payment_type' => $paymentType,
@@ -3975,7 +4012,9 @@ class POSRegisterController
             'amount' => $amount,
             'transaction_id' => $transactionId,
             'import_status' => $importStatus,
-            'invoice_preview_url' => $invoicePreviewUrl,
+            'invoice_pdf_url' => $invoicePdfUrl,
+            'show_invoice_pdf_button' => $showInvoicePdfButton,
+            'invoice_pdf_disabled_hint' => $invoicePdfDisabledHint,
             'payment_history_url' => $paymentHistoryUrl,
             'warehouse_name' => $warehouseName,
             'receipt_number' => $receiptNumber,
