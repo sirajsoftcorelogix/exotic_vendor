@@ -751,9 +751,11 @@ function create_order($cartData, $paymentType = 'cash', $note = '')
         $codCharges = '0';
     }
 
-    $storeId = (string)((int)($_SESSION['warehouse_id'] ?? 0));
-    if ($storeId === '0' || $storeId === '') {
-        $storeId = 'store';
+    $wid = (int)($_SESSION['warehouse_id'] ?? 0);
+    $storeId = 'store';
+    if ($conn instanceof mysqli) {
+        require_once __DIR__ . '/../../helpers/pos_payment_receipt.php';
+        $storeId = pos_payment_resolve_short_code_for_warehouse($conn, $wid);
     }
     $transactionId = trim((string)($_POST['transaction_id'] ?? ''));
     $effectiveTransactionId = $transactionId !== '' ? $transactionId : ('store.' . gmdate('YmdHis'));

@@ -2939,12 +2939,16 @@ class POSRegisterController
 
     private function buildStorePaymentDetails(string $paymentType, string $transactionId): string
     {
-        $storeId = (string)((int)($_SESSION['warehouse_id'] ?? 0));
-        if ($storeId === '0' || $storeId === '') {
-            $storeId = 'store';
+        global $conn;
+
+        $wid = (int)($_SESSION['warehouse_id'] ?? 0);
+        $storeId = 'store';
+        if ($conn instanceof mysqli) {
+            require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+            $storeId = pos_payment_resolve_short_code_for_warehouse($conn, $wid);
         }
 
-        // Required format: STORE_ID|PAYMENT_MODE|TRANSACTION_ID
+        // Required format: STORE_ID|PAYMENT_MODE|TRANSACTION_ID (STORE_ID = exotic_address.short_code)
         // If no transaction ID is provided (cash/offline etc.), send store.<UTC TIMESTAMP>.
         $effectiveTransactionId = $transactionId !== ''
             ? $transactionId
