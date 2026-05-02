@@ -1245,23 +1245,17 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
         <!-- Payment Mode -->
         <div>
           <label class="text-xs text-gray-600">Payment Mode</label>
-
           <select name="payment_type" id="payment_mode"
             class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-
-            <option value="offline">Cash / Counter</option>
-            <option value="cc">Card</option>
-            <option value="razorpay">Razorpay / UPI</option>
-            <option value="cod">COD (pay on delivery)</option>
-            <option value="bank_transfer">Bank transfer</option>
-            <option value="pos_machine">POS machine</option>
-            <option value="specialpay">Special pay</option>
-            <option value="cheque">Cheque</option>
-            <option value="demand_draft">Demand draft</option>
-
+              <option value="Cash">Cash</option>
+              <option value="pos_machine">POS machine</option>
+              <option value="upi">UPI</option>
+              <option value="cheque">Cheque</option>
+              <option value="razorpay">Razorpay</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="demand_draft">Demand Draft</option>
           </select>
         </div>
-
         <!-- Payment Date -->
         <div>
           <label class="text-xs text-gray-600">Payment Date</label>
@@ -1290,7 +1284,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
         <!-- Transaction ID -->
         <div>
-          <label class="text-xs text-gray-600">Transaction ID</label>
+          <label class="text-xs text-gray-600" id="transaction_id_label">Transaction ID <span id="transaction_id_required_hint" class="text-red-600 hidden">(required — Razorpay pay_ id)</span></label>
 
           <input
             type="text"
@@ -1869,6 +1863,19 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       });
     }
 
+    var paymentModeSelect = document.getElementById("payment_mode");
+    var txnRequiredHint = document.getElementById("transaction_id_required_hint");
+    function syncRazorpayTxnHint() {
+      if (!paymentModeSelect || !txnRequiredHint) {
+        return;
+      }
+      txnRequiredHint.classList.toggle("hidden", paymentModeSelect.value !== "razorpay");
+    }
+    if (paymentModeSelect) {
+      paymentModeSelect.addEventListener("change", syncRazorpayTxnHint);
+      syncRazorpayTxnHint();
+    }
+
     document.getElementById("placeOrderBtn").addEventListener("click", function() {
 
       var customerId = getSelectedCustomerId();
@@ -1918,6 +1925,17 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
       }
 
+      var paymentModeVal = document.getElementById("payment_mode").value;
+      var txnVal = (document.getElementById("transaction_id").value || "").trim();
+      if (paymentModeVal === "razorpay" && txnVal === "") {
+        showToast("⚠ Razorpay requires a transaction ID", "red");
+        var txnEl = document.getElementById("transaction_id");
+        if (txnEl) {
+          txnEl.focus();
+        }
+        return;
+      }
+
       loadAndOpenAddressConfirm(customerId);
     });
 
@@ -1944,6 +1962,14 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
     let paymentStage = document.getElementById("payment_stage").value;
     let paymentAmount = document.getElementById("payment_amount").value;
     let transactionId = document.getElementById("transaction_id").value;
+    if (paymentType === "razorpay" && String(transactionId || "").trim() === "") {
+      showToast("⚠ Razorpay requires a transaction ID", "red");
+      var txnEl2 = document.getElementById("transaction_id");
+      if (txnEl2) {
+        txnEl2.focus();
+      }
+      return;
+    }
     let note = document.querySelector("textarea[name='note']").value;
 
     let form = document.getElementById("customerForm");
@@ -1964,6 +1990,9 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
     formData.append("payment_stage", paymentStage);
     formData.append("amount", paymentAmount);
     formData.append("transaction_id", transactionId);
+    if (paymentType === "razorpay") {
+      formData.append("razorpay_payment_id", String(transactionId || "").trim());
+    }
     formData.append("note", note);
     var cid = $('#customerSelect').val();
     if (Array.isArray(cid)) {
