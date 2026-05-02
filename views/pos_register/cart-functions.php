@@ -448,9 +448,21 @@ function add_to_cart($code, $qty, $variation = '', $options = '', $buyNow = fals
 }
 function change_qty($cartref, $newqty)
 {
+    $q = (int)$newqty;
+    if ($q < 1) {
+        // Documented site endpoint (not /api): GET /cart/delete?cartid= — value is cartref from retrieve.
+        return exotic_api_call(
+            '/cart/delete',
+            'GET',
+            ['cartid' => $cartref],
+            null,
+            'https://www.exoticindia.com'
+        );
+    }
+
     return exotic_api_call('/cart/modifyqty', 'GET', [
         'cartid' => $cartref,
-        'newqty' => $newqty
+        'newqty' => $q
     ]);
 }
 
