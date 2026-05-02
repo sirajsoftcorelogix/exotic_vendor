@@ -1774,6 +1774,15 @@ class POSRegisterController
         // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
         // exit;
 
+        $ep = '/' . ltrim((string)$endpoint, '/');
+        if (strtoupper((string)$method) === 'POST' && rtrim($ep, '/') === '/order/create'
+                && is_file(dirname(__DIR__) . '/.pos_skip_exotic_order_create_api')) {
+            $d = ['orderid' => 'LOCAL-' . gmdate('YmdHis')];
+            $j = json_encode($d);
+            return ['data' => $d, 'code' => 200, 'raw' => $j];
+        }
+
+        
         $base = $apiBaseUrl ?? 'https://www.exoticindia.com/api';
         $url = rtrim($base, '/') . $endpoint;
         if ($params) {

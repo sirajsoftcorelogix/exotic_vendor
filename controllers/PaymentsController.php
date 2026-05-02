@@ -72,6 +72,9 @@ class PaymentsController
         // LEFT JOIN 	exotic_address w ON w.id = p.warehouse_id
         // WHERE 1=1
         // ";
+        // Warehouse: already from LEFT JOIN exotic_address (pos_payments.warehouse_id).
+        // vp_orders can have many rows per order_number (line items), so we join an aggregate
+        // of vp_orders instead of correlating subqueries or joining vp_orders raw (row duplication).
         $sql = "
 SELECT 
     p.id,
@@ -85,20 +88,10 @@ SELECT
     p.payment_stage,
     u.name AS user_name,
     w.address_title AS warehouse,
-    (
-        SELECT MIN(o.id) FROM vp_orders o 
-        WHERE o.order_number COLLATE utf8mb4_unicode_ci = p.order_number COLLATE utf8mb4_unicode_ci
-    ) AS order_id,
+    vo.order_id AS order_id,
 
     (
-        IFNULL(
-            (
-                SELECT SUM(o.finalprice) 
-                FROM vp_orders o 
-                WHERE o.order_number COLLATE utf8mb4_unicode_ci
-                      = p.order_number COLLATE utf8mb4_unicode_ci
-            ), 0
-        )
+        IFNULL(vo.order_line_total, 0)
         -
         IFNULL(
             (
@@ -118,6 +111,15 @@ LEFT JOIN vp_users u
 
 LEFT JOIN exotic_address w 
     ON w.id = p.warehouse_id
+
+LEFT JOIN (
+    SELECT 
+        order_number,
+        MIN(id) AS order_id,
+        SUM(finalprice) AS order_line_total
+    FROM vp_orders
+    GROUP BY order_number
+) vo ON vo.order_number COLLATE utf8mb4_unicode_ci = p.order_number COLLATE utf8mb4_unicode_ci
 
 WHERE 1=1
 ";
