@@ -448,9 +448,9 @@ class OrdersController
             }
             //add address info
             $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
-            print_array($addressdata);
-            print_array($order);
-            exit;
+            // print_array($addressdata);
+            // print_array($order);
+            // exit;
         }
         //print_array($pdata);
         //print_r($result);
