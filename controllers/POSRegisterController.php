@@ -1789,8 +1789,10 @@ class POSRegisterController
      * @param string|null $apiBaseUrl Base URL without trailing slash. Default API JSON gateway:
      *                                "https://www.exoticindia.com/api".
      *                                Site cart helpers (documented separately from /api/) use
-     *                                "https://www.exoticindia.com" — e.g. GET /cart/addcoupon,
-     *                                GET /cart/delete?cartid= (cartref from retrieve).
+     *                                "https://www.exoticindia.com" — e.g. GET /cart/addcoupon.
+     *                                Line removal for POS must use /api/cart/modifyqty (same x-api session
+     *                                as /cart/retrieve); www /cart/delete is cookie-based and will not
+     *                                change the API cart.
      */
     public function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null)
     {
@@ -2043,7 +2045,7 @@ class POSRegisterController
     }
 
     /**
-     * Remove every line item from the Exotic India cart (documented GET /cart/delete?cartid=cartref).
+     * Remove every line item from the Exotic API cart (GET /api/cart/modifyqty, newqty=0).
      */
     private function clearRemoteCartLines(array $items): void
     {
@@ -2825,8 +2827,9 @@ class POSRegisterController
     }
 
     /**
-     * Documented: GET https://www.exoticindia.com/cart/delete?cartid= — use cartref as cartid.
-     * Base host must be site root, not /api.
+     * Remove one cart line. Must use the API gateway (same session as /cart/retrieve), not
+     * https://www.exoticindia.com/cart/delete (that path is cookie/session-based and does not
+     * update the x-api-euid cart).
      *
      * @return array{data: array, code: int, raw: string}
      */
@@ -2837,13 +2840,12 @@ class POSRegisterController
             return ['data' => [], 'code' => 0, 'raw' => ''];
         }
 
-        return $this->exotic_api_call(
-            '/cart/delete',
-            'GET',
-            ['cartid' => $cartref],
-            null,
-            'https://www.exoticindia.com'
-        );
+        $params = array_merge($this->cartModifyQtySessionParams(), [
+            'cartid' => $cartref,
+            'newqty' => 0,
+        ]);
+
+        return $this->exotic_api_call('/cart/modifyqty', 'GET', $params);
     }
 
     public function change_qty()

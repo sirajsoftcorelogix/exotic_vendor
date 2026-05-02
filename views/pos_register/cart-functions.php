@@ -449,20 +449,20 @@ function add_to_cart($code, $qty, $variation = '', $options = '', $buyNow = fals
 function change_qty($cartref, $newqty)
 {
     $q = (int)$newqty;
-    if ($q < 1) {
-        // Documented site endpoint (not /api): GET /cart/delete?cartid= — value is cartref from retrieve.
-        return exotic_api_call(
-            '/cart/delete',
-            'GET',
-            ['cartid' => $cartref],
-            null,
-            'https://www.exoticindia.com'
-        );
+    // Same gateway session as /cart/retrieve (x-api-euid). Site www…/cart/delete is cookie-based and does not clear this cart.
+    $coupon = '';
+    if (!empty($_SESSION['discount_coupon'])) {
+        $coupon = is_array($_SESSION['discount_coupon'])
+            ? (string)($_SESSION['discount_coupon']['discountcoupondetails'] ?? '')
+            : (string)$_SESSION['discount_coupon'];
     }
+    $voucher = (string)($_SESSION['gift_voucher']['giftvoucherdetails'] ?? '');
 
     return exotic_api_call('/cart/modifyqty', 'GET', [
+        'discountcoupondetails' => $coupon,
+        'giftvoucherdetails' => $voucher,
         'cartid' => $cartref,
-        'newqty' => $q
+        'newqty' => $q < 1 ? 0 : $q,
     ]);
 }
 
