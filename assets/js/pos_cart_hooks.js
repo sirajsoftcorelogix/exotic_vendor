@@ -400,6 +400,23 @@
     return ok ? sum : null;
   }
 
+  /** Sum GST in currency from lines only — never use `gst` on the line (that is typically the % slab, e.g. 3). */
+  function lineGstAmountRupee(row) {
+    return pickNumber(row, [
+      'gstamount',
+      'gst_amount',
+      'line_gst_amount',
+      'line_gst_total',
+      'line_tax',
+      'line_tax_amount',
+      'tax_amount',
+      'igst_amount',
+      'cgst_amount',
+      'sgst_amount',
+      'total_line_gst'
+    ]);
+  }
+
   function sumGstFromCartLineItems(cartData) {
     var items = getCartItems(cartData || {});
     if (!items.length) {
@@ -408,8 +425,7 @@
     var sum = 0;
     var ok = false;
     for (var i = 0; i < items.length; i++) {
-      var row = items[i];
-      var g = pickNumber(row, ['gstamount', 'gst_amount', 'line_gst', 'line_gst_amount', 'tax_amount', 'gst']);
+      var g = lineGstAmountRupee(items[i]);
       if (g != null) {
         sum += g;
         ok = true;
@@ -440,12 +456,14 @@
       pickNumber(d, [
         'gst_total',
         'total_gst',
-        'gstamount',
         'total_gst_amount',
+        'totalgst',
+        'gst_tax_total',
         'tax_total',
         'total_tax',
-        'gst_amount'
-      ]) || pickNumber(cd, ['gst_total', 'total_gst', 'tax_total']);
+        'gst_amount',
+        'gstamount'
+      ]) || pickNumber(cd, ['gst_total', 'total_gst', 'total_gst_amount', 'tax_total']);
     if (gstTotal == null) {
       gstTotal = sumGstFromCartLineItems(d);
     }
