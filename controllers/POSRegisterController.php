@@ -1391,15 +1391,32 @@ class POSRegisterController
                 return;
 
             case 'modifyqty':
-                $this->emitCartApiResponse($this->exotic_api_call('/cart/modifyqty', 'GET', [
-                    'cartref' => trim((string)($_GET['cartref'] ?? $_REQUEST['cartref'] ?? '')),
-                    'qty' => $_GET['qty'] ?? $_REQUEST['qty'] ?? '',
-                ]));
+                // GET /api/cart/modifyqty?cartid=&newqty=&variationqtylist=&discountcoupondetails=
+                // (cart line value is cartref in retrieve JSON; query param name is cartid.)
+                $cartid = $this->resolveCartLineIdFromRequest();
+                $newqty = trim((string)($_GET['newqty'] ?? $_REQUEST['newqty'] ?? $_GET['qty'] ?? $_REQUEST['qty'] ?? ''));
+                $variationqtylist = trim((string)($_GET['variationqtylist'] ?? $_REQUEST['variationqtylist'] ?? ''));
+                $discountStr = $this->getSessionDiscountCouponDetailsString();
+                $query = [
+                    'cartid' => $cartid,
+                    'newqty' => $newqty,
+                ];
+                if ($variationqtylist !== '') {
+                    $query['variationqtylist'] = $variationqtylist;
+                }
+                if ($discountStr !== '') {
+                    $query['discountcoupondetails'] = $discountStr;
+                }
+                $extraHeaders = $discountStr !== ''
+                    ? ['x-api-discountcoupondetails:' . $discountStr]
+                    : [];
+                $this->emitCartApiResponse($this->exotic_api_call('/cart/modifyqty', 'GET', $query, null, null, $extraHeaders));
                 return;
 
             case 'delete':
+                $cartid = $this->resolveCartLineIdFromRequest();
                 $this->emitCartApiResponse($this->exotic_api_call('/cart/delete', 'GET', [
-                    'cartref' => trim((string)($_GET['cartref'] ?? $_REQUEST['cartref'] ?? '')),
+                    'cartid' => $cartid,
                 ]));
                 return;
 
@@ -1475,14 +1492,7 @@ class POSRegisterController
             $post['options'] = (string)$body['options'];
         }
 
-        $discountStr = '';
-        if (!empty($_SESSION['pos_exotic_cart_coupon_details'])) {
-            $dcd = $_SESSION['pos_exotic_cart_coupon_details'];
-            $discountStr = is_string($dcd) ? $dcd : json_encode($dcd, JSON_UNESCAPED_UNICODE);
-        } elseif (!empty($_SESSION['discount_coupon']['discountcoupondetails'])) {
-            $v = $_SESSION['discount_coupon']['discountcoupondetails'];
-            $discountStr = is_string($v) ? $v : json_encode($v, JSON_UNESCAPED_UNICODE);
-        }
+        $discountStr = $this->getSessionDiscountCouponDetailsString();
 
         $giftStr = '';
         if (!empty($_SESSION['pos_exotic_cart_gift_voucher'])) {
@@ -1500,6 +1510,38 @@ class POSRegisterController
         ];
 
         return ['query' => $query, 'post' => $post];
+    }
+
+    private function getSessionDiscountCouponDetailsString(): string
+    {
+        if (!empty($_SESSION['pos_exotic_cart_coupon_details'])) {
+            $dcd = $_SESSION['pos_exotic_cart_coupon_details'];
+
+            return is_string($dcd) ? $dcd : json_encode($dcd, JSON_UNESCAPED_UNICODE);
+        }
+        if (!empty($_SESSION['discount_coupon']['discountcoupondetails'])) {
+            $v = $_SESSION['discount_coupon']['discountcoupondetails'];
+
+            return is_string($v) ? $v : json_encode($v, JSON_UNESCAPED_UNICODE);
+        }
+
+        return '';
+    }
+
+    /**
+     * Cart line id from POS (supports cartid / legacy cartref naming).
+     */
+    private function resolveCartLineIdFromRequest(): string
+    {
+        foreach (['cartid', 'cart_id', 'cartref'] as $key) {
+            $v = $_GET[$key] ?? $_REQUEST[$key] ?? null;
+            $t = trim((string)($v ?? ''));
+            if ($t !== '') {
+                return $t;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -1542,7 +1584,10 @@ class POSRegisterController
         exit;
     }
 
-    public function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null)
+    /**
+     * @param list<string> $extraHttpHeaders Additional request headers (full "Name:value" lines).
+     */
+    public function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null, array $extraHttpHeaders = [])
     {
         // echo "<pre>";
         // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
@@ -1598,6 +1643,11 @@ class POSRegisterController
         }
         if (!empty($_SESSION['x_api_etd_pincode'])) {
             $headers[] = 'x-api-etd-pincode:' . (string)$_SESSION['x_api_etd_pincode'];
+        }
+        foreach ($extraHttpHeaders as $line) {
+            if (is_string($line) && $line !== '') {
+                $headers[] = $line;
+            }
         }
 
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
