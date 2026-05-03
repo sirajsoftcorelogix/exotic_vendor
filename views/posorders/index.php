@@ -385,10 +385,10 @@
                         <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <!-- PO No -->
-                    <div>
+                    <!-- <div>
                         <label for="po-no" class="block text-sm font-medium text-gray-600 mb-1">PO No</label>
                         <input type="text" value="<?= htmlspecialchars($_GET['po_no'] ?? '') ?>" name="po_no" id="po-no" placeholder="PO No" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
-                    </div>
+                    </div> -->
 
                     <!-- Item Name -->
                     <div>
@@ -567,7 +567,7 @@
                             </svg>
                         </button>
                         <div id="bulk-action-menu" class="hidden absolute left-0 mt-2 w-48 bg-white border rounded shadow z-50">
-                            <a href="#" id="action-create-po" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                            <!-- <a href="#" id="action-create-po" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a> -->
                             <a href="#" id="action-update-status" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a>
                             <a href="#" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Assign To</a>
                             <a href="javascript:void(0)" id="action-add-to-purchase-list" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
@@ -910,9 +910,9 @@
                                                     <i class="fas fa-ellipsis-v"></i>
                                                     <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order absolute right-0 mt-8 z-50 bg-white shadow rounded">
                                                         <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Order</a>
-                                                        <hr class="my-1 mx-2">
+                                                        <!--<hr class="my-1 mx-2">
                                                         </hr>
-                                                        <a href="#" onclick="SubmitCreatePo(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                                                         <a href="#" onclick="SubmitCreatePo(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a> -->
                                                         <?php
                                                         $invStatMenu = strtolower(trim((string)($order['invoice_status'] ?? '')));
                                                         $showAddToInvoiceLink = empty($order['invoice_id']) || $invStatMenu === 'cancelled';
