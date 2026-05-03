@@ -8,6 +8,95 @@
   var cartActionLock = false;
   var cartDelegatesBound = false;
   var PANEL_ID = 'posExoticCartPanel';
+  var MODAL_ID = 'posCartApiDebugModal';
+  /** @type {Record<string, unknown>|null} */
+  var lastCartApiDebug = null;
+
+  function setLastCartApiDebug(entry) {
+    lastCartApiDebug = Object.assign({ at: new Date().toISOString() }, entry);
+  }
+
+  function ensureCartApiDebugModal() {
+    var m = document.getElementById(MODAL_ID);
+    if (m) {
+      return m;
+    }
+    m = document.createElement('div');
+    m.id = MODAL_ID;
+    m.className =
+      'fixed inset-0 z-[10000] hidden flex items-center justify-center bg-black/50 p-4';
+    m.setAttribute('role', 'dialog');
+    m.setAttribute('aria-modal', 'true');
+    m.setAttribute('aria-label', 'Cart API debug');
+    m.innerHTML =
+      '<div id="posCartApiDebugBackdrop" class="absolute inset-0" aria-hidden="true"></div>' +
+      '<div class="pos-cart-api-debug-inner relative z-10 max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-xl flex flex-col">' +
+      '<div class="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-2">' +
+      '<span class="text-sm font-semibold text-slate-800">Last cart API (proxy)</span>' +
+      '<button type="button" class="pos-cart-api-debug-close rounded px-2 py-1 text-slate-500 hover:bg-slate-100" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<pre id="posCartApiDebugPre" class="min-h-[120px] flex-1 overflow-auto p-4 text-[10px] font-mono leading-relaxed text-slate-800 whitespace-pre-wrap break-words"></pre>' +
+      '</div>';
+    m.classList.add('relative');
+    document.body.appendChild(m);
+    var backdrop = document.getElementById('posCartApiDebugBackdrop');
+    if (backdrop) {
+      backdrop.addEventListener('click', function () {
+        closePosCartApiDebugModal();
+      });
+    }
+    return m;
+  }
+
+  function closePosCartApiDebugModal() {
+    var m = document.getElementById(MODAL_ID);
+    if (m) {
+      m.classList.add('hidden');
+    }
+  }
+
+  function openPosCartApiDebugModal() {
+    if (!lastCartApiDebug) {
+      toast('No cart API call recorded yet.', 'red');
+      return;
+    }
+    var m = ensureCartApiDebugModal();
+    var pre = document.getElementById('posCartApiDebugPre');
+    if (!pre) {
+      return;
+    }
+    var pr = lastCartApiDebug.parsedProxyResponse;
+    var out = {
+      note:
+        'Vendor calls same-origin ?page=pos_register&action=cart-api — server forwards to https://www.exoticindia.com/api/cart/* with x-api-* headers.',
+      request: {
+        time: lastCartApiDebug.at,
+        op: lastCartApiDebug.op,
+        method: lastCartApiDebug.method,
+        url: lastCartApiDebug.requestUrl,
+        fetchHttpStatus: lastCartApiDebug.fetchHttpStatus,
+        headers: lastCartApiDebug.requestHeaders || {},
+        jsonBody: lastCartApiDebug.requestBody != null ? lastCartApiDebug.requestBody : undefined
+      },
+      response: pr
+        ? {
+            success: pr.success,
+            http_code: pr.http_code,
+            message: pr.message,
+            parseError: pr.parseError,
+            data: pr.data,
+            raw: pr.raw
+          }
+        : { networkError: lastCartApiDebug.networkError },
+      rawResponseText: lastCartApiDebug.rawProxyResponseText
+    };
+    try {
+      pre.textContent = JSON.stringify(out, null, 2);
+    } catch (e) {
+      pre.textContent = String(lastCartApiDebug);
+    }
+    m.classList.remove('hidden');
+  }
 
   function toast(msg, color) {
     if (typeof window.showToast === 'function') {
@@ -44,14 +133,28 @@
       init.headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(opt.jsonBody);
     }
+    var reqHeaders = {};
+    Object.keys(init.headers).forEach(function (k) {
+      reqHeaders[k] = init.headers[k];
+    });
     return fetch(url, init).then(function (res) {
       return res.text().then(function (text) {
         var cleaned = text.replace(/^\uFEFF/, '').trim();
-        var parsed = null;
+        var maxRaw = 200000;
+        var rawPreview =
+          cleaned.length > maxRaw ? cleaned.slice(0, maxRaw) + '\n…(truncated)' : cleaned;
+        var r;
         try {
-          parsed = cleaned ? JSON.parse(cleaned) : {};
+          var parsed = cleaned ? JSON.parse(cleaned) : {};
+          r = {
+            success: !!parsed.success,
+            http_code: parsed.http_code != null ? parsed.http_code : res.status,
+            data: parsed.data || {},
+            raw: parsed.raw || '',
+            message: parsed.message || (parsed.data && parsed.data.message) || ''
+          };
         } catch (e) {
-          return {
+          r = {
             success: false,
             http_code: res.status,
             data: {},
@@ -60,15 +163,30 @@
             message: 'Invalid JSON from cart API'
           };
         }
-        return {
-          success: !!parsed.success,
-          http_code: parsed.http_code != null ? parsed.http_code : res.status,
-          data: parsed.data || {},
-          raw: parsed.raw || '',
-          message: parsed.message || (parsed.data && parsed.data.message) || ''
-        };
+        setLastCartApiDebug({
+          op: op,
+          method: method,
+          requestUrl: url,
+          requestHeaders: reqHeaders,
+          requestBody: opt.jsonBody != null ? opt.jsonBody : null,
+          fetchHttpStatus: res.status,
+          parsedProxyResponse: r,
+          rawProxyResponseText: rawPreview
+        });
+        return r;
       });
     }).catch(function (err) {
+      setLastCartApiDebug({
+        op: op,
+        method: method,
+        requestUrl: url,
+        requestHeaders: reqHeaders,
+        requestBody: opt.jsonBody != null ? opt.jsonBody : null,
+        fetchHttpStatus: null,
+        parsedProxyResponse: null,
+        rawProxyResponseText: null,
+        networkError: err && err.message ? err.message : String(err)
+      });
       toast(err && err.message ? err.message : 'Cart request failed', 'red');
       return { success: false, http_code: 0, data: {}, raw: '', message: 'Network error' };
     });
@@ -317,6 +435,13 @@
       '</div>';
     html += '</div>';
 
+    html +=
+      '<div class="mt-3 pt-2 border-t border-slate-200 text-center">' +
+      '<button type="button" class="pos-cart-api-debug-link text-xs text-blue-700 hover:underline">' +
+      'Last API request / response' +
+      '</button>' +
+      '</div>';
+
     panel.innerHTML = html;
   }
 
@@ -325,6 +450,16 @@
       return;
     }
     cartDelegatesBound = true;
+
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Escape') {
+        return;
+      }
+      var modal = document.getElementById(MODAL_ID);
+      if (modal && !modal.classList.contains('hidden')) {
+        closePosCartApiDebugModal();
+      }
+    });
 
     document.body.addEventListener(
       'change',
@@ -354,8 +489,18 @@
     document.body.addEventListener(
       'click',
       function (e) {
+        var dbgClose = e.target && e.target.closest ? e.target.closest('.pos-cart-api-debug-close') : null;
+        if (dbgClose) {
+          closePosCartApiDebugModal();
+          return;
+        }
         var panel = document.getElementById(PANEL_ID);
         if (!panel) {
+          return;
+        }
+        var dbgLink = e.target && e.target.closest ? e.target.closest('.pos-cart-api-debug-link') : null;
+        if (dbgLink && panel.contains(dbgLink)) {
+          openPosCartApiDebugModal();
           return;
         }
         var del = e.target && e.target.closest ? e.target.closest('.pos-cart-delete-btn') : null;
