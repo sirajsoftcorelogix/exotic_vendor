@@ -343,6 +343,34 @@
     return sku ? String(sku) : '';
   }
 
+  /** Cart line thumbnail URL (Exotic: full https, path from site root, or CDN-relative). */
+  function lineImageUrl(row) {
+    var raw = pickFirst(row, [
+      'imageurl',
+      'image_url',
+      'image',
+      'thumb',
+      'thumbnail',
+      'img',
+      'small_image',
+      'product_image'
+    ]);
+    if (raw == null || String(raw).trim() === '') {
+      return '';
+    }
+    var s = String(raw).trim();
+    if (/^\/\//.test(s)) {
+      return 'https:' + s;
+    }
+    if (/^https?:\/\//i.test(s)) {
+      return s;
+    }
+    if (s.charAt(0) === '/') {
+      return 'https://www.exoticindia.com' + s;
+    }
+    return 'https://cdn.exoticindia.com/' + s.replace(/^\/+/, '');
+  }
+
   function parseMoneyValue(val) {
     if (val == null || val === '') {
       return null;
@@ -643,7 +671,22 @@
         var sub = lineSubDisplay(row);
         var unitPrice = lineUnitPriceStr(row);
         var lineTotal = lineLineTotalStr(row, qty);
-        html += '<div class="border-b border-slate-100 py-2 last:border-0" data-cart-row="1">';
+        var imgUrl = lineImageUrl(row);
+        html += '<div class="flex gap-2 border-b border-slate-100 py-2 last:border-0" data-cart-row="1">';
+        if (imgUrl) {
+          html +=
+            '<div class="shrink-0 w-12 h-12 rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">' +
+            '<img src="' +
+            escapeHtml(imgUrl) +
+            '" alt="' +
+            escapeHtml(title) +
+            '" class="w-full h-full object-contain" loading="lazy" decoding="async" />' +
+            '</div>';
+        } else {
+          html +=
+            '<div class="shrink-0 w-12 h-12 rounded-lg border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-[9px]" title="No image">·</div>';
+        }
+        html += '<div class="min-w-0 flex-1">';
         html += '<div class="text-xs font-medium text-slate-900 leading-snug">' + escapeHtml(title) + '</div>';
         if (sub) {
           html += '<div class="text-[10px] text-slate-500">' + escapeHtml(sub) + '</div>';
@@ -692,7 +735,7 @@
         } else {
           html += '<span class="text-[10px] text-amber-700">Missing cart reference — cannot update line.</span>';
         }
-        html += '</div></div>';
+        html += '</div></div></div>';
       });
       html += '</div>';
     }
