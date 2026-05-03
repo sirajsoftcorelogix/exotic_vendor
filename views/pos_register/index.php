@@ -357,6 +357,7 @@
                         <form method="POST" action="?page=pos_register&action=change-qty">
                           <!-- <input type="hidden" name="action" value="change_qty"> -->
                           <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
+                          <input type="hidden" name="item_code" value="<?= htmlspecialchars($cartItemCode) ?>">
                           <button type="submit"
                             name="newqty"
                             value="<?= $item['quantity'] - 1 ?>"
@@ -370,6 +371,7 @@
                         <form method="POST" action="?page=pos_register&action=change-qty">
                           <!-- <input type="hidden" name="action" value="change_qty"> -->
                           <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
+                          <input type="hidden" name="item_code" value="<?= htmlspecialchars($cartItemCode) ?>">
                           <button type="submit"
                             name="newqty"
                             value="<?= $item['quantity'] + 1 ?>"
@@ -382,6 +384,7 @@
                       <form method="POST" action="?page=pos_register&action=remove-item">
                         <!-- <input type="hidden" name="action" value="remove"> -->
                         <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
+                        <input type="hidden" name="item_code" value="<?= htmlspecialchars($cartItemCode) ?>">
                         <button type="submit" class="text-xs text-red-600 hover:underline sm:text-sm">
                           Remove
                         </button>
