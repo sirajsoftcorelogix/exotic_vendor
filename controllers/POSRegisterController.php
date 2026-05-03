@@ -1442,7 +1442,22 @@ class POSRegisterController
 
             case 'removecoupon':
                 unset($_SESSION['pos_exotic_cart_coupon_details'], $_SESSION['discount_coupon']);
-                echo json_encode(['success' => true, 'message' => 'Coupon attachment cleared'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                $remoteRm = $this->exotic_api_call('/cart/removecoupon', 'GET', []);
+                if ($this->isExoticCartSuccess($remoteRm)) {
+                    $this->emitCartApiResponse($remoteRm);
+
+                    return;
+                }
+                // Session is cleared so add/modify no longer sends discountcoupondetails; client still refreshes retrieve.
+                echo json_encode([
+                    'success' => true,
+                    'http_code' => 200,
+                    'data' => array_merge(
+                        is_array($remoteRm['data'] ?? null) ? $remoteRm['data'] : [],
+                        ['message' => 'Coupon cleared for this terminal.']
+                    ),
+                    'raw' => (string)($remoteRm['raw'] ?? ''),
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
                 exit;
 
             case 'customdiscount':

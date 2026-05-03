@@ -510,20 +510,24 @@
     var d = data && typeof data === 'object' ? data : {};
     var cd = typeof d.checkoutdata === 'object' && d.checkoutdata !== null ? d.checkoutdata : {};
 
+    /**
+     * Exotic cart merchandise sub total is GST-inclusive (line prices include tax).
+     * Do not use pretax / pre-tax style keys here — they would read as exclusive and invite sub + GST mistakes.
+     */
     var sub =
       pickNumber(d, [
-        'subtotal',
-        'sub_total',
-        'cart_subtotal',
         'items_total',
         'items_subtotal',
-        'pretax_total',
+        'cart_subtotal',
+        'subtotal',
+        'sub_total',
         'merchandise_total'
-      ]) || pickNumber(cd, ['subtotal', 'sub_total', 'items_total']);
+      ]) || pickNumber(cd, ['items_total', 'items_subtotal', 'subtotal', 'sub_total']);
     if (sub == null) {
       sub = sumLineTotalsFromCartItems(d);
     }
 
+    /** Tax component included in line/sub totals — informational only; never add again to sub for grand. */
     var gstTotal =
       pickNumber(d, [
         'gst_total',
@@ -569,6 +573,16 @@
         'order_total'
       ]) || pickNumber(cd, ['grandtotal', 'grand_total', 'total', 'totalamount']);
 
+    if (grandTotal == null && sub != null && !isNaN(sub)) {
+      grandTotal = sub;
+      if (couponDeduction != null && !isNaN(couponDeduction)) {
+        grandTotal -= couponDeduction;
+      }
+      if (customDeduction != null && !isNaN(customDeduction)) {
+        grandTotal -= customDeduction;
+      }
+    }
+
     return {
       subtotal: sub,
       gstTotal: gstTotal,
@@ -596,24 +610,42 @@
     return !isNaN(n) && n > 0;
   }
 
-  /** Always one row; uses em dash when API did not supply a number. */
-  function moneyRowSummary(label, val, isGrand) {
+  /**
+   * One summary row; uses em dash when API did not supply a number.
+   * @param {string} [removeBtnClass] Optional button class for a trailing Remove control (non-grand rows only).
+   */
+  function moneyRowSummary(label, val, isGrand, removeBtnClass) {
     var disp = formatMoneyDisplay(val);
     var text = disp == null ? '—' : disp;
+    var hasRemove = !isGrand && removeBtnClass && String(removeBtnClass).trim() !== '';
     var rowClass = isGrand
       ? 'flex justify-between items-baseline gap-3 text-base font-bold text-slate-900 pt-3 mt-2 border-t border-slate-200/90'
-      : 'flex justify-between items-baseline gap-3 text-xs text-slate-600 py-1.5';
-    return (
-      '<div class="' +
-      rowClass +
-      '"><span class="' +
-      (isGrand ? 'text-slate-700' : 'text-slate-500 font-medium') +
+      : 'flex justify-between items-center gap-2 text-xs text-slate-600 py-1.5';
+    var labelSpan =
+      '<span class="' +
+      (isGrand ? 'text-slate-700' : 'text-slate-500 font-medium min-w-0 pr-1') +
       '">' +
       escapeHtml(label) +
-      '</span><span class="tabular-nums ' +
+      '</span>';
+    var amountSpan =
+      '<span class="tabular-nums ' +
       (isGrand ? 'text-orange-700' : disp == null ? 'text-slate-400' : 'text-slate-800 font-semibold') +
       '">' +
       escapeHtml(text) +
+      '</span>';
+    if (!hasRemove) {
+      return '<div class="' + rowClass + '">' + labelSpan + amountSpan + '</div>';
+    }
+    return (
+      '<div class="' +
+      rowClass +
+      '">' +
+      labelSpan +
+      '<span class="flex items-center gap-2 shrink-0">' +
+      amountSpan +
+      '<button type="button" class="' +
+      String(removeBtnClass) +
+      ' rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700">Remove</button>' +
       '</span></div>'
     );
   }
@@ -778,13 +810,15 @@
         '<div class="mt-4 rounded-xl border border-slate-100 bg-slate-50/90 p-3 shadow-inner">' +
         '<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-0.5">Summary</p>' +
         '<div class="rounded-lg bg-white/90 px-2 py-1 ring-1 ring-slate-100/80">';
-      html += moneyRowSummary('Sub total', totals.subtotal, false);
-      html += moneyRowSummary('GST total', totals.gstTotal, false);
+      html += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
+      html += moneyRowSummary('GST (included — breakdown)', totals.gstTotal, false);
+      html +=
+        '<p class="text-[10px] leading-snug text-slate-500 px-0.5 -mt-0.5 mb-1">The GST line is the tax portion already inside the sub total — it is not added again. Grand total is whatever the cart returns (shipping or other fees may apply).</p>';
       if (isAmountGreaterThanZero(totals.couponDeduction)) {
-        html += moneyRowSummary('Coupon discount deduction', totals.couponDeduction, false);
+        html += moneyRowSummary('Coupon discount deduction', totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
       }
       if (isAmountGreaterThanZero(totals.customDeduction)) {
-        html += moneyRowSummary('Custom discount deduction', totals.customDeduction, false);
+        html += moneyRowSummary('Custom discount', totals.customDeduction, false, 'pos-cart-summary-remove-custom');
       }
       html += moneyRowSummary('Grand total', totals.grandTotal, true);
       html += '</div></div>';
@@ -803,8 +837,9 @@
       '<div class="space-y-1.5 border-t border-slate-100 pt-3">' +
       '<label class="text-xs font-medium text-slate-600">Custom discount</label>' +
       '<div class="flex gap-2 flex-wrap">' +
-      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input flex-1 min-w-[5rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Amount (0 removes)" />' +
+      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input flex-1 min-w-[5rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Amount" />' +
       '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 active:scale-[0.98]">Set</button>' +
+      '<button type="button" class="pos-cart-customdisc-clear shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700">Remove</button>' +
       '</div></div></div>';
 
     html +=
@@ -906,6 +941,16 @@
           openPosCartApiDebugModal();
           return;
         }
+        var sumRmC = e.target && e.target.closest ? e.target.closest('.pos-cart-summary-remove-coupon') : null;
+        if (sumRmC && panel.contains(sumRmC)) {
+          window.applyCoupon('');
+          return;
+        }
+        var sumRmD = e.target && e.target.closest ? e.target.closest('.pos-cart-summary-remove-custom') : null;
+        if (sumRmD && panel.contains(sumRmD)) {
+          window.applyCustomDiscount(0);
+          return;
+        }
         var del = e.target && e.target.closest ? e.target.closest('.pos-cart-delete-btn') : null;
         if (del && panel.contains(del)) {
           var refD = String(del.getAttribute('data-cartref') || '').trim();
@@ -943,6 +988,12 @@
           var di = panel.querySelector('.pos-cart-customdisc-input');
           var num = di ? parseFloat(String(di.value)) : NaN;
           window.applyCustomDiscount(isNaN(num) ? 0 : num);
+          return;
+        }
+        var cdc = e.target && e.target.closest ? e.target.closest('.pos-cart-customdisc-clear') : null;
+        if (cdc && panel.contains(cdc)) {
+          window.applyCustomDiscount(0);
+          return;
         }
       },
       false
