@@ -29,15 +29,22 @@
     m.setAttribute('aria-modal', 'true');
     m.setAttribute('aria-label', 'Cart API debug');
     m.innerHTML =
-      '<div id="posCartApiDebugBackdrop" class="absolute inset-0" aria-hidden="true"></div>' +
-      '<div class="pos-cart-api-debug-inner relative z-10 max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-xl flex flex-col">' +
+      '<div id="posCartApiDebugBackdrop" class="absolute inset-0 bg-black/40" aria-hidden="true"></div>' +
+      '<div class="pos-cart-api-debug-inner relative z-10 max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-xl flex flex-col shadow-2xl">' +
       '<div class="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-2">' +
       '<span class="text-sm font-semibold text-slate-800">Last cart API (proxy)</span>' +
       '<button type="button" class="pos-cart-api-debug-close rounded px-2 py-1 text-slate-500 hover:bg-slate-100" aria-label="Close">✕</button>' +
       '</div>' +
       '<pre id="posCartApiDebugPre" class="min-h-[120px] flex-1 overflow-auto p-4 text-[10px] font-mono leading-relaxed text-slate-800 whitespace-pre-wrap break-words"></pre>' +
       '</div>';
-    m.classList.add('relative');
+    m.style.position = 'fixed';
+    m.style.inset = '0';
+    m.style.zIndex = '10050';
+    m.style.display = 'none';
+    m.style.alignItems = 'center';
+    m.style.justifyContent = 'center';
+    m.style.padding = '1rem';
+    m.style.boxSizing = 'border-box';
     document.body.appendChild(m);
     var backdrop = document.getElementById('posCartApiDebugBackdrop');
     if (backdrop) {
@@ -52,6 +59,18 @@
     var m = document.getElementById(MODAL_ID);
     if (m) {
       m.classList.add('hidden');
+      m.style.display = 'none';
+    }
+  }
+
+  function cloneSafeJson(value) {
+    if (value === undefined) {
+      return undefined;
+    }
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (e) {
+      return '[unserializable or circular: ' + String(e && e.message ? e.message : e) + ']';
     }
   }
 
@@ -84,7 +103,7 @@
             http_code: pr.http_code,
             message: pr.message,
             parseError: pr.parseError,
-            data: pr.data,
+            data: cloneSafeJson(pr.data),
             raw: pr.raw
           }
         : { networkError: lastCartApiDebug.networkError },
@@ -93,10 +112,18 @@
     try {
       pre.textContent = JSON.stringify(out, null, 2);
     } catch (e) {
-      pre.textContent = String(lastCartApiDebug);
+      pre.textContent =
+        'Could not stringify debug payload: ' +
+        String(e && e.message ? e.message : e) +
+        '\n\n' +
+        String(lastCartApiDebug && lastCartApiDebug.op ? 'op=' + lastCartApiDebug.op : '');
     }
     m.classList.remove('hidden');
+    m.style.display = 'flex';
   }
+
+  window.openPosCartApiDebugModal = openPosCartApiDebugModal;
+  window.closePosCartApiDebugModal = closePosCartApiDebugModal;
 
   function toast(msg, color) {
     if (typeof window.showToast === 'function') {
@@ -437,7 +464,8 @@
 
     html +=
       '<div class="mt-3 pt-2 border-t border-slate-200 text-center">' +
-      '<button type="button" class="pos-cart-api-debug-link text-xs text-blue-700 hover:underline">' +
+      '<button type="button" class="pos-cart-api-debug-link text-xs text-blue-700 hover:underline" ' +
+      'onclick="event.preventDefault();event.stopPropagation();if(typeof window.openPosCartApiDebugModal===\'function\'){window.openPosCartApiDebugModal();}">' +
       'Last API request / response' +
       '</button>' +
       '</div>';
