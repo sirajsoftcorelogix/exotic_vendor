@@ -296,6 +296,41 @@
     return isNaN(n) || n < 1 ? 1 : n;
   }
 
+  /**
+   * Exotic cart line / browse history sellable cap (not computed locally — from API fields).
+   * @param {Record<string, unknown>} row
+   * @param {Record<string, unknown>} [cartData]
+   * @returns {number|null} positive max qty, or null if unknown / unlimited
+   */
+  function lineMaxSellableQty(row, cartData) {
+    var fromLine = pickNumber(row, ['availability', 'avail_qty', 'stock', 'max_qty', 'maxqty']);
+    if (fromLine != null && fromLine >= 1) {
+      return Math.floor(fromLine);
+    }
+    var code = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
+    if (!code || !cartData || typeof cartData !== 'object') {
+      return null;
+    }
+    var bh = cartData.browsing_history;
+    var products = bh && typeof bh === 'object' ? bh.products : null;
+    if (!Array.isArray(products)) {
+      return null;
+    }
+    var upper = code.toUpperCase();
+    for (var i = 0; i < products.length; i++) {
+      var p = products[i];
+      if (String((p && p.itemcode) || '').toUpperCase() !== upper) {
+        continue;
+      }
+      var st = pickNumber(p, ['stock']);
+      if (st != null && st >= 1) {
+        return Math.floor(st);
+      }
+      return null;
+    }
+    return null;
+  }
+
   function lineTitle(row) {
     return String(
       pickFirst(row, ['title', 'name', 'product_name', 'item_name', 'description']) || 'Item'
@@ -397,6 +432,7 @@
       items.forEach(function (row) {
         var ref = lineCartRef(row);
         var qty = lineQty(row);
+        var maxSell = lineMaxSellableQty(row, data || {});
         var title = lineTitle(row);
         var sub = lineSubDisplay(row);
         var price = linePriceDisplay(row);
@@ -410,13 +446,26 @@
         }
         html += '<div class="mt-1 flex flex-wrap items-center gap-2">';
         if (ref) {
+          var maxAttr =
+            maxSell != null && maxSell >= 1 ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"' : '';
+          var hint =
+            maxSell != null && maxSell >= 1
+              ? '<span class="text-[10px] text-slate-500 w-full basis-full">Max ' +
+                escapeHtml(String(maxSell)) +
+                ' (Exotic catalog stock)</span>'
+              : '';
           html +=
             '<label class="text-[10px] text-slate-500">Qty</label>' +
-            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-14 border border-slate-200 rounded px-1 py-0.5 text-xs" data-cartref="' +
+            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-14 border border-slate-200 rounded px-1 py-0.5 text-xs"' +
+            maxAttr +
+            ' data-cartref="' +
             escapeHtml(ref) +
             '" value="' +
             escapeHtml(String(qty)) +
+            '" title="' +
+            (maxSell != null && maxSell >= 1 ? escapeHtml('Maximum ' + maxSell + ' per Exotic India inventory') : '') +
             '" />' +
+            hint +
             '<button type="button" class="pos-cart-delete-btn text-xs text-red-600 hover:underline" data-cartref="' +
             escapeHtml(ref) +
             '">Remove</button>';
@@ -507,6 +556,13 @@
         }
         if (!qty || qty < 1) {
           toast('Quantity must be at least 1', 'red');
+          return;
+        }
+        var maxAttr = t.getAttribute('data-max-qty');
+        var maxQ = maxAttr != null && maxAttr !== '' ? parseInt(String(maxAttr), 10) : NaN;
+        if (!isNaN(maxQ) && maxQ >= 1 && qty > maxQ) {
+          toast('Maximum quantity for this item is ' + maxQ + ' (Exotic India catalog stock / availability).', 'red');
+          t.value = String(maxQ);
           return;
         }
         window.handleUpdateQty({ cartref: ref, qty: qty });
@@ -603,6 +659,74 @@
     });
   }
 
+  function findCartLineByCode(cartData, codeUpper) {
+    var items = getCartItems(cartData || {});
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      var c = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').toUpperCase();
+      if (c === codeUpper) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  function findCartLineByCartref(cartData, ref) {
+    var r = String(ref || '').trim();
+    if (!r) {
+      return null;
+    }
+    var items = getCartItems(cartData || {});
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      if (lineCartRef(row) === r) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * After a successful add/modify + retrieve, warn if Exotic kept fewer units than requested (stock cap).
+   * @param {number} requestedQty
+   * @param {Record<string, unknown>} cartData
+   * @param {{ code?: string, cartref?: string }} match
+   */
+  function toastIfQtyCappedAfterSuccess(requestedQty, cartData, match) {
+    if (!cartData || typeof cartData !== 'object' || requestedQty < 1) {
+      return;
+    }
+    var row = null;
+    if (match.code) {
+      row = findCartLineByCode(cartData, String(match.code).toUpperCase());
+    } else if (match.cartref) {
+      row = findCartLineByCartref(cartData, match.cartref);
+    }
+    if (!row) {
+      return;
+    }
+    var actual = lineQty(row);
+    if (requestedQty <= actual) {
+      return;
+    }
+    var maxS = lineMaxSellableQty(row, cartData);
+    var capHint =
+      maxS != null && maxS >= 1
+        ? ' Exotic India allows at most ' + maxS + ' for this SKU.'
+        : ' Quantity is limited by Exotic India stock / availability.';
+    toast(
+      'You requested ' +
+        requestedQty +
+        ' unit(s), but only ' +
+        actual +
+        ' ' +
+        (actual === 1 ? 'is' : 'are') +
+        ' in the cart (less than requested).' +
+        capHint,
+      'red'
+    );
+  }
+
   /** @param {Record<string, unknown>} [payload] */
   window.handleAddToCart = function (payload) {
     return withCartLock(function () {
@@ -621,13 +745,19 @@
         return undefined;
       }
       setPanelBusy(true);
+      var requestedQty = body.qty;
       return cartRequest('add', { method: 'POST', jsonBody: body })
         .then(function (r) {
           cartHandleApiMessages(r);
           if (!r.success) {
             return r;
           }
-          return refreshCartInternal();
+          return refreshCartInternal().then(function (r2) {
+            if (r2 && r2.data && typeof r2.data === 'object') {
+              toastIfQtyCappedAfterSuccess(requestedQty, r2.data, { code: body.code });
+            }
+            return r2;
+          });
         })
         .finally(function () {
           setPanelBusy(false);
@@ -646,13 +776,19 @@
         return undefined;
       }
       setPanelBusy(true);
+      var sentQty = qty;
       return cartRequest('modifyqty', { query: { cartid: ref, newqty: String(qty) } })
         .then(function (r) {
           cartHandleApiMessages(r);
           if (!r.success) {
             return r;
           }
-          return refreshCartInternal();
+          return refreshCartInternal().then(function (r2) {
+            if (r2 && r2.data && typeof r2.data === 'object') {
+              toastIfQtyCappedAfterSuccess(sentQty, r2.data, { cartref: ref });
+            }
+            return r2;
+          });
         })
         .finally(function () {
           setPanelBusy(false);
