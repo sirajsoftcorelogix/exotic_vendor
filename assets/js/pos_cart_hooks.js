@@ -827,7 +827,7 @@
         html += moneyRowSummary('Coupon discount deduction', totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
       }
       if (isAmountGreaterThanZero(totals.customDeduction)) {
-        html += moneyRowSummary('Custom discount', totals.customDeduction, false, 'pos-cart-summary-remove-custom');
+        html += moneyRowSummary('Custom discount (INR)', totals.customDeduction, false, 'pos-cart-summary-remove-custom');
       }
       html += moneyRowSummary('Grand total', totals.grandTotal, true);
       html += '</div></div>';
@@ -844,7 +844,7 @@
       '<button type="button" class="pos-cart-coupon-clear shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50">Clear</button>' +
       '</div></div>' +
       '<div class="space-y-1.5 border-t border-slate-100 pt-3">' +
-      '<label class="text-xs font-medium text-slate-600">Custom discount</label>' +
+      '<label class="text-xs font-medium text-slate-600">Custom discount (INR)</label>' +
       '<div class="flex gap-2 flex-wrap">' +
       '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input flex-1 min-w-[5rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Amount" />' +
       '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 active:scale-[0.98]">Set</button>' +
