@@ -811,9 +811,7 @@
         '<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-0.5">Summary</p>' +
         '<div class="rounded-lg bg-white/90 px-2 py-1 ring-1 ring-slate-100/80">';
       html += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
-      html += moneyRowSummary('GST (included — breakdown)', totals.gstTotal, false);
-      html +=
-        '<p class="text-[10px] leading-snug text-slate-500 px-0.5 -mt-0.5 mb-1">The GST line is the tax portion already inside the sub total — it is not added again. Grand total is whatever the cart returns (shipping or other fees may apply).</p>';
+      html += moneyRowSummary('GST', totals.gstTotal, false);
       if (isAmountGreaterThanZero(totals.couponDeduction)) {
         html += moneyRowSummary('Coupon discount deduction', totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
       }
