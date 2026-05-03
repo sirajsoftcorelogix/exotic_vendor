@@ -1368,7 +1368,16 @@ class POSRegisterController
         $op = trim((string)($_REQUEST['op'] ?? ''));
         switch ($op) {
             case 'retrieve':
-                $this->emitCartApiResponse($this->exotic_api_call('/cart/retrieve', 'GET', []));
+                // Same discount / gift query + header as add/modifyqty so cart totals reflect applied coupon.
+                $ctx = $this->exoticCartDiscountContext();
+                $this->emitCartApiResponse($this->exotic_api_call(
+                    '/cart/retrieve',
+                    'GET',
+                    $ctx['query'],
+                    null,
+                    null,
+                    $ctx['extraHeaders']
+                ));
                 return;
 
             case 'add':
@@ -1421,8 +1430,9 @@ class POSRegisterController
                 return;
 
             case 'addcoupon':
+                $couponId = trim((string)($_GET['couponid'] ?? $_REQUEST['couponid'] ?? ''));
                 $res = $this->exotic_api_call('/cart/addcoupon', 'GET', [
-                    'couponid' => trim((string)($_GET['couponid'] ?? $_REQUEST['couponid'] ?? '')),
+                    'couponid' => $couponId,
                 ]);
                 if ($this->isExoticCartSuccess($res)) {
                     $data = is_array($res['data'] ?? null) ? $res['data'] : [];
@@ -1435,6 +1445,10 @@ class POSRegisterController
                             $_SESSION['pos_exotic_cart_coupon_details'] = (string)$details;
                             $_SESSION['discount_coupon'] = ['discountcoupondetails' => (string)$details];
                         }
+                    } elseif ($couponId !== '') {
+                        // API may succeed without echoing details; still attach code so retrieve/add/modifyqty send context.
+                        $_SESSION['pos_exotic_cart_coupon_details'] = $couponId;
+                        $_SESSION['discount_coupon'] = ['discountcoupondetails' => $couponId];
                     }
                 }
                 $this->emitCartApiResponse($res);
@@ -1507,8 +1521,19 @@ class POSRegisterController
             $post['options'] = (string)$body['options'];
         }
 
-        $discountStr = $this->getSessionDiscountCouponDetailsString();
+        $ctx = $this->exoticCartDiscountContext();
 
+        return ['query' => $ctx['query'], 'post' => $post];
+    }
+
+    /**
+     * Query params + optional x-api-discountcoupondetails header for Exotic cart GETs that must reflect coupons.
+     *
+     * @return array{query: array<string, string>, extraHeaders: list<string>}
+     */
+    private function exoticCartDiscountContext(): array
+    {
+        $discountStr = $this->getSessionDiscountCouponDetailsString();
         $giftStr = '';
         if (!empty($_SESSION['pos_exotic_cart_gift_voucher'])) {
             $gv = $_SESSION['pos_exotic_cart_gift_voucher'];
@@ -1517,14 +1542,16 @@ class POSRegisterController
             $gv = $_SESSION['gift_voucher'];
             $giftStr = is_string($gv) ? $gv : json_encode($gv, JSON_UNESCAPED_UNICODE);
         }
-
-        // API expects these on the URL: .../cart/add?discountcoupondetails=&giftvoucherdetails=
         $query = [
             'discountcoupondetails' => $discountStr,
             'giftvoucherdetails' => $giftStr,
         ];
+        $extraHeaders = [];
+        if ($discountStr !== '') {
+            $extraHeaders[] = 'x-api-discountcoupondetails:' . $discountStr;
+        }
 
-        return ['query' => $query, 'post' => $post];
+        return ['query' => $query, 'extraHeaders' => $extraHeaders];
     }
 
     private function getSessionDiscountCouponDetailsString(): string
