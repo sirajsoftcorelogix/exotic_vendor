@@ -166,7 +166,7 @@
     ?>
     <!-- Header Section -->
     <!-- Stats Section -->
-   
+
     <?php
     // if (isset($_GET['order_from']) && !empty($_GET['order_from'])) {
     //     $from_date = $_GET['order_from'];
@@ -186,6 +186,9 @@
     }
 
     ?>
+    <!--page heading -->
+    <h1 class="text-2xl font-bold text-gray-900 mb-2 mt-2 ml-2">POS Orders</h1>
+
     <!-- Advance Search Accordion -->
     <div class="mt-2 mb-8 bg-white rounded-xl p-4 ">
         <button id="accordion-button-search" class="w-full flex justify-between items-center mb-2">
@@ -414,6 +417,8 @@
 
                     <!-- Buttons -->
                     <div class="col-span-1 sm:col-span-1 md:col-span-1 flex items-center gap-2">
+                        <input type="hidden" name="page" value="posorders">
+                        <input type="hidden" name="action" value="list">
                         <button type="button" onclick="cancelSearch()" class="w-full bg-gray-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button>
                         <!-- <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button> -->
                         <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
@@ -551,45 +556,47 @@
     <div class="mt-5">
         <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post" id="orders-form">
             <div class="flex  ">
-            <div class="w-1/2">
-            <!-- <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button> -->
-             <!-- Actions dropdown for bulk operations -->
-            <div class="relative inline-block text-left">
-                <button id="bulk-action-toggle" type="button" class="btn btn-success inline-flex items-center px-4 py-2" aria-haspopup="true" aria-expanded="false">
-                    Actions
-                    <svg class="ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                </button>
-                <div id="bulk-action-menu" class="hidden absolute left-0 mt-2 w-48 bg-white border rounded shadow z-50">
-                    <a href="#" id="action-create-po" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
-                    <a href="#" id="action-update-status" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a>
-                    <a href="#" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Assign To</a>
-                    <a href="javascript:void(0)" id="action-add-to-purchase-list" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
-                    <a href="javascript:void(0)" id="action-add-to-invoice" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
+                <div class="w-1/2">
+                    <!-- <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button> -->
+                    <!-- Actions dropdown for bulk operations -->
+                    <div class="relative inline-block text-left">
+                        <button id="bulk-action-toggle" type="button" class="btn btn-success inline-flex items-center px-4 py-2" aria-haspopup="true" aria-expanded="false">
+                            Actions
+                            <svg class="ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div id="bulk-action-menu" class="hidden absolute left-0 mt-2 w-48 bg-white border rounded shadow z-50">
+                            <a href="#" id="action-create-po" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                            <a href="#" id="action-update-status" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a>
+                            <a href="#" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Assign To</a>
+                            <a href="javascript:void(0)" id="action-add-to-purchase-list" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
+                            <a href="javascript:void(0)" id="action-add-to-invoice" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            </div>
-            <div class="ml-auto flex items-center space-x-4">
-            <span class="text-sm bg-white border border-gray-300 rounded-md px-2 py-1 cursor-pointer" onclick="clearSelectedOrders()" title="Clear selected orders">Clear All </span>
-            <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=posorders&action=list&sort=' + this.value + '&<?= $query_string ?>';">
-                    
-                    <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By New to Old</option>
-                    <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By Old to New</option>
-            </select>
-            <select id="rows-per-page" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
-                onchange="location.href='?page=posorders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
-                <?php foreach ([10, 20, 50, 100] as $opt): ?>
-                    <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
-                        <?= $opt ?> Orders per page
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            <!-- button refresh-->
-            <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
-                <!-- <img src="<?php //echo base_url('images/refresh2.jpg'); ?>" alt="Refresh" class="h-8 inline-block " /> -->
-            <i class="fa-solid fa-download p-1 bg-white border border-orange-500"></i>
-            </span>
-            <!-- update imported orders -->
-            <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
+                <div class="ml-auto flex items-center space-x-4">
+                    <span class="text-sm bg-white border border-gray-300 rounded-md px-2 py-1 cursor-pointer" onclick="clearSelectedOrders()" title="Clear selected orders">Clear All </span>
+                    <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=posorders&action=list&sort=' + this.value + '&<?= $query_string ?>';">
+
+                        <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By New to Old</option>
+                        <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By Old to New</option>
+                    </select>
+                    <select id="rows-per-page" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                        onchange="location.href='?page=posorders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
+                        <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                            <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
+                                <?= $opt ?> Orders per page
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <!-- button refresh-->
+                    <!-- <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
+                       
+                        <i class="fa-solid fa-download p-1 bg-white border border-orange-500"></i>
+                    </span> -->
+                    <!-- update imported orders -->
+                    <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
                 <i class="fas fa-edit p-1 bg-white border border-blue-500"></i>
             </span> -->
                 </div>
@@ -598,7 +605,7 @@
             <div class="relative border-b-[4px] border-white">
                 <div id="tabsContainer" class="flex space-x-6" aria-label="Tabs">
                     <a href="<?php echo base_url('?page=posorders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : '';
-                                                                                                        echo (!isset($_GET['status']) && !isset($_GET['options']) && !isset($_GET['agent'])) ? 'tab-active' : ''; ?> text-center relative py-4">
+                                                                                                            echo (!isset($_GET['status']) && !isset($_GET['options']) && !isset($_GET['agent'])) ? 'tab-active' : ''; ?> text-center relative py-4">
                         <span class="px-1 text-md">All Orders</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
@@ -649,7 +656,7 @@
                         <span class="px-1 text-md">Returned</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
-                    
+
                 </div>
                 <div class="right-0 top-0 absolute p-4 size">
                     <!--<select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
@@ -670,7 +677,7 @@
 
             <!-- Table h-96 overflow-y-scroll-->
             <div class="overflow-x-auto mt-4 ">
-               
+
                 <?php
                 if (!empty($data['orders'])) {
                     foreach ($data['orders'] as $order) {
@@ -723,8 +730,8 @@
                         }
 
                 ?>
-                       
-                       <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md  <?= $bordercolor ?>" style="margin: 0px 0px 10px 0px">
+
+                        <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md  <?= $bordercolor ?>" style="margin: 0px 0px 10px 0px">
                             <div class="flex items-start p-4 gap-4">
                                 <!-- Checkbox -->
                                 <div class="flex-shrink-0 pt-1">
@@ -748,12 +755,13 @@
                                             <div class="pt-1 w-full max-w-xs">
                                                 <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
                                                 <p class="item-code">Item Code: <?php
-                                                    $catalogPid = isset($order['catalog_product_id']) ? (int)$order['catalog_product_id'] : 0;
-                                                    if ($catalogPid > 0): ?>
-                                                    <a href="<?= htmlspecialchars(base_url('?page=products&action=detail&id=' . $catalogPid)) ?>" target="_blank" rel="noopener noreferrer" class="icon-link text-blue-600 hover:underline"><?= htmlspecialchars($order['item_code']) ?></a>
-                                                <?php else: ?>
-                                                    <span class="text-gray-800"><?= htmlspecialchars($order['item_code']) ?></span>
-                                                <?php endif; ?></p>
+                                                                                $catalogPid = isset($order['catalog_product_id']) ? (int)$order['catalog_product_id'] : 0;
+                                                                                if ($catalogPid > 0): ?>
+                                                        <a href="<?= htmlspecialchars(base_url('?page=products&action=detail&id=' . $catalogPid)) ?>" target="_blank" rel="noopener noreferrer" class="icon-link text-blue-600 hover:underline"><?= htmlspecialchars($order['item_code']) ?></a>
+                                                    <?php else: ?>
+                                                        <span class="text-gray-800"><?= htmlspecialchars($order['item_code']) ?></span>
+                                                    <?php endif; ?>
+                                                </p>
                                                 <p class="quantity">Quantity: <?= $order['quantity'] ?> </p>
                                                 <?php
                                                 $dimensions = [];
@@ -772,9 +780,9 @@
                                                 if ($length > 0 || $width > 0 || $height > 0) {
                                                     $dimParts = [];
 
-                                                    if ($length > 0) $dimParts[] = 'L: ' . $length .' Inch';
-                                                    if ($width > 0)  $dimParts[] = 'W: ' . $width .' Inch';
-                                                    if ($height > 0) $dimParts[] = 'H: ' . $height .' Inch';
+                                                    if ($length > 0) $dimParts[] = 'L: ' . $length . ' Inch';
+                                                    if ($width > 0)  $dimParts[] = 'W: ' . $width . ' Inch';
+                                                    if ($height > 0) $dimParts[] = 'H: ' . $height . ' Inch';
 
                                                     $dimensions[] = ' ' . implode(' × ', $dimParts);
                                                 }
@@ -788,8 +796,8 @@
                                                     <p class="quantity">
                                                         <?= $Weight ?>
                                                     </p>
-                                                    <?php endif; ?>
-                                                 
+                                                <?php endif; ?>
+
                                             </div>
                                         </div>
                                         <!-- Col 1, Row 2: Order Details -->
@@ -910,8 +918,9 @@
                                                         $showAddToInvoiceLink = empty($order['invoice_id']) || $invStatMenu === 'cancelled';
                                                         ?>
                                                         <?php if ($showAddToInvoiceLink): ?>
-                                                        <hr class="my-1 mx-2"></hr>
-                                                        <a href="#" onclick="addOrderToInvoice(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
+                                                            <hr class="my-1 mx-2">
+                                                            </hr>
+                                                            <a href="#" onclick="addOrderToInvoice(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
                                                         <?php endif; ?>
                                                     </div>
                                                 </span>
@@ -937,17 +946,17 @@
                                                     $invoiceCancelled = ($invStat === 'cancelled');
                                                     ?>
                                                     <?php if (!empty($order['invoice_id']) && !$invoiceCancelled): ?>
-                                                    <a href="<?= base_url("?page=invoices&action=generate_pdf&invoice_id=".$order['invoice_id']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
-                                                        <p class="mr-1">Download Invoice</p>
-                                                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                                        </svg>
-                                                    </a>
-                                                <?php elseif (!empty($order['invoice_id']) && $invoiceCancelled): ?>
-                                                    <span class="text-gray-500" title="Invoice was cancelled">Invoice cancelled</span>
-                                                <?php else: ?>
-                                                    <span class="text-gray-400">No Invoice</span>
-                                                <?php endif;  ?>
+                                                        <a href="<?= base_url("?page=invoices&action=generate_pdf&invoice_id=" . $order['invoice_id']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
+                                                            <p class="mr-1">Download Invoice</p>
+                                                            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                <path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                                            </svg>
+                                                        </a>
+                                                    <?php elseif (!empty($order['invoice_id']) && $invoiceCancelled): ?>
+                                                        <span class="text-gray-500" title="Invoice was cancelled">Invoice cancelled</span>
+                                                    <?php else: ?>
+                                                        <span class="text-gray-400">No Invoice</span>
+                                                    <?php endif;  ?>
                                                 </div>
                                             </div>
                                         </div>
@@ -981,8 +990,8 @@
                                                     <p><?php echo $log['changed_by_username']; ?></p>
                                                 </div>
                                             </div>
-                                        <?php }
-                                        } ?>
+                                    <?php }
+                                    } ?>
 
                                 </div>
                             </div>
@@ -1809,56 +1818,56 @@
         const formData = new FormData(form);
 
         fetch('index.php?page=posorders&action=import_orders&secret_key=b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801&orderid=' + orderId, {
-            method: 'GET',
-        })
-        .then(response => response.text())
-        .then(text => {
-            // Try to parse JSON; if parsing fails, treat response as HTML/text
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                return {
-                    message: null,
-                    html: text
-                };
-            }
-        })
-        .then(data => {
-            // Remove loading image and enable submit button
-            loadingImage.remove();
-            submitButton.disabled = false;
-            //increment gradually to show activity
-
-            const interval = setInterval(() => {
-                progress += 10;
-                document.getElementById('importProgress').style.width = `${progress}%`;
-                document.getElementById('importProgress').textContent = `${progress}%`;
-                if (progress >= 100) {
-                    clearInterval(interval);
+                method: 'GET',
+            })
+            .then(response => response.text())
+            .then(text => {
+                // Try to parse JSON; if parsing fails, treat response as HTML/text
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    return {
+                        message: null,
+                        html: text
+                    };
                 }
-            }, 100);
+            })
+            .then(data => {
+                // Remove loading image and enable submit button
+                loadingImage.remove();
+                submitButton.disabled = false;
+                //increment gradually to show activity
 
-            document.getElementById('errorMessage').classList.add('text-green-500');
-            document.getElementById('errorMessage').textContent = 'Import completed successfully.';
-            if (data && data.message) {
-                alert(data.message || 'Import completed.');
-            } else if (data && data.html) {
-                // Server returned HTML; log it for debugging and show a generic success message
-                document.getElementById('importStatus').innerHTML = data.html;
-                //console.log('Server response (HTML):', data.html);
-                //alert('Import completed. Server returned HTML response.');
-            } else {
-                alert('Import completed.');
-            }
-            //closeImportPopup();
-            // Optionally, refresh the page or update the order list
-            //location.reload();
-        })
-        .catch(error => {
-            console.error('Error during import:', error);
-            alert('An error occurred during import.');
-            closeImportPopup();
-        });
+                const interval = setInterval(() => {
+                    progress += 10;
+                    document.getElementById('importProgress').style.width = `${progress}%`;
+                    document.getElementById('importProgress').textContent = `${progress}%`;
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                    }
+                }, 100);
+
+                document.getElementById('errorMessage').classList.add('text-green-500');
+                document.getElementById('errorMessage').textContent = 'Import completed successfully.';
+                if (data && data.message) {
+                    alert(data.message || 'Import completed.');
+                } else if (data && data.html) {
+                    // Server returned HTML; log it for debugging and show a generic success message
+                    document.getElementById('importStatus').innerHTML = data.html;
+                    //console.log('Server response (HTML):', data.html);
+                    //alert('Import completed. Server returned HTML response.');
+                } else {
+                    alert('Import completed.');
+                }
+                //closeImportPopup();
+                // Optionally, refresh the page or update the order list
+                //location.reload();
+            })
+            .catch(error => {
+                console.error('Error during import:', error);
+                alert('An error occurred during import.');
+                closeImportPopup();
+            });
     });
     //toggle order number input
     function toggleOrderNumberInput() {
@@ -2296,7 +2305,9 @@
         //     form.appendChild(input);
         // });
         // clear persisted selection in localStorage
-        try { localStorage.removeItem('selected_po_orders'); } catch(e){}
+        try {
+            localStorage.removeItem('selected_po_orders');
+        } catch (e) {}
         // submit the form
         form.submit();
     });
@@ -2611,226 +2622,230 @@
         document.getElementById('bulkAddToPurchasePopup').classList.add('hidden');
     }
 
-//bulk AddToPurchase submit
-document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', function(e){
-    const agent = document.getElementById('bulkAddToPurchaseAgent').value;
-    if (!agent) {
-        e.preventDefault();
-        document.getElementById('bulkAddToPurchaseError').textContent = 'Please select an agent.';
+    //bulk AddToPurchase submit
+    document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', function(e) {
+        const agent = document.getElementById('bulkAddToPurchaseAgent').value;
+        if (!agent) {
+            e.preventDefault();
+            document.getElementById('bulkAddToPurchaseError').textContent = 'Please select an agent.';
+            document.getElementById('bulkAddToPurchaseError').classList.remove('hidden');
+            return;
+        }
+        //ajax submit
+        document.getElementById('bulkAddToPurchaseError').textContent = 'Processing..'
         document.getElementById('bulkAddToPurchaseError').classList.remove('hidden');
-        return;
-    }
-    //ajax submit
-    document.getElementById('bulkAddToPurchaseError').textContent = 'Processing..'
-    document.getElementById('bulkAddToPurchaseError').classList.remove('hidden');
-    e.preventDefault();
-    const formData = new FormData(this);
-    fetch('index.php?page=products&action=create_purchase_list', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        const msgEl = document.getElementById('bulkAddToPurchaseError');
-        if (data.success) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        fetch('index.php?page=products&action=create_purchase_list', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const msgEl = document.getElementById('bulkAddToPurchaseError');
+                if (data.success) {
 
-            let html = [];
+                    let html = [];
 
-            // ✅ Created (GREEN)
-            if (data.created && data.created > 0) {
-                html.push(
-                    `<span class="text-green-500 font-semibold">
+                    // ✅ Created (GREEN)
+                    if (data.created && data.created > 0) {
+                        html.push(
+                            `<span class="text-green-500 font-semibold">
                         ✅ ${data.created} item(s) added to Purchase List
                     </span>`
-                );
-            }
+                        );
+                    }
 
-            // ⚠️ Failed (RED)
-            if (Array.isArray(data.failed) && data.failed.length > 0) {
-                html.push(
-                    `<span class="text-red-500 font-semibold">
+                    // ⚠️ Failed (RED)
+                    if (Array.isArray(data.failed) && data.failed.length > 0) {
+                        html.push(
+                            `<span class="text-red-500 font-semibold">
                         ⚠️ ${data.failed.length} item(s) failed:
                     </span>`
-                );
+                        );
 
-                data.failed.forEach(f => {
-                    html.push(
-                        `<span class="text-red-500 ml-2 block">
+                        data.failed.forEach(f => {
+                            html.push(
+                                `<span class="text-red-500 ml-2 block">
                             • Order #${f.order_id} (SKU: ${f.sku}): ${f.message}
                         </span>`
-                    );
-                });
-            }
-
-            msgEl.classList.remove('hidden');
-            msgEl.innerHTML = html.join('');
-
-            // clear localStorage
-            localStorage.removeItem('selected_po_orders');
-
-            // auto close
-            setTimeout(() => {
-                closeBulkAddToPurchasePopup();
-                location.reload();
-            }, 3500);
-
-        } else {
-            msgEl.classList.remove('hidden');
-            msgEl.classList.add('text-red-500');
-            msgEl.textContent = data.message || 'Something went wrong.';
-        }
-    });
-});
-
-function orderHasBlockingInvoice(orderData) {
-    const inv = orderData.invoice_id;
-    if (!inv || inv === '' || inv === '0') {
-        return false;
-    }
-    const st = (orderData.invoice_status || '').toString().toLowerCase().trim();
-    if (st === 'cancelled') {
-        return false;
-    }
-    return true;
-}
-
-// Add to Invoice handler
-document.getElementById('action-add-to-invoice').addEventListener('click', function(e){
-    e.preventDefault();
-    const oids = getSelectedOrderIds();
-    if (oids.length === 0) {
-        showAlert('Please select at least one order to create invoice.', 'warning');
-        return;
-    }
-    
-    // Validate customer_id for all selected orders
-    let validationPromise = Promise.resolve();
-    let customerId = null;
-    const visibleOrderIds = [];
-    const hiddenOrderIds = [];
-    
-    // Separate visible and hidden orders
-    for (const id of oids) {
-        const element = document.querySelector('#order-id-' + id);
-        if (element) {
-            visibleOrderIds.push(id);
-        } else {
-            hiddenOrderIds.push(id);
-        }
-    }
-    
-    // First, validate visible orders
-    for (const id of visibleOrderIds) {
-        const element = document.querySelector('#order-id-' + id);
-        const orderData = JSON.parse(element.getAttribute('data-order'));
-        //console.log('Order', id, 'customer_id:', orderData.customer_id);
-        if (customerId === null) {
-            customerId = orderData.customer_id;
-        } else if (customerId !== orderData.customer_id) {
-            showAlert('Selected orders belong to different customers. Please select orders for the same customer to create an invoice.', 'error');
-            return;
-        }
-
-        if (orderHasBlockingInvoice(orderData)) {
-            showAlert('One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
-            return;
-        }
-    }
-    
-    // If there are hidden orders, fetch their data via AJAX
-    if (hiddenOrderIds.length > 0) {
-        validationPromise = fetch('index.php?page=posorders&action=get_orders_customer_id', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ order_ids: hiddenOrderIds })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.orders) {
-                for (const orderData of data.orders) {
-                    console.log('Fetched Order', orderData.order_id, 'customer_id:', orderData.customer_id);
-                    if (customerId === null) {
-                        customerId = orderData.customer_id;
-                    } else if (customerId !== orderData.customer_id) {
-                        throw new Error('Different customers');
+                            );
+                        });
                     }
-                    if (orderHasBlockingInvoice(orderData)) {
-                        throw new Error('active_invoice');
-                    }
+
+                    msgEl.classList.remove('hidden');
+                    msgEl.innerHTML = html.join('');
+
+                    // clear localStorage
+                    localStorage.removeItem('selected_po_orders');
+
+                    // auto close
+                    setTimeout(() => {
+                        closeBulkAddToPurchasePopup();
+                        location.reload();
+                    }, 3500);
+
+                } else {
+                    msgEl.classList.remove('hidden');
+                    msgEl.classList.add('text-red-500');
+                    msgEl.textContent = data.message || 'Something went wrong.';
                 }
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching order data:', error);
-            if (error.message === 'active_invoice') {
-                showAlert('One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
-            } else {
-                showAlert('Different customers. Cannot create invoice.', 'error');
-            }
-            throw error;
-        });
+            });
+    });
+
+    function orderHasBlockingInvoice(orderData) {
+        const inv = orderData.invoice_id;
+        if (!inv || inv === '' || inv === '0') {
+            return false;
+        }
+        const st = (orderData.invoice_status || '').toString().toLowerCase().trim();
+        if (st === 'cancelled') {
+            return false;
+        }
+        return true;
     }
-    
-    validationPromise.then(() => {
-        // Validation passed, proceed with form submission
-        const form = document.getElementById('orders-form');
-        form.querySelectorAll('input[name="poitem[]"]').forEach(el => {
-            if (!oids.includes(parseInt(el.value))) {
-                el.checked = false;
+
+    // Add to Invoice handler
+    document.getElementById('action-add-to-invoice').addEventListener('click', function(e) {
+        e.preventDefault();
+        const oids = getSelectedOrderIds();
+        if (oids.length === 0) {
+            showAlert('Please select at least one order to create invoice.', 'warning');
+            return;
+        }
+
+        // Validate customer_id for all selected orders
+        let validationPromise = Promise.resolve();
+        let customerId = null;
+        const visibleOrderIds = [];
+        const hiddenOrderIds = [];
+
+        // Separate visible and hidden orders
+        for (const id of oids) {
+            const element = document.querySelector('#order-id-' + id);
+            if (element) {
+                visibleOrderIds.push(id);
+            } else {
+                hiddenOrderIds.push(id);
             }
+        }
+
+        // First, validate visible orders
+        for (const id of visibleOrderIds) {
+            const element = document.querySelector('#order-id-' + id);
+            const orderData = JSON.parse(element.getAttribute('data-order'));
+            //console.log('Order', id, 'customer_id:', orderData.customer_id);
+            if (customerId === null) {
+                customerId = orderData.customer_id;
+            } else if (customerId !== orderData.customer_id) {
+                showAlert('Selected orders belong to different customers. Please select orders for the same customer to create an invoice.', 'error');
+                return;
+            }
+
+            if (orderHasBlockingInvoice(orderData)) {
+                showAlert('One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
+                return;
+            }
+        }
+
+        // If there are hidden orders, fetch their data via AJAX
+        if (hiddenOrderIds.length > 0) {
+            validationPromise = fetch('index.php?page=posorders&action=get_orders_customer_id', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        order_ids: hiddenOrderIds
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.orders) {
+                        for (const orderData of data.orders) {
+                            console.log('Fetched Order', orderData.order_id, 'customer_id:', orderData.customer_id);
+                            if (customerId === null) {
+                                customerId = orderData.customer_id;
+                            } else if (customerId !== orderData.customer_id) {
+                                throw new Error('Different customers');
+                            }
+                            if (orderHasBlockingInvoice(orderData)) {
+                                throw new Error('active_invoice');
+                            }
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching order data:', error);
+                    if (error.message === 'active_invoice') {
+                        showAlert('One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
+                    } else {
+                        showAlert('Different customers. Cannot create invoice.', 'error');
+                    }
+                    throw error;
+                });
+        }
+
+        validationPromise.then(() => {
+                // Validation passed, proceed with form submission
+                const form = document.getElementById('orders-form');
+                form.querySelectorAll('input[name="poitem[]"]').forEach(el => {
+                    if (!oids.includes(parseInt(el.value))) {
+                        el.checked = false;
+                    }
+                });
+                const hiddenInputs = form.querySelectorAll('input[name="invoice_order_ids[]"]');
+                hiddenInputs.forEach(el => el.remove());
+
+                oids.forEach(id => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'poitem[]';
+                    input.value = id;
+                    form.appendChild(input);
+                });
+
+                form.action = '<?php echo base_url('?page=invoices&action=create'); ?>';
+                form.method = 'POST';
+                form.submit();
+            })
+            .catch(error => {
+                // Error handling already done in AJAX catch block
+                console.error('Validation failed:', error);
+            });
+    });
+
+    //clear selected orders from localStorage on page unload
+    function clearSelectedOrders() {
+        localStorage.removeItem('selected_po_orders');
+        window.location.reload();
+    }
+    //addOrderToInvoice function
+    function addOrderToInvoice(id) {
+        const form = document.getElementById('orders-form');
+        // Uncheck visible checkboxes to avoid duplicates
+        document.querySelectorAll('input[type="checkbox"][name="poitem[]"]').forEach(cb => cb.checked = false);
+
+        // Remove previously added hidden inputs for poitem[] (including poitem_hidden)
+        form.querySelectorAll('input[name="poitem[]"]').forEach(el => {
+            if (el.type === 'hidden' || el.classList.contains('poitem_hidden')) el.remove();
         });
-        const hiddenInputs = form.querySelectorAll('input[name="invoice_order_ids[]"]');
-        hiddenInputs.forEach(el => el.remove());
-        
-        oids.forEach(id => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'poitem[]';
-            input.value = id;
-            form.appendChild(input);
-        });
-        
+        form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+
+        // Clear persisted selections in localStorage
+        try {
+            localStorage.removeItem('selected_po_orders');
+        } catch (e) {}
+
+        // Add the selected order as a single hidden input and submit
+        const orderIdInput = document.createElement('input');
+        orderIdInput.type = 'hidden';
+        orderIdInput.name = 'poitem[]';
+        orderIdInput.value = id;
+        form.appendChild(orderIdInput);
+
         form.action = '<?php echo base_url('?page=invoices&action=create'); ?>';
         form.method = 'POST';
         form.submit();
-    })
-    .catch(error => {
-        // Error handling already done in AJAX catch block
-        console.error('Validation failed:', error);
-    });
-});
-
-//clear selected orders from localStorage on page unload
-function clearSelectedOrders() {
-    localStorage.removeItem('selected_po_orders');
-    window.location.reload();
-}
-//addOrderToInvoice function
-function addOrderToInvoice(id) {
-    const form = document.getElementById('orders-form');
-    // Uncheck visible checkboxes to avoid duplicates
-    document.querySelectorAll('input[type="checkbox"][name="poitem[]"]').forEach(cb => cb.checked = false);
-
-    // Remove previously added hidden inputs for poitem[] (including poitem_hidden)
-    form.querySelectorAll('input[name="poitem[]"]').forEach(el => {
-        if (el.type === 'hidden' || el.classList.contains('poitem_hidden')) el.remove();
-    });
-    form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
-
-    // Clear persisted selections in localStorage
-    try { localStorage.removeItem('selected_po_orders'); } catch(e){}
-
-    // Add the selected order as a single hidden input and submit
-    const orderIdInput = document.createElement('input');
-    orderIdInput.type = 'hidden';
-    orderIdInput.name = 'poitem[]';
-    orderIdInput.value = id;
-    form.appendChild(orderIdInput);
-
-    form.action = '<?php echo base_url('?page=invoices&action=create'); ?>';
-    form.method = 'POST';
-    form.submit();
-}
+    }
 </script>

@@ -1,19 +1,21 @@
-<?php 
+<?php
 require_once 'models/posorder/order.php';
 require_once 'models/comman/tables.php';
 require_once 'models/searches/saved_search.php';
 require_once 'models/posorder/po_invoice.php';
 require_once 'models/product/product.php';
-$ordersModel = new Order($conn);
+$ordersModel = new POSOrder($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
 $poInvoiceModel = new POInvoice($conn);
 $productModel = new Product($conn);
 global $root_path;
 global $domain;
-class PosOrdersController { 
-     
-    public function index() {
+class PosOrdersController
+{
+
+    public function index()
+    {
         is_login();
         global $ordersModel;
         global $commanModel;
@@ -29,16 +31,16 @@ class PosOrdersController {
         //Advanced Search Filters
         $filters = [];
         if (!empty($_GET['order_number'])) {
-            $filters['order_number'] = $_GET['order_number'];            
+            $filters['order_number'] = $_GET['order_number'];
         }
         if (!empty($_GET['item_code'])) {
-            $filters['item_code'] = $_GET['item_code'];            
+            $filters['item_code'] = $_GET['item_code'];
         }
         if (!empty($_GET['order_from']) && !empty($_GET['order_till'])) {
             $filters['order_from'] = $_GET['order_from'];
             $filters['order_till'] = $_GET['order_till'];
         }
-        
+
         // if(!empty($_GET['daterange'])){
         //     echo urldecode($_GET['daterange']);
         //     $dateRange = explode(' - ', $_GET['daterange']);       
@@ -49,31 +51,31 @@ class PosOrdersController {
         //     }
         // }
         if (!empty($_GET['item_name'])) {
-            $filters['title'] = $_GET['item_name'];            
+            $filters['title'] = $_GET['item_name'];
         }
         if (!empty($_GET['min_amount'])) {
-            $filters['min_amount'] = $_GET['min_amount'];            
+            $filters['min_amount'] = $_GET['min_amount'];
         }
         if (!empty($_GET['max_amount'])) {
-            $filters['max_amount'] = $_GET['max_amount'];            
+            $filters['max_amount'] = $_GET['max_amount'];
         }
-        if(!empty($_GET['po_no'])){
-            $filters['po_no'] = $_GET['po_no'];  
+        if (!empty($_GET['po_no'])) {
+            $filters['po_no'] = $_GET['po_no'];
         }
         if (!empty($_GET['status'])) {
             $filters['status_filter'] = $_GET['status'];
-        } 
+        }
 
         if (!empty($_GET['category']) && $_GET['category'] != 'all') {
             $filters['category'] = $_GET['category'];
         } else {
             $filters['category'] = 'all';
         }
-        if(!empty($_GET['country'])){
-            $filters['country'] = $_GET['country'];  
+        if (!empty($_GET['country'])) {
+            $filters['country'] = $_GET['country'];
         }
-        if(!empty($_GET['options']) && $_GET['options'] == 'express'){
-            $filters['options'] = 'express';  
+        if (!empty($_GET['options']) && $_GET['options'] == 'express') {
+            $filters['options'] = 'express';
         }
         if (!empty($_GET['sort']) && in_array(strtolower($_GET['sort']), ['asc', 'desc'])) {
             $filters['sort'] = strtolower($_GET['sort']);
@@ -91,49 +93,49 @@ class PosOrdersController {
         if (!empty($_GET['priority'])) {
             $filters['priority'] = $_GET['priority'];
         }
-        if(!empty($_GET['vendor_id'])){
-            $filters['vendor_id'] = $_GET['vendor_id'];  
+        if (!empty($_GET['vendor_id'])) {
+            $filters['vendor_id'] = $_GET['vendor_id'];
         }
-        if(!empty($_GET['agent'])){
-            $filters['agent'] = $_GET['agent'];  
+        if (!empty($_GET['agent'])) {
+            $filters['agent'] = $_GET['agent'];
         }
         if (!empty($_GET['publisher'])) {
-            $filters['publisher'] = $_GET['publisher'];            
+            $filters['publisher'] = $_GET['publisher'];
         }
         if (!empty($_GET['author'])) {
-            $filters['author'] = $_GET['author'];            
+            $filters['author'] = $_GET['author'];
         }
         //unshipped
         if (!empty($_GET['options']) && $_GET['options'] == 'unshipped') {
-            $filters['unshipped'] = true;  
+            $filters['unshipped'] = true;
         }
-        
-        
+
+
 
         //order status list
         $statusList = $commanModel->get_order_status_list();
         $order_status_row = $commanModel->get_order_status();
-        $countryList= $commanModel->get_counry_list();
+        $countryList = $commanModel->get_counry_list();
         //print_array($order_status_list);
         // Use pagination in the database query for better performance
         //print_r($_GET);
         //print_r($filters);
-        $orders = $ordersModel->getAllOrders($filters, $limit, $offset);   
+        $orders = $ordersModel->getAllOrders($filters, $limit, $offset);
 
-        $assignmentDates = [];          
+        $assignmentDates = [];
         foreach ($orders as $key => $order) {
-            $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['order_id']);  
-            $assignmentDates[$order['order_id']] =  $orders[$key]['status_log']['change_date'] ?? '';         
+            $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['order_id']);
+            $assignmentDates[$order['order_id']] =  $orders[$key]['status_log']['change_date'] ?? '';
         }
         // Agent filter: use assignment from vp_order_status_log (change_date) instead of vp_orders.assign_date
-    //    if (!empty($_GET['agent'])) {
-    //        //sort orders by agent assignment date
-    //        usort($orders, function($a, $b) use ($assignmentDates) {
-    //             return strtotime($assignmentDates[$a['order_id']])
-    //                 - strtotime($assignmentDates[$b['order_id']]);
-    //         });            
-            
-    //     }
+        //    if (!empty($_GET['agent'])) {
+        //        //sort orders by agent assignment date
+        //        usort($orders, function($a, $b) use ($assignmentDates) {
+        //             return strtotime($assignmentDates[$a['order_id']])
+        //                 - strtotime($assignmentDates[$b['order_id']]);
+        //         });            
+
+        //     }
         //print_array($orders);  
         $total_orders = $ordersModel->getOrdersCount($filters);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
@@ -157,31 +159,33 @@ class PosOrdersController {
             'order_status_list' => $order_status_row,
             'status_list' => $statusList,
             'country_list' => $countryList,
-            'payment_types'=> $ordersModel->getPaymentTypes(),
+            'payment_types' => $ordersModel->getPaymentTypes(),
             'staff_list' => $commanModel->get_staff_list(),
             'filters' => $filters,
             'saved_searches' => $saved_searches
         ], 'Manage Orders');
     }
-        
-    public function viewOrder() {
+
+    public function viewOrder()
+    {
         is_login();
         global $ordersModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
-            $order = $ordersModel->getOrderById($id); 
+            $order = $ordersModel->getOrderById($id);
             if ($order) {
                 renderTemplate('views/posorders/view_order.php', ['order' => $order], 'View Order');
             } else {
                 renderTemplate('views/errors/not_found.php', [], 'Order Not Found');
-            }   
+            }
         } else {
             renderTemplate('views/errors/not_found.php', [], 'Invalid Order ID');
         }
         exit;
     }
-	
-    public function importOrders() {
+
+    public function importOrders()
+    {
         //is_login();
         global $ordersModel;
         global $productModel;
@@ -193,18 +197,18 @@ class PosOrdersController {
         $statusList = $ordersModel->adminOrderStatusList('true');
         //last order log fetch
         $lastLog = $ordersModel->getLastImportLog();
-        
+
         //log create
         $log_data = ['start_time' => date('Y-m-d H:i:s')];
         $log_id = 0;
-		
-        if($logs = $ordersModel->orderImportLog($log_data)){
+
+        if ($logs = $ordersModel->orderImportLog($log_data)) {
             $log_id = $logs['insert_id'];
         }        // Set your date range (example: last 7 days)
 
         $from_date = strtotime('-1 days');
         //echo "<br>";
-        if ($lastLog && !empty($lastLog['max_ordered_time'])) {         
+        if ($lastLog && !empty($lastLog['max_ordered_time'])) {
             $from_date = $lastLog['max_ordered_time'];
         }
         $to_date = time();
@@ -214,7 +218,7 @@ class PosOrdersController {
         //$to_date = 1755102092;   // Example fixed date 13-08-2025 23:59:59
         //$url = 'https://www.exoticindia.com/action';
         $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint
-       
+
         $postData = [
             'makeRequestOf' => 'vendors-orderjson',
             'from_date' => $from_date,
@@ -242,7 +246,7 @@ class PosOrdersController {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $response = curl_exec($ch);
-        
+
         $error = curl_error($ch);
         curl_close($ch);
         // print_r($error);
@@ -256,20 +260,20 @@ class PosOrdersController {
         $orders = json_decode($response, true);
         if (!is_array($orders)) {
             //echo "Invalid API response format.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'Invalid API response format.']], 'API Error');
             return;
         }
         // print_array($orders);
         // exit;
         if (empty($orders['orders'])) {
             //echo "No orders found in the API response.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'No orders found in the API response.']], 'No Orders Found');
             return;
         }
         //page
         $page = $orders['total_pages'];
-        if($page > 1){
-            for($i=2; $i<=$page; $i++){
+        if ($page > 1) {
+            for ($i = 2; $i <= $page; $i++) {
                 $postData['page'] = $i;
                 $ch = curl_init($url);
                 curl_setopt($ch, CURLOPT_POST, true);
@@ -280,7 +284,7 @@ class PosOrdersController {
                 $error = curl_error($ch);
                 curl_close($ch);
                 if ($response === false) {
-                    renderTemplateClean('views/errors/error.php', ['message' => 'API request failed on page '.$i.': ' . $error], 'API Error');
+                    renderTemplateClean('views/errors/error.php', ['message' => 'API request failed on page ' . $i . ': ' . $error], 'API Error');
                     return;
                 }
                 $pageOrders = json_decode($response, true);
@@ -289,81 +293,85 @@ class PosOrdersController {
                 }
             }
         }
-        $imported = 0; $totalorder = 0; $result =[]; $pdata = []; $addressdata = [];
-        foreach ($orders['orders'] as $order) { 
-            
+        $imported = 0;
+        $totalorder = 0;
+        $result = [];
+        $pdata = [];
+        $addressdata = [];
+        foreach ($orders['orders'] as $order) {
+
             //print_r($order['cart']);
             // Check if the order has the required fields
             // Map API fields to your table columns
             //2658982 order_number continue;
-            if (in_array($order['orderid'], ['2658982', '2660434','2662287','469282','2664206'])) {
+            if (in_array($order['orderid'], ['2658982', '2660434', '2662287', '469282', '2664206'])) {
                 continue; // Skip invalid orders
             }
             //customer data
             $customerdata = $ordersModel->addCustomerIfNotExists($order);
             //print_array($customerdata);
-                foreach ($order['cart'] as $item) {  
-                    $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s'); 
-                    $esd = '0000-00-00';
-                    $local_stock_int = (int) floatval($item['local_stock']);
-                    $lead_time_int = (int) floatval($item['leadtime']);
-                    if($item['marketplace_vendor'] == 'exoticindia' || empty($item['marketplace_vendor'])){
-                        if(!empty($local_stock_int) && $local_stock_int > 0){
-                            $esd = date('Y-m-d', strtotime($orderdate. ' + 3 days'));
-                        } else {
-                            // Normalize options to array and check for 'express'
-                            $hasExpress = false;
-                            $options = $item['options'] ?? null;
-                            if (!empty($options)) {
-                                if (is_string($options)) {
-                                    $decoded = json_decode($options, true);
-                                    if (is_array($decoded)) {
-                                        $hasExpress = in_array('express', $decoded, true);
-                                    } else {
-                                        // fallback: check substring (case-insensitive) for non-JSON values
-                                        $hasExpress = stripos($options, 'express') !== false;
-                                    }
-                                } elseif (is_array($options)) {
-                                    $hasExpress = in_array('express', $options, true);
+            foreach ($order['cart'] as $item) {
+                $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s');
+                $esd = '0000-00-00';
+                $local_stock_int = (int) floatval($item['local_stock']);
+                $lead_time_int = (int) floatval($item['leadtime']);
+                if ($item['marketplace_vendor'] == 'exoticindia' || empty($item['marketplace_vendor'])) {
+                    if (!empty($local_stock_int) && $local_stock_int > 0) {
+                        $esd = date('Y-m-d', strtotime($orderdate . ' + 3 days'));
+                    } else {
+                        // Normalize options to array and check for 'express'
+                        $hasExpress = false;
+                        $options = $item['options'] ?? null;
+                        if (!empty($options)) {
+                            if (is_string($options)) {
+                                $decoded = json_decode($options, true);
+                                if (is_array($decoded)) {
+                                    $hasExpress = in_array('express', $decoded, true);
+                                } else {
+                                    // fallback: check substring (case-insensitive) for non-JSON values
+                                    $hasExpress = stripos($options, 'express') !== false;
                                 }
-                            }
-                            if ($hasExpress) {
-                                $esd = date('Y-m-d', strtotime($orderdate. ' + 0 days'));
-                            } else {
-                                $esd = date('Y-m-d', strtotime($orderdate. ' + ' . $lead_time_int . ' days'));
+                            } elseif (is_array($options)) {
+                                $hasExpress = in_array('express', $options, true);
                             }
                         }
-                    }else{
-                        if(!empty($local_stock_int) && $local_stock_int > 0){
-                            $esd = date('Y-m-d', strtotime($orderdate . ' + ' . $local_stock_int . ' days'));                           
+                        if ($hasExpress) {
+                            $esd = date('Y-m-d', strtotime($orderdate . ' + 0 days'));
                         } else {
-                            $esd = date('Y-m-d', strtotime($orderdate. ' + '.($lead_time_int).' days'));                            
+                            $esd = date('Y-m-d', strtotime($orderdate . ' + ' . $lead_time_int . ' days'));
                         }
                     }
-					$rdata = [
+                } else {
+                    if (!empty($local_stock_int) && $local_stock_int > 0) {
+                        $esd = date('Y-m-d', strtotime($orderdate . ' + ' . $local_stock_int . ' days'));
+                    } else {
+                        $esd = date('Y-m-d', strtotime($orderdate . ' + ' . ($lead_time_int) . ' days'));
+                    }
+                }
+                $rdata = [
                     'sku' => $item['sku'] ?? '',
-					'order_number' => $order['orderid'] ?? '',
-					'shipping_country' => $order['shipping_country'] ?? '',
-					'title' => !empty($item['title']) ? preg_replace('/[^a-zA-Z0-9\s\-_]/', '', $item['title']) : '',
-					'description' => $item['description'] ?? '',
-					'item_code' => $item['itemcode'] ?? '',
-					'size' => $item['size'] ?? '',
-					'color' => $item['color'] ?? '',
-					'groupname' => $item['groupname'] ?? '',
+                    'order_number' => $order['orderid'] ?? '',
+                    'shipping_country' => $order['shipping_country'] ?? '',
+                    'title' => !empty($item['title']) ? preg_replace('/[^a-zA-Z0-9\s\-_]/', '', $item['title']) : '',
+                    'description' => $item['description'] ?? '',
+                    'item_code' => $item['itemcode'] ?? '',
+                    'size' => $item['size'] ?? '',
+                    'color' => $item['color'] ?? '',
+                    'groupname' => $item['groupname'] ?? '',
                     'subcategories' => !empty($item['subcategories']) ? preg_replace('/[^a-zA-Z0-9\s\-_]/', '', $item['subcategories']) : '',
-					'currency' => $item['currency'] ?? '',
-					'itemprice' => $item['itemprice'] ?? '',
-					'finalprice' => $item['finalprice'] ?? '',
-					'image' => $item['image'] ?? '',
-					'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
-					'quantity' => $item['qty'] ?? '',
-					'options' => $item['options'] ?? 0,
-					'gst' => $item['gst'] ?? '',
-					'hsn' => $item['hscode'] ?? '',
-					'local_stock' => $item['local_stock'] ?? '',
-					'cost_price' => $item['cp'] ?? 0.0,
-					'location' => $item['location'] ?? '',
-					'order_date' => date('Y-m-d H:i:s', $order['processed_time'] ?? ''),
+                    'currency' => $item['currency'] ?? '',
+                    'itemprice' => $item['itemprice'] ?? '',
+                    'finalprice' => $item['finalprice'] ?? '',
+                    'image' => $item['image'] ?? '',
+                    'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
+                    'quantity' => $item['qty'] ?? '',
+                    'options' => $item['options'] ?? 0,
+                    'gst' => $item['gst'] ?? '',
+                    'hsn' => $item['hscode'] ?? '',
+                    'local_stock' => $item['local_stock'] ?? '',
+                    'cost_price' => $item['cp'] ?? 0.0,
+                    'location' => $item['location'] ?? '',
+                    'order_date' => date('Y-m-d H:i:s', $order['processed_time'] ?? ''),
                     'processed_time' => $order['processed_time'] ?? 0,
                     'numsold' => $item['numsold'] ?? 0,
                     'product_weight' => $item['product_weight'] ?? 0.0,
@@ -394,56 +402,56 @@ class PosOrdersController {
                         : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
                     'esd' => $esd,
                     'agent_id' => 0
-                    ];
-                    if(strtoupper($order['payment_type']) == 'COD' &&  $item['itemprice'] >= 5000){
-                        $rdata['status'] = 'cod_confirmation_required';
-                        $rdata['agent_id'] = 31; // Assign to specific agent Ashutosh for COD confirmation
+                ];
+                if (strtoupper($order['payment_type']) == 'COD' &&  $item['itemprice'] >= 5000) {
+                    $rdata['status'] = 'cod_confirmation_required';
+                    $rdata['agent_id'] = 31; // Assign to specific agent Ashutosh for COD confirmation
+                }
+                //customer id add
+                $rdata['customer_id'] = $customerdata['customer_id'] ?? 0;
+                $totalorder++;
+
+                $data = $ordersModel->insertOrder($rdata);
+                $result[] = $data;
+                //add products
+                $pdata[] = $ordersModel->addProducts($rdata);
+
+                if (isset($data['success']) && $data['success'] == 1) {
+                    $imported++;
+                }
+                //print_array($rdata);   
+                // insert vendor name(s) into vp_vendors during import
+                $maped = [];
+                $vendorRaw = trim((string)($item['vendor'] ?? ''));
+                $vendorNames = array_values(array_unique(array_filter(array_map(
+                    static function ($v) {
+                        return trim((string)$v);
+                    },
+                    preg_split('/\s*,\s*/', $vendorRaw)
+                ))));
+                $firstVendorId = 0;
+                foreach ($vendorNames as $vendorname) {
+                    $vendorsuccess = $ordersModel->addVendorIfNotExists($vendorname);
+                    $currentVendorId = (int)($vendorsuccess['vendor_id'] ?? 0);
+                    if ($firstVendorId <= 0 && $currentVendorId > 0) {
+                        $firstVendorId = $currentVendorId;
                     }
-                    //customer id add
-                    $rdata['customer_id'] = $customerdata['customer_id'] ?? 0;
-					$totalorder++;                
-                    
-                    $data = $ordersModel->insertOrder($rdata);
-                    $result[] = $data;
-                    //add products
-                    $pdata[] = $ordersModel->addProducts($rdata);                   
-                    
-                    if (isset($data['success']) && $data['success'] == 1) {                        
-                        $imported++;
-                    } 
-                    //print_array($rdata);   
-                    // insert vendor name(s) into vp_vendors during import
-                    $maped = [];
-                    $vendorRaw = trim((string)($item['vendor'] ?? ''));
-                    $vendorNames = array_values(array_unique(array_filter(array_map(
-                        static function ($v) {
-                            return trim((string)$v);
-                        },
-                        preg_split('/\s*,\s*/', $vendorRaw)
-                    ))));
-                    $firstVendorId = 0;
-                    foreach ($vendorNames as $vendorname) {
-                        $vendorsuccess = $ordersModel->addVendorIfNotExists($vendorname);
-                        $currentVendorId = (int)($vendorsuccess['vendor_id'] ?? 0);
-                        if ($firstVendorId <= 0 && $currentVendorId > 0) {
-                            $firstVendorId = $currentVendorId;
-                        }
-                    }
-                    if ($firstVendorId > 0) {
-                        // map primary vendor to product
-                        $maped[] = $productModel->saveProductVendor($rdata['item_code'], $firstVendorId, '');
-                    }
-                    //print_array($maped);             
+                }
+                if ($firstVendorId > 0) {
+                    // map primary vendor to product
+                    $maped[] = $productModel->saveProductVendor($rdata['item_code'], $firstVendorId, '');
+                }
+                //print_array($maped);             
             }
             //add address info
             $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
-           //print_array($addressdata);
-           //print_array($order);exit;
+            //print_array($addressdata);
+            //print_array($order);exit;
         }
         //print_array($pdata);
         //print_r($result);
         //update log end time and imported count
-        if($log_id > 0){
+        if ($log_id > 0) {
             $log_update_data = [
                 'end_time' => date('Y-m-d H:i:s'),
                 'successful_imports' => $imported,
@@ -453,7 +461,7 @@ class PosOrdersController {
                 'max_ordered_time' => $order['processed_time'] ?? '',
                 'from_date' => $from_date,
                 'to_date' => $to_date,
-                'add_product_log' => NULL,//json_encode($pdata)
+                'add_product_log' => NULL, //json_encode($pdata)
             ];
             //print_array($log_update_data);
             $ordersModel->updateOrderImportLog($log_id, $log_update_data);
@@ -466,8 +474,9 @@ class PosOrdersController {
             'products' => json_encode($pdata)
         ], 'Import Orders Result');
     }
-	
-    public function createPurchaseOrder() {
+
+    public function createPurchaseOrder()
+    {
         is_login();
         global $ordersModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -483,7 +492,8 @@ class PosOrdersController {
         }
         exit;
     }
-    public function getOrderDetails() {
+    public function getOrderDetails()
+    {
         global $ordersModel;
         header('Content-Type: application/json');
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -500,7 +510,8 @@ class PosOrdersController {
         exit;
     }
 
-    public function saveSearch() {
+    public function saveSearch()
+    {
         // Save a named search (AJAX)
         is_login();
         header('Content-Type: application/json');
@@ -531,7 +542,8 @@ class PosOrdersController {
         exit;
     }
 
-    public function deleteSearch() {
+    public function deleteSearch()
+    {
         // Delete saved search (AJAX)
         is_login();
         header('Content-Type: application/json');
@@ -551,9 +563,10 @@ class PosOrdersController {
         exit;
     }
 
-    public function updateStatus() {
+    public function updateStatus()
+    {
         is_login();
-        global $ordersModel; 
+        global $ordersModel;
         global $commanModel;
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -568,7 +581,7 @@ class PosOrdersController {
             $previous_status = isset($_POST['previousStatus']) ? trim($_POST['previousStatus']) : NULL;
             $previous_esd = isset($_POST['previous_esd']) ? trim($_POST['previous_esd']) : NULL;
             $previous_priority = isset($_POST['previous_priority']) ? trim($_POST['previous_priority']) : NULL;
-            $previous_remarks = isset($_POST['previous_remarks']) ? trim($_POST['previous_remarks']) : NULL;                       
+            $previous_remarks = isset($_POST['previous_remarks']) ? trim($_POST['previous_remarks']) : NULL;
 
             if ($order_id > 0 && !empty($new_status)) {
                 $update_data = [
@@ -582,7 +595,7 @@ class PosOrdersController {
                     $update_data['esd'] = $esd;
                 }
                 $updated = $ordersModel->updateStatus($order_id, $update_data);
-               
+
                 // commented out on 09-11-2025 as per request
                 // call exotic india API to update order status
                 $orderval = $ordersModel->getOrderById($order_id);
@@ -601,21 +614,21 @@ class PosOrdersController {
                 //log status change
                 $logData = [
                     'order_id' => $order_id,
-                    'status' => 'Status: '.$new_status,
+                    'status' => 'Status: ' . $new_status,
                     'changed_by' => $_SESSION['user']['id'],
                     'api_response' => NULL, //json_encode($resp),
                     'change_date' => date('Y-m-d H:i:s')
                 ];
                 //print_array($apidata);
                 //print_array($_POST);
-                if($new_status != $_POST['previousStatus']){
+                if ($new_status != $_POST['previousStatus']) {
                     $commanModel->add_order_status_log($logData);
                 }
-                if($agent_id != $previous_agent){
+                if ($agent_id != $previous_agent) {
                     //log agent change
                     $agentLogData = [
-                        'order_id' => $order_id,                        
-                        'status' => 'Agent: '.$agent_name,
+                        'order_id' => $order_id,
+                        'status' => 'Agent: ' . $agent_name,
                         'changed_by' => $_SESSION['user']['id'],
                         'api_response' => NULL,
                         'change_date' => date('Y-m-d H:i:s')
@@ -625,43 +638,43 @@ class PosOrdersController {
                     $assign = $commanModel->updateRecord('vp_orders', ['agent_assign_date' => date('Y-m-d H:i:s')], $order_id);
                     //$ordersModel->updateAgentAssignDate($order_id);
                     //set notification to agent
-                    
-                    $link = base_url('index.php?page=orders&action=get_order_details_html&type=outer&order_number='.$orderval['order_number']);
-                    insertNotification($agent_id, 'Order Assigned', 'Order <a href="'.$link.'" class="text-blue-600 hover:underline" target="_blank">'.$orderval['order_number'].'</a> has been assigned to you for processing.', $link);
+
+                    $link = base_url('index.php?page=orders&action=get_order_details_html&type=outer&order_number=' . $orderval['order_number']);
+                    insertNotification($agent_id, 'Order Assigned', 'Order <a href="' . $link . '" class="text-blue-600 hover:underline" target="_blank">' . $orderval['order_number'] . '</a> has been assigned to you for processing.', $link);
                 }
-                if($esd != $previous_esd){
+                if ($esd != $previous_esd) {
                     //log esd change
                     $esdLogData = [
-                        'order_id' => $order_id,                        
-                        'status' => 'ESD : '.$esd,
+                        'order_id' => $order_id,
+                        'status' => 'ESD : ' . $esd,
                         'changed_by' => $_SESSION['user']['id'],
                         'api_response' => NULL,
                         'change_date' => date('Y-m-d H:i:s')
                     ];
                     $commanModel->add_order_status_log($esdLogData);
                 }
-                if($priority != $previous_priority){
+                if ($priority != $previous_priority) {
                     //log priority change
                     $priorityLogData = [
-                        'order_id' => $order_id,                        
-                        'status' => 'Priority : '.$priority,
+                        'order_id' => $order_id,
+                        'status' => 'Priority : ' . $priority,
                         'changed_by' => $_SESSION['user']['id'],
                         'api_response' => NULL,
                         'change_date' => date('Y-m-d H:i:s')
                     ];
                     $commanModel->add_order_status_log($priorityLogData);
                 }
-                if($remarks != $previous_remarks){
+                if ($remarks != $previous_remarks) {
                     //log remarks change
                     $remarksLogData = [
-                        'order_id' => $order_id,                        
+                        'order_id' => $order_id,
                         'status' => 'Notes updated.',
                         'changed_by' => $_SESSION['user']['id'],
                         'api_response' => NULL,
                         'change_date' => date('Y-m-d H:i:s')
                     ];
                     $commanModel->add_order_status_log($remarksLogData);
-                }   
+                }
 
                 if ($updated) {
                     echo json_encode(['success' => true, 'message' => 'Order status updated successfully.']);
@@ -675,7 +688,8 @@ class PosOrdersController {
 
         exit;
     }
-    public function getOrderDetailsHTML() {
+    public function getOrderDetailsHTML()
+    {
         is_login();
         global $ordersModel, $commanModel;
         $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
@@ -686,9 +700,9 @@ class PosOrdersController {
             $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($order_number);
             $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($order_number);
             $statusList = $commanModel->get_order_status_list();
-            $assignmentDates = [];          
+            $assignmentDates = [];
             foreach ($order as $key => $orders) {
-                $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);  
+                $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);
                 $assignmentDates[$orders['id']] =  $orders[$key]['status_log']['change_date'] ?? '';
             }
             if ($order) {
@@ -704,7 +718,8 @@ class PosOrdersController {
         }
         exit;
     }
-    public function updateImportedOrders() {        
+    public function updateImportedOrders()
+    {
         global $ordersModel;
         // if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
         //     http_response_code(403); // Forbidden
@@ -721,9 +736,9 @@ class PosOrdersController {
         //     $from_date = $lastLog['max_ordered_time'];
         // }
         $to_date = !empty($_GET['to_date']) ? strtotime($_GET['to_date'] . ' 23:59:59') : time();
-      
+
         $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint
-       
+
         $postData = [
             'makeRequestOf' => 'vendors-orderjson',
             'from_date' => $from_date,
@@ -751,7 +766,7 @@ class PosOrdersController {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $response = curl_exec($ch);
-        
+
         $error = curl_error($ch);
         curl_close($ch);
         // print_r($error);
@@ -765,7 +780,7 @@ class PosOrdersController {
         $orders = json_decode($response, true);
         if (!is_array($orders)) {
             //echo "Invalid API response format.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'Invalid API response format.']], 'API Error');
             return;
         }
         // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
@@ -773,77 +788,78 @@ class PosOrdersController {
         // exit;
         if (empty($orders['orders'])) {
             //echo "No orders found in the API response.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'No orders found in the API response.']], 'No Orders Found');
             return;
         }
-        $imported = 0; $totalorder = 0;
-        foreach ($orders['orders'] as $order) { 
-            
+        $imported = 0;
+        $totalorder = 0;
+        foreach ($orders['orders'] as $order) {
+
             //print_r($order['cart']);
             // Check if the order has the required fields
             // Map API fields to your table columns
-                
-                foreach ($order['cart'] as $item) {  
-                    $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s'); 
-                    $esd = '0000-00-00';
-                    $local_stock_int = (int) floatval($item['local_stock']);
-                    $lead_time_int = (int) floatval($item['leadtime']);
-                    if($item['marketplace_vendor'] == 'exoticindia' || empty($item['marketplace_vendor'])){
-                        if(!empty($local_stock_int) && $local_stock_int > 0){
-                            $esd = date('Y-m-d', strtotime($orderdate. ' + 3 days'));
-                        } else {
-                            // Normalize options to array and check for 'express'
-                            $hasExpress = false;
-                            $options = $item['options'] ?? null;
-                            if (!empty($options)) {
-                                if (is_string($options)) {
-                                    $decoded = json_decode($options, true);
-                                    if (is_array($decoded)) {
-                                        $hasExpress = in_array('express', $decoded, true);
-                                    } else {
-                                        // fallback: check substring (case-insensitive) for non-JSON values
-                                        $hasExpress = stripos($options, 'express') !== false;
-                                    }
-                                } elseif (is_array($options)) {
-                                    $hasExpress = in_array('express', $options, true);
+
+            foreach ($order['cart'] as $item) {
+                $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s');
+                $esd = '0000-00-00';
+                $local_stock_int = (int) floatval($item['local_stock']);
+                $lead_time_int = (int) floatval($item['leadtime']);
+                if ($item['marketplace_vendor'] == 'exoticindia' || empty($item['marketplace_vendor'])) {
+                    if (!empty($local_stock_int) && $local_stock_int > 0) {
+                        $esd = date('Y-m-d', strtotime($orderdate . ' + 3 days'));
+                    } else {
+                        // Normalize options to array and check for 'express'
+                        $hasExpress = false;
+                        $options = $item['options'] ?? null;
+                        if (!empty($options)) {
+                            if (is_string($options)) {
+                                $decoded = json_decode($options, true);
+                                if (is_array($decoded)) {
+                                    $hasExpress = in_array('express', $decoded, true);
+                                } else {
+                                    // fallback: check substring (case-insensitive) for non-JSON values
+                                    $hasExpress = stripos($options, 'express') !== false;
                                 }
-                            }
-                            if ($hasExpress) {
-                                $esd = date('Y-m-d', strtotime($orderdate. ' + 0 days'));
-                            } else {
-                                $esd = date('Y-m-d', strtotime($orderdate. ' + ' . $lead_time_int . ' days'));
+                            } elseif (is_array($options)) {
+                                $hasExpress = in_array('express', $options, true);
                             }
                         }
-                    }else{
-                        if(!empty($local_stock_int) && $local_stock_int > 0){
-                            $esd = date('Y-m-d', strtotime($orderdate . ' + ' . $local_stock_int . ' days'));                           
+                        if ($hasExpress) {
+                            $esd = date('Y-m-d', strtotime($orderdate . ' + 0 days'));
                         } else {
-                            $esd = date('Y-m-d', strtotime($orderdate. ' + '.($lead_time_int).' days'));                            
+                            $esd = date('Y-m-d', strtotime($orderdate . ' + ' . $lead_time_int . ' days'));
                         }
                     }
-					$rdata = [
-					'order_number' => $order['orderid'] ?? '',
-					'shipping_country' => $order['shipping_country'] ?? '',
-					'title' => $item['title'] ?? '',
-					'description' => $item['description'] ?? '',
-					'item_code' => $item['itemcode'] ?? '',
-					'size' => $item['size'] ?? '',
-					'color' => $item['color'] ?? '',
-					'groupname' => $item['groupname'] ?? '',
-					'subcategories' => $item['subcategories'] ?? '',
-					'currency' => $item['currency'] ?? '',
-					'itemprice' => $item['itemprice'] ?? '',
-					'finalprice' => $item['finalprice'] ?? '',
-					'image' => $item['image'] ?? '',
-					'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
-					'quantity' => $item['qty'] ?? '',
-					'options' => $item['options'] ?? 0,
-					'gst' => $item['gst'] ?? '',
-					'hsn' => $item['hscode'] ?? '',
-					'local_stock' => $item['local_stock'] ?? '',
-					'cost_price' => $item['cp'] ?? 0.0,
-					'location' => $item['location'] ?? '',
-					'order_date' => date('Y-m-d H:i:s', $order['processed_time'] ?? ''),
+                } else {
+                    if (!empty($local_stock_int) && $local_stock_int > 0) {
+                        $esd = date('Y-m-d', strtotime($orderdate . ' + ' . $local_stock_int . ' days'));
+                    } else {
+                        $esd = date('Y-m-d', strtotime($orderdate . ' + ' . ($lead_time_int) . ' days'));
+                    }
+                }
+                $rdata = [
+                    'order_number' => $order['orderid'] ?? '',
+                    'shipping_country' => $order['shipping_country'] ?? '',
+                    'title' => $item['title'] ?? '',
+                    'description' => $item['description'] ?? '',
+                    'item_code' => $item['itemcode'] ?? '',
+                    'size' => $item['size'] ?? '',
+                    'color' => $item['color'] ?? '',
+                    'groupname' => $item['groupname'] ?? '',
+                    'subcategories' => $item['subcategories'] ?? '',
+                    'currency' => $item['currency'] ?? '',
+                    'itemprice' => $item['itemprice'] ?? '',
+                    'finalprice' => $item['finalprice'] ?? '',
+                    'image' => $item['image'] ?? '',
+                    'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
+                    'quantity' => $item['qty'] ?? '',
+                    'options' => $item['options'] ?? 0,
+                    'gst' => $item['gst'] ?? '',
+                    'hsn' => $item['hscode'] ?? '',
+                    'local_stock' => $item['local_stock'] ?? '',
+                    'cost_price' => $item['cp'] ?? 0.0,
+                    'location' => $item['location'] ?? '',
+                    'order_date' => date('Y-m-d H:i:s', $order['processed_time'] ?? ''),
                     'processed_time' => $order['processed_time'] ?? 0,
                     'numsold' => $item['numsold'] ?? 0,
                     'product_weight' => $item['product_weight'] ?? 0.0,
@@ -870,25 +886,24 @@ class PosOrdersController {
                         : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
                     'esd' => $esd,
                     'updated_at' => date('Y-m-d H:i:s')
-                    ];
-					$totalorder++;                
-                    
-                    $data = $ordersModel->updateImportedOrder($rdata);
-                    $result[] = $data;
-                    //add products
-                    //$pdata[] = $ordersModel->addProducts($rdata);                   
-                    
-                    if (isset($data['success']) && $data['success'] == true) {                        
-                        $imported++;
-                    } 
-                   // print_array($rdata);                   
+                ];
+                $totalorder++;
+
+                $data = $ordersModel->updateImportedOrder($rdata);
+                $result[] = $data;
+                //add products
+                //$pdata[] = $ordersModel->addProducts($rdata);                   
+
+                if (isset($data['success']) && $data['success'] == true) {
+                    $imported++;
+                }
+                // print_array($rdata);                   
             }
-           
         }
         //print_array($pdata);
         //print_r($result);
         //update log end time and imported count
-        
+
         renderTemplateClean('views/posorders/import_update_result.php', [
             'imported' => $imported,
             'result' => $result,
@@ -896,7 +911,8 @@ class PosOrdersController {
             //'products' => json_encode($pdata)
         ], 'Import Orders Result');
     }
-    public function skuUpdateImportedOrders() {      
+    public function skuUpdateImportedOrders()
+    {
         //ini_set('max_execution_time', 300);
         //set_time_limit(300);  
         global $ordersModel;
@@ -905,7 +921,7 @@ class PosOrdersController {
         //     die('Unauthorized access.');
         // }
         //order status list
-       // $statusList = $ordersModel->adminOrderStatusList('true');
+        // $statusList = $ordersModel->adminOrderStatusList('true');
         //last order log fetch
         // Set your date range (example: last 7 days)
         //print_array($_GET);
@@ -918,7 +934,7 @@ class PosOrdersController {
         //$from_date = '1758240000';
         //$to_date = '1758330134';
         $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint
-       
+
         $postData = [
             'makeRequestOf' => 'vendors-orderjson',
             'from_date' => $from_date,
@@ -946,7 +962,7 @@ class PosOrdersController {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $response = curl_exec($ch);
-        
+
         $error = curl_error($ch);
         curl_close($ch);
         // print_r($error);
@@ -960,7 +976,7 @@ class PosOrdersController {
         $orders = json_decode($response, true);
         if (!is_array($orders)) {
             //echo "Invalid API response format.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'Invalid API response format.']], 'API Error');
             return;
         }
         // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
@@ -968,41 +984,41 @@ class PosOrdersController {
         // exit;
         if (empty($orders['orders'])) {
             //echo "No orders found in the API response.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'No orders found in the API response.']], 'No Orders Found');
             return;
         }
-        $imported = 0; $totalorder = 0;
-        foreach ($orders['orders'] as $order) { 
-            
+        $imported = 0;
+        $totalorder = 0;
+        foreach ($orders['orders'] as $order) {
+
             //print_r($order['cart']);
             // Check if the order has the required fields
             // Map API fields to your table columns
-                
+
             foreach ($order['cart'] as $item) {
                 $rdata = [
-                'sku' => $item['sku'] ?? '',
-                'order_number' => $order['orderid'] ?? '',
-                'item_code' => $item['itemcode'] ?? '',					
-                'updated_at' => date('Y-m-d H:i:s')
+                    'sku' => $item['sku'] ?? '',
+                    'order_number' => $order['orderid'] ?? '',
+                    'item_code' => $item['itemcode'] ?? '',
+                    'updated_at' => date('Y-m-d H:i:s')
                 ];
-                $totalorder++;                
-                
+                $totalorder++;
+
                 $data = $ordersModel->skuUpdateImportedOrder($rdata);
                 $result[] = $data;
                 //add products
                 //$pdata[] = $ordersModel->addProducts($rdata);                   
-                
-                if (isset($data['success']) && $data['success'] == true) {                        
+
+                if (isset($data['success']) && $data['success'] == true) {
                     $imported++;
-                } 
+                }
                 //print_array($rdata);                   
             }
-           
         }
         //print_array($pdata);
         //print_r($result);
         //update log end time and imported count
-        
+
         renderTemplateClean('views/posorders/import_update_result.php', [
             'imported' => $imported,
             'result' => $result,
@@ -1010,10 +1026,11 @@ class PosOrdersController {
             //'products' => json_encode($pdata)
         ], 'Import Orders Result');
     }
-    public function ordersStatusImportBulk() {   
-           
+    public function ordersStatusImportBulk()
+    {
+
         ini_set('max_execution_time', 3000);
-        set_time_limit(3000);  
+        set_time_limit(3000);
         global $ordersModel;
         // if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
         //     http_response_code(403); // Forbidden
@@ -1027,19 +1044,19 @@ class PosOrdersController {
         //$to_date = '1758330134';
         //print_array($odr);
         //exit;
-        
+
         $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint       
-        
-        $orderChunks = array_chunk(array_filter($odr, function($order) {
+
+        $orderChunks = array_chunk(array_filter($odr, function ($order) {
             return !empty($order);
         }), 50);
-       
+
         $response = [];
         foreach ($orderChunks as $key => $chunk) {
             $orderIds = implode(',', $chunk);
             $postData = [
-            'makeRequestOf' => 'vendors-orderjson',
-            'orderid' => $orderIds
+                'makeRequestOf' => 'vendors-orderjson',
+                'orderid' => $orderIds
             ];
 
             $headers = [
@@ -1057,76 +1074,76 @@ class PosOrdersController {
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             $response[] = curl_exec($ch);
-            
+
             $error = curl_error($ch);
             curl_close($ch);
             //echo $orderIds."<br>Chunk ".($key+1)." Response:<br>";
             //print_array(json_decode($response[0]), true);
-            if(!empty($error)){
+            if (!empty($error)) {
                 break;
             }
             // if($key >= 10){
             //     //limit to 5 chunks per execution
             //     break;
             // }
-            
+
         }
         //print_r($error);
         // print_r($headers);
-       
+
         // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
         // print_array($orders);
         // exit;
         if (empty($response)) {
             //echo "No orders found in the API response.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'No orders found in the API response.']], 'No Orders Found');
             return;
         }
-        $imported = 0; $totalorder = 0;
+        $imported = 0;
+        $totalorder = 0;
         foreach ($response as $resp) {
             $respData = json_decode($resp, true);
             if (!is_array($respData) || empty($respData['orders'])) {
                 continue; // Skip invalid or empty responses
             }
-            foreach ($respData['orders'] as $order) {             
+            foreach ($respData['orders'] as $order) {
                 //print_r($order);
                 // Check if the order has the required fields
                 // Map API fields to your table columns
-                    
+
                 foreach ($order['cart'] as $item) {
                     //check status other than 1 (pending)
-                    if(empty($item['order_status']) || $item['order_status'] == 1){
+                    if (empty($item['order_status']) || $item['order_status'] == 1) {
                         //continue;
-                    
+
                         $rdata = [
-                        'sku' => $item['sku'] ?? '',
-                        'order_number' => $order['orderid'] ?? '',
-                        'item_code' => $item['itemcode'] ?? '',	
-                        'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA' || strtoupper($order['payment_type'] ?? '') === 'INDIAAMAZONFBA')
-                            ? 'shipped'
-                            : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),				
-                        'updated_at' => date('Y-m-d H:i:s')
+                            'sku' => $item['sku'] ?? '',
+                            'order_number' => $order['orderid'] ?? '',
+                            'item_code' => $item['itemcode'] ?? '',
+                            'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA' || strtoupper($order['payment_type'] ?? '') === 'INDIAAMAZONFBA')
+                                ? 'shipped'
+                                : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
+                            'updated_at' => date('Y-m-d H:i:s')
                         ];
-                        $totalorder++;                
-                        
+                        $totalorder++;
+
                         $data = $ordersModel->importedStatusUpdate2($rdata);
                         $result[] = $data;
                         //add products
                         //$pdata[] = $ordersModel->addProducts($rdata);                   
-                        
-                        if (isset($data['success']) && $data['success'] == true) {                        
+
+                        if (isset($data['success']) && $data['success'] == true) {
                             $imported++;
-                        } 
+                        }
                     }
                     //print_array($rdata);                   
                 }
-            
             }
         }
         //print_array($pdata);
         //print_r($result);
         //update log end time and imported count
-        
+
         renderTemplateClean('views/posorders/import_update_result.php', [
             'imported' => $imported,
             'result' => $result,
@@ -1134,9 +1151,10 @@ class PosOrdersController {
             //'products' => json_encode($pdata)
         ], 'Import Orders Result');
     }
-    public function bulkUpdateStatus() {
+    public function bulkUpdateStatus()
+    {
         is_login();
-        global $ordersModel; 
+        global $ordersModel;
         global $commanModel;
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -1145,13 +1163,13 @@ class PosOrdersController {
             //print_array($order_ids);
             //print_array($_POST);
             //exit;
-            if (!empty($order_ids) && !empty($new_status)) { 
-               $result = $ordersModel->updateStatusBulk($order_ids, $new_status);
-               //log status change for each order
-               foreach($order_ids as $oid){
+            if (!empty($order_ids) && !empty($new_status)) {
+                $result = $ordersModel->updateStatusBulk($order_ids, $new_status);
+                //log status change for each order
+                foreach ($order_ids as $oid) {
                     $logData = [
                         'order_id' => $oid,
-                        'status' => 'Status: '.$new_status,
+                        'status' => 'Status: ' . $new_status,
                         'changed_by' => $_SESSION['user']['id'],
                         'api_response' => NULL,
                         'change_date' => date('Y-m-d H:i:s')
@@ -1173,11 +1191,11 @@ class PosOrdersController {
                     }
                     //notify agent if assigned
                     $orderval = $ordersModel->getOrderById($oid);
-                    if(!empty($orderval['agent_id']) && $orderval['agent_id'] > 0){
-                        $link = base_url('index.php?page=orders&action=list&'.$oid);
+                    if (!empty($orderval['agent_id']) && $orderval['agent_id'] > 0) {
+                        $link = base_url('index.php?page=orders&action=list&' . $oid);
                         insertNotification($orderval['agent_id'], 'Order Status Updated', 'The status of an order assigned to you has been updated. Please check the order details.', $link);
                     }
-                }    
+                }
                 if ($result) {
                     //session poitem array clean
 
@@ -1185,8 +1203,7 @@ class PosOrdersController {
                     //echo json_encode(['success' => true, 'message' => 'Order statuses updated successfully.']);
                 } else {
                     echo json_encode(['success' => false, 'message' => 'Failed to update order statuses.']);
-                }       
-                
+                }
             } else {
                 echo json_encode(['success' => false, 'message' => 'Invalid order IDs or status.']);
             }
@@ -1194,9 +1211,10 @@ class PosOrdersController {
 
         exit;
     }
-    public function bulkAssignOrder(){
+    public function bulkAssignOrder()
+    {
         is_login();
-        global $ordersModel; 
+        global $ordersModel;
         global $commanModel;
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -1205,23 +1223,23 @@ class PosOrdersController {
             //print_array($order_ids);
             //print_array($_POST);
             //exit;
-            if (!empty($order_ids) && !empty($agent_id)) { 
-               $result = $ordersModel->updateAgentBulk($order_ids, $agent_id); 
-               //log agent assignment for each order
-               $agent_name = $commanModel->getUserNameById($agent_id);
-               foreach($order_ids as $oid){
+            if (!empty($order_ids) && !empty($agent_id)) {
+                $result = $ordersModel->updateAgentBulk($order_ids, $agent_id);
+                //log agent assignment for each order
+                $agent_name = $commanModel->getUserNameById($agent_id);
+                foreach ($order_ids as $oid) {
                     $logData = [
                         'order_id' => $oid,
-                        'status' => 'Agent: '.$agent_name,
+                        'status' => 'Agent: ' . $agent_name,
                         'changed_by' => $_SESSION['user']['id'],
                         'api_response' => NULL,
                         'change_date' => date('Y-m-d H:i:s')
                     ];
                     $commanModel->add_order_status_log($logData);
                     //set notification to agent
-                    $link = base_url('index.php?page=orders&action=list&'.$oid);
+                    $link = base_url('index.php?page=orders&action=list&' . $oid);
                     insertNotification($agent_id, 'Order Assigned', 'You have been assigned a new order. Please check the order details.', $link);
-                }   
+                }
                 if ($result) {
                     //session poitem array clean
 
@@ -1229,28 +1247,28 @@ class PosOrdersController {
                     //echo json_encode(['success' => true, 'message' => 'Order statuses updated successfully.']);
                 } else {
                     echo json_encode(['success' => false, 'message' => 'Failed to update order statuses.']);
-                }       
-                
+                }
             } else {
                 echo json_encode(['success' => false, 'message' => 'Invalid order IDs or status.']);
             }
         }
     }
 
-    public function getOrdersCustomerId() {
+    public function getOrdersCustomerId()
+    {
         is_login();
         global $ordersModel;
         header('Content-Type: application/json');
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $input = json_decode(file_get_contents('php://input'), true);
             $order_ids = $input['order_ids'] ?? [];
-            
+
             if (empty($order_ids) || !is_array($order_ids)) {
                 echo json_encode(['success' => false, 'message' => 'Invalid order IDs.']);
                 exit;
             }
-            
+
             $orders = [];
             foreach ($order_ids as $order_id) {
                 $order_id = (int)$order_id;
@@ -1266,7 +1284,7 @@ class PosOrdersController {
                     ];
                 }
             }
-            
+
             echo json_encode(['success' => true, 'orders' => $orders]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
@@ -1274,9 +1292,10 @@ class PosOrdersController {
         exit;
     }
 
-    public function invoiceList() {
+    public function invoiceList()
+    {
         is_login();
-        global $poInvoiceModel;       
+        global $poInvoiceModel;
         // $limit = 50;
         // $offset = 0;
         // if (isset($_GET['limit'])) {
@@ -1319,15 +1338,16 @@ class PosOrdersController {
         $invoices = $poInvoiceModel->getAllInvoices($limit, $offset, $filters);
         $total_orders = $poInvoiceModel->getTotalInvoices(0, 0, $filters);
         //foreach invoice get po items
-        foreach($invoices as $id => $invoice){
+        foreach ($invoices as $id => $invoice) {
             $items = $poInvoiceModel->getPOsByInvoiceId($invoice['id']);
-            $invoices[$id]['items'] = $items;            
-        }      
+            $invoices[$id]['items'] = $items;
+        }
         //print_array($invoices);
 
         renderTemplate('views/purchase_orders/invoice_list.php', ['invoices' => $invoices, 'total_orders' => $total_orders], 'Purchase Order Invoices');
     }
-    public function paymentList() {
+    public function paymentList()
+    {
         is_login();
         global $poInvoiceModel;
         // $limit = 50;
@@ -1367,15 +1387,16 @@ class PosOrdersController {
         //utr filter
         if (isset($_GET['utr_number']) && !empty($_GET['utr_number'])) {
             $filters['utr_number'] = $_GET['utr_number'];
-        }    
+        }
 
         $payments = $poInvoiceModel->getAllPayments($limit, $offset, $filters);
         $total_payments = $poInvoiceModel->getTotalPayments(0, 0, $filters);
         //print_array($payments);
         renderTemplate('views/purchase_orders/payment_list.php', ['payments' => $payments, 'total_payments' => $total_payments], 'Payments List');
-    }   
-    
-    public function updateNoteAjax() {
+    }
+
+    public function updateNoteAjax()
+    {
         is_login();
         global $ordersModel;
         // ob_end_clean();
@@ -1389,7 +1410,8 @@ class PosOrdersController {
         echo json_encode($result);
         exit;
     }
-    public function updateNameEmailAjax() {
+    public function updateNameEmailAjax()
+    {
         is_login();
         global $ordersModel;
         $order_number   = trim($_POST['order_number']   ?? '');
@@ -1412,18 +1434,19 @@ class PosOrdersController {
             ]);
             exit;
         }
-        $result = $ordersModel->updateCustomerNameAndEmail($order_number,$customer_name,$customer_phone,$address_line1,$address_line2,$city,$zipcode,$country,$billing_address_line1,$billing_address_line2,$billing_city,$billing_zipcode,$billing_country);
+        $result = $ordersModel->updateCustomerNameAndEmail($order_number, $customer_name, $customer_phone, $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country);
         echo json_encode($result);
         exit;
     }
 
-    public function getOrderDetailsForDispatch() {
+    public function getOrderDetailsForDispatch()
+    {
         is_login();
         global $ordersModel;
         header('Content-Type: application/json');
-        
+
         $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
-        
+
         if ($order_number <= 0) {
             echo json_encode([
                 'success' => false,
@@ -1436,7 +1459,7 @@ class PosOrdersController {
             $orders = $ordersModel->getOrderByOrderNumber($order_number);
             //address details from vp_order_info table
             $order_info = $ordersModel->getRemarksByOrderNumber($order_number);
-            
+
             if (empty($orders)) {
                 echo json_encode([
                     'success' => false,
@@ -1450,7 +1473,7 @@ class PosOrdersController {
             $customer_name = $firstOrder['customer_name'] ?? 'Unknown';
             $customer_id = $firstOrder['customer_id'] ?? '-';
             $shipping_address = '';
-            
+
             // Build shipping address
             if (!empty($firstOrder['address_line1'])) {
                 $shipping_address = htmlspecialchars($firstOrder['address_line1']);
@@ -1473,7 +1496,7 @@ class PosOrdersController {
             $total_weight = 0;
             $total_amount = 0;
             $items_count = count($orders);
-            
+
             foreach ($orders as $idx => $order) {
                 $quantity = $order['quantity'] ?? 0;
                 $finalprice = $order['finalprice'] ?? 0;
@@ -1481,7 +1504,7 @@ class PosOrdersController {
                 $gst = $order['gst'] ?? 0;
                 $payment_type = strtolower($order['payment_type'] ?? '') === 'cod' ? 'COD' : 'Prepaid';
                 $product_weight = (float)($order['product_weight'] ?? 0);
-                
+
                 $total_weight += $product_weight * $quantity;
                 $total_amount += $item_total;
 
@@ -1597,13 +1620,14 @@ class PosOrdersController {
         }
     }
 
-    public function getOrderItemsForDispatch() {
+    public function getOrderItemsForDispatch()
+    {
         is_login();
         global $ordersModel;
         header('Content-Type: application/json');
-        
+
         $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
-        
+
         if ($order_number <= 0) {
             echo json_encode([
                 'success' => false,
@@ -1612,7 +1636,7 @@ class PosOrdersController {
             exit;
         }
         //check if invoice already exists for the order number, if yes return error
-        
+
         if ($ordersModel->invoiceExists($order_number)) {
             echo json_encode([
                 'success' => false,
@@ -1665,7 +1689,7 @@ class PosOrdersController {
                         <input type="checkbox" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
                     </td>
                     <td class="p-2">' . htmlspecialchars($order['order_number'] ?? '') . '</td>
-                    <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') .'</td>
+                    <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') . '</td>
                     <td class="p-2 text-right">' . htmlspecialchars($order['item_code'] ?? '') . '</td>
                     <td class="p-2 text-right">' . $quantity . '</td>
                     <td class="p-2 text-right">' . number_format($product_weight, 3) . ' kg</td>
@@ -1693,6 +1717,3 @@ class PosOrdersController {
         }
     }
 }
-?>
-
-               

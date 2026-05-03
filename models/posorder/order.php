@@ -1,6 +1,6 @@
 <?php
 
-class Order
+class POSOrder
 {
     private $db;
     public function __construct($db)
@@ -9,24 +9,39 @@ class Order
     }
     public function getAllOrders($filters = [], $limit = 50, $offset = 0)
     {
-        $warehouseId = $_SESSION['warehouse_id'] ?? 0;
+
         //$sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.*, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name FROM vp_orders INNER JOIN purchase_orders ON vp_orders.po_number = purchase_orders.po_number INNER JOIN vp_vendors ON vp_vendors.id = purchase_orders.vendor_id INNER JOIN vp_users ON vp_users.id = purchase_orders.user_id WHERE 1=1";
-        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name, inv.status AS invoice_status
+        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name,
+            inv.status AS invoice_status
 		FROM vp_orders 
 		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
 		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
-		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id
-		LEFT JOIN vp_invoices inv ON inv.id = vp_orders.invoice_id  
-		WHERE 1=1 AND IFNULL(vp_orders.payment_type,'') = 'offline'AND vp_orders.warehouse_id = " . intval($warehouseId);
-
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id AND vp_users.is_deleted = 0
+		LEFT JOIN vp_invoices inv ON inv.id = vp_orders.invoice_id
+		WHERE store_name != 'null'  AND store_name > 0";
         $params = [];
         if (!empty($filters['order_number'])) {
-            $sql .= " AND vp_orders.order_number LIKE ?";
-            $params[] = '%' . $filters['order_number'] . '%';
+            // Support comma-separated order numbers
+            $orderNumbers = is_array($filters['order_number'])
+                ? $filters['order_number']
+                : array_map('trim', explode(',', $filters['order_number']));
+            $orderNumbers = array_filter($orderNumbers); // Remove empty values
+
+            if (!empty($orderNumbers)) {
+                $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
+                $sql .= " AND vp_orders.order_number IN ($placeholders)";
+                foreach ($orderNumbers as $orderNum) {
+                    $params[] = $orderNum;
+                }
+            }
         }
         if (!empty($filters['item_code'])) {
             $sql .= " AND vp_orders.item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
+        }
+        if (!empty($filters['sku'])) {
+            $sql .= " AND vp_orders.sku = ?";
+            $params[] = $filters['sku'];
         }
         if (!empty($filters['po_no'])) {
             $sql .= " AND vp_orders.po_number LIKE ?";
@@ -144,64 +159,117 @@ class Order
             $params[] = '%' . $filters['author'] . '%';
         }
         if (!empty($filters['unshipped'])) {
-            $sql .= " AND vp_orders.status != 'shipped'";
+            $sql .= " AND vp_orders.status != 'shipped' AND vp_orders.status != 'cancelled' AND vp_orders.status NOT LIKE 'return%'";
         }
         //echo $sql;
+        //sortdaterange
+        if (!empty($filters['sortdaterange'])) {
+            if ($filters['sortdaterange'] === 'last_7_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+            } elseif ($filters['sortdaterange'] === 'last_30_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+            } elseif ($filters['sortdaterange'] === 'last_90_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
+            }
+        }
+
+        if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
+        }
+
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             //agent assignment date desc
             if (!empty($filters['agent'])) {
-                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date " . strtoupper($filters['sort']) . ", vp_orders.order_number " . strtoupper($filters['sort']);
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date " . strtoupper($filters['sort']);
             } else {
-                $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']) . ", vp_orders.order_number " . strtoupper($filters['sort']);
+                $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
             }
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_desc') {
+            $sql .= " ORDER BY vp_orders.esd DESC";
+        } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
+            $sql .= " ORDER BY vp_orders.esd ASC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_desc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_asc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date ASC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " ORDER BY vp_orders.updated_at DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " ORDER BY vp_orders.updated_at ASC";
         } else {
             //agent assignment date desc
             if (!empty($filters['agent'])) {
-                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC, vp_orders.order_number DESC"; // Default sort order
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC"; // Default sort order
             } else {
-                $sql .= " ORDER BY vp_orders.order_date DESC, vp_orders.order_number DESC"; // Default sort order
+                $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
             }
         }
 
+        //ship_by_date_desc 	esd        
+
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
         //echo $sql;
         // Add limit and offset to params and types
         $params[] = $limit;
         $params[] = $offset;
         $types = str_repeat('s', count($params) - 2) . 'ii';
         $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $orders = [];
-        if ($result && $result->num_rows > 0) {
-            while ($row = $result->fetch_assoc()) {
-                $orders[] = $row;
+
+        try {
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $orders = [];
+            if ($result && $result->num_rows > 0) {
+                while ($row = $result->fetch_assoc()) {
+                    $orders[] = $row;
+                }
             }
+            return $orders;
+        } catch (\mysqli_sql_exception $e) {
+            // Prevent fatal crash when MySQL cannot create temp files (e.g. /tmp full).
+            error_log('Order::getAllOrders failed: ' . $e->getMessage());
+            return [];
         }
-        return $orders;
     }
     public function getOrdersCount($filters = [])
     {
         //$sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
-        $warehouseId = $_SESSION['warehouse_id'] ?? 0;
         $sql = "SELECT COUNT(*) as count 
 		FROM vp_orders 
 		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
 		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
-		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
-		WHERE 1=1
-		  AND IFNULL(vp_orders.payment_type,'') = 'offline'
-		  AND vp_orders.warehouse_id = " . intval($warehouseId);
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id AND vp_users.is_deleted = 0
+		WHERE store_name != 'null'  AND store_name > 0";
         $params = [];
         if (!empty($filters['order_number'])) {
-            $sql .= " AND order_number LIKE ?";
-            $params[] = '%' . $filters['order_number'] . '%';
+            // Support comma-separated order numbers
+            $orderNumbers = is_array($filters['order_number'])
+                ? $filters['order_number']
+                : array_map('trim', explode(',', $filters['order_number']));
+            $orderNumbers = array_filter($orderNumbers); // Remove empty values
+
+            if (!empty($orderNumbers)) {
+                $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
+                $sql .= " AND vp_orders.order_number IN ($placeholders)";
+                foreach ($orderNumbers as $orderNum) {
+                    $params[] = $orderNum;
+                }
+            }
         }
         if (!empty($filters['item_code'])) {
             $sql .= " AND item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
+        }
+        if (!empty($filters['sku'])) {
+            $sql .= " AND sku = ?";
+            $params[] = $filters['sku'];
         }
         if (!empty($filters['po_no'])) {
             $sql .= " AND vp_orders.po_number LIKE ?";
@@ -314,11 +382,37 @@ class Order
             $params[] = '%' . $filters['author'] . '%';
         }
         if (!empty($filters['unshipped'])) {
-            $sql .= " AND vp_orders.status != 'shipped'";
+            $sql .= " AND vp_orders.status != 'shipped' AND vp_orders.status != 'cancelled' AND vp_orders.status NOT LIKE 'return%'";
+        }
+        if (!empty($filters['sortdaterange'])) {
+            if ($filters['sortdaterange'] === 'last_7_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+            } elseif ($filters['sortdaterange'] === 'last_30_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+            } elseif ($filters['sortdaterange'] === 'last_90_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
+            }
+        }
+        if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
         }
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_desc') {
+            $sql .= " ORDER BY vp_orders.esd DESC";
+        } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
+            $sql .= " ORDER BY vp_orders.esd ASC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_desc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_asc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date ASC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " ORDER BY vp_orders.updated_at DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " ORDER BY vp_orders.updated_at ASC";
         } else {
             $sql .= " ORDER BY order_date DESC"; // Default sort order
         }
