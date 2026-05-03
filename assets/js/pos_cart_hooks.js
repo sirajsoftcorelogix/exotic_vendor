@@ -672,7 +672,11 @@
         var unitPrice = lineUnitPriceStr(row);
         var lineTotal = lineLineTotalStr(row, qty);
         var imgUrl = lineImageUrl(row);
-        html += '<div class="flex gap-2 border-b border-slate-100 py-2 last:border-0" data-cart-row="1">';
+        var productCode = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
+        html +=
+          '<div class="pos-cart-line-item flex gap-2 border-b border-slate-100 py-2 last:border-0 cursor-pointer rounded-lg hover:bg-slate-50/80 -mx-1 px-1 transition-colors" data-cart-row="1"' +
+          (productCode ? ' data-product-code="' + escapeHtml(productCode) + '"' : '') +
+          ' role="button" tabindex="0" title="View product details">';
         if (imgUrl) {
           html +=
             '<div class="shrink-0 w-12 h-12 rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">' +
@@ -795,12 +799,35 @@
     cartDelegatesBound = true;
 
     document.addEventListener('keydown', function (ev) {
-      if (ev.key !== 'Escape') {
+      if (ev.key === 'Escape') {
+        var modal = document.getElementById(MODAL_ID);
+        if (modal && !modal.classList.contains('hidden')) {
+          closePosCartApiDebugModal();
+        }
         return;
       }
-      var modal = document.getElementById(MODAL_ID);
-      if (modal && !modal.classList.contains('hidden')) {
-        closePosCartApiDebugModal();
+      if (ev.key !== 'Enter' && ev.key !== ' ') {
+        return;
+      }
+      var t = ev.target;
+      if (!t || !t.closest) {
+        return;
+      }
+      if (t.matches && t.matches('input, button, textarea, select')) {
+        return;
+      }
+      var lineItem = t.closest('.pos-cart-line-item');
+      if (!lineItem) {
+        return;
+      }
+      var panelK = document.getElementById(PANEL_ID);
+      if (!panelK || !panelK.contains(lineItem)) {
+        return;
+      }
+      var pk = String(lineItem.getAttribute('data-product-code') || '').trim();
+      if (pk && typeof window.openProductModalByCode === 'function') {
+        ev.preventDefault();
+        window.openProductModalByCode(pk, []);
       }
     });
 
@@ -851,6 +878,18 @@
         var dbgLink = e.target && e.target.closest ? e.target.closest('.pos-cart-api-debug-link') : null;
         if (dbgLink && panel.contains(dbgLink)) {
           openPosCartApiDebugModal();
+          return;
+        }
+        var lineItem = e.target && e.target.closest ? e.target.closest('.pos-cart-line-item') : null;
+        if (lineItem && panel.contains(lineItem)) {
+          if (e.target.closest('button, input, a, label, textarea, select')) {
+            return;
+          }
+          var pcode = String(lineItem.getAttribute('data-product-code') || '').trim();
+          if (pcode && typeof window.openProductModalByCode === 'function') {
+            e.preventDefault();
+            window.openProductModalByCode(pcode, []);
+          }
           return;
         }
         var del = e.target && e.target.closest ? e.target.closest('.pos-cart-delete-btn') : null;

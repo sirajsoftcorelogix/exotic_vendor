@@ -887,6 +887,7 @@ data-code="${lookupCode}">
       }
     });
   }
+  window.openProductModalByCode = openProductModalByCode;
   function checkAvailabilityAndMaybeOpen(product) {
     if (!product) return;
     const productId = product.id != null ? String(product.id) : '';
