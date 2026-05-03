@@ -293,7 +293,7 @@ $(function () {
   function updateModalQtyUiState() {
     const max = modalWarehouseMaxQty;
     const q = getModalQty();
-    const $submit = $('#productModal').find('form[action*="cart-add"] button[type="submit"]');
+    const $submit = $('#pmAddToCartBtn');
 
     if (typeof max === 'number' && max === 0) {
       $submit.prop('disabled', true).addClass('opacity-50');
@@ -375,7 +375,8 @@ $(function () {
     setModalQty(cur + 1);
   });
 
-  $('#productModal').find('form[action*="cart-add"]').on('submit', function (e) {
+  $('#productModal').on('click', '#pmAddToCartBtn', function (e) {
+    e.preventDefault();
     const selectedEntries = [];
     $('#productModal .addon-checkbox:checked').each(function () {
       const entry = $(this).data('entry');
@@ -390,14 +391,23 @@ $(function () {
     const qtyNum = Number.isFinite(q) ? q : 0;
     if (typeof max === 'number' && max >= 0) {
       if (max === 0 || qtyNum > max) {
-        e.preventDefault();
         alert(
           max === 0
             ? 'Out of stock in this warehouse.'
             : 'Maximum quantity available is ' + max + '.'
         );
-        return false;
+        return;
       }
+    }
+
+    if (typeof window.handleAddToCart === 'function') {
+      window.handleAddToCart({
+        code: String($('#modal_product_code').val() || '').trim(),
+        stock_check_code: String($('#modal_stock_check_code').val() || '').trim(),
+        qty: qtyNum || getModalQty(),
+        options: String($('#modal_options').val() || '').trim(),
+        variation: String($('#modal_variation').val() || '').trim()
+      });
     }
   });
 
@@ -844,18 +854,6 @@ data-code="${lookupCode}">
     let code = $(this).data('code');
     if (!code) return;
     openProductModalByCode(code, []);
-  });
-  $(document).on('click', '.pos-cart-item', function (e) {
-    if ($(e.target).closest('form,button,input,a,select,textarea,label').length) {
-      return;
-    }
-    const code = String($(this).data('product-code') || '').trim();
-    const selectedEntriesRaw = String($(this).data('selected-entries') || '').trim();
-    const selectedEntries = selectedEntriesRaw
-      ? selectedEntriesRaw.split('|').map(function (x) { return String(x || '').trim(); }).filter(Boolean)
-      : [];
-    if (!code) return;
-    openProductModalByCode(code, selectedEntries);
   });
   function openProductModalByCode(code, preselectedAddonEntries = []) {
     if (!code) return;

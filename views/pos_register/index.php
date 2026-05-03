@@ -339,7 +339,17 @@
             </div>
 
 
-            <p class="text-sm text-amber-900 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 max-w-sm">Cart removed — add-to-cart will return when the new checkout flow is wired.</p>
+            <input type="hidden" id="modal_product_code" value="">
+            <input type="hidden" id="modal_stock_check_code" value="">
+            <input type="hidden" id="modal_qty" value="1">
+            <input type="hidden" id="modal_options" value="">
+            <input type="hidden" id="modal_variation" value="">
+            <button
+              type="button"
+              id="pmAddToCartBtn"
+              class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 disabled:pointer-events-none">
+              Add to cart
+            </button>
             <!-- Close -->
             <button
               type="button"
@@ -634,6 +644,7 @@
 </div>
 
 <!-- ===== END PAGE WRAPPER ===== -->
+<script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
 <!-- <script src="<?php echo 'http://' . $_SERVER['HTTP_HOST']; ?>/assets/js/pos.js"></script> -->
 <script>
@@ -1134,154 +1145,6 @@
 
   function createOrderNow(addressPayload) {
     showToast("POS checkout API removed — rebuild cart/order flow before creating orders.", "red");
-    return;
-
-    let paymentType = document.getElementById("payment_mode").value;
-    let paymentStage = document.getElementById("payment_stage").value;
-    let paymentAmount = document.getElementById("payment_amount").value;
-    let transactionId = document.getElementById("transaction_id").value;
-    if (paymentType === "razorpay" && String(transactionId || "").trim() === "") {
-      showToast("⚠ Razorpay requires a transaction ID", "red");
-      var txnEl2 = document.getElementById("transaction_id");
-      if (txnEl2) {
-        txnEl2.focus();
-      }
-      return;
-    }
-    let note = document.querySelector("textarea[name='note']").value;
-
-    let form = document.getElementById("customerForm");
-    let formData = new FormData();
-
-    for (let key in customerData) {
-      formData.append(key, customerData[key]);
-    }
-
-    for (let element of form.elements) {
-      if (element.name) {
-        formData.append(element.name, element.value);
-      }
-    }
-
-    formData.append("action", "create_order");
-    formData.append("payment_type", paymentType);
-    formData.append("payment_stage", paymentStage);
-    formData.append("amount", paymentAmount);
-    formData.append("transaction_id", transactionId);
-    if (paymentType === "razorpay") {
-      formData.append("razorpay_payment_id", String(transactionId || "").trim());
-    }
-    formData.append("note", note);
-    var cid = $('#customerSelect').val();
-    if (Array.isArray(cid)) {
-      cid = cid[0];
-    }
-    formData.append("customer_id", cid || window.POS_SESSION_CUSTOMER_ID || "");
-    if (addressPayload && typeof addressPayload === "object") {
-      Object.keys(addressPayload).forEach(function(k) {
-        formData.append(k, addressPayload[k]);
-      });
-    }
-    fetch("index.php?page=pos_register&action=create-order", {
-        method: "POST",
-        credentials: "same-origin",
-        body: formData
-      })
-      .then(function (res) {
-        return res.text().then(function (text) {
-          var cleaned = text.replace(/^\uFEFF/, "").trim();
-          try {
-            return { res: res, data: JSON.parse(cleaned), raw: cleaned, parseError: false };
-          } catch (e) {
-            return {
-              res: res,
-              parseError: true,
-              raw: cleaned
-            };
-          }
-        });
-      })
-      .then(function(wrapped) {
-        if (wrapped.parseError) {
-          var parseDbg = {
-            triggered_from: "payment_modal",
-            parse_error: true,
-            http_status: wrapped.res.status,
-            raw_body_preview: wrapped.raw.slice(0, 12000)
-          };
-          if (typeof window.setOrderCreateApiDebugPayload === "function") {
-            window.setOrderCreateApiDebugPayload(parseDbg);
-          }
-          showPaymentModalOrderApiRecord(parseDbg);
-          if (typeof window.openOrderCreateApiResponseModal === "function") {
-            window.openOrderCreateApiResponseModal();
-          }
-          showToast("Order API response was not valid JSON.", "red");
-          return;
-        }
-
-        var data = wrapped.data || {};
-        var apiDebug = data.order_api_debug || {
-          timestamp: new Date().toISOString(),
-          triggered_from: "payment_modal",
-          message_only: true,
-          message: data.message || "Order create response received.",
-          request: {
-            method: "POST",
-            url: "index.php?page=pos_register&action=create-order",
-            post_body: {}
-          }
-        };
-
-        if (typeof window.setOrderCreateApiDebugPayload === "function") {
-          window.setOrderCreateApiDebugPayload(apiDebug);
-        }
-        showPaymentModalOrderApiRecord(apiDebug);
-        if (typeof window.openOrderCreateApiResponseModal === "function") {
-          window.openOrderCreateApiResponseModal();
-        }
-
-        if (!data.success) {
-          showToast(data.message || "Order creation failed.", "red");
-          return;
-        }
-
-        var orderId = data.order_id || "";
-        if (!orderId && data.api_response) {
-          orderId =
-            data.api_response.orderid ||
-            data.api_response.order_id ||
-            data.api_response.order_no ||
-            "";
-        }
-        if (!orderId) {
-          showToast("Order created but order ID was missing in response.", "red");
-          return;
-        }
-
-        closeAddressConfirmModal();
-        closePaymentModal();
-        showToast("✓ Order created on API: " + orderId, "blue");
-        importOrder(orderId, function(importOk) {
-          var paymentSummary = data.payment_summary || {};
-          var qs = new URLSearchParams({
-            page: "pos_register",
-            action: "order-confirmation",
-            order_id: String(orderId || ""),
-            payment_type: String(paymentSummary.payment_type || paymentType || ""),
-            payment_stage: String(paymentSummary.payment_stage || paymentStage || ""),
-            amount: String(paymentSummary.amount || paymentAmount || ""),
-            transaction_id: String(paymentSummary.transaction_id || transactionId || ""),
-            import_status: importOk ? "success" : "failed"
-          });
-          window.location.href = "index.php?" + qs.toString();
-        });
-      })
-      .catch(function (err) {
-        console.error(err);
-        showToast(err.message || "Order creation request failed.", "red");
-      });
-
   }
 
   function importOrder(orderid, callback = null) {
@@ -1665,35 +1528,16 @@
   }
 
   function applyDiscount() {
-
-    let type = document.getElementById("discount_type").value;
-    let value = parseFloat(document.getElementById("discount_value").value);
-
+    var typeEl = document.getElementById("discount_type");
+    var valueEl = document.getElementById("discount_value");
+    var type = typeEl ? typeEl.value : "";
+    var value = valueEl ? parseFloat(valueEl.value) : NaN;
     if (!value || value <= 0) {
       showToast("⚠ Enter valid discount", "red");
       return;
     }
-
-    fetch("?page=pos_register&action=apply_custom_discount", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: "type=" + type + "&value=" + value
-      })
-      .then(res => res.json())
-      .then(data => {
-
-        if (data.success) {
-          showToast("✓ Discount Applied", "green");
-          closeDiscountModal();
-          location.reload();
-        } else {
-          showToast(data.message || "Discount failed", "red");
-        }
-
-      });
-
+    showToast("Discount API removed — wire new cart before applying discounts.", "red");
+    closeDiscountModal();
   }
 </script>
 <script>
