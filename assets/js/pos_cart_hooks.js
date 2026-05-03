@@ -601,15 +601,17 @@
     var disp = formatMoneyDisplay(val);
     var text = disp == null ? '—' : disp;
     var rowClass = isGrand
-      ? 'flex justify-between text-sm font-semibold text-slate-900 pt-2 border-t border-slate-100 mt-1'
-      : 'flex justify-between text-xs text-slate-700 py-0.5';
+      ? 'flex justify-between items-baseline gap-3 text-base font-bold text-slate-900 pt-3 mt-2 border-t border-slate-200/90'
+      : 'flex justify-between items-baseline gap-3 text-xs text-slate-600 py-1.5';
     return (
       '<div class="' +
       rowClass +
-      '"><span>' +
+      '"><span class="' +
+      (isGrand ? 'text-slate-700' : 'text-slate-500 font-medium') +
+      '">' +
       escapeHtml(label) +
       '</span><span class="tabular-nums ' +
-      (disp == null ? 'text-slate-400' : '') +
+      (isGrand ? 'text-orange-700' : disp == null ? 'text-slate-400' : 'text-slate-800 font-semibold') +
       '">' +
       escapeHtml(text) +
       '</span></div>'
@@ -635,7 +637,8 @@
     }
     el = document.createElement('div');
     el.id = PANEL_ID;
-    el.className = 'pos-exotic-cart-panel border-t border-slate-100 px-4 py-3 text-sm text-slate-800';
+    el.className =
+      'pos-exotic-cart-panel rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white shadow-sm px-3 py-4 text-sm text-slate-800 mx-0.5 mb-2';
     sticky.appendChild(el);
     return el;
   }
@@ -655,14 +658,23 @@
     if (!panel) {
       return;
     }
+    panel.className =
+      'pos-exotic-cart-panel rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white shadow-sm px-3 py-4 text-sm text-slate-800 mx-0.5 mb-2';
     var items = getCartItems(data);
     var totals = totalsFromRetrieve(data || {});
     var html = '';
 
     if (!items.length) {
-      html += '<p class="text-xs text-slate-500 py-2">Cart is empty.</p>';
+      html +=
+        '<div class="flex flex-col items-center justify-center py-8 px-2 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60">' +
+        '<span class="text-2xl mb-1 opacity-40" aria-hidden="true">🛒</span>' +
+        '<p class="text-sm font-medium text-slate-600">Your cart is empty</p>' +
+        '<p class="text-[11px] text-slate-400 mt-1 max-w-[14rem]">Add products from the grid to see them here.</p>' +
+        '</div>';
     } else {
-      html += '<div class="space-y-1 max-h-[50vh] overflow-y-auto pr-1">';
+      html +=
+        '<div class="flex flex-col gap-2.5 max-h-[50vh] overflow-y-auto pr-0.5 [scrollbar-width:thin]">' +
+        '<p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-0.5">In cart</p>';
       items.forEach(function (row) {
         var ref = lineCartRef(row);
         var qty = lineQty(row);
@@ -674,56 +686,66 @@
         var imgUrl = lineImageUrl(row);
         var productCode = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
         html +=
-          '<div class="pos-cart-line-item flex gap-2 border-b border-slate-100 py-2 last:border-0 cursor-pointer rounded-lg hover:bg-slate-50/80 -mx-1 px-1 transition-colors" data-cart-row="1"' +
+          '<div class="pos-cart-line-item group flex gap-3 rounded-xl border border-slate-100 bg-white p-2.5 shadow-sm cursor-pointer transition-all hover:border-slate-200 hover:shadow-md active:scale-[0.99]" data-cart-row="1"' +
           (productCode ? ' data-product-code="' + escapeHtml(productCode) + '"' : '') +
           ' role="button" tabindex="0" title="View product details">';
         if (imgUrl) {
           html +=
-            '<div class="shrink-0 w-12 h-12 rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">' +
+            '<div class="shrink-0 w-14 h-14 rounded-xl border border-slate-100 bg-gradient-to-br from-white to-slate-50 overflow-hidden ring-1 ring-slate-100 group-hover:ring-orange-100">' +
             '<img src="' +
             escapeHtml(imgUrl) +
             '" alt="' +
             escapeHtml(title) +
-            '" class="w-full h-full object-contain" loading="lazy" decoding="async" />' +
+            '" class="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />' +
             '</div>';
         } else {
           html +=
-            '<div class="shrink-0 w-12 h-12 rounded-lg border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-[9px]" title="No image">·</div>';
+            '<div class="shrink-0 w-14 h-14 rounded-xl border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-lg leading-none" title="No image">◇</div>';
         }
-        html += '<div class="min-w-0 flex-1">';
-        html += '<div class="text-xs font-medium text-slate-900 leading-snug">' + escapeHtml(title) + '</div>';
+        html += '<div class="min-w-0 flex-1 flex flex-col gap-0.5">';
+        html +=
+          '<div class="text-[13px] font-semibold text-slate-900 leading-snug line-clamp-2">' +
+          escapeHtml(title) +
+          '</div>';
         if (sub) {
-          html += '<div class="text-[10px] text-slate-500">' + escapeHtml(sub) + '</div>';
-        }
-        if (unitPrice) {
           html +=
-            '<div class="text-[10px] text-slate-600 mt-0.5">' +
-            '<span class="text-slate-500">Price:</span> ' +
-            '<span class="tabular-nums font-medium text-slate-800">' +
-            escapeHtml(unitPrice) +
-            '</span></div>';
+            '<div class="text-[10px] font-medium uppercase tracking-wide text-slate-400">' +
+            escapeHtml(sub) +
+            '</div>';
         }
-        if (lineTotal) {
-          html +=
-            '<div class="text-[10px] text-slate-800 mt-0.5">' +
-            '<span class="text-slate-500">Amount:</span> ' +
-            '<span class="tabular-nums font-semibold">' +
-            escapeHtml(lineTotal) +
-            '</span></div>';
+        if (unitPrice || lineTotal) {
+          html += '<div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">';
+          if (unitPrice) {
+            html +=
+              '<span class="inline-flex items-baseline gap-1 rounded-md bg-slate-50 px-1.5 py-0.5 text-slate-600 ring-1 ring-slate-100">' +
+              '<span class="text-slate-400">Price</span>' +
+              '<span class="tabular-nums font-semibold text-slate-800">' +
+              escapeHtml(unitPrice) +
+              '</span></span>';
+          }
+          if (lineTotal) {
+            html +=
+              '<span class="inline-flex items-baseline gap-1 rounded-md bg-orange-50/80 px-1.5 py-0.5 text-orange-900 ring-1 ring-orange-100/80">' +
+              '<span class="text-orange-700/80">Amount</span>' +
+              '<span class="tabular-nums font-bold text-orange-900">' +
+              escapeHtml(lineTotal) +
+              '</span></span>';
+          }
+          html += '</div>';
         }
-        html += '<div class="mt-1 flex flex-wrap items-center gap-2">';
+        html += '<div class="mt-2 flex flex-wrap items-center gap-2">';
         if (ref) {
           var maxAttr =
             maxSell != null && maxSell >= 1 ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"' : '';
           var hint =
             maxSell != null && maxSell >= 1
-              ? '<span class="text-[10px] text-slate-500 w-full basis-full">Max ' +
+              ? '<span class="text-[10px] text-slate-400 w-full basis-full pl-0.5">Max ' +
                 escapeHtml(String(maxSell)) +
                 ' per order</span>'
               : '';
           html +=
-            '<label class="text-[10px] text-slate-500">Qty</label>' +
-            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-14 border border-slate-200 rounded px-1 py-0.5 text-xs"' +
+            '<span class="text-[10px] font-medium text-slate-500">Qty</span>' +
+            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-[3.25rem] rounded-lg border border-slate-200 bg-white px-2 py-1 text-center text-xs font-semibold text-slate-800 shadow-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"' +
             maxAttr +
             ' data-cartref="' +
             escapeHtml(ref) +
@@ -733,7 +755,7 @@
             (maxSell != null && maxSell >= 1 ? escapeHtml('Maximum ' + maxSell + ' per order') : '') +
             '" />' +
             hint +
-            '<button type="button" class="pos-cart-delete-btn text-xs text-red-600 hover:underline" data-cartref="' +
+            '<button type="button" class="pos-cart-delete-btn ml-auto rounded-lg border border-red-100 bg-red-50/70 px-2.5 py-1 text-[11px] font-semibold text-red-700 transition hover:bg-red-100 hover:border-red-200" data-cartref="' +
             escapeHtml(ref) +
             '">Remove</button>';
         } else {
@@ -752,7 +774,10 @@
       isAmountGreaterThanZero(totals.customDeduction) ||
       totals.grandTotal != null;
     if (showSummary) {
-      html += '<div class="mt-3 pt-2 border-t border-slate-200 space-y-0.5">';
+      html +=
+        '<div class="mt-4 rounded-xl border border-slate-100 bg-slate-50/90 p-3 shadow-inner">' +
+        '<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-0.5">Summary</p>' +
+        '<div class="rounded-lg bg-white/90 px-2 py-1 ring-1 ring-slate-100/80">';
       html += moneyRowSummary('Sub total', totals.subtotal, false);
       html += moneyRowSummary('GST total', totals.gstTotal, false);
       if (isAmountGreaterThanZero(totals.couponDeduction)) {
@@ -762,28 +787,29 @@
         html += moneyRowSummary('Custom discount deduction', totals.customDeduction, false);
       }
       html += moneyRowSummary('Grand total', totals.grandTotal, true);
-      html += '</div>';
+      html += '</div></div>';
     }
 
-    html += '<div class="mt-3 pt-2 border-t border-slate-200 space-y-2">';
-    html += '<div class="text-xs font-medium text-slate-700">Coupon</div>';
     html +=
-      '<div class="flex gap-1 flex-wrap">' +
-      '<input type="text" class="pos-cart-coupon-input flex-1 min-w-[100px] border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Coupon ID" />' +
-      '<button type="button" class="pos-cart-coupon-apply shrink-0 bg-slate-800 text-white px-2 py-1 rounded text-xs">Apply</button>' +
-      '<button type="button" class="pos-cart-coupon-clear shrink-0 border border-slate-200 px-2 py-1 rounded text-xs">Clear</button>' +
-      '</div>';
-    html += '<div class="text-xs font-medium text-slate-700 pt-1">Custom discount</div>';
-    html +=
-      '<div class="flex gap-1 flex-wrap">' +
-      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input flex-1 min-w-[80px] border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Amount (0 removes)" />' +
-      '<button type="button" class="pos-cart-customdisc-apply shrink-0 bg-slate-800 text-white px-2 py-1 rounded text-xs">Set</button>' +
-      '</div>';
-    html += '</div>';
+      '<div class="mt-4 rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-3">' +
+      '<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Discounts</p>' +
+      '<div class="space-y-1.5">' +
+      '<label class="text-xs font-medium text-slate-600">Coupon</label>' +
+      '<div class="flex gap-2 flex-wrap">' +
+      '<input type="text" class="pos-cart-coupon-input flex-1 min-w-[6rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Coupon code" />' +
+      '<button type="button" class="pos-cart-coupon-apply shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 active:scale-[0.98]">Apply</button>' +
+      '<button type="button" class="pos-cart-coupon-clear shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50">Clear</button>' +
+      '</div></div>' +
+      '<div class="space-y-1.5 border-t border-slate-100 pt-3">' +
+      '<label class="text-xs font-medium text-slate-600">Custom discount</label>' +
+      '<div class="flex gap-2 flex-wrap">' +
+      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input flex-1 min-w-[5rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Amount (0 removes)" />' +
+      '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 active:scale-[0.98]">Set</button>' +
+      '</div></div></div>';
 
     html +=
-      '<div class="mt-3 pt-2 border-t border-slate-200 text-center">' +
-      '<button type="button" class="pos-cart-api-debug-link text-xs text-blue-700 hover:underline" ' +
+      '<div class="mt-3 flex justify-center">' +
+      '<button type="button" class="pos-cart-api-debug-link rounded-full border border-slate-200/90 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700" ' +
       'onclick="event.preventDefault();event.stopPropagation();if(typeof window.openPosCartApiDebugModal===\'function\'){window.openPosCartApiDebugModal();}">' +
       'Last API request / response' +
       '</button>' +
@@ -880,6 +906,14 @@
           openPosCartApiDebugModal();
           return;
         }
+        var del = e.target && e.target.closest ? e.target.closest('.pos-cart-delete-btn') : null;
+        if (del && panel.contains(del)) {
+          var refD = String(del.getAttribute('data-cartref') || '').trim();
+          if (refD) {
+            window.handleDeleteItem({ cartref: refD });
+          }
+          return;
+        }
         var lineItem = e.target && e.target.closest ? e.target.closest('.pos-cart-line-item') : null;
         if (lineItem && panel.contains(lineItem)) {
           if (e.target.closest('button, input, a, label, textarea, select')) {
@@ -889,14 +923,6 @@
           if (pcode && typeof window.openProductModalByCode === 'function') {
             e.preventDefault();
             window.openProductModalByCode(pcode, []);
-          }
-          return;
-        }
-        var del = e.target && e.target.closest ? e.target.closest('.pos-cart-delete-btn') : null;
-        if (del && panel.contains(del)) {
-          var refD = String(del.getAttribute('data-cartref') || '').trim();
-          if (refD) {
-            window.handleDeleteItem({ cartref: refD });
           }
           return;
         }
