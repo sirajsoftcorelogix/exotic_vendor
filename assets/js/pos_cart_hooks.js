@@ -7,6 +7,8 @@
 
   var cartActionLock = false;
   var cartDelegatesBound = false;
+  /** Last coupon id applied in this session (fallback label when retrieve omits name fields). */
+  var lastAppliedCouponDisplay = '';
   var PANEL_ID = 'posExoticCartPanel';
   var MODAL_ID = 'posCartApiDebugModal';
   /** @type {Record<string, unknown>|null} */
@@ -506,6 +508,55 @@
     return ok ? Math.round(sum * 100) / 100 : null;
   }
 
+  /** Human-readable coupon label for summary row (Exotic field names vary). */
+  function pickCouponDisplayName(data) {
+    var d = data && typeof data === 'object' ? data : {};
+    var cd = typeof d.checkoutdata === 'object' && d.checkoutdata !== null ? d.checkoutdata : {};
+    function asString(v) {
+      if (v == null || v === '') {
+        return '';
+      }
+      if (typeof v === 'object') {
+        var inner =
+          pickFirst(v, ['name', 'title', 'coupon_name', 'couponname', 'code', 'coupon_code', 'couponcode', 'id']) ||
+          '';
+        return inner !== '' && inner != null ? String(inner).trim() : '';
+      }
+      return String(v).trim();
+    }
+    var v =
+      pickFirst(d, [
+        'coupon_name',
+        'couponname',
+        'applied_coupon_name',
+        'discount_coupon_name',
+        'coupondisplayname',
+        'coupon_title',
+        'coupon_display_name'
+      ]) ||
+      pickFirst(cd, [
+        'coupon_name',
+        'couponname',
+        'discount_coupon_name',
+        'applied_coupon_name',
+        'coupon_display_name'
+      ]);
+    var s = asString(v);
+    if (s !== '') {
+      return s;
+    }
+    v =
+      pickFirst(d, [
+        'coupon_code',
+        'couponcode',
+        'discount_coupon_code',
+        'applied_coupon',
+        'couponid',
+        'coupon_id'
+      ]) || pickFirst(cd, ['coupon_code', 'couponcode', 'couponid', 'coupon_id']);
+    return asString(v);
+  }
+
   function totalsFromRetrieve(data) {
     var d = data && typeof data === 'object' ? data : {};
     var cd = typeof d.checkoutdata === 'object' && d.checkoutdata !== null ? d.checkoutdata : {};
@@ -553,6 +604,15 @@
         'coupon_discount_amount'
       ]) || pickNumber(cd, ['coupon_discount', 'coupondiscount']);
 
+    var couponDisplayName = pickCouponDisplayName(data);
+    if (
+      (!couponDisplayName || String(couponDisplayName).trim() === '') &&
+      isAmountGreaterThanZero(couponDeduction) &&
+      lastAppliedCouponDisplay
+    ) {
+      couponDisplayName = lastAppliedCouponDisplay;
+    }
+
     var customDeduction =
       pickNumber(d, [
         'customreduction',
@@ -596,6 +656,7 @@
       subtotal: sub,
       gstTotal: gstTotal,
       couponDeduction: couponDeduction,
+      couponDisplayName: couponDisplayName,
       customDeduction: customDeduction,
       grandTotal: grandTotal
     };
@@ -824,7 +885,11 @@
       html += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
       html += moneyRowSummary('GST', totals.gstTotal, false);
       if (isAmountGreaterThanZero(totals.couponDeduction)) {
-        html += moneyRowSummary('Coupon discount deduction', totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
+        var couponLbl =
+          totals.couponDisplayName && String(totals.couponDisplayName).trim() !== ''
+            ? 'Coupon (' + String(totals.couponDisplayName).trim() + ')'
+            : 'Coupon';
+        html += moneyRowSummary(couponLbl, totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
       }
       if (isAmountGreaterThanZero(totals.customDeduction)) {
         html += moneyRowSummary('Custom discount (INR)', totals.customDeduction, false, 'pos-cart-summary-remove-custom');
@@ -1237,7 +1302,10 @@
             if (!r.success) {
               return r;
             }
+            lastAppliedCouponDisplay = id;
             toast('Coupon applied.', 'green');
+          } else {
+            lastAppliedCouponDisplay = '';
           }
           return refreshCartInternal();
         })
