@@ -130,8 +130,18 @@
   }
 
   function lineCartRef(row) {
+    // Retrieve payload uses cartref for the line id; modifyqty URL param is cartid (same value).
     return String(
-      pickFirst(row, ['cartref', 'cart_ref', 'line_id', 'id', 'ref']) || ''
+      pickFirst(row, [
+        'cartref',
+        'cart_ref',
+        'cartid',
+        'cart_id',
+        'CartId',
+        'cartitem_id',
+        'line_id',
+        'cart_item_id'
+      ]) || ''
     ).trim();
   }
 
@@ -463,7 +473,7 @@
         return undefined;
       }
       setPanelBusy(true);
-      return cartRequest('modifyqty', { query: { cartref: ref, qty: String(qty) } })
+      return cartRequest('modifyqty', { query: { cartid: ref, newqty: String(qty) } })
         .then(function (r) {
           cartHandleApiMessages(r);
           if (!r.success) {
@@ -486,7 +496,7 @@
         return undefined;
       }
       setPanelBusy(true);
-      return cartRequest('delete', { query: { cartref: ref } })
+      return cartRequest('delete', { query: { cartid: ref } })
         .then(function (r) {
           cartHandleApiMessages(r);
           if (!r.success) {
