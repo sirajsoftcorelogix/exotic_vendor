@@ -21,7 +21,7 @@
     if (m) {
       return m;
     }
-    
+
     m = document.createElement('div');
     m.id = MODAL_ID;
     m.className =
@@ -401,7 +401,7 @@
     return ok ? sum : null;
   }
 
-  /** Sum GST in currency from lines only — never use `gst` on the line (that is typically the % slab, e.g. 3). */
+  /** Raw GST amount fields on the line (may mirror `gst` slab when both are the same small number). */
   function lineGstAmountRupee(row) {
     return pickNumber(row, [
       'gstamount',
@@ -418,6 +418,48 @@
     ]);
   }
 
+  /** GST % / slab on line (Exotic uses `gst` for rate, not rupees). */
+  function lineGstRatePercent(row) {
+    return pickNumber(row, ['gst_rate', 'gst_percent', 'gstrate', 'gst']);
+  }
+
+  /**
+   * GST in rupees from GST-inclusive line total: tax = T - T/(1+p/100).
+   * Used when `gstamount` equals `gst` (both encode the rate) or when no separate rupee amount exists.
+   */
+  function gstRupeesFromInclusiveLine(row, qty, percent) {
+    if (percent == null || percent <= 0 || percent > 40) {
+      return null;
+    }
+    var inclusive = parseMoneyValue(lineLineTotalStr(row, qty));
+    if (inclusive == null || inclusive <= 0) {
+      return null;
+    }
+    var tax = inclusive - inclusive / (1 + percent / 100);
+    if (isNaN(tax) || tax <= 0) {
+      return null;
+    }
+    return Math.round(tax * 100) / 100;
+  }
+
+  function lineResolvedGstRupees(row, qty) {
+    var apiAmt = lineGstAmountRupee(row);
+    var rate = lineGstRatePercent(row);
+    if (rate != null && rate > 0 && rate <= 40 && apiAmt != null && Math.abs(apiAmt - rate) < 1e-6) {
+      var extracted = gstRupeesFromInclusiveLine(row, qty, rate);
+      if (extracted != null) {
+        return extracted;
+      }
+    }
+    if (apiAmt != null && (rate == null || Math.abs(apiAmt - rate) >= 1e-6)) {
+      return apiAmt;
+    }
+    if (apiAmt == null && rate != null && rate > 0 && rate <= 40) {
+      return gstRupeesFromInclusiveLine(row, qty, rate);
+    }
+    return null;
+  }
+
   function sumGstFromCartLineItems(cartData) {
     var items = getCartItems(cartData || {});
     if (!items.length) {
@@ -426,13 +468,14 @@
     var sum = 0;
     var ok = false;
     for (var i = 0; i < items.length; i++) {
-      var g = lineGstAmountRupee(items[i]);
+      var qty = lineQty(items[i]);
+      var g = lineResolvedGstRupees(items[i], qty);
       if (g != null) {
         sum += g;
         ok = true;
       }
     }
-    return ok ? sum : null;
+    return ok ? Math.round(sum * 100) / 100 : null;
   }
 
   function totalsFromRetrieve(data) {
@@ -462,8 +505,7 @@
         'gst_tax_total',
         'tax_total',
         'total_tax',
-        'gst_amount',
-        'gstamount'
+        'gst_amount'
       ]) || pickNumber(cd, ['gst_total', 'total_gst', 'total_gst_amount', 'tax_total']);
     if (gstTotal == null) {
       gstTotal = sumGstFromCartLineItems(d);
