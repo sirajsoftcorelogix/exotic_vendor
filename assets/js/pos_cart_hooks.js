@@ -350,13 +350,13 @@
     return isNaN(n) ? null : n;
   }
 
-  /** Display unit / single-item price from cart line (API fields vary). */
+  /** Unit price from cart line (API fields vary). */
   function lineUnitPriceStr(row) {
     var v = pickFirst(row, ['unit_price', 'item_price', 'single_price', 'original_price', 'price', 'selling_price']);
     return v != null && String(v) !== '' ? String(v) : '';
   }
 
-  /** Line total from API or unit price × qty when Exotic omits an explicit line total. */
+  /** Line amount from API or unit price × qty when Exotic omits an explicit line total. */
   function lineLineTotalStr(row, qty) {
     var explicit = pickFirst(row, [
       'line_total',
@@ -499,6 +499,14 @@
     return String(val);
   }
 
+  function isAmountGreaterThanZero(val) {
+    if (val == null || val === '') {
+      return false;
+    }
+    var n = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, ''));
+    return !isNaN(n) && n > 0;
+  }
+
   /** Always one row; uses em dash when API did not supply a number. */
   function moneyRowSummary(label, val, isGrand) {
     var disp = formatMoneyDisplay(val);
@@ -582,7 +590,7 @@
         if (unitPrice) {
           html +=
             '<div class="text-[10px] text-slate-600 mt-0.5">' +
-            '<span class="text-slate-500">Single item price:</span> ' +
+            '<span class="text-slate-500">Price:</span> ' +
             '<span class="tabular-nums font-medium text-slate-800">' +
             escapeHtml(unitPrice) +
             '</span></div>';
@@ -590,7 +598,7 @@
         if (lineTotal) {
           html +=
             '<div class="text-[10px] text-slate-800 mt-0.5">' +
-            '<span class="text-slate-500">Line total:</span> ' +
+            '<span class="text-slate-500">Amount:</span> ' +
             '<span class="tabular-nums font-semibold">' +
             escapeHtml(lineTotal) +
             '</span></div>';
@@ -603,7 +611,7 @@
             maxSell != null && maxSell >= 1
               ? '<span class="text-[10px] text-slate-500 w-full basis-full">Max ' +
                 escapeHtml(String(maxSell)) +
-                ' (Exotic catalog stock)</span>'
+                ' per order</span>'
               : '';
           html +=
             '<label class="text-[10px] text-slate-500">Qty</label>' +
@@ -614,7 +622,7 @@
             '" value="' +
             escapeHtml(String(qty)) +
             '" title="' +
-            (maxSell != null && maxSell >= 1 ? escapeHtml('Maximum ' + maxSell + ' per Exotic India inventory') : '') +
+            (maxSell != null && maxSell >= 1 ? escapeHtml('Maximum ' + maxSell + ' per order') : '') +
             '" />' +
             hint +
             '<button type="button" class="pos-cart-delete-btn text-xs text-red-600 hover:underline" data-cartref="' +
@@ -632,15 +640,19 @@
       items.length > 0 ||
       totals.subtotal != null ||
       totals.gstTotal != null ||
-      totals.couponDeduction != null ||
-      totals.customDeduction != null ||
+      isAmountGreaterThanZero(totals.couponDeduction) ||
+      isAmountGreaterThanZero(totals.customDeduction) ||
       totals.grandTotal != null;
     if (showSummary) {
       html += '<div class="mt-3 pt-2 border-t border-slate-200 space-y-0.5">';
       html += moneyRowSummary('Sub total', totals.subtotal, false);
       html += moneyRowSummary('GST total', totals.gstTotal, false);
-      html += moneyRowSummary('Coupon discount deduction', totals.couponDeduction, false);
-      html += moneyRowSummary('Custom discount deduction', totals.customDeduction, false);
+      if (isAmountGreaterThanZero(totals.couponDeduction)) {
+        html += moneyRowSummary('Coupon discount deduction', totals.couponDeduction, false);
+      }
+      if (isAmountGreaterThanZero(totals.customDeduction)) {
+        html += moneyRowSummary('Custom discount deduction', totals.customDeduction, false);
+      }
       html += moneyRowSummary('Grand total', totals.grandTotal, true);
       html += '</div>';
     }
@@ -711,7 +723,7 @@
         var maxAttr = t.getAttribute('data-max-qty');
         var maxQ = maxAttr != null && maxAttr !== '' ? parseInt(String(maxAttr), 10) : NaN;
         if (!isNaN(maxQ) && maxQ >= 1 && qty > maxQ) {
-          toast('Maximum quantity for this item is ' + maxQ + ' (Exotic India catalog stock / availability).', 'red');
+          toast('Maximum quantity for this item is ' + maxQ + ' per order.', 'red');
           t.value = String(maxQ);
           return;
         }
@@ -862,8 +874,8 @@
     var maxS = lineMaxSellableQty(row, cartData);
     var capHint =
       maxS != null && maxS >= 1
-        ? ' Exotic India allows at most ' + maxS + ' for this SKU.'
-        : ' Quantity is limited by Exotic India stock / availability.';
+        ? ' Maximum per order for this item is ' + maxS + '.'
+        : ' Quantity is limited per order for this item.';
     toast(
       'You requested ' +
         requestedQty +
