@@ -1381,8 +1381,13 @@ class POSRegisterController
                 if (!is_array($body)) {
                     $body = $_POST;
                 }
-                $postData = $this->buildExoticCartAddBody(is_array($body) ? $body : []);
-                $this->emitCartApiResponse($this->exotic_api_call('/cart/add', 'POST', [], $postData));
+                $split = $this->buildExoticCartAddSplit(is_array($body) ? $body : []);
+                $this->emitCartApiResponse($this->exotic_api_call(
+                    '/cart/add',
+                    'POST',
+                    $split['query'],
+                    $split['post']
+                ));
                 return;
 
             case 'modifyqty':
@@ -1436,54 +1441,65 @@ class POSRegisterController
     }
 
     /**
-     * @param array<string, mixed> $body
-     * @return array<string, string>
+     * Build Exotic POST /api/cart/add request: query params per API collection, form body buynow/code/qty/variation/options.
+     *
+     * @param array<string, mixed> $body Decoded JSON from POS (code, qty, variation, options, optional buynow 0|1).
+     * @return array{query: array<string, string>, post: array<string, string>}
      */
-    private function buildExoticCartAddBody(array $body): array
+    private function buildExoticCartAddSplit(array $body): array
     {
         $code = trim((string)($body['code'] ?? ''));
-        $stockCheck = trim((string)($body['stock_check_code'] ?? ''));
         $qty = (int)($body['qty'] ?? 1);
         if ($qty < 1) {
             $qty = 1;
         }
 
-        $post = [];
-        if ($code !== '') {
-            $post['code'] = $code;
-            $post['item_code'] = $code;
+        // Required: 0 = add to cart, 1 = buy now (https://www.exoticindia.com/api/cart/add)
+        $buynow = '0';
+        if (array_key_exists('buynow', $body)) {
+            $bn = (int)$body['buynow'];
+            $buynow = $bn === 1 ? '1' : '0';
         }
-        if ($stockCheck !== '' && $stockCheck !== $code) {
-            $post['stock_check_code'] = $stockCheck;
-        }
-        $post['quantity'] = (string)$qty;
-        $post['qty'] = (string)$qty;
+
+        $post = [
+            'buynow' => $buynow,
+            'code' => $code,
+            'qty' => (string)$qty,
+        ];
 
         $variation = isset($body['variation']) ? trim((string)$body['variation']) : '';
         if ($variation !== '') {
             $post['variation'] = $variation;
         }
-        if (isset($body['options'])) {
+        if (isset($body['options']) && trim((string)$body['options']) !== '') {
             $post['options'] = (string)$body['options'];
         }
 
+        $discountStr = '';
         if (!empty($_SESSION['pos_exotic_cart_coupon_details'])) {
             $dcd = $_SESSION['pos_exotic_cart_coupon_details'];
-            $post['discountcoupondetails'] = is_string($dcd) ? $dcd : json_encode($dcd, JSON_UNESCAPED_UNICODE);
+            $discountStr = is_string($dcd) ? $dcd : json_encode($dcd, JSON_UNESCAPED_UNICODE);
         } elseif (!empty($_SESSION['discount_coupon']['discountcoupondetails'])) {
             $v = $_SESSION['discount_coupon']['discountcoupondetails'];
-            $post['discountcoupondetails'] = is_string($v) ? $v : json_encode($v, JSON_UNESCAPED_UNICODE);
+            $discountStr = is_string($v) ? $v : json_encode($v, JSON_UNESCAPED_UNICODE);
         }
 
+        $giftStr = '';
         if (!empty($_SESSION['pos_exotic_cart_gift_voucher'])) {
             $gv = $_SESSION['pos_exotic_cart_gift_voucher'];
-            $post['gift_voucher'] = is_string($gv) ? $gv : json_encode($gv, JSON_UNESCAPED_UNICODE);
+            $giftStr = is_string($gv) ? $gv : json_encode($gv, JSON_UNESCAPED_UNICODE);
         } elseif (!empty($_SESSION['gift_voucher'])) {
             $gv = $_SESSION['gift_voucher'];
-            $post['gift_voucher'] = is_string($gv) ? $gv : json_encode($gv, JSON_UNESCAPED_UNICODE);
+            $giftStr = is_string($gv) ? $gv : json_encode($gv, JSON_UNESCAPED_UNICODE);
         }
 
-        return $post;
+        // API expects these on the URL: .../cart/add?discountcoupondetails=&giftvoucherdetails=
+        $query = [
+            'discountcoupondetails' => $discountStr,
+            'giftvoucherdetails' => $giftStr,
+        ];
+
+        return ['query' => $query, 'post' => $post];
     }
 
     /**
