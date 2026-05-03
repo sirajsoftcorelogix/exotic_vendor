@@ -48,6 +48,18 @@ class POSRegisterController
         // Put it first:
         $categories = ['allProducts' => 'All Products'] + $categories;
 
+        // Clear legacy Exotic-cart session keys so nothing re-fires discounts/coupons or stale debug.
+        foreach (['cart_success', 'cart_error', 'coupon_message', 'coupon_status'] as $k) {
+            unset($_SESSION[$k]);
+        }
+        unset(
+            $_SESSION['discount_coupon'],
+            $_SESSION['gift_voucher'],
+            $_SESSION['custom_discount'],
+            $_SESSION['pos_coupon_api_debug'],
+            $_SESSION['pos_order_create_api_debug']
+        );
+
         $customerModel = new Customer($conn);
         $selected_customer = null;
         if (!empty($_SESSION['pos_customer_id'])) {
@@ -122,23 +134,11 @@ class POSRegisterController
         renderTemplate('views/pos_register/index.php', [
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
+            // Minimal placeholder until new cart; view must not depend on Exotic retrieve shape.
             'cartData' => [
                 'items' => [],
-                'subtotal' => 0.0,
-                'shipping_total' => 0.0,
-                'gst' => 0.0,
-                'coupon_discount' => 0.0,
-                'coupon_applied' => false,
-                'custom_discount' => 0.0,
                 'grand_total' => 0.0,
-                'checkoutdata' => '',
-                'codcharges' => 0.0,
-                'discountcoupondetails_effective' => '',
-                'giftvoucherdetails_effective' => '',
                 'currency' => 'INR',
-                'cart_api_http_code' => 0,
-                'cart_api_body' => [],
-                'cart_api_request' => [],
             ],
             'selected_customer' => $selected_customer,
         ]);
@@ -728,328 +728,6 @@ class POSRegisterController
         $stmt->close();
 
         return is_array($row) ? $row : [];
-    }
-
-    /**
-     * GST % for a cart line: same keys as Exotic `/product/code` (see mergeGstPercentField): gst_rate, gst_percent, gst.
-     * Cart line keys can override when present; unwrapped product payload fills typical API fields.
-     */
-    private function resolveCartLineGstPercent(array $cartLineItem, array $productApiResult, $conn): float
-    {
-        $productData = $this->unwrapProductApiResponse($productApiResult['data'] ?? []);
-        $merged = array_merge($cartLineItem, $productData);
-        $dbRow = $this->fetchVpProductGstFallbackRow($conn, trim((string)($cartLineItem['code'] ?? '')));
-
-        return $this->resolveGstPercentAsNumber($merged, $dbRow);
-    }
-
-    /**
-     * Coupon discount rupees from GET /cart/retrieve JSON.
-     * Primary key matches legacy POS cart helper (views/pos_register/cart-functions.php): couponreduction.
-     * Fallback: orderremarks.coupon_reduce (same shape as order detail templates).
-     */
-    private function resolveCartRetrieveCouponDiscount(array $data): float
-    {
-        if (array_key_exists('couponreduction', $data) && is_numeric($data['couponreduction'])) {
-            $v = (float)$data['couponreduction'];
-            if ($v > 0) {
-                return $v;
-            }
-        }
-        if (
-            !empty($data['orderremarks'])
-            && is_array($data['orderremarks'])
-            && isset($data['orderremarks']['coupon_reduce'])
-            && is_numeric($data['orderremarks']['coupon_reduce'])
-        ) {
-            $v = (float)$data['orderremarks']['coupon_reduce'];
-
-            return $v > 0 ? $v : 0.0;
-        }
-
-        return 0.0;
-    }
-
-    /**
-     * First positive numeric value from a payload node by candidate keys.
-     */
-    private function pickFirstPositiveNumeric(array $node, array $keys): float
-    {
-        foreach ($keys as $k) {
-            if (array_key_exists($k, $node) && is_numeric($node[$k])) {
-                $v = (float)$node[$k];
-                if ($v > 0) {
-                    return $v;
-                }
-            }
-        }
-
-        return 0.0;
-    }
-
-    /**
-     * Decode checkoutdata that may be array/json/base64-json.
-     */
-    private function decodeCheckoutdataNode($checkoutdata): array
-    {
-        if (is_array($checkoutdata)) {
-            return $checkoutdata;
-        }
-        $s = trim((string)$checkoutdata);
-        if ($s === '') {
-            return [];
-        }
-        $decoded = json_decode($s, true);
-        if (is_array($decoded)) {
-            return $decoded;
-        }
-        $b = base64_decode($s, true);
-        if ($b === false || $b === '') {
-            return [];
-        }
-        $decoded2 = json_decode($b, true);
-
-        return is_array($decoded2) ? $decoded2 : [];
-    }
-
-    /**
-     * Coupon discount in rupees: root fields, then JSON (or base64+JSON) checkoutdata.
-     * The API may omit couponreduction on the root but still include it in checkoutdata.
-     */
-    private function extractCartRetrieveCouponDiscountRupees(array $data): float
-    {
-        $v = $this->resolveCartRetrieveCouponDiscount($data);
-        if ($v > 0) {
-            return $v;
-        }
-        $rootAlt = $this->pickFirstPositiveNumeric(
-            $data,
-            ['coupon_reduction', 'couponreduce', 'coupon_reduce', 'coupondiscount', 'coupon_discount']
-        );
-        if ($rootAlt > 0) {
-            return $rootAlt;
-        }
-
-        $checkoutNode = $this->decodeCheckoutdataNode($data['checkoutdata'] ?? null);
-        if ($checkoutNode === []) {
-            return 0.0;
-        }
-        $tryNode = static function (array $node): float {
-            foreach (['couponreduction', 'coupon_reduction', 'couponreduce', 'coupon_reduce', 'coupondiscount', 'coupon_discount'] as $k) {
-                if (array_key_exists($k, $node) && is_numeric($node[$k])) {
-                    $x = (float)$node[$k];
-                    if ($x > 0) {
-                        return $x;
-                    }
-                }
-            }
-            if (!empty($node['orderremarks']) && is_array($node['orderremarks'])
-                && isset($node['orderremarks']['coupon_reduce']) && is_numeric($node['orderremarks']['coupon_reduce'])) {
-                $x = (float)$node['orderremarks']['coupon_reduce'];
-
-                return $x > 0 ? $x : 0.0;
-            }
-
-            return 0.0;
-        };
-        $fromCheckout = $tryNode($checkoutNode);
-        if ($fromCheckout > 0) {
-            return $fromCheckout;
-        }
-
-        return 0.0;
-    }
-
-    /**
-     * Total GST rupees from GET /cart/retrieve JSON root (same key as views/pos_register/cart-functions.php): gstamount.
-     */
-    private function resolveCartRetrieveGstTotal(array $data): float
-    {
-        return $this->pickFirstPositiveNumeric($data, ['gstamount']);
-    }
-
-    /**
-     * Addon list from /product/code (unwrapped), including express row for cart_entry matching.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function productApiAddonCatalogList(array $productApiResult): array
-    {
-        $data = $this->unwrapProductApiResponse($productApiResult['data'] ?? []);
-        $opts = [];
-        if (!empty($data['addon_options']['default_options']) && is_array($data['addon_options']['default_options'])) {
-            $opts = $data['addon_options']['default_options'];
-        }
-        if (!empty($data['express_shipping_option']['price'])) {
-            $eso = $data['express_shipping_option'];
-            $opts[] = [
-                'title' => $eso['title'] ?? '',
-                'price' => (float)($eso['price'] ?? 0),
-                'cart_entry' => trim((string)($eso['cart_entry'] ?? '')),
-            ];
-        }
-
-        return $opts;
-    }
-
-    /**
-     * Sum addon unit prices by matching selected cart_entry strings to catalog rows (same as POS modal).
-     */
-    private function sumAddonPricesFromCatalogMatches(array $selectedEntries, array $catalogAddons): float
-    {
-        $sum = 0.0;
-        foreach ($selectedEntries as $se) {
-            $se = trim((string)$se);
-            if ($se === '') {
-                continue;
-            }
-            foreach ($catalogAddons as $opt) {
-                $ce = trim((string)($opt['cart_entry'] ?? ''));
-                if ($ce !== '' && strcasecmp($ce, $se) === 0) {
-                    $sum += (float)($opt['price'] ?? 0);
-                    break;
-                }
-            }
-        }
-
-        return $sum;
-    }
-
-    /**
-     * Express shipping is billed as an add-on in the UI but cart/retrieve may omit it from addons_selected;
-     * merge per-unit express cost into the addon sum without double-counting catalog / addons rows.
-     */
-    private function mergeExpressShippingIntoAddonUnitSum(
-        float $addonsSumPerUnit,
-        array $addons,
-        array $selectedEntries,
-        array $allAddons,
-        bool $expressSelected,
-        float $shippingPerUnit
-    ): float {
-        if (!$expressSelected || $shippingPerUnit <= 0) {
-            return $addonsSumPerUnit;
-        }
-
-        $expressCounted = 0.0;
-        foreach ($addons as $a) {
-            if (stripos((string)($a['name'] ?? ''), 'Express') !== false) {
-                $expressCounted += (float)($a['value'] ?? 0);
-            }
-        }
-        foreach ($allAddons as $opt) {
-            if (stripos((string)($opt['title'] ?? ''), 'express') === false) {
-                continue;
-            }
-            $ce = trim((string)($opt['cart_entry'] ?? ''));
-            if ($ce === '') {
-                continue;
-            }
-            foreach ($selectedEntries as $se) {
-                if (strcasecmp($ce, trim((string)$se)) === 0) {
-                    $expressCounted += (float)($opt['price'] ?? 0);
-                    break;
-                }
-            }
-        }
-
-        if ($expressCounted < $shippingPerUnit - 0.0001) {
-            return $addonsSumPerUnit + ($shippingPerUnit - $expressCounted);
-        }
-
-        return $addonsSumPerUnit;
-    }
-
-    /**
-     * Human-readable addon lines for POS cart UI (non-express; express has its own row).
-     *
-     * @param array<int, array<string, mixed>> $addonsFromApi
-     * @param array<int, string> $selectedEntries
-     * @param array<int, array<string, mixed>> $catalog
-     * @return array<int, array{title: string, value: float, cart_entry: string}>
-     */
-    private function buildPosCartAddonDisplayLines(
-        array $addonsFromApi,
-        array $selectedEntries,
-        array $catalog
-    ): array {
-        $lines = [];
-        $seen = [];
-
-        $resolveTitle = static function (string $cartEntry, string $fallbackName) use ($catalog): string {
-            $ce = trim($cartEntry);
-            $name = trim($fallbackName);
-            if ($name !== '') {
-                return $name;
-            }
-            if ($ce === '') {
-                return '';
-            }
-            foreach ($catalog as $opt) {
-                if (strcasecmp(trim((string)($opt['cart_entry'] ?? '')), $ce) === 0) {
-                    return trim((string)($opt['title'] ?? '')) ?: $ce;
-                }
-            }
-
-            return $ce;
-        };
-
-        foreach ($addonsFromApi as $ad) {
-            if (!is_array($ad)) {
-                continue;
-            }
-            $ce = trim((string)($ad['cart_entry'] ?? ''));
-            $title = $resolveTitle($ce, (string)($ad['name'] ?? ''));
-            if ($title === '') {
-                continue;
-            }
-            if (stripos($title, 'express') !== false) {
-                continue;
-            }
-            if ($ce !== '') {
-                $seen[strtolower($ce)] = true;
-            }
-            $lines[] = [
-                'title' => $title,
-                'value' => (float)($ad['value'] ?? 0),
-                'cart_entry' => $ce,
-            ];
-        }
-
-        foreach ($selectedEntries as $entry) {
-            $entry = trim((string)$entry);
-            if ($entry === '') {
-                continue;
-            }
-            if (isset($seen[strtolower($entry)])) {
-                continue;
-            }
-            $seen[strtolower($entry)] = true;
-
-            $title = $resolveTitle($entry, '');
-            if ($title === '') {
-                $title = $entry;
-            }
-            if (stripos($title, 'express') !== false) {
-                continue;
-            }
-
-            $price = 0.0;
-            foreach ($catalog as $opt) {
-                if (strcasecmp(trim((string)($opt['cart_entry'] ?? '')), $entry) === 0) {
-                    $price = (float)($opt['price'] ?? 0);
-                    break;
-                }
-            }
-
-            $lines[] = [
-                'title' => $title,
-                'value' => $price,
-                'cart_entry' => $entry,
-            ];
-        }
-
-        return $lines;
     }
 
     /** First usable image path/URL from a /product/code JSON payload. */
@@ -1677,6 +1355,177 @@ class POSRegisterController
         ]);
         exit;
     }
+    /**
+     * Same-origin JSON proxy for Exotic retail cart endpoints (browser cannot send x-api-* headers / CORS).
+     * Forwards to https://www.exoticindia.com/api via exotic_api_call().
+     */
+    public function cartApi(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $op = trim((string)($_REQUEST['op'] ?? ''));
+        switch ($op) {
+            case 'retrieve':
+                $this->emitCartApiResponse($this->exotic_api_call('/cart/retrieve', 'GET', []));
+                return;
+
+            case 'add':
+                if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
+                    echo json_encode(['success' => false, 'message' => 'POST required'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                    exit;
+                }
+                $raw = (string)file_get_contents('php://input');
+                $body = json_decode($raw, true);
+                if (!is_array($body)) {
+                    $body = $_POST;
+                }
+                $postData = $this->buildExoticCartAddBody(is_array($body) ? $body : []);
+                $this->emitCartApiResponse($this->exotic_api_call('/cart/add', 'POST', [], $postData));
+                return;
+
+            case 'modifyqty':
+                $this->emitCartApiResponse($this->exotic_api_call('/cart/modifyqty', 'GET', [
+                    'cartref' => trim((string)($_GET['cartref'] ?? $_REQUEST['cartref'] ?? '')),
+                    'qty' => $_GET['qty'] ?? $_REQUEST['qty'] ?? '',
+                ]));
+                return;
+
+            case 'delete':
+                $this->emitCartApiResponse($this->exotic_api_call('/cart/delete', 'GET', [
+                    'cartref' => trim((string)($_GET['cartref'] ?? $_REQUEST['cartref'] ?? '')),
+                ]));
+                return;
+
+            case 'addcoupon':
+                $res = $this->exotic_api_call('/cart/addcoupon', 'GET', [
+                    'couponid' => trim((string)($_GET['couponid'] ?? $_REQUEST['couponid'] ?? '')),
+                ]);
+                if ($this->isExoticCartSuccess($res)) {
+                    $data = is_array($res['data'] ?? null) ? $res['data'] : [];
+                    $details = $data['discountcoupondetails'] ?? $data['discount_coupon_details'] ?? null;
+                    if ($details !== null && $details !== '') {
+                        if (is_array($details)) {
+                            $_SESSION['pos_exotic_cart_coupon_details'] = json_encode($details, JSON_UNESCAPED_UNICODE);
+                            $_SESSION['discount_coupon'] = ['discountcoupondetails' => $details];
+                        } else {
+                            $_SESSION['pos_exotic_cart_coupon_details'] = (string)$details;
+                            $_SESSION['discount_coupon'] = ['discountcoupondetails' => (string)$details];
+                        }
+                    }
+                }
+                $this->emitCartApiResponse($res);
+                return;
+
+            case 'removecoupon':
+                unset($_SESSION['pos_exotic_cart_coupon_details'], $_SESSION['discount_coupon']);
+                echo json_encode(['success' => true, 'message' => 'Coupon attachment cleared'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+
+            case 'customdiscount':
+                $this->emitCartApiResponse($this->exotic_api_call('/cart/addcustomdiscount', 'GET', [
+                    'custom_reduce' => (string)($_GET['custom_reduce'] ?? $_REQUEST['custom_reduce'] ?? '0'),
+                ]));
+                return;
+
+            default:
+                echo json_encode(['success' => false, 'message' => 'Unknown cart op'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     * @return array<string, string>
+     */
+    private function buildExoticCartAddBody(array $body): array
+    {
+        $code = trim((string)($body['code'] ?? ''));
+        $stockCheck = trim((string)($body['stock_check_code'] ?? ''));
+        $qty = (int)($body['qty'] ?? 1);
+        if ($qty < 1) {
+            $qty = 1;
+        }
+
+        $post = [];
+        if ($code !== '') {
+            $post['code'] = $code;
+            $post['item_code'] = $code;
+        }
+        if ($stockCheck !== '' && $stockCheck !== $code) {
+            $post['stock_check_code'] = $stockCheck;
+        }
+        $post['quantity'] = (string)$qty;
+        $post['qty'] = (string)$qty;
+
+        $variation = isset($body['variation']) ? trim((string)$body['variation']) : '';
+        if ($variation !== '') {
+            $post['variation'] = $variation;
+        }
+        if (isset($body['options'])) {
+            $post['options'] = (string)$body['options'];
+        }
+
+        if (!empty($_SESSION['pos_exotic_cart_coupon_details'])) {
+            $dcd = $_SESSION['pos_exotic_cart_coupon_details'];
+            $post['discountcoupondetails'] = is_string($dcd) ? $dcd : json_encode($dcd, JSON_UNESCAPED_UNICODE);
+        } elseif (!empty($_SESSION['discount_coupon']['discountcoupondetails'])) {
+            $v = $_SESSION['discount_coupon']['discountcoupondetails'];
+            $post['discountcoupondetails'] = is_string($v) ? $v : json_encode($v, JSON_UNESCAPED_UNICODE);
+        }
+
+        if (!empty($_SESSION['pos_exotic_cart_gift_voucher'])) {
+            $gv = $_SESSION['pos_exotic_cart_gift_voucher'];
+            $post['gift_voucher'] = is_string($gv) ? $gv : json_encode($gv, JSON_UNESCAPED_UNICODE);
+        } elseif (!empty($_SESSION['gift_voucher'])) {
+            $gv = $_SESSION['gift_voucher'];
+            $post['gift_voucher'] = is_string($gv) ? $gv : json_encode($gv, JSON_UNESCAPED_UNICODE);
+        }
+
+        return $post;
+    }
+
+    /**
+     * @param array{data?: mixed, code?: int, raw?: string} $res
+     */
+    private function isExoticCartSuccess(array $res): bool
+    {
+        $c = (int)($res['code'] ?? 0);
+        if ($c < 200 || $c >= 300) {
+            return false;
+        }
+        $d = $res['data'] ?? [];
+        if (!is_array($d)) {
+            return true;
+        }
+        if (array_key_exists('success', $d) && $d['success'] === false) {
+            return false;
+        }
+        if (isset($d['status']) && strtolower((string)$d['status']) === 'error') {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * @param array{data?: mixed, code?: int, raw?: string} $res
+     */
+    private function emitCartApiResponse(array $res): void
+    {
+        $raw = (string)($res['raw'] ?? '');
+        if (strlen($raw) > 65536) {
+            $raw = substr($raw, 0, 65536) . '…(truncated)';
+        }
+        echo json_encode([
+            'success' => $this->isExoticCartSuccess($res),
+            'http_code' => (int)($res['code'] ?? 0),
+            'data' => $res['data'] ?? [],
+            'raw' => $raw,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     public function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null)
     {
         // echo "<pre>";

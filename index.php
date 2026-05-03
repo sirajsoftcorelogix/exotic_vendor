@@ -1039,6 +1039,9 @@ switch ($page) {
             case 'product-availability':
                 $controller->productAvailability();
                 break;
+            case 'cart-api':
+                $controller->cartApi();
+                break;
             default:
                 $controller->index();
                 break;
