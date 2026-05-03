@@ -107,30 +107,6 @@
           Stock Report
         </a>
 
-        <!-- Cart Icon (clickable) -->
-        <button
-          onclick="openCart()"
-          class="flex h-10 w-10 items-center justify-center rounded-xl border hover:bg-gray-100"
-          title="Cart">
-          <svg xmlns="http://www.w3.org/2000/svg"
-            class="h-5 w-5 text-gray-700"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor">
-            <path stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M3 3h2l.4 2M7 13h10l4-8H5.4
-                    M7 13l-1.35 2.7A1 1 0 007.55 17h8.9
-                    a1 1 0 00.9-.55L19 13
-                    M7 13L5.4 5
-                    M16 21a1 1 0 100-2
-                    1 1 0 000 2z
-                    M8 21a1 1 0 100-2
-                    1 1 0 000 2z" />
-          </svg>
-        </button>
-
         <!-- Store / Profile -->
         <div class="flex items-center gap-2 border rounded-xl px-3 py-2">
           <div class="h-8 w-8 rounded-full bg-slate-300"></div>
@@ -236,13 +212,8 @@
       </div>
     </section>
 
-    <!-- ===== PAYMENT / CART ===== -->
-    <!-- CUSTOMER SELECT -->
-
-    <?php
-
-    $cart = $cartData['items'] ?? [];
-    ?>
+    <!-- Checkout / Exotic cart removed — rebuild in progress -->
+    <?php $cart = []; ?>
 
     <aside class="col-span-12 lg:col-span-3">
       <div class="px-4 py-3 border-b">
@@ -272,676 +243,13 @@
           <div id="selectedCustomerPhoneCart" class="text-sm text-slate-500 text-center">-</div>
         </div>
 
-        <?php if (isset($_SESSION['cart_success'])): ?>
-          <div class="text-green-600 text-sm mb-2 px-4">
-            <?= $_SESSION['cart_success'] ?>
-          </div>
-          <?php unset($_SESSION['cart_success']); ?>
-        <?php endif; ?>
-
-        <?php if (!empty($_SESSION['cart_error'])): ?>
-          <div class="text-red-600 text-sm mb-2 px-4">
-            <?= htmlspecialchars((string)$_SESSION['cart_error']) ?>
-          </div>
-          <?php unset($_SESSION['cart_error']); ?>
-        <?php endif; ?>
-
-        <div class="px-4 py-3 space-y-4 text-sm">
-
-          <!-- PRODUCTS -->
-          <div class="space-y-3" id="cartItems">
-
-            <?php if (empty($cart)): ?>
-
-              <div class="py-8 text-center text-gray-400 text-sm">
-                Your cart is empty
-              </div>
-
-            <?php else: ?>
-
-              <?php foreach ($cart as $item): ?>
-
-                <?php
-                $cartItemCode = trim((string)($item['item_code'] ?? $item['itemcode'] ?? $item['code'] ?? $item['sku'] ?? ''));
-                $cartSelectedEntries = [];
-                if (!empty($item['selected_entries']) && is_array($item['selected_entries'])) {
-                  foreach ($item['selected_entries'] as $se) {
-                    $se = trim((string)$se);
-                    if ($se !== '') {
-                      $cartSelectedEntries[] = $se;
-                    }
-                  }
-                }
-                ?>
-                <div
-                  class="flex gap-3 pos-cart-item cursor-pointer"
-                  data-product-code="<?= htmlspecialchars($cartItemCode) ?>"
-                  data-selected-entries="<?= htmlspecialchars(implode('|', $cartSelectedEntries)) ?>">
-
-                  <img
-                    src="<?= htmlspecialchars($item['imageurl'] ?? 'https://dummyimage.com/80x80/e5e7eb/6b7280&text=No+Image') ?>"
-                    class="h-14 w-14 shrink-0 rounded-lg bg-slate-50 object-contain">
-
-                  <div class="flex-1 min-w-0">
-
-                    <div class="mt-0.5 flex items-start justify-between gap-2">
-                      <div class="text-xs leading-snug line-clamp-2 text-slate-800 sm:text-sm">
-                        <?= htmlspecialchars($item['name']) ?>
-                      </div>
-                      <span class="shrink-0 text-sm font-semibold text-orange-600 sm:text-base">
-                        <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['price'], 2) ?>
-                      </span>
-                    </div>
-
-                    <?php if (!empty($item['addons_display']) && is_array($item['addons_display'])): ?>
-                      <div class="mt-1.5 flex flex-wrap gap-1.5">
-                        <?php foreach ($item['addons_display'] as $adl): ?>
-                          <span class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] leading-snug text-slate-700"
-                            title="<?= htmlspecialchars((string)($adl['title'] ?? '')) ?>">
-                            <?= htmlspecialchars((string)($adl['title'] ?? '')) ?>
-                            <?php if (!empty($adl['value']) && (float)$adl['value'] > 0): ?>
-                              <span class="text-orange-600 font-semibold tabular-nums">
-                                +<?= currencySymbol($cartData['currency']) ?><?= number_format((float)$adl['value'], 2) ?>
-                              </span>
-                            <?php endif; ?>
-                          </span>
-                        <?php endforeach; ?>
-                      </div>
-                    <?php endif; ?>
-
-                    <div class="mt-2 flex items-center justify-between">
-
-                      <!-- QTY -->
-                      <div class="flex items-center border rounded-md overflow-hidden">
-
-                        <form method="POST" action="?page=pos_register&action=change-qty">
-                          <!-- <input type="hidden" name="action" value="change_qty"> -->
-                          <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
-                          <input type="hidden" name="item_code" value="<?= htmlspecialchars($cartItemCode) ?>">
-                          <button type="submit"
-                            name="newqty"
-                            value="<?= $item['quantity'] - 1 ?>"
-                            class="h-7 w-7 text-sm text-slate-600">−</button>
-                        </form>
-
-                        <span class="h-7 min-w-[1.75rem] flex items-center justify-center text-sm font-semibold tabular-nums">
-                          <?= $item['quantity'] ?>
-                        </span>
-
-                        <form method="POST" action="?page=pos_register&action=change-qty">
-                          <!-- <input type="hidden" name="action" value="change_qty"> -->
-                          <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
-                          <input type="hidden" name="item_code" value="<?= htmlspecialchars($cartItemCode) ?>">
-                          <button type="submit"
-                            name="newqty"
-                            value="<?= $item['quantity'] + 1 ?>"
-                            class="h-7 w-7 text-sm text-slate-600">+</button>
-                        </form>
-
-                      </div>
-
-                      <!-- REMOVE -->
-                      <form method="POST" action="?page=pos_register&action=remove-item">
-                        <!-- <input type="hidden" name="action" value="remove"> -->
-                        <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
-                        <input type="hidden" name="item_code" value="<?= htmlspecialchars($cartItemCode) ?>">
-                        <button type="submit" class="text-xs text-red-600 hover:underline sm:text-sm">
-                          Remove
-                        </button>
-                      </form>
-
-                    </div>
-
-                  </div>
-
-                </div>
-             
-                <?php if (!empty($item['shipping']) && $item['shipping'] > 0): ?>
-
-                  <!-- <div class="flex gap-2"> -->
-
-                  <!-- <div class="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-2 justify-center "> -->
-                  <div class="flex items-center justify-center gap-2 rounded-lg bg-green-100 px-3 py-2 text-center">
-                    <div class="flex h-6 w-6 items-center justify-center rounded-md">
-
-                      <form method="POST" action="?page=pos_register&action=toggle-shipping">
-
-                        <!-- <input type="hidden" name="action" value="toggle_express_shipping"> -->
-                        <input type="hidden" name="cartid" value="<?= $item['cartref'] ?>">
-
-                        <input type="hidden" name="action"
-                          value="<?= $item['express_selected'] ? 'delete' : 'add' ?>">
-
-                        <input type="checkbox"
-                          <?= $item['express_selected'] ? 'checked' : '' ?>
-                          onchange="this.form.submit()"
-                          class="h-4 w-4 rounded border-slate-300 text-green-600">
-
-                      </form>
-
-                    </div>
-
-                    <div>
-
-
-                      <div class="text-xs text-green-900 leading-snug sm:text-sm">
-                        <?= htmlspecialchars($item['shipping_title'] ?? 'Express Shipping') ?>
-                      </div>
-
-                      <div class="text-sm font-semibold text-green-900 sm:text-base">
-                        <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['shipping_per_unit'], 2) ?>
-                      </div>
-
-                    </div>
-
-                  </div>
-
-
-                  <!-- <div class="flex items-center gap-2 rounded-lg bg-green-200 px-3 py-2">
-
-                      <div class="flex h-6 w-6 items-center justify-center rounded-md bg-orange-500">
-
-                        <div class="flex h-6 w-6 items-center justify-center rounded-md bg-yellow-600">
-
-                          <svg class="h-3 w-3 text-white" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="3">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                          </svg>
-
-                        </div>
-                      </div>
-
-                      <div>
-                        <div class="text-[10px] font-semibold text-green-900">
-                          <?= htmlspecialchars($item['shipping_longtitle']) ?>
-                        </div>
-                      </div>
-
-                    </div> -->
-
-                  <!-- </div> -->
-
-                <?php endif; ?>
-
-              <?php endforeach; ?>
-
-            <?php endif; ?>
-
-          </div>
-
-
-          <?php $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? ''; ?>
-          <?php
-          $couponApiDebug = $cartData['cart_api_body']['coupon_discount_debug'] ?? [];
-          $couponApiRawValue = $couponApiDebug['payload_coupon_discount']
-            ?? ($cartData['cart_api_body']['couponreduction'] ?? 0);
-          ?>
-
-          <?php if (empty($coupon)): ?>
-
-            <!-- APPLY COUPON -->
-            <form method="POST" action="?page=pos_register&action=apply-coupon" class="flex gap-2">
-
-              <!-- <input type="hidden" name="action" value="apply_coupon"> -->
-
-              <input
-                name="coupon"
-                class="w-2/3 rounded-lg border px-2 py-2.5 text-sm"
-                placeholder="Coupon/Discount Code">
-
-              <button
-                type="submit"
-                class="w-1/3 rounded-lg bg-black px-4 py-2.5 text-sm text-white">
-                Apply
-              </button>
-
-            </form>
-
-          <?php else: ?>
-
-            <!-- COUPON APPLIED -->
-            <div class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-
-              <span class="text-sm text-green-700 font-semibold">
-                Coupon Applied: <?= htmlspecialchars(explode('|', $coupon)[0]) ?>
-              </span>
-
-              <form method="POST" action="?page=pos_register&action=remove-coupon">
-                <!-- <input type="hidden" name="action" value="remove_coupon"> -->
-
-                <button
-                  type="submit"
-                  class="text-sm text-red-600 font-semibold hover:underline">
-                  Remove
-                </button>
-
-              </form>
-
-            </div>
-
-            <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              API Coupon Value: <?= currencySymbol($cartData['currency']) ?> <?= number_format((float)$couponApiRawValue, 2) ?>
-            </div>
-
-          <?php endif; ?>
-          <?php if (!empty($cartData['custom_discount']) && $cartData['custom_discount'] > 0): ?>
-            <div class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-
-              <span class="text-sm text-green-700 font-semibold">
-                Custom Discount
-                (- <?= currencySymbol($cartData['currency']) ?>
-                <?= number_format($cartData['custom_discount'], 2) ?>)
-              </span>
-
-              <form method="POST" action="?page=pos_register&action=remove-custom-discount">
-                <button
-                  type="submit"
-                  class="text-sm text-green-600 font-semibold hover:underline">
-                  Remove
-                </button>
-              </form>
-
-            </div>
-          <?php endif; ?>
-          <div id="couponMessage" class="text-sm"></div>
-          <?php if (isset($_SESSION['coupon_message'])): ?>
-
-            <div class="text-sm mt-1
-        <?= $_SESSION['coupon_status'] == 'success'
-              ? 'text-green-600'
-              : 'text-red-600' ?>">
-
-              <?= htmlspecialchars($_SESSION['coupon_message']) ?>
-
-            </div>
-
-          <?php
-            unset($_SESSION['coupon_message']);
-            unset($_SESSION['coupon_status']);
-          endif;
-          ?>
-          <!-- ADDON -->
-          <!-- <select class="w-full rounded-lg border px-3 py-2" id="addonSelect">
-            <option value="0">Add-on services</option>
-            <option value="150">Gift Wrap (+₹150)</option>
-            <option value="500">Insurance (+₹500)</option>
-          </select> -->
-          <?php $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? ''; ?>
-
-          <?php if (empty($voucher)): ?>
-
-            <!-- <form method="POST" action="?page=pos_register&action=apply-gift-voucher" class="flex gap-2 mt-2">
-
-              <input
-                name="voucher"
-                class="w-2/3 rounded-lg border px-2 py-2 text-xs"
-                placeholder="Gift Voucher Code">
-
-              <button
-                type="submit"
-                class="w-1/3 rounded-lg bg-blue-600 px-4 py-2 text-xs text-white">
-                Apply
-              </button>
-
-            </form> -->
-
-          <?php else: ?>
-
-            <!-- <div class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mt-2">
-
-              <span class="text-[11px] text-blue-700 font-semibold">
-                Voucher Applied
-              </span>
-
-              <form method="POST" action="?page=pos_register&action=remove-gift-voucher">
-                <button
-                  type="submit"
-                  class="text-[11px] text-red-600 font-semibold hover:underline">
-                  Remove
-                </button>
-              </form>
-
-            </div> -->
-
-          <?php endif; ?>
-          <!-- TOTALS -->
-          <?php
-          //print_array($cartData);
-          $rawSubtotal = (float)($cartData['subtotal'] ?? 0);
-          $gstTotal = (float)($cartData['gst'] ?? 0);
-          $couponDiscount = (float)($cartData['coupon_discount'] ?? 0);
-          $customDiscount = (float)($cartData['custom_discount'] ?? 0);
-          $totalDiscount = $couponDiscount + $customDiscount;
-          // Subtotal is already GST-inclusive.
-          $computedGrandTotal = max(0, $rawSubtotal - $totalDiscount);
-          $displayGrandTotal = (float)($cartData['grand_total'] ?? 0);
-          if ($totalDiscount > 0 && abs($displayGrandTotal - $computedGrandTotal) > 0.01) {
-            // Keep discount effect visible even if API returns a stale grand total.
-            $displayGrandTotal = $computedGrandTotal;
-          }
-          ?>
-          <div class="pt-2 border-t space-y-2 text-sm">
-            <div class="flex justify-between text-slate-600">
-              <span>Sub Total</span>
-              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($rawSubtotal, 2) ?></span>
-            </div>
-            <?php if (!empty($cartData['custom_discount'])): ?>
-              <div class="flex justify-between text-green-600">
-                <span>Custom Discount</span>
-                <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['custom_discount'], 2) ?></span>
-              </div>
-            <?php endif; ?>
-            <?php if (!empty($cartData['coupon_discount'])): ?>
-              <div class="flex justify-between text-green-600">
-                <span>Coupon Discount</span>
-                <span class="tabular-nums">- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['coupon_discount'], 2) ?></span>
-              </div>
-            <?php endif; ?>
-            <div class="flex justify-between text-slate-600">
-              <span>GST Total</span>
-              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($gstTotal, 2) ?></span>
-            </div>
-
-            <div class="flex justify-between text-base font-semibold text-slate-900">
-              <span>Total</span>
-              <span class="tabular-nums"><?= currencySymbol($cartData['currency']) ?> <?= number_format($displayGrandTotal, 2) ?></span>
-            </div>
-
-          </div>
-
-          <!-- ACTION -->
-          <button id="applyCustomDiscountBtn"
-            class="w-full rounded-xl bg-orange-600 py-3 text-base text-white font-semibold">
-            Apply Cash Discount
-          </button>
-
-          <button
-            onclick="openPaymentModal()"
-            class="w-full rounded-xl bg-orange-600 py-3 text-base text-white font-semibold hover:bg-orange-700">
-            Proceed to Payment
-          </button>
-
-          <button
-            type="button"
-            id="btnOpenCartApiModal"
-            class="mt-2 w-full text-center text-sm text-slate-500 hover:text-slate-800 underline decoration-slate-400">
-            View Cart API request &amp; response
-          </button>
-
-          <button
-            type="button"
-            id="btnOpenCouponApiModal"
-            class="mt-1 w-full text-center text-sm text-slate-500 hover:text-slate-800 underline decoration-slate-400">
-            View coupon API request &amp; response
-          </button>
-
-          <button
-            type="button"
-            id="btnOpenOrderCreateApiModal"
-            class="mt-1 w-full text-center text-sm text-slate-500 hover:text-slate-800 underline decoration-slate-400">
-            View order create API request &amp; response
-          </button>
-
+        <div class="px-4 py-6 space-y-3 text-sm text-slate-600">
+          <p class="font-semibold text-slate-800">Cart &amp; payment</p>
+          <p>The previous Exotic India cart API flow (add to cart, coupons, remote checkout, payment modal tied to <code class="text-xs bg-slate-100 px-1 rounded">/cart/*</code>) has been removed from this controller so you can replace it with a new design.</p>
+          <p class="text-xs text-slate-500">Product browse, product modal, warehouse stock, and customer selection stay available.</p>
         </div>
       </div>
     </aside>
-
-
-  </main>
-</div>
-
-<!-- Cart API debug: full decoded GET /cart/retrieve body + coupon_discount_debug from POS -->
-<div id="cartApiResponseModal" class="fixed inset-0 z-[10000] hidden">
-  <div id="cartApiResponseOverlay" class="absolute inset-0 bg-black/50"></div>
-  <div class="relative mx-auto mt-8 w-[95%] max-w-4xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[88vh]">
-    <div class="flex items-center justify-between gap-3 border-b px-4 py-3 shrink-0">
-      <h2 class="text-sm font-semibold text-gray-900">Cart API request &amp; response</h2>
-      <button type="button" id="cartApiResponseClose" class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100">
-        ✕
-      </button>
-    </div>
-    <div class="px-4 py-3 overflow-auto text-xs leading-relaxed">
-      <p class="text-[11px] text-slate-500 mb-2">
-        <span class="font-medium text-slate-700">HTTP <?= (int)($cartData['cart_api_http_code'] ?? 0) ?></span>
-        · Same request the POS used for <code class="bg-slate-100 px-1 rounded">GET /cart/retrieve</code>
-      </p>
-      <pre id="cartApiResponsePre" class="whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-200 p-3 font-mono text-[11px] text-slate-800"><?= htmlspecialchars(
-          json_encode(
-              [
-                  'request' => $cartData['cart_api_request'] ?? [],
-                  'http_code' => $cartData['cart_api_http_code'] ?? null,
-                  'response' => $cartData['cart_api_body'] ?? [],
-              ],
-              JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
-          ),
-          ENT_QUOTES,
-          'UTF-8'
-      ) ?></pre>
-    </div>
-  </div>
-</div>
-<script>
-(function () {
-  var modal = document.getElementById('cartApiResponseModal');
-  var btn = document.getElementById('btnOpenCartApiModal');
-  var closeBtn = document.getElementById('cartApiResponseClose');
-  var overlay = document.getElementById('cartApiResponseOverlay');
-  function openCartApiModal() {
-    if (!modal) return;
-    modal.classList.remove('hidden');
-    document.body.classList.add('overflow-hidden');
-  }
-  function closeCartApiModal() {
-    if (!modal) return;
-    modal.classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
-  }
-  if (btn) btn.addEventListener('click', openCartApiModal);
-  if (closeBtn) closeBtn.addEventListener('click', closeCartApiModal);
-  if (overlay) overlay.addEventListener('click', closeCartApiModal);
-})();
-</script>
-
-<?php
-$couponApiDebugInitial = $_SESSION['pos_coupon_api_debug'] ?? null;
-$couponApiPrePayload = $couponApiDebugInitial ?: [
-    'message' => 'No coupon API call recorded yet. Apply a coupon code to capture GET https://www.exoticindia.com/cart/addcoupon request and response here (including invalid or expired responses).',
-];
-$couponApiPreJson = json_encode(
-    $couponApiPrePayload,
-    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
-);
-$couponApiHttpMeta = $couponApiDebugInitial
-    ? 'HTTP ' . (int)($couponApiDebugInitial['http_code'] ?? 0) . ' · GET /cart/addcoupon'
-    : '—';
-?>
-<!-- Coupon add API debug (GET https://www.exoticindia.com/cart/addcoupon) -->
-<div id="couponApiResponseModal" class="fixed inset-0 z-[10000] hidden">
-  <div id="couponApiResponseOverlay" class="absolute inset-0 bg-black/50"></div>
-  <div class="relative mx-auto mt-8 w-[95%] max-w-4xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[88vh]">
-    <div class="flex items-center justify-between gap-3 border-b px-4 py-3 shrink-0">
-      <h2 class="text-sm font-semibold text-gray-900">Coupon API request &amp; response</h2>
-      <button type="button" id="couponApiResponseClose" class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100">
-        ✕
-      </button>
-    </div>
-    <div class="px-4 py-3 overflow-auto text-xs leading-relaxed">
-      <p class="text-[11px] text-slate-500 mb-2">
-        <span class="font-medium text-slate-700"><?= htmlspecialchars($couponApiHttpMeta, ENT_QUOTES, 'UTF-8') ?></span>
-        · Last <code class="bg-slate-100 px-1 rounded">GET /cart/addcoupon</code> used when you clicked Apply on the coupon field
-      </p>
-      <pre id="couponApiResponsePre" class="whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-200 p-3 font-mono text-[11px] text-slate-800"><?= htmlspecialchars(
-          $couponApiPreJson !== false ? $couponApiPreJson : '{}',
-          ENT_QUOTES,
-          'UTF-8'
-      ) ?></pre>
-    </div>
-  </div>
-</div>
-<script>
-(function () {
-  var modal = document.getElementById('couponApiResponseModal');
-  var btn = document.getElementById('btnOpenCouponApiModal');
-  var closeBtn = document.getElementById('couponApiResponseClose');
-  var overlay = document.getElementById('couponApiResponseOverlay');
-  var pre = document.getElementById('couponApiResponsePre');
-  function pretty(obj) {
-    try {
-      return JSON.stringify(obj, null, 2);
-    } catch (e) {
-      return String(obj);
-    }
-  }
-  function buildCouponDebugView(payload) {
-    if (!payload || typeof payload !== 'object') {
-      return String(payload || '{}');
-    }
-    var lines = [];
-    var ts = payload.timestamp || '-';
-    var http = payload.http_code != null ? String(payload.http_code) : '-';
-    var request = payload.request || {};
-    var response = payload.response_normalized || payload.response || {};
-    var fallbackProbe = payload.fallback_probe || null;
-    lines.push('Coupon API Debug');
-    lines.push('Timestamp: ' + ts);
-    lines.push('HTTP: ' + http);
-    lines.push('');
-    lines.push('Request');
-    lines.push('-------');
-    lines.push(pretty({
-      method: request.method || 'GET',
-      url: request.url || '',
-      query_params: request.query_params || {},
-      headers: request.headers || {},
-    }));
-    lines.push('');
-    lines.push('Response');
-    lines.push('--------');
-    lines.push(pretty(response));
-    if (fallbackProbe) {
-      lines.push('');
-      lines.push('Fallback Probe');
-      lines.push('--------------');
-      lines.push(pretty(fallbackProbe));
-    }
-    return lines.join('\n');
-  }
-  function formatCouponDebugPre() {
-    if (!pre) return;
-    var raw = pre.textContent || '{}';
-    try {
-      var parsed = JSON.parse(raw);
-      pre.textContent = buildCouponDebugView(parsed);
-    } catch (e) {
-      // keep original text if it's not valid JSON
-    }
-  }
-  function openCouponApiModal() {
-    if (!modal) return;
-    formatCouponDebugPre();
-    modal.classList.remove('hidden');
-    document.body.classList.add('overflow-hidden');
-  }
-  function closeCouponApiModal() {
-    if (!modal) return;
-    modal.classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
-  }
-  if (btn) btn.addEventListener('click', openCouponApiModal);
-  if (closeBtn) closeBtn.addEventListener('click', closeCouponApiModal);
-  if (overlay) overlay.addEventListener('click', closeCouponApiModal);
-  formatCouponDebugPre();
-})();
-</script>
-<?php
-$orderCreateApiDebugInitial = $_SESSION['pos_order_create_api_debug'] ?? null;
-$orderCreatePrePayload = $orderCreateApiDebugInitial ?: [
-    'message' => 'No order create API call recorded yet. Attempt "Proceed to Payment" to capture POST /order/create request and response here (including failed or non-JSON responses).',
-];
-$orderCreatePreJson = json_encode(
-    $orderCreatePrePayload,
-    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
-);
-$orderCreateHttpMeta = $orderCreateApiDebugInitial
-    ? 'HTTP ' . (int)($orderCreateApiDebugInitial['http_code'] ?? 0) . ' · POST /order/create (Exotic India API)'
-    : '—';
-?>
-<!-- Order create API debug (POST /order/create) -->
-<div id="orderCreateApiResponseModal" class="fixed inset-0 z-[10000] hidden">
-  <div id="orderCreateApiResponseOverlay" class="absolute inset-0 bg-black/50"></div>
-  <div class="relative mx-auto mt-8 w-[95%] max-w-4xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[88vh]">
-    <div class="flex items-center justify-between gap-3 border-b px-4 py-3 shrink-0">
-      <h2 class="text-sm font-semibold text-gray-900">Order create API request &amp; response</h2>
-      <button type="button" id="orderCreateApiResponseClose" class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100">
-        ✕
-      </button>
-    </div>
-    <div class="px-4 py-3 overflow-auto text-xs leading-relaxed">
-      <p class="text-[11px] text-slate-500 mb-2">
-        <span id="orderCreateApiHttpMeta" class="font-medium text-slate-700"><?= htmlspecialchars($orderCreateHttpMeta, ENT_QUOTES, 'UTF-8') ?></span>
-        · Same payload the POS sends to <code class="bg-slate-100 px-1 rounded">POST /order/create</code>
-      </p>
-      <pre id="orderCreateApiResponsePre" class="whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-200 p-3 font-mono text-[11px] text-slate-800"><?= htmlspecialchars(
-          $orderCreatePreJson !== false ? $orderCreatePreJson : '{}',
-          ENT_QUOTES,
-          'UTF-8'
-      ) ?></pre>
-    </div>
-  </div>
-</div>
-<script>
-(function () {
-  window.setOrderCreateApiDebugPayload = function (obj) {
-    window.POS_LAST_ORDER_CREATE_DEBUG = obj;
-    var pre = document.getElementById('orderCreateApiResponsePre');
-    var meta = document.getElementById('orderCreateApiHttpMeta');
-    if (pre) {
-      try {
-        pre.textContent = JSON.stringify(obj, null, 2);
-      } catch (e) {
-        pre.textContent = String(obj);
-      }
-    }
-    if (meta) {
-      if (obj && obj.parse_error) {
-        meta.textContent = 'Non-JSON response (see raw_body_preview)';
-      } else if (obj && obj.http_code != null && !obj.message_only) {
-        meta.textContent = (obj.triggered_from === 'payment_modal' ? 'Payment popup · ' : '') +
-          'HTTP ' + obj.http_code + ' · POST /order/create (Exotic India API)';
-      } else if (obj && obj.http_status != null) {
-        meta.textContent = 'HTTP ' + obj.http_status + ' · response was not JSON';
-      } else {
-        meta.textContent = '—';
-      }
-    }
-  };
-
-  var modal = document.getElementById('orderCreateApiResponseModal');
-  var btn = document.getElementById('btnOpenOrderCreateApiModal');
-  var closeBtn = document.getElementById('orderCreateApiResponseClose');
-  var overlay = document.getElementById('orderCreateApiResponseOverlay');
-  function openModal() {
-    if (!modal) return;
-    modal.classList.remove('hidden');
-    document.body.classList.add('overflow-hidden');
-  }
-  function closeModal() {
-    if (!modal) return;
-    modal.classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
-  }
-  if (btn) btn.addEventListener('click', openModal);
-  if (closeBtn) closeBtn.addEventListener('click', closeModal);
-  if (overlay) overlay.addEventListener('click', closeModal);
-  window.openOrderCreateApiResponseModal = openModal;
-})();
-</script>
-<!-- <a
-  href="/?page=posinvoice&action=generate_pdf&invoice_id=49"
-  target="_blank"
-  class="px-4 py-2 bg-green-600 text-white rounded">
-  TEST PRINT
-</a> -->
 <!-- Product Modal -->
 <div id="productModal" class="fixed inset-0 z-[9999] hidden"
      data-pos-warehouse="<?= htmlspecialchars((string)($warehouse_name ?? ''), ENT_QUOTES, 'UTF-8') ?>">
@@ -1031,18 +339,7 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
             </div>
 
 
-            <form method="POST" action="?page=pos_register&action=cart-add">
-              <!-- <input type="hidden" name="action" value="add_to_cart"> -->
-              <input type="hidden" name="code" id="modal_product_code">
-              <input type="hidden" name="stock_check_code" id="modal_stock_check_code" value="">
-              <input type="hidden" name="qty" id="modal_qty" value="1">
-              <input type="hidden" name="options" id="modal_options">
-              <input type="hidden" name="variation" id="modal_variation">
-              <button type="submit"
-                class="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
-                Add to Cart
-              </button>
-            </form>
+            <p class="text-sm text-amber-900 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 max-w-sm">Cart removed — add-to-cart will return when the new checkout flow is wired.</p>
             <!-- Close -->
             <button
               type="button"
@@ -1210,143 +507,6 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 
 </div>
 
-<!-- PAYMENT MODAL -->
-<div id="paymentModal" class="fixed inset-0 z-[9999] hidden">
-
-  <div class="absolute inset-0 bg-black/40" onclick="closePaymentModal()"></div>
-
-  <div class="relative mx-auto mt-20 w-[95%] max-w-2xl rounded-2xl bg-white shadow-xl">
-
-    <!-- Header -->
-    <div class="flex items-center justify-between border-b px-6 py-4">
-      <h2 class="text-lg font-semibold">Payment</h2>
-
-      <button onclick="closePaymentModal()" class="text-gray-500 hover:text-gray-800 text-xl">
-        ✕
-      </button>
-    </div>
-
-    <!-- Body -->
-    <div class="p-6 space-y-4">
-
-      <div class="grid grid-cols-3 gap-4">
-
-        <!-- Payment Type -->
-        <div>
-          <label class="text-xs text-gray-600">Payment Type</label>
-
-          <select name="payment_stage" id="payment_stage"
-            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-
-            <option value="final">Final</option>
-            <option value="partial">Partial</option>
-            <option value="advance">Advance</option>
-
-          </select>
-        </div>
-
-        <!-- Payment Mode -->
-        <div>
-          <label class="text-xs text-gray-600">Payment Mode</label>
-          <select name="payment_type" id="payment_mode"
-            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-              <option value="Cash">Cash</option>
-              <option value="Card">Credit / Debit Card</option>
-              <option value="upi">UPI</option>
-              <option value="pos_machine">POS machine</option>
-              <option value="razorpay">Razorpay</option>
-              <option value="bank_transfer">Bank Transfer</option>
-              <option value="cheque">Cheque</option>
-              <option value="demand_draft">Demand Draft</option>
-              <option value="cod">Cash on Delivery</option>
-              <option value="specialpay">Special Payment</option>
-          </select>
-        </div>
-        <!-- Payment Date -->
-        <div>
-          <label class="text-xs text-gray-600">Payment Date</label>
-
-          <input
-            type="date"
-            value="<?= date('Y-m-d') ?>"
-            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-        </div>
-
-      </div>
-
-
-      <div class="grid grid-cols-2 gap-4">
-
-        <!-- Amount -->
-        <div>
-          <label class="text-xs text-gray-600">Amount</label>
-
-          <input
-            type="number"
-            id="payment_amount"
-            value="<?= $displayGrandTotal ?? ($cartData['grand_total'] ?? 0) ?>"
-            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-        </div>
-
-        <!-- Transaction ID -->
-        <div>
-          <label class="text-xs text-gray-600" id="transaction_id_label">Transaction ID <span id="transaction_id_required_hint" class="text-red-600 hidden">(required — Razorpay pay_ id)</span></label>
-
-          <input
-            type="text"
-            id="transaction_id"
-            placeholder="Enter transaction id"
-            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-        </div>
-
-      </div>
-
-
-      <!-- Note -->
-      <div>
-        <label class="text-xs text-gray-600">Note</label>
-
-        <textarea
-          name="note"
-          placeholder="Enter note"
-          class="w-full mt-1 border rounded-lg px-3 py-2 text-sm h-24"></textarea>
-      </div>
-
-      <!-- Last order create API (filled after Confirm Order calls POST /order/create) -->
-      <div id="paymentModalOrderApiPanel" class="hidden rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-[11px] font-semibold text-slate-800">Order create API (this attempt)</span>
-          <button type="button" id="paymentModalOrderApiFullBtn"
-            class="text-[11px] text-orange-700 font-medium hover:underline shrink-0">
-            Full JSON
-          </button>
-        </div>
-        <p class="text-[10px] text-slate-500">Request and response from Exotic India <code class="bg-slate-200 px-1 rounded">POST /order/create</code> after you click Confirm Order.</p>
-        <pre id="paymentModalOrderApiPre" class="max-h-48 overflow-auto text-[10px] leading-snug rounded border border-slate-200 bg-white p-2 font-mono whitespace-pre-wrap break-words"></pre>
-      </div>
-
-    </div>
-
-
-    <!-- Footer -->
-    <div class="flex justify-end gap-3 border-t px-6 py-4">
-
-      <button
-        onclick="closePaymentModal()"
-        class="px-5 py-2 rounded-lg bg-gray-300 text-gray-700 hover:bg-gray-400">
-        Cancel
-      </button>
-
-      <button
-        id="placeOrderBtn"
-        class="px-5 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700">
-        Confirm Order
-      </button>
-
-    </div>
-
-  </div>
-</div>
 <!-- ADDRESS CONFIRMATION MODAL -->
 <div id="addressConfirmModal" class="fixed inset-0 z-[10000] hidden">
   <div class="absolute inset-0 bg-black/40" onclick="closeAddressConfirmModal()"></div>
@@ -1657,6 +817,10 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
 </script>
 <script>
   function openPaymentModal() {
+    var pm = document.getElementById("paymentModal");
+    if (!pm) {
+      return;
+    }
     var apiPanel = document.getElementById("paymentModalOrderApiPanel");
     var apiPre = document.getElementById("paymentModalOrderApiPre");
     if (apiPanel) {
@@ -1665,11 +829,14 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
     if (apiPre) {
       apiPre.textContent = "";
     }
-    document.getElementById("paymentModal").classList.remove("hidden");
+    pm.classList.remove("hidden");
   }
 
   function closePaymentModal() {
-    document.getElementById("paymentModal").classList.add("hidden");
+    var pm = document.getElementById("paymentModal");
+    if (pm) {
+      pm.classList.add("hidden");
+    }
   }
 
   function openAddressConfirmModal() {
@@ -1882,68 +1049,71 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
       syncRazorpayTxnHint();
     }
 
-    document.getElementById("placeOrderBtn").addEventListener("click", function() {
+    var placeOrderBtn = document.getElementById("placeOrderBtn");
+    if (placeOrderBtn) {
+      placeOrderBtn.addEventListener("click", function() {
 
-      var customerId = getSelectedCustomerId();
+        var customerId = getSelectedCustomerId();
 
-      if (!customerId) {
-        showToast("⚠ Please select customer first", "red");
-          if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
-          jQuery("#customerSelect").select2("open");
-        } else {
-          var cs = document.getElementById("customerSelect");
-          if (cs) cs.focus();
-        }
-        return;
-      }
-
-      let paymentStage = document.getElementById("payment_stage").value;
-      let paymentAmount = parseFloat(document.getElementById("payment_amount").value);
-      let grandTotal = parseFloat("<?= $displayGrandTotal ?? ($cartData['grand_total'] ?? 0) ?>");
-
-      if (!paymentAmount || paymentAmount <= 0) {
-        showToast("⚠ Payment amount must be greater than 0", "red");
-        return;
-      }
-
-      //  FINAL PAYMENT STRICT VALIDATION
-      if (paymentStage === "final") {
-
-        if (paymentAmount < grandTotal) {
-          showToast("⚠ Final payment must be FULL amount ₹ " + grandTotal, "red");
+        if (!customerId) {
+          showToast("⚠ Please select customer first", "red");
+            if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
+            jQuery("#customerSelect").select2("open");
+          } else {
+            var cs = document.getElementById("customerSelect");
+            if (cs) cs.focus();
+          }
           return;
         }
 
-        if (paymentAmount > grandTotal) {
-          showToast("⚠ Over payment not allowed", "red");
+        let paymentStage = document.getElementById("payment_stage").value;
+        let paymentAmount = parseFloat(document.getElementById("payment_amount").value);
+        let grandTotal = parseFloat("<?= $displayGrandTotal ?? ($cartData['grand_total'] ?? 0) ?>");
+
+        if (!paymentAmount || paymentAmount <= 0) {
+          showToast("⚠ Payment amount must be greater than 0", "red");
           return;
         }
 
-      }
+        //  FINAL PAYMENT STRICT VALIDATION
+        if (paymentStage === "final") {
 
-      //  PARTIAL VALIDATION
-      if (paymentStage === "partial" || paymentStage === "advance") {
+          if (paymentAmount < grandTotal) {
+            showToast("⚠ Final payment must be FULL amount ₹ " + grandTotal, "red");
+            return;
+          }
 
-        if (paymentAmount >= grandTotal) {
-          showToast("⚠ Partial payment must be less than total ₹ " + grandTotal, "red");
+          if (paymentAmount > grandTotal) {
+            showToast("⚠ Over payment not allowed", "red");
+            return;
+          }
+
+        }
+
+        //  PARTIAL VALIDATION
+        if (paymentStage === "partial" || paymentStage === "advance") {
+
+          if (paymentAmount >= grandTotal) {
+            showToast("⚠ Partial payment must be less than total ₹ " + grandTotal, "red");
+            return;
+          }
+
+        }
+
+        var paymentModeVal = document.getElementById("payment_mode").value;
+        var txnVal = (document.getElementById("transaction_id").value || "").trim();
+        if (paymentModeVal === "razorpay" && txnVal === "") {
+          showToast("⚠ Razorpay requires a transaction ID", "red");
+          var txnEl = document.getElementById("transaction_id");
+          if (txnEl) {
+            txnEl.focus();
+          }
           return;
         }
 
-      }
-
-      var paymentModeVal = document.getElementById("payment_mode").value;
-      var txnVal = (document.getElementById("transaction_id").value || "").trim();
-      if (paymentModeVal === "razorpay" && txnVal === "") {
-        showToast("⚠ Razorpay requires a transaction ID", "red");
-        var txnEl = document.getElementById("transaction_id");
-        if (txnEl) {
-          txnEl.focus();
-        }
-        return;
-      }
-
-      loadAndOpenAddressConfirm(customerId);
-    });
+        loadAndOpenAddressConfirm(customerId);
+      });
+    }
 
     var confirmAddressSubmitBtn = document.getElementById("confirmAddressSubmitBtn");
     if (confirmAddressSubmitBtn) {
@@ -1963,6 +1133,8 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
   });
 
   function createOrderNow(addressPayload) {
+    showToast("POS checkout API removed — rebuild cart/order flow before creating orders.", "red");
+    return;
 
     let paymentType = document.getElementById("payment_mode").value;
     let paymentStage = document.getElementById("payment_stage").value;
@@ -2464,20 +1636,34 @@ $orderCreateHttpMeta = $orderCreateApiDebugInitial
     valueEl.placeholder = typeEl.value === "percent" ? "Enter percentage" : "Enter amount";
   }
 
-  // OPEN MODAL
-  document.getElementById("applyCustomDiscountBtn").addEventListener("click", function() {
-    document.getElementById("discountModal").classList.remove("hidden");
+  (function () {
+    var applyBtn = document.getElementById("applyCustomDiscountBtn");
+    var dtype = document.getElementById("discount_type");
+    if (dtype) {
+      dtype.addEventListener("change", updateDiscountPlaceholder);
+    }
     updateDiscountPlaceholder();
-  });
 
-  document.getElementById("discount_type").addEventListener("change", updateDiscountPlaceholder);
-  updateDiscountPlaceholder();
+    if (!applyBtn) {
+      return;
+    }
+
+    applyBtn.addEventListener("click", function() {
+      var dm = document.getElementById("discountModal");
+      if (dm) {
+        dm.classList.remove("hidden");
+      }
+      updateDiscountPlaceholder();
+    });
+  })();
 
   function closeDiscountModal() {
-    document.getElementById("discountModal").classList.add("hidden");
+    var dm = document.getElementById("discountModal");
+    if (dm) {
+      dm.classList.add("hidden");
+    }
   }
 
-  // APPLY DISCOUNT
   function applyDiscount() {
 
     let type = document.getElementById("discount_type").value;

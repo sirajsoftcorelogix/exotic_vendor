@@ -1018,35 +1018,6 @@ switch ($page) {
                 $controller->stockReport();
                 break;
 
-            case 'cart-add':
-                $controller->add_to_cart();
-                break;
-
-            case 'change-qty':
-                $controller->change_qty();
-                break;
-
-            case 'remove-item':
-                $controller->remove_item();
-                break;
-
-            case 'apply-coupon':
-                $controller->apply_coupon();
-                break;
-            case 'remove-coupon':
-                $controller->remove_coupon();
-                break;
-            case 'toggle-shipping':
-                $controller->modify_express_shipping();
-                break;
-
-            case 'create-order':
-                $controller->create_order();
-                break;
-            case 'order-confirmation':
-                $controller->order_confirmation();
-                break;
-
             case 'add-customer':
                 $controller->add_customer();
                 break;
@@ -1059,12 +1030,6 @@ switch ($page) {
             case 'customer-order-info':
                 $controller->customer_order_info();
                 break;
-            case 'apply_custom_discount':
-                $controller->apply_custom_discount();
-                break;
-            case 'remove-custom-discount':
-                $controller->remove_custom_discount();
-                break;
             case 'get-product-api':
                 $controller->getProductApi();
                 break;
@@ -1073,9 +1038,6 @@ switch ($page) {
                 break;
             case 'product-availability':
                 $controller->productAvailability();
-                break;
-            case 'toggle_addon':
-                $controller->toggle_addon();
                 break;
             default:
                 $controller->index();
