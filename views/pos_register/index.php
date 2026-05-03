@@ -690,7 +690,7 @@
   </main>
 </div>
 
-<!-- Cart API debug (decoded JSON from GET /cart/retrieve) -->
+<!-- Cart API debug: full decoded GET /cart/retrieve body + coupon_discount_debug from POS -->
 <div id="cartApiResponseModal" class="fixed inset-0 z-[10000] hidden">
   <div id="cartApiResponseOverlay" class="absolute inset-0 bg-black/50"></div>
   <div class="relative mx-auto mt-8 w-[95%] max-w-4xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[88vh]">
