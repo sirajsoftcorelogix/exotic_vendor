@@ -411,7 +411,7 @@ class OrdersController
                 }
                 //customer id add
                 $rdata['customer_id'] = $customerdata['customer_id'] ?? 0;
-                $rdata['warehouse_id'] = 0; // Default warehouse, can be updated later based on logic
+                $rdata['store_name'] = $order['store_name'] ?? '';
                 $totalorder++;
 
                 $data = $ordersModel->insertOrder($rdata);
