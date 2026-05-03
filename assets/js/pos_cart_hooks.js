@@ -1237,6 +1237,7 @@
             if (!r.success) {
               return r;
             }
+            toast('Coupon applied.', 'green');
           }
           return refreshCartInternal();
         })
