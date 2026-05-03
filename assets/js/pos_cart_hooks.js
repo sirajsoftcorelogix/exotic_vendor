@@ -21,6 +21,7 @@
     if (m) {
       return m;
     }
+    
     m = document.createElement('div');
     m.id = MODAL_ID;
     m.className =
