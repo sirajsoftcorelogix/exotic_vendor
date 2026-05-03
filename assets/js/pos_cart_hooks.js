@@ -562,16 +562,22 @@
         'custom_reduce'
       ]) || pickNumber(cd, ['custom_discount', 'customdiscount']);
 
+    /**
+     * Prefer explicit payable totals; generic `total` is often a sub+tax sum and can double-count when sub is GST-inclusive.
+     */
     var grandTotal =
       pickNumber(d, [
         'totalamount',
         'grandtotal',
         'grand_total',
-        'total',
         'amount_payable',
         'payable_total',
-        'order_total'
-      ]) || pickNumber(cd, ['grandtotal', 'grand_total', 'total', 'totalamount']);
+        'order_total',
+        'final_total',
+        'finaltotal',
+        'total_amount',
+        'total'
+      ]) || pickNumber(cd, ['grandtotal', 'grand_total', 'totalamount', 'amount_payable', 'total']);
 
     if (grandTotal == null && sub != null && !isNaN(sub)) {
       grandTotal = sub;
@@ -580,6 +586,28 @@
       }
       if (customDeduction != null && !isNaN(customDeduction)) {
         grandTotal -= customDeduction;
+      }
+    }
+
+    if (
+      grandTotal != null &&
+      sub != null &&
+      gstTotal != null &&
+      gstTotal > 0 &&
+      !isNaN(grandTotal) &&
+      !isNaN(sub) &&
+      !isNaN(gstTotal)
+    ) {
+      var tol = 0.51;
+      var naiveTaxOnTop = sub + gstTotal;
+      if (Math.abs(grandTotal - naiveTaxOnTop) < tol) {
+        grandTotal = sub;
+        if (couponDeduction != null && !isNaN(couponDeduction)) {
+          grandTotal -= couponDeduction;
+        }
+        if (customDeduction != null && !isNaN(customDeduction)) {
+          grandTotal -= customDeduction;
+        }
       }
     }
 
