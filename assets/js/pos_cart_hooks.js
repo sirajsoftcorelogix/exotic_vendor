@@ -342,42 +342,179 @@
     return sku ? String(sku) : '';
   }
 
-  function linePriceDisplay(row) {
-    var p = pickFirst(row, ['line_total', 'linetotal', 'total', 'price', 'amount', 'subtotal']);
-    return p != null ? String(p) : '';
+  function parseMoneyValue(val) {
+    if (val == null || val === '') {
+      return null;
+    }
+    var n = parseFloat(String(val).replace(/,/g, ''));
+    return isNaN(n) ? null : n;
+  }
+
+  /** Display unit / single-item price from cart line (API fields vary). */
+  function lineUnitPriceStr(row) {
+    var v = pickFirst(row, ['unit_price', 'item_price', 'single_price', 'original_price', 'price', 'selling_price']);
+    return v != null && String(v) !== '' ? String(v) : '';
+  }
+
+  /** Line total from API or unit price × qty when Exotic omits an explicit line total. */
+  function lineLineTotalStr(row, qty) {
+    var explicit = pickFirst(row, [
+      'line_total',
+      'linetotal',
+      'line_total_amount',
+      'lineamount',
+      'line_amount',
+      'extended_price',
+      'row_total',
+      'amount'
+    ]);
+    if (explicit != null && String(explicit) !== '') {
+      return String(explicit);
+    }
+    var unit = parseMoneyValue(
+      pickFirst(row, ['unit_price', 'item_price', 'original_price', 'price', 'selling_price'])
+    );
+    if (unit != null && qty >= 1) {
+      var t = unit * qty;
+      return Math.abs(t - Math.round(t)) < 1e-9 ? String(Math.round(t)) : t.toFixed(2);
+    }
+    return '';
+  }
+
+  function sumLineTotalsFromCartItems(cartData) {
+    var items = getCartItems(cartData || {});
+    if (!items.length) {
+      return null;
+    }
+    var sum = 0;
+    var ok = false;
+    for (var i = 0; i < items.length; i++) {
+      var qty = lineQty(items[i]);
+      var ltStr = lineLineTotalStr(items[i], qty);
+      var n = parseMoneyValue(ltStr);
+      if (n != null) {
+        sum += n;
+        ok = true;
+      }
+    }
+    return ok ? sum : null;
+  }
+
+  function sumGstFromCartLineItems(cartData) {
+    var items = getCartItems(cartData || {});
+    if (!items.length) {
+      return null;
+    }
+    var sum = 0;
+    var ok = false;
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      var g = pickNumber(row, ['gstamount', 'gst_amount', 'line_gst', 'line_gst_amount', 'tax_amount', 'gst']);
+      if (g != null) {
+        sum += g;
+        ok = true;
+      }
+    }
+    return ok ? sum : null;
   }
 
   function totalsFromRetrieve(data) {
-    var cd = data && data.checkoutdata && typeof data.checkoutdata === 'object' ? data.checkoutdata : {};
+    var d = data && typeof data === 'object' ? data : {};
+    var cd = typeof d.checkoutdata === 'object' && d.checkoutdata !== null ? d.checkoutdata : {};
+
     var sub =
-      pickNumber(data, ['subtotal', 'sub_total', 'cart_subtotal']) ||
-      pickNumber(cd, ['subtotal', 'sub_total']);
-    var coupon =
-      pickNumber(data, ['coupon_discount', 'coupondiscount', 'coupon_discount_amount']) ||
-      pickNumber(cd, ['coupon_discount', 'coupondiscount']);
-    var custom =
-      pickNumber(data, ['custom_discount', 'customdiscount', 'custom_reduce']) ||
-      pickNumber(cd, ['custom_discount', 'customdiscount']);
-    var grand =
-      pickNumber(data, ['grandtotal', 'grand_total', 'total', 'amount_payable']) ||
-      pickNumber(cd, ['grandtotal', 'grand_total', 'total']);
+      pickNumber(d, [
+        'subtotal',
+        'sub_total',
+        'cart_subtotal',
+        'items_total',
+        'items_subtotal',
+        'pretax_total',
+        'merchandise_total'
+      ]) || pickNumber(cd, ['subtotal', 'sub_total', 'items_total']);
+    if (sub == null) {
+      sub = sumLineTotalsFromCartItems(d);
+    }
+
+    var gstTotal =
+      pickNumber(d, [
+        'gst_total',
+        'total_gst',
+        'gstamount',
+        'total_gst_amount',
+        'tax_total',
+        'total_tax',
+        'gst_amount'
+      ]) || pickNumber(cd, ['gst_total', 'total_gst', 'tax_total']);
+    if (gstTotal == null) {
+      gstTotal = sumGstFromCartLineItems(d);
+    }
+
+    var couponDeduction =
+      pickNumber(d, [
+        'couponreduction',
+        'coupon_reduction',
+        'coupon_discount_total',
+        'coupon_discount',
+        'coupondiscount',
+        'coupon_discount_amount'
+      ]) || pickNumber(cd, ['coupon_discount', 'coupondiscount']);
+
+    var customDeduction =
+      pickNumber(d, [
+        'customreduction',
+        'custom_reduction',
+        'custom_discount',
+        'customdiscount',
+        'custom_reduce'
+      ]) || pickNumber(cd, ['custom_discount', 'customdiscount']);
+
+    var grandTotal =
+      pickNumber(d, [
+        'totalamount',
+        'grandtotal',
+        'grand_total',
+        'total',
+        'amount_payable',
+        'payable_total',
+        'order_total'
+      ]) || pickNumber(cd, ['grandtotal', 'grand_total', 'total', 'totalamount']);
+
     return {
       subtotal: sub,
-      coupon: coupon,
-      custom: custom,
-      grand: grand
+      gstTotal: gstTotal,
+      couponDeduction: couponDeduction,
+      customDeduction: customDeduction,
+      grandTotal: grandTotal
     };
   }
 
-  function moneyRow(label, val) {
-    if (val == null) {
-      return '';
+  function formatMoneyDisplay(val) {
+    if (val == null || (typeof val === 'number' && isNaN(val))) {
+      return null;
     }
+    if (typeof val === 'number') {
+      return Math.abs(val - Math.round(val)) < 1e-9 ? String(Math.round(val)) : val.toFixed(2);
+    }
+    return String(val);
+  }
+
+  /** Always one row; uses em dash when API did not supply a number. */
+  function moneyRowSummary(label, val, isGrand) {
+    var disp = formatMoneyDisplay(val);
+    var text = disp == null ? '—' : disp;
+    var rowClass = isGrand
+      ? 'flex justify-between text-sm font-semibold text-slate-900 pt-2 border-t border-slate-100 mt-1'
+      : 'flex justify-between text-xs text-slate-700 py-0.5';
     return (
-      '<div class="flex justify-between text-xs text-slate-700 py-0.5"><span>' +
+      '<div class="' +
+      rowClass +
+      '"><span>' +
       escapeHtml(label) +
-      '</span><span class="tabular-nums">' +
-      escapeHtml(String(val)) +
+      '</span><span class="tabular-nums ' +
+      (disp == null ? 'text-slate-400' : '') +
+      '">' +
+      escapeHtml(text) +
       '</span></div>'
     );
   }
@@ -435,14 +572,28 @@
         var maxSell = lineMaxSellableQty(row, data || {});
         var title = lineTitle(row);
         var sub = lineSubDisplay(row);
-        var price = linePriceDisplay(row);
+        var unitPrice = lineUnitPriceStr(row);
+        var lineTotal = lineLineTotalStr(row, qty);
         html += '<div class="border-b border-slate-100 py-2 last:border-0" data-cart-row="1">';
         html += '<div class="text-xs font-medium text-slate-900 leading-snug">' + escapeHtml(title) + '</div>';
         if (sub) {
           html += '<div class="text-[10px] text-slate-500">' + escapeHtml(sub) + '</div>';
         }
-        if (price) {
-          html += '<div class="text-[10px] text-slate-600">Line: ' + escapeHtml(price) + '</div>';
+        if (unitPrice) {
+          html +=
+            '<div class="text-[10px] text-slate-600 mt-0.5">' +
+            '<span class="text-slate-500">Single item price:</span> ' +
+            '<span class="tabular-nums font-medium text-slate-800">' +
+            escapeHtml(unitPrice) +
+            '</span></div>';
+        }
+        if (lineTotal) {
+          html +=
+            '<div class="text-[10px] text-slate-800 mt-0.5">' +
+            '<span class="text-slate-500">Line total:</span> ' +
+            '<span class="tabular-nums font-semibold">' +
+            escapeHtml(lineTotal) +
+            '</span></div>';
         }
         html += '<div class="mt-1 flex flex-wrap items-center gap-2">';
         if (ref) {
@@ -477,23 +628,22 @@
       html += '</div>';
     }
 
-    html += '<div class="mt-3 pt-2 border-t border-slate-200 space-y-1">';
-    if (totals.subtotal != null) {
-      html += moneyRow('Subtotal', totals.subtotal);
+    var showSummary =
+      items.length > 0 ||
+      totals.subtotal != null ||
+      totals.gstTotal != null ||
+      totals.couponDeduction != null ||
+      totals.customDeduction != null ||
+      totals.grandTotal != null;
+    if (showSummary) {
+      html += '<div class="mt-3 pt-2 border-t border-slate-200 space-y-0.5">';
+      html += moneyRowSummary('Sub total', totals.subtotal, false);
+      html += moneyRowSummary('GST total', totals.gstTotal, false);
+      html += moneyRowSummary('Coupon discount deduction', totals.couponDeduction, false);
+      html += moneyRowSummary('Custom discount deduction', totals.customDeduction, false);
+      html += moneyRowSummary('Grand total', totals.grandTotal, true);
+      html += '</div>';
     }
-    if (totals.coupon != null) {
-      html += moneyRow('Coupon discount', totals.coupon);
-    }
-    if (totals.custom != null) {
-      html += moneyRow('Custom discount', totals.custom);
-    }
-    if (totals.grand != null) {
-      html +=
-        '<div class="flex justify-between text-sm font-semibold text-slate-900 pt-1"><span>Grand total</span><span class="tabular-nums">' +
-        escapeHtml(String(totals.grand)) +
-        '</span></div>';
-    }
-    html += '</div>';
 
     html += '<div class="mt-3 pt-2 border-t border-slate-200 space-y-2">';
     html += '<div class="text-xs font-medium text-slate-700">Coupon</div>';
