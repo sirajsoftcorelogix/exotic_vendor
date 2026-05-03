@@ -2468,15 +2468,6 @@ class POSRegisterController
         ];
     }
 
-    private function stripCartItemsFromDebugBody(array $data): array
-    {
-        if (isset($data['cartitems'])) {
-            unset($data['cartitems']);
-        }
-
-        return $data;
-    }
-
     /**
      * GET /cart/retrieve may nest payload under "data" like the product API.
      */
@@ -2559,7 +2550,8 @@ class POSRegisterController
         // Keep Sub Total as pre-discount line sum; discount is shown separately in UI.
         $display_subtotal = $subtotal;
         $financials = $this->resolveCartFinancials($data, (string)$coupon, $subtotal, $gst_computed);
-        $cartApiBodyForDebug = $this->stripCartItemsFromDebugBody($data);
+        // Full decoded /cart/retrieve body for the POS debug modal (includes cartitems).
+        $cartApiBodyForDebug = $data;
         $financials['coupon_debug']['api_totalamount_raw'] = isset($data['totalamount']) && is_numeric($data['totalamount'])
             ? (float)$data['totalamount']
             : null;
