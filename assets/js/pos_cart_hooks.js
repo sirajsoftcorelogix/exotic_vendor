@@ -727,66 +727,67 @@
         var imgUrl = lineImageUrl(row);
         var productCode = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
         html +=
-          '<div class="pos-cart-line-item group flex gap-3 rounded-xl border border-slate-100 bg-white p-2.5 shadow-sm cursor-pointer transition-all hover:border-slate-200 hover:shadow-md active:scale-[0.99]" data-cart-row="1"' +
+          '<div class="pos-cart-line-item group flex gap-2.5 rounded-xl border border-slate-100 bg-white p-2 shadow-sm cursor-pointer transition-all hover:border-slate-200 hover:shadow-md active:scale-[0.99]" data-cart-row="1"' +
           (productCode ? ' data-product-code="' + escapeHtml(productCode) + '"' : '') +
           ' role="button" tabindex="0" title="View product details">';
         if (imgUrl) {
           html +=
-            '<div class="shrink-0 w-14 h-14 rounded-xl border border-slate-100 bg-gradient-to-br from-white to-slate-50 overflow-hidden ring-1 ring-slate-100 group-hover:ring-orange-100">' +
+            '<div class="shrink-0 w-16 h-16 self-start rounded-lg border border-slate-100 bg-gradient-to-br from-white to-slate-50 overflow-hidden ring-1 ring-slate-100 group-hover:ring-orange-100">' +
             '<img src="' +
             escapeHtml(imgUrl) +
             '" alt="' +
             escapeHtml(title) +
-            '" class="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />' +
+            '" class="h-full w-full object-contain p-0.5" loading="lazy" decoding="async" />' +
             '</div>';
         } else {
           html +=
-            '<div class="shrink-0 w-14 h-14 rounded-xl border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-lg leading-none" title="No image">◇</div>';
+            '<div class="shrink-0 w-16 h-16 self-start rounded-lg border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-base leading-none" title="No image">◇</div>';
         }
-        html += '<div class="min-w-0 flex-1 flex flex-col gap-0.5">';
+        html += '<div class="min-w-0 flex-1 flex flex-col gap-1">';
         html +=
-          '<div class="text-[13px] font-semibold text-slate-900 leading-snug line-clamp-2">' +
+          '<div class="flex items-start justify-between gap-2">' +
+          '<div class="min-w-0 flex-1">' +
+          '<div class="text-[13px] font-semibold leading-tight text-slate-900 line-clamp-2">' +
           escapeHtml(title) +
           '</div>';
         if (sub) {
           html +=
-            '<div class="text-[10px] font-medium uppercase tracking-wide text-slate-400">' +
+            '<div class="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">' +
             escapeHtml(sub) +
             '</div>';
         }
-        if (unitPrice || lineTotal) {
-          html += '<div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">';
-          if (unitPrice) {
-            html +=
-              '<span class="inline-flex items-baseline gap-1 rounded-md bg-slate-50 px-1.5 py-0.5 text-slate-600 ring-1 ring-slate-100">' +
-              '<span class="text-slate-400">Price</span>' +
-              '<span class="tabular-nums font-semibold text-slate-800">' +
-              escapeHtml(unitPrice) +
-              '</span></span>';
-          }
-          if (lineTotal) {
-            html +=
-              '<span class="inline-flex items-baseline gap-1 rounded-md bg-orange-50/80 px-1.5 py-0.5 text-orange-900 ring-1 ring-orange-100/80">' +
-              '<span class="text-orange-700/80">Amount</span>' +
-              '<span class="tabular-nums font-bold text-orange-900">' +
-              escapeHtml(lineTotal) +
-              '</span></span>';
-          }
-          html += '</div>';
+        html += '</div>';
+        html += '<div class="shrink-0 text-right leading-tight">';
+        if (unitPrice && lineTotal) {
+          html +=
+            '<div class="text-[10px] text-slate-500 tabular-nums">' +
+            escapeHtml(String(qty)) +
+            ' \u00d7 ' +
+            escapeHtml(unitPrice) +
+            '</div>' +
+            '<div class="text-sm font-bold tabular-nums text-orange-700">' +
+            escapeHtml(lineTotal) +
+            '</div>';
+        } else if (lineTotal) {
+          html += '<div class="text-sm font-bold tabular-nums text-slate-900">' + escapeHtml(lineTotal) + '</div>';
+        } else if (unitPrice) {
+          html += '<div class="text-xs font-semibold tabular-nums text-slate-800">' + escapeHtml(unitPrice) + '</div>';
         }
-        html += '<div class="mt-2 flex flex-wrap items-center gap-2">';
+        html += '</div></div>';
+        html += '<div class="flex items-center justify-between gap-2 border-t border-slate-100 pt-1.5">';
         if (ref) {
           var maxAttr =
             maxSell != null && maxSell >= 1 ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"' : '';
-          var hint =
+          var hintInline =
             maxSell != null && maxSell >= 1
-              ? '<span class="text-[10px] text-slate-400 w-full basis-full pl-0.5">Max ' +
+              ? '<span class="text-[10px] text-slate-400 tabular-nums">\u00b7 max ' +
                 escapeHtml(String(maxSell)) +
-                ' per order</span>'
+                '/order</span>'
               : '';
           html +=
+            '<div class="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">' +
             '<span class="text-[10px] font-medium text-slate-500">Qty</span>' +
-            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-[3.25rem] rounded-lg border border-slate-200 bg-white px-2 py-1 text-center text-xs font-semibold text-slate-800 shadow-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"' +
+            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-11 rounded-md border border-slate-200 bg-white px-1 py-0.5 text-center text-xs font-semibold text-slate-800 shadow-sm outline-none transition focus:border-orange-400 focus:ring-1 focus:ring-orange-100"' +
             maxAttr +
             ' data-cartref="' +
             escapeHtml(ref) +
@@ -795,8 +796,9 @@
             '" title="' +
             (maxSell != null && maxSell >= 1 ? escapeHtml('Maximum ' + maxSell + ' per order') : '') +
             '" />' +
-            hint +
-            '<button type="button" class="pos-cart-delete-btn ml-auto rounded-lg border border-red-100 bg-red-50/70 px-2.5 py-1 text-[11px] font-semibold text-red-700 transition hover:bg-red-100 hover:border-red-200" data-cartref="' +
+            hintInline +
+            '</div>' +
+            '<button type="button" class="pos-cart-delete-btn shrink-0 rounded-md border border-red-100 bg-red-50/80 px-2 py-0.5 text-[10px] font-semibold text-red-700 transition hover:bg-red-100 hover:border-red-200" data-cartref="' +
             escapeHtml(ref) +
             '">Remove</button>';
         } else {
