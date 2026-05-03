@@ -2827,6 +2827,56 @@ class POSRegisterController
     }
 
     /**
+     * Drop a product code from the session browse-history list so the next /cart/retrieve
+     * does not still report that SKU under browsing_history (stale x-api-browsehistory when
+     * /cart/modifyqty does not echo a replacement header).
+     */
+    private function removeSkuFromSessionBrowseHistory(string $itemCode): void
+    {
+        $itemCode = strtoupper(trim($itemCode));
+        if ($itemCode === '') {
+            return;
+        }
+        $raw = (string)($_SESSION['x_api_browsehistory'] ?? '');
+        if ($raw === '') {
+            return;
+        }
+        $parts = array_map('trim', explode(',', $raw));
+        $kept = [];
+        foreach ($parts as $p) {
+            if ($p === '' || strtoupper($p) === $itemCode) {
+                continue;
+            }
+            $kept[] = $p;
+        }
+        $new = implode(',', $kept);
+        if ($new === '') {
+            unset($_SESSION['x_api_browsehistory']);
+        } else {
+            $_SESSION['x_api_browsehistory'] = $new;
+        }
+    }
+
+    /**
+     * Resolve line item code for a cartref (POST item_code if present, else current cart).
+     */
+    private function resolveItemCodeForCartref(string $cartref): string
+    {
+        $fromPost = trim((string)($_POST['item_code'] ?? ''));
+        if ($fromPost !== '') {
+            return $fromPost;
+        }
+        $cartData = $this->get_cart();
+        foreach ($cartData['items'] ?? [] as $item) {
+            if (($item['cartref'] ?? '') === $cartref) {
+                return trim((string)($item['item_code'] ?? ''));
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * Remove one cart line. Must use the API gateway (same session as /cart/retrieve), not
      * https://www.exoticindia.com/cart/delete (that path is cookie/session-based and does not
      * update the x-api-euid cart).
@@ -2859,7 +2909,9 @@ class POSRegisterController
             exit;
         }
 
+        $removedCodeForBrowse = '';
         if ($qty < 1) {
+            $removedCodeForBrowse = $this->resolveItemCodeForCartref($cartref);
             $modRes = $this->exoticCartDeleteLine($cartref);
         } else {
             $cartData = $this->get_cart();
@@ -2891,6 +2943,8 @@ class POSRegisterController
             $_SESSION['cart_error'] = $qty < 1
                 ? 'Could not remove item from cart (HTTP ' . $modCode . ').'
                 : 'Could not update quantity (HTTP ' . $modCode . ').';
+        } elseif ($qty < 1 && $removedCodeForBrowse !== '') {
+            $this->removeSkuFromSessionBrowseHistory($removedCodeForBrowse);
         }
 
         header("Location: ?page=pos_register");
@@ -2907,10 +2961,13 @@ class POSRegisterController
             exit;
         }
 
+        $removedCode = $this->resolveItemCodeForCartref($cartref);
         $modRes = $this->exoticCartDeleteLine($cartref);
         $modCode = (int)($modRes['code'] ?? 0);
         if ($modCode < 200 || $modCode >= 300) {
             $_SESSION['cart_error'] = 'Could not remove item from cart (HTTP ' . $modCode . '). The line may still appear until the cart syncs — try again.';
+        } elseif ($removedCode !== '') {
+            $this->removeSkuFromSessionBrowseHistory($removedCode);
         }
 
         header("Location: ?page=pos_register");
