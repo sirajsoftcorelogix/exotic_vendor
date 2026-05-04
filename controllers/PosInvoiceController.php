@@ -6,7 +6,7 @@ require_once 'models/comman/tables.php';
 require_once 'models/customer/Customer.php';
 require_once 'models/product/product.php';
 require_once 'models/order/stock.php';
-$invoiceModel = new Invoice($conn);
+$invoiceModel = new POSInvoice($conn);
 $ordersModel = new Order($conn);
 $usersModel = new User($conn);
 $commanModel = new Tables($conn);
@@ -40,38 +40,41 @@ class PosInvoiceController
 
         $sql = "
     SELECT 
-        i.id,
-        i.invoice_number,
-        i.invoice_date,
-        i.status,
-        i.total_amount,
+    i.id,
+    i.invoice_number,
+    i.invoice_date,
+    i.status,
+    i.total_amount,
 
-        o.order_number,
-        o.payment_type,
+    o.order_number,
+    o.payment_type,
 
-        c.name AS customer_name,
+    c.name AS customer_name,
 
-        IFNULL((
-            SELECT SUM(pp.payment_amount)
-            FROM pos_payments pp
-            WHERE pp.order_number COLLATE utf8mb4_unicode_ci = i.order_number COLLATE utf8mb4_unicode_ci
-        ),0) AS paid_amount,
+    IFNULL((
+        SELECT SUM(pp.payment_amount)
+        FROM pos_payments pp
+        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+              CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
+    ),0) AS paid_amount,
 
-        i.total_amount - IFNULL((
-            SELECT SUM(pp.payment_amount)
-            FROM pos_payments pp
-            WHERE pp.order_number COLLATE utf8mb4_unicode_ci = i.order_number COLLATE utf8mb4_unicode_ci
-        ),0) AS due_amount
+    i.total_amount - IFNULL((
+        SELECT SUM(pp.payment_amount)
+        FROM pos_payments pp
+        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+              CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
+    ),0) AS due_amount
 
-    FROM vp_invoices i
+FROM vp_invoices i
 
-    LEFT JOIN vp_order_info o 
-        ON o.id = i.vp_order_info_id
+LEFT JOIN vp_order_info o 
+    ON o.id = i.vp_order_info_id
 
-    LEFT JOIN vp_customers c 
-        ON c.id = i.customer_id
-WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($warehouseId) . "
-    ";
+LEFT JOIN vp_customers c 
+    ON c.id = i.customer_id
+
+WHERE IFNULL(o.payment_type,'') = 'offline' 
+  AND i.warehouse_id = " . intval($warehouseId) . "";
 
         if (!empty($_GET['order_number'])) {
             $sql .= " AND o.order_number LIKE '%" . $conn->real_escape_string($_GET['order_number']) . "%'";
@@ -106,8 +109,9 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
         }
 
 
-        $sql .= " ORDER BY i.id DESC";
-
+        $sql .= " AND pos_flag = 1 ORDER BY i.id DESC";
+        //echo $sql;
+        //exit;
         $res = $conn->query($sql);
 
         $data = [];
@@ -217,8 +221,8 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
             "invoice_id" => $invoiceId
         ]);
     }
-   
-   
+
+
     public function create_from_payment()
     {
         global $conn;
@@ -621,7 +625,7 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
 
         return $html;
     }
-    
+
     public function create_auto_from_order()
     {
         is_login();
