@@ -18,35 +18,16 @@
     html.pos-page-hide-scrollbars,
     html.pos-page-hide-scrollbars body,
     .pos-register-page,
-    .pos-register-page *:not(.pos-cart-shell-scroll) {
+    .pos-register-page * {
       scrollbar-width: none;
       -ms-overflow-style: none;
     }
     html.pos-page-hide-scrollbars::-webkit-scrollbar,
     html.pos-page-hide-scrollbars body::-webkit-scrollbar,
-    .pos-register-page *:not(.pos-cart-shell-scroll)::-webkit-scrollbar {
+    .pos-register-page *::-webkit-scrollbar {
       width: 0 !important;
       height: 0 !important;
       background: transparent;
-    }
-
-    /* White cart card: scroll here + thin visible thumb (rest of POS keeps hidden scrollbars) */
-    .pos-register-page .pos-cart-shell-scroll {
-      -webkit-overflow-scrolling: touch;
-    }
-    html.pos-page-hide-scrollbars .pos-register-page .pos-cart-shell-scroll {
-      scrollbar-width: thin;
-      scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
-      -ms-overflow-style: auto;
-    }
-    html.pos-page-hide-scrollbars .pos-register-page .pos-cart-shell-scroll::-webkit-scrollbar {
-      width: 8px !important;
-      height: 0 !important;
-      background: transparent;
-    }
-    html.pos-page-hide-scrollbars .pos-register-page .pos-cart-shell-scroll::-webkit-scrollbar-thumb {
-      border-radius: 9999px;
-      background: rgba(148, 163, 184, 0.5);
     }
 
     /* Consistent typography scale across POS */
@@ -234,7 +215,7 @@
     <?php $cart = []; ?>
 
     <aside
-      class="col-span-12 lg:col-span-3 flex flex-col min-h-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100dvh-9rem)]"
+      class="col-span-12 lg:col-span-3 flex flex-col lg:sticky lg:top-4 lg:self-start"
       data-pos-cart-sidebar="1">
       <div class="px-4 py-3 border-b shrink-0">
 
@@ -258,7 +239,7 @@
 
       </div>
       <div
-        class="pos-cart-shell-scroll flex flex-col flex-1 min-h-0 overflow-y-auto overscroll-y-contain rounded-2xl bg-white border shadow-sm mt-2 lg:mt-0"
+        class="flex flex-col rounded-2xl bg-white border shadow-sm overflow-hidden mt-2 lg:mt-0"
         data-pos-cart-scroll="1">
         <div class="px-4 py-3 border-b shrink-0">
           <div id="selectedCustomerNameCart" class="text-base font-semibold text-center text-slate-800">Walk-in Customer</div>
@@ -574,7 +555,7 @@
         </div>
         <div>
           <label class="text-xs text-slate-500">Payment date</label>
-          <input type="date" id="payment_date" value="<?= htmlspecialchars(date('Y-m-d'), ENT_QUOTES, 'UTF-8') ?>" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+          <input type="date" id="payment_date" value="<?= htmlspecialchars(date('Y-m-d'), ENT_QUOTES, 'UTF-8') ?>" max="<?= htmlspecialchars(date('Y-m-d'), ENT_QUOTES, 'UTF-8') ?>" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" title="Today or earlier only">
         </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -917,6 +898,26 @@
   }
 </script>
 <script>
+  function posPaymentDateLocalYmd() {
+    var d = new Date();
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
+  }
+
+  function syncPaymentDatePickerMax() {
+    var pd = document.getElementById("payment_date");
+    if (!pd) {
+      return;
+    }
+    var today = posPaymentDateLocalYmd();
+    pd.setAttribute("max", today);
+    if (pd.value && pd.value > today) {
+      pd.value = today;
+    }
+  }
+
   function openPaymentModal() {
     var pm = document.getElementById("paymentModal");
     if (!pm) {
@@ -930,6 +931,7 @@
     if (apiPre) {
       apiPre.textContent = "";
     }
+    syncPaymentDatePickerMax();
     var ct = typeof window.getPosCartTotalsForCheckout === "function" ? window.getPosCartTotalsForCheckout() : null;
     var pa = document.getElementById("payment_amount");
     if (pa && ct && ct.grandTotal != null && !isNaN(parseFloat(String(ct.grandTotal)))) {
@@ -1170,6 +1172,16 @@
       syncRazorpayTxnHint();
     }
 
+    var paymentDateInput = document.getElementById("payment_date");
+    if (paymentDateInput && typeof posPaymentDateLocalYmd === "function") {
+      paymentDateInput.addEventListener("input", function () {
+        var t = posPaymentDateLocalYmd();
+        if (paymentDateInput.value && paymentDateInput.value > t) {
+          paymentDateInput.value = t;
+        }
+      });
+    }
+
     var placeOrderBtn = document.getElementById("placeOrderBtn");
     if (placeOrderBtn) {
       placeOrderBtn.addEventListener("click", function() {
@@ -1233,6 +1245,17 @@
             txnEl.focus();
           }
           return;
+        }
+
+        var payDateEl = document.getElementById("payment_date");
+        if (payDateEl && payDateEl.value) {
+          var todayYmd = posPaymentDateLocalYmd();
+          if (payDateEl.value > todayYmd) {
+            showToast("⚠ Payment date cannot be in the future", "red");
+            payDateEl.value = todayYmd;
+            payDateEl.focus();
+            return;
+          }
         }
 
         loadAndOpenAddressConfirm(customerId);

@@ -173,7 +173,8 @@ class POSRegisterController
     }
 
     /**
-     * Fetch latest billing/shipping info used for POS order create confirmation popup.
+     * Fetch billing/shipping for POS confirmation popup.
+     * Priority: vp_customers (+ pos_customer_details) → last vp_order_info → session pos_customer_form.
      */
     public function customer_order_info()
     {
@@ -183,74 +184,121 @@ class POSRegisterController
         header('Content-Type: application/json; charset=utf-8');
 
         $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
-        $billing = [];
-        $shipping = [];
+
+        $pick = static function (string ...$parts): string {
+            foreach ($parts as $p) {
+                $t = trim((string)$p);
+                if ($t !== '') {
+                    return $t;
+                }
+            }
+
+            return '';
+        };
+
+        require_once 'models/customer/Customer.php';
+        $customerModel = new Customer($conn);
+        $fromVc = $customerId > 0 ? $customerModel->getCustomerBillingShippingForPos($customerId) : ['billing' => [], 'shipping' => []];
+        $billingVc = $fromVc['billing'];
+        $shippingVc = $fromVc['shipping'];
+
+        $billingOrder = [];
+        $shippingOrder = [];
 
         if ($customerId > 0) {
-            $stmt = $conn->prepare("SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1");
+            $stmt = $conn->prepare('SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1');
             if ($stmt) {
-                $stmt->bind_param("i", $customerId);
+                $stmt->bind_param('i', $customerId);
                 $stmt->execute();
                 $info = $stmt->get_result()->fetch_assoc();
                 $stmt->close();
                 if ($info) {
-                    $billing = [
-                        "first_name" => trim((string)($info['first_name'] ?? '')),
-                        "last_name" => trim((string)($info['last_name'] ?? '')),
-                        "email" => trim((string)($info['email'] ?? '')),
-                        "phone" => trim((string)($info['mobile'] ?? '')),
-                        "address1" => trim((string)($info['address_line1'] ?? '')),
-                        "address2" => trim((string)($info['address_line2'] ?? '')),
-                        "city" => trim((string)($info['city'] ?? '')),
-                        "state" => trim((string)($info['state'] ?? '')),
-                        "zip" => trim((string)($info['zipcode'] ?? '')),
-                        "country" => trim((string)($info['country'] ?? 'IN')),
-                        "gstin" => trim((string)($info['gstin'] ?? '')),
+                    $billingOrder = [
+                        'first_name' => trim((string)($info['first_name'] ?? '')),
+                        'last_name' => trim((string)($info['last_name'] ?? '')),
+                        'email' => trim((string)($info['email'] ?? '')),
+                        'phone' => trim((string)($info['mobile'] ?? '')),
+                        'address1' => trim((string)($info['address_line1'] ?? '')),
+                        'address2' => trim((string)($info['address_line2'] ?? '')),
+                        'city' => trim((string)($info['city'] ?? '')),
+                        'state' => trim((string)($info['state'] ?? '')),
+                        'zip' => trim((string)($info['zipcode'] ?? '')),
+                        'country' => trim((string)($info['country'] ?? 'IN')),
+                        'gstin' => trim((string)($info['gstin'] ?? '')),
                     ];
-                    $shipping = [
-                        "sname" => trim((string)(($info['shipping_first_name'] ?? '') . ' ' . ($info['shipping_last_name'] ?? ''))),
-                        "saddress1" => trim((string)($info['shipping_address_line1'] ?? '')),
-                        "saddress2" => trim((string)($info['shipping_address_line2'] ?? '')),
-                        "scity" => trim((string)($info['shipping_city'] ?? '')),
-                        "sstate" => trim((string)($info['shipping_state'] ?? '')),
-                        "szip" => trim((string)($info['shipping_zipcode'] ?? '')),
-                        "scountry" => trim((string)($info['shipping_country'] ?? 'IN')),
-                        "sphone" => trim((string)($info['shipping_mobile'] ?? '')),
+                    $shippingOrder = [
+                        'shipping_first_name' => trim((string)($info['shipping_first_name'] ?? '')),
+                        'shipping_last_name' => trim((string)($info['shipping_last_name'] ?? '')),
+                        'sname' => trim((string)(($info['shipping_first_name'] ?? '').' '.($info['shipping_last_name'] ?? ''))),
+                        'saddress1' => trim((string)($info['shipping_address_line1'] ?? '')),
+                        'saddress2' => trim((string)($info['shipping_address_line2'] ?? '')),
+                        'scity' => trim((string)($info['shipping_city'] ?? '')),
+                        'sstate' => trim((string)($info['shipping_state'] ?? '')),
+                        'szip' => trim((string)($info['shipping_zipcode'] ?? '')),
+                        'scountry' => trim((string)($info['shipping_country'] ?? 'IN')),
+                        'sphone' => trim((string)($info['shipping_mobile'] ?? '')),
                     ];
                 }
             }
         }
 
-        if ((empty($billing) || empty($shipping)) && !empty($_SESSION['pos_customer_form'])) {
+        $billingSession = [];
+        $shippingSession = [];
+        if (!empty($_SESSION['pos_customer_form'])) {
             $form = $_SESSION['pos_customer_form'];
-            if (empty($billing)) {
-                $billing = [
-                    "first_name" => trim((string)($form['first_name'] ?? '')),
-                    "last_name" => trim((string)($form['last_name'] ?? '')),
-                    "email" => trim((string)($form['cus_email'] ?? '')),
-                    "phone" => trim((string)($form['mobile'] ?? '')),
-                    "address1" => trim((string)($form['address_line1'] ?? '')),
-                    "address2" => trim((string)($form['address_line2'] ?? '')),
-                    "city" => trim((string)($form['city'] ?? '')),
-                    "state" => trim((string)($form['state'] ?? '')),
-                    "zip" => trim((string)($form['zipcode'] ?? '')),
-                    "country" => "IN",
-                    "gstin" => trim((string)($form['gstin'] ?? '')),
-                ];
-            }
-            if (empty($shipping)) {
-                $shipping = [
-                    "sname" => trim((string)(($form['shipping_first_name'] ?? '') . ' ' . ($form['shipping_last_name'] ?? ''))),
-                    "saddress1" => trim((string)($form['shipping_address_line1'] ?? '')),
-                    "saddress2" => trim((string)($form['shipping_address_line2'] ?? '')),
-                    "scity" => trim((string)($form['shipping_city'] ?? '')),
-                    "sstate" => trim((string)($form['shipping_state'] ?? '')),
-                    "szip" => trim((string)($form['shipping_zipcode'] ?? '')),
-                    "scountry" => "IN",
-                    "sphone" => trim((string)($form['shipping_mobile'] ?? '')),
-                ];
-            }
+            $billingSession = [
+                'first_name' => trim((string)($form['first_name'] ?? '')),
+                'last_name' => trim((string)($form['last_name'] ?? '')),
+                'email' => trim((string)($form['cus_email'] ?? '')),
+                'phone' => trim((string)($form['mobile'] ?? '')),
+                'address1' => trim((string)($form['address_line1'] ?? '')),
+                'address2' => trim((string)($form['address_line2'] ?? '')),
+                'city' => trim((string)($form['city'] ?? '')),
+                'state' => trim((string)($form['state'] ?? '')),
+                'zip' => trim((string)($form['zipcode'] ?? '')),
+                'country' => trim((string)($form['country'] ?? 'IN')),
+                'gstin' => trim((string)($form['gstin'] ?? '')),
+            ];
+            $shippingSession = [
+                'shipping_first_name' => trim((string)($form['shipping_first_name'] ?? '')),
+                'shipping_last_name' => trim((string)($form['shipping_last_name'] ?? '')),
+                'sname' => trim((string)(($form['shipping_first_name'] ?? '').' '.($form['shipping_last_name'] ?? ''))),
+                'saddress1' => trim((string)($form['shipping_address_line1'] ?? '')),
+                'saddress2' => trim((string)($form['shipping_address_line2'] ?? '')),
+                'scity' => trim((string)($form['shipping_city'] ?? '')),
+                'sstate' => trim((string)($form['shipping_state'] ?? '')),
+                'szip' => trim((string)($form['shipping_zipcode'] ?? '')),
+                'scountry' => trim((string)($form['shipping_country'] ?? 'IN')),
+                'sphone' => trim((string)($form['shipping_mobile'] ?? '')),
+            ];
         }
+
+        $billing = [
+            'first_name' => $pick($billingVc['first_name'] ?? '', $billingOrder['first_name'] ?? '', $billingSession['first_name'] ?? ''),
+            'last_name' => $pick($billingVc['last_name'] ?? '', $billingOrder['last_name'] ?? '', $billingSession['last_name'] ?? ''),
+            'email' => $pick($billingVc['email'] ?? '', $billingOrder['email'] ?? '', $billingSession['email'] ?? ''),
+            'phone' => $pick($billingVc['phone'] ?? '', $billingOrder['phone'] ?? '', $billingSession['phone'] ?? ''),
+            'address1' => $pick($billingVc['address1'] ?? '', $billingOrder['address1'] ?? '', $billingSession['address1'] ?? ''),
+            'address2' => $pick($billingVc['address2'] ?? '', $billingOrder['address2'] ?? '', $billingSession['address2'] ?? ''),
+            'city' => $pick($billingVc['city'] ?? '', $billingOrder['city'] ?? '', $billingSession['city'] ?? ''),
+            'state' => $pick($billingVc['state'] ?? '', $billingOrder['state'] ?? '', $billingSession['state'] ?? ''),
+            'zip' => $pick($billingVc['zip'] ?? '', $billingOrder['zip'] ?? '', $billingSession['zip'] ?? ''),
+            'country' => $pick($billingVc['country'] ?? '', $billingOrder['country'] ?? '', $billingSession['country'] ?? ''),
+            'gstin' => $pick($billingVc['gstin'] ?? '', $billingOrder['gstin'] ?? '', $billingSession['gstin'] ?? ''),
+        ];
+
+        $shipping = [
+            'shipping_first_name' => $pick($shippingVc['shipping_first_name'] ?? '', $shippingOrder['shipping_first_name'] ?? '', $shippingSession['shipping_first_name'] ?? ''),
+            'shipping_last_name' => $pick($shippingVc['shipping_last_name'] ?? '', $shippingOrder['shipping_last_name'] ?? '', $shippingSession['shipping_last_name'] ?? ''),
+            'sname' => $pick($shippingVc['sname'] ?? '', $shippingOrder['sname'] ?? '', $shippingSession['sname'] ?? ''),
+            'saddress1' => $pick($shippingVc['saddress1'] ?? '', $shippingOrder['saddress1'] ?? '', $shippingSession['saddress1'] ?? ''),
+            'saddress2' => $pick($shippingVc['saddress2'] ?? '', $shippingOrder['saddress2'] ?? '', $shippingSession['saddress2'] ?? ''),
+            'scity' => $pick($shippingVc['scity'] ?? '', $shippingOrder['scity'] ?? '', $shippingSession['scity'] ?? ''),
+            'sstate' => $pick($shippingVc['sstate'] ?? '', $shippingOrder['sstate'] ?? '', $shippingSession['sstate'] ?? ''),
+            'szip' => $pick($shippingVc['szip'] ?? '', $shippingOrder['szip'] ?? '', $shippingSession['szip'] ?? ''),
+            'scountry' => $pick($shippingVc['scountry'] ?? '', $shippingOrder['scountry'] ?? '', $shippingSession['scountry'] ?? ''),
+            'sphone' => $pick($shippingVc['sphone'] ?? '', $shippingOrder['sphone'] ?? '', $shippingSession['sphone'] ?? ''),
+        ];
 
         echo json_encode([
             'success' => true,
@@ -1869,6 +1917,9 @@ class POSRegisterController
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
 
+        require_once 'models/customer/Customer.php';
+        $customerModel = new Customer($conn);
+
         $first = $_POST['first_name'] ?? '';
         $last  = $_POST['last_name'] ?? '';
         $phone = $_POST['mobile'] ?? '';
@@ -1916,6 +1967,7 @@ class POSRegisterController
                         $id = (int)$existing['id'];
                         $_SESSION['pos_customer_id'] = $id;
                         $_SESSION['pos_customer_form'] = $_POST;
+                        $customerModel->upsertPosCustomerDetailsFromPost($id, $_POST);
                         echo json_encode([
                             'success' => true,
                             'message' => 'This email and phone are already registered; using existing customer.',
@@ -1965,6 +2017,7 @@ class POSRegisterController
         /*  STORE FULL BILLING + SHIPPING IN SESSION */
         $_SESSION['pos_customer_id'] = $id;
         $_SESSION['pos_customer_form'] = $_POST;
+        $customerModel->upsertPosCustomerDetailsFromPost($id, $_POST);
 
         echo json_encode([
             "success" => true,

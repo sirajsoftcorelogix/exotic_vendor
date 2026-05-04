@@ -239,6 +239,123 @@ class Customer
         $stmt->execute();
         return $stmt->get_result()->fetch_assoc();
     }
+
+    /**
+     * Billing/shipping arrays for POS address modal: vp_customers + pos_customer_details.
+     * Keys match POSRegisterController::customer_order_info() / setAddressConfirmFields() expectations.
+     *
+     * @return array{billing: array<string, string>, shipping: array<string, string>}
+     */
+    public function getCustomerBillingShippingForPos(int $customerId): array
+    {
+        $billing = [];
+        $shipping = [];
+        if ($customerId <= 0) {
+            return ['billing' => $billing, 'shipping' => $shipping];
+        }
+        $row = $this->getCustomerById($customerId);
+        if (!$row || empty($row['id'])) {
+            return ['billing' => $billing, 'shipping' => $shipping];
+        }
+
+        $fullName = trim((string)($row['name'] ?? ''));
+        $parts = $fullName !== '' ? preg_split('/\s+/u', $fullName, 2, PREG_SPLIT_NO_EMPTY) : [];
+        $first = $parts[0] ?? '';
+        $last = isset($parts[1]) ? trim((string)$parts[1]) : '';
+
+        $billing = [
+            'first_name' => $first,
+            'last_name' => $last,
+            'email' => trim((string)($row['email'] ?? '')),
+            'phone' => trim((string)($row['phone'] ?? '')),
+            'address1' => '',
+            'address2' => '',
+            'city' => '',
+            'state' => '',
+            'zip' => '',
+            'country' => 'IN',
+            'gstin' => '',
+        ];
+
+        // Optional extended columns on vp_customers (if present in DB)
+        $vcExtras = [
+            'billing_address_line1' => 'address1',
+            'billing_address_line2' => 'address2',
+            'billing_city' => 'city',
+            'billing_state' => 'state',
+            'billing_zip' => 'zip',
+            'billing_zipcode' => 'zip',
+            'billing_country' => 'country',
+            'gstin' => 'gstin',
+        ];
+        foreach ($vcExtras as $col => $key) {
+            if (!empty($row[$col])) {
+                $billing[$key] = trim((string)$row[$col]);
+            }
+        }
+
+        $this->ensurePosCustomerDetailsTable();
+        $stmt = $this->conn->prepare('SELECT * FROM pos_customer_details WHERE customer_id = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('i', $customerId);
+            $stmt->execute();
+            $det = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if (is_array($det)) {
+                if (trim((string)($det['bill_line1'] ?? '')) !== '') {
+                    $billing['address1'] = trim((string)$det['bill_line1']);
+                }
+                if (trim((string)($det['bill_line2'] ?? '')) !== '') {
+                    $billing['address2'] = trim((string)$det['bill_line2']);
+                }
+                if (trim((string)($det['bill_city'] ?? '')) !== '') {
+                    $billing['city'] = trim((string)$det['bill_city']);
+                }
+                if (trim((string)($det['bill_state'] ?? '')) !== '') {
+                    $billing['state'] = trim((string)$det['bill_state']);
+                }
+                if (trim((string)($det['bill_pin'] ?? '')) !== '') {
+                    $billing['zip'] = trim((string)$det['bill_pin']);
+                }
+                if (trim((string)($det['bill_country'] ?? '')) !== '') {
+                    $billing['country'] = trim((string)$det['bill_country']);
+                }
+                if (trim((string)($det['gstin'] ?? '')) !== '') {
+                    $billing['gstin'] = trim((string)$det['gstin']);
+                }
+
+                $shipping = [
+                    'shipping_first_name' => $first,
+                    'shipping_last_name' => $last,
+                    'sname' => trim($first . ' ' . $last),
+                    'saddress1' => trim((string)($det['ship_line1'] ?? '')),
+                    'saddress2' => trim((string)($det['ship_line2'] ?? '')),
+                    'scity' => trim((string)($det['ship_city'] ?? '')),
+                    'sstate' => trim((string)($det['ship_state'] ?? '')),
+                    'szip' => trim((string)($det['ship_pin'] ?? '')),
+                    'scountry' => trim((string)($det['ship_country'] ?? '')) !== '' ? trim((string)$det['ship_country']) : 'IN',
+                    'sphone' => $billing['phone'],
+                ];
+            }
+        }
+
+        if ($shipping === []) {
+            $shipping = [
+                'shipping_first_name' => $first,
+                'shipping_last_name' => $last,
+                'sname' => trim($first . ' ' . $last),
+                'saddress1' => '',
+                'saddress2' => '',
+                'scity' => '',
+                'sstate' => '',
+                'szip' => '',
+                'scountry' => 'IN',
+                'sphone' => $billing['phone'],
+            ];
+        }
+
+        return ['billing' => $billing, 'shipping' => $shipping];
+    }
     public function getOrderItemsByCustomerId($customer_id, $limit = 10, $offset = 0, $filters = [])
     {
         $sql = "SELECT 
@@ -348,6 +465,89 @@ class Customer
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         );
         $done = true;
+    }
+
+    /**
+     * Persist Add Customer modal billing/shipping + GSTIN to pos_customer_details (UPSERT by customer_id).
+     *
+     * @param array<string, mixed> $post Typically $_POST from POS add-customer form.
+     */
+    public function upsertPosCustomerDetailsFromPost(int $customerId, array $post): bool
+    {
+        if ($customerId <= 0) {
+            return false;
+        }
+        $this->ensurePosCustomerDetailsTable();
+
+        $bill1 = trim((string)($post['address_line1'] ?? ''));
+        $bill2 = trim((string)($post['address_line2'] ?? ''));
+        $billCity = trim((string)($post['city'] ?? ''));
+        $billState = trim((string)($post['state'] ?? ''));
+        $billPin = trim((string)($post['zipcode'] ?? ''));
+        $billCountry = trim((string)($post['country'] ?? ''));
+        if ($billCountry === '') {
+            $billCountry = 'IN';
+        }
+
+        $ship1 = trim((string)($post['shipping_address_line1'] ?? ''));
+        $ship2 = trim((string)($post['shipping_address_line2'] ?? ''));
+        $shipCity = trim((string)($post['shipping_city'] ?? ''));
+        $shipState = trim((string)($post['shipping_state'] ?? ''));
+        $shipPin = trim((string)($post['shipping_zipcode'] ?? ''));
+        $shipCountry = trim((string)($post['shipping_country'] ?? ''));
+        if ($shipCountry === '') {
+            $shipCountry = 'IN';
+        }
+
+        $gstin = trim((string)($post['gstin'] ?? ''));
+
+        $sql = 'INSERT INTO pos_customer_details (
+            customer_id, bill_line1, bill_line2, bill_city, bill_state, bill_country, bill_pin,
+            ship_line1, ship_line2, ship_city, ship_state, ship_country, ship_pin, gstin
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON DUPLICATE KEY UPDATE
+            bill_line1 = VALUES(bill_line1),
+            bill_line2 = VALUES(bill_line2),
+            bill_city = VALUES(bill_city),
+            bill_state = VALUES(bill_state),
+            bill_country = VALUES(bill_country),
+            bill_pin = VALUES(bill_pin),
+            ship_line1 = VALUES(ship_line1),
+            ship_line2 = VALUES(ship_line2),
+            ship_city = VALUES(ship_city),
+            ship_state = VALUES(ship_state),
+            ship_country = VALUES(ship_country),
+            ship_pin = VALUES(ship_pin),
+            gstin = VALUES(gstin)';
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        $types = 'i' . str_repeat('s', 13);
+        $stmt->bind_param(
+            $types,
+            $customerId,
+            $bill1,
+            $bill2,
+            $billCity,
+            $billState,
+            $billCountry,
+            $billPin,
+            $ship1,
+            $ship2,
+            $shipCity,
+            $shipState,
+            $shipCountry,
+            $shipPin,
+            $gstin
+        );
+
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        return $ok;
     }
 
     /** All customers with purchase totals across all orders (customer list). */
