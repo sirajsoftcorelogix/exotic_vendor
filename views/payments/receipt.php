@@ -69,17 +69,118 @@ $note = trim((string)($payment['note'] ?? ''));
     </script>
     <style>
         body { font-family: 'DM Sans', system-ui, sans-serif; }
+        /* Half A4: full width (210mm), half height (~148mm) — typical top-half tear-off */
+        @page {
+            size: 210mm 148mm;
+            margin: 5mm 8mm;
+        }
         @media print {
             .no-print { display: none !important; }
-            body { background: #fff !important; padding: 0 !important; }
+            html, body {
+                background: #fff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                height: auto !important;
+                width: 100% !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .receipt-print-outer {
+                max-width: 100% !important;
+                padding: 0 !important;
+                margin: 0 auto !important;
+            }
             .receipt-sheet {
                 box-shadow: none !important;
                 border-radius: 0 !important;
                 max-width: 100% !important;
+                width: 100% !important;
+                page-break-inside: avoid;
+                break-inside: avoid;
             }
-            * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
+            /* Compact layout to fit half A4 */
+            .receipt-print-brand {
+                padding: 0.35rem 0.65rem 0.25rem !important;
+                border-bottom-width: 1px !important;
+            }
+            .receipt-print-brand img {
+                height: 1.65rem !important;
+                width: auto !important;
+            }
+            .receipt-print-brand .tagline {
+                margin-top: 0.15rem !important;
+                font-size: 7px !important;
+                letter-spacing: 0.12em !important;
+            }
+            .receipt-print-body {
+                padding: 0.45rem 0.65rem 0.35rem !important;
+            }
+            .receipt-print-title-row {
+                margin-bottom: 0.25rem !important;
+                gap: 0.35rem !important;
+            }
+            .receipt-print-title-row .label-pay {
+                font-size: 9px !important;
+                letter-spacing: 0.08em !important;
+            }
+            .receipt-print-title-row h1 {
+                font-size: 1.1rem !important;
+                margin-top: 0.05rem !important;
+                line-height: 1.15 !important;
+            }
+            .receipt-print-title-row .meta {
+                font-size: 0.65rem !important;
+            }
+            .receipt-print-amount {
+                margin-top: 0.35rem !important;
+                padding: 0.45rem 0.5rem !important;
+                border-radius: 0.35rem !important;
+            }
+            .receipt-print-amount .amt-label {
+                font-size: 8px !important;
+            }
+            .receipt-print-amount .amt-value {
+                font-size: 1.35rem !important;
+                margin-top: 0.1rem !important;
+                line-height: 1.1 !important;
+            }
+            .receipt-print-amount .amt-sub {
+                margin-top: 0.2rem !important;
+                padding-top: 0.2rem !important;
+                font-size: 8px !important;
+            }
+            .receipt-print-dl {
+                margin-top: 0.35rem !important;
+                border-radius: 0.35rem !important;
+            }
+            .receipt-print-dl > div {
+                padding: 0.2rem 0.45rem !important;
+                gap: 0 !important;
+            }
+            .receipt-print-dl dt {
+                font-size: 7px !important;
+            }
+            .receipt-print-dl dd {
+                font-size: 0.65rem !important;
+            }
+            .receipt-print-note {
+                margin-top: 0.3rem !important;
+                padding: 0.3rem 0.45rem !important;
+                font-size: 0.6rem !important;
+            }
+            .receipt-print-footer {
+                margin-top: 0.35rem !important;
+                padding-top: 0.35rem !important;
+                border-top-width: 1px !important;
+            }
+            .receipt-print-footer p {
+                font-size: 8px !important;
+                line-height: 1.35 !important;
+                margin: 0 !important;
+            }
+            .receipt-print-footer .fine {
+                margin-top: 0.2rem !important;
+                font-size: 7px !important;
             }
         }
     </style>
@@ -101,26 +202,26 @@ $note = trim((string)($payment['note'] ?? ''));
         </div>
     </div>
 
-    <div class="mx-auto max-w-lg px-4 py-8 print:max-w-none print:px-0 print:py-0">
+    <div class="receipt-print-outer mx-auto max-w-lg px-4 py-8 print:max-w-none print:px-0 print:py-0">
         <article class="receipt-sheet overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xl shadow-slate-900/5 print:border-0 print:shadow-none">
             <!-- Brand strip -->
-            <div class="border-b border-slate-100 bg-white px-6 pt-6 pb-4">
+            <div class="receipt-print-brand border-b border-slate-100 bg-white px-6 pt-6 pb-4">
                 <div class="flex items-end gap-4">
                     <div class="min-w-0 flex-1">
                         <img src="images/EI_Logo_130x27_SVG_1.svg" width="260" height="54" alt="Exotic India" class="h-11 w-auto max-w-full object-contain object-left" />
-                        <p class="mt-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Authentic · Curated · Heritage</p>
+                        <p class="tagline mt-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Authentic · Curated · Heritage</p>
                     </div>
                     <div class="hidden h-px min-w-[3rem] flex-1 bg-gradient-to-r from-orange-500 to-transparent sm:block print:block" aria-hidden="true"></div>
                 </div>
             </div>
 
-            <div class="px-6 pb-6 pt-5">
-                <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="receipt-print-body px-6 pb-6 pt-5">
+                <div class="receipt-print-title-row flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <p class="text-[11px] font-bold uppercase tracking-widest text-orange-600">Payment receipt</p>
+                        <p class="label-pay text-[11px] font-bold uppercase tracking-widest text-orange-600">Payment receipt</p>
                         <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-900"><?= $h($receiptNo) ?></h1>
                     </div>
-                    <div class="text-right text-sm">
+                    <div class="meta text-right text-sm">
                         <?php if ($warehouse !== ''): ?>
                             <p class="font-semibold text-slate-800"><?= $h($warehouse) ?></p>
                         <?php endif; ?>
@@ -132,11 +233,11 @@ $note = trim((string)($payment['note'] ?? ''));
                 </div>
 
                 <!-- Amount highlight -->
-                <div class="mt-6 rounded-xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-5 py-5 text-center text-white ring-1 ring-slate-900/10">
-                    <p class="text-xs font-medium uppercase tracking-wider text-white/70">Amount received</p>
-                    <p class="mt-2 text-4xl font-bold tabular-nums tracking-tight">₹ <?= $h($fmt($amount)) ?></p>
+                <div class="receipt-print-amount mt-6 rounded-xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-5 py-5 text-center text-white ring-1 ring-slate-900/10">
+                    <p class="amt-label text-xs font-medium uppercase tracking-wider text-white/70">Amount received</p>
+                    <p class="amt-value mt-2 text-4xl font-bold tabular-nums tracking-tight">₹ <?= $h($fmt($amount)) ?></p>
                     <?php if ($orderAmt !== null && $orderAmt > 0): ?>
-                        <p class="mt-3 border-t border-white/10 pt-3 text-xs text-white/80">
+                        <p class="amt-sub mt-3 border-t border-white/10 pt-3 text-xs text-white/80">
                             Order total <span class="font-semibold tabular-nums">₹ <?= $h($fmt($orderAmt)) ?></span>
                             <?php if ($pendingAmt !== null && $pendingAmt > 0.009): ?>
                                 <span class="text-white/60"> · </span>
@@ -149,7 +250,7 @@ $note = trim((string)($payment['note'] ?? ''));
                 </div>
 
                 <!-- Details grid -->
-                <dl class="mt-6 space-y-0 divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50/50">
+                <dl class="receipt-print-dl mt-6 space-y-0 divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50/50">
                     <div class="grid grid-cols-1 gap-1 px-4 py-3 sm:grid-cols-3 sm:items-center">
                         <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Order number</dt>
                         <dd class="font-semibold text-slate-900 sm:col-span-2"><?= $h($orderNum !== '' ? $orderNum : '—') ?></dd>
@@ -173,18 +274,18 @@ $note = trim((string)($payment['note'] ?? ''));
                 </dl>
 
                 <?php if ($note !== ''): ?>
-                    <div class="mt-5 rounded-lg border border-amber-100 bg-amber-50/80 px-4 py-3">
+                    <div class="receipt-print-note mt-5 rounded-lg border border-amber-100 bg-amber-50/80 px-4 py-3">
                         <p class="text-xs font-semibold uppercase tracking-wide text-amber-900/70">Note</p>
                         <p class="mt-1 text-sm text-amber-950/90"><?= nl2br($h($note)) ?></p>
                     </div>
                 <?php endif; ?>
 
-                <footer class="mt-8 border-t border-slate-100 pt-6 text-center">
+                <footer class="receipt-print-footer mt-8 border-t border-slate-100 pt-6 text-center">
                     <p class="text-xs leading-relaxed text-slate-500">
                         This is a system-generated receipt.<br class="hidden sm:inline" />
                         Thank you for your business.
                     </p>
-                    <p class="mt-4 text-[10px] text-slate-400">Exotic India · POS payment record</p>
+                    <p class="fine mt-4 text-[10px] text-slate-400">Exotic India · POS payment record</p>
                 </footer>
             </div>
         </article>
