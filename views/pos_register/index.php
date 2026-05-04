@@ -617,7 +617,7 @@
           <input id="confirm_zip" class="w-full border rounded px-3 py-2 text-sm" placeholder="ZIP">
           <input id="confirm_country" class="w-full border rounded px-3 py-2 text-sm" placeholder="Country">
         </div>
-        <input id="confirm_gstin" class="w-full border rounded px-3 py-2 text-sm" placeholder="GSTIN (optional)">
+        <input id="confirm_gstin" class="w-full border rounded px-3 py-2 text-sm" placeholder="GSTIN (optional)" maxlength="15">
       </div>
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>

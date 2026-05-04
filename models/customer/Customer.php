@@ -504,7 +504,7 @@ class Customer
         $sql = 'INSERT INTO pos_customer_details (
             customer_id, bill_line1, bill_line2, bill_city, bill_state, bill_country, bill_pin,
             ship_line1, ship_line2, ship_city, ship_state, ship_country, ship_pin, gstin
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE
             bill_line1 = VALUES(bill_line1),
             bill_line2 = VALUES(bill_line2),
@@ -525,7 +525,7 @@ class Customer
             return false;
         }
 
-        $types = 'i' . str_repeat('s', 13);
+        $types = 'i' . str_repeat('s', 14);
         $stmt->bind_param(
             $types,
             $customerId,
@@ -548,6 +548,32 @@ class Customer
         $stmt->close();
 
         return $ok;
+    }
+
+    /**
+     * Maps POS "Confirm Billing & Shipping" JSON payload into pos_customer_details upsert.
+     *
+     * @param array<string, mixed> $p Keys confirm_* from checkout-create JSON body.
+     */
+    public function upsertPosCustomerDetailsFromConfirmPayload(int $customerId, array $p): bool
+    {
+        $post = [
+            'address_line1' => $p['confirm_address1'] ?? '',
+            'address_line2' => $p['confirm_address2'] ?? '',
+            'city' => $p['confirm_city'] ?? '',
+            'state' => $p['confirm_state'] ?? '',
+            'zipcode' => $p['confirm_zip'] ?? '',
+            'country' => $p['confirm_country'] ?? 'IN',
+            'gstin' => $p['confirm_gstin'] ?? '',
+            'shipping_address_line1' => $p['confirm_saddress1'] ?? '',
+            'shipping_address_line2' => $p['confirm_saddress2'] ?? '',
+            'shipping_city' => $p['confirm_scity'] ?? '',
+            'shipping_state' => $p['confirm_sstate'] ?? '',
+            'shipping_zipcode' => $p['confirm_szip'] ?? '',
+            'shipping_country' => $p['confirm_scountry'] ?? 'IN',
+        ];
+
+        return $this->upsertPosCustomerDetailsFromPost($customerId, $post);
     }
 
     /** All customers with purchase totals across all orders (customer list). */
