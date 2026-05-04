@@ -2224,6 +2224,10 @@ class POSRegisterController
             exit;
         }
 
+        require_once 'models/customer/Customer.php';
+        $posDetailsModel = new Customer($conn);
+        $posDetailsModel->upsertPosCustomerDetailsFromConfirmPayload($customerId, $payload);
+
         $modeLabel = $this->mapPosPaymentModeLabel($paymentMode);
         $dt = new \DateTime('now', new \DateTimeZone('Asia/Kolkata'));
 
