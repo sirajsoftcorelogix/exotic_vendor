@@ -286,6 +286,9 @@ $(function () {
     $('#pmModalPrice').addClass('hidden').text('');
   }
 
+  /** Called after cart add (e.g. from pos_cart_hooks.js) to dismiss the product popup. */
+  window.closePosProductModal = closeModal;
+
   $overlay.on('click', closeModal);
   $close.on('click', closeModal);
   $closeBtn.on('click', closeModal);

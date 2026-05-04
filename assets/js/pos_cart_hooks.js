@@ -1237,6 +1237,9 @@
             return r;
           }
           toast('Added to cart.', 'green');
+          if (typeof window.closePosProductModal === 'function') {
+            window.closePosProductModal();
+          }
           return refreshCartInternal().then(function (r2) {
             if (r2 && r2.data && typeof r2.data === 'object') {
               toastIfQtyCappedAfterSuccess(requestedQty, r2.data, { code: body.code });
