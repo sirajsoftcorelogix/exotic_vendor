@@ -54,9 +54,9 @@
                     </div>
                 </div>
 
-                <!-- Remove Button: Centered via flex parent, removed mt-1 -->
-                <button onclick="removeVendor(this,<?php echo $vendor['pvm_id']; ?>)" data-item-code="<?php echo $vendor['item_code']; ?>" class="ml-4 w-8 h-8 bg-brand-red text-white rounded-full flex items-center justify-center hover:bg-red-700 transition-colors shadow-sm flex-shrink-0">
-                    <i class="fas fa-times"></i>
+                <!-- Remove vendor: trash icon, centered via flex parent -->
+                <button type="button" onclick="removeVendor(this,<?php echo $vendor['pvm_id']; ?>)" data-item-code="<?php echo $vendor['item_code']; ?>" class="ml-4 w-8 h-8 bg-brand-red text-white rounded-full flex items-center justify-center hover:bg-red-700 transition-colors shadow-sm flex-shrink-0" title="Remove vendor" aria-label="Remove vendor">
+                    <i class="fas fa-trash-alt text-sm" aria-hidden="true"></i>
                 </button>
             </div>
             <?php endforeach; 

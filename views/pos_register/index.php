@@ -18,16 +18,35 @@
     html.pos-page-hide-scrollbars,
     html.pos-page-hide-scrollbars body,
     .pos-register-page,
-    .pos-register-page * {
+    .pos-register-page *:not(.pos-cart-panel-scroll) {
       scrollbar-width: none;
       -ms-overflow-style: none;
     }
     html.pos-page-hide-scrollbars::-webkit-scrollbar,
     html.pos-page-hide-scrollbars body::-webkit-scrollbar,
-    .pos-register-page *::-webkit-scrollbar {
+    .pos-register-page *:not(.pos-cart-panel-scroll)::-webkit-scrollbar {
       width: 0 !important;
       height: 0 !important;
       background: transparent;
+    }
+
+    /* Cart column: its own scroll + thin visible thumb (rest of POS keeps hidden scrollbars) */
+    .pos-register-page .pos-cart-panel-scroll {
+      -webkit-overflow-scrolling: touch;
+    }
+    html.pos-page-hide-scrollbars .pos-register-page .pos-cart-panel-scroll {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+      -ms-overflow-style: auto;
+    }
+    html.pos-page-hide-scrollbars .pos-register-page .pos-cart-panel-scroll::-webkit-scrollbar {
+      width: 8px !important;
+      height: 0 !important;
+      background: transparent;
+    }
+    html.pos-page-hide-scrollbars .pos-register-page .pos-cart-panel-scroll::-webkit-scrollbar-thumb {
+      border-radius: 9999px;
+      background: rgba(148, 163, 184, 0.5);
     }
 
     /* Consistent typography scale across POS */
@@ -120,7 +139,7 @@
   </header>
 
   <!-- ===== CONTENT GRID ===== -->
-  <main class="mx-auto max-w-[1500px] grid grid-cols-12 gap-5 px-4 py-5">
+  <main class="mx-auto max-w-[1500px] grid grid-cols-12 gap-5 px-4 py-5 items-start">
 
     <!-- ===== MAIN COLUMN ===== -->
     <section class="col-span-12 lg:col-span-9 space-y-5">
@@ -214,8 +233,10 @@
     <!-- Checkout / Exotic cart removed — rebuild in progress -->
     <?php $cart = []; ?>
 
-    <aside class="col-span-12 lg:col-span-3" data-pos-cart-sidebar="1">
-      <div class="px-4 py-3 border-b">
+    <aside
+      class="col-span-12 lg:col-span-3 flex flex-col min-h-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100dvh-9rem)]"
+      data-pos-cart-sidebar="1">
+      <div class="px-4 py-3 border-b shrink-0">
 
         <label class="text-sm text-gray-500">Customer</label>
 
@@ -236,15 +257,19 @@
         </div>
 
       </div>
-      <div class="sticky top-4 rounded-2xl bg-white border shadow-sm overflow-hidden">
-        <div class="px-4 py-3 border-b">
+      <div class="flex flex-col flex-1 min-h-0 rounded-2xl bg-white border shadow-sm overflow-hidden mt-2 lg:mt-0">
+        <div class="px-4 py-3 border-b shrink-0">
           <div id="selectedCustomerNameCart" class="text-base font-semibold text-center text-slate-800">Walk-in Customer</div>
           <div id="selectedCustomerPhoneCart" class="text-sm text-slate-500 text-center">-</div>
         </div>
 
-        <div class="px-4 py-6 space-y-3 text-sm text-slate-600">
-          <p class="font-semibold text-slate-800">Cart</p>
-          <p class="text-xs text-slate-500">Loading cart from Exotic… If this message stays visible, refresh the page or open the browser console for errors.</p>
+        <div
+          class="pos-cart-panel-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-3 py-2"
+          data-pos-cart-scroll="1">
+          <div class="px-1 py-4 space-y-3 text-sm text-slate-600">
+            <p class="font-semibold text-slate-800">Cart</p>
+            <p class="text-xs text-slate-500">Loading cart from Exotic… If this message stays visible, refresh the page or open the browser console for errors.</p>
+          </div>
         </div>
       </div>
     </aside>
