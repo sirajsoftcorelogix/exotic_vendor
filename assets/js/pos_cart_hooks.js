@@ -157,7 +157,10 @@
     var init = {
       method: method,
       credentials: 'same-origin',
-      headers: {}
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
     };
     if (opt.jsonBody != null) {
       init.headers['Content-Type'] = 'application/json';
@@ -725,7 +728,10 @@
     if (el) {
       return el;
     }
-    var aside = document.querySelector('aside.col-span-12');
+    var aside =
+      document.querySelector('aside[data-pos-cart-sidebar]') ||
+      document.querySelector('.pos-register-page aside') ||
+      document.querySelector('aside.col-span-12');
     if (!aside) {
       return null;
     }
@@ -1229,6 +1235,10 @@
           cartHandleApiMessages(r);
           if (!r.success) {
             return r;
+          }
+          toast('Added to cart.', 'green');
+          if (typeof window.closePosProductModal === 'function') {
+            window.closePosProductModal();
           }
           return refreshCartInternal().then(function (r2) {
             if (r2 && r2.data && typeof r2.data === 'object') {
