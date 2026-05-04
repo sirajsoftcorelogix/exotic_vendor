@@ -1042,6 +1042,12 @@ switch ($page) {
             case 'cart-api':
                 $controller->cartApi();
                 break;
+            case 'checkout-create':
+                $controller->checkout_create();
+                break;
+            case 'checkout-receipt':
+                $controller->checkout_receipt();
+                break;
             default:
                 $controller->index();
                 break;

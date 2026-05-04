@@ -1927,4 +1927,323 @@ class POSRegisterController
         echo json_encode(["success" => true]);
         exit;
     }
+
+    /**
+     * POST JSON: address confirm fields + payment_* + customer_id + order_total (from live cart).
+     * Proxies Exotic POST /order/create, then inserts pos_payments with receipt number.
+     */
+    public function checkout_create(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        require_once dirname(__DIR__) . '/helpers/pos_payment_receipt.php';
+
+        $raw = (string)file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid JSON body'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $customerId = (int)($payload['customer_id'] ?? 0);
+        $sessionCid = (int)($_SESSION['pos_customer_id'] ?? 0);
+        if ($customerId <= 0 || $sessionCid <= 0 || $customerId !== $sessionCid) {
+            echo json_encode(['success' => false, 'message' => 'Select a customer before checkout.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $orderTotal = round((float)($payload['order_total'] ?? 0), 2);
+        if ($orderTotal <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Cart total is missing or zero. Refresh the cart and try again.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $paymentAmount = round((float)($payload['payment_amount'] ?? 0), 2);
+        $paymentStage = strtolower(trim((string)($payload['payment_stage'] ?? 'final')));
+        if ($paymentAmount <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Payment amount must be greater than zero.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if ($paymentStage === 'final') {
+            if ($paymentAmount + 0.02 < $orderTotal) {
+                echo json_encode(['success' => false, 'message' => 'Final payment must match order total ₹ ' . $orderTotal], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+            if ($paymentAmount - 0.02 > $orderTotal) {
+                echo json_encode(['success' => false, 'message' => 'Over payment is not allowed for final settlement.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+        } elseif ($paymentStage === 'partial' || $paymentStage === 'advance') {
+            if ($paymentAmount + 0.02 >= $orderTotal) {
+                echo json_encode(['success' => false, 'message' => 'Partial / advance must be less than order total ₹ ' . $orderTotal], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+        }
+
+        $paymentMode = trim((string)($payload['payment_mode'] ?? 'cod'));
+        $txn = trim((string)($payload['transaction_id'] ?? ''));
+        if ($paymentMode === 'razorpay' && $txn === '') {
+            echo json_encode(['success' => false, 'message' => 'Razorpay requires a transaction ID.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $ctx = $this->exoticCartDiscountContext();
+        $retrieve = $this->exotic_api_call(
+            '/cart/retrieve',
+            'GET',
+            $ctx['query'],
+            null,
+            null,
+            $ctx['extraHeaders']
+        );
+        if (!$this->isExoticCartSuccess($retrieve)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not load cart before checkout. Try refreshing the cart.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+        $cartData = is_array($retrieve['data'] ?? null) ? $retrieve['data'] : [];
+        $items = $cartData['cartitems'] ?? $cartData['cart_items'] ?? $cartData['items'] ?? $cartData['lines'] ?? [];
+        if (!is_array($items) || count($items) === 0) {
+            echo json_encode(['success' => false, 'message' => 'Cart is empty.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $postBody = $this->buildOrderCreatePostFromPayload($payload);
+        $createRes = $this->exotic_api_call(
+            '/order/create',
+            'POST',
+            $ctx['query'],
+            $postBody,
+            null,
+            $ctx['extraHeaders']
+        );
+
+        $_SESSION['pos_order_create_api_debug'] = [
+            'at' => gmdate('c'),
+            'http_code' => (int)($createRes['code'] ?? 0),
+            'data' => $createRes['data'] ?? [],
+            'raw_snippet' => substr((string)($createRes['raw'] ?? ''), 0, 12000),
+        ];
+
+        if (!$this->isExoticCartSuccess($createRes)) {
+            $d = is_array($createRes['data'] ?? null) ? $createRes['data'] : [];
+            $msg = trim((string)($d['message'] ?? $d['error'] ?? $d['errormessage'] ?? ''));
+            if ($msg === '') {
+                $msg = 'Order create failed (HTTP ' . (int)($createRes['code'] ?? 0) . ').';
+            }
+            echo json_encode([
+                'success' => false,
+                'message' => $msg,
+                'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $orderNumber = $this->extractExoticOrderNumberFromCreateResponse(is_array($createRes['data'] ?? null) ? $createRes['data'] : []);
+        if ($orderNumber === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Order was created but no order number was returned. Check Last order-create API in the payment modal.',
+                'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $short = pos_payment_resolve_short_code_for_warehouse($conn, (int)($_SESSION['warehouse_id'] ?? 0));
+        try {
+            $receiptNo = pos_payment_generate_next_receipt_number($conn, $short);
+        } catch (\Throwable $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Receipt number error: ' . $e->getMessage(),
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $note = trim((string)($payload['payment_note'] ?? ''));
+        $userId = pos_payment_resolve_session_user_id();
+        $whId = (int)($_SESSION['warehouse_id'] ?? 0);
+
+        $pay = pos_payment_insert_row(
+            $conn,
+            $orderNumber,
+            $receiptNo,
+            $customerId,
+            $paymentStage,
+            $paymentMode,
+            $paymentAmount,
+            $txn,
+            $note,
+            $userId,
+            $whId,
+            true,
+            $orderTotal
+        );
+
+        if (empty($pay['success'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Exotic order ' . $orderNumber . ' was created but local payment row failed: ' . (string)($pay['error'] ?? 'unknown'),
+                'order_number' => $orderNumber,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $modeLabel = $this->mapPosPaymentModeLabel($paymentMode);
+        $dt = new \DateTime('now', new \DateTimeZone('Asia/Kolkata'));
+
+        $_SESSION['pos_last_checkout_receipt'] = [
+            'receipt_number' => $receiptNo,
+            'receipt_date_formatted' => $dt->format('d M Y, h:i A'),
+            'order_id' => $orderNumber,
+            'payment_stage' => $paymentStage,
+            'payment_mode_label' => $modeLabel,
+            'transaction_id' => $txn,
+            'receipt_banner_text' => 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
+            'receipt_billing_block' => $this->formatAddressLinesFromPayload($payload, 'billing'),
+            'receipt_shipping_block' => $this->formatAddressLinesFromPayload($payload, 'shipping'),
+            'receipt_lines' => [],
+            'receipt_subtotal_goods' => 0.0,
+            'receipt_gst_total' => 0.0,
+            'receipt_coupon_discount' => 0.0,
+            'receipt_gift_discount' => 0.0,
+            'receipt_cash_discount' => 0.0,
+            'receipt_grand_total' => $orderTotal,
+            'receipt_qty_total' => 0.0,
+            'receipt_agg_sgst' => 0.0,
+            'receipt_agg_cgst' => 0.0,
+            'receipt_agg_igst' => 0.0,
+            'receipt_amount_in_words' => '',
+            'receipt_amount_received' => $paymentAmount,
+            'receipt_pending_amount' => (float)($pay['pending_amount'] ?? 0),
+            'import_status' => '',
+            'show_invoice_pdf_button' => false,
+            'invoice_pdf_url' => '',
+            'invoice_pdf_disabled_hint' => 'Import the order into vp_orders to generate a tax invoice.',
+            'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+            'receipt_company_tagline' => '',
+            'receipt_company_gstin' => '',
+            'receipt_company_pan' => '',
+            'receipt_title_main' => 'PAYMENT RECEIPT',
+            'receipt_place_of_supply' => '',
+            'receipt_terms' => [
+                'Goods once sold will not be taken back.',
+                'Subject to jurisdiction of competent courts at New Delhi.',
+            ],
+            'receipt_office_footer' => '',
+            'receipt_signature_date' => $dt->format('d M Y'),
+            'payment_history_url' => 'index.php?page=payments',
+        ];
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Order placed.',
+            'order_number' => $orderNumber,
+            'receipt_number' => $receiptNo,
+            'payment_id' => (int)($pay['payment_id'] ?? 0),
+            'redirect_url' => 'index.php?page=pos_register&action=checkout-receipt',
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function checkout_receipt(): void
+    {
+        is_login();
+        $row = $_SESSION['pos_last_checkout_receipt'] ?? null;
+        if (!is_array($row) || empty($row['receipt_number'])) {
+            header('Location: index.php?page=pos_register&action=list');
+            exit;
+        }
+        unset($_SESSION['pos_last_checkout_receipt']);
+        renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
+    }
+
+    private function buildOrderCreatePostFromPayload(array $payload): array
+    {
+        $skip = ['customer_id' => true, 'order_total' => true];
+        $out = [];
+        foreach ($payload as $k => $v) {
+            if (!is_string($k) || $k === '' || isset($skip[$k])) {
+                continue;
+            }
+            if (is_array($v) || is_object($v)) {
+                continue;
+            }
+            $out[$k] = trim((string)$v);
+        }
+
+        return $out;
+    }
+
+    private function extractExoticOrderNumberFromCreateResponse(array $data): string
+    {
+        foreach (['orderid', 'order_id', 'OrderId', 'ordernumber', 'order_number', 'order_no', 'orderNo'] as $k) {
+            if (!empty($data[$k])) {
+                return trim((string)$data[$k]);
+            }
+        }
+        if (!empty($data['order']) && is_array($data['order'])) {
+            return $this->extractExoticOrderNumberFromCreateResponse($data['order']);
+        }
+        if (!empty($data['data']) && is_array($data['data'])) {
+            return $this->extractExoticOrderNumberFromCreateResponse($data['data']);
+        }
+
+        return '';
+    }
+
+    private function mapPosPaymentModeLabel(string $mode): string
+    {
+        $m = strtolower(trim($mode));
+        $map = [
+            'cod' => 'Cash',
+            'offline' => 'Offline',
+            'bank_transfer' => 'Bank transfer',
+            'pos_machine' => 'POS machine',
+            'razorpay' => 'Razorpay',
+            'cheque' => 'Cheque',
+        ];
+
+        return $map[$m] ?? strtoupper($m);
+    }
+
+    /**
+     * @param 'billing'|'shipping' $which
+     *
+     * @return list<string>
+     */
+    private function formatAddressLinesFromPayload(array $p, string $which): array
+    {
+        if ($which === 'shipping') {
+            $name = trim((string)($p['confirm_sfirst_name'] ?? '') . ' ' . (string)($p['confirm_slast_name'] ?? ''));
+            $lines = [
+                $name,
+                trim((string)($p['confirm_saddress1'] ?? '')),
+                trim((string)($p['confirm_saddress2'] ?? '')),
+                trim((string)($p['confirm_scity'] ?? '')) . ', ' . trim((string)($p['confirm_sstate'] ?? '')) . ' ' . trim((string)($p['confirm_szip'] ?? '')),
+                trim((string)($p['confirm_scountry'] ?? '')),
+                'Ph: ' . trim((string)($p['confirm_sphone'] ?? '')),
+            ];
+        } else {
+            $name = trim((string)($p['confirm_first_name'] ?? '') . ' ' . (string)($p['confirm_last_name'] ?? ''));
+            $lines = [
+                $name,
+                trim((string)($p['confirm_address1'] ?? '')),
+                trim((string)($p['confirm_address2'] ?? '')),
+                trim((string)($p['confirm_city'] ?? '')) . ', ' . trim((string)($p['confirm_state'] ?? '')) . ' ' . trim((string)($p['confirm_zip'] ?? '')),
+                trim((string)($p['confirm_country'] ?? '')),
+                'Ph: ' . trim((string)($p['confirm_phone'] ?? '')),
+            ];
+        }
+
+        return array_values(array_filter(array_map('trim', $lines), static function ($x) {
+            return $x !== '' && !preg_match('/^Ph:\s*$/', $x);
+        }));
+    }
 }
