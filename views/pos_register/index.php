@@ -214,7 +214,7 @@
     <!-- Checkout / Exotic cart removed — rebuild in progress -->
     <?php $cart = []; ?>
 
-    <aside class="col-span-12 lg:col-span-3">
+    <aside class="col-span-12 lg:col-span-3" data-pos-cart-sidebar="1">
       <div class="px-4 py-3 border-b">
 
         <label class="text-sm text-gray-500">Customer</label>
@@ -243,9 +243,8 @@
         </div>
 
         <div class="px-4 py-6 space-y-3 text-sm text-slate-600">
-          <p class="font-semibold text-slate-800">Cart &amp; payment</p>
-          <p>The previous Exotic India cart API flow (add to cart, coupons, remote checkout, payment modal tied to <code class="text-xs bg-slate-100 px-1 rounded">/cart/*</code>) has been removed from this controller so you can replace it with a new design.</p>
-          <p class="text-xs text-slate-500">Product browse, product modal, warehouse stock, and customer selection stay available.</p>
+          <p class="font-semibold text-slate-800">Cart</p>
+          <p class="text-xs text-slate-500">Loading cart from Exotic… If this message stays visible, refresh the page or open the browser console for errors.</p>
         </div>
       </div>
     </aside>
