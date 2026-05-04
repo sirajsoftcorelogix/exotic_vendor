@@ -279,10 +279,13 @@ WHERE 1=1
             SELECT 
                 p.*,
                 u.name as user_name,
-                w.address_title as warehouse
+                w.address_title as warehouse,
+                w.address as warehouse_address,
+                c.name AS customer_name
             FROM pos_payments p
             LEFT JOIN vp_users u ON u.id = p.user_id
-            LEFT JOIN 	exotic_address w ON w.id = p.warehouse_id
+            LEFT JOIN exotic_address w ON w.id = p.warehouse_id
+            LEFT JOIN vp_customers c ON c.id = p.customer_id
             WHERE p.id = ?
         ");
 
@@ -290,6 +293,29 @@ WHERE 1=1
         $stmt->execute();
 
         $payment = $stmt->get_result()->fetch_assoc();
+
+        $defaultWarehouseAddress = ['title' => '', 'lines' => []];
+        if ($conn instanceof \mysqli) {
+            $dwRes = $conn->query(
+                'SELECT address_title, display_name, address FROM exotic_address WHERE is_active = 1 ORDER BY is_default DESC, order_no ASC, id ASC LIMIT 1'
+            );
+            if ($dwRes && ($dw = $dwRes->fetch_assoc())) {
+                $defaultWarehouseAddress['title'] = trim((string)($dw['address_title'] ?? ''));
+                $addrText = trim((string)($dw['address'] ?? ''));
+                if ($addrText === '') {
+                    $addrText = trim((string)($dw['display_name'] ?? ''));
+                }
+                $parts = preg_split('/\r\n|\r|\n/', $addrText);
+                $lines = [];
+                foreach (is_array($parts) ? $parts : [] as $ln) {
+                    $ln = trim((string)$ln);
+                    if ($ln !== '') {
+                        $lines[] = $ln;
+                    }
+                }
+                $defaultWarehouseAddress['lines'] = $lines;
+            }
+        }
 
         require 'views/payments/receipt.php';
         exit;
