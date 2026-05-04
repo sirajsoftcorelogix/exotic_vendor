@@ -808,9 +808,9 @@
     if (!sticky) {
       return null;
     }
-    var scrollMount =
-      sticky.querySelector('[data-pos-cart-scroll]') || sticky.querySelector('.pos-cart-panel-scroll');
-    var mountParent = scrollMount || sticky;
+    var shell =
+      sticky.querySelector('[data-pos-cart-scroll]') || sticky.querySelector('.pos-cart-shell-scroll');
+    var mountParent = shell ? shell.querySelector('.pos-cart-panel-inner') || shell : sticky;
     var ph = mountParent.querySelector('.space-y-3.text-sm.text-slate-600');
     if (!ph) {
       ph = sticky.querySelector('.px-4.py-6.space-y-3');
