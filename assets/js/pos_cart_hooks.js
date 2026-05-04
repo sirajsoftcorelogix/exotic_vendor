@@ -753,7 +753,7 @@
 
   /**
    * One summary row; uses em dash when API did not supply a number.
-   * @param {string} [removeBtnClass] Optional button class for a trailing Remove control (non-grand rows only).
+   * @param {string} [removeBtnClass] Optional button class for a trailing trash/remove control (non-grand rows only).
    */
   function moneyRowSummary(label, val, isGrand, removeBtnClass) {
     var disp = formatMoneyDisplay(val);
@@ -786,7 +786,8 @@
       amountSpan +
       '<button type="button" class="' +
       String(removeBtnClass) +
-      ' rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700">Remove</button>' +
+      ' inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700" title="Remove" aria-label="Remove">' +
+      '<i class="fas fa-trash-alt text-[11px]" aria-hidden="true"></i></button>' +
       '</span></div>'
     );
   }
@@ -939,9 +940,10 @@
             '" />' +
             hintInline +
             '</div>' +
-            '<button type="button" class="pos-cart-delete-btn shrink-0 rounded-md border border-red-100 bg-red-50/80 px-2 py-0.5 text-[10px] font-semibold text-red-700 transition hover:bg-red-100 hover:border-red-200" data-cartref="' +
+            '<button type="button" class="pos-cart-delete-btn inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-100 bg-red-50/80 text-red-700 transition hover:bg-red-100 hover:border-red-200" data-cartref="' +
             escapeHtml(ref) +
-            '">Remove</button>';
+            '" title="Remove from cart" aria-label="Remove from cart">' +
+            '<i class="fas fa-trash-alt text-[12px]" aria-hidden="true"></i></button>';
         } else {
           html += '<span class="text-[10px] text-amber-700">Missing cart reference — cannot update line.</span>';
         }
@@ -996,7 +998,6 @@
       '</div></div>' +
       '<div class="space-y-1.5 border-t border-slate-100 pt-3">' +
       '<label class="text-xs font-medium text-slate-600">Custom discount</label>' +
-      '<p class="text-[10px] text-slate-400 leading-snug">% is off merchandise sub total (Summary). Values are capped with coupon so payable total stays non-negative.</p>' +
       '<div class="flex gap-2 flex-wrap items-stretch">' +
       '<select class="pos-cart-customdisc-mode shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-700 shadow-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100" aria-label="Discount type">' +
       '<option value="fixed">Fixed (₹)</option>' +
@@ -1004,7 +1005,8 @@
       '</select>' +
       '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input flex-1 min-w-[5rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Amount (₹)" />' +
       '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 active:scale-[0.98]">Set</button>' +
-      '<button type="button" class="pos-cart-customdisc-clear shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700">Remove</button>' +
+      '<button type="button" class="pos-cart-customdisc-clear inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700" title="Remove custom discount" aria-label="Remove custom discount">' +
+      '<i class="fas fa-trash-alt text-sm" aria-hidden="true"></i></button>' +
       '</div></div></div>';
 
     if (items.length > 0) {
