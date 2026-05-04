@@ -540,8 +540,8 @@
         <div>
           <label class="text-xs text-slate-500">Payment mode</label>
           <select id="payment_mode" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
-            <option value="cod">Cash</option>
-            <option value="offline">Offline</option>
+            <option value="cash">Cash</option>
+            <option value="upi">UPI</option>
             <option value="bank_transfer">Bank transfer</option>
             <option value="pos_machine">POS machine</option>
             <option value="razorpay">Razorpay</option>

@@ -1984,7 +1984,7 @@ class POSRegisterController
             }
         }
 
-        $paymentMode = trim((string)($payload['payment_mode'] ?? 'cod'));
+        $paymentMode = trim((string)($payload['payment_mode'] ?? 'cash'));
         $txn = trim((string)($payload['transaction_id'] ?? ''));
         if ($paymentMode === 'razorpay' && $txn === '') {
             echo json_encode(['success' => false, 'message' => 'Razorpay requires a transaction ID.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -2014,7 +2014,14 @@ class POSRegisterController
             exit;
         }
 
-        $postBody = $this->buildOrderCreatePostFromPayload($payload);
+        $postBody = $this->buildOrderCreatePostFromPayload($payload, $cartData);
+        if (trim((string)($postBody['checkoutdata'] ?? '')) === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Cart response did not include checkoutdata (required by Exotic order/create). Refresh the cart or add items again.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
         $createRes = $this->exotic_api_call(
             '/order/create',
             'POST',
@@ -2164,21 +2171,136 @@ class POSRegisterController
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
     }
 
-    private function buildOrderCreatePostFromPayload(array $payload): array
+    /**
+     * POST /api/order/create body (application/x-www-form-urlencoded) per ExoticIndia API:
+     * payment_type, buynow, checkoutdata (verbatim from cart retrieve), cod/codcharges fixed for counter sale,
+     * billing/shipping fields, optional Razorpay / store_payment_details.
+     *
+     * @param array<string, mixed> $payload JSON from POS (confirm_* billing/shipping, payment_* , transaction_id, …)
+     * @param array<string, mixed> $cartData Decoded JSON from GET /cart/retrieve (same session as checkout).
+     *
+     * @return array<string, string>
+     */
+    private function buildOrderCreatePostFromPayload(array $payload, array $cartData): array
     {
-        $skip = ['customer_id' => true, 'order_total' => true];
-        $out = [];
-        foreach ($payload as $k => $v) {
-            if (!is_string($k) || $k === '' || isset($skip[$k])) {
-                continue;
+        $posMode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
+        $paymentType = $this->mapPosPaymentModeToExoticPaymentType($posMode);
+
+        /** Exact string from GET /cart/retrieve JSON — posted as-is (only URL-encoded as form field by HTTP client). */
+        $checkoutdata = $this->extractCheckoutDataStringFromCart($cartData);
+
+        $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
+        $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
+        $sname = trim((string)($payload['confirm_sname'] ?? ''));
+        if ($sname === '') {
+            $sname = trim($sf . ' ' . $sl);
+        }
+
+        $country = strtoupper(substr(trim((string)($payload['confirm_country'] ?? 'IN')), 0, 2));
+        if ($country === '') {
+            $country = 'IN';
+        }
+        $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
+        if ($scountry === '') {
+            $scountry = 'IN';
+        }
+
+        $whId = (int)($_SESSION['warehouse_id'] ?? 0);
+        $storeId = $whId > 0 ? (string)$whId : '1';
+        $txn = trim((string)($payload['transaction_id'] ?? ''));
+        $txnField = $txn !== '' ? $txn : '-';
+
+        $out = [
+            'payment_type' => $paymentType,
+            'buynow' => '0',
+            'checkoutdata' => $checkoutdata,
+            'cod' => '0',
+            'codcharges' => '0.00',
+            'first_name' => trim((string)($payload['confirm_first_name'] ?? '')),
+            'last_name' => trim((string)($payload['confirm_last_name'] ?? '')),
+            'email' => trim((string)($payload['confirm_email'] ?? '')),
+            'address1' => trim((string)($payload['confirm_address1'] ?? '')),
+            'address2' => trim((string)($payload['confirm_address2'] ?? '')),
+            'city' => trim((string)($payload['confirm_city'] ?? '')),
+            'state' => trim((string)($payload['confirm_state'] ?? '')),
+            'zip' => trim((string)($payload['confirm_zip'] ?? '')),
+            'country' => $country,
+            'phone' => trim((string)($payload['confirm_phone'] ?? '')),
+            'gstin' => trim((string)($payload['confirm_gstin'] ?? '')),
+            'sname' => $sname,
+            'saddress1' => trim((string)($payload['confirm_saddress1'] ?? '')),
+            'saddress2' => trim((string)($payload['confirm_saddress2'] ?? '')),
+            'scity' => trim((string)($payload['confirm_scity'] ?? '')),
+            'sstate' => trim((string)($payload['confirm_sstate'] ?? '')),
+            'szip' => trim((string)($payload['confirm_szip'] ?? '')),
+            'scountry' => $scountry,
+            'sphone' => trim((string)($payload['confirm_sphone'] ?? '')),
+            'store_payment_details' => $storeId . '|' . $posMode . '|' . $txnField,
+        ];
+
+        if ($paymentType === 'razorpay') {
+            $rzPay = trim((string)($payload['razorpay_payment_id'] ?? $txn));
+            if ($rzPay !== '') {
+                $out['razorpay_payment_id'] = $rzPay;
             }
-            if (is_array($v) || is_object($v)) {
-                continue;
+            $rzo = trim((string)($payload['razorpay_order_id'] ?? ''));
+            if ($rzo !== '') {
+                $out['razorpay_order_id'] = $rzo;
             }
-            $out[$k] = trim((string)$v);
+            $rzs = trim((string)($payload['razorpay_signature'] ?? ''));
+            if ($rzs !== '') {
+                $out['razorpay_signature'] = $rzs;
+            }
+            $mc = trim((string)($payload['magiccheckout_done'] ?? ''));
+            if ($mc === '1') {
+                $out['magiccheckout_done'] = '1';
+            }
         }
 
         return $out;
+    }
+
+    /**
+     * Exotic India: India payment_type includes razorpay, cod, offline — POS counter sale uses offline (not COD).
+     * Cash at counter → offline; UPI/bank/POS/cheque → offline; razorpay → razorpay.
+     */
+    private function mapPosPaymentModeToExoticPaymentType(string $posMode): string
+    {
+        $m = strtolower(trim($posMode));
+        if ($m === 'razorpay') {
+            return 'razorpay';
+        }
+        if (in_array($m, ['cash', 'upi', 'bank_transfer', 'pos_machine', 'cheque', 'offline', 'cod'], true)) {
+            return 'offline';
+        }
+
+        return 'offline';
+    }
+
+    /**
+     * checkoutdata string exactly as in the cart retrieve payload (do not serialize or rebuild).
+     *
+     * @param array<string, mixed> $cartData
+     */
+    private function extractCheckoutDataStringFromCart(array $cartData): string
+    {
+        $candidates = [
+            $cartData['checkoutdata'] ?? null,
+            $cartData['checkout_data'] ?? null,
+        ];
+        if (isset($cartData['data']) && is_array($cartData['data'])) {
+            $candidates[] = $cartData['data']['checkoutdata'] ?? null;
+        }
+        if (isset($cartData['cart']) && is_array($cartData['cart'])) {
+            $candidates[] = $cartData['cart']['checkoutdata'] ?? null;
+        }
+        foreach ($candidates as $raw) {
+            if (is_string($raw) && $raw !== '') {
+                return $raw;
+            }
+        }
+
+        return '';
     }
 
     private function extractExoticOrderNumberFromCreateResponse(array $data): string
@@ -2202,8 +2324,9 @@ class POSRegisterController
     {
         $m = strtolower(trim($mode));
         $map = [
+            'cash' => 'Cash',
             'cod' => 'Cash',
-            'offline' => 'Offline',
+            'upi' => 'UPI',
             'bank_transfer' => 'Bank transfer',
             'pos_machine' => 'POS machine',
             'razorpay' => 'Razorpay',
