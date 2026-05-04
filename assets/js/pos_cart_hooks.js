@@ -808,8 +808,7 @@
     if (!sticky) {
       return null;
     }
-    var shell =
-      sticky.querySelector('[data-pos-cart-scroll]') || sticky.querySelector('.pos-cart-shell-scroll');
+    var shell = sticky.querySelector('[data-pos-cart-scroll]');
     var mountParent = shell ? shell.querySelector('.pos-cart-panel-inner') || shell : sticky;
     var ph = mountParent.querySelector('.space-y-3.text-sm.text-slate-600');
     if (!ph) {
