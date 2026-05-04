@@ -13,6 +13,8 @@
   var MODAL_ID = 'posCartApiDebugModal';
   /** @type {Record<string, unknown>|null} */
   var lastCartApiDebug = null;
+  /** After a successful apply: fixed = INR entered; percent = 0–100, re-synced to API after each retrieve. */
+  var posCustomDiscountPersist = null;
 
   function setLastCartApiDebug(entry) {
     lastCartApiDebug = Object.assign({ at: new Date().toISOString() }, entry);
@@ -665,6 +667,72 @@
     };
   }
 
+  /**
+   * @param {'fixed'|'percent'} mode
+   * @param {number} raw INR amount (fixed) or 0–100 (percent of merchandise sub total)
+   * @param {{ subtotal?: number|null, couponDeduction?: number|null }} t
+   * @returns {number} Rupees to send as custom_reduce (capped so sub − coupon − discount stays ≥ 0)
+   */
+  function computeCustomReduceInr(mode, raw, t) {
+    t = t || {};
+    var sub = t.subtotal;
+    if (sub == null || isNaN(sub) || sub <= 0) {
+      return 0;
+    }
+    var coupon = t.couponDeduction != null && !isNaN(t.couponDeduction) ? t.couponDeduction : 0;
+    var maxRoom = Math.max(0, sub - coupon);
+    var amt = 0;
+    if (mode === 'percent') {
+      if (!(raw > 0) || raw > 100) {
+        return 0;
+      }
+      amt = (sub * raw) / 100;
+    } else {
+      if (!(raw > 0)) {
+        return 0;
+      }
+      amt = raw;
+    }
+    if (amt > maxRoom) {
+      amt = maxRoom;
+    }
+    return Math.round(amt * 100) / 100;
+  }
+
+  function formatPctLabel(raw) {
+    var n = typeof raw === 'number' ? raw : parseFloat(String(raw));
+    if (isNaN(n)) {
+      return '';
+    }
+    var s = n.toFixed(2).replace(/\.?0+$/, '');
+    return s + '%';
+  }
+
+  /**
+   * Keeps server custom_reduce aligned when cart or coupon changes (percent mode only).
+   * @param {Record<string, unknown>} cartData
+   * @returns {Promise<boolean>} true if a follow-up retrieve is needed
+   */
+  function maybeSyncPercentCustomDiscount(cartData) {
+    if (!posCustomDiscountPersist || posCustomDiscountPersist.mode !== 'percent') {
+      return Promise.resolve(false);
+    }
+    var pval = posCustomDiscountPersist.value;
+    if (!(pval > 0) || pval > 100) {
+      return Promise.resolve(false);
+    }
+    var t = totalsFromRetrieve(cartData && typeof cartData === 'object' ? cartData : {});
+    var want = computeCustomReduceInr('percent', pval, t);
+    var cur = t.customDeduction != null && !isNaN(t.customDeduction) ? t.customDeduction : 0;
+    if (Math.abs(want - cur) < 0.02) {
+      return Promise.resolve(false);
+    }
+    return cartRequest('customdiscount', { query: { custom_reduce: String(want) } }).then(function (r2) {
+      cartHandleApiMessages(r2);
+      return !!(r2 && r2.success);
+    });
+  }
+
   function formatMoneyDisplay(val) {
     if (val == null || (typeof val === 'number' && isNaN(val))) {
       return null;
@@ -685,7 +753,7 @@
 
   /**
    * One summary row; uses em dash when API did not supply a number.
-   * @param {string} [removeBtnClass] Optional button class for a trailing Remove control (non-grand rows only).
+   * @param {string} [removeBtnClass] Optional button class for a trailing trash/remove control (non-grand rows only).
    */
   function moneyRowSummary(label, val, isGrand, removeBtnClass) {
     var disp = formatMoneyDisplay(val);
@@ -718,7 +786,8 @@
       amountSpan +
       '<button type="button" class="' +
       String(removeBtnClass) +
-      ' rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700">Remove</button>' +
+      ' inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700" title="Remove" aria-label="Remove">' +
+      '<i class="fas fa-trash-alt text-[11px]" aria-hidden="true"></i></button>' +
       '</span></div>'
     );
   }
@@ -735,11 +804,17 @@
     if (!aside) {
       return null;
     }
-    var sticky = aside.querySelector('.sticky');
+    var sticky = aside.querySelector('.rounded-2xl.bg-white.border.shadow-sm') || aside.querySelector('.sticky');
     if (!sticky) {
       return null;
     }
-    var ph = sticky.querySelector('.px-4.py-6.space-y-3');
+    var scrollMount =
+      sticky.querySelector('[data-pos-cart-scroll]') || sticky.querySelector('.pos-cart-panel-scroll');
+    var mountParent = scrollMount || sticky;
+    var ph = mountParent.querySelector('.space-y-3.text-sm.text-slate-600');
+    if (!ph) {
+      ph = sticky.querySelector('.px-4.py-6.space-y-3');
+    }
     if (ph) {
       ph.style.display = 'none';
     }
@@ -747,7 +822,7 @@
     el.id = PANEL_ID;
     el.className =
       'pos-exotic-cart-panel rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white shadow-sm px-3 py-4 text-sm text-slate-800 mx-0.5 mb-2';
-    sticky.appendChild(el);
+    mountParent.appendChild(el);
     return el;
   }
 
@@ -781,7 +856,7 @@
         '</div>';
     } else {
       html +=
-        '<div class="flex flex-col gap-2.5 max-h-[50vh] overflow-y-auto pr-0.5 [scrollbar-width:thin]">' +
+        '<div class="flex flex-col gap-2.5 pr-0.5">' +
         '<p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-0.5">In cart</p>';
       items.forEach(function (row) {
         var ref = lineCartRef(row);
@@ -865,9 +940,10 @@
             '" />' +
             hintInline +
             '</div>' +
-            '<button type="button" class="pos-cart-delete-btn shrink-0 rounded-md border border-red-100 bg-red-50/80 px-2 py-0.5 text-[10px] font-semibold text-red-700 transition hover:bg-red-100 hover:border-red-200" data-cartref="' +
+            '<button type="button" class="pos-cart-delete-btn inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-100 bg-red-50/80 text-red-700 transition hover:bg-red-100 hover:border-red-200" data-cartref="' +
             escapeHtml(ref) +
-            '">Remove</button>';
+            '" title="Remove from cart" aria-label="Remove from cart">' +
+            '<i class="fas fa-trash-alt text-[12px]" aria-hidden="true"></i></button>';
         } else {
           html += '<span class="text-[10px] text-amber-700">Missing cart reference — cannot update line.</span>';
         }
@@ -898,7 +974,13 @@
         html += moneyRowSummary(couponLbl, totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
       }
       if (isAmountGreaterThanZero(totals.customDeduction)) {
-        html += moneyRowSummary('Custom discount (INR)', totals.customDeduction, false, 'pos-cart-summary-remove-custom');
+        var cdLbl = 'Custom discount';
+        if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'percent') {
+          cdLbl += ' (' + formatPctLabel(posCustomDiscountPersist.value) + ')';
+        } else if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'fixed') {
+          cdLbl += ' (fixed ₹)';
+        }
+        html += moneyRowSummary(cdLbl, totals.customDeduction, false, 'pos-cart-summary-remove-custom');
       }
       html += moneyRowSummary('Grand total', totals.grandTotal, true);
       html += '</div></div>';
@@ -915,11 +997,16 @@
       '<button type="button" class="pos-cart-coupon-clear shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50">Clear</button>' +
       '</div></div>' +
       '<div class="space-y-1.5 border-t border-slate-100 pt-3">' +
-      '<label class="text-xs font-medium text-slate-600">Custom discount (INR)</label>' +
-      '<div class="flex gap-2 flex-wrap">' +
-      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input flex-1 min-w-[5rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Amount" />' +
+      '<label class="text-xs font-medium text-slate-600">Custom discount</label>' +
+      '<div class="flex gap-2 flex-wrap items-stretch">' +
+      '<select class="pos-cart-customdisc-mode shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-700 shadow-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100" aria-label="Discount type">' +
+      '<option value="fixed">Fixed (₹)</option>' +
+      '<option value="percent">Percent (%)</option>' +
+      '</select>' +
+      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input flex-1 min-w-[5rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Amount (₹)" />' +
       '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 active:scale-[0.98]">Set</button>' +
-      '<button type="button" class="pos-cart-customdisc-clear shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700">Remove</button>' +
+      '<button type="button" class="pos-cart-customdisc-clear inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700" title="Remove custom discount" aria-label="Remove custom discount">' +
+      '<i class="fas fa-trash-alt text-sm" aria-hidden="true"></i></button>' +
       '</div></div></div>';
 
     if (items.length > 0) {
@@ -946,6 +1033,21 @@
     };
 
     panel.innerHTML = html;
+    var modeSel = panel.querySelector('.pos-cart-customdisc-mode');
+    var inpDisc = panel.querySelector('.pos-cart-customdisc-input');
+    if (modeSel && inpDisc && posCustomDiscountPersist) {
+      modeSel.value = posCustomDiscountPersist.mode === 'percent' ? 'percent' : 'fixed';
+      inpDisc.value = String(posCustomDiscountPersist.value);
+      if (modeSel.value === 'percent') {
+        inpDisc.setAttribute('max', '100');
+        inpDisc.setAttribute('step', '0.01');
+        inpDisc.placeholder = 'e.g. 10';
+      } else {
+        inpDisc.removeAttribute('max');
+        inpDisc.setAttribute('step', '0.01');
+        inpDisc.placeholder = 'Amount (₹)';
+      }
+    }
   }
 
   function bindCartDelegatesOnce() {
@@ -991,7 +1093,29 @@
       'change',
       function (e) {
         var t = e.target;
-        if (!t || !t.matches || !t.matches('.pos-cart-qty-input')) {
+        if (!t || !t.matches) {
+          return;
+        }
+        if (t.matches('.pos-cart-customdisc-mode')) {
+          var panelM = document.getElementById(PANEL_ID);
+          if (!panelM || !panelM.contains(t)) {
+            return;
+          }
+          var inpM = panelM.querySelector('.pos-cart-customdisc-input');
+          if (inpM) {
+            if (t.value === 'percent') {
+              inpM.setAttribute('max', '100');
+              inpM.setAttribute('step', '0.01');
+              inpM.placeholder = 'e.g. 10';
+            } else {
+              inpM.removeAttribute('max');
+              inpM.setAttribute('step', '0.01');
+              inpM.placeholder = 'Amount (₹)';
+            }
+          }
+          return;
+        }
+        if (!t.matches('.pos-cart-qty-input')) {
           return;
         }
         var panel = document.getElementById(PANEL_ID);
@@ -1088,8 +1212,18 @@
         var cad = e.target && e.target.closest ? e.target.closest('.pos-cart-customdisc-apply') : null;
         if (cad && panel.contains(cad)) {
           var di = panel.querySelector('.pos-cart-customdisc-input');
+          var ms = panel.querySelector('.pos-cart-customdisc-mode');
           var num = di ? parseFloat(String(di.value)) : NaN;
-          window.applyCustomDiscount(isNaN(num) ? 0 : num);
+          var mDisc = ms && ms.value === 'percent' ? 'percent' : 'fixed';
+          if (isNaN(num) || num < 0) {
+            toast('Enter a valid discount.', 'red');
+            return;
+          }
+          if (mDisc === 'percent' && num > 100) {
+            toast('Percentage must be between 0 and 100.', 'red');
+            return;
+          }
+          window.applyCustomDiscount(num, { mode: mDisc });
           return;
         }
         var cdc = e.target && e.target.closest ? e.target.closest('.pos-cart-customdisc-clear') : null;
@@ -1129,17 +1263,30 @@
     return result;
   }
 
-  function refreshCartInternal() {
+  function refreshCartInternal(opts) {
+    opts = opts || {};
+    var skipPctSync = !!opts.skipPctSync;
     return cartRequest('retrieve', {}).then(function (r) {
       cartHandleApiMessages(r);
+      var data = {};
       if (r && r.success && r.data && typeof r.data === 'object') {
-        renderCartUI(r.data);
+        data = r.data;
+        renderCartUI(data);
       } else if (r && r.data && typeof r.data === 'object' && Object.keys(r.data).length) {
-        renderCartUI(r.data);
+        data = r.data;
+        renderCartUI(data);
       } else {
         renderCartUI({});
       }
-      return r;
+      if (skipPctSync) {
+        return r;
+      }
+      return maybeSyncPercentCustomDiscount(data).then(function (didSync) {
+        if (!didSync) {
+          return r;
+        }
+        return refreshCartInternal({ skipPctSync: true });
+      });
     });
   }
 
@@ -1348,22 +1495,65 @@
   };
 
   /**
-   * @param {number} amount
+   * @param {number} amount Fixed INR, or percent 0–100 when opt.mode === 'percent'
+   * @param {{ mode?: 'fixed'|'percent' }} [opt]
    * @returns {void|Promise<void>}
    */
-  window.applyCustomDiscount = function (amount) {
+  window.applyCustomDiscount = function (amount, opt) {
     return withCartLock(function () {
-      setPanelBusy(true);
+      opt = opt || {};
+      var mode = opt.mode === 'percent' ? 'percent' : 'fixed';
       var a = parseFloat(String(amount));
       if (isNaN(a) || a < 0) {
         a = 0;
       }
-      return cartRequest('customdiscount', { query: { custom_reduce: String(a) } })
+      setPanelBusy(true);
+      if (a === 0) {
+        posCustomDiscountPersist = null;
+        return cartRequest('customdiscount', { query: { custom_reduce: '0' } })
+          .then(function (r) {
+            cartHandleApiMessages(r);
+            if (!r.success) {
+              return r;
+            }
+            return refreshCartInternal();
+          })
+          .finally(function () {
+            setPanelBusy(false);
+          });
+      }
+      if (mode === 'percent' && a > 100) {
+        setPanelBusy(false);
+        toast('Percentage must be between 0 and 100.', 'red');
+        return undefined;
+      }
+      var t0 = window.__posCartLastTotals || {};
+      var tModel = {
+        subtotal: t0.subtotal,
+        couponDeduction: t0.couponDeduction
+      };
+      var send = computeCustomReduceInr(mode, a, tModel);
+      if (!(send > 0)) {
+        setPanelBusy(false);
+        if (mode === 'percent') {
+          toast('Cannot apply percent — sub total is missing or zero. Add items to the cart first.', 'red');
+        } else {
+          toast('Discount must be greater than zero.', 'red');
+        }
+        return undefined;
+      }
+      if (mode === 'fixed' && a > send + 0.01) {
+        toast('Discount capped at ₹' + send.toFixed(2) + ' (sub total minus coupon).', 'green');
+      } else if (mode === 'percent') {
+        toast('Applied ' + formatPctLabel(a) + ' (₹' + send.toFixed(2) + ').', 'green');
+      }
+      return cartRequest('customdiscount', { query: { custom_reduce: String(send) } })
         .then(function (r) {
           cartHandleApiMessages(r);
           if (!r.success) {
             return r;
           }
+          posCustomDiscountPersist = { mode: mode, value: a };
           return refreshCartInternal();
         })
         .finally(function () {
