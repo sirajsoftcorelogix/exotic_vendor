@@ -2145,7 +2145,7 @@ class POSRegisterController
             ],
             'receipt_office_footer' => '',
             'receipt_signature_date' => $dt->format('d M Y'),
-            'payment_history_url' => 'index.php?page=payments',
+            'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
         ];
 
         echo json_encode([

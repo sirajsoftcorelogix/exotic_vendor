@@ -322,7 +322,14 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
         const oidEl = document.getElementById('payments_filter_order_id');
         const oidParam = oidEl && oidEl.value ? `&order_id=${encodeURIComponent(oidEl.value)}` : '';
-        let url = `?page=payments&action=list_ajax&from_date=${encodeURIComponent(document.getElementById('from_date').value)}&to_date=${encodeURIComponent(document.getElementById('to_date').value)}&order_number=${encodeURIComponent(document.getElementById('order_number').value)}&payment_mode=${encodeURIComponent(document.getElementById('payment_mode').value)}&amount_min=${encodeURIComponent(document.getElementById('amount_min').value)}&amount_max=${encodeURIComponent(document.getElementById('amount_max').value)}${oidParam}`;
+        let orderExactParam = '';
+        try {
+            const qs = new URLSearchParams(window.location.search);
+            if (qs.get('order_exact') === '1') {
+                orderExactParam = '&order_exact=1';
+            }
+        } catch (e) {}
+        let url = `?page=payments&action=list_ajax&from_date=${encodeURIComponent(document.getElementById('from_date').value)}&to_date=${encodeURIComponent(document.getElementById('to_date').value)}&order_number=${encodeURIComponent(document.getElementById('order_number').value)}&payment_mode=${encodeURIComponent(document.getElementById('payment_mode').value)}&amount_min=${encodeURIComponent(document.getElementById('amount_min').value)}&amount_max=${encodeURIComponent(document.getElementById('amount_max').value)}${oidParam}${orderExactParam}`;
 
 
         fetch(url)

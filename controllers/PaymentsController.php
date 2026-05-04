@@ -166,9 +166,16 @@ WHERE 1=1
                 $types .= 's';
             }
         } elseif (!empty($_GET['order_number'])) {
-            $sql .= ' AND p.order_number LIKE ?';
-            $params[] = '%' . $_GET['order_number'] . '%';
-            $types .= 's';
+            $exact = isset($_GET['order_exact']) && (string)$_GET['order_exact'] === '1';
+            if ($exact) {
+                $sql .= ' AND p.order_number = ?';
+                $params[] = trim((string)$_GET['order_number']);
+                $types .= 's';
+            } else {
+                $sql .= ' AND p.order_number LIKE ?';
+                $params[] = '%' . $_GET['order_number'] . '%';
+                $types .= 's';
+            }
         }
 
         if (!empty($_GET['amount_min'])) {
