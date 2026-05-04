@@ -74,7 +74,6 @@
     window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
     window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
   </script>
-  <a href="test_create_order_static();"></a>
   <!-- ===== TOP BAR ===== -->
   <header class="border-b bg-white">
     <div class="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-3">
@@ -517,6 +516,73 @@
 
 </div>
 
+<!-- PAYMENT MODAL (POS checkout — wired to Exotic /order/create + pos_payments) -->
+<div id="paymentModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closePaymentModal()"></div>
+  <div class="relative mx-auto mt-12 w-[95%] max-w-2xl rounded-2xl bg-white shadow-2xl flex flex-col max-h-[90vh]">
+    <div class="flex items-center justify-between border-b px-5 py-3 shrink-0">
+      <h2 class="text-base font-semibold text-slate-800">Checkout &amp; payment</h2>
+      <button type="button" onclick="closePaymentModal()" class="text-slate-400 hover:text-slate-700 text-xl leading-none" aria-label="Close">✕</button>
+    </div>
+    <div class="overflow-y-auto p-5 space-y-4 text-sm">
+      <div class="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        Order total is taken from the live cart summary (incl. discounts). Select payment stage, then <strong>Place order</strong> to confirm addresses next.
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs text-slate-500">Payment stage</label>
+          <select id="payment_stage" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+            <option value="final">Final</option>
+            <option value="partial">Partial</option>
+            <option value="advance">Advance</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Payment mode</label>
+          <select id="payment_mode" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+            <option value="cod">Cash</option>
+            <option value="offline">Offline</option>
+            <option value="bank_transfer">Bank transfer</option>
+            <option value="pos_machine">POS machine</option>
+            <option value="razorpay">Razorpay</option>
+            <option value="cheque">Cheque</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Payment date</label>
+          <input type="date" id="payment_date" value="<?= htmlspecialchars(date('Y-m-d'), ENT_QUOTES, 'UTF-8') ?>" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-slate-500">Amount (₹)</label>
+          <input type="number" step="0.01" min="0" id="payment_amount" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 tabular-nums" placeholder="0.00">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Transaction ID</label>
+          <input type="text" id="transaction_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" placeholder="Required for Razorpay">
+          <p id="transaction_id_required_hint" class="hidden mt-1 text-[11px] text-amber-700">Razorpay requires a transaction ID.</p>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">Note (optional)</label>
+        <textarea id="payment_note" rows="2" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"></textarea>
+      </div>
+      <div id="paymentModalOrderApiPanel" class="hidden rounded-lg border border-slate-200 bg-slate-900 p-3">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span class="text-xs font-semibold text-white">Last order-create API</span>
+          <button type="button" id="paymentModalOrderApiFullBtn" class="text-[11px] text-orange-300 hover:text-white">Open in debug</button>
+        </div>
+        <pre id="paymentModalOrderApiPre" class="max-h-40 overflow-auto text-[10px] leading-snug text-slate-100 whitespace-pre-wrap break-words"></pre>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-slate-100 px-5 py-3 bg-slate-50 rounded-b-2xl shrink-0">
+      <button type="button" onclick="closePaymentModal()" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
+      <button type="button" id="placeOrderBtn" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Place order</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADDRESS CONFIRMATION MODAL -->
 <div id="addressConfirmModal" class="fixed inset-0 z-[10000] hidden">
   <div class="absolute inset-0 bg-black/40" onclick="closeAddressConfirmModal()"></div>
@@ -840,8 +906,28 @@
     if (apiPre) {
       apiPre.textContent = "";
     }
+    var ct = typeof window.getPosCartTotalsForCheckout === "function" ? window.getPosCartTotalsForCheckout() : null;
+    var pa = document.getElementById("payment_amount");
+    if (pa && ct && ct.grandTotal != null && !isNaN(parseFloat(String(ct.grandTotal)))) {
+      pa.value = String(ct.grandTotal);
+    }
     pm.classList.remove("hidden");
   }
+
+  window.openOrderCreateApiResponseModal = function () {
+    var pre = document.getElementById("paymentModalOrderApiPre");
+    var panel = document.getElementById("paymentModalOrderApiPanel");
+    if (!pre || !panel) {
+      return;
+    }
+    var d = window.__posLastOrderCreateDebug;
+    try {
+      pre.textContent = d ? JSON.stringify(d, null, 2) : "No order-create debug stored yet.";
+    } catch (e) {
+      pre.textContent = String(d);
+    }
+    panel.classList.remove("hidden");
+  };
 
   function closePaymentModal() {
     var pm = document.getElementById("paymentModal");
@@ -1079,7 +1165,10 @@
 
         let paymentStage = document.getElementById("payment_stage").value;
         let paymentAmount = parseFloat(document.getElementById("payment_amount").value);
-        let grandTotal = parseFloat("<?= $displayGrandTotal ?? ($cartData['grand_total'] ?? 0) ?>");
+        var liveT = typeof window.getPosCartTotalsForCheckout === "function" ? window.getPosCartTotalsForCheckout() : null;
+        var grandTotal = liveT && liveT.grandTotal != null && !isNaN(parseFloat(String(liveT.grandTotal)))
+          ? parseFloat(String(liveT.grandTotal))
+          : parseFloat("<?= (float)($cartData['grand_total'] ?? 0) ?>");
 
         if (!paymentAmount || paymentAmount <= 0) {
           showToast("⚠ Payment amount must be greater than 0", "red");
@@ -1144,7 +1233,64 @@
   });
 
   function createOrderNow(addressPayload) {
-    showToast("POS checkout API removed — rebuild cart/order flow before creating orders.", "red");
+    var customerId = getSelectedCustomerId();
+    var live = typeof window.getPosCartTotalsForCheckout === "function" ? window.getPosCartTotalsForCheckout() : null;
+    var orderTotal = live && live.grandTotal != null ? parseFloat(String(live.grandTotal)) : NaN;
+    if (!isFinite(orderTotal) || orderTotal <= 0) {
+      showToast("Cart total unavailable — add items or refresh the cart.", "red");
+      return;
+    }
+    var payStage = document.getElementById("payment_stage").value;
+    var payMode = document.getElementById("payment_mode").value;
+    var payAmt = parseFloat(document.getElementById("payment_amount").value);
+    var txn = (document.getElementById("transaction_id").value || "").trim();
+    var note = (document.getElementById("payment_note") && document.getElementById("payment_note").value) || "";
+    var body = Object.assign({}, addressPayload, {
+      customer_id: String(customerId),
+      payment_stage: payStage,
+      payment_mode: payMode,
+      payment_amount: payAmt,
+      transaction_id: txn,
+      payment_note: note,
+      order_total: orderTotal
+    });
+    fetch("index.php?page=pos_register&action=checkout-create", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body)
+    })
+      .then(function (res) {
+        return res.text().then(function (text) {
+          var cleaned = text.replace(/^\uFEFF/, "").trim();
+          try {
+            return JSON.parse(cleaned);
+          } catch (e) {
+            throw new Error(cleaned.slice(0, 400) || "Invalid JSON");
+          }
+        });
+      })
+      .then(function (data) {
+        if (!data || !data.success) {
+          window.__posLastOrderCreateDebug = data && data.order_create_debug ? data.order_create_debug : null;
+          if (window.__posLastOrderCreateDebug && typeof showPaymentModalOrderApiRecord === "function") {
+            showPaymentModalOrderApiRecord(window.__posLastOrderCreateDebug);
+          }
+          showToast(data && data.message ? data.message : "Checkout failed", "red");
+          return;
+        }
+        window.__posLastOrderCreateDebug = null;
+        showToast(data.message || "Order placed.", "green");
+        closeAddressConfirmModal();
+        closePaymentModal();
+        if (data.redirect_url) {
+          window.location.href = data.redirect_url;
+        }
+      })
+      .catch(function (err) {
+        console.error(err);
+        showToast(err && err.message ? err.message : "Checkout request failed", "red");
+      });
   }
 
   function importOrder(orderid, callback = null) {

@@ -916,6 +916,13 @@
       '<button type="button" class="pos-cart-customdisc-clear shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700">Remove</button>' +
       '</div></div></div>';
 
+    if (items.length > 0) {
+      html +=
+        '<div class="mt-3 flex justify-center">' +
+        '<button type="button" class="pos-cart-checkout-btn rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">Proceed to payment</button>' +
+        '</div>';
+    }
+
     html +=
       '<div class="mt-3 flex justify-center">' +
       '<button type="button" class="pos-cart-api-debug-link rounded-full border border-slate-200/90 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700" ' +
@@ -923,6 +930,14 @@
       'Last API request / response' +
       '</button>' +
       '</div>';
+
+    window.__posCartLastTotals = {
+      grandTotal: totals.grandTotal,
+      subtotal: totals.subtotal,
+      gstTotal: totals.gstTotal,
+      couponDeduction: totals.couponDeduction,
+      customDeduction: totals.customDeduction
+    };
 
     panel.innerHTML = html;
   }
@@ -1013,6 +1028,13 @@
         var dbgLink = e.target && e.target.closest ? e.target.closest('.pos-cart-api-debug-link') : null;
         if (dbgLink && panel.contains(dbgLink)) {
           openPosCartApiDebugModal();
+          return;
+        }
+        var chkPay = e.target && e.target.closest ? e.target.closest('.pos-cart-checkout-btn') : null;
+        if (chkPay && panel.contains(chkPay)) {
+          if (typeof window.openPaymentModal === 'function') {
+            window.openPaymentModal();
+          }
           return;
         }
         var sumRmC = e.target && e.target.closest ? e.target.closest('.pos-cart-summary-remove-coupon') : null;
@@ -1338,6 +1360,10 @@
           setPanelBusy(false);
         });
     });
+  };
+
+  window.getPosCartTotalsForCheckout = function () {
+    return window.__posCartLastTotals || null;
   };
 
   function initPosCartHooks() {

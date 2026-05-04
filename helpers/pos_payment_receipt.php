@@ -142,10 +142,11 @@ function pos_payment_resolve_session_user_id(): int
 
 /**
  * Order total (vp_orders) and balance remaining after this payment is applied (pos_payments exclude new row).
+ * When $orderTotalOverride is set (>0), use it instead of vp_orders (e.g. Exotic order not imported yet).
  *
  * @return array{order_amount: float, pending_amount: float}
  */
-function pos_payment_compute_order_snapshots(mysqli $conn, string $orderNumber, float $thisPaymentAmount): array
+function pos_payment_compute_order_snapshots(mysqli $conn, string $orderNumber, float $thisPaymentAmount, ?float $orderTotalOverride = null): array
 {
     $orderNumber = trim($orderNumber);
     if ($orderNumber === '') {
@@ -153,13 +154,17 @@ function pos_payment_compute_order_snapshots(mysqli $conn, string $orderNumber, 
     }
 
     $orderTotal = 0.0;
-    $stmt = $conn->prepare('SELECT IFNULL(SUM(finalprice), 0) AS t FROM vp_orders WHERE order_number = ?');
-    if ($stmt) {
-        $stmt->bind_param('s', $orderNumber);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $orderTotal = round((float)($row['t'] ?? 0), 2);
+    if ($orderTotalOverride !== null && $orderTotalOverride > 0) {
+        $orderTotal = round($orderTotalOverride, 2);
+    } else {
+        $stmt = $conn->prepare('SELECT IFNULL(SUM(finalprice), 0) AS t FROM vp_orders WHERE order_number = ?');
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $orderTotal = round((float)($row['t'] ?? 0), 2);
+        }
     }
 
     $paidPrior = 0.0;
@@ -216,7 +221,8 @@ function pos_payment_insert_row(
     string $note,
     int $userId,
     int $warehouseId,
-    bool $retryWithoutCustomerIfFkFails = true
+    bool $retryWithoutCustomerIfFkFails = true,
+    ?float $orderTotalOverride = null
 ): array {
     $whEff = $warehouseId > 0 ? $warehouseId : pos_payment_fallback_warehouse_id($conn);
     if ($whEff <= 0) {
@@ -228,7 +234,7 @@ function pos_payment_insert_row(
         ];
     }
 
-    $snap = pos_payment_compute_order_snapshots($conn, $orderNumber, $amount);
+    $snap = pos_payment_compute_order_snapshots($conn, $orderNumber, $amount, $orderTotalOverride);
     $orderAmtSnap = $snap['order_amount'];
     $pendingAmtSnap = $snap['pending_amount'];
 
@@ -282,7 +288,8 @@ function pos_payment_insert_row(
                     $note,
                     $userId,
                     $warehouseId,
-                    false
+                    false,
+                    $orderTotalOverride
                 );
             }
 
