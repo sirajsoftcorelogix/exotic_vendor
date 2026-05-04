@@ -725,7 +725,10 @@
     if (el) {
       return el;
     }
-    var aside = document.querySelector('aside.col-span-12');
+    var aside =
+      document.querySelector('aside[data-pos-cart-sidebar]') ||
+      document.querySelector('.pos-register-page aside') ||
+      document.querySelector('aside.col-span-12');
     if (!aside) {
       return null;
     }

@@ -1391,11 +1391,14 @@ class POSRegisterController
                     $body = $_POST;
                 }
                 $split = $this->buildExoticCartAddSplit(is_array($body) ? $body : []);
+                $ctxAdd = $this->exoticCartDiscountContext();
                 $this->emitCartApiResponse($this->exotic_api_call(
                     '/cart/add',
                     'POST',
                     $split['query'],
-                    $split['post']
+                    $split['post'],
+                    null,
+                    $ctxAdd['extraHeaders']
                 ));
                 return;
 
@@ -1519,6 +1522,11 @@ class POSRegisterController
         }
         if (isset($body['options']) && trim((string)$body['options']) !== '') {
             $post['options'] = (string)$body['options'];
+        }
+
+        $stockCheck = isset($body['stock_check_code']) ? trim((string)$body['stock_check_code']) : '';
+        if ($stockCheck !== '') {
+            $post['stock_check_code'] = $stockCheck;
         }
 
         $ctx = $this->exoticCartDiscountContext();
