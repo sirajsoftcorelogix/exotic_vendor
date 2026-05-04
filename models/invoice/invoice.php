@@ -1,13 +1,16 @@
 <?php
 
-class Invoice {
+class Invoice
+{
     private $db;
 
-    public function __construct($conn) {
+    public function __construct($conn)
+    {
         $this->db = $conn;
     }
 
-    public function getAllInvoices($limit, $offset) {
+    public function getAllInvoices($limit, $offset)
+    {
         $sql = "SELECT i.*, c.id AS customer_id, c.name, c.email, c.phone FROM vp_invoices i 
                 LEFT JOIN vp_customers c ON i.customer_id = c.id 
                 ORDER BY i.invoice_date DESC LIMIT $limit OFFSET $offset";
@@ -21,7 +24,8 @@ class Invoice {
         return $invoices;
     }
 
-    public function countAllInvoices() {
+    public function countAllInvoices()
+    {
         $sql = "SELECT COUNT(*) AS cnt FROM vp_invoices";
         $result = $this->db->query($sql);
         if ($result) {
@@ -31,16 +35,18 @@ class Invoice {
         return 0;
     }
 
-    public function createInvoice($data) {
-        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at, exchange_text, converted_amount, batch_no,warehouse_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)";
+    public function createInvoice($data)
+    {
+        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at, exchange_text, converted_amount, batch_no,warehouse_id,pos_flag) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
- $warehouse_id = $_SESSION['warehouse_id'] ?? 0;
+        $warehouse_id = $_SESSION['warehouse_id'] ?? 0;
         $invoice_number = 'INV-' . date('Ymd') . '-' . mt_rand(1000, 9999);
         $batch_no = $data['batch_no'] ?? null;
+        $pos_flag = $data['pos_flag'] ?? 0;
         $stmt->bind_param(
-            'ssisssdddsdsdssi',
+            'ssisssdddsdsdssii',
             $data['invoice_number'],
             $data['invoice_date'],
             $data['customer_id'],
@@ -56,7 +62,8 @@ class Invoice {
             $data['exchange_text'],
             $data['converted_amount'],
             $batch_no,
-            $warehouse_id
+            $warehouse_id,
+            $pos_flag
         );
 
         if ($stmt->execute()) {
@@ -65,7 +72,8 @@ class Invoice {
         return false;
     }
 
-    private function ensureInvoiceItemsProductIdColumn(): void {
+    private function ensureInvoiceItemsProductIdColumn(): void
+    {
         $r = @$this->db->query("SHOW COLUMNS FROM vp_invoice_items LIKE 'product_id'");
         if ($r && $r->num_rows > 0) {
             return;
@@ -73,7 +81,8 @@ class Invoice {
         @$this->db->query("ALTER TABLE vp_invoice_items ADD COLUMN product_id INT UNSIGNED NULL DEFAULT NULL AFTER item_code");
     }
 
-    public function createInvoiceItem($data) {
+    public function createInvoiceItem($data)
+    {
         $this->ensureInvoiceItemsProductIdColumn();
         $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, product_id, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total, image_url, groupname)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -94,12 +103,12 @@ class Invoice {
             $data['box_no'],
             $data['quantity'],
             $data['unit_price'],
-            $data['tax_rate'],            
+            $data['tax_rate'],
             $data['cgst'],
             $data['sgst'],
             $data['igst'],
             $data['tax_amount'],
-            $data['line_total'],           
+            $data['line_total'],
             $data['image_url'],
             $data['groupname']
         );
@@ -110,7 +119,8 @@ class Invoice {
         return false;
     }
 
-    public function getInvoiceById($id) {
+    public function getInvoiceById($id)
+    {
         $sql = "SELECT * FROM vp_invoices WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
@@ -124,7 +134,8 @@ class Invoice {
         return null;
     }
 
-    public function getInvoiceItems($invoice_id) {
+    public function getInvoiceItems($invoice_id)
+    {
         $sql = "SELECT * FROM vp_invoice_items WHERE invoice_id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return [];
@@ -141,7 +152,8 @@ class Invoice {
         return $items;
     }
 
-    public function updateInvoiceStatus($id, $status) {
+    public function updateInvoiceStatus($id, $status)
+    {
         $sql = "UPDATE vp_invoices SET status = ?, updated_at = NOW() WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
@@ -150,7 +162,8 @@ class Invoice {
         return $stmt->execute();
     }
 
-    public function deleteInvoice($id) {
+    public function deleteInvoice($id)
+    {
         // Delete items first
         $sql1 = "DELETE FROM vp_invoice_items WHERE invoice_id = ?";
         $stmt1 = $this->db->prepare($sql1);
@@ -165,7 +178,8 @@ class Invoice {
         $stmt2->bind_param('i', $id);
         return $stmt2->execute();
     }
-    public function getCustomerById($customer_id) {
+    public function getCustomerById($customer_id)
+    {
         $sql = "SELECT * FROM vp_customers WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
@@ -178,7 +192,8 @@ class Invoice {
         }
         return null;
     }
-    public function getInvoiceByOrderNumber($order_number) {
+    public function getInvoiceByOrderNumber($order_number)
+    {
         $sql = "SELECT * FROM vp_invoices WHERE vp_order_info_id = (SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1) LIMIT 1";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
@@ -195,7 +210,8 @@ class Invoice {
     /**
      * Invoice that still blocks creating a new invoice for this order_number (excludes cancelled).
      */
-    public function getActiveInvoiceForOrderNumber($order_number) {
+    public function getActiveInvoiceForOrderNumber($order_number)
+    {
         $order_number = trim((string)$order_number);
         if ($order_number === '') {
             return null;
@@ -218,7 +234,8 @@ class Invoice {
         }
         return null;
     }
-    public function insert_international_invoice_data($data) {
+    public function insert_international_invoice_data($data)
+    {
         $sql = "INSERT INTO vp_invoices_international (invoice_id, pre_carriage_by, port_of_loading, port_of_discharge, country_of_origin, country_of_final_destination, final_destination, usd_export_rate, ap_cost, freight_charge, insurance_charge, shipping_bill_number, shipping_bill_date, shipping_port, shipping_ref_clm, shipping_currency, shipping_country_code, shipping_exp_duty, irn, qrcode_string) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
@@ -253,7 +270,8 @@ class Invoice {
         }
         return false;
     }
-    public function getInternationalInvoiceByInvoiceId($invoice_id) {
+    public function getInternationalInvoiceByInvoiceId($invoice_id)
+    {
         $sql = "SELECT * FROM vp_invoices_international WHERE invoice_id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
@@ -266,7 +284,8 @@ class Invoice {
         }
         return null;
     }
-    public function updateInvoiceInternational($invoice_id, $data) {
+    public function updateInvoiceInternational($invoice_id, $data)
+    {
         // Build dynamic UPDATE query based on provided fields
         $allowedFields = ['pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty', 'irn', 'ack_number', 'ack_date', 'signed_invoice', 'qrcode_string', 'irn_status', 'request_payload', 'response_payload', 'irn_error_message'];
         $updateFields = [];
@@ -297,7 +316,8 @@ class Invoice {
         $stmt->bind_param($bindTypes, ...$bindParams);
         return $stmt->execute();
     }
-    public function getInvoicesCount() {
+    public function getInvoicesCount()
+    {
         $sql = "SELECT COUNT(*) AS cnt FROM vp_invoices";
         $result = $this->db->query($sql);
         if ($result) {
@@ -306,7 +326,8 @@ class Invoice {
         }
         return 0;
     }
-    public function  getAllInvoicesPaginated($limit, $offset, $filters = []) {
+    public function  getAllInvoicesPaginated($limit, $offset, $filters = [])
+    {
         // join dispatch details so we can filter on its columns
         $sql  = "SELECT DISTINCT i.*, c.id AS customer_id, c.name, c.email, c.phone
                 FROM vp_invoices i
@@ -339,7 +360,7 @@ class Invoice {
                 $whereClause[] = "d.length >= 22 AND d.width >= 17 AND d.height >= 5";
                 //$whereClause[] = "d.box_size NOT IN ('R-1', 'R-2', 'R-3', 'R-4', 'R-5', 'R-6', 'R-7', 'R-8', 'R-9', 'R-10', 'R-11', 'R-12', 'R-13', 'R-14')";
             } elseif ($filters['box_size'] === 'R-2') {
-                $whereClause[] = "d.length >= 16 AND d.width >= 13 AND d.height >= 13";               
+                $whereClause[] = "d.length >= 16 AND d.width >= 13 AND d.height >= 13";
             } elseif ($filters['box_size'] === 'R-3') {
                 $whereClause[] = "d.length >= 16 AND d.width >= 11 AND d.height >= 7";
             } elseif ($filters['box_size'] === 'R-4') {
@@ -372,7 +393,7 @@ class Invoice {
                 //     $length = (int)$parts[0];
                 //     $width = (int)$parts[1];
                 //     $height = (int)$parts[2];
-            
+
                 //     $whereClause[] = "d.length >= $length AND d.width >= $width AND d.height >= $height";
                 // }
             }
@@ -400,15 +421,13 @@ class Invoice {
             $whereClause[] = "i.batch_no = '" . $this->db->real_escape_string($filters['batch_no']) . "'";
         }
         if (isset($filters['item_code']) && $filters['item_code'] !== '') {
-            $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_invoice_items WHERE item_code LIKE '%" . $this->db->real_escape_string($filters['item_code']) . "%')"; 
-
+            $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_invoice_items WHERE item_code LIKE '%" . $this->db->real_escape_string($filters['item_code']) . "%')";
         }
         if (isset($filters['created_by']) && $filters['created_by'] !== '') {
             $whereClause[] = "d.created_by = " . intval($filters['created_by']);
         }
         if (isset($filters['item_name']) && $filters['item_name'] !== '') {
             $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_invoice_items WHERE item_name LIKE '%" . $this->db->real_escape_string($filters['item_name']) . "%')";
-            
         }
         //Box Weight
         if (isset($filters['box_weight_min']) && is_numeric($filters['box_weight_min'])) {
@@ -423,7 +442,7 @@ class Invoice {
             $sql .= "WHERE " . implode(" AND ", $whereClause) . " ";
         }
 
-        if (isset($filters['sort']) && in_array($filters['sort'], ['asc','desc'])) {
+        if (isset($filters['sort']) && in_array($filters['sort'], ['asc', 'desc'])) {
             $sql .= "ORDER BY i.id " . (($filters['sort'] === 'asc') ? 'ASC' : 'DESC') . " ";
         } else {
             $sql .= "ORDER BY i.id DESC ";

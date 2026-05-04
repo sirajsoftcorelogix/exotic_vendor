@@ -52,6 +52,8 @@ class InvoicesController
                 exit;
             }
         }
+        //check pos flag
+        $posFlag = isset($_POST['pos_flag']) ? (int)$_POST['pos_flag'] : 0;
 
         if (!empty($itemIds)) {
             $_SESSION['invoice_items'] = $itemIds;
@@ -89,6 +91,7 @@ class InvoicesController
 
         $data['users'] = $usersModel->getAllUsers();
         $data['invoiceModel'] = null; // placeholder for next invoice number logic
+        $data['pos_flag'] = $posFlag;
 
         renderTemplate('views/invoices/create.php', $data, 'Create Invoice');
         exit;
@@ -182,6 +185,10 @@ class InvoicesController
             $invoiceData['exchange_text'] = '';
             $invoiceData['converted_amount'] = 0.00;
         }
+        //pos_flag
+        $invoiceData['pos_flag'] = isset($_POST['pos_flag']) ? (int)$_POST['pos_flag'] : 0;
+        // print_r($invoiceData);
+        // exit;
         $invoiceId = $invoiceModel->createInvoice($invoiceData);
 
         if (!$invoiceId) {
@@ -263,10 +270,10 @@ class InvoicesController
                 'shipping_exp_duty' => isset($_POST['shipping_exp_duty']) ? floatval($_POST['shipping_exp_duty']) : 0
             ];
             $invoiceModel->insert_international_invoice_data($internationalData);
-            
+
             // Generate Alankit IRN for international invoice
             $irn = $this->generateAlankitIrnForInvoice($invoiceId);
-            
+
             // Get error message if IRN generation failed
             $irnErrorMessage = '';
             if (!$irn) {
@@ -305,19 +312,19 @@ class InvoicesController
     {
         is_login();
         global $invoiceModel;
-        
+
         $input = json_decode(file_get_contents('php://input'), true);
         if (!is_array($input)) {
             $input = $_POST;
         }
-        
+
         $invoiceId = isset($input['invoice_id']) ? (int)$input['invoice_id'] : 0;
-        
+
         if ($invoiceId <= 0) {
             echo json_encode(['success' => false, 'message' => 'Invalid invoice ID']);
             exit;
         }
-        
+
         // Check if invoice exists and is international
         $invoice = $invoiceModel->getInvoiceById($invoiceId);
         if (!$invoice || $invoice['currency'] === 'INR') {
@@ -341,10 +348,10 @@ class InvoicesController
         if (!empty($internationalData)) {
             $invoiceModel->updateInvoiceInternational($invoiceId, $internationalData);
         }
-        
+
         // Attempt to regenerate IRN
         $irn = $this->generateAlankitIrnForInvoice($invoiceId);
-        
+
         if ($irn) {
             echo json_encode(['success' => true, 'message' => 'IRN generated successfully']);
         } else {
@@ -474,7 +481,7 @@ class InvoicesController
                 'seller_name' => $firm['firm_name'] ?? '',
                 'seller_address' => $firm['address'] ?? '',
                 'seller_city' => $firm['city'] ?? '',
-                'seller_state' => $firm['state'] ?? '',                
+                'seller_state' => $firm['state'] ?? '',
                 'seller_pincode' => $firm['pin'],
                 'seller_email' => $firm['email'] ?? '',
                 'seller_phone' => $firm['phone'] ?? '',
@@ -513,12 +520,14 @@ class InvoicesController
             $config = include 'config.php';
             $alankitConfig = $config['alankit'] ?? [];
 
-            if (empty($alankitConfig) || 
-                empty($alankitConfig['username']) || 
-                empty($alankitConfig['password']) || 
+            if (
+                empty($alankitConfig) ||
+                empty($alankitConfig['username']) ||
+                empty($alankitConfig['password']) ||
                 empty($alankitConfig['subscription_key']) ||
                 empty($alankitConfig['app_key']) ||
-                empty($alankitConfig['gstin'])) {
+                empty($alankitConfig['gstin'])
+            ) {
                 error_log("Alankit IRN: Missing API credentials in config.php. Please configure alankit section with username, password, subscription_key, app_key, and gstin");
                 return false;
             }
@@ -533,7 +542,7 @@ class InvoicesController
                 $alankitConfig['gstin'],
                 $alankitConfig['force_refresh_access_token'] ?? true
             );
-            
+
             // Option 2 (Alternative): Create with auto-generated AppKey
             // $alankitClient = AlankitIrnClient::createWithGeneratedKey(
             //     $alankitConfig['username'],
@@ -571,18 +580,18 @@ class InvoicesController
                     'request_payload' => json_encode($irnPayload),
                     'response_payload' => json_encode($response ?? ['error' => 'No response received'])
                 ];
-                
+
                 $invoiceModel->updateInvoice($invoiceId, $updateData);
                 error_log("Alankit IRN generation failed for invoice #$invoiceId: " . ($response['message'] ?? 'Unknown error'));
                 return false;
             }
-
         } catch (Exception $e) {
             error_log("Alankit IRN Exception for invoice #$invoiceId: " . $e->getMessage());
             return false;
         }
     }
-    public function generateAlankitIrnForInvoice($invoiceId){
+    public function generateAlankitIrnForInvoice($invoiceId)
+    {
         global $invoiceModel, $commanModel;
 
         try {
@@ -658,7 +667,7 @@ class InvoicesController
             $buyerPincode = $isDirectExport ? '999999' : (trim($customer['zipcode'] ?? '') ?: $customer['zipcode'] ?? '');
             $shippingState = $isDirectExport ? '96' : (trim($shippingAddress) ? $customer['shipping_state'] ?? '' : $customer['state'] ?? '');
             $shippingPincode = $isDirectExport ? '999999' : (trim($shippingAddress) ? $customer['shipping_zipcode'] ?? '' : $customer['zipcode'] ?? '');
-            
+
             $irnPayload = [
                 'invoice_number' => $invoice['invoice_number'] ?? '',
                 'invoice_date' => $invoice['invoice_date'] ?? date('Y-m-d'),
@@ -666,7 +675,7 @@ class InvoicesController
                 'seller_name' => $firm['firm_name'] ?? '',
                 'seller_address' => $firm['address'] ?? '',
                 'seller_city' => $firm['city'] ?? '',
-                'seller_state' => $firm['state'] ?? '',                
+                'seller_state' => $firm['state'] ?? '',
                 'seller_pincode' => $firm['pin'],
                 'seller_email' => $firm['email'] ?? '',
                 'seller_phone' => $firm['phone'] ?? '',
@@ -708,7 +717,7 @@ class InvoicesController
                 'shipping_exp_duty' => empty($internationalData['shipping_exp_duty']) ? 0 : (float)($internationalData['shipping_exp_duty'])
 
             ];
-           // echo '<br><br><pre>';
+            // echo '<br><br><pre>';
             // print_r($irnPayload);
             $authreq = $alankitClient->authRequest();
             // call api request to auth
@@ -718,76 +727,76 @@ class InvoicesController
             ];
             //echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
             $authdata = $alankitClient->sendRequest('AUTH_ENDPOINT', $data, false);
-            
+
             if (!$authdata || !isset($authdata['Data']['AuthToken'])) {
                 error_log("Alankit IRN: Authentication failed for invoice #$invoiceId. Response: " . json_encode($authdata));
                 return false;
             }
-            
+
             $accessToken = $authdata['Data']['AuthToken'];
             $sek = $authdata['Data']['Sek'];
             //echo "sek: $sek <br>";
             $apkey = $alankitConfig['app_key'];
             //echo "Alankit IRN: Authentication successful, accessToken #$accessToken. Access token obtained.\n";
             $decryptedSek = $alankitClient->decryptSek($sek, $apkey);
-                // Encrypt IRN payload using SEK
-                $payload = $alankitClient->prepareIrnPayload($irnPayload);
-                //echo '<br><br>'.json_encode($payload).'<br><br>';
-                $payloadreq = base64_encode(json_encode($payload));
-                //$pyload = "ewogICAgIlZlcnNpb24iOiAiMS4xIiwKICAgICJUcmFuRHRscyI6IHsKICAgICAgICAiVGF4U2NoIjogIkdTVCIsCiAgICAgICAgIlN1cFR5cCI6ICJCMkIiLAogICAgICAgICJSZWdSZXYiOiAiWSIsCiAgICAgICAgIkVjbUdzdGluIjogbnVsbCwKICAgICAgICAiSWdzdE9uSW50cmEiOiAiTiIKICAgIH0sCiAgICAiRG9jRHRscyI6IHsKICAgICAgICAiVHlwIjogIklOViIsCiAgICAgICAgIk5vIjogInRlc3QwOTA0MjAyNiIsCiAgICAgICAgIkR0IjogIjA5LzA0LzIwMjYiCiAgICB9LAogICAgIlNlbGxlckR0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjA3QUdBUEE1MzYzTDAwMiIsCiAgICAgICAgIkxnbE5tIjogIk5JQyBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJOSUMgSW5kdXN0cmllcyIsCiAgICAgICAgIkFkZHIxIjogIjV0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJHQU5ESElOQUdBUiIsCiAgICAgICAgIlBpbiI6IDExMDA1NSwKICAgICAgICAiU3RjZCI6ICIwNyIsCiAgICAgICAgIlBoIjogIjkwMDAwMDAwMDAiLAogICAgICAgICJFbSI6ICJhYmNAZ21haWwuY29tIgogICAgfSwKICAgICJCdXllckR0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjI5QVdHUFY3MTA3QjFaMSIsCiAgICAgICAgIkxnbE5tIjogIlhZWiBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJYWVogSW5kdXN0cmllcyIsCiAgICAgICAgIlBvcyI6ICIxMiIsCiAgICAgICAgIkFkZHIxIjogIjd0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJHQU5ESElOQUdBUiIsCiAgICAgICAgIlBpbiI6IDU2MjE2MCwKICAgICAgICAiU3RjZCI6ICIyOSIsCiAgICAgICAgIlBoIjogIjkxMTExMTExMTExIiwKICAgICAgICAiRW0iOiAieHl6QHlhaG9vLmNvbSIKICAgIH0sCiAgICAiRGlzcER0bHMiOiB7CiAgICAgICAgIk5tIjogIkFCQyBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJBZGRyMSI6ICI3dGggYmxvY2ssIGt1dmVtcHUgbGF5b3V0IiwKICAgICAgICAiQWRkcjIiOiAia3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJMb2MiOiAiQmFuYWdhbG9yZSIsCiAgICAgICAgIlBpbiI6IDU2MjE2MCwKICAgICAgICAiU3RjZCI6ICIyOSIKICAgIH0sCiAgICAiU2hpcER0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjI5QVdHUFY3MTA3QjFaMSIsCiAgICAgICAgIkxnbE5tIjogIkNCRSBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkFkZHIxIjogIjd0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJCYW5hZ2Fsb3JlIiwKICAgICAgICAiUGluIjogNTYyMTYwLAogICAgICAgICJTdGNkIjogIjI5IgogICAgfSwKICAgICJJdGVtTGlzdCI6IFsKICAgICAgICB7CiAgICAgICAgICAgICJTbE5vIjogIjEiLAogICAgICAgICAgICAiUHJkRGVzYyI6ICJSaWNlIiwKICAgICAgICAgICAgIklzU2VydmMiOiAiTiIsCiAgICAgICAgICAgICJIc25DZCI6ICIxMDAxIiwKICAgICAgICAgICAgIkJhcmNkZSI6ICIxMjM0NTYiLAogICAgICAgICAgICAiUXR5IjogMTAwLjM0NSwKICAgICAgICAgICAgIkZyZWVRdHkiOiAxMCwKICAgICAgICAgICAgIlVuaXQiOiAiQkFHIiwKICAgICAgICAgICAgIlVuaXRQcmljZSI6IDk5LjU0NSwKICAgICAgICAgICAgIlRvdEFtdCI6IDk5ODguODQsCiAgICAgICAgICAgICJEaXNjb3VudCI6IDEwLAogICAgICAgICAgICAiUHJlVGF4VmFsIjogMSwKICAgICAgICAgICAgIkFzc0FtdCI6IDk5NzguODQsCiAgICAgICAgICAgICJHc3RSdCI6IDEyLAogICAgICAgICAgICAiSWdzdEFtdCI6IDExOTcuNDYsCiAgICAgICAgICAgICJDZ3N0QW10IjogMCwKICAgICAgICAgICAgIlNnc3RBbXQiOiAwLAogICAgICAgICAgICAiQ2VzUnQiOiA1LAogICAgICAgICAgICAiQ2VzQW10IjogNDk4Ljk0LAogICAgICAgICAgICAiQ2VzTm9uQWR2bEFtdCI6IDEwLAogICAgICAgICAgICAiU3RhdGVDZXNSdCI6IDEyLAogICAgICAgICAgICAiU3RhdGVDZXNBbXQiOiAxMTk3LjQ2LAogICAgICAgICAgICAiU3RhdGVDZXNOb25BZHZsQW10IjogNSwKICAgICAgICAgICAgIk90aENocmciOiAxMCwKICAgICAgICAgICAgIlRvdEl0ZW1WYWwiOiAxMjg5Ny43LAogICAgICAgICAgICAiT3JkTGluZVJlZiI6ICIzMjU2IiwKICAgICAgICAgICAgIk9yZ0NudHJ5IjogIkFHIiwKICAgICAgICAgICAgIlByZFNsTm8iOiAiMTIzNDUiLAogICAgICAgICAgICAiQmNoRHRscyI6IHsKICAgICAgICAgICAgICAgICJObSI6ICIxMjM0NTYiLAogICAgICAgICAgICAgICAgIkV4cER0IjogIjAxLzA4LzIwMjMiLAogICAgICAgICAgICAgICAgIldyRHQiOiAiMDEvMDkvMjAyMyIKICAgICAgICAgICAgfSwKICAgICAgICAgICAgIkF0dHJpYkR0bHMiOiBbCiAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgIk5tIjogIlJpY2UiLAogICAgICAgICAgICAgICAgICAgICJWYWwiOiAiMTAwMDAiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIF0KICAgICAgICB9CiAgICBdLAogICAgIlZhbER0bHMiOiB7CiAgICAgICAgIkFzc1ZhbCI6IDk5NzguODQsCiAgICAgICAgIkNnc3RWYWwiOiAwLAogICAgICAgICJTZ3N0VmFsIjogMCwKICAgICAgICAiSWdzdFZhbCI6IDExOTcuNDYsCiAgICAgICAgIkNlc1ZhbCI6IDUwOC45NCwKICAgICAgICAiU3RDZXNWYWwiOiAxMjAyLjQ2LAogICAgICAgICJEaXNjb3VudCI6IDEwLAogICAgICAgICJPdGhDaHJnIjogMjAsCiAgICAgICAgIlJuZE9mZkFtdCI6IDAuMywKICAgICAgICAiVG90SW52VmFsIjogMTI5MDgsCiAgICAgICAgIlRvdEludlZhbEZjIjogMTI4OTcuNwogICAgfSwKICAgICJQYXlEdGxzIjogewogICAgICAgICJObSI6ICJBQkNERSIsCiAgICAgICAgIkFjY0RldCI6ICI1Njk3Mzg5NzEzMjEwIiwKICAgICAgICAiTW9kZSI6ICJDYXNoIiwKICAgICAgICAiRmluSW5zQnIiOiAiU0JJTjExMDAwIiwKICAgICAgICAiUGF5VGVybSI6ICIxMDAiLAogICAgICAgICJQYXlJbnN0ciI6ICJHaWZ0IiwKICAgICAgICAiQ3JUcm4iOiAidGVzdCIsCiAgICAgICAgIkRpckRyIjogInRlc3QiLAogICAgICAgICJDckRheSI6IDEwMCwKICAgICAgICAiUGFpZEFtdCI6IDEwMDAwLAogICAgICAgICJQYXltdER1ZSI6IDUwMDAKICAgIH0sCiAgICAiUmVmRHRscyI6IHsKICAgICAgICAiSW52Um0iOiAiVEVTVCIsCiAgICAgICAgIkRvY1BlcmREdGxzIjogewogICAgICAgICAgICAiSW52U3REdCI6ICIwMS8wOC8yMDIzIiwKICAgICAgICAgICAgIkludkVuZER0IjogIjAxLzA5LzIwMjMiCiAgICAgICAgfSwKICAgICAgICAiUHJlY0RvY0R0bHMiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICJJbnZObyI6ICJET0MvMDAyIiwKICAgICAgICAgICAgICAgICJJbnZEdCI6ICIwMS8wOC8yMDIzIiwKICAgICAgICAgICAgICAgICJPdGhSZWZObyI6ICIxMjM0NTYiCiAgICAgICAgICAgIH0KICAgICAgICBdLAogICAgICAgICJDb250ckR0bHMiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICJSZWNBZHZSZWZyIjogIkRvYy8wMDMiLAogICAgICAgICAgICAgICAgIlJlY0FkdkR0IjogIjAxLzA4LzIwMjMiLAogICAgICAgICAgICAgICAgIlRlbmRSZWZyIjogIkFiYzAwMSIsCiAgICAgICAgICAgICAgICAiQ29udHJSZWZyIjogIkNvMTIzIiwKICAgICAgICAgICAgICAgICJFeHRSZWZyIjogIllvNDU2IiwKICAgICAgICAgICAgICAgICJQcm9qUmVmciI6ICJEb2MtNDU2IiwKICAgICAgICAgICAgICAgICJQT1JlZnIiOiAiRG9jLTc4OSIsCiAgICAgICAgICAgICAgICAiUE9SZWZEdCI6ICIwMS8wOC8yMDIzIgogICAgICAgICAgICB9CiAgICAgICAgXQogICAgfSwKICAgICJBZGRsRG9jRHRscyI6IFsKICAgICAgICB7CiAgICAgICAgICAgICJVcmwiOiAiaHR0cHM6Ly9laW52LWFwaXNhbmRib3gubmljLmluIiwKICAgICAgICAgICAgIkRvY3MiOiAiVGVzdCBEb2MiLAogICAgICAgICAgICAiSW5mbyI6ICJEb2N1bWVudCBUZXN0IgogICAgICAgIH0KICAgIF0sCiAgICAiRXhwRHRscyI6IHsKICAgICAgICAiU2hpcEJObyI6ICJBLTI0OCIsCiAgICAgICAgIlNoaXBCRHQiOiAiMDEvMDgvMjAyMyIsCiAgICAgICAgIlBvcnQiOiAiSU5BQkcxIiwKICAgICAgICAiUmVmQ2xtIjogIk4iLAogICAgICAgICJGb3JDdXIiOiAiQUVEIiwKICAgICAgICAiQ250Q29kZSI6ICJBRSIsCiAgICAgICAgIkV4cER1dHkiOiBudWxsCiAgICB9LAogICAgIkV3YkR0bHMiOiB7CiAgICAgICAgIlRyYW5zSWQiOiAiMTJBV0dQVjcxMDdCMVoxIiwKICAgICAgICAiVHJhbnNOYW1lIjogIlhZWiBFWFBPUlRTIiwKICAgICAgICAiRGlzdGFuY2UiOiAxMDAsCiAgICAgICAgIlRyYW5zRG9jTm8iOiAiRE9DMDEiLAogICAgICAgICJUcmFuc0RvY0R0IjogIjA0LzA0LzIwMjQiLAogICAgICAgICJWZWhObyI6ICJrYTEyMzQ1NiIsCiAgICAgICAgIlZlaFR5cGUiOiAiUiIsCiAgICAgICAgIlRyYW5zTW9kZSI6ICIxIgogICAgfQp9";
-                $encryptedPayload = $alankitClient->encryptBySymmetricKey($payloadreq, $decryptedSek);
-                if (!$encryptedPayload) {
-                    error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
-                    return false;
-                }
-                //echo '<br><br>'.$encryptedPayload.'<br><br>';
-                // Send IRN generation request with encrypted payload
-                //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
-                $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);
-                //echo "Alankit IRN: IRN generation response of irn #$invoiceId\n";
+            // Encrypt IRN payload using SEK
+            $payload = $alankitClient->prepareIrnPayload($irnPayload);
+            //echo '<br><br>'.json_encode($payload).'<br><br>';
+            $payloadreq = base64_encode(json_encode($payload));
+            //$pyload = "ewogICAgIlZlcnNpb24iOiAiMS4xIiwKICAgICJUcmFuRHRscyI6IHsKICAgICAgICAiVGF4U2NoIjogIkdTVCIsCiAgICAgICAgIlN1cFR5cCI6ICJCMkIiLAogICAgICAgICJSZWdSZXYiOiAiWSIsCiAgICAgICAgIkVjbUdzdGluIjogbnVsbCwKICAgICAgICAiSWdzdE9uSW50cmEiOiAiTiIKICAgIH0sCiAgICAiRG9jRHRscyI6IHsKICAgICAgICAiVHlwIjogIklOViIsCiAgICAgICAgIk5vIjogInRlc3QwOTA0MjAyNiIsCiAgICAgICAgIkR0IjogIjA5LzA0LzIwMjYiCiAgICB9LAogICAgIlNlbGxlckR0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjA3QUdBUEE1MzYzTDAwMiIsCiAgICAgICAgIkxnbE5tIjogIk5JQyBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJOSUMgSW5kdXN0cmllcyIsCiAgICAgICAgIkFkZHIxIjogIjV0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJHQU5ESElOQUdBUiIsCiAgICAgICAgIlBpbiI6IDExMDA1NSwKICAgICAgICAiU3RjZCI6ICIwNyIsCiAgICAgICAgIlBoIjogIjkwMDAwMDAwMDAiLAogICAgICAgICJFbSI6ICJhYmNAZ21haWwuY29tIgogICAgfSwKICAgICJCdXllckR0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjI5QVdHUFY3MTA3QjFaMSIsCiAgICAgICAgIkxnbE5tIjogIlhZWiBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJYWVogSW5kdXN0cmllcyIsCiAgICAgICAgIlBvcyI6ICIxMiIsCiAgICAgICAgIkFkZHIxIjogIjd0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJHQU5ESElOQUdBUiIsCiAgICAgICAgIlBpbiI6IDU2MjE2MCwKICAgICAgICAiU3RjZCI6ICIyOSIsCiAgICAgICAgIlBoIjogIjkxMTExMTExMTExIiwKICAgICAgICAiRW0iOiAieHl6QHlhaG9vLmNvbSIKICAgIH0sCiAgICAiRGlzcER0bHMiOiB7CiAgICAgICAgIk5tIjogIkFCQyBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJBZGRyMSI6ICI3dGggYmxvY2ssIGt1dmVtcHUgbGF5b3V0IiwKICAgICAgICAiQWRkcjIiOiAia3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJMb2MiOiAiQmFuYWdhbG9yZSIsCiAgICAgICAgIlBpbiI6IDU2MjE2MCwKICAgICAgICAiU3RjZCI6ICIyOSIKICAgIH0sCiAgICAiU2hpcER0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjI5QVdHUFY3MTA3QjFaMSIsCiAgICAgICAgIkxnbE5tIjogIkNCRSBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkFkZHIxIjogIjd0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJCYW5hZ2Fsb3JlIiwKICAgICAgICAiUGluIjogNTYyMTYwLAogICAgICAgICJTdGNkIjogIjI5IgogICAgfSwKICAgICJJdGVtTGlzdCI6IFsKICAgICAgICB7CiAgICAgICAgICAgICJTbE5vIjogIjEiLAogICAgICAgICAgICAiUHJkRGVzYyI6ICJSaWNlIiwKICAgICAgICAgICAgIklzU2VydmMiOiAiTiIsCiAgICAgICAgICAgICJIc25DZCI6ICIxMDAxIiwKICAgICAgICAgICAgIkJhcmNkZSI6ICIxMjM0NTYiLAogICAgICAgICAgICAiUXR5IjogMTAwLjM0NSwKICAgICAgICAgICAgIkZyZWVRdHkiOiAxMCwKICAgICAgICAgICAgIlVuaXQiOiAiQkFHIiwKICAgICAgICAgICAgIlVuaXRQcmljZSI6IDk5LjU0NSwKICAgICAgICAgICAgIlRvdEFtdCI6IDk5ODguODQsCiAgICAgICAgICAgICJEaXNjb3VudCI6IDEwLAogICAgICAgICAgICAiUHJlVGF4VmFsIjogMSwKICAgICAgICAgICAgIkFzc0FtdCI6IDk5NzguODQsCiAgICAgICAgICAgICJHc3RSdCI6IDEyLAogICAgICAgICAgICAiSWdzdEFtdCI6IDExOTcuNDYsCiAgICAgICAgICAgICJDZ3N0QW10IjogMCwKICAgICAgICAgICAgIlNnc3RBbXQiOiAwLAogICAgICAgICAgICAiQ2VzUnQiOiA1LAogICAgICAgICAgICAiQ2VzQW10IjogNDk4Ljk0LAogICAgICAgICAgICAiQ2VzTm9uQWR2bEFtdCI6IDEwLAogICAgICAgICAgICAiU3RhdGVDZXNSdCI6IDEyLAogICAgICAgICAgICAiU3RhdGVDZXNBbXQiOiAxMTk3LjQ2LAogICAgICAgICAgICAiU3RhdGVDZXNOb25BZHZsQW10IjogNSwKICAgICAgICAgICAgIk90aENocmciOiAxMCwKICAgICAgICAgICAgIlRvdEl0ZW1WYWwiOiAxMjg5Ny43LAogICAgICAgICAgICAiT3JkTGluZVJlZiI6ICIzMjU2IiwKICAgICAgICAgICAgIk9yZ0NudHJ5IjogIkFHIiwKICAgICAgICAgICAgIlByZFNsTm8iOiAiMTIzNDUiLAogICAgICAgICAgICAiQmNoRHRscyI6IHsKICAgICAgICAgICAgICAgICJObSI6ICIxMjM0NTYiLAogICAgICAgICAgICAgICAgIkV4cER0IjogIjAxLzA4LzIwMjMiLAogICAgICAgICAgICAgICAgIldyRHQiOiAiMDEvMDkvMjAyMyIKICAgICAgICAgICAgfSwKICAgICAgICAgICAgIkF0dHJpYkR0bHMiOiBbCiAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgIk5tIjogIlJpY2UiLAogICAgICAgICAgICAgICAgICAgICJWYWwiOiAiMTAwMDAiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIF0KICAgICAgICB9CiAgICBdLAogICAgIlZhbER0bHMiOiB7CiAgICAgICAgIkFzc1ZhbCI6IDk5NzguODQsCiAgICAgICAgIkNnc3RWYWwiOiAwLAogICAgICAgICJTZ3N0VmFsIjogMCwKICAgICAgICAiSWdzdFZhbCI6IDExOTcuNDYsCiAgICAgICAgIkNlc1ZhbCI6IDUwOC45NCwKICAgICAgICAiU3RDZXNWYWwiOiAxMjAyLjQ2LAogICAgICAgICJEaXNjb3VudCI6IDEwLAogICAgICAgICJPdGhDaHJnIjogMjAsCiAgICAgICAgIlJuZE9mZkFtdCI6IDAuMywKICAgICAgICAiVG90SW52VmFsIjogMTI5MDgsCiAgICAgICAgIlRvdEludlZhbEZjIjogMTI4OTcuNwogICAgfSwKICAgICJQYXlEdGxzIjogewogICAgICAgICJObSI6ICJBQkNERSIsCiAgICAgICAgIkFjY0RldCI6ICI1Njk3Mzg5NzEzMjEwIiwKICAgICAgICAiTW9kZSI6ICJDYXNoIiwKICAgICAgICAiRmluSW5zQnIiOiAiU0JJTjExMDAwIiwKICAgICAgICAiUGF5VGVybSI6ICIxMDAiLAogICAgICAgICJQYXlJbnN0ciI6ICJHaWZ0IiwKICAgICAgICAiQ3JUcm4iOiAidGVzdCIsCiAgICAgICAgIkRpckRyIjogInRlc3QiLAogICAgICAgICJDckRheSI6IDEwMCwKICAgICAgICAiUGFpZEFtdCI6IDEwMDAwLAogICAgICAgICJQYXltdER1ZSI6IDUwMDAKICAgIH0sCiAgICAiUmVmRHRscyI6IHsKICAgICAgICAiSW52Um0iOiAiVEVTVCIsCiAgICAgICAgIkRvY1BlcmREdGxzIjogewogICAgICAgICAgICAiSW52U3REdCI6ICIwMS8wOC8yMDIzIiwKICAgICAgICAgICAgIkludkVuZER0IjogIjAxLzA5LzIwMjMiCiAgICAgICAgfSwKICAgICAgICAiUHJlY0RvY0R0bHMiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICJJbnZObyI6ICJET0MvMDAyIiwKICAgICAgICAgICAgICAgICJJbnZEdCI6ICIwMS8wOC8yMDIzIiwKICAgICAgICAgICAgICAgICJPdGhSZWZObyI6ICIxMjM0NTYiCiAgICAgICAgICAgIH0KICAgICAgICBdLAogICAgICAgICJDb250ckR0bHMiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICJSZWNBZHZSZWZyIjogIkRvYy8wMDMiLAogICAgICAgICAgICAgICAgIlJlY0FkdkR0IjogIjAxLzA4LzIwMjMiLAogICAgICAgICAgICAgICAgIlRlbmRSZWZyIjogIkFiYzAwMSIsCiAgICAgICAgICAgICAgICAiQ29udHJSZWZyIjogIkNvMTIzIiwKICAgICAgICAgICAgICAgICJFeHRSZWZyIjogIllvNDU2IiwKICAgICAgICAgICAgICAgICJQcm9qUmVmciI6ICJEb2MtNDU2IiwKICAgICAgICAgICAgICAgICJQT1JlZnIiOiAiRG9jLTc4OSIsCiAgICAgICAgICAgICAgICAiUE9SZWZEdCI6ICIwMS8wOC8yMDIzIgogICAgICAgICAgICB9CiAgICAgICAgXQogICAgfSwKICAgICJBZGRsRG9jRHRscyI6IFsKICAgICAgICB7CiAgICAgICAgICAgICJVcmwiOiAiaHR0cHM6Ly9laW52LWFwaXNhbmRib3gubmljLmluIiwKICAgICAgICAgICAgIkRvY3MiOiAiVGVzdCBEb2MiLAogICAgICAgICAgICAiSW5mbyI6ICJEb2N1bWVudCBUZXN0IgogICAgICAgIH0KICAgIF0sCiAgICAiRXhwRHRscyI6IHsKICAgICAgICAiU2hpcEJObyI6ICJBLTI0OCIsCiAgICAgICAgIlNoaXBCRHQiOiAiMDEvMDgvMjAyMyIsCiAgICAgICAgIlBvcnQiOiAiSU5BQkcxIiwKICAgICAgICAiUmVmQ2xtIjogIk4iLAogICAgICAgICJGb3JDdXIiOiAiQUVEIiwKICAgICAgICAiQ250Q29kZSI6ICJBRSIsCiAgICAgICAgIkV4cER1dHkiOiBudWxsCiAgICB9LAogICAgIkV3YkR0bHMiOiB7CiAgICAgICAgIlRyYW5zSWQiOiAiMTJBV0dQVjcxMDdCMVoxIiwKICAgICAgICAiVHJhbnNOYW1lIjogIlhZWiBFWFBPUlRTIiwKICAgICAgICAiRGlzdGFuY2UiOiAxMDAsCiAgICAgICAgIlRyYW5zRG9jTm8iOiAiRE9DMDEiLAogICAgICAgICJUcmFuc0RvY0R0IjogIjA0LzA0LzIwMjQiLAogICAgICAgICJWZWhObyI6ICJrYTEyMzQ1NiIsCiAgICAgICAgIlZlaFR5cGUiOiAiUiIsCiAgICAgICAgIlRyYW5zTW9kZSI6ICIxIgogICAgfQp9";
+            $encryptedPayload = $alankitClient->encryptBySymmetricKey($payloadreq, $decryptedSek);
+            if (!$encryptedPayload) {
+                error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
+                return false;
+            }
+            //echo '<br><br>'.$encryptedPayload.'<br><br>';
+            // Send IRN generation request with encrypted payload
+            //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
+            $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);
+            //echo "Alankit IRN: IRN generation response of irn #$invoiceId\n";
+            //print_r($irnResponse);
+            //decrypt response
+            if ($irnResponse && isset($irnResponse['Data'])) {
+                $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
+                $irnResponse = json_decode($decryptedResponse, true);
+                //echo "Alankit IRN: IRN generation response decrypted for invoice #$invoiceId\n";
                 //print_r($irnResponse);
-                //decrypt response
-                if ($irnResponse && isset($irnResponse['Data'])) {
-                    $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
-                    $irnResponse = json_decode($decryptedResponse, true);
-                    //echo "Alankit IRN: IRN generation response decrypted for invoice #$invoiceId\n";
-                    //print_r($irnResponse);
-                } else {
-                    error_log("Alankit IRN: No response data received for invoice #$invoiceId");
-                    //$irnResponse = null;
-                }
+            } else {
+                error_log("Alankit IRN: No response data received for invoice #$invoiceId");
+                //$irnResponse = null;
+            }
 
-                if ($irnResponse && isset($irnResponse['Status']) && $irnResponse['Status'] === 'ACT') {
-                    // Update invoice with IRN details and store payloads for audit trail
-                    $updateData = [
-                        'irn' => $irnResponse['Irn'] ?? null,
-                        'ack_number' => $irnResponse['AckNo'] ?? null,
-                        'ack_date' => $irnResponse['AckDt'] ? date('Y-m-d H:i:s', strtotime($irnResponse['AckDt'])) : null,
-                        'signed_invoice' => $irnResponse['SignedInvoice'] ?? null,
-                        'qrcode_string' => $irnResponse['SignedQRCode'] ?? null,
-                        'irn_status' => 'generated',
-                        'request_payload' => json_encode($irnPayload),
-                        'response_payload' => json_encode($irnResponse)
-                    ];
-    
-                    // Update invoice international table with IRN details
-                    $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
-    
-                    error_log("Alankit IRN generated successfully for invoice #$invoiceId: " . ($irnResponse['irn'] ?? 'No IRN'));
-                    return true;
-                } else {
-                    // Store request and error response for debugging
-                    $updateData = [
-                        'irn_status' => 'failed',
-                        'request_payload' => json_encode($payload),
-                        'response_payload' => json_encode($irnResponse ?? ['error' => 'No response received']),
-                        'irn_error_message' => json_encode($irnResponse['ErrorDetails'] ?? 'Unknown error')
-                    ];
-                    
-                    $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
-                    error_log("Alankit IRN generation failed for invoice #$invoiceId: " . ($irnResponse['message'] ?? 'Unknown error'));
-                    return false;
-                }           
+            if ($irnResponse && isset($irnResponse['Status']) && $irnResponse['Status'] === 'ACT') {
+                // Update invoice with IRN details and store payloads for audit trail
+                $updateData = [
+                    'irn' => $irnResponse['Irn'] ?? null,
+                    'ack_number' => $irnResponse['AckNo'] ?? null,
+                    'ack_date' => $irnResponse['AckDt'] ? date('Y-m-d H:i:s', strtotime($irnResponse['AckDt'])) : null,
+                    'signed_invoice' => $irnResponse['SignedInvoice'] ?? null,
+                    'qrcode_string' => $irnResponse['SignedQRCode'] ?? null,
+                    'irn_status' => 'generated',
+                    'request_payload' => json_encode($irnPayload),
+                    'response_payload' => json_encode($irnResponse)
+                ];
+
+                // Update invoice international table with IRN details
+                $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+
+                error_log("Alankit IRN generated successfully for invoice #$invoiceId: " . ($irnResponse['irn'] ?? 'No IRN'));
+                return true;
+            } else {
+                // Store request and error response for debugging
+                $updateData = [
+                    'irn_status' => 'failed',
+                    'request_payload' => json_encode($payload),
+                    'response_payload' => json_encode($irnResponse ?? ['error' => 'No response received']),
+                    'irn_error_message' => json_encode($irnResponse['ErrorDetails'] ?? 'Unknown error')
+                ];
+
+                $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+                error_log("Alankit IRN generation failed for invoice #$invoiceId: " . ($irnResponse['message'] ?? 'Unknown error'));
+                return false;
+            }
         } catch (Exception $e) {
             error_log("Alankit IRN Exception for invoice #$invoiceId: " . $e->getMessage());
             return false;
@@ -1251,7 +1260,7 @@ class InvoicesController
             echo json_encode([
                 'success' => true,
                 'html' => $html,
-               //'invoice_id' => $invoice['id']
+                //'invoice_id' => $invoice['id']
             ]);
             exit;
         } catch (Exception $e) {
@@ -1448,7 +1457,7 @@ class InvoicesController
             exit;
         }
     }
- 
+
 
 
 

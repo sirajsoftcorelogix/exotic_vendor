@@ -2843,6 +2843,12 @@
         orderIdInput.name = 'poitem[]';
         orderIdInput.value = id;
         form.appendChild(orderIdInput);
+        //Add pos flag 
+        const posFlagInput = document.createElement('input');
+        posFlagInput.type = 'hidden';
+        posFlagInput.name = 'pos_flag';
+        posFlagInput.value = 1;
+        form.appendChild(posFlagInput);
 
         form.action = '<?php echo base_url('?page=invoices&action=create'); ?>';
         form.method = 'POST';
