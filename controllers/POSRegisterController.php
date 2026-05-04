@@ -1536,24 +1536,28 @@ class POSRegisterController
 
     /**
      * Query params + optional x-api-discountcoupondetails header for Exotic cart GETs that must reflect coupons.
+     * Omit empty discount/gift params — sending e.g. discountcoupondetails= with no value can break /cart/add upstream.
      *
      * @return array{query: array<string, string>, extraHeaders: list<string>}
      */
     private function exoticCartDiscountContext(): array
     {
-        $discountStr = $this->getSessionDiscountCouponDetailsString();
+        $discountStr = trim($this->getSessionDiscountCouponDetailsString());
         $giftStr = '';
         if (!empty($_SESSION['pos_exotic_cart_gift_voucher'])) {
             $gv = $_SESSION['pos_exotic_cart_gift_voucher'];
-            $giftStr = is_string($gv) ? $gv : json_encode($gv, JSON_UNESCAPED_UNICODE);
+            $giftStr = is_string($gv) ? trim($gv) : trim(json_encode($gv, JSON_UNESCAPED_UNICODE));
         } elseif (!empty($_SESSION['gift_voucher'])) {
             $gv = $_SESSION['gift_voucher'];
-            $giftStr = is_string($gv) ? $gv : json_encode($gv, JSON_UNESCAPED_UNICODE);
+            $giftStr = is_string($gv) ? trim($gv) : trim(json_encode($gv, JSON_UNESCAPED_UNICODE));
         }
-        $query = [
-            'discountcoupondetails' => $discountStr,
-            'giftvoucherdetails' => $giftStr,
-        ];
+        $query = [];
+        if ($discountStr !== '') {
+            $query['discountcoupondetails'] = $discountStr;
+        }
+        if ($giftStr !== '') {
+            $query['giftvoucherdetails'] = $giftStr;
+        }
         $extraHeaders = [];
         if ($discountStr !== '') {
             $extraHeaders[] = 'x-api-discountcoupondetails:' . $discountStr;
@@ -1607,13 +1611,62 @@ class POSRegisterController
         if (!is_array($d)) {
             return true;
         }
-        if (array_key_exists('success', $d) && $d['success'] === false) {
+        if (array_key_exists('success', $d)) {
+            $sv = $d['success'];
+            if ($sv === false || $sv === 0 || $sv === '0' || $sv === 'false' || $sv === 'False') {
+                return false;
+            }
+        }
+        if (isset($d['status'])) {
+            $st = strtolower((string)$d['status']);
+            if (in_array($st, ['error', 'fail', 'failed'], true)) {
+                return false;
+            }
+        }
+        if (isset($d['error']) && (is_string($d['error']) ? trim($d['error']) !== '' : $d['error'] === true)) {
             return false;
         }
-        if (isset($d['status']) && strtolower((string)$d['status']) === 'error') {
-            return false;
-        }
+
         return true;
+    }
+
+    /**
+     * Best-effort user-facing message from Exotic cart JSON (shape varies by endpoint).
+     *
+     * @param array{data?: mixed, raw?: string} $res
+     */
+    private function extractExoticCartUserMessage(array $res): string
+    {
+        $d = $res['data'] ?? null;
+        if (is_array($d)) {
+            foreach (['message', 'Message', 'error', 'Error', 'errormessage', 'msg'] as $k) {
+                if (!empty($d[$k]) && is_string($d[$k])) {
+                    $t = trim($d[$k]);
+                    if ($t !== '') {
+                        return $t;
+                    }
+                }
+            }
+            foreach (['data', 'result', 'payload'] as $wrap) {
+                if (!empty($d[$wrap]) && is_array($d[$wrap])) {
+                    $inner = $d[$wrap];
+                    foreach (['message', 'error', 'Message', 'errormessage'] as $k) {
+                        if (!empty($inner[$k]) && is_string($inner[$k])) {
+                            $t = trim($inner[$k]);
+                            if ($t !== '') {
+                                return $t;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        $raw = trim((string)($res['raw'] ?? ''));
+        if ($raw !== '' && strlen($raw) < 400 && strpos($raw, '<') === false) {
+            return $raw;
+        }
+
+        return '';
     }
 
     /**
@@ -1625,8 +1678,14 @@ class POSRegisterController
         if (strlen($raw) > 65536) {
             $raw = substr($raw, 0, 65536) . '…(truncated)';
         }
+        $ok = $this->isExoticCartSuccess($res);
+        $msg = $this->extractExoticCartUserMessage($res);
+        if (!$ok && $msg === '') {
+            $msg = 'Cart request failed (HTTP ' . (int)($res['code'] ?? 0) . ').';
+        }
         echo json_encode([
-            'success' => $this->isExoticCartSuccess($res),
+            'success' => $ok,
+            'message' => $msg,
             'http_code' => (int)($res['code'] ?? 0),
             'data' => $res['data'] ?? [],
             'raw' => $raw,

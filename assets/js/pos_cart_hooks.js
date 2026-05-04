@@ -157,7 +157,10 @@
     var init = {
       method: method,
       credentials: 'same-origin',
-      headers: {}
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
     };
     if (opt.jsonBody != null) {
       init.headers['Content-Type'] = 'application/json';
@@ -1233,6 +1236,7 @@
           if (!r.success) {
             return r;
           }
+          toast('Added to cart.', 'green');
           return refreshCartInternal().then(function (r2) {
             if (r2 && r2.data && typeof r2.data === 'object') {
               toastIfQtyCappedAfterSuccess(requestedQty, r2.data, { code: body.code });
