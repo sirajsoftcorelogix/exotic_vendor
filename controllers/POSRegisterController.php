@@ -1077,35 +1077,37 @@ class POSRegisterController
         }
 
         $data2 = null;
-        // Variant SKU may return no image from upstream; retry with base item_code.
-        if (
-            $imageResolved === ''
-            && $dbItemCode !== ''
-            && strcasecmp($dbItemCode, $code) !== 0
-        ) {
-            $res2 = $this->exotic_api_call('/product/code', 'GET', ['code' => $dbItemCode]);
-            $data2 = $this->unwrapProductApiResponse($res2['data'] ?? []);
-            $imageResolved = $this->fixImageUrl($this->pickRawImageFromProductApiArray($data2));
+        $sellingPrice = $this->mergePosProductSellingBaseExGst($data, $dbRow);
+        $variantDiffers = ($dbItemCode !== '' && strcasecmp($dbItemCode, $code) !== 0);
+        // One base item_code fetch when variant response is missing image, price, MRP, or GST (avoids 2–3 sequential /product/code calls).
+        if ($variantDiffers) {
+            $mrpFromVariant = $this->mergeMrpRupee($data, $dbRow);
+            $gstFromVariant = $this->resolveGstPercentAsNumber($data, $dbRow);
+            $needBaseFetch =
+                ($imageResolved === '')
+                || ($sellingPrice <= 0)
+                || ($mrpFromVariant <= 0)
+                || ($gstFromVariant <= 0);
+            if ($needBaseFetch) {
+                $res2 = $this->exotic_api_call('/product/code', 'GET', ['code' => $dbItemCode]);
+                $data2 = $this->unwrapProductApiResponse($res2['data'] ?? []);
+                if ($imageResolved === '') {
+                    $imgBase = $this->fixImageUrl($this->pickRawImageFromProductApiArray($data2));
+                    if ($imgBase !== '') {
+                        $imageResolved = $imgBase;
+                    }
+                }
+                if ($sellingPrice <= 0) {
+                    $altSell = $this->mergePosProductSellingBaseExGst($data2, $dbRow);
+                    if ($altSell > 0) {
+                        $sellingPrice = $altSell;
+                    }
+                }
+            }
         }
 
         if ($imageResolved === '' && $imageFromDb !== '') {
             $imageResolved = $imageFromDb;
-        }
-
-        $sellingPrice = $this->mergePosProductSellingBaseExGst($data, $dbRow);
-        if (
-            $sellingPrice <= 0
-            && $dbItemCode !== ''
-            && strcasecmp($dbItemCode, $code) !== 0
-        ) {
-            if ($data2 === null) {
-                $resPrice = $this->exotic_api_call('/product/code', 'GET', ['code' => $dbItemCode]);
-                $data2 = $this->unwrapProductApiResponse($resPrice['data'] ?? []);
-            }
-            $alt = $this->mergePosProductSellingBaseExGst($data2, $dbRow);
-            if ($alt > 0) {
-                $sellingPrice = $alt;
-            }
         }
 
         $gstApiForSell = $data;
