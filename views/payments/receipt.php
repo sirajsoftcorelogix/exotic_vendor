@@ -41,9 +41,53 @@ $pendingAmt = isset($payment['pending_amount']) ? (float)$payment['pending_amoun
 
 $warehouse = trim((string)($payment['warehouse'] ?? ''));
 $userName = trim((string)($payment['user_name'] ?? ''));
-$payDate = trim((string)($payment['payment_date'] ?? ''));
+$payDateRaw = trim((string)($payment['payment_date'] ?? ''));
+
+/** e.g. 4th May 2026 */
+$formatReceiptDateOrdinal = static function (string $raw): string {
+    if ($raw === '') {
+        return '—';
+    }
+    try {
+        $dt = new \DateTimeImmutable($raw);
+    } catch (\Throwable $e) {
+        return $raw;
+    }
+    $day = (int)$dt->format('j');
+    $suffix = 'th';
+    $teens = $day % 100;
+    if ($teens < 11 || $teens > 13) {
+        switch ($day % 10) {
+            case 1:
+                $suffix = 'st';
+                break;
+            case 2:
+                $suffix = 'nd';
+                break;
+            case 3:
+                $suffix = 'rd';
+                break;
+            default:
+                $suffix = 'th';
+        }
+    }
+
+    return $day . $suffix . ' ' . $dt->format('F Y');
+};
+$payDateFormatted = $formatReceiptDateOrdinal($payDateRaw);
+
+/** From controller: default warehouse (is_default first) */
+$defaultWarehouseAddress = isset($defaultWarehouseAddress) && is_array($defaultWarehouseAddress)
+    ? $defaultWarehouseAddress
+    : ['title' => '', 'lines' => []];
+$dwTitle = trim((string)($defaultWarehouseAddress['title'] ?? ''));
+$dwLines = isset($defaultWarehouseAddress['lines']) && is_array($defaultWarehouseAddress['lines'])
+    ? $defaultWarehouseAddress['lines']
+    : [];
+
 $orderNum = trim((string)($payment['order_number'] ?? ''));
 $note = trim((string)($payment['note'] ?? ''));
+$customerBillingName = trim((string)($payment['customer_name'] ?? ''));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -111,6 +155,19 @@ $note = trim((string)($payment['note'] ?? ''));
                 margin-top: 0.15rem !important;
                 font-size: 7px !important;
                 letter-spacing: 0.12em !important;
+            }
+            .receipt-store-address {
+                margin-top: 0.25rem !important;
+                padding-top: 0.3rem !important;
+                border-top-width: 1px !important;
+                font-size: 7px !important;
+                line-height: 1.25 !important;
+            }
+            .receipt-store-address p {
+                margin: 0.05rem 0 !important;
+            }
+            .receipt-store-address .font-semibold {
+                font-size: 7.5px !important;
             }
             .receipt-print-body {
                 padding: 0.45rem 0.65rem 0.35rem !important;
@@ -213,6 +270,16 @@ $note = trim((string)($payment['note'] ?? ''));
                     </div>
                     <div class="hidden h-px min-w-[3rem] flex-1 bg-gradient-to-r from-orange-500 to-transparent sm:block print:block" aria-hidden="true"></div>
                 </div>
+                <?php if ($dwTitle !== '' || count($dwLines) > 0): ?>
+                    <div class="receipt-store-address mt-4 border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-600">
+                        <?php if ($dwTitle !== ''): ?>
+                            <p class="font-semibold text-slate-800"><?= $h($dwTitle) ?></p>
+                        <?php endif; ?>
+                        <?php foreach ($dwLines as $addrLine): ?>
+                            <p class="mt-0.5"><?= $h($addrLine) ?></p>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <div class="receipt-print-body px-6 pb-6 pt-5">
@@ -226,8 +293,8 @@ $note = trim((string)($payment['note'] ?? ''));
                             <p class="font-semibold text-slate-800"><?= $h($warehouse) ?></p>
                         <?php endif; ?>
                         <p class="mt-1 text-slate-600">
-                            <span class="text-slate-500">Date</span><br />
-                            <span class="font-medium text-slate-800"><?= $h($payDate !== '' ? $payDate : '—') ?></span>
+                            <span class="text-slate-500">Receipt date</span><br />
+                            <span class="font-medium text-slate-800"><?= $h($payDateFormatted) ?></span>
                         </p>
                     </div>
                 </div>
@@ -251,6 +318,10 @@ $note = trim((string)($payment['note'] ?? ''));
 
                 <!-- Details grid -->
                 <dl class="receipt-print-dl mt-6 space-y-0 divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50/50">
+                    <div class="grid grid-cols-1 gap-1 px-4 py-3 sm:grid-cols-3 sm:items-center">
+                        <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Billing customer</dt>
+                        <dd class="font-semibold text-slate-900 sm:col-span-2"><?= $h($customerBillingName !== '' ? $customerBillingName : '—') ?></dd>
+                    </div>
                     <div class="grid grid-cols-1 gap-1 px-4 py-3 sm:grid-cols-3 sm:items-center">
                         <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Order number</dt>
                         <dd class="font-semibold text-slate-900 sm:col-span-2"><?= $h($orderNum !== '' ? $orderNum : '—') ?></dd>
