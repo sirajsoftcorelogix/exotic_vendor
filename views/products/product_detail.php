@@ -308,6 +308,15 @@
             <i class="fas fa-sync-alt text-[11px]" aria-hidden="true"></i>
             Refresh from API
           </button>
+          <button
+            type="button"
+            id="refreshProductApiDebugBtn"
+            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1"
+            title="View Refresh API request/response"
+            aria-label="View Refresh API request/response"
+            onclick="openRefreshProductApiDebugModal()">
+            <i class="fas fa-code text-[11px]" aria-hidden="true"></i>
+          </button>
         </div>
         <?php if ($isBookProduct): ?>
           <?php if ($authorRaw !== ''): ?>
@@ -994,8 +1003,19 @@
     </div>
   </div>
 </div>
+<div id="refreshProductApiDebugModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+  <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-5 relative">
+    <button type="button" onclick="closeRefreshProductApiDebugModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-700">✕</button>
+    <h3 class="text-base font-semibold text-gray-800 mb-3">Refresh API Debug</h3>
+    <pre id="refreshProductApiDebugPre" class="max-h-[70vh] overflow-auto rounded-lg border border-gray-200 bg-slate-900 p-3 text-[11px] leading-relaxed text-slate-100 whitespace-pre-wrap break-words"></pre>
+    <div class="mt-4 flex justify-end">
+      <button type="button" onclick="closeRefreshProductApiDebugModal()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold">Close</button>
+    </div>
+  </div>
+</div>
 <script>
   var profileStatusReloadOnClose = false;
+  var lastRefreshProductApiDebug = null;
 
   function showProfileStatusModal(message, type, reloadOnClose) {
     var modal = document.getElementById('profileStatusModal');
@@ -1034,6 +1054,27 @@
     }
   }
 
+  function closeRefreshProductApiDebugModal() {
+    var modal = document.getElementById('refreshProductApiDebugModal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function openRefreshProductApiDebugModal() {
+    var modal = document.getElementById('refreshProductApiDebugModal');
+    var pre = document.getElementById('refreshProductApiDebugPre');
+    if (!modal || !pre) return;
+    if (!lastRefreshProductApiDebug) {
+      pre.textContent = 'No refresh API call recorded yet.';
+    } else {
+      try {
+        pre.textContent = JSON.stringify(lastRefreshProductApiDebug, null, 2);
+      } catch (e) {
+        pre.textContent = String(lastRefreshProductApiDebug);
+      }
+    }
+    modal.classList.remove('hidden');
+  }
+
   async function updateProductProfileFromApi(btn) {
     var itemCode = (btn && btn.dataset && btn.dataset.itemCode) ? String(btn.dataset.itemCode).trim() : '';
     if (!itemCode) {
@@ -1046,18 +1087,50 @@
     btn.classList.add('opacity-70', 'cursor-not-allowed');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin text-[11px]" aria-hidden="true"></i> Updating...';
 
+    var requestUrl = 'index.php?page=products&action=update_api_call&itemCode=' + encodeURIComponent(itemCode);
     try {
-      var res = await fetch('index.php?page=products&action=update_api_call&itemCode=' + encodeURIComponent(itemCode), {
+      var res = await fetch(requestUrl, {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' }
       });
-      var data = await res.json();
+      var rawText = await res.text();
+      var data = null;
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch (parseErr) {
+        data = null;
+      }
+      lastRefreshProductApiDebug = {
+        at: new Date().toISOString(),
+        request: {
+          method: 'GET',
+          url: requestUrl,
+          headers: { 'Accept': 'application/json' }
+        },
+        response: {
+          http_status: res.status,
+          ok: !!res.ok,
+          data: data,
+          raw: rawText
+        }
+      };
       if (data && data.success) {
         showProfileStatusModal('Product updated successfully from API.', 'success', true);
         return;
       }
       showProfileStatusModal('Update failed: ' + ((data && data.message) ? data.message : 'Unknown error'), 'error', false);
     } catch (e) {
+      lastRefreshProductApiDebug = {
+        at: new Date().toISOString(),
+        request: {
+          method: 'GET',
+          url: requestUrl,
+          headers: { 'Accept': 'application/json' }
+        },
+        response: {
+          network_error: (e && e.message) ? e.message : String(e)
+        }
+      };
       showProfileStatusModal('An error occurred while updating this product.', 'error', false);
     } finally {
       btn.disabled = false;

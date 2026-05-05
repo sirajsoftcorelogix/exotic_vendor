@@ -1363,6 +1363,10 @@
     var payAmt = parseFloat(document.getElementById("payment_amount").value);
     var txn = (document.getElementById("transaction_id").value || "").trim();
     var note = (document.getElementById("payment_note") && document.getElementById("payment_note").value) || "";
+    var subTotalGoods = live && live.subtotal != null ? parseFloat(String(live.subtotal)) : NaN;
+    var gstTotal = live && live.gstTotal != null ? parseFloat(String(live.gstTotal)) : NaN;
+    var couponDeduction = live && live.couponDeduction != null ? parseFloat(String(live.couponDeduction)) : NaN;
+    var customDeduction = live && live.customDeduction != null ? parseFloat(String(live.customDeduction)) : NaN;
     var body = Object.assign({}, addressPayload, {
       customer_id: String(customerId),
       payment_stage: payStage,
@@ -1370,7 +1374,11 @@
       payment_amount: payAmt,
       transaction_id: txn,
       payment_note: note,
-      order_total: orderTotal
+      order_total: orderTotal,
+      receipt_subtotal_goods: isFinite(subTotalGoods) ? subTotalGoods : orderTotal,
+      receipt_gst_total: isFinite(gstTotal) ? gstTotal : 0,
+      receipt_coupon_discount: isFinite(couponDeduction) ? couponDeduction : 0,
+      receipt_cash_discount: isFinite(customDeduction) ? customDeduction : 0
     });
     fetch("index.php?page=pos_register&action=checkout-create", {
       method: "POST",

@@ -2244,6 +2244,13 @@ class POSRegisterController
 
         $modeLabel = $this->mapPosPaymentModeLabel($paymentMode);
         $dt = new \DateTime('now', new \DateTimeZone('Asia/Kolkata'));
+        $receiptSubtotalGoods = round((float)($payload['receipt_subtotal_goods'] ?? $orderTotal), 2);
+        if ($receiptSubtotalGoods <= 0 && $orderTotal > 0) {
+            $receiptSubtotalGoods = $orderTotal;
+        }
+        $receiptGstTotal = round((float)($payload['receipt_gst_total'] ?? 0), 2);
+        $receiptCouponDiscount = round((float)($payload['receipt_coupon_discount'] ?? 0), 2);
+        $receiptCashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
 
         $_SESSION['pos_last_checkout_receipt'] = [
             'receipt_number' => $receiptNo,
@@ -2256,11 +2263,11 @@ class POSRegisterController
             'receipt_billing_block' => $this->formatAddressLinesFromPayload($payload, 'billing'),
             'receipt_shipping_block' => $this->formatAddressLinesFromPayload($payload, 'shipping'),
             'receipt_lines' => [],
-            'receipt_subtotal_goods' => 0.0,
-            'receipt_gst_total' => 0.0,
-            'receipt_coupon_discount' => 0.0,
+            'receipt_subtotal_goods' => $receiptSubtotalGoods,
+            'receipt_gst_total' => $receiptGstTotal,
+            'receipt_coupon_discount' => $receiptCouponDiscount,
             'receipt_gift_discount' => 0.0,
-            'receipt_cash_discount' => 0.0,
+            'receipt_cash_discount' => $receiptCashDiscount,
             'receipt_grand_total' => $orderTotal,
             'receipt_qty_total' => 0.0,
             'receipt_agg_sgst' => 0.0,
