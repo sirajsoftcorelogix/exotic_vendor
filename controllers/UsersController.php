@@ -17,21 +17,63 @@ class UsersController {
     }
     public function loginProcess() {
         global $usersModel;
-        //echo "Processing login...";
         $login = trim($_POST['login'] ?? '');
-        $password = $_POST['password'] ?? '';
+        $otp = $_POST['otp'] ?? '';
 
-        if (empty($login) || empty($password)) {
-            echo json_encode(['success' => false, 'message' => 'Please enter both login and password.']);
+        if (empty($login) || empty($otp)) {
+            echo json_encode(['success' => false, 'message' => 'Please enter both email and OTP.']);
             exit;
         }
-        $logininfo = $usersModel->login($login, $password);
+        $logininfo = $usersModel->loginWithOtp($login, $otp);
         if ($logininfo) {            
             echo json_encode(['success' => true, 'message' => 'Login successful.']);
         } else {
-            echo json_encode(['success' => false, 'message' => 'Invalid login or password.']);
+            echo json_encode(['success' => false, 'message' => 'Invalid OTP or email.']);
         }
-        //require_once 'views/users/login_process.php';
+    }
+
+    public function sendLoginOtp() {
+        global $usersModel;
+        global $domain;
+        $login = trim($_POST['login'] ?? '');
+        if (empty($login)) {
+            echo json_encode(['success' => false, 'message' => 'Please enter your email or phone.']);
+            exit;
+        }
+
+        $user = $usersModel->findByLogin($login);
+        if ($user) {
+            $token = rand(100000, 999999);
+            $usersModel->saveResetToken($user['id'], $token);
+
+            $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+            try {
+                $mail->isSMTP();
+                $mail->Host       = 'glacier.mxrouting.net'; 
+                $mail->SMTPAuth   = true;
+                $mail->Username   = 'vendoradmin@exoticindia.com';   
+                $mail->Password   = 'xah5VfXUrdVaju576bpa';     
+                $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+                $mail->Port       = 587;
+
+                $mail->setFrom('vendoradmin@exoticindia.com', 'Admin');
+                $mail->addAddress($login); 
+
+                $mail->isHTML(true);
+                $mail->Subject = 'VendorDesk - Login OTP';
+                $htmlBody = "Your login OTP is: <b>$token</b>";
+                $mail->Body    = $htmlBody;
+
+                $mail->send();
+
+                echo json_encode(['success' => true, 'message' => 'OTP sent.', 'token' => $token]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'message' => 'Mailer Error: ' . $mail->ErrorInfo]);
+            }
+        } else {
+            echo json_encode(['success' => false, 'message' => 'User not found.']);
+        }
+        exit;
     }
 
     public function logout() {
