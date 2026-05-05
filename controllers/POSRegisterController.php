@@ -2334,7 +2334,8 @@ class POSRegisterController
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
         $storeId = $whId > 0 ? (string)$whId : '1';
         $txn = trim((string)($payload['transaction_id'] ?? ''));
-        $txnField = $txn !== '' ? $txn : '-';
+        // Exotic validates store_payment_details with gateway-style payment type, not UI mode labels.
+        $txnField = $txn !== '' ? $txn : ($paymentType === 'offline' ? 'OFFLINE' : '-');
 
         $out = [
             'payment_type' => $paymentType,
@@ -2361,7 +2362,7 @@ class POSRegisterController
             'szip' => trim((string)($payload['confirm_szip'] ?? '')),
             'scountry' => $scountry,
             'sphone' => trim((string)($payload['confirm_sphone'] ?? '')),
-            'store_payment_details' => $storeId . '|' . $posMode . '|' . $txnField,
+            'store_payment_details' => $storeId . '|' . $paymentType . '|' . $txnField,
         ];
 
         if ($paymentType === 'razorpay') {
