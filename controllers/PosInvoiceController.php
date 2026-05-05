@@ -137,6 +137,7 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
         $stmt->execute();
 
         echo json_encode(["success" => true]);
+        exit;
     }
 
     /* ===============================
