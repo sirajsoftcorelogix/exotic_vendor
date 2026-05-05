@@ -947,11 +947,7 @@
       return;
     }
     var d = window.__posLastOrderCreateDebug;
-    try {
-      pre.textContent = d ? JSON.stringify(d, null, 2) : "No order-create debug stored yet.";
-    } catch (e) {
-      pre.textContent = String(d);
-    }
+    pre.textContent = formatOrderCreateDebugText(d);
     panel.classList.remove("hidden");
   };
 
@@ -1139,12 +1135,50 @@
     if (!panel || !pre) {
       return;
     }
-    try {
-      pre.textContent = JSON.stringify(debug, null, 2);
-    } catch (e) {
-      pre.textContent = String(debug);
-    }
+    pre.textContent = formatOrderCreateDebugText(debug);
     panel.classList.remove("hidden");
+  }
+
+  function formatOrderCreateDebugText(debug) {
+    if (!debug) {
+      return "No order-create debug stored yet.";
+    }
+    var lines = [];
+    var request = debug.request || null;
+    var response = debug.response || null;
+    lines.push("at: " + String(debug.at || ""));
+    if (request) {
+      lines.push("");
+      lines.push("REQUEST");
+      lines.push("-------");
+      lines.push("endpoint: " + String(request.endpoint || "/order/create"));
+      lines.push("method: " + String(request.method || "POST"));
+      lines.push("query:");
+      try {
+        lines.push(JSON.stringify(request.query || {}, null, 2));
+      } catch (e1) {
+        lines.push(String(request.query || ""));
+      }
+      lines.push("body:");
+      try {
+        lines.push(JSON.stringify(request.body || {}, null, 2));
+      } catch (e2) {
+        lines.push(String(request.body || ""));
+      }
+    }
+    lines.push("");
+    lines.push("RESPONSE");
+    lines.push("--------");
+    lines.push("http_code: " + String((response && response.http_code) || debug.http_code || ""));
+    lines.push("data:");
+    try {
+      lines.push(JSON.stringify((response && response.data) || debug.data || {}, null, 2));
+    } catch (e3) {
+      lines.push(String((response && response.data) || debug.data || ""));
+    }
+    lines.push("raw_snippet:");
+    lines.push(String((response && response.raw_snippet) || debug.raw_snippet || ""));
+    return lines.join("\n");
   }
 </script>
 <script>
