@@ -1139,45 +1139,73 @@
     panel.classList.remove("hidden");
   }
 
+  function posBashQuote(v) {
+    return "'" + String(v == null ? "" : v).replace(/'/g, "'\"'\"'") + "'";
+  }
+
+  function buildOrderCreateCurl(request) {
+    if (!request) {
+      return "";
+    }
+    var endpoint = String(request.endpoint || "/order/create");
+    var query = request.query || {};
+    var body = request.body || {};
+    var queryParts = [];
+    Object.keys(query).forEach(function(k) {
+      if (query[k] != null && String(query[k]) !== "") {
+        queryParts.push(encodeURIComponent(k) + "=" + encodeURIComponent(String(query[k])));
+      }
+    });
+    var url = endpoint + (queryParts.length ? ("?" + queryParts.join("&")) : "");
+    var lines = [
+      "curl --location --request " + String(request.method || "POST").toUpperCase() + " " + posBashQuote(url),
+      "--header " + posBashQuote("Content-Type: application/x-www-form-urlencoded")
+    ];
+    Object.keys(body).forEach(function(k) {
+      lines.push("--data-urlencode " + posBashQuote(k + "=" + String(body[k] == null ? "" : body[k])));
+    });
+    return lines.join(" \\\n  ");
+  }
+
   function formatOrderCreateDebugText(debug) {
     if (!debug) {
       return "No order-create debug stored yet.";
     }
-    var lines = [];
     var request = debug.request || null;
     var response = debug.response || null;
+    var requestJsonObj = request || {
+      endpoint: "/order/create",
+      method: "POST",
+      query: {},
+      body: {}
+    };
+    var responseJsonObj = response || {
+      http_code: debug.http_code || "",
+      data: debug.data || {},
+      raw_snippet: debug.raw_snippet || ""
+    };
+    var lines = [];
     lines.push("at: " + String(debug.at || ""));
-    if (request) {
-      lines.push("");
-      lines.push("REQUEST");
-      lines.push("-------");
-      lines.push("endpoint: " + String(request.endpoint || "/order/create"));
-      lines.push("method: " + String(request.method || "POST"));
-      lines.push("query:");
-      try {
-        lines.push(JSON.stringify(request.query || {}, null, 2));
-      } catch (e1) {
-        lines.push(String(request.query || ""));
-      }
-      lines.push("body:");
-      try {
-        lines.push(JSON.stringify(request.body || {}, null, 2));
-      } catch (e2) {
-        lines.push(String(request.body || ""));
-      }
+    lines.push("");
+    lines.push("REQUEST JSON");
+    lines.push("------------");
+    try {
+      lines.push(JSON.stringify(requestJsonObj, null, 2));
+    } catch (e1) {
+      lines.push(String(requestJsonObj));
     }
     lines.push("");
-    lines.push("RESPONSE");
-    lines.push("--------");
-    lines.push("http_code: " + String((response && response.http_code) || debug.http_code || ""));
-    lines.push("data:");
+    lines.push("RESPONSE JSON");
+    lines.push("-------------");
     try {
-      lines.push(JSON.stringify((response && response.data) || debug.data || {}, null, 2));
-    } catch (e3) {
-      lines.push(String((response && response.data) || debug.data || ""));
+      lines.push(JSON.stringify(responseJsonObj, null, 2));
+    } catch (e2) {
+      lines.push(String(responseJsonObj));
     }
-    lines.push("raw_snippet:");
-    lines.push(String((response && response.raw_snippet) || debug.raw_snippet || ""));
+    lines.push("");
+    lines.push("CURL");
+    lines.push("----");
+    lines.push(buildOrderCreateCurl(requestJsonObj) || "N/A");
     return lines.join("\n");
   }
 </script>
