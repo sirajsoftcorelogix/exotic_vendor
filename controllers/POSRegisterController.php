@@ -2348,8 +2348,7 @@ class POSRegisterController
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
         $storeId = $whId > 0 ? (string)$whId : '1';
         $txn = trim((string)($payload['transaction_id'] ?? ''));
-        // Exotic validates store_payment_details with gateway-style payment type, not UI mode labels.
-        $txnField = $txn !== '' ? $txn : ($paymentType === 'offline' ? 'OFFLINE' : '-');
+        $txnField = $txn !== '' ? $txn : '-';
 
         $out = [
             'payment_type' => $paymentType,
@@ -2401,21 +2400,22 @@ class POSRegisterController
         return $out;
     }
 
-    /**
-     * Exotic India: India payment_type includes razorpay, cod, offline — POS counter sale uses offline (not COD).
-     * Cash at counter → offline; UPI/bank/POS/cheque → offline; razorpay → razorpay.
-     */
+    /** Use exact payment mode label expected by order/create payload. */
     private function mapPosPaymentModeToExoticPaymentType(string $posMode): string
     {
         $m = strtolower(trim($posMode));
-        if ($m === 'razorpay') {
-            return 'razorpay';
-        }
-        if (in_array($m, ['cash', 'upi', 'bank_transfer', 'pos_machine', 'cheque', 'offline', 'cod'], true)) {
-            return 'offline';
-        }
+        $map = [
+            'cash' => 'cash',
+            'upi' => 'UPI',
+            'bank_transfer' => 'bank_transfer',
+            'pos_machine' => 'pos_machine',
+            'cheque' => 'cheque',
+            'razorpay' => 'razorpay',
+            'cod' => 'cod',
+            'offline' => 'offline',
+        ];
 
-        return 'offline';
+        return $map[$m] ?? 'cash';
     }
 
     /**
