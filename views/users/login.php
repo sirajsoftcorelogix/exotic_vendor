@@ -1,9 +1,9 @@
-<?php 
+<?php
 global $domain, $root_path;
 ?>
-  
-<div class="flex flex-col md:flex-row w-full min-h-screen">  
- <!-- Left Panel -->
+
+<div class="flex flex-col md:flex-row w-full min-h-screen">
+    <!-- Left Panel -->
     <div class="w-full md:w-3/5 p-8 lg:p-12 text-white flex flex-col justify-center left-panel-bg left-panel-gradient">
         <div class="relative z-10 max-w-md mx-auto">
             <!-- Logo and Brand Name -->
@@ -31,60 +31,119 @@ global $domain, $root_path;
 
             <form id="loginForm">
                 <div id="loginError" style="color:red; margin-bottom:10px;"></div>
+                <div id="loginSuccess" style="color:green; margin-bottom:10px;"></div>
+                
                 <!-- Email Input -->
-                <div class="relative mb-4">
-                        <span class="absolute inset-y-0 left-0 flex items-center pl-3">
-                            <i class="fa-regular fa-envelope text-gray-400"></i>
-                        </span>
-                    <input type="email" id="login" name="login" placeholder="Email Address" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 transition duration-300">
+                <div class="relative mb-4" id="emailContainer">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+                        <i class="fa-regular fa-envelope text-gray-400"></i>
+                    </span>
+                    <input type="email" id="login" name="login" placeholder="Email Address" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 transition duration-300" required>
                 </div>
 
-                <!-- Password Input -->
-                <div class="relative mb-6">
-                        <span class="absolute inset-y-0 left-0 flex items-center pl-3">
-                            <i class="fa-solid fa-lock text-gray-400"></i>
-                        </span>
-                    <input type="password" id="password" name="password" placeholder="Password" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 transition duration-300">
+                <!-- OTP Input -->
+                <div class="relative mb-6" id="otpContainer" style="display: none;">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+                        <i class="fa-solid fa-key text-gray-400"></i>
+                    </span>
+                    <input type="text" id="otp" name="otp" placeholder="Enter OTP" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 transition duration-300">
                 </div>
 
-                <!-- Login Button -->
-                <button type="submit" class="w-full bg-[#D06706] text-white font-bold py-3 rounded-lg shadow-lg hover:bg-orange-700 transition duration-300">
+                <!-- Action Button -->
+                <button type="button" id="sendOtpBtn" class="w-full bg-[#D06706] text-white font-bold py-3 rounded-lg shadow-lg hover:bg-orange-700 transition duration-300">
+                    Send OTP
+                </button>
+                
+                <button type="submit" id="loginBtn" class="w-full bg-[#D06706] text-white font-bold py-3 rounded-lg shadow-lg hover:bg-orange-700 transition duration-300" style="display: none;">
                     Login
                 </button>
-
-                <!-- Forgot Password Link -->
-                <div class="text-center mt-3">                  
-                    <a href="<?php echo $domain; ?>/?page=users&action=forgotPassword" class="text-sm text-[#C2C2C2] hover:text-orange-600 transition duration-300">Forgot Password</a>
-                </div>
-                
             </form>
         </div>
     </div>
 </div>
 <script>
-  document.getElementById('loginForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    var login = document.getElementById('login').value.trim();
-    var password = document.getElementById('password').value;
-    var errorDiv = document.getElementById('loginError');
-    errorDiv.textContent = '';
-    fetch('?page=users&action=loginProcess', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'login=' + encodeURIComponent(login) + '&password=' + encodeURIComponent(password)
-    })
-    .then(response => response.json())
-    .then(data => {
-    if (data.success) {
-      var redirect = <?php echo json_encode(isset($_SESSION['redirect_after_login']) && $_SESSION['redirect_after_login'] ? $_SESSION['redirect_after_login'] : '?page=orders&action=list'); ?>;
-      window.location.href = redirect;
-      } else {
-        //alert('Login failed: ' + data.message);
-        errorDiv.textContent = data.message;
-      }
-    })
-    .catch(() => {
-      errorDiv.textContent = 'Login failed. Please try again.';
+    document.getElementById('sendOtpBtn').addEventListener('click', function(e) {
+        var login = document.getElementById('login').value.trim();
+        var errorDiv = document.getElementById('loginError');
+        var successDiv = document.getElementById('loginSuccess');
+        var btn = document.getElementById('sendOtpBtn');
+        errorDiv.textContent = '';
+        successDiv.textContent = '';
+        
+        if (!login) {
+            errorDiv.textContent = 'Please enter your email.';
+            return;
+        }
+        
+        btn.textContent = 'Sending...';
+        btn.disabled = true;
+
+        fetch('?page=users&action=sendLoginOtp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: 'login=' + encodeURIComponent(login)
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.textContent = 'Send OTP';
+                btn.disabled = false;
+                if (data.success) {
+                    successDiv.textContent = 'OTP sent to your email.';
+                    document.getElementById('login').readOnly = true;
+                    document.getElementById('login').classList.add('bg-gray-100');
+                    document.getElementById('sendOtpBtn').style.display = 'none';
+                    document.getElementById('otpContainer').style.display = 'block';
+                    document.getElementById('loginBtn').style.display = 'block';
+                    document.getElementById('otp').required = true;
+                } else {
+                    errorDiv.textContent = data.message;
+                }
+            })
+            .catch(() => {
+                btn.textContent = 'Send OTP';
+                btn.disabled = false;
+                errorDiv.textContent = 'Failed to send OTP. Please try again.';
+            });
     });
-  });
+
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var login = document.getElementById('login').value.trim();
+        var otp = document.getElementById('otp').value.trim();
+        var errorDiv = document.getElementById('loginError');
+        var successDiv = document.getElementById('loginSuccess');
+        errorDiv.textContent = '';
+        successDiv.textContent = '';
+
+        var btn = document.getElementById('loginBtn');
+        btn.textContent = 'Verifying...';
+        btn.disabled = true;
+
+        fetch('?page=users&action=loginProcess', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: 'login=' + encodeURIComponent(login) + '&otp=' + encodeURIComponent(otp)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    successDiv.textContent = 'Login successful! Redirecting...';
+                    var redirect = <?php echo json_encode(isset($_SESSION['redirect_after_login']) && $_SESSION['redirect_after_login'] ? $_SESSION['redirect_after_login'] : '?page=orders&action=list'); ?>;
+                    window.location.href = redirect;
+                } else {
+                    btn.textContent = 'Login';
+                    btn.disabled = false;
+                    errorDiv.textContent = data.message;
+                }
+            })
+            .catch(() => {
+                btn.textContent = 'Login';
+                btn.disabled = false;
+                errorDiv.textContent = 'Login failed. Please try again.';
+            });
+    });
 </script>

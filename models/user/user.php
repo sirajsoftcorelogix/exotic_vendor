@@ -31,6 +31,29 @@ class User
 
         return false;
     }
+
+    public function loginWithOtp($login, $otp)
+    {
+        $sql = "SELECT * FROM vp_users WHERE (email = ? OR phone = ?) AND remember_token = ? AND is_deleted = 0";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('sss', $login, $login, $otp);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows > 0) {
+            $user = $result->fetch_assoc();
+            @session_start();
+            $_SESSION['user'] = $user;
+            $_SESSION['user_id'] = (int)($user['id'] ?? 0);
+            $_SESSION['warehouse_id'] = $user['warehouse_id'];
+            assignAPIToken($user["id"]); // Insert Token for Chat
+            
+            // clear token
+            $this->saveResetToken($user['id'], null);
+            return true;
+        }
+
+        return false;
+    }
     public function logout()
     {
         session_start();

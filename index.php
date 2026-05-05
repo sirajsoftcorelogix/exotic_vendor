@@ -77,6 +77,9 @@ switch ($page) {
             case 'verifyResetToken':
                 $controller->verifyResetToken();
                 break;
+            case 'sendLoginOtp':
+                $controller->sendLoginOtp();
+                break;
             default:
                 $controller->index();
                 break;
