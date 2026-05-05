@@ -2348,7 +2348,7 @@ class POSRegisterController
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
         $storeId = $whId > 0 ? (string)$whId : '1';
         $txn = trim((string)($payload['transaction_id'] ?? ''));
-        $txnField = $txn !== '' ? $txn : '-';
+        $txnField = $txn !== '' ? $txn : '0';
 
         $out = [
             'payment_type' => $paymentType,
