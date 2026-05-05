@@ -17,8 +17,6 @@
   var posCustomDiscountPersist = null;
   /** Per cart line (cartref): line-level discount toward POST /order/pos_editorderprices after checkout. */
   var posLineAdjustByRef = {};
-  /** Expanded "Line discount" panel keyed by cartref. */
-  var posLineAdjustExpanded = {};
   /** Last successful cart retrieve root `data` (for instant re-render after line discount edits). */
   var lastRetrieveCartDataSnapshot = null;
 
@@ -709,7 +707,6 @@
 
   function pruneLineAdjustMaps(refsUsed) {
     var next = {};
-    var nextExp = {};
     for (var i = 0; i < refsUsed.length; i++) {
       var r = refsUsed[i];
       if (!r) {
@@ -718,12 +715,8 @@
       if (posLineAdjustByRef[r]) {
         next[r] = posLineAdjustByRef[r];
       }
-      if (posLineAdjustExpanded[r]) {
-        nextExp[r] = true;
-      }
     }
     posLineAdjustByRef = next;
-    posLineAdjustExpanded = nextExp;
   }
 
   /** Unit price from cart line (API fields vary). */
@@ -1083,6 +1076,36 @@
     return String(val);
   }
 
+  /** Display ₹ 1,234.56 (en-IN grouping). */
+  function formatRupeeInrDisplay(val) {
+    if (val == null || (typeof val === 'number' && isNaN(val))) {
+      return '\u2014';
+    }
+    var n = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, ''));
+    if (isNaN(n)) {
+      return String(val);
+    }
+    return (
+      '\u20b9 ' +
+      n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    );
+  }
+
+  function summaryAmountCell(val) {
+    var disp = formatMoneyDisplay(val);
+    if (disp == null) {
+      return '\u2014';
+    }
+    var n = parseFloat(String(disp).replace(/,/g, ''));
+    if (isNaN(n)) {
+      return escapeHtml(disp);
+    }
+    return (
+      '\u20b9 ' +
+      n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    );
+  }
+
   function isAmountGreaterThanZero(val) {
     if (val == null || val === '') {
       return false;
@@ -1097,22 +1120,22 @@
    */
   function moneyRowSummary(label, val, isGrand, removeBtnClass) {
     var disp = formatMoneyDisplay(val);
-    var text = disp == null ? '—' : disp;
+    var text = disp == null ? '\u2014' : summaryAmountCell(val);
     var hasRemove = !isGrand && removeBtnClass && String(removeBtnClass).trim() !== '';
     var rowClass = isGrand
-      ? 'flex justify-between items-baseline gap-3 text-base font-bold text-slate-900 pt-3 mt-2 border-t border-slate-200/90'
+      ? 'flex justify-between items-baseline gap-3 text-base font-bold text-slate-900 pt-3 mt-2 border-t border-dashed border-slate-300'
       : 'flex justify-between items-center gap-2 text-xs text-slate-600 py-1.5';
     var labelSpan =
       '<span class="' +
-      (isGrand ? 'text-slate-700' : 'text-slate-500 font-medium min-w-0 pr-1') +
+      (isGrand ? 'text-slate-800 font-bold' : 'text-slate-500 font-medium min-w-0 pr-1') +
       '">' +
       escapeHtml(label) +
       '</span>';
     var amountSpan =
       '<span class="tabular-nums ' +
-      (isGrand ? 'text-orange-700' : disp == null ? 'text-slate-400' : 'text-slate-800 font-semibold') +
+      (isGrand ? 'text-orange-600' : disp == null ? 'text-slate-400' : 'text-slate-800 font-semibold') +
       '">' +
-      escapeHtml(text) +
+      (disp == null ? escapeHtml('\u2014') : text) +
       '</span>';
     if (!hasRemove) {
       return '<div class="' + rowClass + '">' + labelSpan + amountSpan + '</div>';
@@ -1192,7 +1215,6 @@
     }
     if (!items.length) {
       posLineAdjustByRef = {};
-      posLineAdjustExpanded = {};
       lastRetrieveCartDataSnapshot = null;
     } else {
       pruneLineAdjustMaps(refsUsed);
@@ -1215,10 +1237,8 @@
         '<p class="text-[11px] text-slate-400 mt-1 max-w-[14rem]">Add products from the grid to see them here.</p>' +
         '</div>';
     } else {
-      html +=
-        '<div class="flex flex-col gap-2.5 pr-0.5">' +
-        '<p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-0.5">In cart</p>';
-      items.forEach(function (row) {
+      html += '<div class="flex flex-col pr-0.5">';
+      items.forEach(function (row, idx) {
         var ref = lineCartRef(row);
         var qty = lineQty(row);
         var maxSell = lineMaxSellableQty(row, data || {});
@@ -1231,19 +1251,46 @@
           listUNum != null ? computePosUnitFromList(listUNum, qty, ref) : null;
         var hasAdj =
           !!(ref && adjustmentIsActive(getLineAdjust(ref)));
-        var posLineStr =
-          posUNum != null ? formatMoneyDisplay(posUNum) : '';
-        var posExtStr =
-          posUNum != null ? formatMoneyDisplay(round2(posUNum * qty)) : '';
         var imgUrl = lineImageUrl(row);
         var productCode = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
+        var codeLbl = String(sub || productCode || '').trim() || '\u2014';
+        var effUnitNum =
+          posUNum != null
+            ? posUNum
+            : listUNum != null
+              ? listUNum
+              : parseMoneyValue(unitPrice);
+        var effLineNum =
+          posUNum != null
+            ? round2(posUNum * qty)
+            : parseMoneyValue(lineLineTotalStr(row, qty));
+        if ((effLineNum == null || isNaN(effLineNum)) && effUnitNum != null && !isNaN(effUnitNum)) {
+          effLineNum = round2(effUnitNum * qty);
+        }
+        var unitDisp =
+          effUnitNum != null && !isNaN(effUnitNum)
+            ? formatRupeeInrDisplay(effUnitNum)
+            : unitPrice
+              ? '\u20b9 ' + escapeHtml(String(unitPrice))
+              : '\u2014';
+        var lineDisp =
+          effLineNum != null && !isNaN(effLineNum)
+            ? formatRupeeInrDisplay(effLineNum)
+            : lineTotal
+              ? '\u20b9 ' + escapeHtml(String(lineTotal))
+              : '\u2014';
+        var betweenClass =
+          idx < items.length - 1 ? 'border-b border-dashed border-slate-300 pb-4 mb-4' : '';
+        html += '<div' + (betweenClass ? ' class="' + betweenClass + '"' : '') + '>';
         html +=
-          '<div class="pos-cart-line-item group flex gap-2.5 rounded-xl border border-slate-100 bg-white p-2 shadow-sm cursor-pointer transition-all hover:border-slate-200 hover:shadow-md active:scale-[0.99]" data-cart-row="1"' +
+          '<div class="pos-cart-line-item group flex flex-col gap-2"' +
+          ' data-cart-row="1"' +
           (productCode ? ' data-product-code="' + escapeHtml(productCode) + '"' : '') +
           ' role="button" tabindex="0" title="View product details">';
+        html += '<div class="flex gap-2.5">';
         if (imgUrl) {
           html +=
-            '<div class="shrink-0 w-16 h-16 self-start rounded-lg border border-slate-100 bg-gradient-to-br from-white to-slate-50 overflow-hidden ring-1 ring-slate-100 group-hover:ring-orange-100">' +
+            '<div class="shrink-0 w-14 h-14 rounded-md border border-slate-200 bg-white overflow-hidden">' +
             '<img src="' +
             escapeHtml(imgUrl) +
             '" alt="' +
@@ -1252,71 +1299,60 @@
             '</div>';
         } else {
           html +=
-            '<div class="shrink-0 w-16 h-16 self-start rounded-lg border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-base leading-none" title="No image">◇</div>';
+            '<div class="shrink-0 w-14 h-14 rounded-md border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-sm" title="No image">\u25c7</div>';
         }
-        html += '<div class="min-w-0 flex-1 flex flex-col gap-1">';
+        html += '<div class="min-w-0 flex-1 flex flex-col">';
+        html += '<div class="flex items-start justify-between gap-2">';
         html +=
-          '<div class="flex items-start justify-between gap-2">' +
-          '<div class="min-w-0 flex-1">' +
-          '<div class="text-[13px] font-semibold leading-tight text-slate-900 line-clamp-2">' +
-          escapeHtml(title) +
-          '</div>';
-        if (sub) {
+          '<span class="text-[11px] font-medium text-slate-500 tabular-nums">' +
+          escapeHtml(codeLbl) +
+          '</span>';
+        if (ref) {
           html +=
-            '<div class="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">' +
-            escapeHtml(sub) +
-            '</div>';
+            '<button type="button" class="pos-cart-delete-btn -mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600 shadow-sm transition hover:bg-red-100" data-cartref="' +
+            escapeHtml(ref) +
+            '" title="Remove from cart" aria-label="Remove from cart">' +
+            '<i class="fas fa-trash-alt text-[12px]" aria-hidden="true"></i></button>';
         }
         html += '</div>';
-        html += '<div class="shrink-0 text-right leading-tight">';
-        if (posLineStr !== '' && posLineStr !== null && posExtStr !== '' && posExtStr !== null) {
-          html +=
-            '<div class="text-[10px] text-slate-500 tabular-nums">' +
-            escapeHtml(String(qty)) +
-            ' \u00d7 ' +
-            escapeHtml(posLineStr) +
-            '</div>' +
-            '<div class="text-sm font-bold tabular-nums text-orange-700">' +
-            escapeHtml(posExtStr) +
-            '</div>';
-          if (
-            listUNum != null &&
-            posUNum != null &&
-            Math.abs(listUNum - posUNum) > 0.000001
-          ) {
-            html +=
-              '<div class="text-[9px] font-semibold uppercase text-amber-700 tabular-nums">Adj</div>';
-          }
-        } else if (unitPrice && lineTotal) {
-          html +=
-            '<div class="text-[10px] text-slate-500 tabular-nums">' +
-            escapeHtml(String(qty)) +
-            ' \u00d7 ' +
-            escapeHtml(unitPrice) +
-            '</div>' +
-            '<div class="text-sm font-bold tabular-nums text-orange-700">' +
-            escapeHtml(lineTotal) +
-            '</div>';
-        } else if (lineTotal) {
-          html += '<div class="text-sm font-bold tabular-nums text-slate-900">' + escapeHtml(lineTotal) + '</div>';
-        } else if (unitPrice) {
-          html += '<div class="text-xs font-semibold tabular-nums text-slate-800">' + escapeHtml(unitPrice) + '</div>';
-        }
+        html +=
+          '<div class="text-[13px] font-bold text-slate-900 leading-snug mt-0.5 pr-1 line-clamp-3">' +
+          escapeHtml(title) +
+          '</div>';
         html += '</div></div>';
-        html += '<div class="flex items-center justify-between gap-2 border-t border-slate-100 pt-1.5">';
+        html +=
+          '<div class="text-[13px] tabular-nums text-slate-800 mt-0.5 leading-relaxed">' +
+          unitDisp +
+          ' \u00d7 ' +
+          escapeHtml(String(qty)) +
+          ' = <span class="font-bold text-orange-600">' +
+          lineDisp +
+          '</span>';
+        if (
+          hasAdj &&
+          listUNum != null &&
+          posUNum != null &&
+          Math.abs(listUNum - posUNum) > 0.000001
+        ) {
+          html +=
+            ' <span class="text-[10px] font-semibold uppercase text-amber-700">Adj</span>';
+        }
+        html += '</div>';
+        html += '<div class="flex flex-wrap items-center gap-2 mt-1">';
         if (ref) {
           var maxAttr =
-            maxSell != null && maxSell >= 1 ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"' : '';
-          var hintInline =
             maxSell != null && maxSell >= 1
-              ? '<span class="text-[10px] text-slate-400 tabular-nums">\u00b7 max ' +
+              ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"'
+              : '';
+          var maxHint =
+            maxSell != null && maxSell >= 1
+              ? '<span class="text-[11px] text-slate-400 tabular-nums">Max ' +
                 escapeHtml(String(maxSell)) +
-                '/order</span>'
+                ' / Order</span>'
               : '';
           html +=
-            '<div class="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">' +
-            '<span class="text-[10px] font-medium text-slate-500">Qty</span>' +
-            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-11 rounded-md border border-slate-200 bg-white px-1 py-0.5 text-center text-xs font-semibold text-slate-800 shadow-sm outline-none transition focus:border-orange-400 focus:ring-1 focus:ring-orange-100"' +
+            '<span class="text-[11px] font-bold text-slate-600 tracking-wide">QTY :</span>' +
+            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-12 rounded border border-slate-300 bg-white px-1.5 py-1 text-center text-xs font-semibold text-slate-900 outline-none focus:border-orange-500"' +
             maxAttr +
             ' data-cartref="' +
             escapeHtml(ref) +
@@ -1325,18 +1361,13 @@
             '" title="' +
             (maxSell != null && maxSell >= 1 ? escapeHtml('Maximum ' + maxSell + ' per order') : '') +
             '" />' +
-            hintInline +
-            '</div>' +
-            '<button type="button" class="pos-cart-delete-btn inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-100 bg-red-50/80 text-red-700 transition hover:bg-red-100 hover:border-red-200" data-cartref="' +
-            escapeHtml(ref) +
-            '" title="Remove from cart" aria-label="Remove from cart">' +
-            '<i class="fas fa-trash-alt text-[12px]" aria-hidden="true"></i></button>';
+            maxHint;
         } else {
-          html += '<span class="text-[10px] text-amber-700">Missing cart reference — cannot update line.</span>';
+          html +=
+            '<span class="text-[10px] text-amber-700">Missing cart reference \u2014 cannot update line.</span>';
         }
         html += '</div>';
         if (ref) {
-          var exp = !!posLineAdjustExpanded[ref];
           var gadj = posLineAdjustByRef[ref] || { mode: 'percent', value: 0 };
           var curMode =
             String(gadj.mode) === 'fixed_line' ? 'fixed_line' : 'percent';
@@ -1347,59 +1378,23 @@
           if (isNaN(curVal) || curVal < 0) {
             curVal = 0;
           }
-          var lineTotAfterDisc =
-            posExtStr !== '' && posExtStr != null
-              ? posExtStr
-              : posUNum != null
-                ? formatMoneyDisplay(round2(posUNum * qty))
-                : null;
-          if (lineTotAfterDisc == null || lineTotAfterDisc === '') {
-            lineTotAfterDisc =
-              lineLineTotalStr(row, qty) ||
-              formatMoneyDisplay(
-                parseMoneyValue(pickFirst(row, ['line_total', 'amount', 'row_total']))
-              );
-          }
-          lineTotAfterDisc =
-            lineTotAfterDisc != null && String(lineTotAfterDisc).trim() !== ''
-              ? String(lineTotAfterDisc).trim()
-              : '\u2014';
           html +=
-            '<div class="pos-cart-line-adjust mt-2 border-t border-dashed border-slate-100 pt-2">' +
-            '<button type="button" class="pos-cart-line-adjust-toggle flex w-full items-center justify-between text-left text-[10px] font-semibold uppercase tracking-wide text-orange-700 hover:text-orange-900" data-cartref="' +
-            escapeHtml(ref) +
-            '" aria-expanded="' +
-            (exp ? 'true' : 'false') +
-            '">' +
-            '<span>Line discount' +
-            (hasAdj ? ' \u2022 Active' : '') +
-            '</span>' +
-            '<span class="tabular-nums text-slate-500">' +
-            (exp ? '\u2212' : '+') +
-            '</span>' +
-            '</button>' +
-            '<div class="pos-cart-line-adjust-body mt-2 space-y-2' +
-            (exp ? '' : ' hidden') +
-            '">' +
-            '<div class="flex flex-wrap items-end gap-2">' +
-            '<div class="min-w-[7rem] flex-1">' +
-            '<label class="block text-[9px] font-semibold uppercase text-slate-400">Discount</label>' +
-            '<select class="pos-cart-line-disc-mode mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800 shadow-sm" data-cartref="' +
+            '<div class="pos-cart-line-adjust mt-3">' +
+            '<div class="text-[11px] font-bold text-red-600 mb-1.5">Line Discount</div>' +
+            '<div class="flex flex-wrap items-stretch gap-2">' +
+            '<select class="pos-cart-line-disc-mode shrink-0 rounded border border-slate-300 bg-white px-2 py-2 text-xs font-medium text-slate-800 shadow-sm outline-none focus:border-orange-500" data-cartref="' +
             escapeHtml(ref) +
             '">' +
             '<option value="percent"' +
             (curMode === 'percent' ? ' selected' : '') +
-            '>% off</option>' +
+            '>% Off</option>' +
             '<option value="fixed_line"' +
             (curMode === 'fixed_line' ? ' selected' : '') +
             '>Fixed \u20b9 off line</option>' +
             '</select>' +
-            '</div>' +
-            '<div class="min-w-[5rem] flex-1">' +
-            '<label class="block text-[9px] font-semibold uppercase text-slate-400">Value</label>' +
             '<input type="number" step="0.01" min="0"' +
             (curMode === 'percent' ? ' max="100"' : '') +
-            ' class="pos-cart-line-disc-val mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs tabular-nums shadow-sm"' +
+            ' class="pos-cart-line-disc-val min-w-[4.5rem] flex-1 rounded border border-slate-300 bg-white px-2 py-2 text-xs tabular-nums shadow-sm outline-none focus:border-orange-500"' +
             ' data-cartref="' +
             escapeHtml(ref) +
             '" placeholder="' +
@@ -1407,16 +1402,12 @@
             '" value="' +
             (curVal > 0 ? escapeHtml(String(curVal)) : '') +
             '" />' +
-            '</div></div>' +
-            '<div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/90 px-2.5 py-2">' +
-            '<span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Line total (after discount)</span>' +
-            '<span class="text-sm font-bold tabular-nums text-orange-700">\u20b9' +
-            escapeHtml(lineTotAfterDisc) +
-            '</span>' +
-            '</div>' +
-            '<button type="button" class="pos-cart-line-disc-reset rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50" data-cartref="' +
+            '<button type="button" class="pos-cart-line-disc-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800" data-cartref="' +
             escapeHtml(ref) +
-            '">Reset</button>' +
+            '">Apply</button>' +
+            '<button type="button" class="pos-cart-line-disc-reset shrink-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50" data-cartref="' +
+            escapeHtml(ref) +
+            '">Clear</button>' +
             '</div></div>';
         }
         html += '</div></div>';
@@ -1433,20 +1424,12 @@
       totals.grandTotal != null;
     if (showSummary) {
       html +=
-        '<div class="mt-4 rounded-xl border border-slate-100 bg-slate-50/90 p-3 shadow-inner">' +
-        '<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-0.5">Summary</p>' +
-        '<div class="rounded-lg bg-white/90 px-2 py-1 ring-1 ring-slate-100/80">';
+        '<div class="mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">' +
+        '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Summary</p>' +
+        '<div class="space-y-0.5">';
       html += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
-      html += moneyRowSummary('GST', totals.gstTotal, false);
-      if (isAmountGreaterThanZero(totals.couponDeduction)) {
-        var couponLbl =
-          totals.couponDisplayName && String(totals.couponDisplayName).trim() !== ''
-            ? 'Coupon (' + String(totals.couponDisplayName).trim() + ')'
-            : 'Coupon';
-        html += moneyRowSummary(couponLbl, totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
-      }
       if (isAmountGreaterThanZero(totals.customDeduction)) {
-        var cdLbl = 'Custom discount';
+        var cdLbl = 'Custom Discount';
         if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'percent') {
           cdLbl += ' (' + formatPctLabel(posCustomDiscountPersist.value) + ')';
         } else if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'fixed') {
@@ -1454,37 +1437,43 @@
         }
         html += moneyRowSummary(cdLbl, totals.customDeduction, false, 'pos-cart-summary-remove-custom');
       }
-      html += moneyRowSummary('Grand total', totals.grandTotal, true);
+      if (isAmountGreaterThanZero(totals.couponDeduction)) {
+        var couponLbl =
+          totals.couponDisplayName && String(totals.couponDisplayName).trim() !== ''
+            ? 'Coupon (' + String(totals.couponDisplayName).trim() + ')'
+            : 'Coupon';
+        html += moneyRowSummary(couponLbl, totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
+      }
+      html += moneyRowSummary('GST Total', totals.gstTotal, false);
+      html += moneyRowSummary('GRAND Total', totals.grandTotal, true);
       html += '</div></div>';
     }
 
     html +=
-      '<div class="mt-4 rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-3">' +
-      '<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Discounts</p>' +
-      '<div class="space-y-1.5">' +
-      '<label class="text-xs font-medium text-slate-600">Coupon</label>' +
-      '<div class="flex gap-2 flex-wrap">' +
-      '<input type="text" class="pos-cart-coupon-input flex-1 min-w-[6rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Coupon code" />' +
-      '<button type="button" class="pos-cart-coupon-apply shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 active:scale-[0.98]">Apply</button>' +
-      '<button type="button" class="pos-cart-coupon-clear shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50">Clear</button>' +
-      '</div></div>' +
-      '<div class="space-y-1.5 border-t border-slate-100 pt-3">' +
-      '<label class="text-xs font-medium text-slate-600">Custom discount</label>' +
+      '<div class="mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-3">' +
+      '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discount</p>' +
+      '<div class="space-y-1">' +
       '<div class="flex gap-2 flex-wrap items-stretch">' +
-      '<select class="pos-cart-customdisc-mode shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-700 shadow-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100" aria-label="Discount type">' +
+      '<input type="text" class="pos-cart-coupon-input flex-1 min-w-[8rem] rounded border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-orange-500 placeholder:text-slate-400" placeholder="Discount Coupon" />' +
+      '<button type="button" class="pos-cart-coupon-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800">Apply</button>' +
+      '<button type="button" class="pos-cart-coupon-clear shrink-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Clear</button>' +
+      '</div></div>' +
+      '<div class="space-y-1 border-t border-slate-100 pt-3">' +
+      '<div class="flex flex-wrap items-stretch gap-2">' +
+      '<select class="pos-cart-customdisc-mode shrink-0 rounded border border-slate-300 bg-white px-2 py-2 text-xs font-medium text-slate-800 shadow-sm outline-none focus:border-orange-500" aria-label="Discount type">' +
+      '<option value="percent">% Off</option>' +
       '<option value="fixed">Fixed (₹)</option>' +
-      '<option value="percent">Percent (%)</option>' +
       '</select>' +
-      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input flex-1 min-w-[5rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Amount (₹)" />' +
-      '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 active:scale-[0.98]">Set</button>' +
-      '<button type="button" class="pos-cart-customdisc-clear inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700" title="Remove custom discount" aria-label="Remove custom discount">' +
+      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input min-w-[5rem] flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-xs shadow-sm outline-none focus:border-orange-500 placeholder:text-slate-400" placeholder="Amount" />' +
+      '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800">Apply</button>' +
+      '<button type="button" class="pos-cart-customdisc-clear inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700" title="Remove custom discount" aria-label="Remove custom discount">' +
       '<i class="fas fa-trash-alt text-sm" aria-hidden="true"></i></button>' +
       '</div></div></div>';
 
     if (items.length > 0) {
       html +=
-        '<div class="mt-3 flex justify-center">' +
-        '<button type="button" class="pos-cart-checkout-btn rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">Proceed to payment</button>' +
+        '<div class="mt-4">' +
+        '<button type="button" class="pos-cart-checkout-btn w-full rounded-lg bg-orange-600 py-3 text-sm font-bold uppercase tracking-wide text-white shadow-md transition hover:bg-orange-700 active:scale-[0.99]">Place order</button>' +
         '</div>';
     }
 
@@ -1507,9 +1496,11 @@
     panel.innerHTML = html;
     var modeSel = panel.querySelector('.pos-cart-customdisc-mode');
     var inpDisc = panel.querySelector('.pos-cart-customdisc-input');
-    if (modeSel && inpDisc && posCustomDiscountPersist) {
-      modeSel.value = posCustomDiscountPersist.mode === 'percent' ? 'percent' : 'fixed';
-      inpDisc.value = String(posCustomDiscountPersist.value);
+    if (modeSel && inpDisc) {
+      if (posCustomDiscountPersist) {
+        modeSel.value = posCustomDiscountPersist.mode === 'percent' ? 'percent' : 'fixed';
+        inpDisc.value = String(posCustomDiscountPersist.value);
+      }
       if (modeSel.value === 'percent') {
         inpDisc.setAttribute('max', '100');
         inpDisc.setAttribute('step', '0.01');
@@ -1577,21 +1568,8 @@
           if (!panelLine || !panelLine.contains(t)) {
             return;
           }
-          var refM = String(t.getAttribute('data-cartref') || '').trim();
-          var wrapLm = refM ? t.closest('.pos-cart-line-adjust') : null;
+          var wrapLm = t.closest('.pos-cart-line-adjust');
           var inpLm = wrapLm ? wrapLm.querySelector('.pos-cart-line-disc-val') : null;
-          var numLm = inpLm ? parseFloat(String(inpLm.value)) : NaN;
-          numLm = isNaN(numLm) || numLm < 0 ? 0 : numLm;
-        if (refM) {
-          if (numLm > 0) {
-            posLineAdjustByRef[refM] =
-              String(t.value) === 'fixed_line'
-                ? { mode: 'fixed_line', value: numLm }
-                : { mode: 'percent', value: numLm > 100 ? 100 : numLm };
-          } else {
-            delete posLineAdjustByRef[refM];
-          }
-        }
           if (inpLm) {
             if (t.value === 'percent') {
               inpLm.setAttribute('max', '100');
@@ -1601,32 +1579,6 @@
               inpLm.placeholder = '\u20b9';
             }
           }
-          renderCartUI(lastRetrieveCartDataSnapshot || {});
-          return;
-        }
-        if (t.matches('.pos-cart-line-disc-val')) {
-          if (!panelLine || !panelLine.contains(t)) {
-            return;
-          }
-          var refV = String(t.getAttribute('data-cartref') || '').trim();
-          var wrapLv = refV ? t.closest('.pos-cart-line-adjust') : null;
-          var selV = wrapLv ? wrapLv.querySelector('.pos-cart-line-disc-mode') : null;
-          var modeV = selV && String(selV.value) === 'fixed_line' ? 'fixed_line' : 'percent';
-          var vv = parseFloat(String(t.value));
-          vv = isNaN(vv) || vv < 0 ? 0 : vv;
-          if (modeV === 'percent' && vv > 100) {
-            vv = 100;
-            t.value = String(vv);
-          }
-          if (!refV) {
-            return;
-          }
-          if (vv > 0) {
-            posLineAdjustByRef[refV] = { mode: modeV, value: vv };
-          } else {
-            delete posLineAdjustByRef[refV];
-          }
-          renderCartUI(lastRetrieveCartDataSnapshot || {});
           return;
         }
 
@@ -1711,19 +1663,37 @@
           window.applyCustomDiscount(0);
           return;
         }
-        var discTog = e.target && e.target.closest ? e.target.closest('.pos-cart-line-adjust-toggle') : null;
-        if (discTog && panel.contains(discTog)) {
+        var discApply = e.target && e.target.closest ? e.target.closest('.pos-cart-line-disc-apply') : null;
+        if (discApply && panel.contains(discApply)) {
           e.preventDefault();
-          var rT = String(discTog.getAttribute('data-cartref') || '').trim();
-          if (rT) {
-            posLineAdjustExpanded[rT] = !posLineAdjustExpanded[rT];
-            renderCartUI(lastRetrieveCartDataSnapshot || {});
+          e.stopPropagation();
+          var rA = String(discApply.getAttribute('data-cartref') || '').trim();
+          var wrapA = discApply.closest('.pos-cart-line-adjust');
+          var selA = wrapA ? wrapA.querySelector('.pos-cart-line-disc-mode') : null;
+          var inpA = wrapA ? wrapA.querySelector('.pos-cart-line-disc-val') : null;
+          if (!rA) {
+            return;
           }
+          var modeA = selA && String(selA.value) === 'fixed_line' ? 'fixed_line' : 'percent';
+          var vA = inpA ? parseFloat(String(inpA.value)) : NaN;
+          vA = isNaN(vA) || vA < 0 ? 0 : vA;
+          if (vA <= 0) {
+            delete posLineAdjustByRef[rA];
+            renderCartUI(lastRetrieveCartDataSnapshot || {});
+            return;
+          }
+          if (modeA === 'percent' && vA > 100) {
+            toast('Percentage must be between 0 and 100.', 'red');
+            return;
+          }
+          posLineAdjustByRef[rA] = { mode: modeA, value: modeA === 'percent' && vA > 100 ? 100 : vA };
+          renderCartUI(lastRetrieveCartDataSnapshot || {});
           return;
         }
         var discRst = e.target && e.target.closest ? e.target.closest('.pos-cart-line-disc-reset') : null;
         if (discRst && panel.contains(discRst)) {
           e.preventDefault();
+          e.stopPropagation();
           var rR = String(discRst.getAttribute('data-cartref') || '').trim();
           if (rR) {
             delete posLineAdjustByRef[rR];
