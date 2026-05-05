@@ -412,6 +412,7 @@ class OrdersController
                 //customer id add
                 $rdata['customer_id'] = $customerdata['customer_id'] ?? 0;
                 $rdata['store_name'] = $order['store_name'] ?? '';
+                $rdata['custom_reduce'] = $order['custom_reduce'] ?? 0;
                 $totalorder++;
 
                 $data = $ordersModel->insertOrder($rdata);

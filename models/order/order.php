@@ -578,7 +578,8 @@ class Order
             'shippingfee',
             'sourcingfee',
             'customer_id',
-            'store_name'
+            'store_name',
+            'custom_reduce'
         ];
 
         // Build SQL query
