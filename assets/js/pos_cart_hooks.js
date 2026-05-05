@@ -1347,12 +1347,23 @@
           if (isNaN(curVal) || curVal < 0) {
             curVal = 0;
           }
-          var listDisp =
-            listUNum != null && formatMoneyDisplay(listUNum) != null
-              ? formatMoneyDisplay(listUNum)
-              : escapeHtml(unitPrice || '—');
-          var posDisp =
-            posUNum != null && formatMoneyDisplay(posUNum) != null ? formatMoneyDisplay(posUNum) : '—';
+          var lineTotAfterDisc =
+            posExtStr !== '' && posExtStr != null
+              ? posExtStr
+              : posUNum != null
+                ? formatMoneyDisplay(round2(posUNum * qty))
+                : null;
+          if (lineTotAfterDisc == null || lineTotAfterDisc === '') {
+            lineTotAfterDisc =
+              lineLineTotalStr(row, qty) ||
+              formatMoneyDisplay(
+                parseMoneyValue(pickFirst(row, ['line_total', 'amount', 'row_total']))
+              );
+          }
+          lineTotAfterDisc =
+            lineTotAfterDisc != null && String(lineTotAfterDisc).trim() !== ''
+              ? String(lineTotAfterDisc).trim()
+              : '\u2014';
           html +=
             '<div class="pos-cart-line-adjust mt-2 border-t border-dashed border-slate-100 pt-2">' +
             '<button type="button" class="pos-cart-line-adjust-toggle flex w-full items-center justify-between text-left text-[10px] font-semibold uppercase tracking-wide text-orange-700 hover:text-orange-900" data-cartref="' +
@@ -1370,12 +1381,6 @@
             '<div class="pos-cart-line-adjust-body mt-2 space-y-2' +
             (exp ? '' : ' hidden') +
             '">' +
-            '<div class="rounded-md bg-slate-50/90 px-2 py-1.5 text-[10px] text-slate-600">' +
-            '<span class="font-semibold text-slate-500">Price</span> · List \u20b9' +
-            escapeHtml(String(listDisp)) +
-            '/unit \u00b7 POS \u20b9' +
-            escapeHtml(String(posDisp)) +
-            '/unit</div>' +
             '<div class="flex flex-wrap items-end gap-2">' +
             '<div class="min-w-[7rem] flex-1">' +
             '<label class="block text-[9px] font-semibold uppercase text-slate-400">Discount</label>' +
@@ -1403,6 +1408,12 @@
             (curVal > 0 ? escapeHtml(String(curVal)) : '') +
             '" />' +
             '</div></div>' +
+            '<div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/90 px-2.5 py-2">' +
+            '<span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Line total (after discount)</span>' +
+            '<span class="text-sm font-bold tabular-nums text-orange-700">\u20b9' +
+            escapeHtml(lineTotAfterDisc) +
+            '</span>' +
+            '</div>' +
             '<button type="button" class="pos-cart-line-disc-reset rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50" data-cartref="' +
             escapeHtml(ref) +
             '">Reset</button>' +
