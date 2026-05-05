@@ -564,7 +564,7 @@
           <input type="number" step="0.01" min="0" id="payment_amount" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 tabular-nums" placeholder="0.00">
         </div>
         <div>
-          <label class="text-xs text-slate-500">Transaction ID</label>
+          <label id="transaction_id_label" class="text-xs text-slate-500">Transaction ID</label>
           <input type="text" id="transaction_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" placeholder="Required for Razorpay">
           <p id="transaction_id_required_hint" class="hidden mt-1 text-[11px] text-amber-700">Razorpay requires a transaction ID.</p>
         </div>
@@ -1223,11 +1223,20 @@
 
     var paymentModeSelect = document.getElementById("payment_mode");
     var txnRequiredHint = document.getElementById("transaction_id_required_hint");
+    var txnLabel = document.getElementById("transaction_id_label");
+    var txnInput = document.getElementById("transaction_id");
     function syncRazorpayTxnHint() {
       if (!paymentModeSelect || !txnRequiredHint) {
         return;
       }
-      txnRequiredHint.classList.toggle("hidden", paymentModeSelect.value !== "razorpay");
+      var mode = String(paymentModeSelect.value || "").toLowerCase();
+      txnRequiredHint.classList.toggle("hidden", mode !== "razorpay");
+      if (txnLabel) {
+        txnLabel.textContent = mode === "cheque" ? "Cheque Number" : "Transaction ID";
+      }
+      if (txnInput) {
+        txnInput.placeholder = mode === "cheque" ? "Enter cheque number" : "Required for Razorpay";
+      }
     }
     if (paymentModeSelect) {
       paymentModeSelect.addEventListener("change", syncRazorpayTxnHint);

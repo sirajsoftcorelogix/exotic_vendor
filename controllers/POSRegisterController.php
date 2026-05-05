@@ -2324,7 +2324,8 @@ class POSRegisterController
     private function buildOrderCreatePostFromPayload(array $payload, array $cartData): array
     {
         $posMode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
-        $paymentType = $this->mapPosPaymentModeToExoticPaymentType($posMode);
+        $storePaymentMode = $this->mapPosPaymentModeToExoticPaymentType($posMode);
+        $paymentType = 'offline';
 
         /** Exact string from GET /cart/retrieve JSON — posted as-is (only URL-encoded as form field by HTTP client). */
         $checkoutdata = $this->extractCheckoutDataStringFromCart($cartData);
@@ -2375,10 +2376,10 @@ class POSRegisterController
             'szip' => trim((string)($payload['confirm_szip'] ?? '')),
             'scountry' => $scountry,
             'sphone' => trim((string)($payload['confirm_sphone'] ?? '')),
-            'store_payment_details' => $storeId . '|' . $paymentType . '|' . $txnField,
+            'store_payment_details' => $storeId . '|' . $storePaymentMode . '|' . $txnField,
         ];
 
-        if ($paymentType === 'razorpay') {
+        if ($storePaymentMode === 'razorpay') {
             $rzPay = trim((string)($payload['razorpay_payment_id'] ?? $txn));
             if ($rzPay !== '') {
                 $out['razorpay_payment_id'] = $rzPay;
