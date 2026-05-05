@@ -525,7 +525,7 @@ class Customer
             return false;
         }
 
-        $types = 'i' . str_repeat('s', 14);
+        $types = 'i' . str_repeat('s', 13);
         $stmt->bind_param(
             $types,
             $customerId,
