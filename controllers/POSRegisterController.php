@@ -2345,6 +2345,10 @@ class POSRegisterController
         if ($scountry === '') {
             $scountry = 'IN';
         }
+        $email = trim((string)($payload['confirm_email'] ?? ''));
+        if ($email === '') {
+            $email = 'dummy-' . time() . '@exoticindia.com';
+        }
 
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
         $storeId = $whId > 0 ? (string)$whId : '1';
@@ -2359,7 +2363,7 @@ class POSRegisterController
             'codcharges' => '0.00',
             'first_name' => trim((string)($payload['confirm_first_name'] ?? '')),
             'last_name' => trim((string)($payload['confirm_last_name'] ?? '')),
-            'email' => trim((string)($payload['confirm_email'] ?? '')),
+            'email' => $email,
             'address1' => trim((string)($payload['confirm_address1'] ?? '')),
             'address2' => trim((string)($payload['confirm_address2'] ?? '')),
             'city' => trim((string)($payload['confirm_city'] ?? '')),

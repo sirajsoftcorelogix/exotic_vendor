@@ -1,4 +1,4 @@
-<?php 
+<?php
 require_once 'models/order/order.php';
 require_once 'models/comman/tables.php';
 require_once 'models/invoice/invoice.php';
@@ -7,15 +7,17 @@ $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $invoiceModel = new Invoice($conn);
 
-class OrdersAPIController { 
-    
+class OrdersAPIController
+{
+
     /**
      * Validate API token from Authorization header or query parameter
      * Accepts Bearer token or token query parameter
      * 
      * @return bool True if token is valid, false otherwise
      */
-    private function validateApiToken() {
+    private function validateApiToken()
+    {
         // Get token from Authorization header or query parameter
         $token = null;
 
@@ -53,14 +55,15 @@ class OrdersAPIController {
      * @param string $token The API token to validate
      * @return bool True if token is valid, false otherwise
      */
-    public function isValidToken($token) {
+    public function isValidToken($token)
+    {
         global $conn;
 
         // Validate token against order_api_tokens table
         // Assuming a table structure: order_api_tokens (id, user_id, token, created_at, expires_at, is_active)
         $sql = "SELECT id, user_id, is_active, expires_at FROM order_api_tokens WHERE token = ? AND is_active = 1 LIMIT 1";
         $stmt = $conn->prepare($sql);
-        
+
         if (!$stmt) {
             return false;
         }
@@ -71,7 +74,7 @@ class OrdersAPIController {
 
         if ($result && $result->num_rows > 0) {
             $row = $result->fetch_assoc();
-            
+
             // Check if token has expired
             if ($row['expires_at'] && strtotime($row['expires_at']) < time()) {
                 // Token has expired
@@ -92,7 +95,8 @@ class OrdersAPIController {
      * @param int $expiryDays Number of days token is valid (default: 365)
      * @return array Token details or error
      */
-    public function generateApiToken($user_id = null, $expiryDays = 365) {
+    public function generateApiToken($user_id = null, $expiryDays = 365)
+    {
         global $conn;
 
         // If no user_id provided, use current session user
@@ -106,7 +110,7 @@ class OrdersAPIController {
 
         // Generate unique token
         $token = bin2hex(random_bytes(32));
-        
+
         // Calculate expiry date
         $expiryDate = date('Y-m-d H:i:s', time() + ($expiryDays * 86400));
 
@@ -119,7 +123,7 @@ class OrdersAPIController {
         }
 
         $stmt->bind_param('iss', $user_id, $token, $expiryDate);
-        
+
         if ($stmt->execute()) {
             return [
                 'success' => true,
@@ -147,17 +151,18 @@ class OrdersAPIController {
      * 
      * Returns JSON response
      */
-    public function updateOrderStatus() {
+    public function updateOrderStatus()
+    {
         global $ordersModel, $commanModel;
         header('Content-Type: application/json');
-        
+
         // Validate API token
         if (!$this->validateApiToken()) {
             http_response_code(401);
             echo json_encode(['success' => false, 'message' => 'Unauthorized: Invalid or missing API token.']);
             exit;
         }
-        
+
         // Validate request method
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
@@ -218,24 +223,24 @@ class OrdersAPIController {
             $order_item_id = null;
             $previous_status = null;
 
-            foreach($order as $item) {
+            foreach ($order as $item) {
                 $matches = true;
-                
+
                 // Check if item_code matches
                 if ($item['sku'] !== $item_code && $item['item_code'] !== $item_code) {
                     $matches = false;
                 }
-                
+
                 // Check color if provided
                 if ($matches && $color !== NULL && isset($item['color']) && $item['color'] !== $color) {
                     $matches = false;
                 }
-                
+
                 // Check size if provided
                 if ($matches && $size !== NULL && isset($item['size']) && $item['size'] !== $size) {
                     $matches = false;
                 }
-                
+
                 if ($matches) {
                     $order_item_found = true;
                     $order_id = $item['id'];
@@ -248,9 +253,9 @@ class OrdersAPIController {
                 http_response_code(404);
                 echo json_encode([
                     'success' => false,
-                    'message' => 'Order item not found. Item Code: ' . $item_code . 
-                                (($color) ? ', Color: ' . $color : '') .
-                                (($size) ? ', Size: ' . $size : '')
+                    'message' => 'Order item not found. Item Code: ' . $item_code .
+                        (($color) ? ', Color: ' . $color : '') .
+                        (($size) ? ', Size: ' . $size : '')
                 ]);
                 exit;
             }
@@ -324,7 +329,8 @@ class OrdersAPIController {
      * 
      * Returns JSON response with results
      */
-    public function bulkUpdateOrderStatus() {
+    public function bulkUpdateOrderStatus()
+    {
         global $ordersModel, $commanModel;
         header('Content-Type: application/json');
 
@@ -354,7 +360,7 @@ class OrdersAPIController {
         }
         $order_numbers = (array)$order_numbers;
         $order_numbers = array_filter($order_numbers); // Remove empty values
-        
+
         $status = isset($input['status']) ? trim($input['status']) : '';
 
         if (empty($order_numbers)) {
@@ -387,7 +393,7 @@ class OrdersAPIController {
                     $results['errors'][] = "Order not found with number: {$order_number}";
                     continue;
                 }
-                foreach($order AS $key=>$value){
+                foreach ($order as $key => $value) {
                     $order_id = (int)$value['id'];
 
                     $update_data = ['status' => $status];
@@ -435,7 +441,8 @@ class OrdersAPIController {
      * 
      * Returns JSON with status history
      */
-    public function getOrderStatusHistory() {
+    public function getOrderStatusHistory()
+    {
         global $ordersModel, $commanModel;
         header('Content-Type: application/json');
 
@@ -502,7 +509,8 @@ class OrdersAPIController {
      * 
      * Returns JSON response with token
      */
-    public function generateToken() {
+    public function generateToken()
+    {
         global $conn;
         header('Content-Type: application/json');
 
@@ -530,7 +538,7 @@ class OrdersAPIController {
             // Authenticate user by email or phone
             $sql = "SELECT id, email, phone, password FROM vp_users WHERE (email = ? OR phone = ?) AND is_deleted = 0 LIMIT 1";
             $stmt = $conn->prepare($sql);
-            
+
             if (!$stmt) {
                 http_response_code(500);
                 echo json_encode(['success' => false, 'message' => 'Database error']);
@@ -543,7 +551,7 @@ class OrdersAPIController {
 
             if ($result && $result->num_rows > 0) {
                 $user = $result->fetch_assoc();
-                
+
                 // Verify password
                 // Note: Depending on your password storage, you may need to adjust this
                 // If passwords are hashed with password_hash(), use: password_verify($password, $user['password'])
@@ -574,7 +582,7 @@ class OrdersAPIController {
 
         try {
             $result = $this->generateApiToken($user_id, $expiryDays);
-            
+
             if ($result['success']) {
                 http_response_code(200);
                 echo json_encode($result);
@@ -601,7 +609,8 @@ class OrdersAPIController {
      * 
      * Returns JSON response with vouchers in BUSY format
      */
-    public function fetchVouchers() {
+    public function fetchVouchers()
+    {
         global $invoiceModel;
         header('Content-Type: application/json');
 
@@ -612,34 +621,118 @@ class OrdersAPIController {
             exit;
         }
 
-        // Get date parameter
-        $date = isset($_GET['date']) ? trim($_GET['date']) : (isset($_POST['date']) ? trim($_POST['date']) : '');
+        // Get date parameters
+        $startDate = isset($_GET['start_date']) ? trim($_GET['start_date']) : (isset($_POST['start_date']) ? trim($_POST['start_date']) : '');
+        $endDate = isset($_GET['end_date']) ? trim($_GET['end_date']) : (isset($_POST['end_date']) ? trim($_POST['end_date']) : '');
+        $singleDate = isset($_GET['date']) ? trim($_GET['date']) : (isset($_POST['date']) ? trim($_POST['date']) : '');
+
+        // Pagination parameters
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : (isset($_POST['page_no']) ? (int)$_POST['page_no'] : 1);
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : (isset($_POST['limit']) ? (int)$_POST['limit'] : 50);
+
+        if ($page < 1) $page = 1;
+        if ($limit < 1 || $limit > 1000) $limit = 50;
+        $offset = ($page - 1) * $limit;
+
+        if (empty($startDate) && empty($endDate) && !empty($singleDate)) {
+            $startDate = $singleDate;
+            $endDate = $singleDate;
+        }
 
         // Validate date format (YYYY-MM-DD)
-        if (empty($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        if ((!empty($startDate) && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate)) ||
+            (!empty($endDate) && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate))
+        ) {
             http_response_code(400);
             echo json_encode([
                 'success' => false,
-                'message' => 'Invalid or missing date parameter. Required format: YYYY-MM-DD'
+                'message' => 'Invalid date parameter. Required format: YYYY-MM-DD'
             ]);
             exit;
         }
 
         try {
-            // Fetch all invoices for the specified date
-            $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.customer_id, i.total_amount, 
-                           i.subtotal, i.tax_amount, i.discount_amount, i.status, c.name, c.email, c.phone
-                    FROM vp_invoices i
-                    LEFT JOIN vp_customers c ON i.customer_id = c.id
-                    WHERE DATE(i.invoice_date) = ?
-                    ORDER BY i.invoice_date DESC";
-            
-            $stmt = $GLOBALS['conn']->prepare($sql);
-            if (!$stmt) {
-                throw new Exception('Database error: Unable to prepare statement');
+            //exotic_address
+            $exoticAddressSql = "SELECT * FROM firm_details LIMIT 1";
+            $exoticAddressStmt = $GLOBALS['conn']->prepare($exoticAddressSql);
+            $exoticAddressStmt->execute();
+            $exoticAddressResult = $exoticAddressStmt->get_result();
+            $firmDetail = $exoticAddressResult->fetch_assoc();
+
+            $whereClauses = [];
+            if (!empty($startDate) && !empty($endDate)) {
+                $whereClauses[] = "DATE(i.invoice_date) BETWEEN ? AND ?";
+            } elseif (!empty($startDate)) {
+                $whereClauses[] = "DATE(i.invoice_date) >= ?";
+            } elseif (!empty($endDate)) {
+                $whereClauses[] = "DATE(i.invoice_date) <= ?";
             }
 
-            $stmt->bind_param('s', $date);
+            $whereSql = "";
+            if (!empty($whereClauses)) {
+                $whereSql = "WHERE " . implode(" AND ", $whereClauses);
+            }
+
+            // Get total count for pagination
+            $countSql = "SELECT COUNT(*) as total FROM vp_invoices i $whereSql";
+            $countStmt = $GLOBALS['conn']->prepare($countSql);
+            if (!$countStmt) {
+                throw new Exception('Database error: Unable to prepare count statement');
+            }
+
+            if (!empty($startDate) && !empty($endDate)) {
+                $countStmt->bind_param('ss', $startDate, $endDate);
+            } elseif (!empty($startDate)) {
+                $countStmt->bind_param('s', $startDate);
+            } elseif (!empty($endDate)) {
+                $countStmt->bind_param('s', $endDate);
+            }
+
+            $countStmt->execute();
+            $countResult = $countStmt->get_result();
+            $totalRecords = $countResult->fetch_assoc()['total'] ?? 0;
+            $totalPages = ceil($totalRecords / $limit);
+
+            // Fetch invoices with pagination
+            $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.customer_id, i.total_amount, 
+                           i.subtotal, i.tax_amount, i.discount_amount, i.status, 
+                           c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, c.city, c.zipcode, c.state, c.country, c.gstin,
+                           ea.address_title,                           
+                           ea.address                          
+                    FROM vp_invoices i
+                    LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id
+                    left join exotic_address as ea on i.warehouse_id = ea.id
+                    $whereSql
+                    ORDER BY i.invoice_date DESC
+                    LIMIT ? OFFSET ?";
+            $stmt = $GLOBALS['conn']->prepare($sql);
+            //echo $sql;
+            if (!$stmt) {
+                // If the column doesn't exist, we fallback to a safer query
+                $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.customer_id, i.total_amount, 
+                               i.subtotal, i.tax_amount, i.discount_amount, i.status, 
+                               c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, c.city, c.zipcode, c.state, c.country, c.gstin
+                        FROM vp_invoices i
+                        LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id
+                        $whereSql
+                        ORDER BY i.invoice_date DESC
+                        LIMIT ? OFFSET ?";
+                $stmt = $GLOBALS['conn']->prepare($sql);
+                if (!$stmt) {
+                    throw new Exception('Database error: Unable to prepare statement');
+                }
+            }
+
+            if (!empty($startDate) && !empty($endDate)) {
+                $stmt->bind_param('ssii', $startDate, $endDate, $limit, $offset);
+            } elseif (!empty($startDate)) {
+                $stmt->bind_param('sii', $startDate, $limit, $offset);
+            } elseif (!empty($endDate)) {
+                $stmt->bind_param('sii', $endDate, $limit, $offset);
+            } else {
+                $stmt->bind_param('ii', $limit, $offset);
+            }
+
             $stmt->execute();
             $result = $stmt->get_result();
 
@@ -657,61 +750,68 @@ class OrdersAPIController {
                     $itemsStmt->execute();
                     $itemsResult = $itemsStmt->get_result();
 
-                    $vchItems = [];
+                    $itemDetails = [];
                     $totalAmount = 0;
 
                     while ($item = $itemsResult->fetch_assoc()) {
                         $itemAmount = floatval($item['line_total'] ?? 0);
                         $totalAmount += $itemAmount;
 
-                        $vchItem = [
-                            'gstRate' => floatval($item['tax_rate'] ?? 0),
-                            'amount' => round($itemAmount, 2),
-                            'hsnCode' => $item['hsn'] ?? '',
-                            'baseUnits' => 'PCS',
-                            'rate' => floatval($item['unit_price'] ?? 0),
-                            'actualQty' => 0.0,
-                            'qty' => floatval($item['quantity'] ?? 0),
-                            'stockItem' => $item['item_name'] ?? '',
-                            'godown' => 'Main Location',
-                            'partNo' => $item['item_code'] ?? '',
-                            'disc' => 0.0,
-                            'batchDetails' => [
-                                [
-                                    'batch' => '',
-                                    'godown' => 'Main Location',
-                                    'qty' => floatval($item['quantity'] ?? 0),
-                                    'disc' => 0.0,
-                                    'rate' => floatval($item['unit_price'] ?? 0),
-                                    'amount' => round($itemAmount, 2)
-                                ]
-                            ]
+                        $itemDetails[] = [
+                            'Item Name'   => $item['item_name'] ?? '',
+                            'HSN Code'    => $item['hsn'] ?? '',
+                            'Qty'         => floatval($item['quantity'] ?? 0),
+                            'Unit'        => 'PCS', // Default unit if not present
+                            'MRP'         => floatval($item['unit_price'] ?? 0),
+                            'Sales Price' => floatval($item['unit_price'] ?? 0),
+                            'Amount'      => round($itemAmount, 2),
+                            'GST Rate'    => floatval($item['tax_rate'] ?? 0),
+                            'Discount'    => 0.0
                         ];
-
-                        $vchItems[] = $vchItem;
                     }
 
                     // Format date as DD-MMM-YYYY (e.g., 16-Mar-2026)
                     $formattedDate = date('d-M-Y', strtotime($invoice['invoice_date']));
 
+                    $shippingDetails = [
+                        'Party Name' => $invoice['first_name'] ?? '' . ' ' . $invoice['last_name'] ?? '',
+                        'Address'    => $invoice['address_line1'] ?? '' . ' ' . $invoice['address_line2'] ?? '',
+                        'PinCode'    => $invoice['zipcode'] ?? '',
+                        'State'      => $invoice['state'] ?? '',
+                        'Country'    => $invoice['country'] ?? 'INDIA',
+                        'Email ID'   => $invoice['email'] ?? '',
+                        'Mobile No.' => $invoice['mobile'] ?? '',
+                        'GSTIN'      => $invoice['gstin'] ?? ''
+                    ];
+
+                    $billSundryDetails = [];
+                    if (floatval($invoice['tax_amount']) > 0) {
+                        $billSundryDetails[] = [
+                            'Bill Sundry Name' => 'GST',
+                            'Percentage' => 0.0,
+                            'Amount' => round(floatval($invoice['tax_amount']), 2)
+                        ];
+                    }
+                    if (floatval($invoice['discount_amount']) > 0) {
+                        $billSundryDetails[] = [
+                            'Bill Sundry Name' => 'Discount',
+                            'Percentage' => 0.0,
+                            'Amount' => -round(floatval($invoice['discount_amount']), 2)
+                        ];
+                    }
+
                     $voucher = [
-                        'externalId' => (string)$invoice['id'],
-                        'narration' => '',
-                        'partyName' => $invoice['name'] ?? '',
-                        'partyAccountCode' => '',
-                        'partyGSTN' => '',
-                        'partyState' => '',
-                        'partyCountry' => 'INDIA',
-                        'partyPincode' => '',
-                        'shipToPlace' => '',
-                        'billToPlace' => '',
-                        'partyEmail' => $invoice['email'] ?? '',
-                        'partyMobile' => $invoice['phone'] ?? '',
-                        'vchDate' => $formattedDate,
-                        'amount' => round($totalAmount, 2),
-                        'vchType' => 'Sales',
-                        'InvoiceNumber' => $invoice['invoice_number'] ?? '',
-                        'vchItems' => $vchItems
+                        'Series Name'         => 'Main Company',
+                        'VchDate'             => $formattedDate,
+                        'VchNo.'              => $invoice['invoice_number'] ?? '',
+                        'Sales Type'          => 'Sales',
+                        'Party Name'          => $firmDetail['firm_name'] ?? '',
+                        'GSTIN'               => $firmDetail['gstin'] ?? '',
+                        'Material Centre'     => $invoice['address_title'] ?? 'Main Location',
+                        'Narration'           => '',
+                        'Shipping Details'    => $shippingDetails,
+                        'Item Details'        => $itemDetails,
+                        'Bill Sundry Details' => $billSundryDetails
                     ];
 
                     $vouchers[] = $voucher;
@@ -727,19 +827,21 @@ class OrdersAPIController {
             //     $company = $companyRow['setting_value'] ?? 'Main Company';
             // }
 
-            // Build response in BUSY JSON format
+            // Build response in JSON format
             $response = [
-                $company => [
-                    'company' => strtoupper(str_replace(' ', '_', $company)),
-                    'godown' => 'Main Location',
-                    'totalVouchers' => count($vouchers),
-                    'vouchers' => $vouchers
+                'company' => strtoupper(str_replace(' ', '_', $company)),
+                'totalVouchers' => count($vouchers),
+                'vouchers' => $vouchers,
+                'pagination' => [
+                    'total_records' => $totalRecords,
+                    'total_pages' => $totalPages,
+                    'current_page' => $page,
+                    'limit' => $limit
                 ]
             ];
 
             http_response_code(200);
             echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode([
@@ -751,4 +853,3 @@ class OrdersAPIController {
         exit;
     }
 }
-?>
