@@ -2153,11 +2153,25 @@ class POSRegisterController
             $ctx['extraHeaders']
         );
 
+        $requestBodyDebug = $this->summarizeOrderCreateDebugBody($postBody);
         $_SESSION['pos_order_create_api_debug'] = [
             'at' => gmdate('c'),
+            // Backward-compatible fields used by existing UI.
             'http_code' => (int)($createRes['code'] ?? 0),
             'data' => $createRes['data'] ?? [],
             'raw_snippet' => substr((string)($createRes['raw'] ?? ''), 0, 12000),
+            // Rich request/response blocks for checkout popup debug.
+            'request' => [
+                'endpoint' => '/order/create',
+                'method' => 'POST',
+                'query' => $ctx['query'] ?? [],
+                'body' => $requestBodyDebug,
+            ],
+            'response' => [
+                'http_code' => (int)($createRes['code'] ?? 0),
+                'data' => $createRes['data'] ?? [],
+                'raw_snippet' => substr((string)($createRes['raw'] ?? ''), 0, 12000),
+            ],
         ];
 
         if (!$this->isExoticCartSuccess($createRes)) {
@@ -2428,6 +2442,26 @@ class POSRegisterController
         }
 
         return '';
+    }
+
+    /**
+     * Keep order/create debug readable in popup; checkoutdata can be very large.
+     *
+     * @param array<string, string> $postBody
+     *
+     * @return array<string, string|int>
+     */
+    private function summarizeOrderCreateDebugBody(array $postBody): array
+    {
+        $debugBody = $postBody;
+        $checkoutRaw = (string)($postBody['checkoutdata'] ?? '');
+        $len = strlen($checkoutRaw);
+        if ($len > 1200) {
+            $debugBody['checkoutdata'] = substr($checkoutRaw, 0, 1200) . ' ... [truncated]';
+        }
+        $debugBody['checkoutdata_length'] = $len;
+
+        return $debugBody;
     }
 
     private function extractExoticOrderNumberFromCreateResponse(array $data): string
