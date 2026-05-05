@@ -504,7 +504,7 @@ class Customer
         $sql = 'INSERT INTO pos_customer_details (
             customer_id, bill_line1, bill_line2, bill_city, bill_state, bill_country, bill_pin,
             ship_line1, ship_line2, ship_city, ship_state, ship_country, ship_pin, gstin
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE
             bill_line1 = VALUES(bill_line1),
             bill_line2 = VALUES(bill_line2),
