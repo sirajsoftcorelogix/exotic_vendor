@@ -697,10 +697,8 @@ class OrdersAPIController
             $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.customer_id, i.total_amount, 
                            i.subtotal, i.tax_amount, i.discount_amount, i.status, 
                            c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, c.city, c.zipcode, c.state, c.country, c.gstin,
-                           ea.address_title,
-                           ea.display_name,
-                           ea.address,
-                           ea.address_type
+                           ea.address_title,                           
+                           ea.address                          
                     FROM vp_invoices i
                     LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id
                     left join exotic_address as ea on i.warehouse_id = ea.id
