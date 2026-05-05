@@ -2342,6 +2342,53 @@ class POSRegisterController
             exit;
         }
 
+        $posLinePrices = $payload['pos_line_prices'] ?? null;
+        if (is_array($posLinePrices) && count($posLinePrices) > 0) {
+            if (count($posLinePrices) !== count($items)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Line price payload does not match the current cart (' . count($posLinePrices) . ' rows vs '
+                        . count($items) . ' items). Refresh the cart and try again.',
+                    'order_number' => $orderNumber,
+                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'] ?? null,
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+            foreach ($posLinePrices as $ln) {
+                if (!is_array($ln)) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Invalid line price row. Refresh the cart and try again.',
+                        'order_number' => $orderNumber,
+                    ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                    exit;
+                }
+                if (trim((string)($ln['itemcode'] ?? '')) === '') {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Line price payload is missing item code for one or more rows.',
+                        'order_number' => $orderNumber,
+                    ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                    exit;
+                }
+            }
+            $editRes = $this->exoticPosEditOrderPrices($orderNumber, $posLinePrices);
+            if (!$this->isExoticCartSuccess($editRes)) {
+                $em = $this->extractExoticCartUserMessage($editRes);
+                if ($em === '') {
+                    $em = 'HTTP ' . (int)($editRes['code'] ?? 0);
+                }
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order ' . $orderNumber . ' was created but Exotic rejected line prices: ' . $em
+                        . ' You may need to fix prices manually or retry before recording payment locally.',
+                    'order_number' => $orderNumber,
+                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'] ?? null,
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+        }
+
         $short = pos_payment_resolve_short_code_for_warehouse($conn, (int)($_SESSION['warehouse_id'] ?? 0));
         try {
             $receiptNo = pos_payment_generate_next_receipt_number($conn, $short);
@@ -2618,6 +2665,31 @@ class POSRegisterController
         $debugBody['checkoutdata_length'] = $len;
 
         return $debugBody;
+    }
+
+    /**
+     * POST /api/order/pos_editorderprices — POS item-level unit prices after order/create.
+     *
+     * @param list<array{itemcode?: string, size?: string, color?: string, price?: string}> $lines
+     *
+     * @return array{data: mixed, code: int, raw: string}
+     */
+    private function exoticPosEditOrderPrices(string $orderId, array $lines): array
+    {
+        $post = ['orderid' => $orderId];
+        $i = 0;
+        foreach ($lines as $ln) {
+            if (!is_array($ln)) {
+                continue;
+            }
+            $post['itemcode[' . $i . ']'] = trim((string)($ln['itemcode'] ?? ''));
+            $post['size[' . $i . ']'] = trim((string)($ln['size'] ?? ''));
+            $post['color[' . $i . ']'] = trim((string)($ln['color'] ?? ''));
+            $post['price[' . $i . ']'] = trim((string)($ln['price'] ?? ''));
+            ++$i;
+        }
+
+        return $this->exotic_api_call('/order/pos_editorderprices', 'POST', [], $post);
     }
 
     private function extractExoticOrderNumberFromCreateResponse(array $data): string
