@@ -1442,14 +1442,46 @@ class POSRegisterController
                 }
                 $split = $this->buildExoticCartAddSplit(is_array($body) ? $body : []);
                 $ctxAdd = $this->exoticCartDiscountContext();
-                $this->emitCartApiResponse($this->exotic_api_call(
+                $addRes = $this->exotic_api_call(
                     '/cart/add',
                     'POST',
                     $split['query'],
                     $split['post'],
                     null,
                     $ctxAdd['extraHeaders']
-                ));
+                );
+                // Some catalogue rows fail with parent-code + variation but succeed with direct variant SKU.
+                // Retry once with a safer payload shape before returning error to UI.
+                if (!$this->isExoticCartSuccess($addRes)) {
+                    $retryPost = $split['post'];
+                    $retryNeeded = false;
+                    $stockCheckCode = trim((string)($retryPost['stock_check_code'] ?? ''));
+                    $baseCode = trim((string)($retryPost['code'] ?? ''));
+                    if ($stockCheckCode !== '' && strcasecmp($stockCheckCode, $baseCode) !== 0) {
+                        $retryPost['code'] = $stockCheckCode;
+                        if (isset($retryPost['variation'])) {
+                            unset($retryPost['variation']);
+                        }
+                        $retryNeeded = true;
+                    } elseif (!empty($retryPost['variation'])) {
+                        unset($retryPost['variation']);
+                        $retryNeeded = true;
+                    }
+                    if ($retryNeeded) {
+                        $retryRes = $this->exotic_api_call(
+                            '/cart/add',
+                            'POST',
+                            $split['query'],
+                            $retryPost,
+                            null,
+                            $ctxAdd['extraHeaders']
+                        );
+                        if ($this->isExoticCartSuccess($retryRes)) {
+                            $addRes = $retryRes;
+                        }
+                    }
+                }
+                $this->emitCartApiResponse($addRes);
                 return;
 
             case 'modifyqty':
@@ -1687,31 +1719,45 @@ class POSRegisterController
      */
     private function extractExoticCartUserMessage(array $res): string
     {
-        $d = $res['data'] ?? null;
-        if (is_array($d)) {
-            foreach (['message', 'Message', 'error', 'Error', 'errormessage', 'msg'] as $k) {
-                if (!empty($d[$k]) && is_string($d[$k])) {
-                    $t = trim($d[$k]);
+        $pickMessageFromArray = null;
+        $pickMessageFromArray = static function (array $arr) use (&$pickMessageFromArray): string {
+            foreach (['message', 'Message', 'error', 'Error', 'errormessage', 'msg', 'reason', 'detail'] as $k) {
+                if (!empty($arr[$k]) && is_string($arr[$k])) {
+                    $t = trim($arr[$k]);
                     if ($t !== '') {
                         return $t;
                     }
                 }
             }
-            foreach (['data', 'result', 'payload'] as $wrap) {
-                if (!empty($d[$wrap]) && is_array($d[$wrap])) {
-                    $inner = $d[$wrap];
-                    foreach (['message', 'error', 'Message', 'errormessage'] as $k) {
-                        if (!empty($inner[$k]) && is_string($inner[$k])) {
-                            $t = trim($inner[$k]);
-                            if ($t !== '') {
-                                return $t;
-                            }
-                        }
+            foreach (['data', 'result', 'payload', 'response'] as $wrap) {
+                if (!empty($arr[$wrap]) && is_array($arr[$wrap])) {
+                    $innerMsg = $pickMessageFromArray($arr[$wrap]);
+                    if ($innerMsg !== '') {
+                        return $innerMsg;
                     }
                 }
             }
+
+            return '';
+        };
+
+        $d = $res['data'] ?? null;
+        if (is_array($d)) {
+            $msg = $pickMessageFromArray($d);
+            if ($msg !== '') {
+                return $msg;
+            }
         }
         $raw = trim((string)($res['raw'] ?? ''));
+        if ($raw !== '' && strpos($raw, '{') !== false) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $msg = $pickMessageFromArray($decoded);
+                if ($msg !== '') {
+                    return $msg;
+                }
+            }
+        }
         if ($raw !== '' && strlen($raw) < 400 && strpos($raw, '<') === false) {
             return $raw;
         }

@@ -233,10 +233,30 @@
       return;
     }
     if (!r.success) {
-      var msg =
-        r.message ||
-        (r.data && (r.data.message || r.data.error || r.data.errormessage)) ||
-        ('Request failed (HTTP ' + (r.http_code || '') + ')');
+      var msg = '';
+      if (r.message) {
+        msg = String(r.message);
+      } else if (r.data && (r.data.message || r.data.error || r.data.errormessage || r.data.reason)) {
+        msg = String(r.data.message || r.data.error || r.data.errormessage || r.data.reason);
+      } else if (r.raw) {
+        try {
+          var parsedRaw = JSON.parse(String(r.raw));
+          if (parsedRaw && typeof parsedRaw === 'object') {
+            msg = String(
+              parsedRaw.message ||
+                parsedRaw.error ||
+                parsedRaw.errormessage ||
+                parsedRaw.reason ||
+                ''
+            );
+          }
+        } catch (e0) {
+          // keep fallback below
+        }
+      }
+      if (!msg) {
+        msg = 'Request failed (HTTP ' + (r.http_code || '') + ')';
+      }
       if (String(r.raw || '').length && String(msg).length < 3) {
         msg = 'Cart API error — check response';
       }
