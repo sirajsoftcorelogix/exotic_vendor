@@ -564,7 +564,7 @@
           <input type="number" step="0.01" min="0" id="payment_amount" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 tabular-nums" placeholder="0.00">
         </div>
         <div>
-          <label class="text-xs text-slate-500">Transaction ID</label>
+          <label id="transaction_id_label" class="text-xs text-slate-500">Transaction ID</label>
           <input type="text" id="transaction_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" placeholder="Required for Razorpay">
           <p id="transaction_id_required_hint" class="hidden mt-1 text-[11px] text-amber-700">Razorpay requires a transaction ID.</p>
         </div>
@@ -947,11 +947,7 @@
       return;
     }
     var d = window.__posLastOrderCreateDebug;
-    try {
-      pre.textContent = d ? JSON.stringify(d, null, 2) : "No order-create debug stored yet.";
-    } catch (e) {
-      pre.textContent = String(d);
-    }
+    pre.textContent = formatOrderCreateDebugText(d);
     panel.classList.remove("hidden");
   };
 
@@ -1139,12 +1135,78 @@
     if (!panel || !pre) {
       return;
     }
-    try {
-      pre.textContent = JSON.stringify(debug, null, 2);
-    } catch (e) {
-      pre.textContent = String(debug);
-    }
+    pre.textContent = formatOrderCreateDebugText(debug);
     panel.classList.remove("hidden");
+  }
+
+  function posBashQuote(v) {
+    return "'" + String(v == null ? "" : v).replace(/'/g, "'\"'\"'") + "'";
+  }
+
+  function buildOrderCreateCurl(request) {
+    if (!request) {
+      return "";
+    }
+    var endpoint = String(request.endpoint || "/order/create");
+    var query = request.query || {};
+    var body = request.body || {};
+    var queryParts = [];
+    Object.keys(query).forEach(function(k) {
+      if (query[k] != null && String(query[k]) !== "") {
+        queryParts.push(encodeURIComponent(k) + "=" + encodeURIComponent(String(query[k])));
+      }
+    });
+    var url = endpoint + (queryParts.length ? ("?" + queryParts.join("&")) : "");
+    var lines = [
+      "curl --location --request " + String(request.method || "POST").toUpperCase() + " " + posBashQuote(url),
+      "--header " + posBashQuote("Content-Type: application/x-www-form-urlencoded")
+    ];
+    Object.keys(body).forEach(function(k) {
+      lines.push("--data-urlencode " + posBashQuote(k + "=" + String(body[k] == null ? "" : body[k])));
+    });
+    return lines.join(" \\\n  ");
+  }
+
+  function formatOrderCreateDebugText(debug) {
+    if (!debug) {
+      return "No order-create debug stored yet.";
+    }
+    var request = debug.request || null;
+    var response = debug.response || null;
+    var requestJsonObj = request || {
+      endpoint: "/order/create",
+      method: "POST",
+      query: {},
+      body: {}
+    };
+    var responseJsonObj = response || {
+      http_code: debug.http_code || "",
+      data: debug.data || {},
+      raw_snippet: debug.raw_snippet || ""
+    };
+    var lines = [];
+    lines.push("at: " + String(debug.at || ""));
+    lines.push("");
+    lines.push("REQUEST JSON");
+    lines.push("------------");
+    try {
+      lines.push(JSON.stringify(requestJsonObj, null, 2));
+    } catch (e1) {
+      lines.push(String(requestJsonObj));
+    }
+    lines.push("");
+    lines.push("RESPONSE JSON");
+    lines.push("-------------");
+    try {
+      lines.push(JSON.stringify(responseJsonObj, null, 2));
+    } catch (e2) {
+      lines.push(String(responseJsonObj));
+    }
+    lines.push("");
+    lines.push("CURL");
+    lines.push("----");
+    lines.push(buildOrderCreateCurl(requestJsonObj) || "N/A");
+    return lines.join("\n");
   }
 </script>
 <script>
@@ -1161,11 +1223,20 @@
 
     var paymentModeSelect = document.getElementById("payment_mode");
     var txnRequiredHint = document.getElementById("transaction_id_required_hint");
+    var txnLabel = document.getElementById("transaction_id_label");
+    var txnInput = document.getElementById("transaction_id");
     function syncRazorpayTxnHint() {
       if (!paymentModeSelect || !txnRequiredHint) {
         return;
       }
-      txnRequiredHint.classList.toggle("hidden", paymentModeSelect.value !== "razorpay");
+      var mode = String(paymentModeSelect.value || "").toLowerCase();
+      txnRequiredHint.classList.toggle("hidden", mode !== "razorpay");
+      if (txnLabel) {
+        txnLabel.textContent = mode === "cheque" ? "Cheque Number" : "Transaction ID";
+      }
+      if (txnInput) {
+        txnInput.placeholder = mode === "cheque" ? "Enter cheque number" : "Required for Razorpay";
+      }
     }
     if (paymentModeSelect) {
       paymentModeSelect.addEventListener("change", syncRazorpayTxnHint);
