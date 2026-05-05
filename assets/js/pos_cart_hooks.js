@@ -152,6 +152,152 @@
     return '?' + qs;
   }
 
+  /** @param {unknown} v @param {number} [depth] */
+  function extractMessageFromUnknown(v, depth) {
+    depth = depth || 0;
+    if (depth > 12) {
+      return '';
+    }
+    if (v == null) {
+      return '';
+    }
+    if (typeof v === 'string') {
+      var ts = v.trim();
+      return ts || '';
+    }
+    if (typeof v === 'number' && !isNaN(v)) {
+      return String(v);
+    }
+    if (typeof v !== 'object') {
+      return '';
+    }
+    if (Array.isArray(v)) {
+      var parts = [];
+      for (var i = 0; i < v.length && parts.length < 5; i++) {
+        var ps = extractMessageFromUnknown(v[i], depth + 1);
+        if (ps) {
+          parts.push(ps);
+        }
+      }
+      return parts.join('; ');
+    }
+    var o = /** @type {Record<string, unknown>} */ (v);
+    var msgKeys = [
+      'message',
+      'Message',
+      'error',
+      'Error',
+      'errormessage',
+      'msg',
+      'reason',
+      'detail',
+      'description',
+      'error_description',
+      'title',
+      'text',
+      'errorMessage',
+      'UserMessage',
+      'userMessage',
+      'statusMessage',
+      'StatusMessage',
+      'exceptionMessage'
+    ];
+    for (var ki = 0; ki < msgKeys.length; ki++) {
+      var mk = msgKeys[ki];
+      if (o[mk] == null || o[mk] === '') {
+        continue;
+      }
+      var got = extractMessageFromUnknown(o[mk], depth + 1);
+      if (got) {
+        return got;
+      }
+    }
+    var errKeys = ['errors', 'Errors', 'validation', 'ValidationErrors'];
+    for (var ei = 0; ei < errKeys.length; ei++) {
+      if (o[errKeys[ei]] == null) {
+        continue;
+      }
+      var g2 = extractMessageFromUnknown(o[errKeys[ei]], depth + 1);
+      if (g2) {
+        return g2;
+      }
+    }
+    var wraps = ['data', 'result', 'payload', 'response'];
+    for (var wi = 0; wi < wraps.length; wi++) {
+      var wk = wraps[wi];
+      if (!o[wk] || typeof o[wk] !== 'object') {
+        continue;
+      }
+      var g3 = extractMessageFromUnknown(o[wk], depth + 1);
+      if (g3) {
+        return g3;
+      }
+    }
+    for (var sk in o) {
+      if (!Object.prototype.hasOwnProperty.call(o, sk)) {
+        continue;
+      }
+      var sub = o[sk];
+      if (!sub || typeof sub !== 'object') {
+        continue;
+      }
+      var g4 = extractMessageFromUnknown(sub, depth + 1);
+      if (g4) {
+        return g4;
+      }
+    }
+    for (var sk2 in o) {
+      if (!Object.prototype.hasOwnProperty.call(o, sk2)) {
+        continue;
+      }
+      if (typeof o[sk2] !== 'string') {
+        continue;
+      }
+      var t2 = String(o[sk2]).trim();
+      if (t2) {
+        return t2;
+      }
+    }
+    return '';
+  }
+
+  /**
+   * @param {{ message?: unknown, data?: unknown, raw?: string }} parsedLike
+   */
+  function extractCartApiUserMessage(parsedLike) {
+    if (!parsedLike || typeof parsedLike !== 'object') {
+      return '';
+    }
+    var pl = /** @type {Record<string, unknown>} */ (parsedLike);
+    if (pl.message != null && pl.message !== '') {
+      var fromTop = extractMessageFromUnknown(pl.message, 0);
+      if (fromTop) {
+        return fromTop;
+      }
+    }
+    if (pl.data != null && typeof pl.data === 'object') {
+      var fromData = extractMessageFromUnknown(pl.data, 0);
+      if (fromData) {
+        return fromData;
+      }
+    }
+    if (pl.raw) {
+      var raw = String(pl.raw);
+      if (raw.indexOf('{') !== -1) {
+        try {
+          var inner = JSON.parse(raw);
+          var fromRaw = extractMessageFromUnknown(inner, 0);
+          if (fromRaw) {
+            return fromRaw;
+          }
+        } catch (eRaw) {
+          /* ignore */
+        }
+      }
+    }
+    return '';
+  }
+
   function cartRequest(op, opt) {
     opt = opt || {};
     var method = (opt.method || 'GET').toUpperCase();
@@ -181,12 +327,16 @@
         var r;
         try {
           var parsed = cleaned ? JSON.parse(cleaned) : {};
+          var extractedMsg = extractCartApiUserMessage(parsed);
           r = {
             success: !!parsed.success,
             http_code: parsed.http_code != null ? parsed.http_code : res.status,
             data: parsed.data || {},
             raw: parsed.raw || '',
-            message: parsed.message || (parsed.data && parsed.data.message) || ''
+            message:
+              (parsed.message && String(parsed.message).trim()) ||
+              extractedMsg ||
+              ''
           };
         } catch (e) {
           r = {
@@ -233,27 +383,13 @@
       return;
     }
     if (!r.success) {
-      var msg = '';
-      if (r.message) {
-        msg = String(r.message);
-      } else if (r.data && (r.data.message || r.data.error || r.data.errormessage || r.data.reason)) {
-        msg = String(r.data.message || r.data.error || r.data.errormessage || r.data.reason);
-      } else if (r.raw) {
-        try {
-          var parsedRaw = JSON.parse(String(r.raw));
-          if (parsedRaw && typeof parsedRaw === 'object') {
-            msg = String(
-              parsedRaw.message ||
-                parsedRaw.error ||
-                parsedRaw.errormessage ||
-                parsedRaw.reason ||
-                ''
-            );
-          }
-        } catch (e0) {
-          // keep fallback below
-        }
-      }
+      var msg =
+        (r.message && String(r.message).trim()) ||
+        extractCartApiUserMessage({
+          message: r.message,
+          data: r.data,
+          raw: r.raw
+        });
       if (!msg) {
         msg = 'Request failed (HTTP ' + (r.http_code || '') + ')';
       }

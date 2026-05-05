@@ -1705,11 +1705,125 @@ class POSRegisterController
                 return false;
             }
         }
-        if (isset($d['error']) && (is_string($d['error']) ? trim($d['error']) !== '' : $d['error'] === true)) {
-            return false;
+        if (isset($d['error'])) {
+            $ev = $d['error'];
+            if ($ev === true) {
+                return false;
+            }
+            if (is_string($ev) && trim($ev) !== '') {
+                return false;
+            }
+            if (is_array($ev) && $ev !== []) {
+                return false;
+            }
         }
 
         return true;
+    }
+
+    /**
+     * Turn API "error" payloads (string, list, or nested assoc) into one user-visible line.
+     *
+     * @param mixed $value
+     */
+    private function humanizeExoticApiMixedValue($value, int $depth = 0): string
+    {
+        if ($depth > 10) {
+            return '';
+        }
+        if (is_string($value)) {
+            $t = trim($value);
+
+            return $t;
+        }
+        if (is_int($value) || is_float($value)) {
+            return trim((string)$value);
+        }
+        if (!is_array($value)) {
+            return '';
+        }
+        if ($value === []) {
+            return '';
+        }
+        // List: join first few human-readable parts.
+        if ($value === [] || array_keys($value) === range(0, count($value) - 1)) {
+            $parts = [];
+            foreach ($value as $item) {
+                $s = $this->humanizeExoticApiMixedValue($item, $depth + 1);
+                if ($s !== '') {
+                    $parts[] = $s;
+                }
+                if (count($parts) >= 5) {
+                    break;
+                }
+            }
+
+            return implode('; ', $parts);
+        }
+        $msgKeys = [
+            'message', 'Message', 'error', 'Error', 'errormessage', 'msg', 'reason', 'detail',
+            'description', 'error_description', 'title', 'text', 'errorMessage',
+            'UserMessage', 'userMessage', 'statusMessage', 'StatusMessage', 'exceptionMessage',
+        ];
+        foreach ($msgKeys as $k) {
+            if (!array_key_exists($k, $value)) {
+                continue;
+            }
+            $s = $this->humanizeExoticApiMixedValue($value[$k], $depth + 1);
+            if ($s !== '') {
+                return $s;
+            }
+        }
+        foreach (['errors', 'Errors', 'validation', 'ValidationErrors'] as $ek) {
+            if (empty($value[$ek])) {
+                continue;
+            }
+            $s = $this->humanizeExoticApiMixedValue($value[$ek], $depth + 1);
+            if ($s !== '') {
+                return $s;
+            }
+        }
+        foreach (['data', 'result', 'payload', 'response'] as $wrap) {
+            if (empty($value[$wrap]) || !is_array($value[$wrap])) {
+                continue;
+            }
+            $inner = $this->extractExoticMessageFromAssoc($value[$wrap], $depth + 1);
+            if ($inner !== '') {
+                return $inner;
+            }
+        }
+        foreach ($value as $sub) {
+            if (!is_array($sub)) {
+                continue;
+            }
+            $nested = $this->humanizeExoticApiMixedValue($sub, $depth + 1);
+            if ($nested !== '') {
+                return $nested;
+            }
+        }
+        foreach ($value as $item) {
+            if (!is_string($item)) {
+                continue;
+            }
+            $t = trim($item);
+            if ($t !== '') {
+                return $t;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $arr
+     */
+    private function extractExoticMessageFromAssoc(array $arr, int $depth = 0): string
+    {
+        if ($depth > 10) {
+            return '';
+        }
+
+        return $this->humanizeExoticApiMixedValue($arr, $depth);
     }
 
     /**
@@ -1719,31 +1833,9 @@ class POSRegisterController
      */
     private function extractExoticCartUserMessage(array $res): string
     {
-        $pickMessageFromArray = null;
-        $pickMessageFromArray = static function (array $arr) use (&$pickMessageFromArray): string {
-            foreach (['message', 'Message', 'error', 'Error', 'errormessage', 'msg', 'reason', 'detail'] as $k) {
-                if (!empty($arr[$k]) && is_string($arr[$k])) {
-                    $t = trim($arr[$k]);
-                    if ($t !== '') {
-                        return $t;
-                    }
-                }
-            }
-            foreach (['data', 'result', 'payload', 'response'] as $wrap) {
-                if (!empty($arr[$wrap]) && is_array($arr[$wrap])) {
-                    $innerMsg = $pickMessageFromArray($arr[$wrap]);
-                    if ($innerMsg !== '') {
-                        return $innerMsg;
-                    }
-                }
-            }
-
-            return '';
-        };
-
         $d = $res['data'] ?? null;
         if (is_array($d)) {
-            $msg = $pickMessageFromArray($d);
+            $msg = $this->extractExoticMessageFromAssoc($d, 0);
             if ($msg !== '') {
                 return $msg;
             }
@@ -1752,7 +1844,7 @@ class POSRegisterController
         if ($raw !== '' && strpos($raw, '{') !== false) {
             $decoded = json_decode($raw, true);
             if (is_array($decoded)) {
-                $msg = $pickMessageFromArray($decoded);
+                $msg = $this->extractExoticMessageFromAssoc($decoded, 0);
                 if ($msg !== '') {
                     return $msg;
                 }
@@ -1776,6 +1868,12 @@ class POSRegisterController
         }
         $ok = $this->isExoticCartSuccess($res);
         $msg = $this->extractExoticCartUserMessage($res);
+        if (!$ok && $msg === '' && $raw !== '' && strpos(trim($raw), '<') !== false) {
+            $plain = trim(preg_replace('/\s+/', ' ', strip_tags($raw)));
+            if (strlen($plain) >= 12 && strlen($plain) <= 4000) {
+                $msg = $plain;
+            }
+        }
         if (!$ok && $msg === '') {
             $msg = 'Cart request failed (HTTP ' . (int)($res['code'] ?? 0) . ').';
         }
