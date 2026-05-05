@@ -15,6 +15,12 @@
   var lastCartApiDebug = null;
   /** After a successful apply: fixed = INR entered; percent = 0–100, re-synced to API after each retrieve. */
   var posCustomDiscountPersist = null;
+  /** Per cart line (cartref): line-level discount toward POST /order/pos_editorderprices after checkout. */
+  var posLineAdjustByRef = {};
+  /** Expanded "Line discount" panel keyed by cartref. */
+  var posLineAdjustExpanded = {};
+  /** Last successful cart retrieve root `data` (for instant re-render after line discount edits). */
+  var lastRetrieveCartDataSnapshot = null;
 
   function setLastCartApiDebug(entry) {
     lastCartApiDebug = Object.assign({ at: new Date().toISOString() }, entry);
@@ -542,6 +548,184 @@
     return isNaN(n) ? null : n;
   }
 
+  function round2(n) {
+    return Math.round(n * 100) / 100;
+  }
+
+  /** Best-effort list unit ₹ (GST-inclusive unit as returned by retrieve). */
+  function lineListUnitNumber(row, qty) {
+    var u = parseMoneyValue(lineUnitPriceStr(row));
+    if (u != null && u >= 0) {
+      return u;
+    }
+    var lt = parseMoneyValue(lineLineTotalStr(row, qty));
+    if (lt != null && qty >= 1 && lt >= 0) {
+      return lt / qty;
+    }
+    return null;
+  }
+
+  /** Base item code for Exotic POS price edit APIs. */
+  function lineItemCodeForApi(row) {
+    var c = pickFirst(row, ['item_code', 'itemcode', 'product_code', 'code', 'sku']);
+    return c != null ? String(c).trim() : '';
+  }
+
+  function lineSizeForApi(row) {
+    var s = pickFirst(row, ['size', 'Size', 'variationsize', 'variation_size']);
+    return s != null && String(s).trim() !== '' ? String(s).trim() : '';
+  }
+
+  function lineColorForApi(row) {
+    var c = pickFirst(row, ['color', 'Color', 'colour', 'variationcolor', 'variation_color']);
+    if (c != null && String(c).trim() !== '') {
+      return String(c).trim();
+    }
+    var v = pickFirst(row, ['variation', 'Variation', 'variant']);
+    return v != null && String(v).trim() !== '' ? String(v).trim() : '';
+  }
+
+  function adjustmentIsActive(adj) {
+    if (!adj || typeof adj !== 'object') {
+      return false;
+    }
+    var v = parseFloat(String(adj.value));
+    return !isNaN(v) && v > 0;
+  }
+
+  /** @returns {{ mode: string, value: number }|null} */
+  function getLineAdjust(ref) {
+    if (!ref) {
+      return null;
+    }
+    var adj = posLineAdjustByRef[ref];
+    if (!adj || typeof adj !== 'object') {
+      return null;
+    }
+    var mode = adj.mode === 'fixed_line' ? 'fixed_line' : 'percent';
+    var val = parseFloat(String(adj.value));
+    val = isNaN(val) || val < 0 ? 0 : val;
+    if (mode === 'percent') {
+      val = val > 100 ? 100 : val;
+    }
+    return { mode: mode, value: val };
+  }
+
+  function computePosUnitFromList(listUnit, qty, cartRef) {
+    if (listUnit == null || isNaN(listUnit) || listUnit < 0 || qty == null || qty < 1) {
+      return 0;
+    }
+    var a = getLineAdjust(cartRef);
+    if (!adjustmentIsActive(a)) {
+      return round2(listUnit);
+    }
+    if (a.mode === 'percent') {
+      var pct = Math.min(100, Math.max(0, a.value));
+      return round2(listUnit * (1 - pct / 100));
+    }
+    var lineWas = listUnit * qty;
+    var off = a.value > lineWas ? lineWas : a.value;
+    var newLineTotal = Math.max(0, lineWas - off);
+    return round2(newLineTotal / qty);
+  }
+
+  function sumAdjustedMerchFromCartItems(data) {
+    var items = getCartItems(data || {});
+    var sum = 0;
+    for (var i = 0; i < items.length; i++) {
+      var qty = lineQty(items[i]);
+      var listU = lineListUnitNumber(items[i], qty);
+      var ref = lineCartRef(items[i]);
+      if (listU == null) {
+        listU = 0;
+      }
+      var posU = computePosUnitFromList(listU, qty, ref);
+      sum += posU * qty;
+    }
+    return round2(sum);
+  }
+
+  /** @returns {Record<string, unknown>} */
+  function mergeTotalsWithLineAdjustments(data, totals) {
+    var items = getCartItems(data || {});
+    if (!items.length || !totals) {
+      return totals;
+    }
+    var rawMerch = sumLineTotalsFromCartItems(data);
+    var adjMerch = sumAdjustedMerchFromCartItems(data);
+    if (rawMerch == null || adjMerch == null || Math.abs(adjMerch - rawMerch) < 0.02) {
+      return totals;
+    }
+    var out = Object.assign({}, totals);
+    var baseSub = out.subtotal != null && !isNaN(out.subtotal) ? out.subtotal : rawMerch;
+    out.subtotal = round2(baseSub + (adjMerch - rawMerch));
+    var coupon =
+      out.couponDeduction != null && !isNaN(Number(out.couponDeduction)) ? Number(out.couponDeduction) : 0;
+    var cust =
+      out.customDeduction != null && !isNaN(Number(out.customDeduction)) ? Number(out.customDeduction) : 0;
+    var grand = out.subtotal - coupon - cust;
+    out.grandTotal = round2(grand >= 0 ? grand : 0);
+    return out;
+  }
+
+  function hasLinePriceOverridesActive(data) {
+    var items = getCartItems(data || {});
+    for (var i = 0; i < items.length; i++) {
+      var ref = lineCartRef(items[i]);
+      if (!ref) {
+        continue;
+      }
+      if (adjustmentIsActive(posLineAdjustByRef[ref])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * @returns {Array<{ itemcode: string, size: string, color: string, price: string }>}
+   */
+  function buildPosLinePricesPayload(data) {
+    var items = getCartItems(data || {});
+    var out = [];
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      var qty = lineQty(row);
+      var listU = lineListUnitNumber(row, qty);
+      if (listU == null) {
+        listU = 0;
+      }
+      var ref = lineCartRef(row);
+      var posU = computePosUnitFromList(listU, qty, ref);
+      out.push({
+        itemcode: lineItemCodeForApi(row),
+        size: lineSizeForApi(row),
+        color: lineColorForApi(row),
+        price: formatMoneyDisplay(posU) != null ? String(formatMoneyDisplay(posU)) : String(round2(posU))
+      });
+    }
+    return out;
+  }
+
+  function pruneLineAdjustMaps(refsUsed) {
+    var next = {};
+    var nextExp = {};
+    for (var i = 0; i < refsUsed.length; i++) {
+      var r = refsUsed[i];
+      if (!r) {
+        continue;
+      }
+      if (posLineAdjustByRef[r]) {
+        next[r] = posLineAdjustByRef[r];
+      }
+      if (posLineAdjustExpanded[r]) {
+        nextExp[r] = true;
+      }
+    }
+    posLineAdjustByRef = next;
+    posLineAdjustExpanded = nextExp;
+  }
+
   /** Unit price from cart line (API fields vary). */
   function lineUnitPriceStr(row) {
     var v = pickFirst(row, ['unit_price', 'item_price', 'single_price', 'original_price', 'price', 'selling_price']);
@@ -999,7 +1183,28 @@
     panel.className =
       'pos-exotic-cart-panel rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white shadow-sm px-3 py-4 text-sm text-slate-800 mx-0.5 mb-2';
     var items = getCartItems(data);
-    var totals = totalsFromRetrieve(data || {});
+    var refsUsed = [];
+    for (var ri = 0; ri < items.length; ri++) {
+      var r0 = lineCartRef(items[ri]);
+      if (r0) {
+        refsUsed.push(r0);
+      }
+    }
+    if (!items.length) {
+      posLineAdjustByRef = {};
+      posLineAdjustExpanded = {};
+      lastRetrieveCartDataSnapshot = null;
+    } else {
+      pruneLineAdjustMaps(refsUsed);
+      lastRetrieveCartDataSnapshot =
+        data && typeof data === 'object' ? data : {};
+    }
+
+    window.__posCartLastRetrieveData =
+      lastRetrieveCartDataSnapshot ||
+      (data && typeof data === 'object' ? data : null);
+
+    var totals = mergeTotalsWithLineAdjustments(data || {}, totalsFromRetrieve(data || {}));
     var html = '';
 
     if (!items.length) {
@@ -1021,6 +1226,15 @@
         var sub = lineSubDisplay(row);
         var unitPrice = lineUnitPriceStr(row);
         var lineTotal = lineLineTotalStr(row, qty);
+        var listUNum = lineListUnitNumber(row, qty);
+        var posUNum =
+          listUNum != null ? computePosUnitFromList(listUNum, qty, ref) : null;
+        var hasAdj =
+          !!(ref && adjustmentIsActive(getLineAdjust(ref)));
+        var posLineStr =
+          posUNum != null ? formatMoneyDisplay(posUNum) : '';
+        var posExtStr =
+          posUNum != null ? formatMoneyDisplay(round2(posUNum * qty)) : '';
         var imgUrl = lineImageUrl(row);
         var productCode = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
         html +=
@@ -1055,7 +1269,25 @@
         }
         html += '</div>';
         html += '<div class="shrink-0 text-right leading-tight">';
-        if (unitPrice && lineTotal) {
+        if (posLineStr !== '' && posLineStr !== null && posExtStr !== '' && posExtStr !== null) {
+          html +=
+            '<div class="text-[10px] text-slate-500 tabular-nums">' +
+            escapeHtml(String(qty)) +
+            ' \u00d7 ' +
+            escapeHtml(posLineStr) +
+            '</div>' +
+            '<div class="text-sm font-bold tabular-nums text-orange-700">' +
+            escapeHtml(posExtStr) +
+            '</div>';
+          if (
+            listUNum != null &&
+            posUNum != null &&
+            Math.abs(listUNum - posUNum) > 0.000001
+          ) {
+            html +=
+              '<div class="text-[9px] font-semibold uppercase text-amber-700 tabular-nums">Adj</div>';
+          }
+        } else if (unitPrice && lineTotal) {
           html +=
             '<div class="text-[10px] text-slate-500 tabular-nums">' +
             escapeHtml(String(qty)) +
@@ -1102,7 +1334,81 @@
         } else {
           html += '<span class="text-[10px] text-amber-700">Missing cart reference — cannot update line.</span>';
         }
-        html += '</div></div></div>';
+        html += '</div>';
+        if (ref) {
+          var exp = !!posLineAdjustExpanded[ref];
+          var gadj = posLineAdjustByRef[ref] || { mode: 'percent', value: 0 };
+          var curMode =
+            String(gadj.mode) === 'fixed_line' ? 'fixed_line' : 'percent';
+          var curVal =
+            typeof gadj.value === 'number' && !isNaN(gadj.value)
+              ? gadj.value
+              : parseFloat(String(gadj.value));
+          if (isNaN(curVal) || curVal < 0) {
+            curVal = 0;
+          }
+          var listDisp =
+            listUNum != null && formatMoneyDisplay(listUNum) != null
+              ? formatMoneyDisplay(listUNum)
+              : escapeHtml(unitPrice || '—');
+          var posDisp =
+            posUNum != null && formatMoneyDisplay(posUNum) != null ? formatMoneyDisplay(posUNum) : '—';
+          html +=
+            '<div class="pos-cart-line-adjust mt-2 border-t border-dashed border-slate-100 pt-2">' +
+            '<button type="button" class="pos-cart-line-adjust-toggle flex w-full items-center justify-between text-left text-[10px] font-semibold uppercase tracking-wide text-orange-700 hover:text-orange-900" data-cartref="' +
+            escapeHtml(ref) +
+            '" aria-expanded="' +
+            (exp ? 'true' : 'false') +
+            '">' +
+            '<span>Line discount' +
+            (hasAdj ? ' \u2022 Active' : '') +
+            '</span>' +
+            '<span class="tabular-nums text-slate-500">' +
+            (exp ? '\u2212' : '+') +
+            '</span>' +
+            '</button>' +
+            '<div class="pos-cart-line-adjust-body mt-2 space-y-2' +
+            (exp ? '' : ' hidden') +
+            '">' +
+            '<div class="rounded-md bg-slate-50/90 px-2 py-1.5 text-[10px] text-slate-600">' +
+            '<span class="font-semibold text-slate-500">Price</span> · List \u20b9' +
+            escapeHtml(String(listDisp)) +
+            '/unit \u00b7 POS \u20b9' +
+            escapeHtml(String(posDisp)) +
+            '/unit</div>' +
+            '<div class="flex flex-wrap items-end gap-2">' +
+            '<div class="min-w-[7rem] flex-1">' +
+            '<label class="block text-[9px] font-semibold uppercase text-slate-400">Discount</label>' +
+            '<select class="pos-cart-line-disc-mode mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800 shadow-sm" data-cartref="' +
+            escapeHtml(ref) +
+            '">' +
+            '<option value="percent"' +
+            (curMode === 'percent' ? ' selected' : '') +
+            '>% off</option>' +
+            '<option value="fixed_line"' +
+            (curMode === 'fixed_line' ? ' selected' : '') +
+            '>Fixed \u20b9 off line</option>' +
+            '</select>' +
+            '</div>' +
+            '<div class="min-w-[5rem] flex-1">' +
+            '<label class="block text-[9px] font-semibold uppercase text-slate-400">Value</label>' +
+            '<input type="number" step="0.01" min="0"' +
+            (curMode === 'percent' ? ' max="100"' : '') +
+            ' class="pos-cart-line-disc-val mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs tabular-nums shadow-sm"' +
+            ' data-cartref="' +
+            escapeHtml(ref) +
+            '" placeholder="' +
+            (curMode === 'percent' ? '%' : '\u20b9') +
+            '" value="' +
+            (curVal > 0 ? escapeHtml(String(curVal)) : '') +
+            '" />' +
+            '</div></div>' +
+            '<button type="button" class="pos-cart-line-disc-reset rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50" data-cartref="' +
+            escapeHtml(ref) +
+            '">Reset</button>' +
+            '</div></div>';
+        }
+        html += '</div></div>';
       });
       html += '</div>';
     }
@@ -1229,6 +1535,9 @@
       if (t.matches && t.matches('input, button, textarea, select')) {
         return;
       }
+      if (t.closest && t.closest('.pos-cart-line-adjust')) {
+        return;
+      }
       var lineItem = t.closest('.pos-cart-line-item');
       if (!lineItem) {
         return;
@@ -1251,12 +1560,71 @@
         if (!t || !t.matches) {
           return;
         }
-        if (t.matches('.pos-cart-customdisc-mode')) {
-          var panelM = document.getElementById(PANEL_ID);
-          if (!panelM || !panelM.contains(t)) {
+        var panelLine = document.getElementById(PANEL_ID);
+
+        if (t.matches('.pos-cart-line-disc-mode')) {
+          if (!panelLine || !panelLine.contains(t)) {
             return;
           }
-          var inpM = panelM.querySelector('.pos-cart-customdisc-input');
+          var refM = String(t.getAttribute('data-cartref') || '').trim();
+          var wrapLm = refM ? t.closest('.pos-cart-line-adjust') : null;
+          var inpLm = wrapLm ? wrapLm.querySelector('.pos-cart-line-disc-val') : null;
+          var numLm = inpLm ? parseFloat(String(inpLm.value)) : NaN;
+          numLm = isNaN(numLm) || numLm < 0 ? 0 : numLm;
+        if (refM) {
+          if (numLm > 0) {
+            posLineAdjustByRef[refM] =
+              String(t.value) === 'fixed_line'
+                ? { mode: 'fixed_line', value: numLm }
+                : { mode: 'percent', value: numLm > 100 ? 100 : numLm };
+          } else {
+            delete posLineAdjustByRef[refM];
+          }
+        }
+          if (inpLm) {
+            if (t.value === 'percent') {
+              inpLm.setAttribute('max', '100');
+              inpLm.placeholder = '%';
+            } else {
+              inpLm.removeAttribute('max');
+              inpLm.placeholder = '\u20b9';
+            }
+          }
+          renderCartUI(lastRetrieveCartDataSnapshot || {});
+          return;
+        }
+        if (t.matches('.pos-cart-line-disc-val')) {
+          if (!panelLine || !panelLine.contains(t)) {
+            return;
+          }
+          var refV = String(t.getAttribute('data-cartref') || '').trim();
+          var wrapLv = refV ? t.closest('.pos-cart-line-adjust') : null;
+          var selV = wrapLv ? wrapLv.querySelector('.pos-cart-line-disc-mode') : null;
+          var modeV = selV && String(selV.value) === 'fixed_line' ? 'fixed_line' : 'percent';
+          var vv = parseFloat(String(t.value));
+          vv = isNaN(vv) || vv < 0 ? 0 : vv;
+          if (modeV === 'percent' && vv > 100) {
+            vv = 100;
+            t.value = String(vv);
+          }
+          if (!refV) {
+            return;
+          }
+          if (vv > 0) {
+            posLineAdjustByRef[refV] = { mode: modeV, value: vv };
+          } else {
+            delete posLineAdjustByRef[refV];
+          }
+          renderCartUI(lastRetrieveCartDataSnapshot || {});
+          return;
+        }
+
+        if (t.matches('.pos-cart-customdisc-mode')) {
+          var panel = document.getElementById(PANEL_ID);
+          if (!panel || !panel.contains(t)) {
+            return;
+          }
+          var inpM = panel.querySelector('.pos-cart-customdisc-input');
           if (inpM) {
             if (t.value === 'percent') {
               inpM.setAttribute('max', '100');
@@ -1273,8 +1641,8 @@
         if (!t.matches('.pos-cart-qty-input')) {
           return;
         }
-        var panel = document.getElementById(PANEL_ID);
-        if (!panel || !panel.contains(t)) {
+        var panelQ = document.getElementById(PANEL_ID);
+        if (!panelQ || !panelQ.contains(t)) {
           return;
         }
         var ref = String(t.getAttribute('data-cartref') || '').trim();
@@ -1332,6 +1700,26 @@
           window.applyCustomDiscount(0);
           return;
         }
+        var discTog = e.target && e.target.closest ? e.target.closest('.pos-cart-line-adjust-toggle') : null;
+        if (discTog && panel.contains(discTog)) {
+          e.preventDefault();
+          var rT = String(discTog.getAttribute('data-cartref') || '').trim();
+          if (rT) {
+            posLineAdjustExpanded[rT] = !posLineAdjustExpanded[rT];
+            renderCartUI(lastRetrieveCartDataSnapshot || {});
+          }
+          return;
+        }
+        var discRst = e.target && e.target.closest ? e.target.closest('.pos-cart-line-disc-reset') : null;
+        if (discRst && panel.contains(discRst)) {
+          e.preventDefault();
+          var rR = String(discRst.getAttribute('data-cartref') || '').trim();
+          if (rR) {
+            delete posLineAdjustByRef[rR];
+            renderCartUI(lastRetrieveCartDataSnapshot || {});
+          }
+          return;
+        }
         var del = e.target && e.target.closest ? e.target.closest('.pos-cart-delete-btn') : null;
         if (del && panel.contains(del)) {
           var refD = String(del.getAttribute('data-cartref') || '').trim();
@@ -1342,6 +1730,9 @@
         }
         var lineItem = e.target && e.target.closest ? e.target.closest('.pos-cart-line-item') : null;
         if (lineItem && panel.contains(lineItem)) {
+          if (e.target.closest && e.target.closest('.pos-cart-line-adjust')) {
+            return;
+          }
           if (e.target.closest('button, input, a, label, textarea, select')) {
             return;
           }
@@ -1719,6 +2110,18 @@
 
   window.getPosCartTotalsForCheckout = function () {
     return window.__posCartLastTotals || null;
+  };
+
+  window.getPosLinePricesPayloadForCheckout = function () {
+    var d = window.__posCartLastRetrieveData;
+    if (!d || typeof d !== 'object') {
+      return [];
+    }
+    return buildPosLinePricesPayload(d);
+  };
+
+  window.hasPosLinePriceOverridesForCheckout = function () {
+    return hasLinePriceOverridesActive(window.__posCartLastRetrieveData || {});
   };
 
   function initPosCartHooks() {
