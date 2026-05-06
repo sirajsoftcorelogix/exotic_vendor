@@ -1380,6 +1380,17 @@
       receipt_coupon_discount: isFinite(couponDeduction) ? couponDeduction : 0,
       receipt_cash_discount: isFinite(customDeduction) ? customDeduction : 0
     });
+    var linePricePayload =
+      typeof window.getPosLinePricesPayloadForCheckout === "function"
+        ? window.getPosLinePricesPayloadForCheckout()
+        : [];
+    var hasLinePriceOv =
+      typeof window.hasPosLinePriceOverridesForCheckout === "function"
+        ? window.hasPosLinePriceOverridesForCheckout()
+        : false;
+    if (hasLinePriceOv && Array.isArray(linePricePayload) && linePricePayload.length > 0) {
+      body.pos_line_prices = linePricePayload;
+    }
     fetch("index.php?page=pos_register&action=checkout-create", {
       method: "POST",
       credentials: "same-origin",

@@ -15,6 +15,10 @@
   var lastCartApiDebug = null;
   /** After a successful apply: fixed = INR entered; percent = 0–100, re-synced to API after each retrieve. */
   var posCustomDiscountPersist = null;
+  /** Per cart line (cartref): line-level discount toward POST /order/pos_editorderprices after checkout. */
+  var posLineAdjustByRef = {};
+  /** Last successful cart retrieve root `data` (for instant re-render after line discount edits). */
+  var lastRetrieveCartDataSnapshot = null;
 
   function setLastCartApiDebug(entry) {
     lastCartApiDebug = Object.assign({ at: new Date().toISOString() }, entry);
@@ -152,6 +156,152 @@
     return '?' + qs;
   }
 
+  /** @param {unknown} v @param {number} [depth] */
+  function extractMessageFromUnknown(v, depth) {
+    depth = depth || 0;
+    if (depth > 12) {
+      return '';
+    }
+    if (v == null) {
+      return '';
+    }
+    if (typeof v === 'string') {
+      var ts = v.trim();
+      return ts || '';
+    }
+    if (typeof v === 'number' && !isNaN(v)) {
+      return String(v);
+    }
+    if (typeof v !== 'object') {
+      return '';
+    }
+    if (Array.isArray(v)) {
+      var parts = [];
+      for (var i = 0; i < v.length && parts.length < 5; i++) {
+        var ps = extractMessageFromUnknown(v[i], depth + 1);
+        if (ps) {
+          parts.push(ps);
+        }
+      }
+      return parts.join('; ');
+    }
+    var o = /** @type {Record<string, unknown>} */ (v);
+    var msgKeys = [
+      'message',
+      'Message',
+      'error',
+      'Error',
+      'errormessage',
+      'msg',
+      'reason',
+      'detail',
+      'description',
+      'error_description',
+      'title',
+      'text',
+      'errorMessage',
+      'UserMessage',
+      'userMessage',
+      'statusMessage',
+      'StatusMessage',
+      'exceptionMessage'
+    ];
+    for (var ki = 0; ki < msgKeys.length; ki++) {
+      var mk = msgKeys[ki];
+      if (o[mk] == null || o[mk] === '') {
+        continue;
+      }
+      var got = extractMessageFromUnknown(o[mk], depth + 1);
+      if (got) {
+        return got;
+      }
+    }
+    var errKeys = ['errors', 'Errors', 'validation', 'ValidationErrors'];
+    for (var ei = 0; ei < errKeys.length; ei++) {
+      if (o[errKeys[ei]] == null) {
+        continue;
+      }
+      var g2 = extractMessageFromUnknown(o[errKeys[ei]], depth + 1);
+      if (g2) {
+        return g2;
+      }
+    }
+    var wraps = ['data', 'result', 'payload', 'response'];
+    for (var wi = 0; wi < wraps.length; wi++) {
+      var wk = wraps[wi];
+      if (!o[wk] || typeof o[wk] !== 'object') {
+        continue;
+      }
+      var g3 = extractMessageFromUnknown(o[wk], depth + 1);
+      if (g3) {
+        return g3;
+      }
+    }
+    for (var sk in o) {
+      if (!Object.prototype.hasOwnProperty.call(o, sk)) {
+        continue;
+      }
+      var sub = o[sk];
+      if (!sub || typeof sub !== 'object') {
+        continue;
+      }
+      var g4 = extractMessageFromUnknown(sub, depth + 1);
+      if (g4) {
+        return g4;
+      }
+    }
+    for (var sk2 in o) {
+      if (!Object.prototype.hasOwnProperty.call(o, sk2)) {
+        continue;
+      }
+      if (typeof o[sk2] !== 'string') {
+        continue;
+      }
+      var t2 = String(o[sk2]).trim();
+      if (t2) {
+        return t2;
+      }
+    }
+    return '';
+  }
+
+  /**
+   * @param {{ message?: unknown, data?: unknown, raw?: string }} parsedLike
+   */
+  function extractCartApiUserMessage(parsedLike) {
+    if (!parsedLike || typeof parsedLike !== 'object') {
+      return '';
+    }
+    var pl = /** @type {Record<string, unknown>} */ (parsedLike);
+    if (pl.message != null && pl.message !== '') {
+      var fromTop = extractMessageFromUnknown(pl.message, 0);
+      if (fromTop) {
+        return fromTop;
+      }
+    }
+    if (pl.data != null && typeof pl.data === 'object') {
+      var fromData = extractMessageFromUnknown(pl.data, 0);
+      if (fromData) {
+        return fromData;
+      }
+    }
+    if (pl.raw) {
+      var raw = String(pl.raw);
+      if (raw.indexOf('{') !== -1) {
+        try {
+          var inner = JSON.parse(raw);
+          var fromRaw = extractMessageFromUnknown(inner, 0);
+          if (fromRaw) {
+            return fromRaw;
+          }
+        } catch (eRaw) {
+          /* ignore */
+        }
+      }
+    }
+    return '';
+  }
+
   function cartRequest(op, opt) {
     opt = opt || {};
     var method = (opt.method || 'GET').toUpperCase();
@@ -181,12 +331,16 @@
         var r;
         try {
           var parsed = cleaned ? JSON.parse(cleaned) : {};
+          var extractedMsg = extractCartApiUserMessage(parsed);
           r = {
             success: !!parsed.success,
             http_code: parsed.http_code != null ? parsed.http_code : res.status,
             data: parsed.data || {},
             raw: parsed.raw || '',
-            message: parsed.message || (parsed.data && parsed.data.message) || ''
+            message:
+              (parsed.message && String(parsed.message).trim()) ||
+              extractedMsg ||
+              ''
           };
         } catch (e) {
           r = {
@@ -233,27 +387,13 @@
       return;
     }
     if (!r.success) {
-      var msg = '';
-      if (r.message) {
-        msg = String(r.message);
-      } else if (r.data && (r.data.message || r.data.error || r.data.errormessage || r.data.reason)) {
-        msg = String(r.data.message || r.data.error || r.data.errormessage || r.data.reason);
-      } else if (r.raw) {
-        try {
-          var parsedRaw = JSON.parse(String(r.raw));
-          if (parsedRaw && typeof parsedRaw === 'object') {
-            msg = String(
-              parsedRaw.message ||
-                parsedRaw.error ||
-                parsedRaw.errormessage ||
-                parsedRaw.reason ||
-                ''
-            );
-          }
-        } catch (e0) {
-          // keep fallback below
-        }
-      }
+      var msg =
+        (r.message && String(r.message).trim()) ||
+        extractCartApiUserMessage({
+          message: r.message,
+          data: r.data,
+          raw: r.raw
+        });
       if (!msg) {
         msg = 'Request failed (HTTP ' + (r.http_code || '') + ')';
       }
@@ -404,6 +544,179 @@
     }
     var n = parseFloat(String(val).replace(/,/g, ''));
     return isNaN(n) ? null : n;
+  }
+
+  function round2(n) {
+    return Math.round(n * 100) / 100;
+  }
+
+  /** Best-effort list unit ₹ (GST-inclusive unit as returned by retrieve). */
+  function lineListUnitNumber(row, qty) {
+    var u = parseMoneyValue(lineUnitPriceStr(row));
+    if (u != null && u >= 0) {
+      return u;
+    }
+    var lt = parseMoneyValue(lineLineTotalStr(row, qty));
+    if (lt != null && qty >= 1 && lt >= 0) {
+      return lt / qty;
+    }
+    return null;
+  }
+
+  /** Base item code for Exotic POS price edit APIs. */
+  function lineItemCodeForApi(row) {
+    var c = pickFirst(row, ['item_code', 'itemcode', 'product_code', 'code', 'sku']);
+    return c != null ? String(c).trim() : '';
+  }
+
+  function lineSizeForApi(row) {
+    var s = pickFirst(row, ['size', 'Size', 'variationsize', 'variation_size']);
+    return s != null && String(s).trim() !== '' ? String(s).trim() : '';
+  }
+
+  function lineColorForApi(row) {
+    var c = pickFirst(row, ['color', 'Color', 'colour', 'variationcolor', 'variation_color']);
+    if (c != null && String(c).trim() !== '') {
+      return String(c).trim();
+    }
+    var v = pickFirst(row, ['variation', 'Variation', 'variant']);
+    return v != null && String(v).trim() !== '' ? String(v).trim() : '';
+  }
+
+  function adjustmentIsActive(adj) {
+    if (!adj || typeof adj !== 'object') {
+      return false;
+    }
+    var v = parseFloat(String(adj.value));
+    return !isNaN(v) && v > 0;
+  }
+
+  /** @returns {{ mode: string, value: number }|null} */
+  function getLineAdjust(ref) {
+    if (!ref) {
+      return null;
+    }
+    var adj = posLineAdjustByRef[ref];
+    if (!adj || typeof adj !== 'object') {
+      return null;
+    }
+    var mode = adj.mode === 'fixed_line' ? 'fixed_line' : 'percent';
+    var val = parseFloat(String(adj.value));
+    val = isNaN(val) || val < 0 ? 0 : val;
+    if (mode === 'percent') {
+      val = val > 100 ? 100 : val;
+    }
+    return { mode: mode, value: val };
+  }
+
+  function computePosUnitFromList(listUnit, qty, cartRef) {
+    if (listUnit == null || isNaN(listUnit) || listUnit < 0 || qty == null || qty < 1) {
+      return 0;
+    }
+    var a = getLineAdjust(cartRef);
+    if (!adjustmentIsActive(a)) {
+      return round2(listUnit);
+    }
+    if (a.mode === 'percent') {
+      var pct = Math.min(100, Math.max(0, a.value));
+      return round2(listUnit * (1 - pct / 100));
+    }
+    var lineWas = listUnit * qty;
+    var off = a.value > lineWas ? lineWas : a.value;
+    var newLineTotal = Math.max(0, lineWas - off);
+    return round2(newLineTotal / qty);
+  }
+
+  function sumAdjustedMerchFromCartItems(data) {
+    var items = getCartItems(data || {});
+    var sum = 0;
+    for (var i = 0; i < items.length; i++) {
+      var qty = lineQty(items[i]);
+      var listU = lineListUnitNumber(items[i], qty);
+      var ref = lineCartRef(items[i]);
+      if (listU == null) {
+        listU = 0;
+      }
+      var posU = computePosUnitFromList(listU, qty, ref);
+      sum += posU * qty;
+    }
+    return round2(sum);
+  }
+
+  /** @returns {Record<string, unknown>} */
+  function mergeTotalsWithLineAdjustments(data, totals) {
+    var items = getCartItems(data || {});
+    if (!items.length || !totals) {
+      return totals;
+    }
+    var rawMerch = sumLineTotalsFromCartItems(data);
+    var adjMerch = sumAdjustedMerchFromCartItems(data);
+    if (rawMerch == null || adjMerch == null || Math.abs(adjMerch - rawMerch) < 0.02) {
+      return totals;
+    }
+    var out = Object.assign({}, totals);
+    var baseSub = out.subtotal != null && !isNaN(out.subtotal) ? out.subtotal : rawMerch;
+    out.subtotal = round2(baseSub + (adjMerch - rawMerch));
+    var coupon =
+      out.couponDeduction != null && !isNaN(Number(out.couponDeduction)) ? Number(out.couponDeduction) : 0;
+    var cust =
+      out.customDeduction != null && !isNaN(Number(out.customDeduction)) ? Number(out.customDeduction) : 0;
+    var grand = out.subtotal - coupon - cust;
+    out.grandTotal = round2(grand >= 0 ? grand : 0);
+    return out;
+  }
+
+  function hasLinePriceOverridesActive(data) {
+    var items = getCartItems(data || {});
+    for (var i = 0; i < items.length; i++) {
+      var ref = lineCartRef(items[i]);
+      if (!ref) {
+        continue;
+      }
+      if (adjustmentIsActive(posLineAdjustByRef[ref])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * @returns {Array<{ itemcode: string, size: string, color: string, price: string }>}
+   */
+  function buildPosLinePricesPayload(data) {
+    var items = getCartItems(data || {});
+    var out = [];
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      var qty = lineQty(row);
+      var listU = lineListUnitNumber(row, qty);
+      if (listU == null) {
+        listU = 0;
+      }
+      var ref = lineCartRef(row);
+      var posU = computePosUnitFromList(listU, qty, ref);
+      out.push({
+        itemcode: lineItemCodeForApi(row),
+        size: lineSizeForApi(row),
+        color: lineColorForApi(row),
+        price: formatMoneyDisplay(posU) != null ? String(formatMoneyDisplay(posU)) : String(round2(posU))
+      });
+    }
+    return out;
+  }
+
+  function pruneLineAdjustMaps(refsUsed) {
+    var next = {};
+    for (var i = 0; i < refsUsed.length; i++) {
+      var r = refsUsed[i];
+      if (!r) {
+        continue;
+      }
+      if (posLineAdjustByRef[r]) {
+        next[r] = posLineAdjustByRef[r];
+      }
+    }
+    posLineAdjustByRef = next;
   }
 
   /** Unit price from cart line (API fields vary). */
@@ -763,6 +1076,36 @@
     return String(val);
   }
 
+  /** Display ₹ 1,234.56 (en-IN grouping). */
+  function formatRupeeInrDisplay(val) {
+    if (val == null || (typeof val === 'number' && isNaN(val))) {
+      return '\u2014';
+    }
+    var n = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, ''));
+    if (isNaN(n)) {
+      return String(val);
+    }
+    return (
+      '\u20b9 ' +
+      n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    );
+  }
+
+  function summaryAmountCell(val) {
+    var disp = formatMoneyDisplay(val);
+    if (disp == null) {
+      return '\u2014';
+    }
+    var n = parseFloat(String(disp).replace(/,/g, ''));
+    if (isNaN(n)) {
+      return escapeHtml(disp);
+    }
+    return (
+      '\u20b9 ' +
+      n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    );
+  }
+
   function isAmountGreaterThanZero(val) {
     if (val == null || val === '') {
       return false;
@@ -777,22 +1120,22 @@
    */
   function moneyRowSummary(label, val, isGrand, removeBtnClass) {
     var disp = formatMoneyDisplay(val);
-    var text = disp == null ? '—' : disp;
+    var text = disp == null ? '\u2014' : summaryAmountCell(val);
     var hasRemove = !isGrand && removeBtnClass && String(removeBtnClass).trim() !== '';
     var rowClass = isGrand
-      ? 'flex justify-between items-baseline gap-3 text-base font-bold text-slate-900 pt-3 mt-2 border-t border-slate-200/90'
+      ? 'flex justify-between items-baseline gap-3 text-base font-bold text-slate-900 pt-3 mt-2 border-t border-dashed border-slate-300'
       : 'flex justify-between items-center gap-2 text-xs text-slate-600 py-1.5';
     var labelSpan =
       '<span class="' +
-      (isGrand ? 'text-slate-700' : 'text-slate-500 font-medium min-w-0 pr-1') +
+      (isGrand ? 'text-slate-800 font-bold' : 'text-slate-500 font-medium min-w-0 pr-1') +
       '">' +
       escapeHtml(label) +
       '</span>';
     var amountSpan =
       '<span class="tabular-nums ' +
-      (isGrand ? 'text-orange-700' : disp == null ? 'text-slate-400' : 'text-slate-800 font-semibold') +
+      (isGrand ? 'text-orange-600' : disp == null ? 'text-slate-400' : 'text-slate-800 font-semibold') +
       '">' +
-      escapeHtml(text) +
+      (disp == null ? escapeHtml('\u2014') : text) +
       '</span>';
     if (!hasRemove) {
       return '<div class="' + rowClass + '">' + labelSpan + amountSpan + '</div>';
@@ -863,7 +1206,27 @@
     panel.className =
       'pos-exotic-cart-panel rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white shadow-sm px-3 py-4 text-sm text-slate-800 mx-0.5 mb-2';
     var items = getCartItems(data);
-    var totals = totalsFromRetrieve(data || {});
+    var refsUsed = [];
+    for (var ri = 0; ri < items.length; ri++) {
+      var r0 = lineCartRef(items[ri]);
+      if (r0) {
+        refsUsed.push(r0);
+      }
+    }
+    if (!items.length) {
+      posLineAdjustByRef = {};
+      lastRetrieveCartDataSnapshot = null;
+    } else {
+      pruneLineAdjustMaps(refsUsed);
+      lastRetrieveCartDataSnapshot =
+        data && typeof data === 'object' ? data : {};
+    }
+
+    window.__posCartLastRetrieveData =
+      lastRetrieveCartDataSnapshot ||
+      (data && typeof data === 'object' ? data : null);
+
+    var totals = mergeTotalsWithLineAdjustments(data || {}, totalsFromRetrieve(data || {}));
     var html = '';
 
     if (!items.length) {
@@ -874,10 +1237,8 @@
         '<p class="text-[11px] text-slate-400 mt-1 max-w-[14rem]">Add products from the grid to see them here.</p>' +
         '</div>';
     } else {
-      html +=
-        '<div class="flex flex-col gap-2.5 pr-0.5">' +
-        '<p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-0.5">In cart</p>';
-      items.forEach(function (row) {
+      html += '<div class="flex flex-col pr-0.5">';
+      items.forEach(function (row, idx) {
         var ref = lineCartRef(row);
         var qty = lineQty(row);
         var maxSell = lineMaxSellableQty(row, data || {});
@@ -885,15 +1246,51 @@
         var sub = lineSubDisplay(row);
         var unitPrice = lineUnitPriceStr(row);
         var lineTotal = lineLineTotalStr(row, qty);
+        var listUNum = lineListUnitNumber(row, qty);
+        var posUNum =
+          listUNum != null ? computePosUnitFromList(listUNum, qty, ref) : null;
+        var hasAdj =
+          !!(ref && adjustmentIsActive(getLineAdjust(ref)));
         var imgUrl = lineImageUrl(row);
         var productCode = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
+        var codeLbl = String(sub || productCode || '').trim() || '\u2014';
+        var effUnitNum =
+          posUNum != null
+            ? posUNum
+            : listUNum != null
+              ? listUNum
+              : parseMoneyValue(unitPrice);
+        var effLineNum =
+          posUNum != null
+            ? round2(posUNum * qty)
+            : parseMoneyValue(lineLineTotalStr(row, qty));
+        if ((effLineNum == null || isNaN(effLineNum)) && effUnitNum != null && !isNaN(effUnitNum)) {
+          effLineNum = round2(effUnitNum * qty);
+        }
+        var unitDisp =
+          effUnitNum != null && !isNaN(effUnitNum)
+            ? formatRupeeInrDisplay(effUnitNum)
+            : unitPrice
+              ? '\u20b9 ' + escapeHtml(String(unitPrice))
+              : '\u2014';
+        var lineDisp =
+          effLineNum != null && !isNaN(effLineNum)
+            ? formatRupeeInrDisplay(effLineNum)
+            : lineTotal
+              ? '\u20b9 ' + escapeHtml(String(lineTotal))
+              : '\u2014';
+        var betweenClass =
+          idx < items.length - 1 ? 'border-b border-dashed border-slate-300 pb-4 mb-4' : '';
+        html += '<div' + (betweenClass ? ' class="' + betweenClass + '"' : '') + '>';
         html +=
-          '<div class="pos-cart-line-item group flex gap-2.5 rounded-xl border border-slate-100 bg-white p-2 shadow-sm cursor-pointer transition-all hover:border-slate-200 hover:shadow-md active:scale-[0.99]" data-cart-row="1"' +
+          '<div class="pos-cart-line-item group flex flex-col gap-2"' +
+          ' data-cart-row="1"' +
           (productCode ? ' data-product-code="' + escapeHtml(productCode) + '"' : '') +
           ' role="button" tabindex="0" title="View product details">';
+        html += '<div class="flex gap-2.5">';
         if (imgUrl) {
           html +=
-            '<div class="shrink-0 w-16 h-16 self-start rounded-lg border border-slate-100 bg-gradient-to-br from-white to-slate-50 overflow-hidden ring-1 ring-slate-100 group-hover:ring-orange-100">' +
+            '<div class="shrink-0 w-14 h-14 rounded-md border border-slate-200 bg-white overflow-hidden">' +
             '<img src="' +
             escapeHtml(imgUrl) +
             '" alt="' +
@@ -902,53 +1299,60 @@
             '</div>';
         } else {
           html +=
-            '<div class="shrink-0 w-16 h-16 self-start rounded-lg border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-base leading-none" title="No image">◇</div>';
+            '<div class="shrink-0 w-14 h-14 rounded-md border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-sm" title="No image">\u25c7</div>';
         }
-        html += '<div class="min-w-0 flex-1 flex flex-col gap-1">';
+        html += '<div class="min-w-0 flex-1 flex flex-col">';
+        html += '<div class="flex items-start justify-between gap-2">';
         html +=
-          '<div class="flex items-start justify-between gap-2">' +
-          '<div class="min-w-0 flex-1">' +
-          '<div class="text-[13px] font-semibold leading-tight text-slate-900 line-clamp-2">' +
-          escapeHtml(title) +
-          '</div>';
-        if (sub) {
+          '<span class="text-[11px] font-medium text-slate-500 tabular-nums">' +
+          escapeHtml(codeLbl) +
+          '</span>';
+        if (ref) {
           html +=
-            '<div class="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">' +
-            escapeHtml(sub) +
-            '</div>';
+            '<button type="button" class="pos-cart-delete-btn -mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600 shadow-sm transition hover:bg-red-100" data-cartref="' +
+            escapeHtml(ref) +
+            '" title="Remove from cart" aria-label="Remove from cart">' +
+            '<i class="fas fa-trash-alt text-[12px]" aria-hidden="true"></i></button>';
         }
         html += '</div>';
-        html += '<div class="shrink-0 text-right leading-tight">';
-        if (unitPrice && lineTotal) {
-          html +=
-            '<div class="text-[10px] text-slate-500 tabular-nums">' +
-            escapeHtml(String(qty)) +
-            ' \u00d7 ' +
-            escapeHtml(unitPrice) +
-            '</div>' +
-            '<div class="text-sm font-bold tabular-nums text-orange-700">' +
-            escapeHtml(lineTotal) +
-            '</div>';
-        } else if (lineTotal) {
-          html += '<div class="text-sm font-bold tabular-nums text-slate-900">' + escapeHtml(lineTotal) + '</div>';
-        } else if (unitPrice) {
-          html += '<div class="text-xs font-semibold tabular-nums text-slate-800">' + escapeHtml(unitPrice) + '</div>';
-        }
+        html +=
+          '<div class="text-[13px] font-bold text-slate-900 leading-snug mt-0.5 pr-1 line-clamp-3">' +
+          escapeHtml(title) +
+          '</div>';
         html += '</div></div>';
-        html += '<div class="flex items-center justify-between gap-2 border-t border-slate-100 pt-1.5">';
+        html +=
+          '<div class="text-[13px] tabular-nums text-slate-800 mt-0.5 leading-relaxed">' +
+          unitDisp +
+          ' \u00d7 ' +
+          escapeHtml(String(qty)) +
+          ' = <span class="font-bold text-orange-600">' +
+          lineDisp +
+          '</span>';
+        if (
+          hasAdj &&
+          listUNum != null &&
+          posUNum != null &&
+          Math.abs(listUNum - posUNum) > 0.000001
+        ) {
+          html +=
+            ' <span class="text-[10px] font-semibold uppercase text-amber-700">Adj</span>';
+        }
+        html += '</div>';
+        html += '<div class="flex flex-wrap items-center gap-2 mt-1">';
         if (ref) {
           var maxAttr =
-            maxSell != null && maxSell >= 1 ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"' : '';
-          var hintInline =
             maxSell != null && maxSell >= 1
-              ? '<span class="text-[10px] text-slate-400 tabular-nums">\u00b7 max ' +
+              ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"'
+              : '';
+          var maxHint =
+            maxSell != null && maxSell >= 1
+              ? '<span class="text-[11px] text-slate-400 tabular-nums">Max ' +
                 escapeHtml(String(maxSell)) +
-                '/order</span>'
+                ' / Order</span>'
               : '';
           html +=
-            '<div class="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">' +
-            '<span class="text-[10px] font-medium text-slate-500">Qty</span>' +
-            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-11 rounded-md border border-slate-200 bg-white px-1 py-0.5 text-center text-xs font-semibold text-slate-800 shadow-sm outline-none transition focus:border-orange-400 focus:ring-1 focus:ring-orange-100"' +
+            '<span class="text-[11px] font-bold text-slate-600 tracking-wide">QTY :</span>' +
+            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-12 rounded border border-slate-300 bg-white px-1.5 py-1 text-center text-xs font-semibold text-slate-900 outline-none focus:border-orange-500"' +
             maxAttr +
             ' data-cartref="' +
             escapeHtml(ref) +
@@ -957,16 +1361,56 @@
             '" title="' +
             (maxSell != null && maxSell >= 1 ? escapeHtml('Maximum ' + maxSell + ' per order') : '') +
             '" />' +
-            hintInline +
-            '</div>' +
-            '<button type="button" class="pos-cart-delete-btn inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-100 bg-red-50/80 text-red-700 transition hover:bg-red-100 hover:border-red-200" data-cartref="' +
-            escapeHtml(ref) +
-            '" title="Remove from cart" aria-label="Remove from cart">' +
-            '<i class="fas fa-trash-alt text-[12px]" aria-hidden="true"></i></button>';
+            maxHint;
         } else {
-          html += '<span class="text-[10px] text-amber-700">Missing cart reference — cannot update line.</span>';
+          html +=
+            '<span class="text-[10px] text-amber-700">Missing cart reference \u2014 cannot update line.</span>';
         }
-        html += '</div></div></div>';
+        html += '</div>';
+        if (ref) {
+          var gadj = posLineAdjustByRef[ref] || { mode: 'percent', value: 0 };
+          var curMode =
+            String(gadj.mode) === 'fixed_line' ? 'fixed_line' : 'percent';
+          var curVal =
+            typeof gadj.value === 'number' && !isNaN(gadj.value)
+              ? gadj.value
+              : parseFloat(String(gadj.value));
+          if (isNaN(curVal) || curVal < 0) {
+            curVal = 0;
+          }
+          html +=
+            '<div class="pos-cart-line-adjust mt-3">' +
+            '<div class="text-[11px] font-bold text-red-600 mb-1.5">Line Discount</div>' +
+            '<div class="flex flex-wrap items-stretch gap-2">' +
+            '<select class="pos-cart-line-disc-mode shrink-0 rounded border border-slate-300 bg-white px-2 py-2 text-xs font-medium text-slate-800 shadow-sm outline-none focus:border-orange-500" data-cartref="' +
+            escapeHtml(ref) +
+            '">' +
+            '<option value="percent"' +
+            (curMode === 'percent' ? ' selected' : '') +
+            '>% Off</option>' +
+            '<option value="fixed_line"' +
+            (curMode === 'fixed_line' ? ' selected' : '') +
+            '>Fixed \u20b9 off line</option>' +
+            '</select>' +
+            '<input type="number" step="0.01" min="0"' +
+            (curMode === 'percent' ? ' max="100"' : '') +
+            ' class="pos-cart-line-disc-val min-w-[4.5rem] flex-1 rounded border border-slate-300 bg-white px-2 py-2 text-xs tabular-nums shadow-sm outline-none focus:border-orange-500"' +
+            ' data-cartref="' +
+            escapeHtml(ref) +
+            '" placeholder="' +
+            (curMode === 'percent' ? '%' : '\u20b9') +
+            '" value="' +
+            (curVal > 0 ? escapeHtml(String(curVal)) : '') +
+            '" />' +
+            '<button type="button" class="pos-cart-line-disc-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800" data-cartref="' +
+            escapeHtml(ref) +
+            '">Apply</button>' +
+            '<button type="button" class="pos-cart-line-disc-reset shrink-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50" data-cartref="' +
+            escapeHtml(ref) +
+            '">Clear</button>' +
+            '</div></div>';
+        }
+        html += '</div></div>';
       });
       html += '</div>';
     }
@@ -980,20 +1424,12 @@
       totals.grandTotal != null;
     if (showSummary) {
       html +=
-        '<div class="mt-4 rounded-xl border border-slate-100 bg-slate-50/90 p-3 shadow-inner">' +
-        '<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-0.5">Summary</p>' +
-        '<div class="rounded-lg bg-white/90 px-2 py-1 ring-1 ring-slate-100/80">';
+        '<div class="mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">' +
+        '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Summary</p>' +
+        '<div class="space-y-0.5">';
       html += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
-      html += moneyRowSummary('GST', totals.gstTotal, false);
-      if (isAmountGreaterThanZero(totals.couponDeduction)) {
-        var couponLbl =
-          totals.couponDisplayName && String(totals.couponDisplayName).trim() !== ''
-            ? 'Coupon (' + String(totals.couponDisplayName).trim() + ')'
-            : 'Coupon';
-        html += moneyRowSummary(couponLbl, totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
-      }
       if (isAmountGreaterThanZero(totals.customDeduction)) {
-        var cdLbl = 'Custom discount';
+        var cdLbl = 'Custom Discount';
         if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'percent') {
           cdLbl += ' (' + formatPctLabel(posCustomDiscountPersist.value) + ')';
         } else if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'fixed') {
@@ -1001,37 +1437,43 @@
         }
         html += moneyRowSummary(cdLbl, totals.customDeduction, false, 'pos-cart-summary-remove-custom');
       }
-      html += moneyRowSummary('Grand total', totals.grandTotal, true);
+      if (isAmountGreaterThanZero(totals.couponDeduction)) {
+        var couponLbl =
+          totals.couponDisplayName && String(totals.couponDisplayName).trim() !== ''
+            ? 'Coupon (' + String(totals.couponDisplayName).trim() + ')'
+            : 'Coupon';
+        html += moneyRowSummary(couponLbl, totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
+      }
+      html += moneyRowSummary('GST Total', totals.gstTotal, false);
+      html += moneyRowSummary('GRAND Total', totals.grandTotal, true);
       html += '</div></div>';
     }
 
     html +=
-      '<div class="mt-4 rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-3">' +
-      '<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Discounts</p>' +
-      '<div class="space-y-1.5">' +
-      '<label class="text-xs font-medium text-slate-600">Coupon</label>' +
-      '<div class="flex gap-2 flex-wrap">' +
-      '<input type="text" class="pos-cart-coupon-input flex-1 min-w-[6rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Coupon code" />' +
-      '<button type="button" class="pos-cart-coupon-apply shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 active:scale-[0.98]">Apply</button>' +
-      '<button type="button" class="pos-cart-coupon-clear shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50">Clear</button>' +
-      '</div></div>' +
-      '<div class="space-y-1.5 border-t border-slate-100 pt-3">' +
-      '<label class="text-xs font-medium text-slate-600">Custom discount</label>' +
+      '<div class="mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-3">' +
+      '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discount</p>' +
+      '<div class="space-y-1">' +
       '<div class="flex gap-2 flex-wrap items-stretch">' +
-      '<select class="pos-cart-customdisc-mode shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-700 shadow-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100" aria-label="Discount type">' +
+      '<input type="text" class="pos-cart-coupon-input flex-1 min-w-[8rem] rounded border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-orange-500 placeholder:text-slate-400" placeholder="Discount Coupon" />' +
+      '<button type="button" class="pos-cart-coupon-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800">Apply</button>' +
+      '<button type="button" class="pos-cart-coupon-clear shrink-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Clear</button>' +
+      '</div></div>' +
+      '<div class="space-y-1 border-t border-slate-100 pt-3">' +
+      '<div class="flex flex-wrap items-stretch gap-2">' +
+      '<select class="pos-cart-customdisc-mode shrink-0 rounded border border-slate-300 bg-white px-2 py-2 text-xs font-medium text-slate-800 shadow-sm outline-none focus:border-orange-500" aria-label="Discount type">' +
+      '<option value="percent">% Off</option>' +
       '<option value="fixed">Fixed (₹)</option>' +
-      '<option value="percent">Percent (%)</option>' +
       '</select>' +
-      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input flex-1 min-w-[5rem] rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100" placeholder="Amount (₹)" />' +
-      '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 active:scale-[0.98]">Set</button>' +
-      '<button type="button" class="pos-cart-customdisc-clear inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700" title="Remove custom discount" aria-label="Remove custom discount">' +
+      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input min-w-[5rem] flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-xs shadow-sm outline-none focus:border-orange-500 placeholder:text-slate-400" placeholder="Amount" />' +
+      '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800">Apply</button>' +
+      '<button type="button" class="pos-cart-customdisc-clear inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700" title="Remove custom discount" aria-label="Remove custom discount">' +
       '<i class="fas fa-trash-alt text-sm" aria-hidden="true"></i></button>' +
       '</div></div></div>';
 
     if (items.length > 0) {
       html +=
-        '<div class="mt-3 flex justify-center">' +
-        '<button type="button" class="pos-cart-checkout-btn rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">Proceed to payment</button>' +
+        '<div class="mt-4">' +
+        '<button type="button" class="pos-cart-checkout-btn w-full rounded-lg bg-orange-600 py-3 text-sm font-bold uppercase tracking-wide text-white shadow-md transition hover:bg-orange-700 active:scale-[0.99]">Place order</button>' +
         '</div>';
     }
 
@@ -1054,9 +1496,11 @@
     panel.innerHTML = html;
     var modeSel = panel.querySelector('.pos-cart-customdisc-mode');
     var inpDisc = panel.querySelector('.pos-cart-customdisc-input');
-    if (modeSel && inpDisc && posCustomDiscountPersist) {
-      modeSel.value = posCustomDiscountPersist.mode === 'percent' ? 'percent' : 'fixed';
-      inpDisc.value = String(posCustomDiscountPersist.value);
+    if (modeSel && inpDisc) {
+      if (posCustomDiscountPersist) {
+        modeSel.value = posCustomDiscountPersist.mode === 'percent' ? 'percent' : 'fixed';
+        inpDisc.value = String(posCustomDiscountPersist.value);
+      }
       if (modeSel.value === 'percent') {
         inpDisc.setAttribute('max', '100');
         inpDisc.setAttribute('step', '0.01');
@@ -1093,6 +1537,9 @@
       if (t.matches && t.matches('input, button, textarea, select')) {
         return;
       }
+      if (t.closest && t.closest('.pos-cart-line-adjust')) {
+        return;
+      }
       var lineItem = t.closest('.pos-cart-line-item');
       if (!lineItem) {
         return;
@@ -1115,12 +1562,32 @@
         if (!t || !t.matches) {
           return;
         }
-        if (t.matches('.pos-cart-customdisc-mode')) {
-          var panelM = document.getElementById(PANEL_ID);
-          if (!panelM || !panelM.contains(t)) {
+        var panelLine = document.getElementById(PANEL_ID);
+
+        if (t.matches('.pos-cart-line-disc-mode')) {
+          if (!panelLine || !panelLine.contains(t)) {
             return;
           }
-          var inpM = panelM.querySelector('.pos-cart-customdisc-input');
+          var wrapLm = t.closest('.pos-cart-line-adjust');
+          var inpLm = wrapLm ? wrapLm.querySelector('.pos-cart-line-disc-val') : null;
+          if (inpLm) {
+            if (t.value === 'percent') {
+              inpLm.setAttribute('max', '100');
+              inpLm.placeholder = '%';
+            } else {
+              inpLm.removeAttribute('max');
+              inpLm.placeholder = '\u20b9';
+            }
+          }
+          return;
+        }
+
+        if (t.matches('.pos-cart-customdisc-mode')) {
+          var panel = document.getElementById(PANEL_ID);
+          if (!panel || !panel.contains(t)) {
+            return;
+          }
+          var inpM = panel.querySelector('.pos-cart-customdisc-input');
           if (inpM) {
             if (t.value === 'percent') {
               inpM.setAttribute('max', '100');
@@ -1137,8 +1604,8 @@
         if (!t.matches('.pos-cart-qty-input')) {
           return;
         }
-        var panel = document.getElementById(PANEL_ID);
-        if (!panel || !panel.contains(t)) {
+        var panelQ = document.getElementById(PANEL_ID);
+        if (!panelQ || !panelQ.contains(t)) {
           return;
         }
         var ref = String(t.getAttribute('data-cartref') || '').trim();
@@ -1196,6 +1663,44 @@
           window.applyCustomDiscount(0);
           return;
         }
+        var discApply = e.target && e.target.closest ? e.target.closest('.pos-cart-line-disc-apply') : null;
+        if (discApply && panel.contains(discApply)) {
+          e.preventDefault();
+          e.stopPropagation();
+          var rA = String(discApply.getAttribute('data-cartref') || '').trim();
+          var wrapA = discApply.closest('.pos-cart-line-adjust');
+          var selA = wrapA ? wrapA.querySelector('.pos-cart-line-disc-mode') : null;
+          var inpA = wrapA ? wrapA.querySelector('.pos-cart-line-disc-val') : null;
+          if (!rA) {
+            return;
+          }
+          var modeA = selA && String(selA.value) === 'fixed_line' ? 'fixed_line' : 'percent';
+          var vA = inpA ? parseFloat(String(inpA.value)) : NaN;
+          vA = isNaN(vA) || vA < 0 ? 0 : vA;
+          if (vA <= 0) {
+            delete posLineAdjustByRef[rA];
+            renderCartUI(lastRetrieveCartDataSnapshot || {});
+            return;
+          }
+          if (modeA === 'percent' && vA > 100) {
+            toast('Percentage must be between 0 and 100.', 'red');
+            return;
+          }
+          posLineAdjustByRef[rA] = { mode: modeA, value: modeA === 'percent' && vA > 100 ? 100 : vA };
+          renderCartUI(lastRetrieveCartDataSnapshot || {});
+          return;
+        }
+        var discRst = e.target && e.target.closest ? e.target.closest('.pos-cart-line-disc-reset') : null;
+        if (discRst && panel.contains(discRst)) {
+          e.preventDefault();
+          e.stopPropagation();
+          var rR = String(discRst.getAttribute('data-cartref') || '').trim();
+          if (rR) {
+            delete posLineAdjustByRef[rR];
+            renderCartUI(lastRetrieveCartDataSnapshot || {});
+          }
+          return;
+        }
         var del = e.target && e.target.closest ? e.target.closest('.pos-cart-delete-btn') : null;
         if (del && panel.contains(del)) {
           var refD = String(del.getAttribute('data-cartref') || '').trim();
@@ -1206,6 +1711,9 @@
         }
         var lineItem = e.target && e.target.closest ? e.target.closest('.pos-cart-line-item') : null;
         if (lineItem && panel.contains(lineItem)) {
+          if (e.target.closest && e.target.closest('.pos-cart-line-adjust')) {
+            return;
+          }
           if (e.target.closest('button, input, a, label, textarea, select')) {
             return;
           }
@@ -1583,6 +2091,18 @@
 
   window.getPosCartTotalsForCheckout = function () {
     return window.__posCartLastTotals || null;
+  };
+
+  window.getPosLinePricesPayloadForCheckout = function () {
+    var d = window.__posCartLastRetrieveData;
+    if (!d || typeof d !== 'object') {
+      return [];
+    }
+    return buildPosLinePricesPayload(d);
+  };
+
+  window.hasPosLinePriceOverridesForCheckout = function () {
+    return hasLinePriceOverridesActive(window.__posCartLastRetrieveData || {});
   };
 
   function initPosCartHooks() {
