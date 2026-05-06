@@ -1465,9 +1465,9 @@
             </button>
         </div>
 
-        <div class="h-full bg-white shadow-xl p-8 overflow-y-auto flex flex-col w-full">
+        <div class="flex-1 min-h-0 bg-white shadow-xl p-8 overflow-y-auto flex flex-col w-full">
             <!-- Modal Content -->
-            <div class="" id="details-modal-content">
+            <div class="min-h-0 overflow-y-auto pb-8" id="details-modal-content">
                 <!-- Dynamic content will be loaded here -->
 
             </div>
