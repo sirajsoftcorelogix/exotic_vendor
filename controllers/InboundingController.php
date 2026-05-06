@@ -456,6 +456,23 @@ class InboundingController {
             header("location: " . base_url('?page=inbounding&action=list'));
         }
     }
+
+    public function searchAuthors() {
+        global $inboundingModel;
+        $q = trim($_GET['q'] ?? '');
+        header('Content-Type: application/json');
+        echo json_encode($inboundingModel->searchAuthors($q));
+        exit;
+    }
+
+    public function searchPublishers() {
+        global $inboundingModel;
+        $q = trim($_GET['q'] ?? '');
+        header('Content-Type: application/json');
+        echo json_encode($inboundingModel->searchPublishers($q));
+        exit;
+    }
+
     public function saveform1() {
         global $inboundingModel;
         
@@ -1545,6 +1562,11 @@ class InboundingController {
           'hsn_code'   => $mainVariant['hsn_code'] ?? '',
           'gst_rate'   => $mainVariant['gst_rate'] ?? 0,
           'dimensions'   => $mainVariant['dimensions'] ?? 0,
+          'author'      => $_POST['author'] ?? '',
+          'publisher'   => $_POST['publisher'] ?? '',
+          'isbn'        => $_POST['isbn'] ?? '',
+          'language'    => $_POST['language'] ?? '',
+          'pages'       => $_POST['pages'] ?? '',
 
           // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
           'quantity_received'  => $mainVariant['quantity'] ?? 0,
