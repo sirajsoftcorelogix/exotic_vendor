@@ -54,6 +54,11 @@ global $domain, $root_path;
                     Send OTP
                 </button>
                 
+                <!-- Resend OTP Timer -->
+                <div id="resendTimerContainer" style="display: none; text-align: center; margin-top: 10px;">
+                    <p class="text-sm text-gray-600">Resend OTP in <span id="timerCount">10:00</span></p>
+                </div>
+                
                 <button type="submit" id="loginBtn" class="w-full bg-[#D06706] text-white font-bold py-3 rounded-lg shadow-lg hover:bg-orange-700 transition duration-300" style="display: none;">
                     Login
                 </button>
@@ -62,6 +67,37 @@ global $domain, $root_path;
     </div>
 </div>
 <script>
+    let otpTimer = null;
+    let remainingTime = 0;
+
+    function startOtpTimer() {
+        remainingTime = 600; // 10 minutes in seconds
+        const timerDisplay = document.getElementById('timerCount');
+        const timerContainer = document.getElementById('resendTimerContainer');
+        const sendOtpBtn = document.getElementById('sendOtpBtn');
+
+        sendOtpBtn.disabled = true;
+        sendOtpBtn.style.opacity = '0.5';
+        timerContainer.style.display = 'block';
+
+        otpTimer = setInterval(() => {
+            remainingTime--;
+            const minutes = Math.floor(remainingTime / 60);
+            const seconds = remainingTime % 60;
+            timerDisplay.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+
+            if (remainingTime <= 0) {
+                clearInterval(otpTimer);
+                sendOtpBtn.disabled = false;
+                sendOtpBtn.style.opacity = '1';
+                timerContainer.style.display = 'none';
+                sendOtpBtn.textContent = 'Resend OTP';
+                sendOtpBtn.style.display = 'block';
+                document.getElementById('loginBtn').style.display = 'none';
+            }
+        }, 1000);
+    }
+
     document.getElementById('sendOtpBtn').addEventListener('click', function(e) {
         var login = document.getElementById('login').value.trim();
         var errorDiv = document.getElementById('loginError');
@@ -87,8 +123,6 @@ global $domain, $root_path;
             })
             .then(response => response.json())
             .then(data => {
-                btn.textContent = 'Send OTP';
-                btn.disabled = false;
                 if (data.success) {
                     successDiv.textContent = 'OTP sent to your email.';
                     document.getElementById('login').readOnly = true;
@@ -97,7 +131,10 @@ global $domain, $root_path;
                     document.getElementById('otpContainer').style.display = 'block';
                     document.getElementById('loginBtn').style.display = 'block';
                     document.getElementById('otp').required = true;
+                    startOtpTimer();
                 } else {
+                    btn.textContent = 'Send OTP';
+                    btn.disabled = false;
                     errorDiv.textContent = data.message;
                 }
             })
@@ -131,6 +168,7 @@ global $domain, $root_path;
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    if (otpTimer) clearInterval(otpTimer);
                     successDiv.textContent = 'Login successful! Redirecting...';
                     var redirect = <?php echo json_encode(isset($_SESSION['redirect_after_login']) && $_SESSION['redirect_after_login'] ? $_SESSION['redirect_after_login'] : '?page=orders&action=list'); ?>;
                     window.location.href = redirect;
