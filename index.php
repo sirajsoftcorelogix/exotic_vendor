@@ -907,12 +907,22 @@ switch ($page) {
                 break;
             case 'getDetails':
                 $controller->getDetails();
+                break;
             case 'getItamcode':
                 $controller->getItamcode();
+                break;
+            case 'searchAuthors':
+                $controller->searchAuthors();
+                break;
+            case 'searchPublishers':
+                $controller->searchPublishers();
+                break;
             case 'search_book_attr':
                 $controller->searchBookAttributes();
+                break;
             case 'bulkAssign':
                 $controller->bulk_assign_action();
+                break;
             case 'printInboundLabel':
                 $controller->printInboundLabel();
                 break;

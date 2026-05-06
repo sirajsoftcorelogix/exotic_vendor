@@ -157,6 +157,20 @@ $gate_entry_date_time = $form2['gate_entry_date_time'] ?? '';
 $material_code        = $form2['material_code'] ?? '';
 $feedback        = $form2['feedback'] ?? '';
 
+$selected_author_id = $form2['author'] ?? '';
+$selected_author_name = '';
+if (!empty($selected_author_id) && method_exists($inboundingModel, 'getAuthorById')) {
+    $authorRow = $inboundingModel->getAuthorById($selected_author_id);
+    $selected_author_name = $authorRow['author'] ?? $authorRow['name'] ?? '';
+}
+
+$selected_publisher_id = $form2['publisher'] ?? '';
+$selected_publisher_name = '';
+if (!empty($selected_publisher_id) && method_exists($inboundingModel, 'getPublisherById')) {
+    $publisherRow = $inboundingModel->getPublisherById($selected_publisher_id);
+    $selected_publisher_name = $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
+}
+
 $formAction = base_url('?page=inbounding&action=submitStep3');
 ?>
 
@@ -305,7 +319,43 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     <input type="text" name="feedback" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none" value="<?php echo $feedback; ?>">
                 </div>
             </div>
-            
+
+            <div id="book-meta-fields" class="hidden bg-gray-50 border border-gray-300 rounded p-4">
+                <h3 class="font-bold text-sm text-gray-700 mb-3 border-b pb-1">Book Details</h3>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Author</label>
+                        <select id="author_select" name="author" placeholder="Type author name..." class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
+                            <option value=""></option>
+                            <?php if (!empty($selected_author_id) && !empty($selected_author_name)): ?>
+                                <option value="<?php echo htmlspecialchars($selected_author_id); ?>" selected><?php echo htmlspecialchars($selected_author_name); ?></option>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Publisher</label>
+                        <select id="publisher_select" name="publisher" placeholder="Type publisher name..." class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
+                            <option value=""></option>
+                            <?php if (!empty($selected_publisher_id) && !empty($selected_publisher_name)): ?>
+                                <option value="<?php echo htmlspecialchars($selected_publisher_id); ?>" selected><?php echo htmlspecialchars($selected_publisher_name); ?></option>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Pages</label>
+                        <input type="number" min="0" name="pages" value="<?php echo htmlspecialchars($form2['pages'] ?? ''); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">ISBN</label>
+                        <input type="text" name="isbn" value="<?php echo htmlspecialchars($form2['isbn'] ?? ''); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Language</label>
+                        <input type="text" name="language" value="<?php echo htmlspecialchars($form2['language'] ?? ''); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                    </div>
+                </div>
+            </div>
+
             <div id="variations-container" class="space-y-6">
                 <?php foreach($viewVariations as $index => $var): ?>
                     <div class="variation-card border border-gray-300 rounded-lg p-3 bg-gray-50/50" data-index="<?php echo $index; ?>">
@@ -458,6 +508,59 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             }
         });
 
+        const searchAuthorsUrl = '<?php echo base_url('?page=inbounding&action=searchAuthors&q='); ?>';
+        const searchPublishersUrl = '<?php echo base_url('?page=inbounding&action=searchPublishers&q='); ?>';
+
+        const authorSelect = new TomSelect('#author_select', {
+            valueField: 'id',
+            labelField: 'name',
+            searchField: ['name'],
+            placeholder: 'Search author...',
+            create: false,
+            preload: false,
+            allowEmptyOption: true,
+            load: function(query, callback) {
+                if (!query || query.length < 2) {
+                    callback();
+                    return;
+                }
+                fetch(searchAuthorsUrl + encodeURIComponent(query))
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.text().then(text => { throw new Error('Author request failed: ' + response.status + ' ' + text); });
+                        }
+                        return response.json();
+                    })
+                    .then(json => callback(json))
+                    .catch(err => { console.error('Author load error:', err); callback(); });
+            }
+        });
+
+        const publisherSelect = new TomSelect('#publisher_select', {
+            valueField: 'id',
+            labelField: 'name',
+            searchField: ['name'],
+            placeholder: 'Search publisher...',
+            create: false,
+            preload: false,
+            allowEmptyOption: true,
+            load: function(query, callback) {
+                if (!query || query.length < 2) {
+                    callback();
+                    return;
+                }
+                fetch(searchPublishersUrl + encodeURIComponent(query))
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.text().then(text => { throw new Error('Publisher request failed: ' + response.status + ' ' + text); });
+                        }
+                        return response.json();
+                    })
+                    .then(json => callback(json))
+                    .catch(err => { console.error('Publisher load error:', err); callback(); });
+            }
+        });
+
         function toggleVariantFields(val) {
             if (val === 'Y') {
                 wrapperSelect.classList.remove('hidden');
@@ -499,7 +602,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         // 2. HELPER: Detect Category Type
         function getCategoryType() {
             const selectedRadio = document.querySelector('input[name="category"]:checked');
-            let info = { isClothing: false, mapKey: null };
+            let info = { isClothing: false, mapKey: null, isBook: false };
 
             if (selectedRadio) {
                 const parentLabel = selectedRadio.closest('label');
@@ -511,11 +614,15 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     info.isClothing = true;
                 }
 
+                // Book Check
+                if (labelText.includes('book') || val.includes('book')) {
+                    info.isBook = true;
+                }
+
                 // Map Key Check
                 if (labelText.includes('textile') || labelText.includes('clothing') || val.includes('textile') || val.includes('clothing')) {
                     info.mapKey = 'textiles'; 
-                } 
-                else if (labelText.includes('jewelry') || labelText.includes('jewellery') || val.includes('jewelry') || val.includes('jewellery')) {
+                } else if (labelText.includes('jewelry') || labelText.includes('jewellery') || val.includes('jewelry') || val.includes('jewellery')) {
                     info.mapKey = 'jewelry'; 
                 }
             }
@@ -606,9 +713,64 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             });
         }
 
+        function toggleBookFields() {
+            const { isBook } = getCategoryType();
+            const bookFields = document.getElementById('book-meta-fields');
+            const addBtn = document.getElementById('add-variation-btn');
+            const variantSelect = document.getElementById('variant_select');
+            const variantContainer = variantSelect.closest('div');
+            const wrapperSelect = document.getElementById('wrapper_select');
+            const wrapperInput = document.getElementById('wrapper_input');
+
+            if (isBook) {
+                bookFields.classList.remove('hidden');
+                addBtn.classList.add('hidden');
+                variantSelect.value = 'N';
+                if (variantContainer) {
+                    variantContainer.style.display = 'none';
+                }
+                wrapperSelect.classList.add('hidden');
+                wrapperInput.classList.remove('hidden');
+                tomSelectInstance.disable();
+            } else {
+                bookFields.classList.add('hidden');
+                addBtn.classList.remove('hidden');
+                if (variantContainer) {
+                    variantContainer.style.display = '';
+                }
+                toggleVariantFields(variantSelect.value);
+            }
+        }
+
+        function toggleVariationControls() {
+            const { isBook } = getCategoryType();
+            const cloneButtons = document.querySelectorAll('.clone-variation-btn');
+            const removeButtons = document.querySelectorAll('.remove-variation-btn');
+            const cards = document.querySelectorAll('.variation-card');
+
+            if (isBook) {
+                cloneButtons.forEach(btn => btn.classList.add('hidden'));
+                removeButtons.forEach(btn => btn.classList.add('hidden'));
+                cards.forEach((card, idx) => {
+                    if (idx > 0) {
+                        card.remove();
+                    }
+                });
+            } else {
+                cloneButtons.forEach(btn => btn.classList.remove('hidden'));
+                removeButtons.forEach(btn => {
+                    if (btn.closest('.variation-card').getAttribute('data-index') !== '0') {
+                        btn.classList.remove('hidden');
+                    }
+                });
+            }
+        }
+
         function updateAllFields() {
             toggleSizeFields();
             toggleColorMapFields();
+            toggleBookFields();
+            toggleVariationControls();
         }
 
         radioButtons.forEach(radio => {
