@@ -742,8 +742,9 @@ background-color: #f0f0f0;
         }
 
         .accordion-content-details.open {
-            max-height: 1500px; /* Set a large enough max-height */
+            max-height: none; /* Allow full content height; prevents clipping in long order detail sections */
             opacity: 1;
+            overflow: visible;
         }
 
         /* Typography Styles */
