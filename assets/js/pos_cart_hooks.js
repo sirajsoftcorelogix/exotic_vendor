@@ -643,6 +643,54 @@
     return round2(sum);
   }
 
+  /**
+   * Recompute GST on discounted line totals.
+   * Preference:
+   * 1) use line GST rate (if available) on adjusted inclusive line total
+   * 2) fallback to scaling API GST amount by adjusted/original line ratio
+   */
+  function sumAdjustedGstFromCartItems(data) {
+    var items = getCartItems(data || {});
+    if (!items.length) {
+      return null;
+    }
+    var sum = 0;
+    var ok = false;
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      var qty = lineQty(row);
+      var listU = lineListUnitNumber(row, qty);
+      if (listU == null) {
+        listU = 0;
+      }
+      var ref = lineCartRef(row);
+      var posU = computePosUnitFromList(listU, qty, ref);
+      var adjLine = round2(posU * qty);
+      if (!(adjLine > 0)) {
+        continue;
+      }
+      var rate = lineGstRatePercent(row);
+      if (rate != null && rate > 0 && rate <= 40) {
+        var gstByRate = adjLine - adjLine / (1 + rate / 100);
+        if (!isNaN(gstByRate) && gstByRate >= 0) {
+          sum += gstByRate;
+          ok = true;
+          continue;
+        }
+      }
+      var origLine = parseMoneyValue(lineLineTotalStr(row, qty));
+      var origG = lineResolvedGstRupees(row, qty);
+      if (origLine != null && origLine > 0 && origG != null && !isNaN(origG) && origG >= 0) {
+        var scaled = origG * (adjLine / origLine);
+        if (!isNaN(scaled) && scaled >= 0) {
+          sum += scaled;
+          ok = true;
+        }
+      }
+    }
+    return ok ? round2(sum) : null;
+  }
+
   /** @returns {Record<string, unknown>} */
   function mergeTotalsWithLineAdjustments(data, totals) {
     var items = getCartItems(data || {});
@@ -657,6 +705,10 @@
     var out = Object.assign({}, totals);
     var baseSub = out.subtotal != null && !isNaN(out.subtotal) ? out.subtotal : rawMerch;
     out.subtotal = round2(baseSub + (adjMerch - rawMerch));
+    var adjGst = sumAdjustedGstFromCartItems(data);
+    if (adjGst != null && !isNaN(adjGst)) {
+      out.gstTotal = round2(adjGst);
+    }
     var coupon =
       out.couponDeduction != null && !isNaN(Number(out.couponDeduction)) ? Number(out.couponDeduction) : 0;
     var cust =
