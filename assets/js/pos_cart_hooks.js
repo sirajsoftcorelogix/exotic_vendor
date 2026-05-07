@@ -1439,6 +1439,58 @@
     );
   }
 
+  /**
+   * Summary row with optional note line under the label.
+   * @param {string} label
+   * @param {number|null} val
+   * @param {string} [note] Small secondary line (e.g. "(included in line totals)")
+   * @param {boolean} isGrand
+   * @param {string} [removeBtnClass]
+   */
+  function moneyRowSummaryNote(label, val, note, isGrand, removeBtnClass) {
+    var disp = formatMoneyDisplay(val);
+    var text = disp == null ? '\u2014' : summaryAmountCell(val);
+    var hasRemove = !isGrand && removeBtnClass && String(removeBtnClass).trim() !== '';
+    var rowClass = isGrand
+      ? 'flex justify-between items-baseline gap-3 text-base font-bold text-slate-900 pt-3 mt-2 border-t border-dashed border-slate-300'
+      : 'flex justify-between items-start gap-2 text-xs text-slate-600 py-1.5';
+
+    var safeNote = note != null && String(note).trim() !== '' ? String(note).trim() : '';
+    var labelHtml =
+      '<span class="' +
+      (isGrand ? 'text-slate-800 font-bold' : 'text-slate-500 font-medium min-w-0 pr-1') +
+      '">' +
+      escapeHtml(label) +
+      (safeNote && !isGrand
+        ? '<div class="text-[11px] text-slate-400 leading-snug mt-0.5">' + escapeHtml(safeNote) + '</div>'
+        : '') +
+      '</span>';
+
+    var amountSpan =
+      '<span class="tabular-nums ' +
+      (isGrand ? 'text-orange-600' : disp == null ? 'text-slate-400' : 'text-slate-800 font-semibold') +
+      '">' +
+      (disp == null ? escapeHtml('\u2014') : text) +
+      '</span>';
+
+    if (!hasRemove) {
+      return '<div class="' + rowClass + '">' + labelHtml + amountSpan + '</div>';
+    }
+    return (
+      '<div class="' +
+      rowClass +
+      '">' +
+      labelHtml +
+      '<span class="flex items-center gap-2 shrink-0">' +
+      amountSpan +
+      '<button type="button" class="' +
+      String(removeBtnClass) +
+      ' inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700" title="Remove" aria-label="Remove">' +
+      '<i class="fas fa-trash-alt text-[11px]" aria-hidden="true"></i></button>' +
+      '</span></div>'
+    );
+  }
+
   function ensureCartPanel() {
     var el = document.getElementById(PANEL_ID);
     if (el) {
@@ -1759,20 +1811,26 @@
         } else if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'fixed') {
           cdLbl += ' (fixed ₹)';
         }
-        if (totals.cartDiscountAbsorbed) {
-          cdLbl += ' \u2014 included in line totals';
-        }
-        html += moneyRowSummary(cdLbl, totals.customDeduction, false, 'pos-cart-summary-remove-custom');
+        html += moneyRowSummaryNote(
+          cdLbl,
+          totals.customDeduction,
+          totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
+          false,
+          'pos-cart-summary-remove-custom'
+        );
       }
       if (isAmountGreaterThanZero(totals.couponDeduction)) {
         var couponLbl =
           totals.couponDisplayName && String(totals.couponDisplayName).trim() !== ''
             ? 'Coupon (' + String(totals.couponDisplayName).trim() + ')'
             : 'Coupon';
-        if (totals.cartDiscountAbsorbed) {
-          couponLbl += ' \u2014 included in line totals';
-        }
-        html += moneyRowSummary(couponLbl, totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
+        html += moneyRowSummaryNote(
+          couponLbl,
+          totals.couponDeduction,
+          totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
+          false,
+          'pos-cart-summary-remove-coupon'
+        );
       }
       html += moneyRowSummary('GST Total', totals.gstTotal, false);
       html += moneyRowSummary('GRAND Total', totals.grandTotal, true);
