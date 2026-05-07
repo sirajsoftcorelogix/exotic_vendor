@@ -827,6 +827,26 @@
     return round2(sum);
   }
 
+  /** Total ₹ discount from manual per-line adjustments (excludes coupon/custom pool). */
+  function sumManualLineDiscountFromCartItems(data) {
+    var items = getCartItems(data || {});
+    if (!items.length) {
+      return 0;
+    }
+    var sum = 0;
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      var qty = lineQty(row);
+      var baseExt = lineListExtendedWeight(row, qty);
+      var posExt = linePosExtendedFromRow(row);
+      var d = round2(baseExt - posExt);
+      if (d > 0) {
+        sum += d;
+      }
+    }
+    return round2(sum);
+  }
+
   /**
    * Recompute GST on discounted line totals (after line discounts + share of coupon/custom allocation).
    * Preference:
@@ -910,8 +930,9 @@
       out.gstTotal = round2(adjGst);
     }
     if (needsMergeCartLevel) {
-      out.couponDeduction = 0;
-      out.customDeduction = 0;
+      // Cart-level discounts are already absorbed into line totals (and thus subtotal).
+      // Keep amounts for display, but don't subtract again when computing grand total.
+      out.cartDiscountAbsorbed = true;
     }
     var coupon =
       !needsMergeCartLevel && out.couponDeduction != null && !isNaN(Number(out.couponDeduction))
@@ -1727,12 +1748,19 @@
         '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Summary</p>' +
         '<div class="space-y-0.5">';
       html += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
+      var manualLineDisc = sumManualLineDiscountFromCartItems(data || {});
+      if (isAmountGreaterThanZero(manualLineDisc)) {
+        html += moneyRowSummary('Line Discount', manualLineDisc, false);
+      }
       if (isAmountGreaterThanZero(totals.customDeduction)) {
         var cdLbl = 'Custom Discount';
         if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'percent') {
           cdLbl += ' (' + formatPctLabel(posCustomDiscountPersist.value) + ')';
         } else if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'fixed') {
           cdLbl += ' (fixed ₹)';
+        }
+        if (totals.cartDiscountAbsorbed) {
+          cdLbl += ' \u2014 included in line totals';
         }
         html += moneyRowSummary(cdLbl, totals.customDeduction, false, 'pos-cart-summary-remove-custom');
       }
@@ -1741,6 +1769,9 @@
           totals.couponDisplayName && String(totals.couponDisplayName).trim() !== ''
             ? 'Coupon (' + String(totals.couponDisplayName).trim() + ')'
             : 'Coupon';
+        if (totals.cartDiscountAbsorbed) {
+          couponLbl += ' \u2014 included in line totals';
+        }
         html += moneyRowSummary(couponLbl, totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
       }
       html += moneyRowSummary('GST Total', totals.gstTotal, false);
