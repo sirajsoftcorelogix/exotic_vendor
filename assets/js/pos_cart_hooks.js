@@ -1645,39 +1645,61 @@
         }
         html += '</div>';
         if (ref) {
+          var cartShare =
+            lineCartAllocs != null && lineCartAllocs.length === items.length ? round2(lineCartAllocs[idx] || 0) : 0;
+          if (isNaN(cartShare) || cartShare < 0) {
+            cartShare = 0;
+          }
+
           var gadj = posLineAdjustByRef[ref] || { mode: 'percent', value: 0 };
-          var curMode =
-            String(gadj.mode) === 'fixed_line' ? 'fixed_line' : 'percent';
-          var curVal =
+          var storedMode = String(gadj.mode) === 'fixed_line' ? 'fixed_line' : 'percent';
+          var storedVal =
             typeof gadj.value === 'number' && !isNaN(gadj.value)
               ? gadj.value
               : parseFloat(String(gadj.value));
-          if (isNaN(curVal) || curVal < 0) {
-            curVal = 0;
+          if (isNaN(storedVal) || storedVal < 0) {
+            storedVal = 0;
           }
+
+          // Display rule: when cart-share exists, show a fixed ₹ field that includes it.
+          // Stored rule: we only store the "manual extra" portion in posLineAdjustByRef to avoid double applying.
+          var showMode = cartShare > 0.001 ? 'fixed_line' : storedMode;
+          var manualFixed = 0;
+          if (storedVal > 0.001) {
+            if (storedMode === 'fixed_line') {
+              manualFixed = storedVal;
+            } else {
+              // percent → convert to ₹ off this line based on list/catalog extended.
+              var baseLine = listUNum != null && !isNaN(listUNum) ? Math.max(0, round2(listUNum * qty)) : 0;
+              manualFixed = round2((baseLine * Math.min(100, Math.max(0, storedVal))) / 100);
+            }
+          }
+          var showValFixed = round2(Math.max(0, manualFixed) + Math.max(0, cartShare));
           html +=
-            '<div class="pos-cart-line-adjust mt-3">' +
+            '<div class="pos-cart-line-adjust mt-3" data-cartshare="' +
+            escapeHtml(String(cartShare)) +
+            '">' +
             '<div class="text-[11px] font-bold text-red-600 mb-1.5">Line Discount</div>' +
             '<div class="flex flex-wrap items-stretch gap-2">' +
             '<select class="pos-cart-line-disc-mode shrink-0 rounded border border-slate-300 bg-white px-2 py-2 text-xs font-medium text-slate-800 shadow-sm outline-none focus:border-orange-500" data-cartref="' +
             escapeHtml(ref) +
             '">' +
-            '<option value="percent"' +
-            (curMode === 'percent' ? ' selected' : '') +
-            '>% Off</option>' +
+            (cartShare > 0.001
+              ? ''
+              : '<option value="percent"' + (showMode === 'percent' ? ' selected' : '') + '>% Off</option>') +
             '<option value="fixed_line"' +
-            (curMode === 'fixed_line' ? ' selected' : '') +
+            (showMode === 'fixed_line' ? ' selected' : '') +
             '>Fixed \u20b9 off line</option>' +
             '</select>' +
             '<input type="number" step="0.01" min="0"' +
-            (curMode === 'percent' ? ' max="100"' : '') +
+            (showMode === 'percent' ? ' max="100"' : '') +
             ' class="pos-cart-line-disc-val min-w-[4.5rem] flex-1 rounded border border-slate-300 bg-white px-2 py-2 text-xs tabular-nums shadow-sm outline-none focus:border-orange-500"' +
             ' data-cartref="' +
             escapeHtml(ref) +
             '" placeholder="' +
-            (curMode === 'percent' ? '%' : '\u20b9') +
+            (showMode === 'percent' ? '%' : '\u20b9') +
             '" value="' +
-            (curVal > 0 ? escapeHtml(String(curVal)) : '') +
+            (showMode === 'fixed_line' && showValFixed > 0.001 ? escapeHtml(String(showValFixed)) : storedVal > 0.001 ? escapeHtml(String(storedVal)) : '') +
             '" />' +
             '<button type="button" class="pos-cart-line-disc-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800" data-cartref="' +
             escapeHtml(ref) +
@@ -1846,6 +1868,13 @@
             return;
           }
           var wrapLm = t.closest('.pos-cart-line-adjust');
+          if (wrapLm) {
+            var cs = parseFloat(String(wrapLm.getAttribute('data-cartshare') || '0'));
+            if (!isNaN(cs) && cs > 0.001 && t.value === 'percent') {
+              // Cart-share display uses fixed ₹. Don't allow switching to percent while a cart pool exists.
+              t.value = 'fixed_line';
+            }
+          }
           var inpLm = wrapLm ? wrapLm.querySelector('.pos-cart-line-disc-val') : null;
           if (inpLm) {
             if (t.value === 'percent') {
@@ -1954,6 +1983,19 @@
           var modeA = selA && String(selA.value) === 'fixed_line' ? 'fixed_line' : 'percent';
           var vA = inpA ? parseFloat(String(inpA.value)) : NaN;
           vA = isNaN(vA) || vA < 0 ? 0 : vA;
+
+          // When cart-level discounts are being absorbed into lines, the UI shows (manual + cartShare).
+          // Only store the manual extra portion so we don't double-apply the cart pool.
+          var cartShareA = 0;
+          if (wrapA) {
+            var rawCsA = parseFloat(String(wrapA.getAttribute('data-cartshare') || '0'));
+            if (!isNaN(rawCsA) && rawCsA > 0) {
+              cartShareA = rawCsA;
+            }
+          }
+          if (cartShareA > 0.001 && modeA === 'fixed_line') {
+            vA = round2(Math.max(0, vA - cartShareA));
+          }
           if (vA <= 0) {
             delete posLineAdjustByRef[rA];
             renderCartUI(lastRetrieveCartDataSnapshot || {});
