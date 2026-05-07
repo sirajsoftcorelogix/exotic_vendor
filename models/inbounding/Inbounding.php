@@ -1000,6 +1000,67 @@ class Inbounding {
         }
         return false;
     }
+
+    public function getAuthorById($id) {
+        $id = (int)$id;
+        $stmt = $this->conn->prepare("SELECT author_id AS id, author AS name FROM vp_author WHERE author_id = ? LIMIT 1");
+        if (!$stmt) return [];
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        return $row ? $row : [];
+    }
+
+    public function getPublisherById($id) {
+        $id = (int)$id;
+        $stmt = $this->conn->prepare("SELECT publishers_id AS id, publishers AS name FROM vp_publishers WHERE publishers_id = ? LIMIT 1");
+        if (!$stmt) return [];
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        return $row ? $row : [];
+    }
+
+    public function searchAuthors($query) {
+        $query = trim($query);
+        if ($query === '') {
+            return [];
+        }
+
+        $search = '%' . $query . '%';
+        $id = intval($query);
+        $stmt = $this->conn->prepare("SELECT author_id AS id, author AS name FROM vp_author WHERE is_active = 1 AND (author LIKE ? OR author_id = ?) ORDER BY author LIMIT 20");
+        if (!$stmt) return [];
+        $stmt->bind_param('si', $search, $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+        return $data;
+    }
+
+    public function searchPublishers($query) {
+        $query = trim($query);
+        if ($query === '') {
+            return [];
+        }
+
+        $search = '%' . $query . '%';
+        $id = intval($query);
+        $stmt = $this->conn->prepare("SELECT publishers_id AS id, publishers AS name FROM vp_publishers WHERE is_active = 1 AND (publishers LIKE ? OR publishers_id = ?) ORDER BY publishers LIMIT 20");
+        if (!$stmt) return [];
+        $stmt->bind_param('si', $search, $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+        return $data;
+    }
+
     public function getlabeldata($id){
         $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name,v.store_location as location  FROM vp_inbound as v 
         LEFT JOIN category as c on v.group_name=c.category
@@ -1058,6 +1119,15 @@ class Inbounding {
         $photo   = $data['product_photo'] ?? '';
         $wh    = $data['store_location'] ?? '';
         $temp_code = $data['temp_code'] ?? '';
+        $gate_entry_date_time = $data['gate_entry_date_time'] ?? '';
+        $material_code = (int) ($data['material_code'] ?? 0);
+        $group_name = $data['group_name'] ?? '';
+        $received_by_user_id = (int) ($data['received_by_user_id'] ?? 0);
+        $author = (int) ($data['author'] ?? 0);
+        $publisher = (int) ($data['publisher'] ?? 0);
+        $isbn = trim($data['isbn'] ?? '');
+        $language = trim($data['language'] ?? '');
+        $pages = (int) ($data['pages'] ?? 0);
        
         $p_ind   = (float) ($data['price_india'] ?? 0);
         $p_mrp   = (float) ($data['price_india_mrp'] ?? 0);
@@ -1069,7 +1139,7 @@ class Inbounding {
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, product_photo = ?,
-              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, modified_at = NOW()
+              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, author = ?, publisher = ?, isbn = ?, language = ?, pages = ?, modified_at = NOW()
             WHERE id = ?";
 
         $stmt = $this->conn->prepare($sql);
@@ -1079,8 +1149,7 @@ class Inbounding {
 
         // 3. Correct Bind Param Types
         // s = string, d = double (float), i = integer
-        // String map: sssss dddd ss d i i sss d d s i
-        $types = "sisssssssddddssdissssdds";
+        $types = "sisssssisddddssdiissddsiissii";
 
         $stmt->bind_param(
             $types,
@@ -1090,9 +1159,9 @@ class Inbounding {
             $feedback,            // 1
             $Item_code,           // 2
             $is_variant,          // 3
-            $data['gate_entry_date_time'], // 4
-            $data['material_code'], // 5
-            $data['group_name'],    // 6
+            $gate_entry_date_time, // 4
+            $material_code,       // 5
+            $group_name,          // 6
             $height,              // 7
             $width,               // 8
             $depth,               // 9
@@ -1101,13 +1170,18 @@ class Inbounding {
             $size,                // 12
             $cp,                  // 13
             $qty,                 // 14
-            $data['received_by_user_id'], // 15
+            $received_by_user_id, // 15
             $photo,               // 16
             $wh,                  // 17
             $p_ind,               // 18
             $p_mrp,               // 19
             $colormaps,           // 20
-            $id                   // 21
+            $author,              // 21
+            $publisher,           // 22
+            $isbn,                // 23
+            $language,            // 24
+            $pages,               // 25
+            $id                   // 26
         );
 
         if ($stmt->execute()) {

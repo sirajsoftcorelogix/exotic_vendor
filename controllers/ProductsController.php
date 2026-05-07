@@ -412,7 +412,8 @@ class ProductsController
             renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No product rows in API response.']], 'No Products Found');
             return;
         }
-        $updateResult = $productModel->updateProductFromApi($productRows);
+        // Refresh from API should not overwrite local stock maintained in the portal.
+        $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => true]);
         echo json_encode($updateResult);
         exit;
         // if ($updatedCount['success']) {

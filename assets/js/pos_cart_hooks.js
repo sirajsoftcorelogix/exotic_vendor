@@ -627,6 +627,190 @@
     return round2(newLineTotal / qty);
   }
 
+  /** Extended line ₹ after user-defined line discounts (GST-inclusive POS total for the row). */
+  function linePosExtendedFromRow(row) {
+    var qty = lineQty(row);
+    var listU = lineListUnitNumber(row, qty);
+    if (listU == null) {
+      listU = 0;
+    }
+    var ref = lineCartRef(row);
+    var posU = computePosUnitFromList(listU, qty, ref);
+    return round2(posU * qty);
+  }
+
+  function cartDeductionPoolFromTotals(totals) {
+    if (!totals || typeof totals !== 'object') {
+      return 0;
+    }
+    var c = totals.couponDeduction != null && !isNaN(Number(totals.couponDeduction)) ? Number(totals.couponDeduction) : 0;
+    var u =
+      totals.customDeduction != null && !isNaN(Number(totals.customDeduction)) ? Number(totals.customDeduction) : 0;
+    return round2(Math.max(0, c) + Math.max(0, u));
+  }
+
+  function lineListExtendedWeight(row, qty) {
+    var listU = lineListUnitNumber(row, qty);
+    if (listU == null || listU < 0) {
+      listU = 0;
+    }
+    return Math.max(0, round2(listU * qty));
+  }
+
+  /** Split pool across lines by list/catalog extended value; remainder on last rounded row. */
+  function proportionalAllocatePool(pool, weights) {
+    var n = weights.length;
+    var out = new Array(n).fill(0);
+    if (!(pool > 0.001) || !n) {
+      return out;
+    }
+    var sumW = 0;
+    for (var wi = 0; wi < n; wi++) {
+      sumW += weights[wi];
+    }
+    var remaining = pool;
+    if (!(sumW > 0.001)) {
+      var base = round2(pool / n);
+      for (var ej = 0; ej < n; ej++) {
+        if (ej === n - 1) {
+          out[ej] = round2(remaining);
+        } else {
+          out[ej] = base;
+          remaining = round2(remaining - base);
+        }
+      }
+      return out;
+    }
+    for (var k = 0; k < n; k++) {
+      if (k === n - 1) {
+        out[k] = round2(remaining);
+      } else {
+        var share = round2((pool * weights[k]) / sumW);
+        out[k] = share;
+        remaining = round2(remaining - share);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Share coupon + custom across lines (weight = list ₹ extended). Caps each slice at the line POS extended
+   * so row totals stay ≥ 0 and redistributes overflow to lines with spare room (multi-pass).
+   */
+  function computePerLineCartAllocations(data, totals) {
+    var items = getCartItems(data || {});
+    var n = items.length;
+    var out = new Array(n).fill(0);
+    var pool = cartDeductionPoolFromTotals(totals);
+    if (!n || !(pool > 0.001)) {
+      return out;
+    }
+    var weights = [];
+    var posExts = [];
+    for (var ix = 0; ix < n; ix++) {
+      var qtyW = lineQty(items[ix]);
+      weights.push(lineListExtendedWeight(items[ix], qtyW));
+      posExts.push(linePosExtendedFromRow(items[ix]));
+    }
+    out = proportionalAllocatePool(pool, weights);
+    var maxRounds = n + 4;
+    for (var rnd = 0; rnd < maxRounds; rnd++) {
+      var surplus = 0;
+      for (var i = 0; i < n; i++) {
+        var px = posExts[i];
+        if (out[i] > px + 1e-6) {
+          surplus = round2(surplus + round2(out[i] - px));
+          out[i] = px;
+        }
+      }
+      if (!(surplus > 1e-4)) {
+        break;
+      }
+      var roomSum = 0;
+      var room = [];
+      for (var j = 0; j < n; j++) {
+        var rm = Math.max(0, round2(posExts[j] - out[j]));
+        room[j] = rm;
+        roomSum += rm;
+      }
+      if (!(roomSum > 1e-4)) {
+        break;
+      }
+      var remGive = surplus;
+      var giveTotal = surplus;
+      for (var g = 0; g < n; g++) {
+        var gs = g === n - 1 ? remGive : round2((giveTotal * room[g]) / roomSum);
+        var capGs = Math.max(0, round2(posExts[g] - out[g]));
+        if (gs > capGs) {
+          gs = capGs;
+        }
+        out[g] = round2(out[g] + gs);
+        remGive = round2(remGive - gs);
+      }
+    }
+    var drift = round2(pool);
+    var sumOk = 0;
+    for (var z = 0; z < n; z++) {
+      sumOk += out[z];
+    }
+    drift = round2(drift - sumOk);
+    if (Math.abs(drift) > 1e-4) {
+      var bestIx = -1;
+      var bestRm = -1;
+      var wantAdd = drift > 0 ? drift : 0;
+      if (wantAdd > 1e-6) {
+        for (var b = 0; b < n; b++) {
+          var rmb = Math.max(0, round2(posExts[b] - out[b]));
+          if (rmb >= wantAdd - 1e-6 && rmb > bestRm) {
+            bestRm = rmb;
+            bestIx = b;
+          }
+        }
+        if (bestIx < 0) {
+          bestRm = -1;
+          for (var bb = 0; bb < n; bb++) {
+            var rm2 = Math.max(0, round2(posExts[bb] - out[bb]));
+            if (rm2 > bestRm + 1e-9) {
+              bestRm = rm2;
+              bestIx = bb;
+            }
+          }
+        }
+        if (bestIx >= 0 && bestRm > 1e-6 && wantAdd > 1e-6) {
+          var bump = Math.min(wantAdd, bestRm);
+          out[bestIx] = round2(out[bestIx] + bump);
+        }
+      } else if (drift < -1e-4) {
+        for (var bk = n - 1; bk >= 0; bk--) {
+          var takeOff = Math.min(out[bk], -drift);
+          if (!(takeOff > 1e-6)) {
+            continue;
+          }
+          out[bk] = round2(out[bk] - takeOff);
+          drift = round2(drift + takeOff);
+          if (Math.abs(drift) < 1e-4) {
+            break;
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  function sumEffectiveMerchAfterCartAlloc(data, totals) {
+    var items = getCartItems(data || {});
+    if (!items.length) {
+      return 0;
+    }
+    var allocs = computePerLineCartAllocations(data, totals);
+    var sum = 0;
+    for (var i = 0; i < items.length; i++) {
+      var px = linePosExtendedFromRow(items[i]);
+      sum += Math.max(0, round2(px - (allocs[i] || 0)));
+    }
+    return round2(sum);
+  }
+
   function sumAdjustedMerchFromCartItems(data) {
     var items = getCartItems(data || {});
     var sum = 0;
@@ -643,6 +827,81 @@
     return round2(sum);
   }
 
+  /** Total ₹ discount from manual per-line adjustments (excludes coupon/custom pool). */
+  function sumManualLineDiscountFromCartItems(data) {
+    var items = getCartItems(data || {});
+    if (!items.length) {
+      return 0;
+    }
+    var sum = 0;
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      var qty = lineQty(row);
+      var baseExt = lineListExtendedWeight(row, qty);
+      var posExt = linePosExtendedFromRow(row);
+      var d = round2(baseExt - posExt);
+      if (d > 0) {
+        sum += d;
+      }
+    }
+    return round2(sum);
+  }
+
+  /**
+   * Recompute GST on discounted line totals (after line discounts + share of coupon/custom allocation).
+   * Preference:
+   * 1) use line GST rate (if available) on adjusted inclusive line total
+   * 2) fallback to scaling API GST amount by adjusted/original line ratio
+   * @param {Record<string, unknown>|null|undefined} [totals] — when coupon/custom pool &gt; 0, allocates into lines here
+   */
+  function sumAdjustedGstFromCartItems(data, totals) {
+    var items = getCartItems(data || {});
+    if (!items.length) {
+      return null;
+    }
+    var allocs = null;
+    if (totals && cartDeductionPoolFromTotals(totals) > 0.001) {
+      allocs = computePerLineCartAllocations(data, totals);
+    }
+    var sum = 0;
+    var ok = false;
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      var qty = lineQty(row);
+      var listU = lineListUnitNumber(row, qty);
+      if (listU == null) {
+        listU = 0;
+      }
+      var ref = lineCartRef(row);
+      var posU = computePosUnitFromList(listU, qty, ref);
+      var posExtLine = round2(posU * qty);
+      var allocCut = allocs != null && allocs.length === items.length ? allocs[i] || 0 : 0;
+      var adjLine = Math.max(0, round2(posExtLine - allocCut));
+      if (!(adjLine > 0)) {
+        continue;
+      }
+      var rate = lineGstRatePercent(row);
+      if (rate != null && rate > 0 && rate <= 40) {
+        var gstByRate = adjLine - adjLine / (1 + rate / 100);
+        if (!isNaN(gstByRate) && gstByRate >= 0) {
+          sum += gstByRate;
+          ok = true;
+          continue;
+        }
+      }
+      var origLine = parseMoneyValue(lineLineTotalStr(row, qty));
+      var origG = lineResolvedGstRupees(row, qty);
+      if (origLine != null && origLine > 0 && origG != null && !isNaN(origG) && origG >= 0) {
+        var scaled = origG * (adjLine / origLine);
+        if (!isNaN(scaled) && scaled >= 0) {
+          sum += scaled;
+          ok = true;
+        }
+      }
+    }
+    return ok ? round2(sum) : null;
+  }
+
   /** @returns {Record<string, unknown>} */
   function mergeTotalsWithLineAdjustments(data, totals) {
     var items = getCartItems(data || {});
@@ -650,17 +909,39 @@
       return totals;
     }
     var rawMerch = sumLineTotalsFromCartItems(data);
-    var adjMerch = sumAdjustedMerchFromCartItems(data);
-    if (rawMerch == null || adjMerch == null || Math.abs(adjMerch - rawMerch) < 0.02) {
+    var pool = cartDeductionPoolFromTotals(totals);
+    var effMerch = sumEffectiveMerchAfterCartAlloc(data, totals);
+    var comparableRaw = rawMerch;
+    if (comparableRaw == null || isNaN(comparableRaw)) {
+      comparableRaw = sumAdjustedMerchFromCartItems(data);
+    }
+    var needsMergeCartLevel = pool > 0.001;
+    var needsMergeLineAdj = comparableRaw != null && !isNaN(comparableRaw) && Math.abs(effMerch - comparableRaw) >= 0.02;
+    if (!needsMergeCartLevel && !needsMergeLineAdj) {
       return totals;
     }
     var out = Object.assign({}, totals);
-    var baseSub = out.subtotal != null && !isNaN(out.subtotal) ? out.subtotal : rawMerch;
-    out.subtotal = round2(baseSub + (adjMerch - rawMerch));
+    var baseSub = out.subtotal != null && !isNaN(out.subtotal) ? out.subtotal : comparableRaw || effMerch;
+    if (comparableRaw != null && !isNaN(comparableRaw)) {
+      out.subtotal = round2(baseSub + (effMerch - comparableRaw));
+    }
+    var adjGst = sumAdjustedGstFromCartItems(data, totals);
+    if (adjGst != null && !isNaN(adjGst)) {
+      out.gstTotal = round2(adjGst);
+    }
+    if (needsMergeCartLevel) {
+      // Cart-level discounts are already absorbed into line totals (and thus subtotal).
+      // Keep amounts for display, but don't subtract again when computing grand total.
+      out.cartDiscountAbsorbed = true;
+    }
     var coupon =
-      out.couponDeduction != null && !isNaN(Number(out.couponDeduction)) ? Number(out.couponDeduction) : 0;
+      !needsMergeCartLevel && out.couponDeduction != null && !isNaN(Number(out.couponDeduction))
+        ? Number(out.couponDeduction)
+        : 0;
     var cust =
-      out.customDeduction != null && !isNaN(Number(out.customDeduction)) ? Number(out.customDeduction) : 0;
+      !needsMergeCartLevel && out.customDeduction != null && !isNaN(Number(out.customDeduction))
+        ? Number(out.customDeduction)
+        : 0;
     var grand = out.subtotal - coupon - cust;
     out.grandTotal = round2(grand >= 0 ? grand : 0);
     return out;
@@ -685,21 +966,24 @@
    */
   function buildPosLinePricesPayload(data) {
     var items = getCartItems(data || {});
+    var rawT = totalsFromRetrieve(data && typeof data === 'object' ? data : {});
+    var alloc =
+      cartDeductionPoolFromTotals(rawT) > 0.001 ? computePerLineCartAllocations(data || {}, rawT) : null;
     var out = [];
     for (var i = 0; i < items.length; i++) {
       var row = items[i];
       var qty = lineQty(row);
-      var listU = lineListUnitNumber(row, qty);
-      if (listU == null) {
-        listU = 0;
-      }
-      var ref = lineCartRef(row);
-      var posU = computePosUnitFromList(listU, qty, ref);
+      var posExt = linePosExtendedFromRow(row);
+      var cut =
+        alloc != null && alloc.length === items.length ? alloc[i] || 0 : 0;
+      var effExt = Math.max(0, round2(posExt - cut));
+      var unitAfter = qty >= 1 ? round2(effExt / qty) : effExt;
       out.push({
         itemcode: lineItemCodeForApi(row),
         size: lineSizeForApi(row),
         color: lineColorForApi(row),
-        price: formatMoneyDisplay(posU) != null ? String(formatMoneyDisplay(posU)) : String(round2(posU))
+        price:
+          formatMoneyDisplay(unitAfter) != null ? String(formatMoneyDisplay(unitAfter)) : String(round2(unitAfter))
       });
     }
     return out;
@@ -1155,6 +1439,58 @@
     );
   }
 
+  /**
+   * Summary row with optional note line under the label.
+   * @param {string} label
+   * @param {number|null} val
+   * @param {string} [note] Small secondary line (e.g. "(included in line totals)")
+   * @param {boolean} isGrand
+   * @param {string} [removeBtnClass]
+   */
+  function moneyRowSummaryNote(label, val, note, isGrand, removeBtnClass) {
+    var disp = formatMoneyDisplay(val);
+    var text = disp == null ? '\u2014' : summaryAmountCell(val);
+    var hasRemove = !isGrand && removeBtnClass && String(removeBtnClass).trim() !== '';
+    var rowClass = isGrand
+      ? 'flex justify-between items-baseline gap-3 text-base font-bold text-slate-900 pt-3 mt-2 border-t border-dashed border-slate-300'
+      : 'flex justify-between items-start gap-2 text-xs text-slate-600 py-1.5';
+
+    var safeNote = note != null && String(note).trim() !== '' ? String(note).trim() : '';
+    var labelHtml =
+      '<span class="' +
+      (isGrand ? 'text-slate-800 font-bold' : 'text-slate-500 font-medium min-w-0 pr-1') +
+      '">' +
+      escapeHtml(label) +
+      (safeNote && !isGrand
+        ? '<div class="text-[11px] text-slate-400 leading-snug mt-0.5">' + escapeHtml(safeNote) + '</div>'
+        : '') +
+      '</span>';
+
+    var amountSpan =
+      '<span class="tabular-nums ' +
+      (isGrand ? 'text-orange-600' : disp == null ? 'text-slate-400' : 'text-slate-800 font-semibold') +
+      '">' +
+      (disp == null ? escapeHtml('\u2014') : text) +
+      '</span>';
+
+    if (!hasRemove) {
+      return '<div class="' + rowClass + '">' + labelHtml + amountSpan + '</div>';
+    }
+    return (
+      '<div class="' +
+      rowClass +
+      '">' +
+      labelHtml +
+      '<span class="flex items-center gap-2 shrink-0">' +
+      amountSpan +
+      '<button type="button" class="' +
+      String(removeBtnClass) +
+      ' inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700" title="Remove" aria-label="Remove">' +
+      '<i class="fas fa-trash-alt text-[11px]" aria-hidden="true"></i></button>' +
+      '</span></div>'
+    );
+  }
+
   function ensureCartPanel() {
     var el = document.getElementById(PANEL_ID);
     if (el) {
@@ -1226,7 +1562,13 @@
       lastRetrieveCartDataSnapshot ||
       (data && typeof data === 'object' ? data : null);
 
-    var totals = mergeTotalsWithLineAdjustments(data || {}, totalsFromRetrieve(data || {}));
+    var rawTotalsForAlloc = totalsFromRetrieve(data || {});
+    var lineCartAllocs =
+      cartDeductionPoolFromTotals(rawTotalsForAlloc) > 0.001
+        ? computePerLineCartAllocations(data || {}, rawTotalsForAlloc)
+        : null;
+
+    var totals = mergeTotalsWithLineAdjustments(data || {}, rawTotalsForAlloc);
     var html = '';
 
     if (!items.length) {
@@ -1254,18 +1596,26 @@
         var imgUrl = lineImageUrl(row);
         var productCode = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
         var codeLbl = String(sub || productCode || '').trim() || '\u2014';
-        var effUnitNum =
-          posUNum != null
-            ? posUNum
-            : listUNum != null
-              ? listUNum
-              : parseMoneyValue(unitPrice);
-        var effLineNum =
-          posUNum != null
-            ? round2(posUNum * qty)
-            : parseMoneyValue(lineLineTotalStr(row, qty));
-        if ((effLineNum == null || isNaN(effLineNum)) && effUnitNum != null && !isNaN(effUnitNum)) {
-          effLineNum = round2(effUnitNum * qty);
+        var posExtBase = linePosExtendedFromRow(row);
+        var effUnitNum;
+        var effLineNum;
+        if (lineCartAllocs != null && lineCartAllocs.length === items.length) {
+          effLineNum = Math.max(0, round2(posExtBase - (lineCartAllocs[idx] || 0)));
+          effUnitNum = qty >= 1 ? round2(effLineNum / qty) : effLineNum;
+        } else {
+          effUnitNum =
+            posUNum != null
+              ? posUNum
+              : listUNum != null
+                ? listUNum
+                : parseMoneyValue(unitPrice);
+          effLineNum =
+            posUNum != null
+              ? round2(posUNum * qty)
+              : parseMoneyValue(lineLineTotalStr(row, qty));
+          if ((effLineNum == null || isNaN(effLineNum)) && effUnitNum != null && !isNaN(effUnitNum)) {
+            effLineNum = round2(effUnitNum * qty);
+          }
         }
         var unitDisp =
           effUnitNum != null && !isNaN(effUnitNum)
@@ -1368,39 +1718,61 @@
         }
         html += '</div>';
         if (ref) {
+          var cartShare =
+            lineCartAllocs != null && lineCartAllocs.length === items.length ? round2(lineCartAllocs[idx] || 0) : 0;
+          if (isNaN(cartShare) || cartShare < 0) {
+            cartShare = 0;
+          }
+
           var gadj = posLineAdjustByRef[ref] || { mode: 'percent', value: 0 };
-          var curMode =
-            String(gadj.mode) === 'fixed_line' ? 'fixed_line' : 'percent';
-          var curVal =
+          var storedMode = String(gadj.mode) === 'fixed_line' ? 'fixed_line' : 'percent';
+          var storedVal =
             typeof gadj.value === 'number' && !isNaN(gadj.value)
               ? gadj.value
               : parseFloat(String(gadj.value));
-          if (isNaN(curVal) || curVal < 0) {
-            curVal = 0;
+          if (isNaN(storedVal) || storedVal < 0) {
+            storedVal = 0;
           }
+
+          // Display rule: when cart-share exists, show a fixed ₹ field that includes it.
+          // Stored rule: we only store the "manual extra" portion in posLineAdjustByRef to avoid double applying.
+          var showMode = cartShare > 0.001 ? 'fixed_line' : storedMode;
+          var manualFixed = 0;
+          if (storedVal > 0.001) {
+            if (storedMode === 'fixed_line') {
+              manualFixed = storedVal;
+            } else {
+              // percent → convert to ₹ off this line based on list/catalog extended.
+              var baseLine = listUNum != null && !isNaN(listUNum) ? Math.max(0, round2(listUNum * qty)) : 0;
+              manualFixed = round2((baseLine * Math.min(100, Math.max(0, storedVal))) / 100);
+            }
+          }
+          var showValFixed = round2(Math.max(0, manualFixed) + Math.max(0, cartShare));
           html +=
-            '<div class="pos-cart-line-adjust mt-3">' +
+            '<div class="pos-cart-line-adjust mt-3" data-cartshare="' +
+            escapeHtml(String(cartShare)) +
+            '">' +
             '<div class="text-[11px] font-bold text-red-600 mb-1.5">Line Discount</div>' +
             '<div class="flex flex-wrap items-stretch gap-2">' +
             '<select class="pos-cart-line-disc-mode shrink-0 rounded border border-slate-300 bg-white px-2 py-2 text-xs font-medium text-slate-800 shadow-sm outline-none focus:border-orange-500" data-cartref="' +
             escapeHtml(ref) +
             '">' +
-            '<option value="percent"' +
-            (curMode === 'percent' ? ' selected' : '') +
-            '>% Off</option>' +
+            (cartShare > 0.001
+              ? ''
+              : '<option value="percent"' + (showMode === 'percent' ? ' selected' : '') + '>% Off</option>') +
             '<option value="fixed_line"' +
-            (curMode === 'fixed_line' ? ' selected' : '') +
+            (showMode === 'fixed_line' ? ' selected' : '') +
             '>Fixed \u20b9 off line</option>' +
             '</select>' +
             '<input type="number" step="0.01" min="0"' +
-            (curMode === 'percent' ? ' max="100"' : '') +
+            (showMode === 'percent' ? ' max="100"' : '') +
             ' class="pos-cart-line-disc-val min-w-[4.5rem] flex-1 rounded border border-slate-300 bg-white px-2 py-2 text-xs tabular-nums shadow-sm outline-none focus:border-orange-500"' +
             ' data-cartref="' +
             escapeHtml(ref) +
             '" placeholder="' +
-            (curMode === 'percent' ? '%' : '\u20b9') +
+            (showMode === 'percent' ? '%' : '\u20b9') +
             '" value="' +
-            (curVal > 0 ? escapeHtml(String(curVal)) : '') +
+            (showMode === 'fixed_line' && showValFixed > 0.001 ? escapeHtml(String(showValFixed)) : storedVal > 0.001 ? escapeHtml(String(storedVal)) : '') +
             '" />' +
             '<button type="button" class="pos-cart-line-disc-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800" data-cartref="' +
             escapeHtml(ref) +
@@ -1428,6 +1800,10 @@
         '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Summary</p>' +
         '<div class="space-y-0.5">';
       html += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
+      var manualLineDisc = sumManualLineDiscountFromCartItems(data || {});
+      if (isAmountGreaterThanZero(manualLineDisc)) {
+        html += moneyRowSummary('Line Discount', manualLineDisc, false);
+      }
       if (isAmountGreaterThanZero(totals.customDeduction)) {
         var cdLbl = 'Custom Discount';
         if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'percent') {
@@ -1435,14 +1811,26 @@
         } else if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'fixed') {
           cdLbl += ' (fixed ₹)';
         }
-        html += moneyRowSummary(cdLbl, totals.customDeduction, false, 'pos-cart-summary-remove-custom');
+        html += moneyRowSummaryNote(
+          cdLbl,
+          totals.customDeduction,
+          totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
+          false,
+          'pos-cart-summary-remove-custom'
+        );
       }
       if (isAmountGreaterThanZero(totals.couponDeduction)) {
         var couponLbl =
           totals.couponDisplayName && String(totals.couponDisplayName).trim() !== ''
             ? 'Coupon (' + String(totals.couponDisplayName).trim() + ')'
             : 'Coupon';
-        html += moneyRowSummary(couponLbl, totals.couponDeduction, false, 'pos-cart-summary-remove-coupon');
+        html += moneyRowSummaryNote(
+          couponLbl,
+          totals.couponDeduction,
+          totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
+          false,
+          'pos-cart-summary-remove-coupon'
+        );
       }
       html += moneyRowSummary('GST Total', totals.gstTotal, false);
       html += moneyRowSummary('GRAND Total', totals.grandTotal, true);
@@ -1569,6 +1957,13 @@
             return;
           }
           var wrapLm = t.closest('.pos-cart-line-adjust');
+          if (wrapLm) {
+            var cs = parseFloat(String(wrapLm.getAttribute('data-cartshare') || '0'));
+            if (!isNaN(cs) && cs > 0.001 && t.value === 'percent') {
+              // Cart-share display uses fixed ₹. Don't allow switching to percent while a cart pool exists.
+              t.value = 'fixed_line';
+            }
+          }
           var inpLm = wrapLm ? wrapLm.querySelector('.pos-cart-line-disc-val') : null;
           if (inpLm) {
             if (t.value === 'percent') {
@@ -1677,6 +2072,19 @@
           var modeA = selA && String(selA.value) === 'fixed_line' ? 'fixed_line' : 'percent';
           var vA = inpA ? parseFloat(String(inpA.value)) : NaN;
           vA = isNaN(vA) || vA < 0 ? 0 : vA;
+
+          // When cart-level discounts are being absorbed into lines, the UI shows (manual + cartShare).
+          // Only store the manual extra portion so we don't double-apply the cart pool.
+          var cartShareA = 0;
+          if (wrapA) {
+            var rawCsA = parseFloat(String(wrapA.getAttribute('data-cartshare') || '0'));
+            if (!isNaN(rawCsA) && rawCsA > 0) {
+              cartShareA = rawCsA;
+            }
+          }
+          if (cartShareA > 0.001 && modeA === 'fixed_line') {
+            vA = round2(Math.max(0, vA - cartShareA));
+          }
           if (vA <= 0) {
             delete posLineAdjustByRef[rA];
             renderCartUI(lastRetrieveCartDataSnapshot || {});
@@ -2102,7 +2510,15 @@
   };
 
   window.hasPosLinePriceOverridesForCheckout = function () {
-    return hasLinePriceOverridesActive(window.__posCartLastRetrieveData || {});
+    var d = window.__posCartLastRetrieveData;
+    if (!d || typeof d !== 'object') {
+      return false;
+    }
+    if (hasLinePriceOverridesActive(d)) {
+      return true;
+    }
+    var tt = totalsFromRetrieve(d);
+    return cartDeductionPoolFromTotals(tt) > 0.001;
   };
 
   function initPosCartHooks() {
