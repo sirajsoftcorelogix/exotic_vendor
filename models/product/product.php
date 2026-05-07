@@ -491,9 +491,10 @@ class product
         }
         return $orderItems;
     }
-    public function updateProductFromApi($productData)
+    public function updateProductFromApi($productData, array $options = [])
     {
         $updatedCount = 0;
+        $preserveLocalStock = !empty($options['preserve_local_stock']);
         // print_array($productData);
         // exit;
         if (isset($productData) && is_array($productData)) {
@@ -523,6 +524,9 @@ class product
                     // $stockQuantity = isset($product['stock_quantity']) ? (int)$product['stock_quantity'] : 0;
                     $asin = isset($product['asin']) ? $product['asin'] : '';
                     $localStock = isset($product['local_stock']) ? (int)$product['local_stock'] : 0;
+                    if ($preserveLocalStock && $existingBase && array_key_exists('local_stock', $existingBase)) {
+                        $localStock = (int)$existingBase['local_stock'];
+                    }
                     $upc = isset($product['upc']) ? $product['upc'] : '';
                     $location = isset($product['location']) ? $product['location'] : '';
                     $fba_in = isset($product['fba_in']) ? (int)$product['fba_in'] : 0;
@@ -770,6 +774,9 @@ class product
                             // $stockQuantity = isset($product['stock_quantity']) ? (int)$product['stock_quantity'] : 0;
                             $asin = isset($variation['asin']) ? $variation['asin'] : '';
                             $localStock = isset($variation['local_stock']) ? (int)$variation['local_stock'] : 0;
+                            if ($preserveLocalStock && $existingBase && array_key_exists('local_stock', $existingBase)) {
+                                $localStock = (int)$existingBase['local_stock'];
+                            }
                             $upc = isset($variation['upc']) ? $variation['upc'] : '';
                             $location = isset($variation['location']) ? $variation['location'] : '';
                             $fba_in = isset($variation['fba_in']) ? (int)$variation['fba_in'] : 0;
