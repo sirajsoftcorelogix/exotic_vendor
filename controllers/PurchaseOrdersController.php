@@ -731,9 +731,11 @@ class PurchaseOrdersController
 
         // Update order status
         $statusUpdate = $ordersModel->updateOrderStatusByPO($poId, 'pending');
+        //update po_id and po_number fields of order
+        $statusUpdate2 = $ordersModel->updatePOFieldsByPOId($poId, null, null);
 
         // If everything is successful, return success response
-        echo json_encode(['success' => true, 'message' => 'Purchase Order deleted successfully.', 'status' => $statusUpdate]);
+        echo json_encode(['success' => true, 'message' => 'Purchase Order deleted successfully.', 'status' => $statusUpdate2]);
         exit;
     }
     function downloadPurchaseOrder_old()
