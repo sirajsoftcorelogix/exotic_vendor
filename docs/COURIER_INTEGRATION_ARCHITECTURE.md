@@ -45,6 +45,23 @@ This document proposes an architecture that fits the current codebase style (pla
 
 ---
 
+## Multi-account requirement (critical)
+
+You need support for:
+
+- UPS, Aramex, DHL, FedEx, Blue Dart
+- **Multiple accounts per partner**
+- Account choice by destination/rate advantage (example: DHL-AU account best for Australia, DHL-EU account best for Europe)
+
+So routing must be:
+
+- **Partner selection** (DHL vs FedEx vs UPS...)
+- then **Account selection inside that partner** (DHL account #1 vs #2 vs #3)
+
+The account must be a first-class entity in DB + quote + shipment records.
+
+---
+
 ## Core abstractions (interfaces)
 
 Create these under a single module namespace/folder, e.g. `src/Courier/` (or `helpers/courier/` if you want minimal refactor).
@@ -161,18 +178,47 @@ Keep your existing `vp_dispatch_details` as legacy; link via `legacy_dispatch_id
 
 #### `courier_partner_credentials`
 - `partner_code`
+- `account_code` (required, unique per partner account)
+- `account_name` (human readable, e.g. "DHL AU Export")
 - `tenant_id` / `warehouse_id` (if applicable)
 - `credentials_json` (encrypted if possible)
 - `enabled` (bool)
+- `priority` (int; lower = preferred when scores tie)
+- `is_default` (bool)
+- `tags_json` (optional; e.g. `["intl","express","australia-focus"]`)
 - `created_at`, `updated_at`
 
 #### `courier_partner_tokens`
 - `partner_code`
+- `account_code`
 - `token` (encrypted)
 - `expires_at`
 - `created_at`, `updated_at`
 
 This generalizes your current `shiprocket_api_tokens`.
+
+### 5) Account routing rules
+
+Add a rules table so account can be chosen automatically:
+
+#### `courier_account_routing_rules`
+- `id` (PK)
+- `partner_code` (nullable; null = applies to all partners)
+- `account_code` (FK-ish reference to credentials row)
+- `destination_country` (nullable)
+- `destination_region` (nullable; e.g. `EU`, `ANZ`, `NA`)
+- `destination_postcode_prefix` (nullable)
+- `service_level` (nullable; economy/express)
+- `shipment_type` (nullable; domestic/international)
+- `min_weight`, `max_weight` (nullable)
+- `min_order_value`, `max_order_value` (nullable)
+- `payment_mode` (nullable; prepaid/cod)
+- `priority` (int)
+- `active` (bool)
+- `effective_from`, `effective_to` (nullable)
+- `created_at`, `updated_at`
+
+Use this for deterministic routing before live-rate scoring.
 
 ---
 
@@ -231,8 +277,25 @@ Every adapter maps partner statuses → this enum.
 ### Strategy
 
 - Gateway calls `getRates()` across all enabled adapters that implement `RateProviderInterface`.
+- For each adapter, it queries **all eligible accounts** for that partner.
 - Merge quotes into a single normalized array.
 - Run a **partner-agnostic ranking** (your current `courier_selector.php` logic can be adapted to accept normalized rows).
+
+### Quote model must include account identity
+
+Extend normalized quote shape with:
+
+- `partner_code`
+- `account_code`
+- `account_name`
+- `carrier_name`
+- `service_level`
+- `charges_total`
+- `etd_days`
+- `destination_country`
+- `score_breakdown` (optional)
+
+This allows audit: "Why was DHL account 2 picked for Europe?"
 
 ### Recommendation
 
@@ -240,6 +303,8 @@ Refactor `courier_selector.php` to accept this shape:
 
 - `carrier_name`
 - `partner_code`
+- `account_code`
+- `account_name`
 - `service_level`
 - `charges_total`
 - `etd_days`
@@ -277,6 +342,12 @@ Use `ShipmentRequest.reference` (e.g. `INV-{invoice_id}-BOX-{box_no}`) and store
 
 - return existing shipment if already created
 - or re-try safe operations only
+
+When multi-account is active, also store:
+
+- `selected_partner_code`
+- `selected_account_code`
+- `selection_reason` (rule match, cheapest, fastest, manual override)
 
 ### Retries
 
@@ -347,6 +418,56 @@ To add a new courier partner:
 - UI automatically shows the partner as an option if enabled
 
 No controller changes required.
+
+---
+
+## What “adding a new account” looks like
+
+To add a second/third account under the same partner:
+
+1. Insert credentials row with same `partner_code`, new `account_code`.
+2. (Optional) Add `courier_account_routing_rules` for destination optimization.
+3. Enable account.
+
+No code changes required in controller/gateway/adapter.
+
+---
+
+## Recommended account-selection algorithm
+
+Use a 3-stage approach:
+
+1. **Rule pre-filter**
+   - Apply routing rules by destination, service level, shipment type, weight/value, payment mode.
+   - If rules match, limit candidate accounts to matched set.
+
+2. **Live quote stage**
+   - Fetch rates for candidate accounts only.
+   - Normalize all quotes (partner + account + service).
+
+3. **Rank + choose**
+   - Score using weighted model (cost, ETA, reliability, SLA, RTO performance).
+   - Tie-break with `priority` then `is_default`.
+
+Store the full decision trail in `courier_api_logs` / selection audit table.
+
+---
+
+## Partner list mapping for your ask
+
+Create initial adapters:
+
+- `UPSAdapter`
+- `AramexAdapter`
+- `DHLAdapter`
+- `FedExAdapter`
+- `BlueDartAdapter`
+- Keep existing `ShiprocketAdapter` during migration
+
+Each adapter must support account-scoped auth/token handling:
+
+- Token key = `partner_code + account_code` (not just partner)
+- Separate expiry/refresh per account
 
 ---
 
