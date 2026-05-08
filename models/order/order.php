@@ -1799,4 +1799,15 @@ class Order
 
         return ['success' => true, 'message' => 'Order updated successfully. Affected rows: ' . $affectedRows];
     }
+    public function updatePOFieldsByPOId($po_id, $po_number,$poid)
+    {
+        $sql = "UPDATE vp_orders SET po_id = ?, po_number = ? WHERE po_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssi', $poid, $po_number, $po_id);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'PO fields updated successfully.'];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
 }
