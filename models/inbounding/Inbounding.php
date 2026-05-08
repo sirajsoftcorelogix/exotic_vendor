@@ -733,7 +733,9 @@ class Inbounding {
         $r = $this->conn->query("SELECT id, name FROM `vp_users` ORDER BY name ASC");
         $user = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
         
-        $r = $this->conn->query("SELECT vendor_id as id, vendor_name FROM `vp_vendors` ORDER BY vendor_name ASC");
+        // Use local vendor PK as option value because vp_inbound.vendor_code stores vp_vendors.id
+        // (not remote vendor_id). Using vendor_id here breaks selected state and save/update joins.
+        $r = $this->conn->query("SELECT id, vendor_name FROM `vp_vendors` ORDER BY vendor_name ASC");
         $vendors = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
         
         $r = $this->conn->query("SELECT id, material_name FROM `material` ORDER BY material_name ASC");

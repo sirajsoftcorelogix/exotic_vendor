@@ -4020,8 +4020,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (Array.isArray(vendors) && vendors.length > 0) {
                     // Add vendor options
                     vendors.forEach(vendor => {
+                        const vendorValue = String(vendor.id ?? vendor.vendor_id ?? '').trim();
+                        if (!vendorValue) return;
                         const option = document.createElement('option');
-                        option.value = vendor.vendor_id;
+                        option.value = vendorValue;
                         option.textContent = vendor.vendor_name;
                         vendorSelect.appendChild(option);
                         //console.log('options:', option);
@@ -4031,8 +4033,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (vendorSelect.tomselect) {
                         vendorSelect.tomselect.clearOptions();
                         vendors.forEach(vendor => {
+                            const vendorValue = String(vendor.id ?? vendor.vendor_id ?? '').trim();
+                            if (!vendorValue) return;
                             vendorSelect.tomselect.addOption({
-                                value: vendor.vendor_id,
+                                value: vendorValue,
                                 text: vendor.vendor_name
                             });
                         });
