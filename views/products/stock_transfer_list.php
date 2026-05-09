@@ -341,6 +341,13 @@ $formatStatusLabel = static function (string $status): string {
                                             aria-label="View GRNs">
                                             <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
                                         </a>
+                                        <a href="?page=products&action=stock_transfer_print&transfer_id=<?php echo urlencode($transfer['id']); ?>"
+                                            target="_blank" rel="noopener noreferrer"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-white text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+                                            title="Print transfer order"
+                                            aria-label="Print transfer order">
+                                            <i class="fas fa-print text-xs" aria-hidden="true"></i>
+                                        </a>
                                     </div>
                                 </td>
                             </tr>

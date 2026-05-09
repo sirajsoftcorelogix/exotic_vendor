@@ -88,6 +88,12 @@ $receiptStatus = isset($transfer_receipt_status) ? (string) $transfer_receipt_st
                     <i class="fas fa-clipboard-list text-emerald-600" aria-hidden="true"></i>
                     View GRNs
                 </a>
+                <a href="?page=products&action=stock_transfer_print&transfer_id=<?php echo urlencode($transferId); ?>"
+                    target="_blank" rel="noopener noreferrer"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50 transition w-full sm:w-auto">
+                    <i class="fas fa-print text-gray-700" aria-hidden="true"></i>
+                    Print transfer order
+                </a>
             </div>
         </div>
     </div>
