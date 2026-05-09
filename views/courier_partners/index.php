@@ -118,6 +118,12 @@ $totalRecords = (int)($totalRecords ?? 0);
                                 </td>
                                 <td class="px-4 py-3"><?php echo (int)$r['is_active'] === 1 ? 'Active' : 'Inactive'; ?></td>
                                 <td class="px-4 py-3">
+                                    <div class="flex flex-col gap-2.5 min-w-[10rem]">
+                                        <a href="?page=courier_accounts&amp;action=list&amp;partner_id=<?php echo (int) $r['id']; ?>"
+                                            class="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 hover:text-amber-950 hover:underline decoration-amber-800/30">
+                                            <i class="fas fa-id-card-alt text-xs opacity-90" aria-hidden="true"></i>
+                                            Manage accounts
+                                        </a>
                                     <details>
                                         <summary class="cursor-pointer text-indigo-600">Edit</summary>
                                         <form method="post" action="?page=courier_partners&action=addRecord" class="mt-3 space-y-2 min-w-[280px]">
@@ -140,6 +146,7 @@ $totalRecords = (int)($totalRecords ?? 0);
                                             <button type="submit" class="h-8 px-3 rounded bg-red-600 text-white text-xs font-semibold">Delete</button>
                                         </form>
                                     </details>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
