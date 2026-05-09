@@ -102,8 +102,20 @@ $totalRecords = (int)($totalRecords ?? 0);
                             <tr class="border-b border-gray-100 align-top">
                                 <td class="px-4 py-3 font-semibold text-gray-800"><?php echo htmlspecialchars((string)$r['partner_code']); ?></td>
                                 <td class="px-4 py-3"><?php echo htmlspecialchars((string)$r['partner_name']); ?></td>
-                                <td class="px-4 py-3"><?php echo (int)$r['supports_domestic'] === 1 ? 'Yes' : 'No'; ?></td>
-                                <td class="px-4 py-3"><?php echo (int)$r['supports_international'] === 1 ? 'Yes' : 'No'; ?></td>
+                                <td class="px-4 py-3">
+                                    <?php if ((int)$r['supports_domestic'] === 1): ?>
+                                        <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 shadow-sm ring-1 ring-inset ring-emerald-600/25">Yes</span>
+                                    <?php else: ?>
+                                        <span class="text-xs font-medium text-gray-400 tabular-nums">No</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <?php if ((int)$r['supports_international'] === 1): ?>
+                                        <span class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-900 shadow-sm ring-1 ring-inset ring-sky-600/25">Yes</span>
+                                    <?php else: ?>
+                                        <span class="text-xs font-medium text-gray-400 tabular-nums">No</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="px-4 py-3"><?php echo (int)$r['is_active'] === 1 ? 'Active' : 'Inactive'; ?></td>
                                 <td class="px-4 py-3">
                                     <details>
