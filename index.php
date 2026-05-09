@@ -723,6 +723,9 @@ switch ($page) {
             case 'stock_transfer_items':
                 $controller->stock_transfer_items();
                 break;
+            case 'stock_transfer_print':
+                $controller->stock_transfer_print();
+                break;
             case 'search_product':
                 $controller->searchProduct();
                 break;
@@ -807,6 +810,42 @@ switch ($page) {
                 break;
             case 'getDetails':
                 $controller->getDetails();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+    case 'courier_partners':
+        require_once 'controllers/CourierPartnersController.php';
+        $controller = new CourierPartnersController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->deleteRecord();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+    case 'courier_accounts':
+        require_once 'controllers/CourierAccountsController.php';
+        $controller = new CourierAccountsController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'saveAccount':
+                $controller->saveAccount();
+                break;
+            case 'deleteAccount':
+                $controller->deleteAccount();
                 break;
             default:
                 $controller->index();
