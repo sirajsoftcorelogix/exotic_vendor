@@ -16,6 +16,10 @@ class CourierAccountsController
         $partnerId = isset($_GET['partner_id']) ? (int)$_GET['partner_id'] : 0;
         $partners = $courierPartnerModel->getActivePartners();
         $accounts = $courierAccountModel->listAccounts($partnerId);
+        foreach ($accounts as &$accRow) {
+            $accRow['credentials'] = $courierAccountModel->getCredentials((int) ($accRow['id'] ?? 0));
+        }
+        unset($accRow);
 
         renderTemplate('views/courier_accounts/index.php', [
             'partners' => $partners,
@@ -36,19 +40,22 @@ class CourierAccountsController
         $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
         $res = $courierAccountModel->upsertAccount($id, $_POST);
 
-        // Save credentials if present
-        $accountId = $id > 0 ? $id : 0;
-        if (!empty($res['success']) && $accountId === 0) {
-            // Try to resolve the inserted account id (partner_id + account_code)
-            // We keep it simple: credentials can be saved on next edit if needed.
+        global $conn;
+        $effectiveId = $id;
+        if (!empty($res['success']) && $id === 0) {
+            $effectiveId = (int) $conn->insert_id;
         }
-        if ($id > 0 && isset($_POST['cred_key']) && is_array($_POST['cred_key'])) {
-            $courierAccountModel->saveCredentials(
-                $id,
-                (array)($_POST['cred_key'] ?? []),
-                (array)($_POST['cred_value'] ?? []),
-                (array)($_POST['cred_secret'] ?? [])
+
+        if (!empty($res['success']) && $effectiveId > 0 && isset($_POST['cred_key']) && is_array($_POST['cred_key'])) {
+            $credRes = $courierAccountModel->saveCredentials(
+                $effectiveId,
+                (array) ($_POST['cred_key'] ?? []),
+                (array) ($_POST['cred_value'] ?? []),
+                (array) ($_POST['cred_secret'] ?? [])
             );
+            if (empty($credRes['success'])) {
+                $res['message'] = trim((string) ($res['message'] ?? '') . ' — Credentials: ' . ($credRes['message'] ?? ''));
+            }
         }
 
         $_SESSION['courier_account_flash'] = $res;
