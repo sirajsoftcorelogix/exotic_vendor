@@ -328,6 +328,65 @@ class ProductsController
         header('Location: ?page=products&action=stock_transfer_list');
     }
 
+    /**
+     * Printable stock transfer order (all lines, totals). Warehouse-scoped for non-admin users.
+     */
+    public function stock_transfer_print()
+    {
+        is_login();
+        global $conn;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $transferId = isset($_GET['transfer_id']) ? (int) $_GET['transfer_id'] : 0;
+        if ($transferId <= 0) {
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Invalid transfer']], 'Error');
+
+            return;
+        }
+
+        $transfer = $stockTransferModel->getTransferById($transferId);
+        if (!$transfer) {
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Stock transfer not found']], 'Error');
+
+            return;
+        }
+
+        $isAdminUser = isset($_SESSION['user']['role_id']) && $_SESSION['user']['role_id'] == 1;
+        if (!$isAdminUser) {
+            $userWh = (int) ($_SESSION['warehouse_id'] ?? 0);
+            if ($userWh <= 0 && ! empty($_SESSION['user']['warehouse_id'])) {
+                $userWh = (int) $_SESSION['user']['warehouse_id'];
+            }
+            if ($userWh > 0) {
+                $from = (int) ($transfer['from_warehouse'] ?? 0);
+                $to = (int) ($transfer['to_warehouse'] ?? 0);
+                if ($from !== $userWh && $to !== $userWh) {
+                    renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'You do not have access to this transfer']], 'Error');
+
+                    return;
+                }
+            }
+        }
+
+        $items = $transfer['items'] ?? [];
+        $totalQty = 0;
+        foreach ($items as $row) {
+            $totalQty += (int) ($row['transfer_qty'] ?? 0);
+        }
+
+        $autoprint = isset($_GET['autoprint']) && $_GET['autoprint'] === '1';
+
+        renderTemplateClean('views/products/stock_transfer_print.php', [
+            'transfer' => $transfer,
+            'items' => $items,
+            'total_qty' => $totalQty,
+            'line_count' => count($items),
+            'autoprint' => $autoprint,
+        ], 'Stock transfer order');
+    }
+
     public function getProductById($id)
     {
         global $productModel;
