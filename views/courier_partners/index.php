@@ -10,67 +10,134 @@ $currentPage = (int)($currentPage ?? 1);
 $totalPages = (int)($totalPages ?? 1);
 $limit = (int)($limit ?? 20);
 $totalRecords = (int)($totalRecords ?? 0);
+$rowCount = is_array($rows) ? count($rows) : 0;
+$filtersPanelOpen = trim($search) !== '' || ($statusFilter !== '' && $statusFilter !== null);
+$qsParams = $_GET ?? [];
+unset($qsParams['page_no']);
+$qs = $qsParams ? ('&' . http_build_query($qsParams)) : '';
+$pgBase = '?page=courier_partners&action=list' . $qs;
 ?>
 
-<div class="max-w-7xl mx-auto p-4 sm:p-6 space-y-5">
-    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
-        <div>
-            <h2 class="text-lg font-semibold text-gray-800">Courier Partner Master</h2>
-            <p class="text-sm text-gray-500 mt-1">Create courier partners (DHL, FedEx, Blue Dart, etc.) before mapping accounts.</p>
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
+        <div class="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-sky-200/15 blur-2xl" aria-hidden="true"></div>
+        <div class="relative px-5 py-7 sm:px-8 sm:py-9 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+            <div class="min-w-0 max-w-3xl">
+                <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+                        <i class="fas fa-truck text-[11px]" aria-hidden="true"></i>
+                    </span>
+                    <span>Courier · Partner master</span>
+                </div>
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Courier partners</h1>
+                <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+                    Maintain carriers (DHL, FedEx, Blue Dart, etc.) before mapping API accounts and credentials.
+                </p>
+            </div>
+            <div class="flex flex-col sm:flex-row shrink-0 lg:pl-4 lg:self-center gap-2">
+                <button type="button" id="cpBtnOpenAdd"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
+                    <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
+                    Add partner
+                </button>
+                <a href="?page=courier_accounts&amp;action=list" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition whitespace-nowrap">
+                    <i class="fas fa-id-card-alt text-xs text-amber-600" aria-hidden="true"></i>
+                    Courier accounts
+                </a>
+            </div>
         </div>
-        <button type="button" id="cpBtnOpenAdd"
-            class="inline-flex shrink-0 items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-md shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
-            <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
-            Add partner
-        </button>
     </div>
 
     <?php if ($flash): ?>
-        <div class="rounded-lg border px-4 py-3 text-sm <?php echo !empty($flash['success']) ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'; ?>">
+        <div class="rounded-xl border px-4 py-3 text-sm mb-6 <?php echo !empty($flash['success']) ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'; ?>">
             <?php echo htmlspecialchars((string)($flash['message'] ?? '')); ?>
         </div>
     <?php endif; ?>
 
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-        <form method="get" class="flex flex-wrap items-end gap-3">
+    <style>
+        #cp-partner-filters > summary { list-style: none; }
+        #cp-partner-filters > summary::-webkit-details-marker { display: none; }
+        #cp-partner-filters[open] > summary { border-bottom: 1px solid rgba(251, 243, 219, 0.85); }
+        #cp-partner-filters:not([open]) .cpf-label-open { display: none; }
+        #cp-partner-filters[open] .cpf-label-closed { display: none; }
+        #cp-partner-filters[open] .cpf-chevron { transform: rotate(180deg); }
+    </style>
+
+    <details id="cp-partner-filters" class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden mb-6 ring-1 ring-gray-900/[0.03]" <?php echo $filtersPanelOpen ? 'open' : ''; ?>>
+        <summary class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 flex items-center justify-between gap-4 cursor-pointer">
+            <div class="flex items-center gap-3 min-w-0">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
+                    <i class="fas fa-filter text-sm" aria-hidden="true"></i>
+                </span>
+                <div class="min-w-0">
+                    <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
+                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Filter by partner name, code, or active status.</p>
+                </div>
+            </div>
+            <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
+                <span class="cpf-label-closed">Show</span>
+                <span class="cpf-label-open">Hide</span>
+                <i class="cpf-chevron fas fa-chevron-down text-[10px] transition-transform duration-200" aria-hidden="true"></i>
+            </span>
+        </summary>
+
+        <form method="get" action="index.php" class="p-5">
             <input type="hidden" name="page" value="courier_partners">
             <input type="hidden" name="action" value="list">
-            <div>
-                <label class="block text-xs font-semibold text-gray-500 mb-1">Search</label>
-                <input type="text" name="search_text" value="<?php echo htmlspecialchars($search); ?>" placeholder="Name or code" class="h-10 rounded-lg border border-gray-300 px-3 text-sm w-64">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-gray-500 mb-1">Status</label>
-                <select name="status_filter" class="h-10 rounded-lg border border-gray-300 px-3 text-sm w-44">
-                    <option value="">All</option>
-                    <option value="1" <?php echo $statusFilter === '1' ? 'selected' : ''; ?>>Active</option>
-                    <option value="0" <?php echo $statusFilter === '0' ? 'selected' : ''; ?>>Inactive</option>
-                </select>
-            </div>
-            <button type="submit" class="h-10 px-4 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold">Search</button>
-            <a href="?page=courier_partners&action=list" class="h-10 px-4 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold inline-flex items-center">Clear</a>
-        </form>
-    </div>
 
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4">
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Keyword</label>
+                    <input type="text" name="search_text" value="<?php echo htmlspecialchars($search); ?>" placeholder="Partner name or code"
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+                    <select name="status_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="">All</option>
+                        <option value="1" <?php echo $statusFilter === '1' ? 'selected' : ''; ?>>Active</option>
+                        <option value="0" <?php echo $statusFilter === '0' ? 'selected' : ''; ?>>Inactive</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mt-5 flex flex-wrap items-center gap-3">
+                <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
+                    <i class="fas fa-search text-xs opacity-90" aria-hidden="true"></i>
+                    Apply filters
+                </button>
+                <a href="?page=courier_partners&action=list" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition">
+                    Reset
+                </a>
+            </div>
+        </form>
+    </details>
+
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
         <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th class="px-4 py-3 text-left">Code</th>
-                        <th class="px-4 py-3 text-left">Partner Name</th>
-                        <th class="px-4 py-3 text-left">Domestic</th>
-                        <th class="px-4 py-3 text-left">International</th>
-                        <th class="px-4 py-3 text-left">Status</th>
-                        <th class="px-4 py-3 text-left">Actions</th>
+            <table class="min-w-full text-left">
+                <thead class="sticky top-0 z-10">
+                    <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+                        <th class="px-5 py-3.5 whitespace-nowrap">Code</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Partner name</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Domestic</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">International</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-gray-100">
                     <?php if (!$rows): ?>
-                        <tr><td colspan="6" class="px-4 py-12 text-center">
-                            <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400 mb-3"><i class="fas fa-truck"></i></span>
-                            <p class="text-gray-500">No courier partners found.</p>
-                            <button type="button" class="cp-open-add mt-3 text-sm font-semibold text-amber-800 hover:underline">Add your first partner</button>
+                        <tr><td colspan="6" class="px-5 py-16 text-center">
+                            <div class="mx-auto flex max-w-sm flex-col items-center">
+                                <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
+                                    <i class="fas fa-truck" aria-hidden="true"></i>
+                                </span>
+                                <p class="text-base font-medium text-gray-900">No courier partners found</p>
+                                <p class="mt-1 text-sm text-gray-500">Try adjusting filters or add a new partner.</p>
+                                <button type="button" class="cp-open-add mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700">Add partner</button>
+                            </div>
                         </td></tr>
                     <?php else: ?>
                         <?php foreach ($rows as $r): ?>
@@ -87,25 +154,31 @@ $totalRecords = (int)($totalRecords ?? 0);
                                 /* HEX_* so JSON is safe inside double-quoted HTML attribute for JSON.parse */
                                 $payloadJson = json_encode($payload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
                             ?>
-                            <tr class="border-b border-gray-100 align-top hover:bg-amber-50/30 transition-colors">
-                                <td class="px-4 py-3 font-semibold text-gray-800"><?php echo htmlspecialchars((string)$r['partner_code']); ?></td>
-                                <td class="px-4 py-3"><?php echo htmlspecialchars((string)$r['partner_name']); ?></td>
-                                <td class="px-4 py-3">
+                            <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors align-top">
+                                <td class="px-5 py-4 font-semibold text-gray-800"><?php echo htmlspecialchars((string)$r['partner_code']); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-800"><?php echo htmlspecialchars((string)$r['partner_name']); ?></td>
+                                <td class="px-5 py-4">
                                     <?php if ((int)$r['supports_domestic'] === 1): ?>
                                         <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 shadow-sm ring-1 ring-inset ring-emerald-600/25">Yes</span>
                                     <?php else: ?>
                                         <span class="text-xs font-medium text-gray-400 tabular-nums">No</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-4 py-3">
+                                <td class="px-5 py-4">
                                     <?php if ((int)$r['supports_international'] === 1): ?>
                                         <span class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-900 shadow-sm ring-1 ring-inset ring-sky-600/25">Yes</span>
                                     <?php else: ?>
                                         <span class="text-xs font-medium text-gray-400 tabular-nums">No</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-4 py-3"><?php echo (int)$r['is_active'] === 1 ? 'Active' : 'Inactive'; ?></td>
-                                <td class="px-4 py-3">
+                                <td class="px-5 py-4">
+                                    <?php if ((int)$r['is_active'] === 1): ?>
+                                        <span class="inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-800">Active</span>
+                                    <?php else: ?>
+                                        <span class="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">Inactive</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="px-5 py-4">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <a href="?page=courier_accounts&amp;action=list&amp;partner_id=<?php echo (int) $r['id']; ?>"
                                             class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition">
@@ -134,15 +207,30 @@ $totalRecords = (int)($totalRecords ?? 0);
         </div>
     </div>
 
-    <div class="text-sm text-gray-600">Total records: <?php echo (int)$totalRecords; ?></div>
+    <div class="mt-6 rounded-xl border border-gray-200 bg-white px-4 py-4 shadow-sm ring-1 ring-gray-900/[0.03]">
+        <p class="text-sm text-gray-600">
+            Showing <span class="font-medium text-gray-900 tabular-nums"><?php echo $rowCount; ?></span> partner<?php echo $rowCount === 1 ? '' : 's'; ?> on this page
+            (total matching: <span class="font-medium text-gray-900 tabular-nums"><?php echo number_format($totalRecords); ?></span>).
+        </p>
+    </div>
+
     <?php if ($totalPages > 1): ?>
-        <div class="flex items-center gap-2 flex-wrap">
-            <?php for ($p = 1; $p <= $totalPages; $p++): ?>
-                <a href="?page=courier_partners&action=list&page_no=<?php echo $p; ?>&limit=<?php echo $limit; ?>&search_text=<?php echo urlencode($search); ?>&status_filter=<?php echo urlencode($statusFilter); ?>"
-                   class="h-8 min-w-8 px-2 rounded border text-sm inline-flex items-center justify-center <?php echo $p === $currentPage ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-300 text-gray-700'; ?>">
-                    <?php echo $p; ?>
-                </a>
-            <?php endfor; ?>
+        <div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-4 shadow-sm ring-1 ring-gray-900/[0.03]">
+            <p class="text-sm text-gray-600">
+                Page <span class="font-medium text-gray-900 tabular-nums"><?php echo $currentPage; ?></span>
+                of <span class="font-medium text-gray-900 tabular-nums"><?php echo $totalPages; ?></span>
+            </p>
+            <nav class="flex flex-wrap items-center gap-2" aria-label="Pagination">
+                <a href="<?php echo htmlspecialchars($pgBase . '&page_no=1'); ?>"
+                    class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?php echo $currentPage <= 1 ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'; ?>">First</a>
+                <a href="<?php echo htmlspecialchars($pgBase . '&page_no=' . max(1, $currentPage - 1)); ?>"
+                    class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?php echo $currentPage <= 1 ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'; ?>">Previous</a>
+                <span class="px-3 py-1.5 text-sm text-gray-700 tabular-nums"><?php echo $currentPage; ?> / <?php echo $totalPages; ?></span>
+                <a href="<?php echo htmlspecialchars($pgBase . '&page_no=' . min($totalPages, $currentPage + 1)); ?>"
+                    class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?php echo $currentPage >= $totalPages ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'; ?>">Next</a>
+                <a href="<?php echo htmlspecialchars($pgBase . '&page_no=' . $totalPages); ?>"
+                    class="px-3 py-1.5 rounded-lg border text-sm font-medium transition <?php echo $currentPage >= $totalPages ? 'pointer-events-none opacity-40 border-gray-200 text-gray-400' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'; ?>">Last</a>
+            </nav>
         </div>
     <?php endif; ?>
 </div>
