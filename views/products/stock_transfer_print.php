@@ -21,8 +21,37 @@ $autoprint = ! empty($autoprint);
     </div>
 
     <div class="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm print:shadow-none print:border-gray-400 print:rounded-none">
+        <!-- Branding (prints on first page; kept together when printing) -->
+        <div class="st-print-branding flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between pb-6 mb-6 border-b border-amber-200/70 print:pb-5 print:mb-5">
+            <div class="flex items-start gap-4 min-w-0">
+                <img src="images/EI_Logo_130x27_SVG_1.svg"
+                    alt="Exotic India"
+                    width="200"
+                    height="42"
+                    class="h-10 sm:h-11 w-auto shrink-0 print:h-12 object-left object-contain" />
+                <div class="min-w-0 pt-0.5">
+                    <p class="text-base sm:text-lg font-bold text-gray-900 tracking-tight leading-snug">
+                        Exotic India Pvt. Ltd.
+                    </p>
+                    <p class="text-xs sm:text-sm text-amber-900/85 font-semibold mt-0.5">
+                        Vendor Portal · Central
+                    </p>
+                    <p class="text-[11px] sm:text-xs text-gray-500 mt-1 max-w-md leading-relaxed">
+                        Stock transfer order — internal logistics document.
+                    </p>
+                </div>
+            </div>
+            <div class="sm:text-right shrink-0 border-l-0 sm:border-l border-amber-200/60 sm:pl-6 sm:border-t-0 border-t border-amber-200/40 pt-4 sm:pt-0">
+                <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Document</p>
+                <p class="text-sm font-semibold text-gray-800 mt-1">Stock transfer</p>
+                <p class="text-xs text-gray-500 mt-2 tabular-nums">
+                    <?php echo htmlspecialchars(date('j M Y')); ?>
+                </p>
+            </div>
+        </div>
+
         <header class="border-b border-gray-200 pb-6 mb-6 print:pb-4 print:mb-4">
-            <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Stock transfer order</p>
+            <p class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Transfer reference</p>
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
                 <?php echo htmlspecialchars((string) ($transfer['transfer_order_no'] ?? '—')); ?>
             </h1>
@@ -134,9 +163,14 @@ $autoprint = ! empty($autoprint);
             </table>
         </div>
 
-        <p class="mt-8 pt-6 border-t border-gray-100 text-xs text-gray-400 print:mt-6">
-            Printed <?php echo htmlspecialchars(date('j M Y, H:i')); ?>
-        </p>
+        <div class="mt-8 pt-6 border-t border-gray-100 text-xs text-gray-500 print:mt-6 space-y-1">
+            <p class="text-gray-400">
+                Printed <?php echo htmlspecialchars(date('j M Y, H:i')); ?>
+            </p>
+            <p class="text-[11px] text-gray-400">
+                © <?php echo htmlspecialchars(date('Y')); ?> Exotic India Pvt. Ltd. · Vendor Portal
+            </p>
+        </div>
     </div>
 </div>
 
@@ -144,6 +178,14 @@ $autoprint = ! empty($autoprint);
     @media print {
         .no-print { display: none !important; }
         body { background: #fff !important; }
+        .st-print-branding {
+            page-break-inside: avoid;
+            border-bottom: 1px solid #e7e5e4;
+        }
+        .st-print-branding img {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
     }
 </style>
 <?php if ($autoprint): ?>
