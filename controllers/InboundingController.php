@@ -892,6 +892,9 @@ class InboundingController {
         $mainPhotoDir = __DIR__ . '/../uploads/products/';
         $altPhotoDir  = __DIR__ . '/../uploads/itm_img/';
 
+        $itemData = $inboundingModel->getform1data($itemId);
+        $isBook = (string) ($itemData['form1']['group_name'] ?? '') === '-8';
+
         // 2. Fetch Variations from DB
         $variations = $inboundingModel->getVariations($itemId);
         $hasVariations = !empty($variations);
@@ -917,21 +920,28 @@ class InboundingController {
         // EXECUTION A: Rename Base Images (Variation ID -1 or 0)
         // =================================================================
         
-        // 1. Rename Main Product Photo (inbound_item table)
-        $itemData = $inboundingModel->getform1data($itemId);
-        $mainPhotoPath = $itemData['form2']['product_photo'] ?? '';
+        // 1. Main product photo: book uses plain itemcode (…jpg); letters a,b,c… apply to gallery only.
+        $mainPhotoPath = $itemData['form1']['product_photo'] ?? ($itemData['form2']['product_photo'] ?? '');
         
         if (!empty($mainPhotoPath)) {
-            // Main photo always gets the base name
-            $this->processRename($mainPhotoPath, $mainPhotoDir, $baseName, $itemId, 'main', $inboundingModel);
+            $this->processRename($mainPhotoPath, $mainPhotoDir, $baseName, $itemId, 'main', $inboundingModel, $isBook);
         }
 
-        // 2. Rename Gallery Images
+        // 2. Rename Gallery Images (book: first gallery is always …a.jpg)
         $baseImages = $inboundingModel->get_item_images_by_variation($itemId, -1);
-        if (empty($baseImages)) $baseImages = $inboundingModel->get_item_images_by_variation($itemId, 0);
+        if (empty($baseImages)) {
+            $baseImages = $inboundingModel->get_item_images_by_variation($itemId, 0);
+        }
 
         if (!empty($baseImages)) {
-            $this->renameGalleryImagesByDisplayOrder($baseImages, $altPhotoDir, $baseName, $inboundingModel);
+            $this->renameGalleryImagesByDisplayOrder(
+                $baseImages,
+                $altPhotoDir,
+                $baseName,
+                $inboundingModel,
+                $isBook,
+                0
+            );
         }
 
         // =================================================================
@@ -944,24 +954,53 @@ class InboundingController {
                 $varSuffix = $this->getNamingSuffix($var['color'], $var['size']);
                 $varBaseName = $itemCode . ($varSuffix ? '-' . $varSuffix : '');
 
-                // 1. Rename Variation Main Photo
+                // 1. Variation main: book uses plain varBaseName; gallery gets …a, …b
                 if (!empty($var['variation_image'])) {
-                    $this->processRename($var['variation_image'], $mainPhotoDir, $varBaseName, $var['id'], 'variation_main', $inboundingModel);
+                    $this->processRename($var['variation_image'], $mainPhotoDir, $varBaseName, $var['id'], 'variation_main', $inboundingModel, $isBook);
                 }
 
                 // 2. Rename Variation Gallery Images
                 $varImages = $inboundingModel->get_item_images_by_variation($itemId, $var['id']);
                 if (!empty($varImages)) {
-                    $this->renameGalleryImagesByDisplayOrder($varImages, $altPhotoDir, $varBaseName, $inboundingModel);
+                    $this->renameGalleryImagesByDisplayOrder(
+                        $varImages,
+                        $altPhotoDir,
+                        $varBaseName,
+                        $inboundingModel,
+                        $isBook,
+                        0
+                    );
                 }
             }
         }
     }
 
     /**
+     * Book image filename letter sequence: 0 => a, 1 => b, …, 25 => z, 26 => aa, …
+     */
+    private function bookImageAlphabetSuffix(int $index): string {
+        $index = max(0, $index);
+        $suffix = '';
+        $n = $index;
+        do {
+            $suffix = chr(ord('a') + ($n % 26)) . $suffix;
+            $n = intdiv($n, 26) - 1;
+        } while ($n >= 0);
+
+        return $suffix;
+    }
+
+    /**
      * Rename gallery files by display_order with collision-safe two-pass renaming.
      */
-    private function renameGalleryImagesByDisplayOrder(array $images, string $directory, string $baseName, $model): void {
+    private function renameGalleryImagesByDisplayOrder(
+        array $images,
+        string $directory,
+        string $baseName,
+        $model,
+        bool $bookMode = false,
+        int $bookStartIndex = 0
+    ): void {
         if (empty($images)) {
             return;
         }
@@ -990,19 +1029,26 @@ class InboundingController {
                 continue;
             }
 
-            $ext = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
+            $origExt = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
 
-            // Name by visual order after sorting (dense sequence): base, a01, a02...
-            if ($idx === 0) {
+            // Book: gallery only — itemcode + a, b, c, … (main photo uses plain itemcode, no letter). Output .jpg.
+            if ($bookMode) {
+                $letterOrdinal = $bookStartIndex + $idx;
+                $candidateBase = $baseName . $this->bookImageAlphabetSuffix($letterOrdinal);
+                $targetExt = 'jpg';
+            } elseif ($idx === 0) {
+                // Non-book: first gallery file matches base name; rest use _a01, _a02, …
                 $candidateBase = $baseName;
+                $targetExt = $origExt;
             } else {
                 $candidateBase = $baseName . '_a' . str_pad((string)$idx, 2, '0', STR_PAD_LEFT);
+                $targetExt = $origExt;
             }
 
-            $candidate = $candidateBase . '.' . $ext;
+            $candidate = $candidateBase . '.' . $targetExt;
             $dedupe = 1;
             while (isset($usedTargets[strtolower($candidate)])) {
-                $candidate = $candidateBase . '_d' . $dedupe . '.' . $ext;
+                $candidate = $candidateBase . '_d' . $dedupe . '.' . $targetExt;
                 $dedupe++;
             }
             $usedTargets[strtolower($candidate)] = true;
@@ -1013,7 +1059,7 @@ class InboundingController {
                 'oldPath' => $fullOldPath,
                 'target' => $candidate,
                 'targetPath' => $directory . $candidate,
-                'tmp' => '__tmp__' . $imgId . '_' . time() . '_' . mt_rand(1000, 9999) . '.' . $ext,
+                'tmp' => '__tmp__' . $imgId . '_' . time() . '_' . mt_rand(1000, 9999) . '.' . $origExt,
             ];
         }
 
@@ -1042,7 +1088,18 @@ class InboundingController {
                 continue;
             }
 
-            if (@rename($plan['tmpPath'], $plan['targetPath'])) {
+            $movedOk = false;
+            if ($bookMode) {
+                if (@rename($plan['tmpPath'], $plan['targetPath'])) {
+                    $movedOk = true;
+                } else {
+                    $movedOk = $this->writeImageFileAsJpeg($plan['tmpPath'], $plan['targetPath']);
+                }
+            } else {
+                $movedOk = (bool) @rename($plan['tmpPath'], $plan['targetPath']);
+            }
+
+            if ($movedOk) {
                 // Force fresh mtime so ?v= cache-busting URL always changes after rename swaps.
                 @touch($plan['targetPath']);
                 $model->update_image_filename_direct($plan['id'], $plan['target']);
@@ -1053,6 +1110,62 @@ class InboundingController {
                 @rename($plan['tmpPath'], $plan['oldPath']);
             }
         }
+    }
+
+    /**
+     * Write a raster image as JPEG (book renames). Removes $sourcePath on success when different from dest.
+     */
+    private function writeImageFileAsJpeg(string $sourcePath, string $destJpgPath): bool {
+        if (!is_readable($sourcePath)) {
+            return false;
+        }
+        $ext = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
+        if (in_array($ext, ['jpg', 'jpeg', 'jfif', 'jpe'], true)) {
+            if (@rename($sourcePath, $destJpgPath)) {
+                return true;
+            }
+            if (@copy($sourcePath, $destJpgPath)) {
+                if (realpath($sourcePath) !== realpath($destJpgPath)) {
+                    @unlink($sourcePath);
+                }
+                return true;
+            }
+        }
+        if (!extension_loaded('gd')) {
+            return false;
+        }
+        $img = false;
+        switch ($ext) {
+            case 'png':
+                $img = @imagecreatefrompng($sourcePath);
+                break;
+            case 'gif':
+                $img = @imagecreatefromgif($sourcePath);
+                break;
+            case 'webp':
+                $img = function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourcePath) : false;
+                break;
+            default:
+                $img = @imagecreatefromjpeg($sourcePath);
+                if ($img === false) {
+                    $blob = @file_get_contents($sourcePath);
+                    if ($blob !== false) {
+                        $img = @imagecreatefromstring($blob);
+                    }
+                }
+        }
+        if ($img === false) {
+            return false;
+        }
+        if (function_exists('imagepalettetotruecolor')) {
+            @imagepalettetotruecolor($img);
+        }
+        $ok = @imagejpeg($img, $destJpgPath, 92);
+        imagedestroy($img);
+        if ($ok && realpath($sourcePath) !== realpath($destJpgPath)) {
+            @unlink($sourcePath);
+        }
+        return (bool) $ok;
     }
 
     // --- HELPER 1: Suffix Logic (Color > Size) ---
@@ -1070,14 +1183,15 @@ class InboundingController {
     }
 
     // --- HELPER 2: File Renaming & DB Update ---
-    private function processRename($oldPathOrName, $directory, $newBaseName, $dbId, $type, $model) {
+    private function processRename($oldPathOrName, $directory, $newBaseName, $dbId, $type, $model, bool $bookOutputJpeg = false) {
         
         // Handle input: oldPathOrName might be "uploads/products/img.jpg" or just "img.jpg"
         $oldFileName = basename($oldPathOrName);
         $fullOldPath = $directory . $oldFileName;
 
         $ext = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
-        $finalName = $newBaseName . "." . $ext;
+        $finalExt = $bookOutputJpeg ? 'jpg' : $ext;
+        $finalName = $newBaseName . '.' . $finalExt;
         $fullNewPath = $directory . $finalName;
 
         // If old name is already correct and file exists, nothing to do.
@@ -1088,11 +1202,11 @@ class InboundingController {
         // Collision-safe target for variation main images.
         // Cloned variations can share same color/size so base target may already exist.
         if ($type === 'variation_main' && file_exists($fullNewPath) && $oldFileName !== $finalName) {
-            $finalName = $newBaseName . '_v' . (int)$dbId . '.' . $ext;
+            $finalName = $newBaseName . '_v' . (int) $dbId . '.' . $finalExt;
             $fullNewPath = $directory . $finalName;
             $bump = 1;
             while (file_exists($fullNewPath) && $bump <= 10) {
-                $finalName = $newBaseName . '_v' . (int)$dbId . '_d' . $bump . '.' . $ext;
+                $finalName = $newBaseName . '_v' . (int) $dbId . '_d' . $bump . '.' . $finalExt;
                 $fullNewPath = $directory . $finalName;
                 $bump++;
             }
@@ -1100,7 +1214,15 @@ class InboundingController {
 
         $renamed = false;
         if (file_exists($fullOldPath)) {
-            $renamed = @rename($fullOldPath, $fullNewPath);
+            if ($bookOutputJpeg && $finalExt === 'jpg') {
+                if (@rename($fullOldPath, $fullNewPath)) {
+                    $renamed = true;
+                } else {
+                    $renamed = $this->writeImageFileAsJpeg($fullOldPath, $fullNewPath);
+                }
+            } else {
+                $renamed = @rename($fullOldPath, $fullNewPath);
+            }
         } else {
             // Shared-source fallback: if another variation already moved this file,
             // point this record to an existing target so image doesn't break.
@@ -1188,12 +1310,19 @@ class InboundingController {
             }
         }
 
-        // 1. Capture Inputs
-        $is_variant = $_POST['is_variant'] ?? '';
+        // 1. Capture Inputs — vp_inbound.is_variant is ENUM('Y','N'); empty/invalid POST causes "Data truncated".
+        $postedVariant = isset($_POST['is_variant']) ? strtoupper(trim((string) $_POST['is_variant'])) : '';
+        if ($postedVariant !== 'Y' && $postedVariant !== 'N') {
+            $postedVariant = strtoupper(trim((string) ($oldData['form1']['is_variant'] ?? 'N')));
+        }
+        if ($postedVariant !== 'Y') {
+            $postedVariant = 'N';
+        }
+        $is_variant = $postedVariant;
         $shouldRename = false;
 
-        if ($oldData['form1']['is_variant'] == 'Y') {
-            if ($_POST['is_variant'] != $oldData['form1']['is_variant']) {
+        if (($oldData['form1']['is_variant'] ?? '') == 'Y') {
+            if ($is_variant !== ($oldData['form1']['is_variant'] ?? '')) {
                 $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['group_name']));
                 $item_code = $this->generateItemcode($group_real_name);
             }else{
@@ -1321,6 +1450,13 @@ class InboundingController {
             'dimention_unit'      => $_POST['dimention_unit'] ?? 'cm',
             'weight_unit'         => $_POST['weight_unit'] ?? 'kg',
             'feedback'         => $_POST['feedback'] ?? '',
+
+            // Book fields (saved when Group is Book)
+            'author'   => trim((string)($_POST['author'] ?? '')) === '' ? null : (int) $_POST['author'],
+            'publisher'=> trim((string)($_POST['publisher'] ?? '')) === '' ? null : (int) $_POST['publisher'],
+            'isbn'     => $_POST['isbn'] ?? '',
+            'language' => $_POST['language'] ?? '',
+            'pages'    => trim((string)($_POST['pages'] ?? '')) === '' ? null : (int) $_POST['pages'],
         ];
         
         // 4. Update Main Record
@@ -1811,6 +1947,10 @@ class InboundingController {
         }
         global $inboundingModel;
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        $publish_status_req = isset($_GET['publish_status']) ? (int) $_GET['publish_status'] : 1;
+        if ($publish_status_req !== 0 && $publish_status_req !== 1) {
+            $publish_status_req = 1;
+        }
         $API_data = array();
 
         // Convert PHP warnings/notices into JSON errors and persist to publish logs.
@@ -1913,9 +2053,21 @@ class InboundingController {
         $API_data['itemcode'] = $d['Item_code'] ?? '';
         $API_data['groupname'] = $d['groupname'] ?? '';
         $API_data['category'] = $d['final_cat_ids'] ?? '';
-        $API_data['itemtype'] ='product';
+        if ($d['groupname'] == 'book') {
+            $API_data['itemtype'] ='book';
+        }else{
+            $API_data['itemtype'] ='product';
+        }
         $API_data['title'] = $d['product_title'] ?? '';
-        $API_data['status'] = 1;
+        $API_data['status'] = $publish_status_req;
+        if ($d['groupname'] == 'book') {
+
+            $API_data['author'] = $d['author'] ?? '';
+            $API_data['publisher'] = $d['publisher'] ?? '';
+            $API_data['language'] = $d['language'] ?? '';
+            $API_data['pages'] = $d['pages'] ?? '';
+            $API_data['isbn'] = $d['isbn'] ?? '';
+        }
         $API_data['snippet_description'] = $d['snippet_description'] ?? '';
         // $API_data['creator'] = $data['data']['received_by_user_id'];
         // $API_data['optionals'] = $data['data']['optionals'];
@@ -1960,7 +2112,11 @@ class InboundingController {
         }else{
             $stock_price_temp[0]['size'] = $d['size'] ?? '';
             $stock_price_temp[0]['color'] = $d['color'] ?? '';
-            $stock_price_temp[0]['item_level'] = 'variation';
+            if ($d['groupname'] == 'book') {
+                $stock_price_temp[0]['item_level'] = 'standalone';
+            }else{
+                $stock_price_temp[0]['item_level'] = 'variation';
+            }
         }
         $stock_price_temp[0]['marketplace_vendor'] = $d['Marketplace'] ?? '';
         $stock_price_temp[0]['colormap'] = $d['colormaps'] ?? '';
@@ -2111,6 +2267,7 @@ class InboundingController {
         }
 
         $API_data['images'] = $images_payload;
+        // echo "<pre>";print_r($API_data);exit;
         $jsonString = json_encode($API_data, JSON_UNESCAPED_SLASHES);
         $apiurl =  '';
         
@@ -2203,8 +2360,14 @@ class InboundingController {
         if (is_object($result) && isset($result->status) && $result->status == 'success' && !isset($result->error)) {
             $ProductsController = new ProductsController();
             // publish log
-            $logData1 = ['userid_log' => $_SESSION['user']['id'] ?? '0', 'i_id' => $id, 'stat' => 'Published'];
-            $inboundingModel->stat_logs($logData1);
+            $publishUserId = (int)($_SESSION['user']['id'] ?? 0);
+            if ($publishUserId <= 0) {
+                $publishUserId = (int)($_POST['userid_log'] ?? 0);
+            }
+            if ($publishUserId > 0) {
+                $logData1 = ['userid_log' => $publishUserId, 'i_id' => $id, 'stat' => 'Published'];
+                $inboundingModel->stat_logs($logData1);
+            }
 
             // import API
             $itemCode = $data['data']['Item_code'];

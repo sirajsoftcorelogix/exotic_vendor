@@ -1732,4 +1732,177 @@ class OrdersController
             exit;
         }
     }
+
+    public function ordersStatusImportBulk2()
+    {
+
+        ini_set('max_execution_time', 3000);
+        set_time_limit(3000);
+        global $ordersModel;
+        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+            http_response_code(403); // Forbidden
+            die('Unauthorized access.');
+        }
+        //fetch order 
+        //$odr = $ordersModel->fetchOrdersForUpdate();
+        //order status list
+        $statusList = $ordersModel->adminOrderStatusList('true');
+        //$from_date = '1758240000';
+        //$to_date = '1758330134';
+        //print_array($odr);
+        $orderIds = trim($_POST['order_numbers'] ?? '');
+        
+        // Validate comma-separated order numbers
+        if (empty($orderIds)) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => 'No order numbers provided.'
+            ]);
+            exit;
+        }
+        
+        // Split and validate order numbers
+        $orderNumberArray = array_map('trim', explode(',', $orderIds));
+        $orderNumberArray = array_filter($orderNumberArray); // Remove empty values
+        
+        if (empty($orderNumberArray)) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invalid order numbers format. Please provide comma-separated order numbers.'
+            ]);
+            exit;
+        }
+        
+        // Validate each order number is not empty
+        foreach ($orderNumberArray as $orderNum) {
+            if (empty($orderNum)) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order numbers cannot contain empty values. Please check your input.'
+                ]);
+                exit;
+            }
+        }
+        //50 order number limit check
+        if (count($orderNumberArray) > 50) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => 'You can only fetch status for up to 50 orders at a time. Please reduce the number of order numbers provided.'
+            ]);
+            exit;
+        }
+        
+        // Rejoin with comma for API
+        $orderIds = implode(',', $orderNumberArray);
+        
+        // Set JSON response header
+        header('Content-Type: application/json');
+        //exit;
+
+        $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint       
+
+        
+        $response = [];
+        
+            
+            $postData = [
+                'makeRequestOf' => 'vendors-orderjson',
+                'orderid' => $orderIds
+            ];
+
+            $headers = [
+                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+                'x-adminapitest: 1',
+                'Content-Type: application/x-www-form-urlencoded'
+            ];
+
+            // Initialize cURL
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_POST, true);
+
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+            //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            $response = curl_exec($ch);
+
+            $error = curl_error($ch);
+            curl_close($ch);
+            
+            if (!empty($error)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'API Error: ' . $error
+                ]);
+                exit;
+            }
+        
+        
+        // print_r($headers); 
+        // print_r($postData);       
+        //print_r($response);
+        // exit;
+        if (empty($response)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No orders found in the API response.'
+            ]);
+            exit;
+        }
+        $response = json_decode($response, true);
+        $imported = 0;
+        $totalorder = 0;
+        $result = [];
+        print_r($response);
+        foreach ($response['orders'] as $order) {
+            
+            // Check if the order has the required fields
+            // Map API fields to your table columns
+
+            foreach ($order['cart'] as $item) {
+                //check status other than 1 (pending)
+                if (empty($item['order_status']) || $item['order_status'] == 1) {
+                    //continue;
+
+                    $rdata = [
+                        'sku' => $item['sku'] ?? '',
+                        'order_number' => $order['orderid'] ?? '',                            
+                        'item_code' => $item['itemcode'] ?? '',
+                        'remote_status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA' || strtoupper($order['payment_type'] ?? '') === 'INDIAAMAZONFBA')
+                            ? 'shipped'
+                            : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ];
+                    $totalorder++;
+                    print_array($rdata);
+                    $data = $ordersModel->importedStatusUpdate2($rdata);
+                    $result[] = $data;
+                    //add products
+                    //$pdata[] = $ordersModel->addProducts($rdata);                   
+
+                    if (isset($data['success']) && $data['success'] == true) {
+                        $imported++;
+                    }
+                }
+                //print_array($rdata);                   
+            }
+        }
+        
+        //print_array($pdata);
+        print_r($result);
+        //update log end time and imported count
+
+        echo json_encode([
+            'success' => true,
+            'message' => "Orders updated successfully. Imported: $imported out of $totalorder",
+            'imported' => $imported,
+            'total' => $totalorder,
+            'result' => $result
+        ]);
+        exit;
+    }
 }

@@ -193,6 +193,9 @@ switch ($page) {
             case 'update_import_bulk':
                 $controller->ordersStatusImportBulk();
                 break;
+            case 'update_import_bulk2':
+                $controller->ordersStatusImportBulk2();
+                break;
             case 'bulk_update_status':
                 $controller->bulkUpdateStatus();
                 break;

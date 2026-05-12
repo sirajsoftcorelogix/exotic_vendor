@@ -744,9 +744,9 @@
             <i class="fa-solid fa-download p-1 bg-white border border-orange-500"></i>
             </span>
             <!-- update imported orders -->
-            <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
+            <span onclick="callImportedUpdate()" title="Click to update status" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
                 <i class="fas fa-edit p-1 bg-white border border-blue-500"></i>
-            </span> -->
+            </span>
                 </div>
             </div>
             <!-- Tabs -->
@@ -1443,6 +1443,32 @@
                     <div id="errorMessage" class=""></div>
                     <button type="button" onclick="closeImportPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- Import Update Popup -->
+<div id="importUpdatePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImportUpdatePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImportUpdatePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <div class="p-6 w-full">
+            <h2 class="text-2xl font-bold mb-4">Update Imported Orders</h2>
+            <div class="w-full bg-gray-200 rounded-full dark:bg-gray-700 mb-4">
+                <div id="importUpdateProgress" class="bg-orange-600 text-xs font-medium text-orange-100 text-center p-0.5 leading-none rounded-full" style="width: 0%">0%</div>
+            </div>
+            <form id="importUpdateForm" method="post" action="?page=orders&action=update_import_bulk">
+                <div class="mb-4">
+                    <label for="importUpdateOrderNumbers" class="block text-gray-700 font-bold mb-2">Order Numbers (comma separated):</label>
+                    <textarea id="importUpdateOrderNumbers" name="order_numbers" class="border border-gray-300 rounded px-3 py-2 w-full" rows="6" placeholder="e.g., ORD001, ORD002, ORD003"></textarea>
+                </div>
+                <div class="mb-4" style="max-height:200px; overflow-y:auto;" id="importUpdateStatus">
+                    <p class="text-gray-700 mb-2">Enter order numbers to update from server.</p>
+                </div>
+                <div id="importUpdateError" class=""></div>
+                <div class="flex justify-end space-x-4 mt-4">
+                    <button type="button" onclick="closeImportUpdatePopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Update</button>
                 </div>
             </form>
         </div>
@@ -2248,8 +2274,94 @@
     //call Imported Update Popup
     function callImportedUpdate() {
         //open import popup to display import status and call ajax to import
-        document.getElementById('importedPopup').classList.remove('hidden');
+        document.getElementById('importUpdatePopup').classList.remove('hidden');
+        document.getElementById('importUpdateOrderNumbers').value = '';
+        document.getElementById('importUpdateStatus').innerHTML = '<p class="text-gray-700 mb-2">Enter order numbers to update from server.</p>';
+        document.getElementById('importUpdateError').textContent = '';
+        document.getElementById('importUpdateError').classList.remove('text-red-500', 'text-green-500');
     }
+
+    function closeImportUpdatePopup(event) {
+        if (event && event.target !== event.currentTarget) return;
+        document.getElementById('importUpdatePopup').classList.add('hidden');
+    }
+
+    // Import Update form submission with AJAX
+    document.getElementById('importUpdateForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const orderNumbers = document.getElementById('importUpdateOrderNumbers').value.trim();
+        if (!orderNumbers) {
+            document.getElementById('importUpdateError').textContent = 'Please enter at least one order number.';
+            document.getElementById('importUpdateError').classList.add('text-red-500');
+            return;
+        }
+
+        const submitButton = this.querySelector('button[type="submit"]');
+        const submitButtonText = submitButton.textContent;
+        submitButton.disabled = true;
+        submitButton.textContent = 'Updating...';
+
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += 10;
+            document.getElementById('importUpdateProgress').style.width = `${progress}%`;
+            document.getElementById('importUpdateProgress').textContent = `${progress}%`;
+            if (progress >= 45) {
+                clearInterval(progressInterval);
+            }
+        }, 100);
+
+        const formData = new FormData(this);
+
+        fetch('index.php?page=orders&action=update_import_bulk2&secret_key=<?= EXPECTED_SECRET_KEY ?>', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            clearInterval(progressInterval);
+            
+            const progressInterval2 = setInterval(() => {
+                progress += 10;
+                document.getElementById('importUpdateProgress').style.width = `${progress}%`;
+                document.getElementById('importUpdateProgress').textContent = `${progress}%`;
+                if (progress >= 100) {
+                    clearInterval(progressInterval2);
+                }
+            }, 100);
+
+            const errorDiv = document.getElementById('importUpdateError');
+            if (data.success) {
+                errorDiv.classList.remove('text-red-500');
+                errorDiv.classList.add('text-green-500');
+                errorDiv.textContent = data.message || 'Orders updated successfully.';
+                document.getElementById('importUpdateStatus').innerHTML = '<p class="text-green-600 font-semibold">Update completed successfully!</p>';
+                
+                setTimeout(() => {
+                    closeImportUpdatePopup();
+                    location.reload();
+                }, 2000);
+            } else {
+                errorDiv.classList.remove('text-green-500');
+                errorDiv.classList.add('text-red-500');
+                errorDiv.textContent = data.message || 'Error updating orders.';
+                document.getElementById('importUpdateStatus').innerHTML = '<p class="text-red-600">Error: ' + (data.message || 'Failed to update orders') + '</p>';
+            }
+
+            submitButton.disabled = false;
+            submitButton.textContent = submitButtonText;
+        })
+        .catch(error => {
+            clearInterval(progressInterval);
+            console.error('Error:', error);
+            document.getElementById('importUpdateError').classList.add('text-red-500');
+            document.getElementById('importUpdateError').textContent = 'An error occurred during the update.';
+            document.getElementById('importUpdateStatus').innerHTML = '<p class="text-red-600">Error: ' + error.message + '</p>';
+            submitButton.disabled = false;
+            submitButton.textContent = submitButtonText;
+        });
+    });
     //vendor auto complete
     document.getElementById('vendor_autocomplete').addEventListener('input', function() {
         const query = this.value;
