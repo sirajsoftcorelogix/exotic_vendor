@@ -494,7 +494,8 @@ class product
     public function updateProductFromApi($productData, array $options = [])
     {
         $updatedCount = 0;
-        $preserveLocalStock = !empty($options['preserve_local_stock']);
+        // Default: never overwrite vp_products.local_stock from API; pass preserve_local_stock => false to sync stock from API.
+        $preserveLocalStock = !array_key_exists('preserve_local_stock', $options) || !empty($options['preserve_local_stock']);
         // print_array($productData);
         // exit;
         if (isset($productData) && is_array($productData)) {

@@ -5735,8 +5735,8 @@ class ProductsController
     }
 
     /**
-     * Refresh vp_products stock from vendor API before transfer validation.
-     * updateProductFromApi() also aligns stock movement ledger with refreshed local stock.
+     * Refresh vp_products fields from vendor API before transfer validation (e.g. SKU resolution).
+     * Local warehouse stock (local_stock) is not overwritten; movement ledger is aligned to existing stock only.
      *
      * @param list<string> $itemCodes
      * @return array{success:bool,message:string}
@@ -5794,19 +5794,19 @@ class ProductsController
         if (empty($allRows)) {
             $sample = implode(', ', array_slice(array_values(array_unique($emptyResponseCodes)), 0, 10));
             $suffix = $sample !== '' ? ' Sample item code(s): ' . $sample : '';
-            return ['success' => false, 'message' => 'Failed to refresh latest stock from API: no item rows returned for the submitted codes.' . $suffix];
+            return ['success' => false, 'message' => 'Failed to refresh product data from API: no item rows returned for the submitted codes.' . $suffix];
         }
 
         $res = $productModel->updateProductFromApi($allRows);
         if (!is_array($res) || empty($res['success'])) {
             $msg = is_array($res) ? (string)($res['message'] ?? 'Unknown API refresh error.') : 'Unknown API refresh error.';
-            return ['success' => false, 'message' => 'Could not sync latest stock before transfer: ' . $msg];
+            return ['success' => false, 'message' => 'Could not sync product data from API before transfer: ' . $msg];
         }
 
         if ($failedChunks > 0) {
-            return ['success' => true, 'message' => 'Latest stock refreshed from API for available items. Some chunks failed; please retry refresh once.'];
+            return ['success' => true, 'message' => 'Product data refreshed from API for available items (local stock unchanged). Some chunks failed; please retry refresh once.'];
         }
-        return ['success' => true, 'message' => 'Latest stock refreshed from API.'];
+        return ['success' => true, 'message' => 'Product data refreshed from API (local stock unchanged).'];
     }
 
     public function getTransferStockBulkForm()
