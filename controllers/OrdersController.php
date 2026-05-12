@@ -1857,7 +1857,7 @@ class OrdersController
         $imported = 0;
         $totalorder = 0;
         $result = [];
-        //print_r($response);
+        print_r($response);
         foreach ($response['orders'] as $order) {
             
             // Check if the order has the required fields
