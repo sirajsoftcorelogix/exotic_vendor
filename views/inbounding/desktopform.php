@@ -150,6 +150,23 @@ if (!empty($data['category']) && !empty($saved_group_id)) {
         }
     }
 }
+
+// --- Book fields prefill (Author/Publisher names for TomSelect) ---
+$selected_author_id = $data['form2']['author'] ?? '';
+$selected_author_name = '';
+$selected_publisher_id = $data['form2']['publisher'] ?? '';
+$selected_publisher_name = '';
+if (!empty($selected_author_id) || !empty($selected_publisher_id)) {
+    global $inboundingModel;
+    if (!empty($selected_author_id) && isset($inboundingModel) && method_exists($inboundingModel, 'getAuthorById')) {
+        $authorRow = $inboundingModel->getAuthorById((int)$selected_author_id);
+        $selected_author_name = $authorRow['author'] ?? $authorRow['name'] ?? '';
+    }
+    if (!empty($selected_publisher_id) && isset($inboundingModel) && method_exists($inboundingModel, 'getPublisherById')) {
+        $publisherRow = $inboundingModel->getPublisherById((int)$selected_publisher_id);
+        $selected_publisher_name = $publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
+    }
+}
 function renderSizeField($fieldName, $currentValue, $isClothing, $options, $customClass = "") {
     $html = '';
     if ($isClothing) {
@@ -587,6 +604,44 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
                     
                 </div>
+                <div id="book-meta-fields" class="hidden mt-6">
+                    <div class="border border-[#ffd6b3] rounded-[5px] px-[15px] py-4 ">
+                        <div class="text-[13px] font-bold text-[#333] mb-3">Book Details</div>
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Author</label>
+                                <select id="author_select" name="author" placeholder="Type author name..." autocomplete="off">
+                                    <option value=""></option>
+                                    <?php if (!empty($selected_author_id) && !empty($selected_author_name)): ?>
+                                        <option value="<?php echo htmlspecialchars($selected_author_id); ?>" selected><?php echo htmlspecialchars($selected_author_name); ?></option>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Publisher</label>
+                                <select id="publisher_select" name="publisher" placeholder="Type publisher name..." autocomplete="off">
+                                    <option value=""></option>
+                                    <?php if (!empty($selected_publisher_id) && !empty($selected_publisher_name)): ?>
+                                        <option value="<?php echo htmlspecialchars($selected_publisher_id); ?>" selected><?php echo htmlspecialchars($selected_publisher_name); ?></option>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">ISBN</label>
+                                <input type="text" name="isbn" value="<?php echo htmlspecialchars($data['form2']['isbn'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Language</label>
+                                <input type="text" name="language" value="<?php echo htmlspecialchars($data['form2']['language'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Pages</label>
+                                <input type="number" min="0" name="pages" value="<?php echo htmlspecialchars($data['form2']['pages'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                     <div class="text-right min-w-[100px]">
                         <span class="text-[10px] font-bold text-gray-500 uppercase">Volumetric</span>
@@ -1048,6 +1103,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 
             </fieldset>
         </div>
+
+        <!-- Book Details moved to Item Photos & Details section (below) -->
         <?php 
             // 1. PARSE SAVED DATA (If exists)
             // Assuming you store this string in a column named 'search_category_string'
@@ -1833,6 +1890,50 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.control.classList.add('h-[36px]');
             }
         });
+
+        // Book fields (Author/Publisher)
+        const searchAuthorsUrl = '<?php echo base_url('?page=inbounding&action=searchAuthors&q='); ?>';
+        const searchPublishersUrl = '<?php echo base_url('?page=inbounding&action=searchPublishers&q='); ?>';
+
+        const authorEl = document.getElementById('author_select');
+        if (authorEl && typeof window.safeTomSelect === 'function') {
+            window.safeTomSelect(authorEl, {
+                valueField: 'id',
+                labelField: 'name',
+                searchField: ['name'],
+                placeholder: 'Search author...',
+                create: false,
+                preload: false,
+                allowEmptyOption: true,
+                load: function(query, callback) {
+                    if (!query || query.length < 2) return callback();
+                    fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
+                        .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t); }))
+                        .then(json => callback(json))
+                        .catch(() => callback());
+                }
+            });
+        }
+
+        const publisherEl = document.getElementById('publisher_select');
+        if (publisherEl && typeof window.safeTomSelect === 'function') {
+            window.safeTomSelect(publisherEl, {
+                valueField: 'id',
+                labelField: 'name',
+                searchField: ['name'],
+                placeholder: 'Search publisher...',
+                create: false,
+                preload: false,
+                allowEmptyOption: true,
+                load: function(query, callback) {
+                    if (!query || query.length < 2) return callback();
+                    fetch(searchPublishersUrl + encodeURIComponent(query), { credentials: 'include' })
+                        .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t); }))
+                        .then(json => callback(json))
+                        .catch(() => callback());
+                }
+            });
+        }
     });
 </script>
 <script>
@@ -3120,6 +3221,55 @@ document.addEventListener('DOMContentLoaded', function() {
         // After adding, force a check to update the newly added field
         toggleAllSizeFields();
     };
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function isBookSelected() {
+        const groupSelect = document.getElementById('group_select');
+        if (!groupSelect) return false;
+        // TomSelect keeps underlying select updated (value), but we need the label/text.
+        const idx = groupSelect.selectedIndex;
+        if (idx < 0) return false;
+        const txt = (groupSelect.options[idx] && groupSelect.options[idx].text) ? groupSelect.options[idx].text.toLowerCase() : '';
+        return txt.indexOf('book') !== -1;
+    }
+
+    function toggleBookFieldsDesktop() {
+        const bookBox = document.getElementById('book-meta-fields');
+        if (!bookBox) return;
+
+        const variantSelect = document.getElementById('variant_select');
+        const addVarBtn = document.querySelector('button[onclick*="addNewVariation"]');
+
+        const isBook = isBookSelected();
+        if (isBook) {
+            bookBox.classList.remove('hidden');
+            if (addVarBtn) addVarBtn.style.display = 'none';
+            if (variantSelect) {
+                variantSelect.value = 'N';
+                variantSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                variantSelect.disabled = true;
+            }
+        } else {
+            bookBox.classList.add('hidden');
+            if (addVarBtn) addVarBtn.style.display = '';
+            if (variantSelect) {
+                variantSelect.disabled = false;
+            }
+        }
+    }
+
+    const groupSelect = document.getElementById('group_select');
+    if (groupSelect) {
+        groupSelect.addEventListener('change', toggleBookFieldsDesktop);
+        if (groupSelect.tomselect) {
+            groupSelect.tomselect.on('change', toggleBookFieldsDesktop);
+        }
+    }
+
+    toggleBookFieldsDesktop();
 });
 </script>
 <script>
