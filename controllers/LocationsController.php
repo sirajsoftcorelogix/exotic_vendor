@@ -33,7 +33,7 @@ class LocationsController
             'type_filter' => $type_filter,
         ];
 
-        renderTemplate('views/locations/index.php', $data, 'Manage Locations');
+        renderTemplate('views/locations/index.php', $data, 'Location listing');
     }
 
     public function addRecord()
