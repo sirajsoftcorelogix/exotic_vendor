@@ -1818,6 +1818,10 @@ class InboundingController {
         }
         global $inboundingModel;
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        $publish_status_req = isset($_GET['publish_status']) ? (int) $_GET['publish_status'] : 1;
+        if ($publish_status_req !== 0 && $publish_status_req !== 1) {
+            $publish_status_req = 1;
+        }
         $API_data = array();
 
         // Convert PHP warnings/notices into JSON errors and persist to publish logs.
@@ -1922,7 +1926,7 @@ class InboundingController {
         $API_data['category'] = $d['final_cat_ids'] ?? '';
         $API_data['itemtype'] ='product';
         $API_data['title'] = $d['product_title'] ?? '';
-        $API_data['status'] = 1;
+        $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
 
             $API_data['author'] = $d['author'] ?? '';

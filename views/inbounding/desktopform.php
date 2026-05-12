@@ -1541,12 +1541,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
 <div id="publishConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[80]">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[420px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
         <div id="publishConfirmIdle">
-            <h3 class="text-lg font-bold mb-2 text-gray-800">Publish Product?</h3>
+            <h3 class="text-lg font-bold mb-2 text-gray-800">Publish product</h3>
             <p class="text-sm text-gray-600 mb-3">This saves the form, then calls the catalog API and imports the product. It often takes <strong>30 seconds to a few minutes</strong>—keep this tab open.</p>
-            <p class="text-xs text-gray-500 mb-6">Are you sure you want to publish now?</p>
-            <div class="flex gap-3 justify-center">
-                <button type="button" id="publishCancelBtn" onclick="closePublishPopup()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
-                <button type="button" id="publishConfirmBtn" onclick="triggerPublishController()" class="bg-[#28a745] text-white px-6 py-2 rounded text-sm font-semibold hover:bg-[#218838] transition shadow-md">Yes, Publish</button>
+            <p class="text-xs text-gray-500 mb-4">Choose where to publish: <strong>Live</strong> sends <code class="text-[11px] bg-gray-100 px-1 rounded">status = 1</code> to the API; <strong>Local</strong> sends <code class="text-[11px] bg-gray-100 px-1 rounded">status = 0</code>.</p>
+            <div class="flex flex-col gap-2 mb-4">
+                <button type="button" id="publishLiveBtn" onclick="triggerPublishController(1)" class="w-full bg-[#28a745] text-white px-4 py-2.5 rounded text-sm font-semibold hover:bg-[#218838] transition shadow-md">Publish on Live</button>
+                <button type="button" id="publishLocalBtn" onclick="triggerPublishController(0)" class="w-full bg-white text-gray-800 border-2 border-gray-300 px-4 py-2.5 rounded text-sm font-semibold hover:bg-gray-50 transition">Publish on Local</button>
+            </div>
+            <div class="flex justify-center">
+                <button type="button" id="publishCancelBtn" onclick="closePublishPopup()" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
             </div>
         </div>
         <div id="publishConfirmBusy" class="hidden flex flex-col items-center gap-3 py-2">
@@ -2508,14 +2511,13 @@ document.addEventListener('DOMContentLoaded', function() {
     function resetPublishPopup() {
         const idle = document.getElementById('publishConfirmIdle');
         const busy = document.getElementById('publishConfirmBusy');
-        const confirmBtn = document.getElementById('publishConfirmBtn');
+        const liveBtn = document.getElementById('publishLiveBtn');
+        const localBtn = document.getElementById('publishLocalBtn');
         const cancelBtn = document.getElementById('publishCancelBtn');
         if (idle) idle.classList.remove('hidden');
         if (busy) busy.classList.add('hidden');
-        if (confirmBtn) {
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Yes, Publish';
-        }
+        if (liveBtn) liveBtn.disabled = false;
+        if (localBtn) localBtn.disabled = false;
         if (cancelBtn) cancelBtn.disabled = false;
     }
     function openPublishPopup() {
@@ -2646,19 +2648,22 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
 
-    // 3. Update Publish Controller to Save Form + Publish
-    function triggerPublishController() {
+    // 3. Update Publish Controller to Save Form + Publish (apiStatus: 1 = live, 0 = local → $API_data['status'])
+    function triggerPublishController(apiStatus) {
+        const publishStatus = (Number(apiStatus) === 0) ? 0 : 1;
         const form = document.getElementById('product_form');
         const formData = new FormData(form);
         const recordId = new URLSearchParams(window.location.search).get('id');
 
         const idle = document.getElementById('publishConfirmIdle');
         const busy = document.getElementById('publishConfirmBusy');
-        const confirmBtn = document.getElementById('publishConfirmBtn');
+        const liveBtn = document.getElementById('publishLiveBtn');
+        const localBtn = document.getElementById('publishLocalBtn');
         const cancelBtn = document.getElementById('publishCancelBtn');
         if (idle) idle.classList.add('hidden');
         if (busy) busy.classList.remove('hidden');
-        if (confirmBtn) confirmBtn.disabled = true;
+        if (liveBtn) liveBtn.disabled = true;
+        if (localBtn) localBtn.disabled = true;
         if (cancelBtn) cancelBtn.disabled = true;
 
         // First: Save the current form data so changes aren't lost
@@ -2668,7 +2673,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(() => {
             // Second: Call the Publish API after save is successful
-            return fetch(`index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`);
+            return fetch(`index.php?page=inbounding&action=inbound_product_publish&id=${recordId}&publish_status=${publishStatus}`);
         })
         .then(response => response.json())
         .then(data => {
