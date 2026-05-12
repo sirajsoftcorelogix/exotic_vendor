@@ -1321,6 +1321,13 @@ class InboundingController {
             'dimention_unit'      => $_POST['dimention_unit'] ?? 'cm',
             'weight_unit'         => $_POST['weight_unit'] ?? 'kg',
             'feedback'         => $_POST['feedback'] ?? '',
+
+            // Book fields (saved when Group is Book)
+            'author'   => trim((string)($_POST['author'] ?? '')) === '' ? null : (int) $_POST['author'],
+            'publisher'=> trim((string)($_POST['publisher'] ?? '')) === '' ? null : (int) $_POST['publisher'],
+            'isbn'     => $_POST['isbn'] ?? '',
+            'language' => $_POST['language'] ?? '',
+            'pages'    => trim((string)($_POST['pages'] ?? '')) === '' ? null : (int) $_POST['pages'],
         ];
         
         // 4. Update Main Record
@@ -1811,6 +1818,10 @@ class InboundingController {
         }
         global $inboundingModel;
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        $publish_status_req = isset($_GET['publish_status']) ? (int) $_GET['publish_status'] : 1;
+        if ($publish_status_req !== 0 && $publish_status_req !== 1) {
+            $publish_status_req = 1;
+        }
         $API_data = array();
 
         // Convert PHP warnings/notices into JSON errors and persist to publish logs.
@@ -1915,7 +1926,15 @@ class InboundingController {
         $API_data['category'] = $d['final_cat_ids'] ?? '';
         $API_data['itemtype'] ='product';
         $API_data['title'] = $d['product_title'] ?? '';
-        $API_data['status'] = 1;
+        $API_data['status'] = $publish_status_req;
+        if ($d['groupname'] == 'book') {
+
+            $API_data['author'] = $d['author'] ?? '';
+            $API_data['publisher'] = $d['publisher'] ?? '';
+            $API_data['language'] = $d['language'] ?? '';
+            $API_data['pages'] = $d['pages'] ?? '';
+            $API_data['isbn'] = $d['isbn'] ?? '';
+        }
         $API_data['snippet_description'] = $d['snippet_description'] ?? '';
         // $API_data['creator'] = $data['data']['received_by_user_id'];
         // $API_data['optionals'] = $data['data']['optionals'];
@@ -1960,7 +1979,11 @@ class InboundingController {
         }else{
             $stock_price_temp[0]['size'] = $d['size'] ?? '';
             $stock_price_temp[0]['color'] = $d['color'] ?? '';
-            $stock_price_temp[0]['item_level'] = 'variation';
+            if ($d['groupname'] == 'book') {
+                $stock_price_temp[0]['item_level'] = 'standalone';
+            }else{
+                $stock_price_temp[0]['item_level'] = 'variation';
+            }
         }
         $stock_price_temp[0]['marketplace_vendor'] = $d['Marketplace'] ?? '';
         $stock_price_temp[0]['colormap'] = $d['colormaps'] ?? '';
@@ -2111,6 +2134,7 @@ class InboundingController {
         }
 
         $API_data['images'] = $images_payload;
+        // echo "<pre>";print_r($API_data);exit;
         $jsonString = json_encode($API_data, JSON_UNESCAPED_SLASHES);
         $apiurl =  '';
         
@@ -2203,8 +2227,14 @@ class InboundingController {
         if (is_object($result) && isset($result->status) && $result->status == 'success' && !isset($result->error)) {
             $ProductsController = new ProductsController();
             // publish log
-            $logData1 = ['userid_log' => $_SESSION['user']['id'] ?? '0', 'i_id' => $id, 'stat' => 'Published'];
-            $inboundingModel->stat_logs($logData1);
+            $publishUserId = (int)($_SESSION['user']['id'] ?? 0);
+            if ($publishUserId <= 0) {
+                $publishUserId = (int)($_POST['userid_log'] ?? 0);
+            }
+            if ($publishUserId > 0) {
+                $logData1 = ['userid_log' => $publishUserId, 'i_id' => $id, 'stat' => 'Published'];
+                $inboundingModel->stat_logs($logData1);
+            }
 
             // import API
             $itemCode = $data['data']['Item_code'];
