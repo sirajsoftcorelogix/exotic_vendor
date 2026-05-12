@@ -198,6 +198,20 @@ class Location
         }
 
         $is_default = $is_default ? 1 : 0;
+        $is_active = $is_active ? 1 : 0;
+
+        if ($is_active === 0) {
+            $existing = $this->getRecord($id);
+            if (!$existing) {
+                return ['success' => false, 'message' => 'Location not found.'];
+            }
+            if (!empty((int) ($existing['is_active'] ?? 0))) {
+                $block = $this->getDeactivateBlockReason($id);
+                if ($block !== null) {
+                    return ['success' => false, 'message' => $block];
+                }
+            }
+        }
 
         $this->conn->begin_transaction();
         try {
@@ -235,6 +249,75 @@ class Location
     }
 
     /**
+     * Human-readable reason why a location cannot be deactivated, or null if allowed.
+     */
+    private function getDeactivateBlockReason(int $warehouseId): ?string
+    {
+        if ($warehouseId <= 0) {
+            return 'Invalid location.';
+        }
+
+        $parts = [];
+
+        $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_stock WHERE warehouse_id = ?');
+        if ($stmt) {
+            $stmt->bind_param('i', $warehouseId);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ((int) ($row['c'] ?? 0) > 0) {
+                $parts[] = 'one or more products still have stock rows for this warehouse';
+            }
+        }
+
+        $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_users WHERE warehouse_id = ? AND is_deleted = 0');
+        if ($stmt) {
+            $stmt->bind_param('i', $warehouseId);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ((int) ($row['c'] ?? 0) > 0) {
+                $parts[] = 'one or more users are mapped to this warehouse';
+            }
+        }
+
+        $orderLinked = false;
+        $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_invoices WHERE warehouse_id = ?');
+        if ($stmt) {
+            $stmt->bind_param('i', $warehouseId);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ((int) ($row['c'] ?? 0) > 0) {
+                $orderLinked = true;
+            }
+        }
+
+        if (!$orderLinked) {
+            $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM pos_payments WHERE warehouse_id = ?');
+            if ($stmt) {
+                $stmt->bind_param('i', $warehouseId);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ((int) ($row['c'] ?? 0) > 0) {
+                    $orderLinked = true;
+                }
+            }
+        }
+
+        if ($orderLinked) {
+            $parts[] = 'there are invoices or POS payments tied to this warehouse (orders from this location)';
+        }
+
+        if ($parts === []) {
+            return null;
+        }
+
+        return 'Cannot deactivate: ' . implode('; ', $parts) . '.';
+    }
+
+    /**
      * Soft-delete: marks location inactive so existing foreign keys remain valid.
      */
     public function deleteRecord($id)
@@ -242,6 +325,11 @@ class Location
         $id = (int) $id;
         if ($id <= 0) {
             return ['success' => false, 'message' => 'Invalid ID.'];
+        }
+
+        $block = $this->getDeactivateBlockReason($id);
+        if ($block !== null) {
+            return ['success' => false, 'message' => $block];
         }
 
         $sql = 'UPDATE exotic_address SET is_active = 0, is_default = 0 WHERE id = ?';
