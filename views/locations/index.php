@@ -37,7 +37,7 @@ function location_nav_query($search, $status_filter, $type_filter, array $extra 
                         <span class="text-gray-600 font-medium">Filters:</span>
                     </div>
                     <div class="relative flex items-left gap-2">
-                        <input type="text" name="search_text" placeholder="Search title, display name, or address" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 300px; height: 37px; border-radius: 5px;" value="<?php echo htmlspecialchars($search ?? '') ?>">
+                        <input type="text" name="search_text" placeholder="Search title, code, display name, or address" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 300px; height: 37px; border-radius: 5px;" value="<?php echo htmlspecialchars($search ?? '') ?>">
                     </div>
                     <div class="relative">
                         <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
@@ -85,6 +85,7 @@ function location_nav_query($search, $status_filter, $type_filter, array $extra 
                     <tr>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Type</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Code</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Title</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Display name</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Address</th>
@@ -104,6 +105,7 @@ function location_nav_query($search, $status_filter, $type_filter, array $extra 
                             <tr class="table-content-text">
                                 <td class="px-6 py-4 whitespace-nowrap"><?= (int) $index + 1 ?></td>
                                 <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars(location_type_label($row['address_type'] ?? '')) ?></td>
+                                <td class="px-6 py-4 whitespace-nowrap font-mono text-sm"><?= htmlspecialchars((string) ($row['short_code'] ?? '')) ?></td>
                                 <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars((string) ($row['address_title'] ?? '')) ?></td>
                                 <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars((string) ($row['display_name'] ?? '')) ?></td>
                                 <td class="px-6 py-4 max-w-xs" title="<?= htmlspecialchars($addr) ?>"><?= htmlspecialchars($addrShort) ?></td>
@@ -123,7 +125,7 @@ function location_nav_query($search, $status_filter, $type_filter, array $extra 
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="9" class="px-6 py-4 text-center text-gray-500">No record found.</td>
+                            <td colspan="10" class="px-6 py-4 text-center text-gray-500">No record found.</td>
                         </tr>
                     <?php endif; ?>
                     </tbody>
@@ -190,6 +192,11 @@ function location_nav_query($search, $status_filter, $type_filter, array $extra 
                                     <option value="retail_store">Retail store</option>
                                     <option value="warehouse">Warehouse</option>
                                 </select>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Short code</label>
+                                <input type="text" class="form-input w-full mt-1 font-mono uppercase" name="addShortCode" id="addShortCode" maxlength="5" placeholder="e.g. KN" autocomplete="off" />
+                                <p class="text-xs text-gray-500 mt-1">Up to 5 letters or digits (used for POS receipt prefixes when set).</p>
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Address title</label>
@@ -261,6 +268,11 @@ function location_nav_query($search, $status_filter, $type_filter, array $extra 
                                     <option value="retail_store">Retail store</option>
                                     <option value="warehouse">Warehouse</option>
                                 </select>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Short code</label>
+                                <input type="text" class="form-input w-full mt-1 font-mono uppercase" name="editShortCode" id="editShortCode" maxlength="5" placeholder="e.g. KN" autocomplete="off" />
+                                <p class="text-xs text-gray-500 mt-1">Up to 5 letters or digits (used for POS receipt prefixes when set).</p>
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Address title</label>
@@ -477,6 +489,7 @@ function location_nav_query($search, $status_filter, $type_filter, array $extra 
             }
             document.getElementById('editId').value = data.id;
             document.getElementById('editAddressType').value = data.address_type || 'retail_store';
+            document.getElementById('editShortCode').value = data.short_code || '';
             document.getElementById('editAddressTitle').value = data.address_title || '';
             document.getElementById('editDisplayName').value = data.display_name || '';
             document.getElementById('editAddress').value = data.address || '';

@@ -20,6 +20,20 @@ class Location
         return in_array($type, self::allowedAddressTypes(), true) ? $type : 'retail_store';
     }
 
+    /**
+     * Optional warehouse/store code (max 5, A–Z / 0–9); empty → null.
+     * Used by POS receipt numbering and similar flows.
+     */
+    public function normalizeShortCode($raw)
+    {
+        $s = strtoupper(preg_replace('/[^A-Z0-9]/', '', is_string($raw) ? trim($raw) : ''));
+        if ($s === '') {
+            return null;
+        }
+
+        return substr($s, 0, 5);
+    }
+
     public function getAll($page = 1, $limit = 10, $search = '', $status_filter = '', $type_filter = '')
     {
         $page = (int) $page;
@@ -39,8 +53,9 @@ class Location
 
         if ($search !== '') {
             $like = '%' . $search . '%';
-            $where[] = '(address_title LIKE ? OR display_name LIKE ? OR address LIKE ?)';
-            $types .= 'sss';
+            $where[] = '(address_title LIKE ? OR display_name LIKE ? OR address LIKE ? OR short_code LIKE ?)';
+            $types .= 'ssss';
+            $params[] = $like;
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
@@ -112,6 +127,7 @@ class Location
     public function addRecord($data)
     {
         $address_type = $this->normalizeAddressType($data['addAddressType'] ?? '');
+        $short_code = $this->normalizeShortCode($data['addShortCode'] ?? '');
         $address_title = isset($data['addAddressTitle']) ? trim((string) $data['addAddressTitle']) : '';
         $display_name = isset($data['addDisplayName']) ? trim((string) $data['addDisplayName']) : '';
         $address = isset($data['addAddress']) ? trim((string) $data['addAddress']) : '';
@@ -127,14 +143,15 @@ class Location
 
         $this->conn->begin_transaction();
         try {
-            $sql = 'INSERT INTO exotic_address (address_type, address_title, display_name, address, order_no, is_default, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)';
+            $sql = 'INSERT INTO exotic_address (address_type, short_code, address_title, display_name, address, order_no, is_default, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
             $stmt = $this->conn->prepare($sql);
             $addrTitleNull = $address_title === '' ? null : $address_title;
             $dispNull = $display_name === '' ? null : $display_name;
             $stmt->bind_param(
-                'ssssiii',
+                'sssssiii',
                 $address_type,
+                $short_code,
                 $addrTitleNull,
                 $dispNull,
                 $address,
@@ -168,6 +185,7 @@ class Location
         }
 
         $address_type = $this->normalizeAddressType($data['editAddressType'] ?? '');
+        $short_code = $this->normalizeShortCode($data['editShortCode'] ?? '');
         $address_title = isset($data['editAddressTitle']) ? trim((string) $data['editAddressTitle']) : '';
         $display_name = isset($data['editDisplayName']) ? trim((string) $data['editDisplayName']) : '';
         $address = isset($data['editAddress']) ? trim((string) $data['editAddress']) : '';
@@ -183,13 +201,14 @@ class Location
 
         $this->conn->begin_transaction();
         try {
-            $sql = 'UPDATE exotic_address SET address_type = ?, address_title = ?, display_name = ?, address = ?, order_no = ?, is_default = ?, is_active = ? WHERE id = ?';
+            $sql = 'UPDATE exotic_address SET address_type = ?, short_code = ?, address_title = ?, display_name = ?, address = ?, order_no = ?, is_default = ?, is_active = ? WHERE id = ?';
             $stmt = $this->conn->prepare($sql);
             $addrTitleNull = $address_title === '' ? null : $address_title;
             $dispNull = $display_name === '' ? null : $display_name;
             $stmt->bind_param(
-                'ssssiiii',
+                'sssssiiii',
                 $address_type,
+                $short_code,
                 $addrTitleNull,
                 $dispNull,
                 $address,
@@ -244,7 +263,7 @@ class Location
             return null;
         }
         $stmt = $this->conn->prepare(
-            'SELECT id, address_type, address_title, display_name, address, order_no, is_default, is_active, created_on FROM exotic_address WHERE id = ? LIMIT 1'
+            'SELECT id, address_type, short_code, address_title, display_name, address, order_no, is_default, is_active, created_on FROM exotic_address WHERE id = ? LIMIT 1'
         );
         $stmt->bind_param('i', $id);
         $stmt->execute();

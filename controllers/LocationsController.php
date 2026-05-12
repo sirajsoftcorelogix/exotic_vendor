@@ -16,7 +16,7 @@ class LocationsController
 
         $page_no = isset($_GET['page_no']) ? (int) $_GET['page_no'] : 1;
         $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
-        $limit = in_array($limit, [5, 20, 50, 100], true) ? $limit : 20;
+        $limit = in_array($limit, [10, 20, 50, 100], true) ? $limit : 20;
 
         $pt_data = $locationsModel->getAll($page_no, $limit, $search, $status_filter, $type_filter);
 
