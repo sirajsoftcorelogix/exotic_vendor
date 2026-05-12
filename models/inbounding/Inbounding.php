@@ -898,6 +898,9 @@ class Inbounding {
                 $cols[] = "$key = NULL";
                 continue;
             }
+            if ($key === 'is_variant') {
+                $val = (strtoupper(trim((string) $val)) === 'Y') ? 'Y' : 'N';
+            }
             $cols[] = "$key = ?";
             $values[] = $val;
                 

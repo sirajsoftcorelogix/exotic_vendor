@@ -1188,12 +1188,19 @@ class InboundingController {
             }
         }
 
-        // 1. Capture Inputs
-        $is_variant = $_POST['is_variant'] ?? '';
+        // 1. Capture Inputs — vp_inbound.is_variant is ENUM('Y','N'); empty/invalid POST causes "Data truncated".
+        $postedVariant = isset($_POST['is_variant']) ? strtoupper(trim((string) $_POST['is_variant'])) : '';
+        if ($postedVariant !== 'Y' && $postedVariant !== 'N') {
+            $postedVariant = strtoupper(trim((string) ($oldData['form1']['is_variant'] ?? 'N')));
+        }
+        if ($postedVariant !== 'Y') {
+            $postedVariant = 'N';
+        }
+        $is_variant = $postedVariant;
         $shouldRename = false;
 
-        if ($oldData['form1']['is_variant'] == 'Y') {
-            if ($_POST['is_variant'] != $oldData['form1']['is_variant']) {
+        if (($oldData['form1']['is_variant'] ?? '') == 'Y') {
+            if ($is_variant !== ($oldData['form1']['is_variant'] ?? '')) {
                 $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['group_name']));
                 $item_code = $this->generateItemcode($group_real_name);
             }else{
