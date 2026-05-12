@@ -1892,6 +1892,8 @@ class POSRegisterController
      */
     public function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null, array $extraHttpHeaders = [])
     {
+        require_once dirname(__DIR__) . '/helpers/api_call_logger.php';
+
         // echo "<pre>";
         // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
         // exit;
@@ -1901,6 +1903,16 @@ class POSRegisterController
                 && is_file(dirname(__DIR__) . '/.pos_skip_exotic_order_create_api')) {
             $d = ['orderid' => 'LOCAL-' . gmdate('YmdHis')];
             $j = json_encode($d);
+            api_call_log_write([
+                'kind' => 'exotic_api_local_stub',
+                'endpoint' => $ep,
+                'method' => strtoupper((string)$method),
+                'note' => '.pos_skip_exotic_order_create_api present — order/create not sent remotely',
+                'response_http_code' => 200,
+                'response_raw' => $j,
+                'response_decoded' => $d,
+            ]);
+
             return ['data' => $d, 'code' => 200, 'raw' => $j];
         }
 
@@ -1911,6 +1923,7 @@ class POSRegisterController
             $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
         }
 
+        $encodedPostData = null;
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -1988,6 +2001,7 @@ class POSRegisterController
         // print_r($response);
         // exit;
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
 
         curl_close($ch);
 
@@ -2010,6 +2024,22 @@ class POSRegisterController
         $body = (string)$response;
         $decoded = json_decode($body, true);
         $data = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : [];
+
+        api_call_log_write([
+            'kind' => 'exotic_api_http',
+            'endpoint' => $ep,
+            'method' => strtoupper((string)$method),
+            'base_url' => $base,
+            'request_url' => $url,
+            'request_headers' => api_call_log_sanitize_header_lines($headers),
+            'request_query_params' => $params,
+            'request_post_body' => $encodedPostData,
+            'curl_error' => $curlErr !== '' ? $curlErr : null,
+            'response_http_code' => $httpCode,
+            'response_session_headers_from_api' => $capturedHeaders,
+            'response_raw' => $body,
+            'response_decoded' => $data,
+        ]);
 
         return [
             'data' => $data,
