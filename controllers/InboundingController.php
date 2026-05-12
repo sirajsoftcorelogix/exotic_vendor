@@ -2067,9 +2067,6 @@ class InboundingController {
             $API_data['language'] = $d['language'] ?? '';
             $API_data['pages'] = $d['pages'] ?? '';
             $API_data['isbn'] = $d['isbn'] ?? '';
-            $API_data['cover_type'] = 'hard';
-            $API_data['edition'] = 'first';
-            $API_data['publication_date'] = date("Y-m-d");
         }
         $API_data['snippet_description'] = $d['snippet_description'] ?? '';
         // $API_data['creator'] = $data['data']['received_by_user_id'];
