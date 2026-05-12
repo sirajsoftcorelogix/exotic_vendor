@@ -892,6 +892,9 @@ class InboundingController {
         $mainPhotoDir = __DIR__ . '/../uploads/products/';
         $altPhotoDir  = __DIR__ . '/../uploads/itm_img/';
 
+        $itemData = $inboundingModel->getform1data($itemId);
+        $isBook = (string) ($itemData['form1']['group_name'] ?? '') === '-8';
+
         // 2. Fetch Variations from DB
         $variations = $inboundingModel->getVariations($itemId);
         $hasVariations = !empty($variations);
@@ -917,21 +920,33 @@ class InboundingController {
         // EXECUTION A: Rename Base Images (Variation ID -1 or 0)
         // =================================================================
         
-        // 1. Rename Main Product Photo (inbound_item table)
-        $itemData = $inboundingModel->getform1data($itemId);
-        $mainPhotoPath = $itemData['form2']['product_photo'] ?? '';
+        // 1. Rename Main Product Photo (vp_inbound row lives under getform1data()['form1'])
+        $mainPhotoPath = $itemData['form1']['product_photo'] ?? ($itemData['form2']['product_photo'] ?? '');
         
+        $bookLetterSeq = 0;
         if (!empty($mainPhotoPath)) {
-            // Main photo always gets the base name
-            $this->processRename($mainPhotoPath, $mainPhotoDir, $baseName, $itemId, 'main', $inboundingModel);
+            $mainBaseName = $isBook ? ($baseName . $this->bookImageAlphabetSuffix($bookLetterSeq)) : $baseName;
+            if ($isBook) {
+                $bookLetterSeq++;
+            }
+            $this->processRename($mainPhotoPath, $mainPhotoDir, $mainBaseName, $itemId, 'main', $inboundingModel);
         }
 
         // 2. Rename Gallery Images
         $baseImages = $inboundingModel->get_item_images_by_variation($itemId, -1);
-        if (empty($baseImages)) $baseImages = $inboundingModel->get_item_images_by_variation($itemId, 0);
+        if (empty($baseImages)) {
+            $baseImages = $inboundingModel->get_item_images_by_variation($itemId, 0);
+        }
 
         if (!empty($baseImages)) {
-            $this->renameGalleryImagesByDisplayOrder($baseImages, $altPhotoDir, $baseName, $inboundingModel);
+            $this->renameGalleryImagesByDisplayOrder(
+                $baseImages,
+                $altPhotoDir,
+                $baseName,
+                $inboundingModel,
+                $isBook,
+                $bookLetterSeq
+            );
         }
 
         // =================================================================
@@ -944,24 +959,58 @@ class InboundingController {
                 $varSuffix = $this->getNamingSuffix($var['color'], $var['size']);
                 $varBaseName = $itemCode . ($varSuffix ? '-' . $varSuffix : '');
 
+                $varBookSeq = 0;
                 // 1. Rename Variation Main Photo
                 if (!empty($var['variation_image'])) {
-                    $this->processRename($var['variation_image'], $mainPhotoDir, $varBaseName, $var['id'], 'variation_main', $inboundingModel);
+                    $varMainBase = $isBook ? ($varBaseName . $this->bookImageAlphabetSuffix($varBookSeq)) : $varBaseName;
+                    if ($isBook) {
+                        $varBookSeq++;
+                    }
+                    $this->processRename($var['variation_image'], $mainPhotoDir, $varMainBase, $var['id'], 'variation_main', $inboundingModel);
                 }
 
                 // 2. Rename Variation Gallery Images
                 $varImages = $inboundingModel->get_item_images_by_variation($itemId, $var['id']);
                 if (!empty($varImages)) {
-                    $this->renameGalleryImagesByDisplayOrder($varImages, $altPhotoDir, $varBaseName, $inboundingModel);
+                    $this->renameGalleryImagesByDisplayOrder(
+                        $varImages,
+                        $altPhotoDir,
+                        $varBaseName,
+                        $inboundingModel,
+                        $isBook,
+                        $varBookSeq
+                    );
                 }
             }
         }
     }
 
     /**
+     * Book image filename letter sequence: 0 => a, 1 => b, …, 25 => z, 26 => aa, …
+     */
+    private function bookImageAlphabetSuffix(int $index): string {
+        $index = max(0, $index);
+        $suffix = '';
+        $n = $index;
+        do {
+            $suffix = chr(ord('a') + ($n % 26)) . $suffix;
+            $n = intdiv($n, 26) - 1;
+        } while ($n >= 0);
+
+        return $suffix;
+    }
+
+    /**
      * Rename gallery files by display_order with collision-safe two-pass renaming.
      */
-    private function renameGalleryImagesByDisplayOrder(array $images, string $directory, string $baseName, $model): void {
+    private function renameGalleryImagesByDisplayOrder(
+        array $images,
+        string $directory,
+        string $baseName,
+        $model,
+        bool $bookMode = false,
+        int $bookStartIndex = 0
+    ): void {
         if (empty($images)) {
             return;
         }
@@ -992,8 +1041,12 @@ class InboundingController {
 
             $ext = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
 
-            // Name by visual order after sorting (dense sequence): base, a01, a02...
-            if ($idx === 0) {
+            // Book: itemcode + a, b, c, … (continuing from $bookStartIndex if main photo already took "a").
+            if ($bookMode) {
+                $letterOrdinal = $bookStartIndex + $idx;
+                $candidateBase = $baseName . $this->bookImageAlphabetSuffix($letterOrdinal);
+            } elseif ($idx === 0) {
+                // Non-book: first gallery file matches base name; rest use _a01, _a02, …
                 $candidateBase = $baseName;
             } else {
                 $candidateBase = $baseName . '_a' . str_pad((string)$idx, 2, '0', STR_PAD_LEFT);
