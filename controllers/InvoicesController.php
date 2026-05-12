@@ -4,7 +4,6 @@ require_once 'models/order/order.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/product/product.php';
-require_once 'models/order/stock.php';
 
 $invoiceModel = new Invoice($conn);
 $ordersModel = new Order($conn);
@@ -288,8 +287,6 @@ class InvoicesController
         foreach ($order_numbers as $order_number) {
             $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
         }
-        $stockModel = new Stock($conn);
-        $stockUpdate = $stockModel->updateStockByInvoiceId((int)$invoiceId);
 
         // Clear session
         unset($_SESSION['invoice_items']);
@@ -301,7 +298,6 @@ class InvoicesController
             'invoice_number' => $invoice_number,
             'items_created' => $itemCreated,
             'items_failed' => $itemsFailed,
-            'stock_update' => $stockUpdate,
             'irn_generated' => $irn ?? false,
             'irn_error_message' => $irnErrorMessage ?? ''
         ]);
