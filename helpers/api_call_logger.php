@@ -3,10 +3,19 @@
 /**
  * One JSON file per outbound API call; prunes oldest files when count exceeds limit.
  * Logs UTC + configured app timezone timestamps and redacts sensitive headers.
+ *
+ * Server-local only:
+ * - Never expose log JSON via HTTP: use logs/.htaccess (Apache) or deny ^~ /logs/ (nginx).
+ * - Production: set env EXOTIC_API_LOG_DIR to a path outside the web root (e.g. /var/log/exotic_vendor/api_calls).
  */
 
 if (!defined('API_CALL_LOG_DIR')) {
-    define('API_CALL_LOG_DIR', dirname(__DIR__) . DIRECTORY_SEPARATOR . 'logs' . DIRECTORY_SEPARATOR . 'api_calls');
+    $envDir = getenv('EXOTIC_API_LOG_DIR');
+    if ($envDir !== false && trim((string) $envDir) !== '') {
+        define('API_CALL_LOG_DIR', rtrim((string) $envDir, DIRECTORY_SEPARATOR));
+    } else {
+        define('API_CALL_LOG_DIR', dirname(__DIR__) . DIRECTORY_SEPARATOR . 'logs' . DIRECTORY_SEPARATOR . 'api_calls');
+    }
 }
 
 if (!defined('API_CALL_LOG_MAX_FILES')) {
