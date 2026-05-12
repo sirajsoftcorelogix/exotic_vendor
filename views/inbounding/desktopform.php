@@ -150,6 +150,23 @@ if (!empty($data['category']) && !empty($saved_group_id)) {
         }
     }
 }
+
+// --- Book fields prefill (Author/Publisher names for TomSelect) ---
+$selected_author_id = $data['form2']['author'] ?? '';
+$selected_author_name = '';
+$selected_publisher_id = $data['form2']['publisher'] ?? '';
+$selected_publisher_name = '';
+if (!empty($selected_author_id) || !empty($selected_publisher_id)) {
+    global $inboundingModel;
+    if (!empty($selected_author_id) && isset($inboundingModel) && method_exists($inboundingModel, 'getAuthorById')) {
+        $authorRow = $inboundingModel->getAuthorById((int)$selected_author_id);
+        $selected_author_name = $authorRow['author'] ?? $authorRow['name'] ?? '';
+    }
+    if (!empty($selected_publisher_id) && isset($inboundingModel) && method_exists($inboundingModel, 'getPublisherById')) {
+        $publisherRow = $inboundingModel->getPublisherById((int)$selected_publisher_id);
+        $selected_publisher_name = $publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
+    }
+}
 function renderSizeField($fieldName, $currentValue, $isClothing, $options, $customClass = "") {
     $html = '';
     if ($isClothing) {
@@ -587,6 +604,44 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
                     
                 </div>
+                <div id="book-meta-fields" class="hidden mt-6">
+                    <div class="border border-[#ffd6b3] rounded-[5px] px-[15px] py-4 ">
+                        <div class="text-[13px] font-bold text-[#333] mb-3">Book Details</div>
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Author</label>
+                                <select id="author_select" name="author" placeholder="Type author name..." autocomplete="off">
+                                    <option value=""></option>
+                                    <?php if (!empty($selected_author_id) && !empty($selected_author_name)): ?>
+                                        <option value="<?php echo htmlspecialchars($selected_author_id); ?>" selected><?php echo htmlspecialchars($selected_author_name); ?></option>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Publisher</label>
+                                <select id="publisher_select" name="publisher" placeholder="Type publisher name..." autocomplete="off">
+                                    <option value=""></option>
+                                    <?php if (!empty($selected_publisher_id) && !empty($selected_publisher_name)): ?>
+                                        <option value="<?php echo htmlspecialchars($selected_publisher_id); ?>" selected><?php echo htmlspecialchars($selected_publisher_name); ?></option>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">ISBN</label>
+                                <input type="text" name="isbn" value="<?php echo htmlspecialchars($data['form2']['isbn'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Language</label>
+                                <input type="text" name="language" value="<?php echo htmlspecialchars($data['form2']['language'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Pages</label>
+                                <input type="number" min="0" name="pages" value="<?php echo htmlspecialchars($data['form2']['pages'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                     <div class="text-right min-w-[100px]">
                         <span class="text-[10px] font-bold text-gray-500 uppercase">Volumetric</span>
@@ -1048,6 +1103,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 
             </fieldset>
         </div>
+
+        <!-- Book Details moved to Item Photos & Details section (below) -->
         <?php 
             // 1. PARSE SAVED DATA (If exists)
             // Assuming you store this string in a column named 'search_category_string'
@@ -1484,12 +1541,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
 <div id="publishConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[80]">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[420px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
         <div id="publishConfirmIdle">
-            <h3 class="text-lg font-bold mb-2 text-gray-800">Publish Product?</h3>
+            <h3 class="text-lg font-bold mb-2 text-gray-800">Publish product</h3>
             <p class="text-sm text-gray-600 mb-3">This saves the form, then calls the catalog API and imports the product. It often takes <strong>30 seconds to a few minutes</strong>—keep this tab open.</p>
-            <p class="text-xs text-gray-500 mb-6">Are you sure you want to publish now?</p>
-            <div class="flex gap-3 justify-center">
-                <button type="button" id="publishCancelBtn" onclick="closePublishPopup()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
-                <button type="button" id="publishConfirmBtn" onclick="triggerPublishController()" class="bg-[#28a745] text-white px-6 py-2 rounded text-sm font-semibold hover:bg-[#218838] transition shadow-md">Yes, Publish</button>
+            <p class="text-xs text-gray-500 mb-4">Choose where to publish: <strong>Live</strong> sends <code class="text-[11px] bg-gray-100 px-1 rounded">status = 1</code> to the API; <strong>Local</strong> sends <code class="text-[11px] bg-gray-100 px-1 rounded">status = 0</code>.</p>
+            <div class="flex flex-col gap-2 mb-4">
+                <button type="button" id="publishLiveBtn" onclick="triggerPublishController(1)" class="w-full bg-[#28a745] text-white px-4 py-2.5 rounded text-sm font-semibold hover:bg-[#218838] transition shadow-md">Publish on Live</button>
+                <button type="button" id="publishLocalBtn" onclick="triggerPublishController(0)" class="w-full bg-white text-gray-800 border-2 border-gray-300 px-4 py-2.5 rounded text-sm font-semibold hover:bg-gray-50 transition">Publish on Local</button>
+            </div>
+            <div class="flex justify-center">
+                <button type="button" id="publishCancelBtn" onclick="closePublishPopup()" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
             </div>
         </div>
         <div id="publishConfirmBusy" class="hidden flex flex-col items-center gap-3 py-2">
@@ -1833,6 +1893,50 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.control.classList.add('h-[36px]');
             }
         });
+
+        // Book fields (Author/Publisher)
+        const searchAuthorsUrl = '<?php echo base_url('?page=inbounding&action=searchAuthors&q='); ?>';
+        const searchPublishersUrl = '<?php echo base_url('?page=inbounding&action=searchPublishers&q='); ?>';
+
+        const authorEl = document.getElementById('author_select');
+        if (authorEl && typeof window.safeTomSelect === 'function') {
+            window.safeTomSelect(authorEl, {
+                valueField: 'id',
+                labelField: 'name',
+                searchField: ['name'],
+                placeholder: 'Search author...',
+                create: false,
+                preload: false,
+                allowEmptyOption: true,
+                load: function(query, callback) {
+                    if (!query || query.length < 2) return callback();
+                    fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
+                        .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t); }))
+                        .then(json => callback(json))
+                        .catch(() => callback());
+                }
+            });
+        }
+
+        const publisherEl = document.getElementById('publisher_select');
+        if (publisherEl && typeof window.safeTomSelect === 'function') {
+            window.safeTomSelect(publisherEl, {
+                valueField: 'id',
+                labelField: 'name',
+                searchField: ['name'],
+                placeholder: 'Search publisher...',
+                create: false,
+                preload: false,
+                allowEmptyOption: true,
+                load: function(query, callback) {
+                    if (!query || query.length < 2) return callback();
+                    fetch(searchPublishersUrl + encodeURIComponent(query), { credentials: 'include' })
+                        .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t); }))
+                        .then(json => callback(json))
+                        .catch(() => callback());
+                }
+            });
+        }
     });
 </script>
 <script>
@@ -2407,14 +2511,13 @@ document.addEventListener('DOMContentLoaded', function() {
     function resetPublishPopup() {
         const idle = document.getElementById('publishConfirmIdle');
         const busy = document.getElementById('publishConfirmBusy');
-        const confirmBtn = document.getElementById('publishConfirmBtn');
+        const liveBtn = document.getElementById('publishLiveBtn');
+        const localBtn = document.getElementById('publishLocalBtn');
         const cancelBtn = document.getElementById('publishCancelBtn');
         if (idle) idle.classList.remove('hidden');
         if (busy) busy.classList.add('hidden');
-        if (confirmBtn) {
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Yes, Publish';
-        }
+        if (liveBtn) liveBtn.disabled = false;
+        if (localBtn) localBtn.disabled = false;
         if (cancelBtn) cancelBtn.disabled = false;
     }
     function openPublishPopup() {
@@ -2545,19 +2648,22 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
 
-    // 3. Update Publish Controller to Save Form + Publish
-    function triggerPublishController() {
+    // 3. Update Publish Controller to Save Form + Publish (apiStatus: 1 = live, 0 = local → $API_data['status'])
+    function triggerPublishController(apiStatus) {
+        const publishStatus = (Number(apiStatus) === 0) ? 0 : 1;
         const form = document.getElementById('product_form');
         const formData = new FormData(form);
         const recordId = new URLSearchParams(window.location.search).get('id');
 
         const idle = document.getElementById('publishConfirmIdle');
         const busy = document.getElementById('publishConfirmBusy');
-        const confirmBtn = document.getElementById('publishConfirmBtn');
+        const liveBtn = document.getElementById('publishLiveBtn');
+        const localBtn = document.getElementById('publishLocalBtn');
         const cancelBtn = document.getElementById('publishCancelBtn');
         if (idle) idle.classList.add('hidden');
         if (busy) busy.classList.remove('hidden');
-        if (confirmBtn) confirmBtn.disabled = true;
+        if (liveBtn) liveBtn.disabled = true;
+        if (localBtn) localBtn.disabled = true;
         if (cancelBtn) cancelBtn.disabled = true;
 
         // First: Save the current form data so changes aren't lost
@@ -2567,7 +2673,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(() => {
             // Second: Call the Publish API after save is successful
-            return fetch(`index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`);
+            return fetch(`index.php?page=inbounding&action=inbound_product_publish&id=${recordId}&publish_status=${publishStatus}`);
         })
         .then(response => response.json())
         .then(data => {
@@ -3120,6 +3226,55 @@ document.addEventListener('DOMContentLoaded', function() {
         // After adding, force a check to update the newly added field
         toggleAllSizeFields();
     };
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function isBookSelected() {
+        const groupSelect = document.getElementById('group_select');
+        if (!groupSelect) return false;
+        // TomSelect keeps underlying select updated (value), but we need the label/text.
+        const idx = groupSelect.selectedIndex;
+        if (idx < 0) return false;
+        const txt = (groupSelect.options[idx] && groupSelect.options[idx].text) ? groupSelect.options[idx].text.toLowerCase() : '';
+        return txt.indexOf('book') !== -1;
+    }
+
+    function toggleBookFieldsDesktop() {
+        const bookBox = document.getElementById('book-meta-fields');
+        if (!bookBox) return;
+
+        const variantSelect = document.getElementById('variant_select');
+        const addVarBtn = document.querySelector('button[onclick*="addNewVariation"]');
+
+        const isBook = isBookSelected();
+        if (isBook) {
+            bookBox.classList.remove('hidden');
+            if (addVarBtn) addVarBtn.style.display = 'none';
+            if (variantSelect) {
+                variantSelect.value = 'N';
+                variantSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                variantSelect.disabled = true;
+            }
+        } else {
+            bookBox.classList.add('hidden');
+            if (addVarBtn) addVarBtn.style.display = '';
+            if (variantSelect) {
+                variantSelect.disabled = false;
+            }
+        }
+    }
+
+    const groupSelect = document.getElementById('group_select');
+    if (groupSelect) {
+        groupSelect.addEventListener('change', toggleBookFieldsDesktop);
+        if (groupSelect.tomselect) {
+            groupSelect.tomselect.on('change', toggleBookFieldsDesktop);
+        }
+    }
+
+    toggleBookFieldsDesktop();
 });
 </script>
 <script>
