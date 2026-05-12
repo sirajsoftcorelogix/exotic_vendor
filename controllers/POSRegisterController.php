@@ -1442,7 +1442,7 @@ class POSRegisterController
                 }
                 $split = $this->buildExoticCartAddSplit(is_array($body) ? $body : []);
                 $ctxAdd = $this->exoticCartDiscountContext();
-                $addRes = $this->exotic_api_call(
+                $primaryRes = $this->exotic_api_call(
                     '/cart/add',
                     'POST',
                     $split['query'],
@@ -1450,6 +1450,9 @@ class POSRegisterController
                     null,
                     $ctxAdd['extraHeaders']
                 );
+                $addRes = $primaryRes;
+                $retryRes = null;
+                $retryPostUsed = null;
                 // Some catalogue rows fail with parent-code + variation but succeed with direct variant SKU.
                 // Retry once with a safer payload shape before returning error to UI.
                 if (!$this->isExoticCartSuccess($addRes)) {
@@ -1468,6 +1471,7 @@ class POSRegisterController
                         $retryNeeded = true;
                     }
                     if ($retryNeeded) {
+                        $retryPostUsed = $retryPost;
                         $retryRes = $this->exotic_api_call(
                             '/cart/add',
                             'POST',
@@ -1481,7 +1485,29 @@ class POSRegisterController
                         }
                     }
                 }
-                $this->emitCartApiResponse($addRes);
+                $upstream = [
+                    'api_base' => 'https://www.exoticindia.com/api',
+                    'endpoint' => 'POST /cart/add',
+                    'discount_query_merged_into_url' => $ctxAdd['query'],
+                    'attempts' => [
+                        [
+                            'label' => 'primary',
+                            'request_url' => $this->exoticCartAddPublicUrl($split['query']),
+                            'post_body' => $split['post'],
+                            'response' => $this->compactUpstreamCartSnapshot($primaryRes),
+                        ],
+                    ],
+                ];
+                if ($retryRes !== null) {
+                    $upstream['attempts'][] = [
+                        'label' => 'retry',
+                        'request_url' => $this->exoticCartAddPublicUrl($split['query']),
+                        'post_body' => $retryPostUsed ?? [],
+                        'response' => $this->compactUpstreamCartSnapshot($retryRes),
+                    ];
+                }
+                $this->emitCartApiResponse($addRes, ['upstream' => $upstream]);
+
                 return;
 
             case 'modifyqty':
@@ -1858,9 +1884,49 @@ class POSRegisterController
     }
 
     /**
-     * @param array{data?: mixed, code?: int, raw?: string} $res
+     * Full URL as sent to Exotic (GET query on /cart/add).
+     *
+     * @param array<string, string|int|float> $queryParams
      */
-    private function emitCartApiResponse(array $res): void
+    private function exoticCartAddPublicUrl(array $queryParams): string
+    {
+        $base = 'https://www.exoticindia.com/api';
+        $url = rtrim($base, '/') . '/cart/add';
+        if ($queryParams !== []) {
+            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($queryParams);
+        }
+
+        return $url;
+    }
+
+    /**
+     * Trimmed upstream response for debug JSON (same limits as proxy raw).
+     *
+     * @param array{data?: mixed, code?: int, raw?: string} $res
+     *
+     * @return array<string, mixed>
+     */
+    private function compactUpstreamCartSnapshot(array $res): array
+    {
+        $raw = (string)($res['raw'] ?? '');
+        if (strlen($raw) > 65536) {
+            $raw = substr($raw, 0, 65536) . '…(truncated)';
+        }
+
+        return [
+            'http_code' => (int)($res['code'] ?? 0),
+            'success_evaluated' => $this->isExoticCartSuccess($res),
+            'message_extracted' => $this->extractExoticCartUserMessage($res),
+            'data' => $res['data'] ?? [],
+            'raw' => $raw,
+        ];
+    }
+
+    /**
+     * @param array{data?: mixed, code?: int, raw?: string} $res
+     * @param array<string, mixed> $extra Merged into JSON (e.g. upstream Exotic request/response for /cart/add)
+     */
+    private function emitCartApiResponse(array $res, array $extra = []): void
     {
         $raw = (string)($res['raw'] ?? '');
         if (strlen($raw) > 65536) {
@@ -1877,13 +1943,14 @@ class POSRegisterController
         if (!$ok && $msg === '') {
             $msg = 'Cart request failed (HTTP ' . (int)($res['code'] ?? 0) . ').';
         }
-        echo json_encode([
+        $payload = array_merge([
             'success' => $ok,
             'message' => $msg,
             'http_code' => (int)($res['code'] ?? 0),
             'data' => $res['data'] ?? [],
             'raw' => $raw,
-        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        ], $extra);
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 

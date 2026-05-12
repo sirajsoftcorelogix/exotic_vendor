@@ -13,6 +13,8 @@
   var MODAL_ID = 'posCartApiDebugModal';
   /** @type {Record<string, unknown>|null} */
   var lastCartApiDebug = null;
+  /** Last op=add snapshot (kept after retrieve overwrites lastCartApiDebug). */
+  var lastCartAddApiDebug = null;
   /** After a successful apply: fixed = INR entered; percent = 0–100, re-synced to API after each retrieve. */
   var posCustomDiscountPersist = null;
   /** Per cart line (cartref): line-level discount toward POST /order/pos_editorderprices after checkout. */
@@ -41,7 +43,7 @@
       '<div id="posCartApiDebugBackdrop" class="absolute inset-0 bg-black/40" aria-hidden="true"></div>' +
       '<div class="pos-cart-api-debug-inner relative z-10 max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-xl flex flex-col shadow-2xl">' +
       '<div class="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-2">' +
-      '<span class="text-sm font-semibold text-slate-800">Last cart API (proxy)</span>' +
+      '<span class="text-sm font-semibold text-slate-800">Cart API — proxy &amp; Exotic</span>' +
       '<button type="button" class="pos-cart-api-debug-close rounded px-2 py-1 text-slate-500 hover:bg-slate-100" aria-label="Close">✕</button>' +
       '</div>' +
       '<pre id="posCartApiDebugPre" class="min-h-[120px] flex-1 overflow-auto p-4 text-[10px] font-mono leading-relaxed text-slate-800 whitespace-pre-wrap break-words"></pre>' +
@@ -84,7 +86,7 @@
   }
 
   function openPosCartApiDebugModal() {
-    if (!lastCartApiDebug) {
+    if (!lastCartApiDebug && !lastCartAddApiDebug) {
       toast('No cart API call recorded yet.', 'red');
       return;
     }
@@ -93,30 +95,46 @@
     if (!pre) {
       return;
     }
-    var pr = lastCartApiDebug.parsedProxyResponse;
+    var dbg = lastCartApiDebug || lastCartAddApiDebug;
+    var pr = dbg ? dbg.parsedProxyResponse : null;
     var out = {
       note:
-        'Vendor calls same-origin ?page=pos_register&action=cart-api — server forwards to https://www.exoticindia.com/api/cart/* with x-api-* headers.',
-      request: {
-        time: lastCartApiDebug.at,
-        op: lastCartApiDebug.op,
-        method: lastCartApiDebug.method,
-        url: lastCartApiDebug.requestUrl,
-        fetchHttpStatus: lastCartApiDebug.fetchHttpStatus,
-        headers: lastCartApiDebug.requestHeaders || {},
-        jsonBody: lastCartApiDebug.requestBody != null ? lastCartApiDebug.requestBody : undefined
-      },
-      response: pr
+        'Flow: browser → ?page=pos_register&action=cart-api → server forwards to https://www.exoticindia.com/api/cart/*. Keys: last_cart_op = most recent call (often retrieve after add). last_add_to_cart = preserved snapshot of add so it is not lost after retrieve.',
+      last_cart_op: dbg
         ? {
-            success: pr.success,
-            http_code: pr.http_code,
-            message: pr.message,
-            parseError: pr.parseError,
-            data: cloneSafeJson(pr.data),
-            raw: pr.raw
+            time: dbg.at,
+            op: dbg.op,
+            method: dbg.method,
+            url: dbg.requestUrl,
+            fetchHttpStatus: dbg.fetchHttpStatus,
+            headers: dbg.requestHeaders || {},
+            jsonBody: dbg.requestBody != null ? dbg.requestBody : undefined,
+            upstream_exotic_india: dbg.upstreamExoticIndia || null,
+            response: pr
+              ? {
+                  success: pr.success,
+                  http_code: pr.http_code,
+                  message: pr.message,
+                  parseError: pr.parseError,
+                  data: cloneSafeJson(pr.data),
+                  raw: pr.raw,
+                  upstream: pr.upstream != null ? cloneSafeJson(pr.upstream) : undefined
+                }
+              : { networkError: dbg.networkError },
+            rawResponseText: dbg.rawProxyResponseText
           }
-        : { networkError: lastCartApiDebug.networkError },
-      rawResponseText: lastCartApiDebug.rawProxyResponseText
+        : null,
+      last_add_to_cart:
+        lastCartAddApiDebug != null
+          ? {
+              time: lastCartAddApiDebug.at,
+              url: lastCartAddApiDebug.requestUrl,
+              jsonBody: lastCartAddApiDebug.requestBody,
+              upstream_exotic_india: lastCartAddApiDebug.upstreamExoticIndia || null,
+              proxy_response: cloneSafeJson(lastCartAddApiDebug.parsedProxyResponse),
+              rawProxyResponseText: lastCartAddApiDebug.rawProxyResponseText
+            }
+          : null
     };
     try {
       pre.textContent = JSON.stringify(out, null, 2);
@@ -342,6 +360,9 @@
               extractedMsg ||
               ''
           };
+          if (parsed.upstream != null) {
+            r.upstream = parsed.upstream;
+          }
         } catch (e) {
           r = {
             success: false,
@@ -352,7 +373,7 @@
             message: 'Invalid JSON from cart API'
           };
         }
-        setLastCartApiDebug({
+        var dbg = {
           op: op,
           method: method,
           requestUrl: url,
@@ -360,8 +381,17 @@
           requestBody: opt.jsonBody != null ? opt.jsonBody : null,
           fetchHttpStatus: res.status,
           parsedProxyResponse: r,
-          rawProxyResponseText: rawPreview
-        });
+          rawProxyResponseText: rawPreview,
+          upstreamExoticIndia: r && r.upstream != null ? r.upstream : null
+        };
+        setLastCartApiDebug(dbg);
+        if (op === 'add') {
+          try {
+            lastCartAddApiDebug = JSON.parse(JSON.stringify(dbg));
+          } catch (eAdd) {
+            lastCartAddApiDebug = dbg;
+          }
+        }
         return r;
       });
     }).catch(function (err) {
@@ -1869,7 +1899,7 @@
       '<div class="mt-3 flex justify-center">' +
       '<button type="button" class="pos-cart-api-debug-link rounded-full border border-slate-200/90 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700" ' +
       'onclick="event.preventDefault();event.stopPropagation();if(typeof window.openPosCartApiDebugModal===\'function\'){window.openPosCartApiDebugModal();}">' +
-      'Last API request / response' +
+      'Review API request / response (proxy + Exotic add)' +
       '</button>' +
       '</div>';
 
