@@ -1878,7 +1878,7 @@ class OrdersController
                         'updated_at' => date('Y-m-d H:i:s')
                     ];
                     $totalorder++;
-                    //print_array($rdata);
+                    print_array($rdata);
                     $data = $ordersModel->importedStatusUpdate2($rdata);
                     $result[] = $data;
                     //add products
@@ -1893,7 +1893,7 @@ class OrdersController
         }
         
         //print_array($pdata);
-       // print_r($result);
+        print_r($result);
         //update log end time and imported count
 
         echo json_encode([
