@@ -36,7 +36,7 @@ class pos
         $warehouseId = $_SESSION['warehouse_id'] ?? 0;
 
         /* ================= FILTERS ================= */
-        $where  = " WHERE p.is_active = 1 ";
+        $where  = " WHERE p.is_active = 1 AND LOWER(TRIM(IFNULL(p.item_level, ''))) <> 'parent' ";
         $params = [];
         $types  = "";
 

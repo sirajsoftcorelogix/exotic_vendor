@@ -3689,7 +3689,7 @@ class ProductsController
         }
 
         if ($exact) {
-            $p = $productModel->getProductByskuExact($q);
+            $p = $productModel->getProductByskuExact($q, true);
             if ($p && !empty($p['id'])) {
                 echo json_encode(['success' => true, 'product' => $p]);
                 exit;
@@ -3703,7 +3703,7 @@ class ProductsController
 
         if (!$products || count($products) === 0) {
             // fallback exact item code
-            $productExactList = $productModel->getProductByItemCode($q);
+            $productExactList = $productModel->getProductByItemCode($q, true);
             if (!empty($productExactList)) {
                 $products = is_array($productExactList) ? $productExactList : [$productExactList];
             }

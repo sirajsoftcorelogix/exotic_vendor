@@ -1097,7 +1097,9 @@ class POSRegisterController
                         price_india, price_india_suggested, itemprice, finalprice, mrp_india,
                         product_weight, product_weight_unit,
                         prod_height, prod_width, prod_length, length_unit
-                 FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+                 FROM vp_products WHERE is_active = 1
+                   AND LOWER(TRIM(IFNULL(item_level, \'\'))) <> \'parent\'
+                   AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
             );
             if ($stmt) {
                 $stmt->bind_param('ss', $code, $code);
