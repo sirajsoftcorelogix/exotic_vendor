@@ -1931,7 +1931,11 @@ class InboundingController {
         $API_data['itemcode'] = $d['Item_code'] ?? '';
         $API_data['groupname'] = $d['groupname'] ?? '';
         $API_data['category'] = $d['final_cat_ids'] ?? '';
-        $API_data['itemtype'] ='product';
+        if ($d['groupname'] == 'book') {
+            $API_data['itemtype'] ='book';
+        }else{
+            $API_data['itemtype'] ='product';
+        }
         $API_data['title'] = $d['product_title'] ?? '';
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
