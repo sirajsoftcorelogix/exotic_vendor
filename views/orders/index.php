@@ -1017,6 +1017,7 @@
                                                         <span class="heading-typography block mb-5">Status</span>
                                                         <span class="data-typography mt-1 block font-semibold"><?= isset($status_list[$order['status']]) ? $status_list[$order['status']] : $order['status'] ?></span>
                                                     </div>
+                                                    
                                                 </div>
                                             </div>
                                             <!-- <div class="w-auto flex flex-col items-center space-y-2">
@@ -1070,6 +1071,17 @@
                                                 </div>
                                             </div>
                                             <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem );">
+                                                <?php 
+                                                    if(isset($order['remote_status']) && $order['remote_status'] != ''){
+                                                        ?>
+                                                        <div class="flex gap-2 items-center">
+                                                            <span class="heading-typography">Remote Status</span>
+                                                            <p> : <span class="data-typography"><?= isset($order['remote_status']) ? $order['remote_status'] : 'N/A' ?></span></p>
+                                                        </div>
+                                                        <?php
+
+                                                    }
+                                                    ?>
                                                 <div class="mt-[20px] max-w-48">
                                                     <span class="heading-typography block mb-5">Addon</span>
                                                     <?= implode('', $addontxt) ?>
@@ -1453,14 +1465,14 @@
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
         <button onclick="closeImportUpdatePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <div class="p-6 w-full">
-            <h2 class="text-2xl font-bold mb-4">Update Imported Orders</h2>
+            <h2 class="text-2xl font-bold mb-4">Update Orders Status</h2>
             <div class="w-full bg-gray-200 rounded-full dark:bg-gray-700 mb-4">
                 <div id="importUpdateProgress" class="bg-orange-600 text-xs font-medium text-orange-100 text-center p-0.5 leading-none rounded-full" style="width: 0%">0%</div>
             </div>
             <form id="importUpdateForm" method="post" action="?page=orders&action=update_import_bulk">
                 <div class="mb-4">
                     <label for="importUpdateOrderNumbers" class="block text-gray-700 font-bold mb-2">Order Numbers (comma separated):</label>
-                    <textarea id="importUpdateOrderNumbers" name="order_numbers" class="border border-gray-300 rounded px-3 py-2 w-full" rows="6" placeholder="e.g., ORD001, ORD002, ORD003"></textarea>
+                    <textarea id="importUpdateOrderNumbers" name="order_numbers" class="border border-gray-300 rounded px-3 py-2 w-full" rows="6" placeholder="e.g., 2825844, 2825845, 2825846"></textarea>
                 </div>
                 <div class="mb-4" style="max-height:200px; overflow-y:auto;" id="importUpdateStatus">
                     <p class="text-gray-700 mb-2">Enter order numbers to update from server.</p>

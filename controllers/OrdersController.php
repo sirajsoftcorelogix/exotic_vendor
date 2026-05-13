@@ -1865,7 +1865,7 @@ class OrdersController
 
             foreach ($order['cart'] as $item) {
                 //check status other than 1 (pending)
-                if (empty($item['order_status']) || $item['order_status'] == 1) {
+                //if (empty($item['order_status']) || $item['order_status'] == 1) {
                     //continue;
 
                     $rdata = [
@@ -1887,8 +1887,8 @@ class OrdersController
                     if (isset($data['success']) && $data['success'] == true) {
                         $imported++;
                     }
-                }
-                //print_array($rdata);                   
+                //}
+                print_array($rdata);                   
             }
         }
         
