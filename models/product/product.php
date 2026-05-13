@@ -253,6 +253,7 @@ class product
             }
         }
 
+        $search .= " AND LOWER(TRIM(IFNULL(vp_products.item_level, ''))) <> 'parent' ";
 
         $stmt = $this->db->prepare("SELECT * FROM vp_products WHERE 1=1 $search order by vp_products.id DESC LIMIT ? OFFSET ?");
         if ($stmt === false) {
@@ -321,6 +322,7 @@ class product
                 $search .= "AND vp_products.marketplace like '%" . $mp . "%'";
             }
         }
+        $search .= " AND LOWER(TRIM(IFNULL(vp_products.item_level, ''))) <> 'parent' ";
         $stmt = $this->db->prepare("SELECT COUNT(*) AS cnt FROM vp_products WHERE 1=1 $search");
         if ($stmt === false) {
             return 0;
@@ -494,7 +496,8 @@ class product
     public function updateProductFromApi($productData, array $options = [])
     {
         $updatedCount = 0;
-        $preserveLocalStock = !empty($options['preserve_local_stock']);
+        // Default: never overwrite vp_products.local_stock from API; pass preserve_local_stock => false to sync stock from API.
+        $preserveLocalStock = !array_key_exists('preserve_local_stock', $options) || !empty($options['preserve_local_stock']);
         // print_array($productData);
         // exit;
         if (isset($productData) && is_array($productData)) {
@@ -1591,7 +1594,9 @@ class product
     {
         $q = '%' . $query . '%';
         $sql = "SELECT id, sku, item_code, title, size, color, image, local_stock
-                FROM vp_products WHERE sku LIKE ? ORDER BY sku ASC LIMIT 25";
+                FROM vp_products WHERE sku LIKE ?
+                  AND LOWER(TRIM(IFNULL(item_level, ''))) <> 'parent'
+                ORDER BY sku ASC LIMIT 25";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return [];
@@ -1607,7 +1612,9 @@ class product
     public function searchProductsBySkuOrItemCode($query)
     {
         $q = '%' . $query . '%';
-        $sql = "SELECT * FROM vp_products WHERE sku LIKE ? OR item_code LIKE ? ORDER BY item_code ASC LIMIT 20";
+        $sql = "SELECT * FROM vp_products WHERE (sku LIKE ? OR item_code LIKE ?)
+                  AND LOWER(TRIM(IFNULL(item_level, ''))) <> 'parent'
+                ORDER BY item_code ASC LIMIT 20";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return [];
@@ -1763,9 +1770,10 @@ class product
         );
         return $this->executeVpProductsStmt($stmt);
     }
-    public function getProductByItemCode($item_code)
+    public function getProductByItemCode($item_code, bool $excludeParentFromCatalog = false)
     {
-        $sql = "SELECT * FROM vp_products WHERE item_code = ?";
+        $notParent = $excludeParentFromCatalog ? " AND LOWER(TRIM(IFNULL(item_level, ''))) <> 'parent' " : '';
+        $sql = "SELECT * FROM vp_products WHERE item_code = ? {$notParent}";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('s', $item_code);
         $stmt->execute();
@@ -2878,9 +2886,10 @@ class product
 
 
 
-    public function getProductByskuExact($sku)
+    public function getProductByskuExact($sku, bool $excludeParentFromCatalog = false)
     {
-        $sql = "SELECT * FROM vp_products WHERE sku = ? LIMIT 1";
+        $notParent = $excludeParentFromCatalog ? " AND LOWER(TRIM(IFNULL(item_level, ''))) <> 'parent' " : '';
+        $sql = "SELECT * FROM vp_products WHERE sku = ? {$notParent} LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('s', $sku);
         $stmt->execute();

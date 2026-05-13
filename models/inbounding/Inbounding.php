@@ -898,6 +898,9 @@ class Inbounding {
                 $cols[] = "$key = NULL";
                 continue;
             }
+            if ($key === 'is_variant') {
+                $val = (strtoupper(trim((string) $val)) === 'Y') ? 'Y' : 'N';
+            }
             $cols[] = "$key = ?";
             $values[] = $val;
                 
@@ -1462,7 +1465,7 @@ class Inbounding {
     }
 
     public function update_main_product_photo($item_id, $path) {
-        $sql = "UPDATE inbound_item SET product_photo = ? WHERE id = ?";
+        $sql = "UPDATE vp_inbound SET product_photo = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("si", $path, $item_id);
         return $stmt->execute();

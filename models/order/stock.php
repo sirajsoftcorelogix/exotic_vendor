@@ -98,7 +98,8 @@ class Stock {
 
     /**
      * Reverse invoice stock deductions: one IN movement per line (ref_type INVOICE_CANCEL).
-     * Idempotent per product_id + invoice id so cancel invoice / cancel dispatch can both call safely.
+     * Only runs when a matching OUT movement exists for this invoice (ref_type INVOICE); otherwise the line is skipped.
+     * Idempotent per product_id + invoice id for INVOICE_CANCEL rows.
      */
     public function restoreStockByInvoiceId(int $invoice_id) {
         $invoice_id = (int)$invoice_id;
@@ -128,6 +129,14 @@ class Stock {
             $stmt->close();
             return ['success' => false, 'message' => 'Prepare failed (dup check): ' . $this->conn->error];
         }
+        $priorOutStmt = $this->conn->prepare(
+            "SELECT id FROM vp_stock_movements WHERE product_id = ? AND movement_type = 'OUT' AND ref_type = 'INVOICE' AND ref_id = ? LIMIT 1"
+        );
+        if (!$priorOutStmt) {
+            $dupStmt->close();
+            $stmt->close();
+            return ['success' => false, 'message' => 'Prepare failed (prior OUT check): ' . $this->conn->error];
+        }
         while ($row = $result->fetch_assoc()) {
             $prodId = (int)($row['product_id'] ?? 0);
             $qty = (int) round((float)($row['quantity'] ?? 0));
@@ -144,6 +153,13 @@ class Stock {
                 $skipped++;
                 continue;
             }
+            $priorOutStmt->bind_param('is', $prodId, $refStr);
+            $priorOutStmt->execute();
+            $priorOutRes = $priorOutStmt->get_result();
+            if (!$priorOutRes || $priorOutRes->num_rows < 1) {
+                $skipped++;
+                continue;
+            }
             $res = $this->addStockMovement($prodId, $qty, 'IN', $invoice_id, 'INVOICE_CANCEL');
             if (empty($res['success'])) {
                 $errors[] = "Product $prodId: " . ($res['message'] ?? 'error');
@@ -152,6 +168,7 @@ class Stock {
             }
         }
         $dupStmt->close();
+        $priorOutStmt->close();
         $stmt->close();
         if (count($errors)) {
             return ['success' => false, 'message' => implode('; ', $errors), 'applied' => $applied, 'skipped_lines' => $skipped];
