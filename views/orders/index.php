@@ -1017,6 +1017,7 @@
                                                         <span class="heading-typography block mb-5">Status</span>
                                                         <span class="data-typography mt-1 block font-semibold"><?= isset($status_list[$order['status']]) ? $status_list[$order['status']] : $order['status'] ?></span>
                                                     </div>
+                                                    
                                                 </div>
                                             </div>
                                             <!-- <div class="w-auto flex flex-col items-center space-y-2">
@@ -1070,6 +1071,17 @@
                                                 </div>
                                             </div>
                                             <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem );">
+                                                <?php 
+                                                    if(isset($order['remote_status']) && $order['remote_status'] != ''){
+                                                        ?>
+                                                        <div class="flex gap-2 items-center">
+                                                            <span class="heading-typography">Remote Status</span>
+                                                            <p> : <span class="data-typography"><?= isset($order['remote_status']) ? $order['remote_status'] : 'N/A' ?></span></p>
+                                                        </div>
+                                                        <?php
+
+                                                    }
+                                                    ?>
                                                 <div class="mt-[20px] max-w-48">
                                                     <span class="heading-typography block mb-5">Addon</span>
                                                     <?= implode('', $addontxt) ?>
