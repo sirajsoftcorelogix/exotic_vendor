@@ -1888,7 +1888,7 @@ class OrdersController
                         $imported++;
                     }
                 }
-                //print_array($rdata);                   
+                print_array($rdata);                   
             }
         }
         
