@@ -1198,6 +1198,10 @@
             .then(data => {
                 console.log('Response data:', data);
                 boxElement._lastCourierDebugRequest = data?.debug?.serviceability_request || null;
+                const resolvedPickupLocation = data?.debug?.serviceability_request?.pickup_resolution?.pickup_location;
+                if (resolvedPickupLocation) {
+                    boxElement.setAttribute('data-pickup-location', resolvedPickupLocation);
+                }
                 boxElement._lastCourierDebugInput = data?.debug?.input_before_filter || null;
                 boxElement._lastCourierDebugOutput = data?.debug?.output_after_filter || null;
                 const rejectedCouriers = Array.isArray(data?.rejected_couriers)
