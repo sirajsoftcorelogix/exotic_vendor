@@ -14,6 +14,11 @@
                 <label for="terms_and_conditions" class="block text-gray-700 form-label text-sm">Terms and Conditions</label>
                 <textarea name="terms_and_conditions" id="terms_and_conditions" rows="8" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full h-32"><?php echo htmlspecialchars($data['terms_and_conditions'] ?? ''); ?></textarea>
             </div>
+            <div>
+                <label for="high_value_transaction_limit" class="block text-gray-700 form-label text-sm">High Value Transaction Limit</label>
+                <input type="number" min="1" step="0.01" name="high_value_transaction_limit" id="high_value_transaction_limit" value="<?php echo htmlspecialchars((string)($data['high_value_transaction_limit'] ?? '200000.00')); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                <p class="mt-1 text-xs text-gray-500">Default: ₹2,00,000. Used for Section 269ST / Rule 114B POS compliance prompts.</p>
+            </div>
         </div>
         <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Save Settings</button>
 <?php 
