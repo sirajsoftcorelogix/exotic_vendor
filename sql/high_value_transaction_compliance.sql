@@ -18,22 +18,3 @@ ALTER TABLE vp_invoices
   ADD COLUMN IF NOT EXISTS is_high_value_transaction TINYINT(1) NOT NULL DEFAULT 0 AFTER total_amount,
   ADD COLUMN IF NOT EXISTS high_value_transaction_limit DECIMAL(15,2) NULL AFTER is_high_value_transaction,
   ADD COLUMN IF NOT EXISTS high_value_compliance_status ENUM('NOT_REQUIRED','PENDING','COMPLETED') NOT NULL DEFAULT 'NOT_REQUIRED' AFTER high_value_transaction_limit;
-
-CREATE TABLE IF NOT EXISTS pos_high_value_compliance_audit (
-  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  invoice_id INT NULL,
-  order_number VARCHAR(100) NOT NULL DEFAULT '',
-  payment_id INT UNSIGNED NULL,
-  invoice_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-  high_value_limit DECIMAL(15,2) NOT NULL DEFAULT 200000.00,
-  payment_modes VARCHAR(255) NOT NULL DEFAULT '',
-  residency_status ENUM('INDIAN_RESIDENT','NRI','FOREIGN_NATIONAL') NOT NULL DEFAULT 'INDIAN_RESIDENT',
-  pan_captured ENUM('Y','N') NOT NULL DEFAULT 'N',
-  passport_captured ENUM('Y','N') NOT NULL DEFAULT 'N',
-  gstin_present ENUM('Y','N') NOT NULL DEFAULT 'N',
-  compliance_completed_timestamp DATETIME NULL,
-  cashier_user_id INT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  KEY idx_order_number (order_number),
-  KEY idx_invoice_id (invoice_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

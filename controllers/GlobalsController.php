@@ -7,8 +7,18 @@ class GlobalsController {
         if (!($conn instanceof mysqli)) {
             return;
         }
-        $stmt = $conn->prepare("SHOW COLUMNS FROM global_settings LIKE 'high_value_transaction_limit'");
+        $stmt = $conn->prepare(
+            'SELECT 1
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = ?
+               AND COLUMN_NAME = ?
+             LIMIT 1'
+        );
         if ($stmt) {
+            $table = 'global_settings';
+            $column = 'high_value_transaction_limit';
+            $stmt->bind_param('ss', $table, $column);
             $stmt->execute();
             $exists = (bool)$stmt->get_result()->fetch_assoc();
             $stmt->close();

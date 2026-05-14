@@ -637,6 +637,11 @@
             </label>
             <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">PAN is required unless GSTIN is entered.</p>
           </div>
+          <div class="mt-3">
+            <label class="block font-medium">Aadhaar
+              <input id="customer_aadhaar" maxlength="14" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm" placeholder="Optional, 12 digits">
+            </label>
+          </div>
           <div id="passportComplianceWrap" class="mt-3 hidden">
             <label class="block font-medium">Passport Number <span id="passportRequiredStar" class="text-red-600">*</span>
               <input id="passport_number" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="Passport number">
@@ -1064,6 +1069,7 @@
     [
       ["customer_residency_status", compliance.customer_residency_status || "INDIAN_RESIDENT"],
       ["customer_pan", compliance.customer_pan || ""],
+      ["customer_aadhaar", compliance.customer_aadhaar || ""],
       ["passport_number", compliance.passport_number || ""],
       ["country_of_residence", compliance.country_of_residence || ""]
     ].forEach(function(row) {
@@ -1150,6 +1156,7 @@
       confirm_sphone: read("confirm_sphone"),
       customer_residency_status: read("customer_residency_status") || "INDIAN_RESIDENT",
       customer_pan: read("customer_pan").replace(/\s+/g, "").toUpperCase(),
+      customer_aadhaar: read("customer_aadhaar").replace(/\D/g, ""),
       passport_number: read("passport_number").replace(/\s+/g, "").toUpperCase(),
       country_of_residence: read("country_of_residence"),
       sec269st_cash_warning_confirmed: "0"
@@ -1185,7 +1192,7 @@
     POS_REQUIRED_ADDRESS_FIELDS.forEach(function(row) {
       setPosFieldInvalid(row[0], false);
     });
-    ["confirm_email", "confirm_gstin", "customer_pan", "passport_number", "country_of_residence"].forEach(function(id) {
+    ["confirm_email", "confirm_gstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
     var summary = document.getElementById("addressConfirmValidationSummary");
@@ -1263,6 +1270,7 @@
     }
     var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
     var pan = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").toUpperCase();
+    var aadhaar = (document.getElementById("customer_aadhaar")?.value || "").replace(/\D/g, "");
     var passport = (document.getElementById("passport_number")?.value || "").replace(/\s+/g, "").toUpperCase();
     var countryResidence = (document.getElementById("country_of_residence")?.value || "").trim();
     var panOk = pan === "" || /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan);
@@ -1344,9 +1352,11 @@
     var highValue = isHighValueTransaction();
     var residency = String(document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
     var pan = String(document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").toUpperCase();
+    var aadhaar = String(document.getElementById("customer_aadhaar")?.value || "").replace(/\D/g, "");
     var passport = String(document.getElementById("passport_number")?.value || "").replace(/\s+/g, "").toUpperCase();
     var countryResidence = String(document.getElementById("country_of_residence")?.value || "").trim();
     if (document.getElementById("customer_pan")) document.getElementById("customer_pan").value = pan;
+    if (document.getElementById("customer_aadhaar")) document.getElementById("customer_aadhaar").value = aadhaar;
     if (document.getElementById("passport_number")) document.getElementById("passport_number").value = passport;
 
     if (highValue && gstin === "") {
@@ -1384,6 +1394,11 @@
       missing.push("Valid Passport Number");
       setPosFieldInvalid("passport_number", true);
       if (!firstInvalidId) firstInvalidId = "passport_number";
+    }
+    if (aadhaar !== "" && !/^\d{12}$/.test(aadhaar)) {
+      missing.push("Valid Aadhaar");
+      setPosFieldInvalid("customer_aadhaar", true);
+      if (!firstInvalidId) firstInvalidId = "customer_aadhaar";
     }
 
     if (missing.length) {
