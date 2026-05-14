@@ -1026,6 +1026,16 @@
             const rows = Array.isArray(rejectedCouriers) ? rejectedCouriers : [];
             if (!rows.length) return '';
 
+            const friendlyNegativeParam = function (key, value) {
+                if (key === 'pickup_availability') {
+                    return 'Pickup not available';
+                }
+                if (key === 'cod') {
+                    return 'COD not available';
+                }
+                return key + ': ' + value;
+            };
+
             const cards = rows.map((courier) => {
                 const negativeParams = courier.negative_parameters && typeof courier.negative_parameters === 'object'
                     ? Object.entries(courier.negative_parameters)
@@ -1033,7 +1043,7 @@
                 const paramHtml = negativeParams.length
                     ? negativeParams.map(([key, value]) => `
                         <span class="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800">
-                            ${escapeHtml(key)}: ${escapeHtml(value)}
+                            ${escapeHtml(friendlyNegativeParam(key, value))}
                         </span>
                     `).join('')
                     : (courier.reasons || []).map((reason) => `
@@ -1160,7 +1170,7 @@
                     const rawText = (typeof text === 'string') ? text : String(text ?? '');
                     const cleaned = rawText.replace(/^\uFEFF/, '').trim();
                     let parsed = {};
-                    
+
                     try {
                         parsed = cleaned ? JSON.parse(cleaned) : {};
                     } catch (err) {
