@@ -16,10 +16,39 @@ class DispatchController {
         $fallbackPin = trim((string)($firm['pin'] ?? ''));
         $pickupLocation = trim($pickupLocation);
         $pinKeys = ['pin_code', 'pincode', 'postcode', 'pin', 'zipcode', 'zip'];
+        $extractPin = function (array $row) use ($pinKeys): string {
+            foreach ($pinKeys as $key) {
+                $pin = trim((string)($row[$key] ?? ''));
+                if ($pin !== '') {
+                    return $pin;
+                }
+            }
+
+            $address = trim((string)($row['address'] ?? ''));
+            if ($address !== '' && preg_match('/\b\d{6}\b/', $address, $matches)) {
+                return $matches[0];
+            }
+
+            return '';
+        };
+        $formatResolution = function (array $row, string $pin, string $source, ?array $requestedRow = null) use ($pickupLocation): array {
+            $rowName = trim((string)($row['pickup_location'] ?? ''));
+
+            return [
+                'postcode' => $pin,
+                'source' => $source . ': ' . ($rowName !== '' ? $rowName : 'unknown'),
+                'pickup_location' => $rowName,
+                'requested_pickup_location' => $pickupLocation,
+                'first_mile_override' => $requestedRow !== null,
+                'requested_row' => $requestedRow,
+                'matched_row' => $row,
+            ];
+        };
 
         $pickupLocations = $dispatchModel->pickupLocations();
         $rows = $pickupLocations['data']['shipping_address'] ?? [];
         if (is_array($rows)) {
+            $requestedRow = null;
             foreach ($rows as $row) {
                 if (!is_array($row)) {
                     continue;
@@ -28,25 +57,30 @@ class DispatchController {
                 if ($pickupLocation !== '' && strcasecmp($rowName, $pickupLocation) !== 0) {
                     continue;
                 }
-                foreach ($pinKeys as $key) {
-                    $pin = trim((string)($row[$key] ?? ''));
+                $requestedRow = $row;
+                $pin = $extractPin($row);
+                if ($pin !== '' && (int)($row['is_first_mile_pickup'] ?? 0) === 1) {
+                    return $formatResolution($row, $pin, 'shiprocket first-mile pickup location');
+                }
+                break;
+            }
+
+            if ($requestedRow !== null && (int)($requestedRow['is_first_mile_pickup'] ?? 0) !== 1) {
+                foreach ($rows as $row) {
+                    if (!is_array($row) || (int)($row['is_first_mile_pickup'] ?? 0) !== 1) {
+                        continue;
+                    }
+                    $pin = $extractPin($row);
                     if ($pin !== '') {
-                        return [
-                            'postcode' => $pin,
-                            'source' => 'shiprocket pickup location: ' . ($rowName !== '' ? $rowName : $pickupLocation),
-                            'pickup_location' => $rowName !== '' ? $rowName : $pickupLocation,
-                            'matched_row' => $row,
-                        ];
+                        return $formatResolution($row, $pin, 'shiprocket first-mile pickup override', $requestedRow);
                     }
                 }
-                $address = trim((string)($row['address'] ?? ''));
-                if ($address !== '' && preg_match('/\b\d{6}\b/', $address, $matches)) {
-                    return [
-                        'postcode' => $matches[0],
-                        'source' => 'shiprocket pickup location address: ' . ($rowName !== '' ? $rowName : $pickupLocation),
-                        'pickup_location' => $rowName !== '' ? $rowName : $pickupLocation,
-                        'matched_row' => $row,
-                    ];
+            }
+
+            if ($requestedRow !== null) {
+                $pin = $extractPin($requestedRow);
+                if ($pin !== '') {
+                    return $formatResolution($requestedRow, $pin, 'shiprocket pickup location');
                 }
             }
         }
@@ -55,6 +89,9 @@ class DispatchController {
             'postcode' => $fallbackPin,
             'source' => 'firm_details.pin',
             'pickup_location' => $pickupLocation,
+            'requested_pickup_location' => $pickupLocation,
+            'first_mile_override' => false,
+            'requested_row' => null,
             'matched_row' => null,
         ];
     }
