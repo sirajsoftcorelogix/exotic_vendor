@@ -1156,7 +1156,8 @@
             .then(response => {
                 console.log('Response status:', response.status);
                 return response.text().then(function (text) {
-                    const cleaned = text.replace(/^\uFEFF/, '').trim();
+                    const rawText = (typeof text === 'string') ? text : String(text ?? '');
+                    const cleaned = rawText.replace(/^\uFEFF/, '').trim();
                     let parsed = {};
                     try {
                         parsed = cleaned ? JSON.parse(cleaned) : {};
