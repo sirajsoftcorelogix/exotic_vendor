@@ -23,7 +23,7 @@ class GlobalsController {
             $exists = (bool)$stmt->get_result()->fetch_assoc();
             $stmt->close();
             if (!$exists) {
-                @$conn->query("ALTER TABLE global_settings ADD COLUMN high_value_transaction_limit DECIMAL(15,2) NOT NULL DEFAULT 200000.00 AFTER terms_and_conditions");
+                @$conn->query("ALTER TABLE global_settings ADD COLUMN high_value_transaction_limit DECIMAL(15,2) NOT NULL DEFAULT 200000.00");
             }
         }
         @$conn->query("UPDATE global_settings SET high_value_transaction_limit = 200000.00 WHERE id = 1 AND (high_value_transaction_limit IS NULL OR high_value_transaction_limit <= 0)");
