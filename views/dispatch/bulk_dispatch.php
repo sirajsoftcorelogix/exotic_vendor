@@ -567,6 +567,7 @@
 
         // Helper function to escape HTML in error messages
         function escapeHtml(text) {
+            const safeText = (typeof text === 'string') ? text : String(text ?? '');
             const map = {
                 '&': '&amp;',
                 '<': '&lt;',
@@ -574,7 +575,7 @@
                 '"': '&quot;',
                 "'": '&#039;'
             };
-            return text.replace(/[&<>"']/g, m => map[m]);
+            return safeText.replace(/[&<>"']/g, m => map[m]);
         }
 
         const closeButtons = modal.querySelectorAll('[data-close-select-items]');
