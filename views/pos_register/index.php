@@ -73,6 +73,7 @@
   <script>
     window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
     window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+    window.POS_HIGH_VALUE_TRANSACTION_LIMIT = <?= json_encode((float)($high_value_transaction_limit ?? 200000.00)) ?>;
   </script>
   <!-- ===== TOP BAR ===== -->
   <header class="border-b bg-white">
@@ -597,6 +598,7 @@
       <button type="button" onclick="closeAddressConfirmModal()" class="text-xl text-gray-500 hover:text-gray-800">✕</button>
     </div>
     <div id="addressConfirmValidationSummary" class="mx-6 mt-4 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></div>
+    <div id="highValueComplianceBanner" class="mx-6 mt-4 hidden rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">High Value Transaction – Compliance Required</div>
     <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
@@ -619,6 +621,34 @@
           <label class="block text-xs font-medium text-slate-600">Country <span class="text-red-600">*</span><input id="confirm_country" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Country" required></label>
         </div>
         <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="mt-1 w-full border rounded px-3 py-2 text-sm uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
+        <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <div class="mb-2 font-semibold text-amber-950">High Value Transaction – Compliance Required</div>
+          <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. GSTIN B2B invoices derive PAN automatically.</p>
+          <label class="block font-medium">Customer residency <span class="text-red-600">*</span>
+            <select id="customer_residency_status" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm">
+              <option value="INDIAN_RESIDENT">Indian Resident</option>
+              <option value="NRI">NRI</option>
+              <option value="FOREIGN_NATIONAL">Foreign National</option>
+            </select>
+          </label>
+          <div id="panComplianceWrap" class="mt-3">
+            <label class="block font-medium">PAN <span id="panRequiredStar" class="text-red-600">*</span>
+              <input id="customer_pan" maxlength="10" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="ABCDE1234F">
+            </label>
+            <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">PAN is required unless GSTIN is entered.</p>
+          </div>
+          <div id="passportComplianceWrap" class="mt-3 hidden">
+            <label class="block font-medium">Passport Number <span id="passportRequiredStar" class="text-red-600">*</span>
+              <input id="passport_number" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="Passport number">
+            </label>
+          </div>
+          <div id="countryResidenceWrap" class="mt-3 hidden">
+            <label class="block font-medium">Country of Residence <span class="text-red-600">*</span>
+              <input id="country_of_residence" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm" placeholder="Country of residence">
+            </label>
+          </div>
+          <p id="complianceInlineError" class="mt-2 hidden text-[11px] font-medium text-red-700"></p>
+        </div>
       </div>
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
@@ -1030,6 +1060,17 @@
       var el = document.getElementById(id);
       if (el) el.value = map[id];
     });
+    var compliance = (payload && payload.compliance) || {};
+    [
+      ["customer_residency_status", compliance.customer_residency_status || "INDIAN_RESIDENT"],
+      ["customer_pan", compliance.customer_pan || ""],
+      ["passport_number", compliance.passport_number || ""],
+      ["country_of_residence", compliance.country_of_residence || ""]
+    ].forEach(function(row) {
+      var el = document.getElementById(row[0]);
+      if (el) el.value = row[1];
+    });
+    syncHighValueComplianceUi();
   }
 
   /** When shipping is blank but billing is present, mirror billing into shipping (same-as-billing / walk-in). */
@@ -1106,7 +1147,12 @@
       confirm_sstate: read("confirm_sstate"),
       confirm_szip: read("confirm_szip"),
       confirm_scountry: read("confirm_scountry"),
-      confirm_sphone: read("confirm_sphone")
+      confirm_sphone: read("confirm_sphone"),
+      customer_residency_status: read("customer_residency_status") || "INDIAN_RESIDENT",
+      customer_pan: read("customer_pan").replace(/\s+/g, "").toUpperCase(),
+      passport_number: read("passport_number").replace(/\s+/g, "").toUpperCase(),
+      country_of_residence: read("country_of_residence"),
+      sec269st_cash_warning_confirmed: "0"
     };
   }
 
@@ -1139,7 +1185,7 @@
     POS_REQUIRED_ADDRESS_FIELDS.forEach(function(row) {
       setPosFieldInvalid(row[0], false);
     });
-    ["confirm_email", "confirm_gstin"].forEach(function(id) {
+    ["confirm_email", "confirm_gstin", "customer_pan", "passport_number", "country_of_residence"].forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
     var summary = document.getElementById("addressConfirmValidationSummary");
@@ -1149,8 +1195,97 @@
     }
   }
 
+  function getHighValueLimit() {
+    var limit = parseFloat(String(window.POS_HIGH_VALUE_TRANSACTION_LIMIT || "200000"));
+    return isFinite(limit) && limit > 0 ? limit : 200000;
+  }
+
+  function getCurrentCheckoutTotal() {
+    var live = typeof window.getPosCartTotalsForCheckout === "function" ? window.getPosCartTotalsForCheckout() : null;
+    var total = live && live.grandTotal != null ? parseFloat(String(live.grandTotal)) : NaN;
+    return isFinite(total) ? total : 0;
+  }
+
+  function isHighValueTransaction() {
+    return getCurrentCheckoutTotal() >= getHighValueLimit();
+  }
+
+  function formatInrAmount(amount) {
+    try {
+      return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
+    } catch (e) {
+      return "₹" + String(amount);
+    }
+  }
+
+  function syncHighValueComplianceUi() {
+    var highValue = isHighValueTransaction();
+    var gstin = (document.getElementById("confirm_gstin")?.value || "").trim();
+    var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
+    var banner = document.getElementById("highValueComplianceBanner");
+    var panel = document.getElementById("highValueCompliancePanel");
+    var panWrap = document.getElementById("panComplianceWrap");
+    var passportWrap = document.getElementById("passportComplianceWrap");
+    var countryWrap = document.getElementById("countryResidenceWrap");
+    var panHint = document.getElementById("panComplianceHint");
+    var panStar = document.getElementById("panRequiredStar");
+    var passportStar = document.getElementById("passportRequiredStar");
+
+    if (banner) {
+      banner.textContent = "High Value Transaction – Compliance Required (limit " + formatInrAmount(getHighValueLimit()) + ")";
+      banner.classList.toggle("hidden", !highValue);
+    }
+    if (panel) panel.classList.toggle("hidden", !highValue);
+    if (!highValue) {
+      updateConfirmAddressButtonState();
+      return;
+    }
+
+    var hasGstin = gstin !== "";
+    if (panWrap) panWrap.classList.toggle("hidden", residency === "FOREIGN_NATIONAL");
+    if (passportWrap) passportWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
+    if (countryWrap) countryWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
+    if (panStar) panStar.classList.toggle("hidden", hasGstin || residency === "FOREIGN_NATIONAL" || residency === "NRI");
+    if (passportStar) passportStar.classList.toggle("hidden", residency === "NRI");
+    if (panHint) {
+      panHint.textContent = hasGstin
+        ? "GSTIN present. PAN will be derived automatically for B2B invoice handling."
+        : (residency === "NRI" ? "For NRI, enter PAN or Passport Number with Country of Residence." : "PAN is required unless GSTIN is entered.");
+    }
+    updateConfirmAddressButtonState();
+  }
+
+  function isHighValueComplianceDataComplete() {
+    if (!isHighValueTransaction()) return true;
+    var gstin = (document.getElementById("confirm_gstin")?.value || "").trim().toUpperCase();
+    if (gstin !== "") {
+      return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin);
+    }
+    var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
+    var pan = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").toUpperCase();
+    var passport = (document.getElementById("passport_number")?.value || "").replace(/\s+/g, "").toUpperCase();
+    var countryResidence = (document.getElementById("country_of_residence")?.value || "").trim();
+    var panOk = pan === "" || /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan);
+    var passportOk = passport === "" || passport.length >= 6;
+    if (!panOk || !passportOk) return false;
+    if (residency === "INDIAN_RESIDENT") return pan !== "";
+    if (residency === "NRI") return pan !== "" || (passport.length >= 6 && countryResidence !== "");
+    return passport.length >= 6 && countryResidence !== "";
+  }
+
+  function updateConfirmAddressButtonState() {
+    var btn = document.getElementById("confirmAddressSubmitBtn");
+    if (!btn) return;
+    var disabled = isHighValueTransaction() && !isHighValueComplianceDataComplete();
+    btn.disabled = disabled;
+    btn.classList.toggle("opacity-50", disabled);
+    btn.classList.toggle("cursor-not-allowed", disabled);
+    btn.title = disabled ? "Complete high value transaction compliance details first." : "";
+  }
+
   function validateAddressConfirmPayload(payload) {
     clearAddressValidationState();
+    syncHighValueComplianceUi();
     var missing = [];
     var firstInvalidId = "";
     POS_REQUIRED_ADDRESS_FIELDS.forEach(function(row) {
@@ -1204,6 +1339,51 @@
       missing.push("Valid GSTIN");
       setPosFieldInvalid("confirm_gstin", true);
       if (!firstInvalidId) firstInvalidId = "confirm_gstin";
+    }
+
+    var highValue = isHighValueTransaction();
+    var residency = String(document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
+    var pan = String(document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").toUpperCase();
+    var passport = String(document.getElementById("passport_number")?.value || "").replace(/\s+/g, "").toUpperCase();
+    var countryResidence = String(document.getElementById("country_of_residence")?.value || "").trim();
+    if (document.getElementById("customer_pan")) document.getElementById("customer_pan").value = pan;
+    if (document.getElementById("passport_number")) document.getElementById("passport_number").value = passport;
+
+    if (highValue && gstin === "") {
+      if (residency === "INDIAN_RESIDENT" && pan === "") {
+        missing.push("Customer PAN");
+        setPosFieldInvalid("customer_pan", true);
+        if (!firstInvalidId) firstInvalidId = "customer_pan";
+      }
+      if (residency === "NRI" && pan === "" && (passport === "" || countryResidence === "")) {
+        missing.push("NRI PAN or Passport Number with Country of Residence");
+        setPosFieldInvalid("customer_pan", true);
+        setPosFieldInvalid("passport_number", true);
+        setPosFieldInvalid("country_of_residence", true);
+        if (!firstInvalidId) firstInvalidId = "customer_pan";
+      }
+      if (residency === "FOREIGN_NATIONAL") {
+        if (passport === "") {
+          missing.push("Passport Number");
+          setPosFieldInvalid("passport_number", true);
+          if (!firstInvalidId) firstInvalidId = "passport_number";
+        }
+        if (countryResidence === "") {
+          missing.push("Country of Residence");
+          setPosFieldInvalid("country_of_residence", true);
+          if (!firstInvalidId) firstInvalidId = "country_of_residence";
+        }
+      }
+    }
+    if (pan !== "" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+      missing.push("Valid PAN");
+      setPosFieldInvalid("customer_pan", true);
+      if (!firstInvalidId) firstInvalidId = "customer_pan";
+    }
+    if (passport !== "" && passport.length < 6) {
+      missing.push("Valid Passport Number");
+      setPosFieldInvalid("passport_number", true);
+      if (!firstInvalidId) firstInvalidId = "passport_number";
     }
 
     if (missing.length) {
@@ -1460,7 +1640,15 @@
     document.querySelectorAll("#addressConfirmModal input").forEach(function(el) {
       el.addEventListener("input", function() {
         setPosFieldInvalid(el.id, false);
+        syncHighValueComplianceUi();
       });
+    });
+    ["customer_residency_status", "confirm_gstin"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("change", syncHighValueComplianceUi);
+        el.addEventListener("input", syncHighValueComplianceUi);
+      }
     });
   });
 
@@ -1494,6 +1682,14 @@
       receipt_coupon_discount: isFinite(couponDeduction) ? couponDeduction : 0,
       receipt_cash_discount: isFinite(customDeduction) ? customDeduction : 0
     });
+    if (String(payMode || "").toLowerCase() === "cash" && isFinite(payAmt) && payAmt >= getHighValueLimit()) {
+      var okCash = window.confirm("Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?");
+      if (!okCash) {
+        showToast("Please switch to digital payment or acknowledge the cash warning.", "red");
+        return;
+      }
+      body.sec269st_cash_warning_confirmed = "1";
+    }
     var linePricePayload =
       typeof window.getPosLinePricesPayloadForCheckout === "function"
         ? window.getPosLinePricesPayloadForCheckout()
@@ -1526,6 +1722,14 @@
           window.__posLastOrderCreateDebug = data && data.order_create_debug ? data.order_create_debug : null;
           if (window.__posLastOrderCreateDebug && typeof showPaymentModalOrderApiRecord === "function") {
             showPaymentModalOrderApiRecord(window.__posLastOrderCreateDebug);
+          }
+          if (data && data.requires_compliance) {
+            syncHighValueComplianceUi();
+            var summary = document.getElementById("addressConfirmValidationSummary");
+            if (summary) {
+              summary.textContent = data.message || "Additional details required for High Value Transaction.";
+              summary.classList.remove("hidden");
+            }
           }
           showToast(data && data.message ? data.message : "Checkout failed", "red");
           return;

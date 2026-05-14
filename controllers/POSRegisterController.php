@@ -22,6 +22,277 @@ class POSRegisterController
         }
     }
 
+    private function columnExists(mysqli $conn, string $table, string $column): bool
+    {
+        $stmt = $conn->prepare("SHOW COLUMNS FROM `$table` LIKE ?");
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $column);
+        $stmt->execute();
+        $exists = (bool)$stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $exists;
+    }
+
+    private function ensureHighValueComplianceSchema(mysqli $conn): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+
+        if (!$this->columnExists($conn, 'global_settings', 'high_value_transaction_limit')) {
+            @$conn->query("ALTER TABLE global_settings ADD COLUMN high_value_transaction_limit DECIMAL(15,2) NOT NULL DEFAULT 200000.00 AFTER terms_and_conditions");
+        }
+        @$conn->query("UPDATE global_settings SET high_value_transaction_limit = 200000.00 WHERE id = 1 AND (high_value_transaction_limit IS NULL OR high_value_transaction_limit <= 0)");
+
+        $customerColumns = [
+            'customer_residency_status' => "ALTER TABLE vp_customers ADD COLUMN customer_residency_status ENUM('INDIAN_RESIDENT','NRI','FOREIGN_NATIONAL') NOT NULL DEFAULT 'INDIAN_RESIDENT' AFTER phone",
+            'customer_pan' => "ALTER TABLE vp_customers ADD COLUMN customer_pan VARCHAR(10) NOT NULL DEFAULT '' AFTER customer_residency_status",
+            'passport_number' => "ALTER TABLE vp_customers ADD COLUMN passport_number VARCHAR(32) NOT NULL DEFAULT '' AFTER customer_pan",
+            'country_of_residence' => "ALTER TABLE vp_customers ADD COLUMN country_of_residence VARCHAR(128) NOT NULL DEFAULT '' AFTER passport_number",
+        ];
+        foreach ($customerColumns as $column => $sql) {
+            if (!$this->columnExists($conn, 'vp_customers', $column)) {
+                @$conn->query($sql);
+            }
+        }
+
+        $invoiceColumns = [
+            'is_high_value_transaction' => "ALTER TABLE vp_invoices ADD COLUMN is_high_value_transaction TINYINT(1) NOT NULL DEFAULT 0 AFTER total_amount",
+            'high_value_transaction_limit' => "ALTER TABLE vp_invoices ADD COLUMN high_value_transaction_limit DECIMAL(15,2) NULL AFTER is_high_value_transaction",
+            'high_value_compliance_status' => "ALTER TABLE vp_invoices ADD COLUMN high_value_compliance_status ENUM('NOT_REQUIRED','PENDING','COMPLETED') NOT NULL DEFAULT 'NOT_REQUIRED' AFTER high_value_transaction_limit",
+        ];
+        foreach ($invoiceColumns as $column => $sql) {
+            if (!$this->columnExists($conn, 'vp_invoices', $column)) {
+                @$conn->query($sql);
+            }
+        }
+
+        $conn->query(
+            "CREATE TABLE IF NOT EXISTS pos_high_value_compliance_audit (
+                id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                invoice_id INT NULL,
+                order_number VARCHAR(100) NOT NULL DEFAULT '',
+                payment_id INT UNSIGNED NULL,
+                invoice_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+                high_value_limit DECIMAL(15,2) NOT NULL DEFAULT 200000.00,
+                payment_modes VARCHAR(255) NOT NULL DEFAULT '',
+                residency_status ENUM('INDIAN_RESIDENT','NRI','FOREIGN_NATIONAL') NOT NULL DEFAULT 'INDIAN_RESIDENT',
+                pan_captured ENUM('Y','N') NOT NULL DEFAULT 'N',
+                passport_captured ENUM('Y','N') NOT NULL DEFAULT 'N',
+                gstin_present ENUM('Y','N') NOT NULL DEFAULT 'N',
+                compliance_completed_timestamp DATETIME NULL,
+                cashier_user_id INT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_order_number (order_number),
+                KEY idx_invoice_id (invoice_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+
+        $done = true;
+    }
+
+    private function getHighValueTransactionLimit(mysqli $conn): float
+    {
+        $this->ensureHighValueComplianceSchema($conn);
+        $limit = 200000.00;
+        $res = $conn->query('SELECT high_value_transaction_limit FROM global_settings WHERE id = 1 LIMIT 1');
+        if ($res && ($row = $res->fetch_assoc())) {
+            $configured = (float)($row['high_value_transaction_limit'] ?? 0);
+            if ($configured > 0) {
+                $limit = $configured;
+            }
+        }
+        return $limit;
+    }
+
+    private function normalizeResidencyStatus(string $status): string
+    {
+        $status = strtoupper(trim($status));
+        return in_array($status, ['INDIAN_RESIDENT', 'NRI', 'FOREIGN_NATIONAL'], true)
+            ? $status
+            : 'INDIAN_RESIDENT';
+    }
+
+    private function normalizePan(string $pan): string
+    {
+        return strtoupper(preg_replace('/\s+/', '', trim($pan)));
+    }
+
+    private function normalizePassport(string $passport): string
+    {
+        return strtoupper(preg_replace('/\s+/', '', trim($passport)));
+    }
+
+    /**
+     * @return array{ok:bool,is_high_value:bool,limit:float,errors:list<string>,cash_warning_required:bool,residency_status:string,pan:string,passport:string,country_of_residence:string,gstin:string,derived_pan_from_gstin:string}
+     */
+    private function evaluateHighValueCompliance(array $payload, float $invoiceAmount, float $cashAmount, string $paymentMode, mysqli $conn): array
+    {
+        $limit = $this->getHighValueTransactionLimit($conn);
+        $isHighValue = $invoiceAmount >= $limit;
+        $residency = $this->normalizeResidencyStatus((string)($payload['customer_residency_status'] ?? 'INDIAN_RESIDENT'));
+        $pan = $this->normalizePan((string)($payload['customer_pan'] ?? ''));
+        $passport = $this->normalizePassport((string)($payload['passport_number'] ?? ''));
+        $countryOfResidence = trim((string)($payload['country_of_residence'] ?? ''));
+        $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));
+        $derivedPan = '';
+        if ($gstin !== '' && preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
+            $derivedPan = substr($gstin, 2, 10);
+            if ($pan === '') {
+                $pan = $derivedPan;
+            }
+        }
+
+        $errors = [];
+        if ($isHighValue && $gstin === '') {
+            if ($residency === 'INDIAN_RESIDENT') {
+                if ($pan === '') {
+                    $errors[] = 'PAN is required for Indian resident high value transactions.';
+                }
+            } elseif ($residency === 'NRI') {
+                if ($pan === '' && ($passport === '' || $countryOfResidence === '')) {
+                    $errors[] = 'For NRI customers, enter PAN or Passport Number with Country of Residence.';
+                }
+            } else {
+                if ($passport === '') {
+                    $errors[] = 'Passport Number is required for foreign national high value transactions.';
+                }
+                if ($countryOfResidence === '') {
+                    $errors[] = 'Country of Residence is required for foreign national high value transactions.';
+                }
+            }
+        }
+
+        if ($pan !== '' && !preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/', $pan)) {
+            $errors[] = 'PAN format is invalid.';
+        }
+        if ($passport !== '' && strlen($passport) < 6) {
+            $errors[] = 'Passport Number must be at least 6 characters.';
+        }
+
+        $cashWarningRequired = (strtolower($paymentMode) === 'cash' && $cashAmount >= $limit);
+        if ($cashWarningRequired && (string)($payload['sec269st_cash_warning_confirmed'] ?? '') !== '1') {
+            $errors[] = 'Cash receipt warning under Section 269ST must be confirmed.';
+        }
+
+        return [
+            'ok' => empty($errors),
+            'is_high_value' => $isHighValue,
+            'limit' => $limit,
+            'errors' => $errors,
+            'cash_warning_required' => $cashWarningRequired,
+            'residency_status' => $residency,
+            'pan' => $pan,
+            'passport' => $passport,
+            'country_of_residence' => $countryOfResidence,
+            'gstin' => $gstin,
+            'derived_pan_from_gstin' => $derivedPan,
+        ];
+    }
+
+    private function persistCustomerComplianceDetails(mysqli $conn, int $customerId, array $compliance): void
+    {
+        if ($customerId <= 0) {
+            return;
+        }
+        $this->ensureHighValueComplianceSchema($conn);
+        $residency = (string)($compliance['residency_status'] ?? 'INDIAN_RESIDENT');
+        $pan = (string)($compliance['pan'] ?? '');
+        $passport = (string)($compliance['passport'] ?? '');
+        $country = (string)($compliance['country_of_residence'] ?? '');
+
+        $stmt = $conn->prepare(
+            'UPDATE vp_customers
+             SET customer_residency_status = ?, customer_pan = ?, passport_number = ?, country_of_residence = ?
+             WHERE id = ?'
+        );
+        if ($stmt) {
+            $stmt->bind_param('ssssi', $residency, $pan, $passport, $country, $customerId);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    private function findInvoiceIdForOrderNumber(mysqli $conn, string $orderNumber): ?int
+    {
+        $stmt = $conn->prepare(
+            'SELECT id FROM vp_invoices
+             WHERE vp_order_info_id = (SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1)
+             ORDER BY id DESC LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return !empty($row['id']) ? (int)$row['id'] : null;
+    }
+
+    private function markInvoiceHighValueIfPresent(mysqli $conn, ?int $invoiceId, array $compliance): void
+    {
+        if (!$invoiceId) {
+            return;
+        }
+        $isHighValue = !empty($compliance['is_high_value']) ? 1 : 0;
+        $limit = (float)($compliance['limit'] ?? 200000.00);
+        $status = $isHighValue ? 'COMPLETED' : 'NOT_REQUIRED';
+        $stmt = $conn->prepare(
+            'UPDATE vp_invoices
+             SET is_high_value_transaction = ?, high_value_transaction_limit = ?, high_value_compliance_status = ?
+             WHERE id = ?'
+        );
+        if ($stmt) {
+            $stmt->bind_param('idsi', $isHighValue, $limit, $status, $invoiceId);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    private function writeHighValueComplianceAudit(mysqli $conn, ?int $invoiceId, string $orderNumber, int $paymentId, float $invoiceAmount, string $paymentMode, array $compliance): void
+    {
+        if (empty($compliance['is_high_value'])) {
+            return;
+        }
+        $this->ensureHighValueComplianceSchema($conn);
+        $limit = (float)($compliance['limit'] ?? 200000.00);
+        $residency = (string)($compliance['residency_status'] ?? 'INDIAN_RESIDENT');
+        $panCaptured = trim((string)($compliance['pan'] ?? '')) !== '' ? 'Y' : 'N';
+        $passportCaptured = trim((string)($compliance['passport'] ?? '')) !== '' ? 'Y' : 'N';
+        $gstinPresent = trim((string)($compliance['gstin'] ?? '')) !== '' ? 'Y' : 'N';
+        $cashierId = pos_payment_resolve_session_user_id();
+
+        $stmt = $conn->prepare(
+            'INSERT INTO pos_high_value_compliance_audit (
+                invoice_id, order_number, payment_id, invoice_amount, high_value_limit, payment_modes,
+                residency_status, pan_captured, passport_captured, gstin_present,
+                compliance_completed_timestamp, cashier_user_id
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),?)'
+        );
+        if ($stmt) {
+            $stmt->bind_param(
+                'isiddsssssi',
+                $invoiceId,
+                $orderNumber,
+                $paymentId,
+                $invoiceAmount,
+                $limit,
+                $paymentMode,
+                $residency,
+                $panCaptured,
+                $passportCaptured,
+                $gstinPresent,
+                $cashierId
+            );
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
     public function index()
     {
         // slug => label
@@ -61,6 +332,7 @@ class POSRegisterController
         );
 
         $customerModel = new Customer($conn);
+        $highValueTransactionLimit = $conn instanceof mysqli ? $this->getHighValueTransactionLimit($conn) : 200000.00;
         $selected_customer = null;
         if (!empty($_SESSION['pos_customer_id'])) {
             $cid = (int)$_SESSION['pos_customer_id'];
@@ -141,6 +413,7 @@ class POSRegisterController
                 'currency' => 'INR',
             ],
             'selected_customer' => $selected_customer,
+            'high_value_transaction_limit' => $highValueTransactionLimit,
         ]);
     }
 
@@ -198,9 +471,13 @@ class POSRegisterController
 
         require_once 'models/customer/Customer.php';
         $customerModel = new Customer($conn);
+        if ($conn instanceof mysqli) {
+            $this->ensureHighValueComplianceSchema($conn);
+        }
         $fromVc = $customerId > 0 ? $customerModel->getCustomerBillingShippingForPos($customerId) : ['billing' => [], 'shipping' => []];
         $billingVc = $fromVc['billing'];
         $shippingVc = $fromVc['shipping'];
+        $customerRow = $customerId > 0 ? ($customerModel->getCustomerById($customerId) ?: []) : [];
 
         $billingOrder = [];
         $shippingOrder = [];
@@ -304,6 +581,12 @@ class POSRegisterController
             'success' => true,
             'billing' => $billing,
             'shipping' => $shipping,
+            'compliance' => [
+                'customer_residency_status' => $this->normalizeResidencyStatus((string)($customerRow['customer_residency_status'] ?? 'INDIAN_RESIDENT')),
+                'customer_pan' => $this->normalizePan((string)($customerRow['customer_pan'] ?? '')),
+                'passport_number' => $this->normalizePassport((string)($customerRow['passport_number'] ?? '')),
+                'country_of_residence' => trim((string)($customerRow['country_of_residence'] ?? '')),
+            ],
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
@@ -2428,6 +2711,18 @@ class POSRegisterController
             exit;
         }
 
+        $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $paymentAmount, $paymentMode, $conn);
+        if (empty($compliance['ok'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Additional details required for High Value Transaction: ' . implode(' ', $compliance['errors']),
+                'requires_compliance' => !empty($compliance['is_high_value']),
+                'requires_cash_confirmation' => !empty($compliance['cash_warning_required']),
+                'compliance' => $compliance,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
         $ctx = $this->exoticCartDiscountContext();
         $retrieve = $this->exotic_api_call(
             '/cart/retrieve',
@@ -2603,6 +2898,10 @@ class POSRegisterController
         require_once 'models/customer/Customer.php';
         $posDetailsModel = new Customer($conn);
         $posDetailsModel->upsertPosCustomerDetailsFromConfirmPayload($customerId, $payload);
+        $this->persistCustomerComplianceDetails($conn, $customerId, $compliance);
+        $invoiceId = $this->findInvoiceIdForOrderNumber($conn, $orderNumber);
+        $this->markInvoiceHighValueIfPresent($conn, $invoiceId, $compliance);
+        $this->writeHighValueComplianceAudit($conn, $invoiceId, $orderNumber, (int)($pay['payment_id'] ?? 0), $orderTotal, $paymentMode, $compliance);
 
         $modeLabel = $this->mapPosPaymentModeLabel($paymentMode);
         $dt = new \DateTime('now', new \DateTimeZone('Asia/Kolkata'));
