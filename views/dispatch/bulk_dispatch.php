@@ -1159,6 +1159,7 @@
                     const rawText = (typeof text === 'string') ? text : String(text ?? '');
                     const cleaned = rawText.replace(/^\uFEFF/, '').trim();
                     let parsed = {};
+                    
                     try {
                         parsed = cleaned ? JSON.parse(cleaned) : {};
                     } catch (err) {
