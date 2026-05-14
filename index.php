@@ -190,6 +190,9 @@ switch ($page) {
             case 'update_import':
                 $controller->skuUpdateImportedOrders();
                 break;
+            case 'show_bulk_update':
+                $controller->showBulkUpdateUI();
+                break;
             case 'update_import_bulk':
                 $controller->ordersStatusImportBulk();
                 break;
@@ -1391,6 +1394,9 @@ switch ($page) {
                 break;
             case 'update_import':
                 $controller->skuUpdateImportedOrders();
+                break;
+            case 'show_bulk_update':
+                $controller->showBulkUpdateUI();
                 break;
             case 'update_import_bulk':
                 $controller->ordersStatusImportBulk();

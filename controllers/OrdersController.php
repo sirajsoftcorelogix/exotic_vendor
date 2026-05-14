@@ -1031,33 +1031,113 @@ class OrdersController
             //'products' => json_encode($pdata)
         ], 'Import Orders Result');
     }
+
+    public function showBulkUpdateUI()
+    {
+        is_login();
+        renderTemplateClean('views/orders/update_import_bulk.php', [], 'Bulk Order Status Update');
+    }
+
     public function ordersStatusImportBulk()
     {
-
-        ini_set('max_execution_time', 3000);
-        set_time_limit(3000);
+        ini_set('max_execution_time', 30000);
+        set_time_limit(30000);
         global $ordersModel;
+        
+        // Security check
         if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
-            http_response_code(403); // Forbidden
+            http_response_code(403);
             die('Unauthorized access.');
         }
-        //fetch order 
-        $odr = $ordersModel->fetchOrdersForUpdate();
-        //order status list
+        
+        header('Content-Type: application/json');
+        
+        // Initialize session for bulk import tracking
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['bulk_import'])) {
+            $_SESSION['bulk_import'] = [
+                'count' => 0,
+                'offset' => 0
+            ];
+        }
+        
+        // Configuration
+        $MAX_RECORDS = 5000;
+        $BATCH_SIZE = 50; // API batch size
+        $DB_LIMIT = 500;  // Database fetch limit per execution
+        $SLEEP_SECONDS = 5; // Recommended sleep between calls
+        
+        // Get current count and offset from session
+        $totalImported = (int)$_SESSION['bulk_import']['count'];
+        $currentOffset = (int)$_SESSION['bulk_import']['offset'];
+        
+        // Check if we've reached the limit
+        if ($totalImported >= $MAX_RECORDS) {
+            echo json_encode([
+                'success' => true,
+                'message' => "✓ Maximum limit of {$MAX_RECORDS} records reached for today. Process completed successfully.",
+                'batch_imported' => 0,
+                'batch_total_items' => 0,
+                'total_imported' => $totalImported,
+                'max_limit' => $MAX_RECORDS,
+                'progress_percent' => 100,
+                'completed' => true,
+                'should_continue' => false,
+                'next_action' => null
+            ]);
+            unset($_SESSION['bulk_import']);
+            exit;
+        }
+        
+        // Fetch up to 500 orders to update from database using offset
+        $odr = $ordersModel->fetchOrdersForUpdateScript($currentOffset);
+        // print_array($odr);
+        // exit;
+        if (empty($odr)) {
+            echo json_encode([
+                'success' => true,
+                'message' => '✓ No more orders found in database. All available orders have been processed.',
+                'batch_imported' => 0,
+                'batch_total_items' => 0,
+                'total_imported' => $totalImported,
+                'max_limit' => $MAX_RECORDS,
+                'progress_percent' => round(($totalImported / $MAX_RECORDS) * 100, 2),
+                'completed' => true,
+                'should_continue' => false,
+                'next_action' => null
+            ]);
+            unset($_SESSION['bulk_import']);
+            exit;
+        }
+        
+        // Order status list
         $statusList = $ordersModel->adminOrderStatusList('true');
-        //$from_date = '1758240000';
-        //$to_date = '1758330134';
-        //print_array($odr);
-        //exit;
-
-        $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint       
-
+        
+        // API configuration
+        $url = 'https://www.exoticindia.com/vendor-api/order/fetch';
+        
+        // Chunk orders into batches of 50 for API calls
         $orderChunks = array_chunk(array_filter($odr, function ($order) {
             return !empty($order);
-        }), 50);
-
-        $response = [];
-        foreach ($orderChunks as $key => $chunk) {
+        }), $BATCH_SIZE);
+        
+        $imported = 0;
+        $totalorder = 0;
+        $skipped = 0;
+        $result = [];
+        $errors = [];
+        $batchesProcessed = 0;
+        $affected_rows = 0;
+        
+        // Process all batches from this 500-record fetch
+        foreach ($orderChunks as $chunkIndex => $chunk) {
+            // Check if we'll exceed limit before processing
+            if ($totalImported + $imported >= $MAX_RECORDS) {
+                break;
+            }
+            
             $orderIds = implode(',', $chunk);
             $postData = [
                 'makeRequestOf' => 'vendors-orderjson',
@@ -1069,92 +1149,141 @@ class OrdersController
                 'x-adminapitest: 1',
                 'Content-Type: application/x-www-form-urlencoded'
             ];
-            // print_r($postData);
-            // exit;
+
             // Initialize cURL
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_POST, true);
-
             curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            $response[] = curl_exec($ch);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+            $response = curl_exec($ch);
 
             $error = curl_error($ch);
             curl_close($ch);
-            //echo $orderIds."<br>Chunk ".($key+1)." Response:<br>";
-            //print_array(json_decode($response[0]), true);
+            
             if (!empty($error)) {
-                break;
+                $errors[] = "API Batch " . ($chunkIndex + 1) . " failed: " . $error;
+                continue;
             }
-            // if($key >= 10){
-            //     //limit to 5 chunks per execution
-            //     break;
-            // }
-
-        }
-        //print_r($error);
-        // print_r($headers);
-
-        // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
-        // print_array($orders);
-        // exit;
-        if (empty($response)) {
-            //echo "No orders found in the API response.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'No orders found in the API response.']], 'No Orders Found');
-            return;
-        }
-        $imported = 0;
-        $totalorder = 0;
-        foreach ($response as $resp) {
-            $respData = json_decode($resp, true);
+            
+            // Process API response
+            $respData = json_decode($response, true);
             if (!is_array($respData) || empty($respData['orders'])) {
-                continue; // Skip invalid or empty responses
+                continue;
             }
+            
+            $batchesProcessed++;
+            
             foreach ($respData['orders'] as $order) {
-                //print_r($order);
-                // Check if the order has the required fields
-                // Map API fields to your table columns
-
+                // Check if we'll exceed limit before processing items
+                if ($totalImported + $imported >= $MAX_RECORDS) {
+                    break 2;
+                }
+                
+                if (!isset($order['cart']) || !is_array($order['cart'])) {
+                    continue;
+                }
+                
                 foreach ($order['cart'] as $item) {
-                    //check status other than 1 (pending)
+                    // Check status other than 1 (pending)
                     if (empty($item['order_status']) || $item['order_status'] == 1) {
-                        //continue;
-
                         $rdata = [
                             'sku' => $item['sku'] ?? '',
                             'order_number' => $order['orderid'] ?? '',
                             'item_code' => $item['itemcode'] ?? '',
-                            'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA' || strtoupper($order['payment_type'] ?? '') === 'INDIAAMAZONFBA')
+                            'remote_status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA' || strtoupper($order['payment_type'] ?? '') === 'INDIAAMAZONFBA')
                                 ? 'shipped'
                                 : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
-                            'updated_at' => date('Y-m-d H:i:s')
+                            'updated_at' => date('Y-m-d H:i:s'),
+                            'size' => $item['size'] ?? '',
+                            'color' => $item['color'] ?? ''
                         ];
                         $totalorder++;
 
-                        $data = $ordersModel->importedStatusUpdate2($rdata);
+                        $data = $ordersModel->importedStatusUpdateScript($rdata);
                         $result[] = $data;
-                        //add products
-                        //$pdata[] = $ordersModel->addProducts($rdata);                   
+                        $result['rdata'][] = $rdata;
+                        $affected_rows += $data['affected_rows'] ?? 0;
 
                         if (isset($data['success']) && $data['success'] == true) {
                             $imported++;
+                        } else {
+                            $skipped++;
+                        }
+                        
+                        // Check if we've reached limit during processing
+                        if ($totalImported + $imported >= $MAX_RECORDS) {
+                            break 3;
                         }
                     }
-                    //print_array($rdata);                   
                 }
             }
         }
-        //print_array($pdata);
-        //print_r($result);
-        //update log end time and imported count
-
-        renderTemplateClean('views/orders/import_update_result.php', [
-            'imported' => $imported,
+        
+        // Update total count and offset in session
+        $totalImported += $imported;
+        $_SESSION['bulk_import']['count'] = $totalImported;
+        
+        // Update offset for next batch (increase by 500)
+        $nextOffset = $currentOffset + $DB_LIMIT;
+        $_SESSION['bulk_import']['offset'] = $nextOffset;
+        
+        // Determine if process should continue
+        $completed = ($totalImported >= $MAX_RECORDS);
+        $shouldContinue = !$completed && count($odr) === $DB_LIMIT; // More records may exist
+        
+        if ($completed) {
+            unset($_SESSION['bulk_import']);
+        }
+        
+        // Build message
+        $messageStatus = $imported > 0 ? '✓' : 'ℹ';
+        $message = "{$messageStatus} Batch processing complete: {$imported} updated";
+        if ($skipped > 0) {
+            $message .= ", {$skipped} skipped";
+        }
+        if (count($errors) > 0) {
+            $message .= ", " . count($errors) . " errors";
+        }
+        
+        // Prepare response
+        $response = [
+            'success' => true,
+            'message' => $message,
+            'batch_imported' => $imported,
+            'batch_total_items' => $totalorder,
+            'batch_skipped' => $skipped,
+            'batches_processed' => $batchesProcessed,
+            'total_imported' => $totalImported,
+            'max_limit' => $MAX_RECORDS,
+            'completed' => $completed,
+            'should_continue' => $shouldContinue,
+            'progress_percent' => round(($totalImported / $MAX_RECORDS) * 100, 2),
+            'timestamp' => date('Y-m-d H:i:s'),
             'result' => $result,
-            'total' => $totalorder,
-            //'products' => json_encode($pdata)
-        ], 'Import Orders Result');
+            'affected_rows' => $affected_rows,
+            'current_offset' => $currentOffset,
+            'next_offset' => $nextOffset
+        ];
+        
+        // Add next action if should continue
+        if ($shouldContinue) {
+            $response['next_action'] = [
+                'action' => 'Call ordersStatusImportBulk again',
+                'wait_seconds' => $SLEEP_SECONDS,
+                'url' => 'index.php?page=orders&action=ordersStatusImportBulk&secret_key=' . EXPECTED_SECRET_KEY
+            ];
+        }
+        
+        // Add errors if any
+        if (!empty($errors)) {
+            $response['errors'] = $errors;
+            $response['error_count'] = count($errors);
+        }
+        
+        echo json_encode($response);
+        exit;
     }
     public function bulkUpdateStatus()
     {
