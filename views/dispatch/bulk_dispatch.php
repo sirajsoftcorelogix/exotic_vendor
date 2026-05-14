@@ -1155,7 +1155,28 @@
             })
             .then(response => {
                 console.log('Response status:', response.status);
-                return response.json();
+                return response.text().then(function (text) {
+                    const cleaned = text.replace(/^\uFEFF/, '').trim();
+                    let parsed = {};
+                    try {
+                        parsed = cleaned ? JSON.parse(cleaned) : {};
+                    } catch (err) {
+                        throw new Error('Courier serviceability returned invalid server response (HTTP ' + response.status + '): ' + (cleaned.slice(0, 300) || 'empty response'));
+                    }
+
+                    if (!response.ok || parsed.success === false) {
+                        let details = '';
+                        if (parsed.details) {
+                            details = typeof parsed.details === 'string'
+                                ? parsed.details
+                                : JSON.stringify(parsed.details);
+                        }
+                        const msg = parsed.message || ('Courier serviceability request failed (HTTP ' + response.status + ')');
+                        throw new Error(details ? (msg + ': ' + details.slice(0, 300)) : msg);
+                    }
+
+                    return parsed;
+                });
             })
             .then(data => {
                 console.log('Response data:', data);
@@ -1306,14 +1327,17 @@
             .catch(error => {
                 console.error('Error fetching couriers:', error);
                 if (courierContainer) {
+                    const errorMessage = error && error.message
+                        ? error.message
+                        : 'Courier serviceability request failed. Please retry or open debug.';
                     courierContainer.innerHTML = `
                         <div class="rounded-xl border border-red-200 bg-gradient-to-b from-red-50 to-white px-4 py-3 shadow-sm flex gap-3 items-start text-[13px]">
                             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600" aria-hidden="true">
                                 <i class="fas fa-exclamation-triangle"></i>
                             </span>
                             <div class="min-w-0 flex-1">
-                                <div class="font-semibold text-red-900">Could not load couriers</div>
-                                <p class="text-[12px] text-red-800/90 mt-1">Network or server error. Check your connection and try again.</p>
+                                <div class="font-semibold text-red-900">Could not load courier serviceability</div>
+                                <p class="text-[12px] text-red-800/90 mt-1">${escapeHtml(errorMessage)}</p>
                                 <button type="button" class="retry-couriers-btn mt-3 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
                                     <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
                                 </button>
