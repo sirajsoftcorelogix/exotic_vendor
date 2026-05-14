@@ -219,7 +219,7 @@
       data-pos-cart-sidebar="1">
       <div class="px-4 py-3 border-b shrink-0">
 
-        <label class="text-sm text-gray-500">Customer</label>
+        <label class="text-sm text-gray-500">Customer <span class="text-red-600">*</span></label>
 
         <div class="flex gap-2 mt-1">
 
@@ -394,7 +394,7 @@
       <div class="grid grid-cols-2 gap-3">
 
         <div>
-          <label class="text-gray-500">First Name</label>
+          <label class="text-gray-500">First Name <span class="text-red-600">*</span></label>
           <input name="first_name" required class="w-full border rounded px-2 py-1.5">
         </div>
 
@@ -404,7 +404,7 @@
         </div>
 
         <div>
-          <label class="text-gray-500">Mobile</label>
+          <label class="text-gray-500">Mobile <span class="text-red-600">*</span></label>
           <input name="mobile" required class="w-full border rounded px-2 py-1.5">
         </div>
 
@@ -535,16 +535,16 @@
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label class="text-xs text-slate-500">Payment stage</label>
-          <select id="payment_stage" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+          <label class="text-xs text-slate-500">Payment stage <span class="text-red-600">*</span></label>
+          <select id="payment_stage" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" required>
             <option value="final">Final</option>
             <option value="partial">Partial</option>
             <option value="advance">Advance</option>
           </select>
         </div>
         <div>
-          <label class="text-xs text-slate-500">Payment mode</label>
-          <select id="payment_mode" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+          <label class="text-xs text-slate-500">Payment mode <span class="text-red-600">*</span></label>
+          <select id="payment_mode" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" required>
             <option value="cash">Cash</option>
             <option value="upi">UPI</option>
             <option value="bank_transfer">Bank transfer</option>
@@ -554,14 +554,14 @@
           </select>
         </div>
         <div>
-          <label class="text-xs text-slate-500">Payment date</label>
-          <input type="date" id="payment_date" value="<?= htmlspecialchars(date('Y-m-d'), ENT_QUOTES, 'UTF-8') ?>" max="<?= htmlspecialchars(date('Y-m-d'), ENT_QUOTES, 'UTF-8') ?>" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" title="Today or earlier only">
+          <label class="text-xs text-slate-500">Payment date <span class="text-red-600">*</span></label>
+          <input type="date" id="payment_date" value="<?= htmlspecialchars(date('Y-m-d'), ENT_QUOTES, 'UTF-8') ?>" max="<?= htmlspecialchars(date('Y-m-d'), ENT_QUOTES, 'UTF-8') ?>" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" title="Today or earlier only" required>
         </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label class="text-xs text-slate-500">Amount (₹)</label>
-          <input type="number" step="0.01" min="0" id="payment_amount" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 tabular-nums" placeholder="0.00">
+          <label class="text-xs text-slate-500">Amount (₹) <span class="text-red-600">*</span></label>
+          <input type="number" step="0.01" min="0" id="payment_amount" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 tabular-nums" placeholder="0.00" required>
         </div>
         <div>
           <label id="transaction_id_label" class="text-xs text-slate-500">Transaction ID</label>
@@ -596,45 +596,46 @@
       <h2 class="text-lg font-semibold">Confirm Billing &amp; Shipping Details</h2>
       <button type="button" onclick="closeAddressConfirmModal()" class="text-xl text-gray-500 hover:text-gray-800">✕</button>
     </div>
+    <div id="addressConfirmValidationSummary" class="mx-6 mt-4 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></div>
     <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
         <div class="grid grid-cols-2 gap-3">
-          <input id="confirm_first_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="First Name">
-          <input id="confirm_last_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Last Name">
+          <label class="block text-xs font-medium text-slate-600">First Name <span class="text-red-600">*</span><input id="confirm_first_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="First Name" required></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Last Name"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <input id="confirm_email" class="w-full border rounded px-3 py-2 text-sm" placeholder="Email">
-          <input id="confirm_phone" class="w-full border rounded px-3 py-2 text-sm" placeholder="Phone">
+          <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Email (optional)"></label>
+          <label class="block text-xs font-medium text-slate-600">Phone <span class="text-red-600">*</span><input id="confirm_phone" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Phone" required></label>
         </div>
-        <input id="confirm_address1" class="w-full border rounded px-3 py-2 text-sm" placeholder="Address 1">
-        <input id="confirm_address2" class="w-full border rounded px-3 py-2 text-sm" placeholder="Address 2">
+        <label class="block text-xs font-medium text-slate-600">Address 1 <span class="text-red-600">*</span><input id="confirm_address1" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Address 1" required></label>
+        <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
-          <input id="confirm_city" class="w-full border rounded px-3 py-2 text-sm" placeholder="City">
-          <input id="confirm_state" class="w-full border rounded px-3 py-2 text-sm" placeholder="State">
+          <label class="block text-xs font-medium text-slate-600">City <span class="text-red-600">*</span><input id="confirm_city" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="City" required></label>
+          <label class="block text-xs font-medium text-slate-600">State <span class="text-red-600">*</span><input id="confirm_state" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="State" required></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <input id="confirm_zip" class="w-full border rounded px-3 py-2 text-sm" placeholder="ZIP">
-          <input id="confirm_country" class="w-full border rounded px-3 py-2 text-sm" placeholder="Country">
+          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode <span class="text-red-600">*</span><input id="confirm_zip" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="ZIP" required></label>
+          <label class="block text-xs font-medium text-slate-600">Country <span class="text-red-600">*</span><input id="confirm_country" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Country" required></label>
         </div>
-        <input id="confirm_gstin" class="w-full border rounded px-3 py-2 text-sm" placeholder="GSTIN (optional)" maxlength="15">
+        <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="mt-1 w-full border rounded px-3 py-2 text-sm uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
       </div>
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
         <div class="grid grid-cols-2 gap-3">
-          <input id="confirm_sfirst_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping First Name">
-          <input id="confirm_slast_name" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Last Name">
+          <label class="block text-xs font-medium text-slate-600">Shipping First Name <span class="text-red-600">*</span><input id="confirm_sfirst_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping First Name" required></label>
+          <label class="block text-xs font-medium text-slate-600">Shipping Last Name<input id="confirm_slast_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Last Name"></label>
         </div>
-        <input id="confirm_sphone" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Phone">
-        <input id="confirm_saddress1" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 1">
-        <input id="confirm_saddress2" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 2">
+        <label class="block text-xs font-medium text-slate-600">Shipping Phone <span class="text-red-600">*</span><input id="confirm_sphone" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Phone" required></label>
+        <label class="block text-xs font-medium text-slate-600">Shipping Address 1 <span class="text-red-600">*</span><input id="confirm_saddress1" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 1" required></label>
+        <label class="block text-xs font-medium text-slate-600">Shipping Address 2<input id="confirm_saddress2" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
-          <input id="confirm_scity" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping City">
-          <input id="confirm_sstate" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping State">
+          <label class="block text-xs font-medium text-slate-600">Shipping City <span class="text-red-600">*</span><input id="confirm_scity" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping City" required></label>
+          <label class="block text-xs font-medium text-slate-600">Shipping State <span class="text-red-600">*</span><input id="confirm_sstate" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping State" required></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <input id="confirm_szip" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping ZIP">
-          <input id="confirm_scountry" class="w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Country">
+          <label class="block text-xs font-medium text-slate-600">Shipping ZIP / Pincode <span class="text-red-600">*</span><input id="confirm_szip" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping ZIP" required></label>
+          <label class="block text-xs font-medium text-slate-600">Shipping Country <span class="text-red-600">*</span><input id="confirm_scountry" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Country" required></label>
         </div>
       </div>
     </div>
@@ -1109,6 +1110,117 @@
     };
   }
 
+  var POS_REQUIRED_ADDRESS_FIELDS = [
+    ["confirm_first_name", "Billing first name"],
+    ["confirm_phone", "Billing phone"],
+    ["confirm_address1", "Billing address 1"],
+    ["confirm_city", "Billing city"],
+    ["confirm_state", "Billing state"],
+    ["confirm_zip", "Billing ZIP / pincode"],
+    ["confirm_country", "Billing country"],
+    ["confirm_sfirst_name", "Shipping first name"],
+    ["confirm_sphone", "Shipping phone"],
+    ["confirm_saddress1", "Shipping address 1"],
+    ["confirm_scity", "Shipping city"],
+    ["confirm_sstate", "Shipping state"],
+    ["confirm_szip", "Shipping ZIP / pincode"],
+    ["confirm_scountry", "Shipping country"]
+  ];
+
+  function setPosFieldInvalid(id, invalid) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle("border-red-500", !!invalid);
+    el.classList.toggle("ring-1", !!invalid);
+    el.classList.toggle("ring-red-200", !!invalid);
+  }
+
+  function clearAddressValidationState() {
+    POS_REQUIRED_ADDRESS_FIELDS.forEach(function(row) {
+      setPosFieldInvalid(row[0], false);
+    });
+    ["confirm_email", "confirm_gstin"].forEach(function(id) {
+      setPosFieldInvalid(id, false);
+    });
+    var summary = document.getElementById("addressConfirmValidationSummary");
+    if (summary) {
+      summary.classList.add("hidden");
+      summary.textContent = "";
+    }
+  }
+
+  function validateAddressConfirmPayload(payload) {
+    clearAddressValidationState();
+    var missing = [];
+    var firstInvalidId = "";
+    POS_REQUIRED_ADDRESS_FIELDS.forEach(function(row) {
+      var id = row[0];
+      var label = row[1];
+      var value = String(payload[id] || "").trim();
+      if (value === "") {
+        missing.push(label);
+        setPosFieldInvalid(id, true);
+        if (!firstInvalidId) firstInvalidId = id;
+      }
+    });
+
+    var email = String(payload.confirm_email || "").trim();
+    if (email !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      missing.push("Valid billing email");
+      setPosFieldInvalid("confirm_email", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_email";
+    }
+
+    var billingPhoneDigits = String(payload.confirm_phone || "").replace(/\D/g, "");
+    if (billingPhoneDigits !== "" && billingPhoneDigits.length < 6) {
+      missing.push("Valid billing phone");
+      setPosFieldInvalid("confirm_phone", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_phone";
+    }
+    var shippingPhoneDigits = String(payload.confirm_sphone || "").replace(/\D/g, "");
+    if (shippingPhoneDigits !== "" && shippingPhoneDigits.length < 6) {
+      missing.push("Valid shipping phone");
+      setPosFieldInvalid("confirm_sphone", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_sphone";
+    }
+
+    var country = String(payload.confirm_country || "").trim().toUpperCase();
+    var scountry = String(payload.confirm_scountry || "").trim().toUpperCase();
+    var billingZip = String(payload.confirm_zip || "").trim();
+    var shippingZip = String(payload.confirm_szip || "").trim();
+    if ((country === "IN" || country === "INDIA") && billingZip !== "" && !/^\d{6}$/.test(billingZip)) {
+      missing.push("Valid 6 digit billing pincode");
+      setPosFieldInvalid("confirm_zip", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_zip";
+    }
+    if ((scountry === "IN" || scountry === "INDIA") && shippingZip !== "" && !/^\d{6}$/.test(shippingZip)) {
+      missing.push("Valid 6 digit shipping pincode");
+      setPosFieldInvalid("confirm_szip", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_szip";
+    }
+
+    var gstin = String(payload.confirm_gstin || "").trim().toUpperCase();
+    if (gstin !== "" && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+      missing.push("Valid GSTIN");
+      setPosFieldInvalid("confirm_gstin", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_gstin";
+    }
+
+    if (missing.length) {
+      var summary = document.getElementById("addressConfirmValidationSummary");
+      var message = "Please complete: " + missing.slice(0, 6).join(", ") + (missing.length > 6 ? " and " + (missing.length - 6) + " more" : "") + ".";
+      if (summary) {
+        summary.textContent = message;
+        summary.classList.remove("hidden");
+      }
+      showToast("⚠ " + message, "red");
+      var first = firstInvalidId ? document.getElementById(firstInvalidId) : null;
+      if (first) first.focus();
+      return false;
+    }
+    return true;
+  }
+
   function loadAndOpenAddressConfirm(customerId) {
     fetch("index.php?page=pos_register&action=customer-order-info&customer_id=" + encodeURIComponent(customerId), {
       credentials: "same-origin",
@@ -1232,10 +1344,11 @@
       var mode = String(paymentModeSelect.value || "").toLowerCase();
       txnRequiredHint.classList.toggle("hidden", mode !== "razorpay");
       if (txnLabel) {
-        txnLabel.textContent = mode === "cheque" ? "Cheque Number" : "Transaction ID";
+        txnLabel.innerHTML = (mode === "cheque" ? "Cheque Number" : "Transaction ID") + (mode === "razorpay" ? ' <span class="text-red-600">*</span>' : "");
       }
       if (txnInput) {
         txnInput.placeholder = mode === "cheque" ? "Enter cheque number" : "Required for Razorpay";
+        txnInput.required = mode === "razorpay";
       }
     }
     if (paymentModeSelect) {
@@ -1337,17 +1450,18 @@
     if (confirmAddressSubmitBtn) {
       confirmAddressSubmitBtn.addEventListener("click", function() {
         var payload = getAddressConfirmPayload();
-        if (!payload.confirm_first_name || !payload.confirm_phone || !payload.confirm_state || !payload.confirm_zip) {
-          showToast("⚠ Billing details are incomplete.", "red");
-          return;
-        }
-        if (!payload.confirm_sfirst_name || !payload.confirm_sphone || !payload.confirm_sstate) {
-          showToast("⚠ Shipping details are incomplete.", "red");
+        if (!validateAddressConfirmPayload(payload)) {
           return;
         }
         createOrderNow(payload);
       });
     }
+
+    document.querySelectorAll("#addressConfirmModal input").forEach(function(el) {
+      el.addEventListener("input", function() {
+        setPosFieldInvalid(el.id, false);
+      });
+    });
   });
 
   function createOrderNow(addressPayload) {

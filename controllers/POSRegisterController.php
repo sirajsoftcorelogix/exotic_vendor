@@ -2297,6 +2297,67 @@ class POSRegisterController
      * POST JSON: address confirm fields + payment_* + customer_id + order_total (from live cart).
      * Proxies Exotic POST /order/create, then inserts pos_payments with receipt number.
      */
+    private function validatePosCheckoutAddressPayload(array $payload): array
+    {
+        $required = [
+            'confirm_first_name' => 'Billing first name',
+            'confirm_phone' => 'Billing phone',
+            'confirm_address1' => 'Billing address 1',
+            'confirm_city' => 'Billing city',
+            'confirm_state' => 'Billing state',
+            'confirm_zip' => 'Billing ZIP / pincode',
+            'confirm_country' => 'Billing country',
+            'confirm_sfirst_name' => 'Shipping first name',
+            'confirm_sphone' => 'Shipping phone',
+            'confirm_saddress1' => 'Shipping address 1',
+            'confirm_scity' => 'Shipping city',
+            'confirm_sstate' => 'Shipping state',
+            'confirm_szip' => 'Shipping ZIP / pincode',
+            'confirm_scountry' => 'Shipping country',
+        ];
+
+        $errors = [];
+        foreach ($required as $key => $label) {
+            if (trim((string)($payload[$key] ?? '')) === '') {
+                $errors[] = $label;
+            }
+        }
+
+        $email = trim((string)($payload['confirm_email'] ?? ''));
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Valid billing email';
+        }
+
+        $billingPhoneDigits = preg_replace('/\D/', '', (string)($payload['confirm_phone'] ?? ''));
+        if ($billingPhoneDigits !== '' && strlen($billingPhoneDigits) < 6) {
+            $errors[] = 'Valid billing phone';
+        }
+
+        $shippingPhoneDigits = preg_replace('/\D/', '', (string)($payload['confirm_sphone'] ?? ''));
+        if ($shippingPhoneDigits !== '' && strlen($shippingPhoneDigits) < 6) {
+            $errors[] = 'Valid shipping phone';
+        }
+
+        $billingCountry = strtoupper(trim((string)($payload['confirm_country'] ?? '')));
+        $billingZip = trim((string)($payload['confirm_zip'] ?? ''));
+        if (($billingCountry === 'IN' || $billingCountry === 'INDIA') && $billingZip !== '' && !preg_match('/^\d{6}$/', $billingZip)) {
+            $errors[] = 'Valid 6 digit billing pincode';
+        }
+
+        $shippingCountry = strtoupper(trim((string)($payload['confirm_scountry'] ?? '')));
+        $shippingZip = trim((string)($payload['confirm_szip'] ?? ''));
+        if (($shippingCountry === 'IN' || $shippingCountry === 'INDIA') && $shippingZip !== '' && !preg_match('/^\d{6}$/', $shippingZip)) {
+            $errors[] = 'Valid 6 digit shipping pincode';
+        }
+
+        $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));
+        if ($gstin !== '' && !preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
+            $errors[] = 'Valid GSTIN';
+        }
+
+        return $errors;
+    }
+
     public function checkout_create(): void
     {
         is_login();
@@ -2353,6 +2414,17 @@ class POSRegisterController
         $txn = trim((string)($payload['transaction_id'] ?? ''));
         if ($paymentMode === 'razorpay' && $txn === '') {
             echo json_encode(['success' => false, 'message' => 'Razorpay requires a transaction ID.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $addressErrors = $this->validatePosCheckoutAddressPayload($payload);
+        if (!empty($addressErrors)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Please complete required order fields: ' . implode(', ', array_slice($addressErrors, 0, 8))
+                    . (count($addressErrors) > 8 ? ' and ' . (count($addressErrors) - 8) . ' more' : ''),
+                'fields' => $addressErrors,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
