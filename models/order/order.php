@@ -1810,4 +1810,33 @@ class Order
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
     }
+    public function fetchOrdersForUpdateScript($offset = 0)
+    {
+        //1= shipped !=cancelled !=return ORDERS
+        $limit = 500;
+        $offset = (int)$offset;
+        $sql = "SELECT * FROM vp_orders WHERE remote_status IS NULL AND update_flag IS NULL ORDER BY order_date LIMIT ? OFFSET ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ii', $limit, $offset);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orders = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orders[] = $row['order_number'];
+            }
+        }
+        return array_unique($orders);
+    }
+    public function importedStatusUpdateScript($data)
+    {
+        $sql = "UPDATE vp_orders SET remote_status = ?, update_flag = 1, updated_at = ? WHERE order_number = ? ";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('sss', $data['remote_status'], $data['updated_at'], $data['order_number']);
+        if ($stmt->execute()) {
+            return ['success' => true, 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'sku' => $data['sku'], 'message' => 'Order status updated successfully.', 'item_code' => $data['item_code'],'sql' => $sql];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
 }
