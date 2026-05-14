@@ -11,6 +11,54 @@ $dispatchModel = new Dispatch($conn);
 $ordersModel = new Order($conn);
 
 class DispatchController {
+    private function resolveShiprocketPickupPostcode($dispatchModel, array $firm, string $pickupLocation): array
+    {
+        $fallbackPin = trim((string)($firm['pin'] ?? ''));
+        $pickupLocation = trim($pickupLocation);
+        $pinKeys = ['pin_code', 'pincode', 'postcode', 'pin', 'zipcode', 'zip'];
+
+        $pickupLocations = $dispatchModel->pickupLocations();
+        $rows = $pickupLocations['data']['shipping_address'] ?? [];
+        if (is_array($rows)) {
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $rowName = trim((string)($row['pickup_location'] ?? ''));
+                if ($pickupLocation !== '' && strcasecmp($rowName, $pickupLocation) !== 0) {
+                    continue;
+                }
+                foreach ($pinKeys as $key) {
+                    $pin = trim((string)($row[$key] ?? ''));
+                    if ($pin !== '') {
+                        return [
+                            'postcode' => $pin,
+                            'source' => 'shiprocket pickup location: ' . ($rowName !== '' ? $rowName : $pickupLocation),
+                            'pickup_location' => $rowName !== '' ? $rowName : $pickupLocation,
+                            'matched_row' => $row,
+                        ];
+                    }
+                }
+                $address = trim((string)($row['address'] ?? ''));
+                if ($address !== '' && preg_match('/\b\d{6}\b/', $address, $matches)) {
+                    return [
+                        'postcode' => $matches[0],
+                        'source' => 'shiprocket pickup location address: ' . ($rowName !== '' ? $rowName : $pickupLocation),
+                        'pickup_location' => $rowName !== '' ? $rowName : $pickupLocation,
+                        'matched_row' => $row,
+                    ];
+                }
+            }
+        }
+
+        return [
+            'postcode' => $fallbackPin,
+            'source' => 'firm_details.pin',
+            'pickup_location' => $pickupLocation,
+            'matched_row' => null,
+        ];
+    }
+
     public function create() {
         global $commanModel, $invoiceModel, $dispatchModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -1742,9 +1790,14 @@ class DispatchController {
                 exit;
             }
             
-            // Get firm details for pickup postcode
+            // Get pickup postcode from the actual Shiprocket pickup location when possible.
             $firm = $commanModel->getRecordById('firm_details', 1);
-            $pickup_postcode = $firm['pin'] ?? null;
+            $requestedPickupLocation = trim((string)($input['pickup_location'] ?? $firm['pickup_location'] ?? 'Head Off'));
+            if ($requestedPickupLocation === '') {
+                $requestedPickupLocation = 'Head Off';
+            }
+            $pickupResolution = $this->resolveShiprocketPickupPostcode($dispatchModel, is_array($firm) ? $firm : [], $requestedPickupLocation);
+            $pickup_postcode = $pickupResolution['postcode'] ?? null;
             
             if (empty($pickup_postcode)) {
                 http_response_code(400);
@@ -1797,7 +1850,15 @@ class DispatchController {
                 echo json_encode([
                     'success' => false,
                     'message' => 'Failed to fetch courier serviceability',
-                    'details' => $serviceability['data']
+                    'details' => $serviceability['data'],
+                    'debug' => [
+                        'serviceability_request' => [
+                            'params' => $serviceability['params'] ?? [],
+                            'pickup_resolution' => $pickupResolution,
+                            'request_url' => $serviceability['request_url'] ?? '',
+                            'curl_error' => $serviceability['curl_error'] ?? '',
+                        ],
+                    ],
                 ]);
                 exit;
             }
@@ -1831,6 +1892,12 @@ class DispatchController {
                 'rejected_couriers' => $selectedCouriers['excludedFromFilters'] ?? [],
                 'selected' => $selectedCouriers['selected'] ?? null,
                 'debug' => [
+                    'serviceability_request' => [
+                        'params' => $serviceability['params'] ?? [],
+                        'pickup_resolution' => $pickupResolution,
+                        'request_url' => $serviceability['request_url'] ?? '',
+                        'curl_error' => $serviceability['curl_error'] ?? '',
+                    ],
                     'input_before_filter' => $serviceability['data'] ?? null,
                     'output_after_filter' => $selectedCouriers
                 ],

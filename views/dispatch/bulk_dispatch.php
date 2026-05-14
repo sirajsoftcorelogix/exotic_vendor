@@ -1151,10 +1151,12 @@
                 height: height,
                 weight: weight,
                 cod: boxElement.getAttribute('data-is-cod') === '1' ? 1 : 0,
-                is_express: boxElement.getAttribute('data-is-express') === '1' ? 1 : 0
+                is_express: boxElement.getAttribute('data-is-express') === '1' ? 1 : 0,
+                pickup_location: boxElement.getAttribute('data-pickup-location') || 'Head Off'
             };
             
             console.log('Sending payload to PHP endpoint:', payload);
+            boxElement._lastCourierRequestPayload = payload;
             
             fetch('?page=dispatch&action=getCourierServiceability', {
                 method: 'POST',
@@ -1185,7 +1187,9 @@
                                 : JSON.stringify(parsed.details);
                         }
                         const msg = parsed.message || ('Courier serviceability request failed (HTTP ' + response.status + ')');
-                        throw new Error(details ? (msg + ': ' + details.slice(0, 300)) : msg);
+                        const requestError = new Error(details ? (msg + ': ' + details.slice(0, 300)) : msg);
+                        requestError.courierDebugRequest = parsed?.debug?.serviceability_request || null;
+                        throw requestError;
                     }
 
                     return parsed;
@@ -1193,6 +1197,7 @@
             })
             .then(data => {
                 console.log('Response data:', data);
+                boxElement._lastCourierDebugRequest = data?.debug?.serviceability_request || null;
                 boxElement._lastCourierDebugInput = data?.debug?.input_before_filter || null;
                 boxElement._lastCourierDebugOutput = data?.debug?.output_after_filter || null;
                 const rejectedCouriers = Array.isArray(data?.rejected_couriers)
@@ -1230,11 +1235,16 @@
                             <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
                                 <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy input (pre-filter)
                             </button>
+                            <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy request JSON
+                            </button>
                             <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
                                 <i class="fas fa-code text-[10px] text-gray-500" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
                             </button>
                         </div>
                         <div class="filter-debug-panel hidden border-b border-gray-200 bg-slate-900 px-3 py-2">
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Serviceability request</div>
+                            <pre class="debug-request text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-yellow-100/95 border border-slate-700 font-mono"></pre>
                             <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
                             <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
                             <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
@@ -1278,8 +1288,12 @@
                     </div>`;
                     if (courierContainer) {
                         courierContainer.innerHTML = courierHtml;
+                        const requestPre = courierContainer.querySelector('.debug-request');
                         const inputPre = courierContainer.querySelector('.debug-input');
                         const outputPre = courierContainer.querySelector('.debug-output');
+                        if (requestPre) {
+                            requestPre.textContent = JSON.stringify(boxElement._lastCourierDebugRequest || {}, null, 2);
+                        }
                         if (inputPre) {
                             inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
                         }
@@ -1319,11 +1333,16 @@
                                 <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
                                     <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy input (pre-filter)
                                 </button>
+                                <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
+                                    <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy request JSON
+                                </button>
                                 <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
                                     <i class="fas fa-code text-[10px]" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
                                 </button>
                             </div>
                             <div class="filter-debug-panel hidden border-b border-gray-200 bg-slate-900 px-3 py-2">
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Serviceability request</div>
+                                <pre class="debug-request text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-yellow-100/95 border border-slate-700 font-mono"></pre>
                                 <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
                                 <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
                                 <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
@@ -1332,8 +1351,12 @@
                             ${rejectedCourierHtml}
                         </div>`;
                         courierContainer.innerHTML = emptyHtml;
+                        const requestPre = courierContainer.querySelector('.debug-request');
                         const inputPre = courierContainer.querySelector('.debug-input');
                         const outputPre = courierContainer.querySelector('.debug-output');
+                        if (requestPre) {
+                            requestPre.textContent = JSON.stringify(boxElement._lastCourierDebugRequest || {}, null, 2);
+                        }
                         if (inputPre) {
                             inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
                         }
@@ -1345,6 +1368,7 @@
             })
             .catch(error => {
                 console.error('Error fetching couriers:', error);
+                boxElement._lastCourierDebugRequest = error?.courierDebugRequest || boxElement._lastCourierDebugRequest || null;
                 if (courierContainer) {
                     const errorMessage = error && error.message
                         ? error.message
@@ -1359,6 +1383,9 @@
                                 <p class="text-[12px] text-red-800/90 mt-1">${escapeHtml(errorMessage)}</p>
                                 <button type="button" class="retry-couriers-btn mt-3 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
                                     <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
+                                </button>
+                                <button type="button" class="copy-request-json-btn mt-3 ml-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
+                                    <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy request JSON
                                 </button>
                             </div>
                         </div>`;
@@ -1376,6 +1403,42 @@
                     return;
                 }
                 fetchCouriersForBox(box);
+                return;
+            }
+
+            const copyRequestBtn = e.target.closest('.copy-request-json-btn');
+            if (copyRequestBtn) {
+                const box = copyRequestBtn.closest('.px-4.pt-4.pb-2')?.querySelector('[data-order-number]');
+                const requestJson = box?._lastCourierDebugRequest || (
+                    box?._lastCourierRequestPayload
+                        ? {
+                            endpoint: '?page=dispatch&action=getCourierServiceability',
+                            method: 'POST',
+                            payload: box._lastCourierRequestPayload
+                        }
+                        : null
+                );
+                if (!requestJson) {
+                    showAlert('No courier request JSON available yet', 'warning');
+                    return;
+                }
+                const raw = JSON.stringify(requestJson, null, 2);
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(raw);
+                    } else {
+                        const temp = document.createElement('textarea');
+                        temp.value = raw;
+                        document.body.appendChild(temp);
+                        temp.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(temp);
+                    }
+                    showAlert('Courier request JSON copied', 'success');
+                } catch (err) {
+                    console.error('Copy request JSON failed:', err);
+                    showAlert('Failed to copy courier request JSON', 'error');
+                }
                 return;
             }
 
@@ -1858,9 +1921,9 @@
                             box_size: box_size,
                             items: items,
                             groupname: boxGroupname,
-                            pickup_location: null,
                             courier_id: courierId,
-                            courier_name: courierName
+                            courier_name: courierName,
+                            pickup_location: boxElement.getAttribute('data-pickup-location') || 'Head Off'
                         });
                     }
                 });
