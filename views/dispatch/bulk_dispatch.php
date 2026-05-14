@@ -1224,6 +1224,9 @@
                         </div>
                         <div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/95 border-b border-gray-100">
                             <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1 hidden sm:inline">Debug</span>
+                            <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-sync-alt text-[10px] text-gray-500" aria-hidden="true"></i> Refresh courier list
+                            </button>
                             <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
                                 <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy input (pre-filter)
                             </button>
@@ -1310,6 +1313,9 @@
                                 <span class="shrink-0 self-start rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.emptyBadge}">0 options</span>
                             </div>
                             <div class="flex flex-wrap items-center gap-2 px-3 py-2 ${tm.emptyToolbarBg} border-b">
+                                <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
+                                    <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
+                                </button>
                                 <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
                                     <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy input (pre-filter)
                                 </button>
