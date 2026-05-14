@@ -567,6 +567,7 @@
 
         // Helper function to escape HTML in error messages
         function escapeHtml(text) {
+            const safeText = (typeof text === 'string') ? text : String(text ?? '');
             const map = {
                 '&': '&amp;',
                 '<': '&lt;',
@@ -574,7 +575,7 @@
                 '"': '&quot;',
                 "'": '&#039;'
             };
-            return text.replace(/[&<>"']/g, m => map[m]);
+            return safeText.replace(/[&<>"']/g, m => map[m]);
         }
 
         const closeButtons = modal.querySelectorAll('[data-close-select-items]');
@@ -1021,6 +1022,64 @@
             }
         }
 
+        function renderRejectedCourierList(rejectedCouriers) {
+            const rows = Array.isArray(rejectedCouriers) ? rejectedCouriers : [];
+            if (!rows.length) return '';
+
+            const friendlyNegativeParam = function (key, value) {
+                if (key === 'pickup_availability') {
+                    return 'Pickup not available';
+                }
+                if (key === 'cod') {
+                    return 'COD not available';
+                }
+                return key + ': ' + value;
+            };
+
+            const cards = rows.map((courier) => {
+                const negativeParams = courier.negative_parameters && typeof courier.negative_parameters === 'object'
+                    ? Object.entries(courier.negative_parameters)
+                    : [];
+                const paramHtml = negativeParams.length
+                    ? negativeParams.map(([key, value]) => `
+                        <span class="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800">
+                            ${escapeHtml(friendlyNegativeParam(key, value))}
+                        </span>
+                    `).join('')
+                    : (courier.reasons || []).map((reason) => `
+                        <span class="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800">
+                            ${escapeHtml(reason)}
+                        </span>
+                    `).join('');
+
+                return `
+                    <div class="rounded-lg border border-red-100 bg-white p-3 shadow-sm">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="text-sm font-semibold text-gray-900">${escapeHtml(courier.name || 'Unknown courier')}</div>
+                                <div class="mt-1 text-[11px] text-gray-500">Courier ID: ${escapeHtml(courier.id ?? '-')}</div>
+                            </div>
+                            <span class="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">Rejected</span>
+                        </div>
+                        <div class="mt-2 flex flex-wrap gap-1.5">${paramHtml || '<span class="text-[11px] text-red-700">Rejected by courier filters.</span>'}</div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="border-t border-red-100 bg-red-50/40 px-3 py-3">
+                    <div class="mb-2 flex items-center justify-between gap-2">
+                        <div>
+                            <div class="text-sm font-semibold text-red-950">Rejected couriers</div>
+                            <div class="text-[11px] text-red-800/80">Shown for visibility. These cannot be selected until the failed parameters pass.</div>
+                        </div>
+                        <span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">${rows.length}</span>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">${cards}</div>
+                </div>
+            `;
+        }
+
         // Helper function to fetch couriers from Shiprocket API
         function fetchCouriersForBox(boxElement) {
             console.log('fetchCouriersForBox called with:', boxElement);
@@ -1092,10 +1151,12 @@
                 height: height,
                 weight: weight,
                 cod: boxElement.getAttribute('data-is-cod') === '1' ? 1 : 0,
-                is_express: boxElement.getAttribute('data-is-express') === '1' ? 1 : 0
+                is_express: boxElement.getAttribute('data-is-express') === '1' ? 1 : 0,
+                pickup_location: boxElement.getAttribute('data-pickup-location') || 'Head Off'
             };
             
             console.log('Sending payload to PHP endpoint:', payload);
+            boxElement._lastCourierRequestPayload = payload;
             
             fetch('?page=dispatch&action=getCourierServiceability', {
                 method: 'POST',
@@ -1107,12 +1168,46 @@
             })
             .then(response => {
                 console.log('Response status:', response.status);
-                return response.json();
+                return response.text().then(function (text) {
+                    const rawText = (typeof text === 'string') ? text : String(text ?? '');
+                    const cleaned = rawText.replace(/^\uFEFF/, '').trim();
+                    let parsed = {};
+
+                    try {
+                        parsed = cleaned ? JSON.parse(cleaned) : {};
+                    } catch (err) {
+                        throw new Error('Courier serviceability returned invalid server response (HTTP ' + response.status + '): ' + (cleaned.slice(0, 300) || 'empty response'));
+                    }
+
+                    if (!response.ok || parsed.success === false) {
+                        let details = '';
+                        if (parsed.details) {
+                            details = typeof parsed.details === 'string'
+                                ? parsed.details
+                                : JSON.stringify(parsed.details);
+                        }
+                        const msg = parsed.message || ('Courier serviceability request failed (HTTP ' + response.status + ')');
+                        const requestError = new Error(details ? (msg + ': ' + details.slice(0, 300)) : msg);
+                        requestError.courierDebugRequest = parsed?.debug?.serviceability_request || null;
+                        throw requestError;
+                    }
+
+                    return parsed;
+                });
             })
             .then(data => {
                 console.log('Response data:', data);
+                boxElement._lastCourierDebugRequest = data?.debug?.serviceability_request || null;
+                const resolvedPickupLocation = data?.debug?.serviceability_request?.pickup_resolution?.pickup_location;
+                if (resolvedPickupLocation) {
+                    boxElement.setAttribute('data-pickup-location', resolvedPickupLocation);
+                }
                 boxElement._lastCourierDebugInput = data?.debug?.input_before_filter || null;
                 boxElement._lastCourierDebugOutput = data?.debug?.output_after_filter || null;
+                const rejectedCouriers = Array.isArray(data?.rejected_couriers)
+                    ? data.rejected_couriers
+                    : (Array.isArray(data?.debug?.output_after_filter?.excludedFromFilters) ? data.debug.output_after_filter.excludedFromFilters : []);
+                const rejectedCourierHtml = renderRejectedCourierList(rejectedCouriers);
                 if (data.success && data.couriers && data.couriers.length > 0) {
                     let boxUid = boxElement.getAttribute('data-box-uid');
                     if (!boxUid) {
@@ -1138,14 +1233,22 @@
                         </div>
                         <div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/95 border-b border-gray-100">
                             <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1 hidden sm:inline">Debug</span>
+                            <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-sync-alt text-[10px] text-gray-500" aria-hidden="true"></i> Refresh courier list
+                            </button>
                             <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
                                 <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy input (pre-filter)
+                            </button>
+                            <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy request JSON
                             </button>
                             <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
                                 <i class="fas fa-code text-[10px] text-gray-500" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
                             </button>
                         </div>
                         <div class="filter-debug-panel hidden border-b border-gray-200 bg-slate-900 px-3 py-2">
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Serviceability request</div>
+                            <pre class="debug-request text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-yellow-100/95 border border-slate-700 font-mono"></pre>
                             <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
                             <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
                             <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
@@ -1185,11 +1288,16 @@
                     courierHtml += `
                             </div>
                         </div>
+                        ${rejectedCourierHtml}
                     </div>`;
                     if (courierContainer) {
                         courierContainer.innerHTML = courierHtml;
+                        const requestPre = courierContainer.querySelector('.debug-request');
                         const inputPre = courierContainer.querySelector('.debug-input');
                         const outputPre = courierContainer.querySelector('.debug-output');
+                        if (requestPre) {
+                            requestPre.textContent = JSON.stringify(boxElement._lastCourierDebugRequest || {}, null, 2);
+                        }
                         if (inputPre) {
                             inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
                         }
@@ -1223,23 +1331,36 @@
                                 <span class="shrink-0 self-start rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.emptyBadge}">0 options</span>
                             </div>
                             <div class="flex flex-wrap items-center gap-2 px-3 py-2 ${tm.emptyToolbarBg} border-b">
+                                <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
+                                    <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
+                                </button>
                                 <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
                                     <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy input (pre-filter)
+                                </button>
+                                <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
+                                    <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy request JSON
                                 </button>
                                 <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
                                     <i class="fas fa-code text-[10px]" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
                                 </button>
                             </div>
                             <div class="filter-debug-panel hidden border-b border-gray-200 bg-slate-900 px-3 py-2">
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Serviceability request</div>
+                                <pre class="debug-request text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-yellow-100/95 border border-slate-700 font-mono"></pre>
                                 <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
                                 <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
                                 <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
                                 <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
                             </div>
+                            ${rejectedCourierHtml}
                         </div>`;
                         courierContainer.innerHTML = emptyHtml;
+                        const requestPre = courierContainer.querySelector('.debug-request');
                         const inputPre = courierContainer.querySelector('.debug-input');
                         const outputPre = courierContainer.querySelector('.debug-output');
+                        if (requestPre) {
+                            requestPre.textContent = JSON.stringify(boxElement._lastCourierDebugRequest || {}, null, 2);
+                        }
                         if (inputPre) {
                             inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
                         }
@@ -1251,15 +1372,25 @@
             })
             .catch(error => {
                 console.error('Error fetching couriers:', error);
+                boxElement._lastCourierDebugRequest = error?.courierDebugRequest || boxElement._lastCourierDebugRequest || null;
                 if (courierContainer) {
+                    const errorMessage = error && error.message
+                        ? error.message
+                        : 'Courier serviceability request failed. Please retry or open debug.';
                     courierContainer.innerHTML = `
                         <div class="rounded-xl border border-red-200 bg-gradient-to-b from-red-50 to-white px-4 py-3 shadow-sm flex gap-3 items-start text-[13px]">
                             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600" aria-hidden="true">
                                 <i class="fas fa-exclamation-triangle"></i>
                             </span>
-                            <div>
-                                <div class="font-semibold text-red-900">Could not load couriers</div>
-                                <p class="text-[12px] text-red-800/90 mt-1">Network or server error. Check your connection and try again.</p>
+                            <div class="min-w-0 flex-1">
+                                <div class="font-semibold text-red-900">Could not load courier serviceability</div>
+                                <p class="text-[12px] text-red-800/90 mt-1">${escapeHtml(errorMessage)}</p>
+                                <button type="button" class="retry-couriers-btn mt-3 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
+                                    <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
+                                </button>
+                                <button type="button" class="copy-request-json-btn mt-3 ml-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
+                                    <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy request JSON
+                                </button>
                             </div>
                         </div>`;
                 }
@@ -1268,6 +1399,53 @@
 
         // Debug actions in courier container
         document.addEventListener('click', async function (e) {
+            const retryBtn = e.target.closest('.retry-couriers-btn');
+            if (retryBtn) {
+                const box = retryBtn.closest('.px-4.pt-4.pb-2')?.querySelector('[data-order-number]');
+                if (!box) {
+                    showAlert('No box found to refresh courier list', 'warning');
+                    return;
+                }
+                fetchCouriersForBox(box);
+                return;
+            }
+
+            const copyRequestBtn = e.target.closest('.copy-request-json-btn');
+            if (copyRequestBtn) {
+                const box = copyRequestBtn.closest('.px-4.pt-4.pb-2')?.querySelector('[data-order-number]');
+                const requestJson = box?._lastCourierDebugRequest || (
+                    box?._lastCourierRequestPayload
+                        ? {
+                            endpoint: '?page=dispatch&action=getCourierServiceability',
+                            method: 'POST',
+                            payload: box._lastCourierRequestPayload
+                        }
+                        : null
+                );
+                if (!requestJson) {
+                    showAlert('No courier request JSON available yet', 'warning');
+                    return;
+                }
+                const raw = JSON.stringify(requestJson, null, 2);
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(raw);
+                    } else {
+                        const temp = document.createElement('textarea');
+                        temp.value = raw;
+                        document.body.appendChild(temp);
+                        temp.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(temp);
+                    }
+                    showAlert('Courier request JSON copied', 'success');
+                } catch (err) {
+                    console.error('Copy request JSON failed:', err);
+                    showAlert('Failed to copy courier request JSON', 'error');
+                }
+                return;
+            }
+
             const copyBtn = e.target.closest('.copy-filter-input-btn');
             if (copyBtn) {
                 const box = copyBtn.closest('.px-4.pt-4.pb-2')?.querySelector('[data-order-number]');
@@ -1747,9 +1925,9 @@
                             box_size: box_size,
                             items: items,
                             groupname: boxGroupname,
-                            pickup_location: null,
                             courier_id: courierId,
-                            courier_name: courierName
+                            courier_name: courierName,
+                            pickup_location: boxElement.getAttribute('data-pickup-location') || 'Head Off'
                         });
                     }
                 });

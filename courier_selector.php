@@ -237,22 +237,34 @@ function calculateConfidence($c)
 | - Auto select Top 1
 */
 
-/** Human-readable reasons a courier fails eligibility for prepareCouriers (all that apply). */
-function courierExclusionReasons(array $c, $isCOD)
+/** Human-readable reasons and failed parameters for prepareCouriers (all that apply). */
+function courierExclusionDetails(array $c, $isCOD)
 {
     $reasons = [];
+    $negativeParameters = [];
 
     if ($isCOD && empty($c['cod'])) {
         $reasons[] = 'COD is required for this order but the courier does not support COD.';
+        $negativeParameters['cod'] = 'expected 1, got ' . json_encode($c['cod'] ?? null);
     }
 
     if ((int)($c['pickup_availability'] ?? 0) === 0) {
         $pa = $c['pickup_availability'] ?? null;
         $reasons[] = 'Reliability filter: pickup not available at pickup location (pickup_availability must be 1; got '
             . json_encode($pa) . ').';
+        $negativeParameters['pickup_availability'] = 'expected 1, got ' . json_encode($pa);
     }
 
-    return $reasons;
+    return [
+        'reasons' => $reasons,
+        'negative_parameters' => $negativeParameters,
+    ];
+}
+
+/** Human-readable reasons a courier fails eligibility for prepareCouriers (all that apply). */
+function courierExclusionReasons(array $c, $isCOD)
+{
+    return courierExclusionDetails($c, $isCOD)['reasons'];
 }
 
 function prepareCouriers($shiprocketResponse, $isCOD = false, $isExpress = false)
@@ -271,12 +283,14 @@ function prepareCouriers($shiprocketResponse, $isCOD = false, $isExpress = false
     $excludedFromFilters = [];
 
     foreach ($shiprocketResponse['data']['available_courier_companies'] as $c) {
-        $reasons = courierExclusionReasons($c, $isCOD);
+        $exclusion = courierExclusionDetails($c, $isCOD);
+        $reasons = $exclusion['reasons'];
         if (!empty($reasons)) {
             $excludedFromFilters[] = [
                 'id' => $c['courier_company_id'] ?? null,
                 'name' => $c['courier_name'] ?? '',
                 'reasons' => $reasons,
+                'negative_parameters' => $exclusion['negative_parameters'],
             ];
             continue;
         }

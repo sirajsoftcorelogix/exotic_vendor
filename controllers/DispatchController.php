@@ -11,6 +11,91 @@ $dispatchModel = new Dispatch($conn);
 $ordersModel = new Order($conn);
 
 class DispatchController {
+    private function resolveShiprocketPickupPostcode($dispatchModel, array $firm, string $pickupLocation): array
+    {
+        $fallbackPin = trim((string)($firm['pin'] ?? ''));
+        $pickupLocation = trim($pickupLocation);
+        $pinKeys = ['pin_code', 'pincode', 'postcode', 'pin', 'zipcode', 'zip'];
+        $extractPin = function (array $row) use ($pinKeys): string {
+            foreach ($pinKeys as $key) {
+                $pin = trim((string)($row[$key] ?? ''));
+                if ($pin !== '') {
+                    return $pin;
+                }
+            }
+
+            $address = trim((string)($row['address'] ?? ''));
+            if ($address !== '' && preg_match('/\b\d{6}\b/', $address, $matches)) {
+                return $matches[0];
+            }
+
+            return '';
+        };
+        $formatResolution = function (array $row, string $pin, string $source, ?array $requestedRow = null) use ($pickupLocation): array {
+            $rowName = trim((string)($row['pickup_location'] ?? ''));
+
+            return [
+                'postcode' => $pin,
+                'source' => $source . ': ' . ($rowName !== '' ? $rowName : 'unknown'),
+                'pickup_location' => $rowName,
+                'requested_pickup_location' => $pickupLocation,
+                'first_mile_override' => $requestedRow !== null,
+                'requested_row' => $requestedRow,
+                'matched_row' => $row,
+            ];
+        };
+
+        $pickupLocations = $dispatchModel->pickupLocations();
+        $rows = $pickupLocations['data']['shipping_address'] ?? [];
+        if (is_array($rows)) {
+            $requestedRow = null;
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $rowName = trim((string)($row['pickup_location'] ?? ''));
+                if ($pickupLocation !== '' && strcasecmp($rowName, $pickupLocation) !== 0) {
+                    continue;
+                }
+                $requestedRow = $row;
+                $pin = $extractPin($row);
+                if ($pin !== '' && (int)($row['is_first_mile_pickup'] ?? 0) === 1) {
+                    return $formatResolution($row, $pin, 'shiprocket first-mile pickup location');
+                }
+                break;
+            }
+
+            if ($requestedRow !== null && (int)($requestedRow['is_first_mile_pickup'] ?? 0) !== 1) {
+                foreach ($rows as $row) {
+                    if (!is_array($row) || (int)($row['is_first_mile_pickup'] ?? 0) !== 1) {
+                        continue;
+                    }
+                    $pin = $extractPin($row);
+                    if ($pin !== '') {
+                        return $formatResolution($row, $pin, 'shiprocket first-mile pickup override', $requestedRow);
+                    }
+                }
+            }
+
+            if ($requestedRow !== null) {
+                $pin = $extractPin($requestedRow);
+                if ($pin !== '') {
+                    return $formatResolution($requestedRow, $pin, 'shiprocket pickup location');
+                }
+            }
+        }
+
+        return [
+            'postcode' => $fallbackPin,
+            'source' => 'firm_details.pin',
+            'pickup_location' => $pickupLocation,
+            'requested_pickup_location' => $pickupLocation,
+            'first_mile_override' => false,
+            'requested_row' => null,
+            'matched_row' => null,
+        ];
+    }
+
     public function create() {
         global $commanModel, $invoiceModel, $dispatchModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -1742,9 +1827,14 @@ class DispatchController {
                 exit;
             }
             
-            // Get firm details for pickup postcode
+            // Get pickup postcode from the actual Shiprocket pickup location when possible.
             $firm = $commanModel->getRecordById('firm_details', 1);
-            $pickup_postcode = $firm['pin'] ?? null;
+            $requestedPickupLocation = trim((string)($input['pickup_location'] ?? $firm['pickup_location'] ?? 'Head Off'));
+            if ($requestedPickupLocation === '') {
+                $requestedPickupLocation = 'Head Off';
+            }
+            $pickupResolution = $this->resolveShiprocketPickupPostcode($dispatchModel, is_array($firm) ? $firm : [], $requestedPickupLocation);
+            $pickup_postcode = $pickupResolution['postcode'] ?? null;
             
             if (empty($pickup_postcode)) {
                 http_response_code(400);
@@ -1797,7 +1887,15 @@ class DispatchController {
                 echo json_encode([
                     'success' => false,
                     'message' => 'Failed to fetch courier serviceability',
-                    'details' => $serviceability['data']
+                    'details' => $serviceability['data'],
+                    'debug' => [
+                        'serviceability_request' => [
+                            'params' => $serviceability['params'] ?? [],
+                            'pickup_resolution' => $pickupResolution,
+                            'request_url' => $serviceability['request_url'] ?? '',
+                            'curl_error' => $serviceability['curl_error'] ?? '',
+                        ],
+                    ],
                 ]);
                 exit;
             }
@@ -1828,8 +1926,15 @@ class DispatchController {
             echo json_encode([
                 'success' => true,
                 'couriers' => $couriers,
+                'rejected_couriers' => $selectedCouriers['excludedFromFilters'] ?? [],
                 'selected' => $selectedCouriers['selected'] ?? null,
                 'debug' => [
+                    'serviceability_request' => [
+                        'params' => $serviceability['params'] ?? [],
+                        'pickup_resolution' => $pickupResolution,
+                        'request_url' => $serviceability['request_url'] ?? '',
+                        'curl_error' => $serviceability['curl_error'] ?? '',
+                    ],
                     'input_before_filter' => $serviceability['data'] ?? null,
                     'output_after_filter' => $selectedCouriers
                 ],

@@ -238,7 +238,6 @@ class Dispatch {
             'height' => $height,
             'cod' => $cod,
             //'is_return' => $is_return,
-            'qc_check' => $qc_check
         ];
         
         if ($mode !== null) {
@@ -259,6 +258,7 @@ class Dispatch {
         // GET is the default, no need to set it explicitly
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
         curl_close($ch);
         
         $responseDecoded = json_decode($response, true);
@@ -266,7 +266,9 @@ class Dispatch {
             'http_code' => $httpCode,
             'data' => $responseDecoded,
             'success' => $httpCode == 200 && !empty($responseDecoded),
-            'params' => $params
+            'params' => $params,
+            'request_url' => $url,
+            'curl_error' => $curlError,
         ];
     }
     //get labels from shiprocket

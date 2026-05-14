@@ -2644,7 +2644,20 @@ class POSRegisterController
         }
         $email = trim((string)($payload['confirm_email'] ?? ''));
         if ($email === '') {
-            $email = 'dummy-' . time() . '@exoticindia.com';
+            $customerId = (int)($payload['customer_id'] ?? 0);
+            $email = $customerId > 0
+                ? 'pos-customer-' . $customerId . '@exoticindia.com'
+                : 'pos-walkin@exoticindia.com';
+
+            global $conn;
+            if ($customerId > 0 && $conn instanceof mysqli) {
+                $stmt = $conn->prepare("UPDATE vp_customers SET email = ? WHERE id = ? AND (email = '' OR email LIKE 'dummy-%@exoticindia.com')");
+                if ($stmt) {
+                    $stmt->bind_param('si', $email, $customerId);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
         }
 
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
