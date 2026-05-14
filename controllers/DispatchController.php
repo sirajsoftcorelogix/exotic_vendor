@@ -1828,6 +1828,7 @@ class DispatchController {
             echo json_encode([
                 'success' => true,
                 'couriers' => $couriers,
+                'rejected_couriers' => $selectedCouriers['excludedFromFilters'] ?? [],
                 'selected' => $selectedCouriers['selected'] ?? null,
                 'debug' => [
                     'input_before_filter' => $serviceability['data'] ?? null,
