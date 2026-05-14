@@ -1311,9 +1311,12 @@
                             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600" aria-hidden="true">
                                 <i class="fas fa-exclamation-triangle"></i>
                             </span>
-                            <div>
+                            <div class="min-w-0 flex-1">
                                 <div class="font-semibold text-red-900">Could not load couriers</div>
                                 <p class="text-[12px] text-red-800/90 mt-1">Network or server error. Check your connection and try again.</p>
+                                <button type="button" class="retry-couriers-btn mt-3 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
+                                    <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
+                                </button>
                             </div>
                         </div>`;
                 }
@@ -1322,6 +1325,17 @@
 
         // Debug actions in courier container
         document.addEventListener('click', async function (e) {
+            const retryBtn = e.target.closest('.retry-couriers-btn');
+            if (retryBtn) {
+                const box = retryBtn.closest('.px-4.pt-4.pb-2')?.querySelector('[data-order-number]');
+                if (!box) {
+                    showAlert('No box found to refresh courier list', 'warning');
+                    return;
+                }
+                fetchCouriersForBox(box);
+                return;
+            }
+
             const copyBtn = e.target.closest('.copy-filter-input-btn');
             if (copyBtn) {
                 const box = copyBtn.closest('.px-4.pt-4.pb-2')?.querySelector('[data-order-number]');
