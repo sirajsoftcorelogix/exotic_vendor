@@ -2,7 +2,7 @@
 -- Runtime code also checks/creates these columns defensively.
 
 ALTER TABLE global_settings
-  ADD COLUMN IF NOT EXISTS high_value_transaction_limit DECIMAL(15,2) NOT NULL DEFAULT 200000.00 AFTER terms_and_conditions;
+  ADD COLUMN IF NOT EXISTS high_value_transaction_limit DECIMAL(15,2) NOT NULL DEFAULT 200000.00;
 
 UPDATE global_settings
 SET high_value_transaction_limit = 200000.00
