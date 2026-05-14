@@ -529,6 +529,47 @@
     return null;
   }
 
+  function lineLocalStockQty(row) {
+    var n = pickNumber(row, ['local_stock', 'localStock', 'stock_qty', 'stockQty']);
+    return n == null || isNaN(n) ? null : n;
+  }
+
+  function getLocalStockWarnings(cartData) {
+    var items = getCartItems(cartData || {});
+    var warnings = [];
+    items.forEach(function (row) {
+      var localStock = lineLocalStockQty(row);
+      if (localStock == null) {
+        return;
+      }
+      var qty = lineQty(row);
+      if (qty <= localStock) {
+        return;
+      }
+      var code = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
+      var title = lineTitle(row);
+      warnings.push({
+        code: code,
+        title: title,
+        quantity: qty,
+        local_stock: localStock,
+        shortage: Math.max(0, qty - localStock)
+      });
+    });
+    return warnings;
+  }
+
+  function formatLocalStockWarning(warnings) {
+    if (!Array.isArray(warnings) || warnings.length === 0) {
+      return '';
+    }
+    if (warnings.length === 1) {
+      var w = warnings[0];
+      return 'Local stock warning: ' + (w.code || w.title || 'Item') + ' has local stock ' + w.local_stock + ', but cart quantity is ' + w.quantity + '. Sale can continue.';
+    }
+    return 'Local stock warning: ' + warnings.length + ' item(s) have cart quantity above local stock. Sale can continue.';
+  }
+
   function lineTitle(row) {
     return String(
       pickFirst(row, ['title', 'name', 'product_name', 'item_name', 'description']) || 'Item'
@@ -1614,6 +1655,8 @@
         var ref = lineCartRef(row);
         var qty = lineQty(row);
         var maxSell = lineMaxSellableQty(row, data || {});
+        var localStockQty = lineLocalStockQty(row);
+        var localStockShort = localStockQty != null && qty > localStockQty;
         var title = lineTitle(row);
         var sub = lineSubDisplay(row);
         var unitPrice = lineUnitPriceStr(row);
@@ -1718,6 +1761,15 @@
             ' <span class="text-[10px] font-semibold uppercase text-amber-700">Adj</span>';
         }
         html += '</div>';
+        if (localStockQty != null) {
+          html +=
+            '<div class="mt-1 text-[11px] ' +
+            (localStockShort ? 'font-semibold text-amber-700' : 'text-slate-400') +
+            '">Local stock: ' +
+            escapeHtml(String(localStockQty)) +
+            (localStockShort ? ' · cart qty exceeds local stock' : '') +
+            '</div>';
+        }
         html += '<div class="flex flex-wrap items-center gap-2 mt-1">';
         if (ref) {
           var maxAttr =
@@ -1865,6 +1917,16 @@
       html += moneyRowSummary('GST Total', totals.gstTotal, false);
       html += moneyRowSummary('GRAND Total', totals.grandTotal, true);
       html += '</div></div>';
+      var localStockWarnings = getLocalStockWarnings(data || {});
+      if (localStockWarnings.length) {
+        html +=
+          '<div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900">' +
+          '<div class="font-bold">Local stock warning</div>' +
+          '<div class="mt-1">' +
+          escapeHtml(formatLocalStockWarning(localStockWarnings)) +
+          '</div>' +
+          '</div>';
+      }
     }
 
     html +=
@@ -1910,6 +1972,7 @@
       couponDeduction: totals.couponDeduction,
       customDeduction: totals.customDeduction
     };
+    window.__posCartLocalStockWarnings = getLocalStockWarnings(data || {});
 
     panel.innerHTML = html;
     var modeSel = panel.querySelector('.pos-cart-customdisc-mode');
@@ -2549,6 +2612,14 @@
     }
     var tt = totalsFromRetrieve(d);
     return cartDeductionPoolFromTotals(tt) > 0.001;
+  };
+
+  window.getPosLocalStockWarningsForCheckout = function () {
+    var d = window.__posCartLastRetrieveData;
+    if (!d || typeof d !== 'object') {
+      return [];
+    }
+    return getLocalStockWarnings(d);
   };
 
   function initPosCartHooks() {

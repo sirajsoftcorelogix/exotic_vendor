@@ -1705,6 +1705,17 @@
       }
       body.sec269st_cash_warning_confirmed = "1";
     }
+    var stockWarnings =
+      typeof window.getPosLocalStockWarningsForCheckout === "function"
+        ? window.getPosLocalStockWarningsForCheckout()
+        : [];
+    if (Array.isArray(stockWarnings) && stockWarnings.length > 0) {
+      body.local_stock_warnings = stockWarnings;
+      var stockMessage = stockWarnings.length === 1
+        ? ("Local stock warning: " + (stockWarnings[0].code || stockWarnings[0].title || "Item") + " has local stock " + stockWarnings[0].local_stock + ", cart quantity " + stockWarnings[0].quantity + ". Sale can continue.")
+        : ("Local stock warning: " + stockWarnings.length + " items have cart quantity above local stock. Sale can continue.");
+      showToast(stockMessage, "orange");
+    }
     var linePricePayload =
       typeof window.getPosLinePricesPayloadForCheckout === "function"
         ? window.getPosLinePricesPayloadForCheckout()

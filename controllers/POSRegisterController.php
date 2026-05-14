@@ -285,6 +285,62 @@ class POSRegisterController
         return trim($note) !== '' ? trim($note) . "\n\n" . $block : $block;
     }
 
+    /**
+     * @return list<array{code:string,title:string,quantity:float,local_stock:float,shortage:float}>
+     */
+    private function detectLocalStockWarningsFromCart(array $cartData): array
+    {
+        $items = $cartData['cartitems'] ?? $cartData['cart_items'] ?? $cartData['items'] ?? $cartData['lines'] ?? [];
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $warnings = [];
+        foreach ($items as $row) {
+            if (!is_array($row) || !array_key_exists('local_stock', $row)) {
+                continue;
+            }
+            $qty = (float)($row['quantity'] ?? $row['qty'] ?? $row['prqt'] ?? 1);
+            if ($qty <= 0) {
+                $qty = 1;
+            }
+            $localStock = (float)str_replace(',', '', (string)($row['local_stock'] ?? 0));
+            if ($qty <= $localStock) {
+                continue;
+            }
+            $warnings[] = [
+                'code' => trim((string)($row['code'] ?? $row['item_code'] ?? $row['sku'] ?? '')),
+                'title' => trim((string)($row['name'] ?? $row['title'] ?? $row['product_name'] ?? 'Item')),
+                'quantity' => $qty,
+                'local_stock' => $localStock,
+                'shortage' => max(0, $qty - $localStock),
+            ];
+        }
+
+        return $warnings;
+    }
+
+    private function appendLocalStockWarningsToNote(string $note, array $warnings): string
+    {
+        if (empty($warnings)) {
+            return $note;
+        }
+
+        $lines = ['Local Stock Warning'];
+        foreach ($warnings as $w) {
+            $label = trim((string)($w['code'] ?? '')) !== ''
+                ? trim((string)$w['code'])
+                : trim((string)($w['title'] ?? 'Item'));
+            $lines[] = $label . ': cart qty ' . (float)($w['quantity'] ?? 0)
+                . ', local stock ' . (float)($w['local_stock'] ?? 0)
+                . ', shortage ' . (float)($w['shortage'] ?? 0)
+                . '. Sale allowed with warning.';
+        }
+
+        $block = implode("\n", $lines);
+        return trim($note) !== '' ? trim($note) . "\n\n" . $block : $block;
+    }
+
     public function index()
     {
         // slug => label
@@ -2737,6 +2793,7 @@ class POSRegisterController
             echo json_encode(['success' => false, 'message' => 'Cart is empty.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
+        $localStockWarnings = $this->detectLocalStockWarningsFromCart($cartData);
 
         $postBody = $this->buildOrderCreatePostFromPayload($payload, $cartData);
         if (trim((string)($postBody['checkoutdata'] ?? '')) === '') {
@@ -2859,6 +2916,7 @@ class POSRegisterController
         }
 
         $note = $this->appendHighValueComplianceToNote(trim((string)($payload['payment_note'] ?? '')), $orderTotal, $paymentMode, $compliance);
+        $note = $this->appendLocalStockWarningsToNote($note, $localStockWarnings);
         $userId = pos_payment_resolve_session_user_id();
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
 
@@ -2947,12 +3005,18 @@ class POSRegisterController
             'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
         ];
 
+        $successMessage = 'Order placed.';
+        if (!empty($localStockWarnings)) {
+            $successMessage .= ' Local stock warning: ' . count($localStockWarnings) . ' item(s) sold above local stock.';
+        }
+
         echo json_encode([
             'success' => true,
-            'message' => 'Order placed.',
+            'message' => $successMessage,
             'order_number' => $orderNumber,
             'receipt_number' => $receiptNo,
             'payment_id' => (int)($pay['payment_id'] ?? 0),
+            'local_stock_warnings' => $localStockWarnings,
             'redirect_url' => 'index.php?page=pos_register&action=checkout-receipt',
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
