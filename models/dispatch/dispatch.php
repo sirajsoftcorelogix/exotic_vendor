@@ -238,7 +238,6 @@ class Dispatch {
             'height' => $height,
             'cod' => $cod,
             //'is_return' => $is_return,
-            'qc_check' => $qc_check
         ];
         
         if ($mode !== null) {
