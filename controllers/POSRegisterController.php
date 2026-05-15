@@ -331,7 +331,7 @@ class POSRegisterController
             $label = trim((string)($w['code'] ?? '')) !== ''
                 ? trim((string)$w['code'])
                 : trim((string)($w['title'] ?? 'Item'));
-            $lines[] = $label . ' — Low / no stock available';
+            $lines[] = $label . ' — Low / no stock available. You can still order this item.';
         }
 
         $block = implode("\n", $lines);
