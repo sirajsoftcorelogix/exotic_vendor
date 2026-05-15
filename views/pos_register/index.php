@@ -1717,7 +1717,7 @@
           : stockWarnings.length === 1
             ? "Low / no stock available"
             : "Low / no stock available (" + stockWarnings.length + " items)";
-      showToast(stockMessage, "red");
+      showToast(stockMessage, "violet");
     }
     var linePricePayload =
       typeof window.getPosLinePricesPayloadForCheckout === "function"

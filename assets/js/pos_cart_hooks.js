@@ -1865,7 +1865,7 @@
         html += '</div>';
         if (localStockShort) {
           html +=
-            '<div class="mt-1 inline-flex max-w-full items-center rounded border border-red-400 bg-red-600 px-2 py-1 text-[10px] font-bold leading-tight text-white shadow-sm" role="alert">' +
+            '<div class="mt-1 inline-flex max-w-full items-center rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-1 text-[10px] font-bold leading-tight text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert">' +
             escapeHtml(localStockUserMessage()) +
             '</div>';
         }
