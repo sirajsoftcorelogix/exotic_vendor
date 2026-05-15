@@ -1711,9 +1711,12 @@
         : [];
     if (Array.isArray(stockWarnings) && stockWarnings.length > 0) {
       body.local_stock_warnings = stockWarnings;
-      var stockMessage = stockWarnings.length === 1
-        ? ("Local stock warning: " + (stockWarnings[0].code || stockWarnings[0].title || "Item") + " has local stock " + stockWarnings[0].local_stock + ", cart quantity " + stockWarnings[0].quantity + ". Sale can continue.")
-        : ("Local stock warning: " + stockWarnings.length + " items have cart quantity above local stock. Sale can continue.");
+      var stockMessage =
+        typeof window.formatPosLocalStockWarning === "function"
+          ? window.formatPosLocalStockWarning(stockWarnings)
+          : stockWarnings.length === 1
+            ? (stockWarnings[0].code || stockWarnings[0].title || "Item") + ": qty " + stockWarnings[0].quantity + " > local " + stockWarnings[0].local_stock
+            : stockWarnings.length + " items exceed local stock";
       showToast(stockMessage, "orange");
     }
     var linePricePayload =

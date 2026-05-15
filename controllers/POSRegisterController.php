@@ -331,10 +331,8 @@ class POSRegisterController
             $label = trim((string)($w['code'] ?? '')) !== ''
                 ? trim((string)$w['code'])
                 : trim((string)($w['title'] ?? 'Item'));
-            $lines[] = $label . ': cart qty ' . (float)($w['quantity'] ?? 0)
-                . ', local stock ' . (float)($w['local_stock'] ?? 0)
-                . ', shortage ' . (float)($w['shortage'] ?? 0)
-                . '. Sale allowed with warning.';
+            $lines[] = $label . ': qty ' . (float)($w['quantity'] ?? 0)
+                . ' > local ' . (float)($w['local_stock'] ?? 0);
         }
 
         $block = implode("\n", $lines);
@@ -1821,7 +1819,9 @@ class POSRegisterController
                 $upstream = [
                     'api_base' => 'https://www.exoticindia.com/api',
                     'endpoint' => 'POST /cart/add',
+                    'browser_request_json' => is_array($body) ? $body : ['_raw' => $raw],
                     'discount_query_merged_into_url' => $ctxAdd['query'],
+                    'extra_headers' => $ctxAdd['extraHeaders'],
                     'attempts' => [
                         [
                             'label' => 'primary',
