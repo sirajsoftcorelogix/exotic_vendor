@@ -657,19 +657,24 @@
     return warnings;
   }
 
-  /** User-facing copy for cart line / toast (no SKU). */
-  function localStockUserMessage() {
+  function localStockWarningTitle() {
     return 'Low / no stock available';
+  }
+
+  function localStockWarningSubline(plural) {
+    return plural ? 'You can still order these items.' : 'You can still order this item.';
   }
 
   function formatLocalStockWarning(warnings) {
     if (!Array.isArray(warnings) || warnings.length === 0) {
       return '';
     }
-    if (warnings.length === 1) {
-      return localStockUserMessage();
-    }
-    return localStockUserMessage() + ' (' + warnings.length + ' items)';
+    var plural = warnings.length > 1;
+    var title =
+      plural
+        ? localStockWarningTitle() + ' (' + warnings.length + ' items)'
+        : localStockWarningTitle();
+    return title + '. ' + localStockWarningSubline(plural);
   }
 
   function lineTitle(row) {
@@ -1865,8 +1870,13 @@
         html += '</div>';
         if (localStockShort) {
           html +=
-            '<div class="mt-1 inline-flex max-w-full items-center rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-1 text-[10px] font-bold leading-tight text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert">' +
-            escapeHtml(localStockUserMessage()) +
+            '<div class="mt-1 flex max-w-full flex-col gap-0.5 rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-1.5 text-[10px] leading-snug text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert">' +
+            '<span class="font-bold">' +
+            escapeHtml(localStockWarningTitle()) +
+            '</span>' +
+            '<span class="font-medium text-violet-800">' +
+            escapeHtml(localStockWarningSubline(false)) +
+            '</span>' +
             '</div>';
         }
         html += '<div class="flex flex-wrap items-center gap-2 mt-1">';

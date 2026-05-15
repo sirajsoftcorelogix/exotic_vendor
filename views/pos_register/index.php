@@ -1715,8 +1715,8 @@
         typeof window.formatPosLocalStockWarning === "function"
           ? window.formatPosLocalStockWarning(stockWarnings)
           : stockWarnings.length === 1
-            ? "Low / no stock available"
-            : "Low / no stock available (" + stockWarnings.length + " items)";
+            ? "Low / no stock available. You can still order this item."
+            : "Low / no stock available (" + stockWarnings.length + " items). You can still order these items.";
       showToast(stockMessage, "violet");
     }
     var linePricePayload =
