@@ -1715,9 +1715,9 @@
         typeof window.formatPosLocalStockWarning === "function"
           ? window.formatPosLocalStockWarning(stockWarnings)
           : stockWarnings.length === 1
-            ? (stockWarnings[0].code || stockWarnings[0].title || "Item") + ": qty " + stockWarnings[0].quantity + " > local " + stockWarnings[0].local_stock
-            : stockWarnings.length + " items exceed local stock";
-      showToast(stockMessage, "orange");
+            ? "Low / no stock available"
+            : "Low / no stock available (" + stockWarnings.length + " items)";
+      showToast(stockMessage, "red");
     }
     var linePricePayload =
       typeof window.getPosLinePricesPayloadForCheckout === "function"
