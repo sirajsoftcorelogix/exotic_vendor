@@ -782,9 +782,16 @@ class Order
         if (empty($log_id) || empty($data['end_time'])) {
             return ['success' => false, 'message' => 'Required fields are missing.'];
         }
+        $successfulImports = (int)($data['successful_imports'] ?? 0);
+        $totalOrders = (int)($data['total_orders'] ?? 0);
+        $maxOrderedTime = (int)($data['max_ordered_time'] ?? 0);
+        $error = (string)($data['error'] ?? '');
+        $addProductLog = $data['add_product_log'];
+        $logDetails = $data['log_details'];
+        $endTime = $data['end_time'];
         $sql = "UPDATE order_import_log SET end_time = ?, successful_imports = ?, total_orders = ?, error = ?, max_ordered_time = ?, add_product_log = ?, log_details = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssdisssd', $data['end_time'], $data['successful_imports'], $data['total_orders'], $data['error'], $data['max_ordered_time'], $data['add_product_log'], $data['log_details'], $log_id);
+        $stmt->bind_param('siisissi', $endTime, $successfulImports, $totalOrders, $error, $maxOrderedTime, $addProductLog, $logDetails, $log_id);
         if ($stmt->execute()) {
             return ['success' => true];
         } else {

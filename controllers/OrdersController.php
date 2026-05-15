@@ -301,6 +301,14 @@ class OrdersController
         $result = $batch['result'];
         $pdata = $batch['pdata'];
         $addressdata = $batch['addressdata'];
+
+        $maxOrderedTimeForLog = (int)$to_date;
+        foreach ($orders['orders'] ?? [] as $ord) {
+            $pt = (int)($ord['processed_time'] ?? 0);
+            if ($pt > $maxOrderedTimeForLog) {
+                $maxOrderedTimeForLog = $pt;
+            }
+        }
         //print_array($pdata);
         //print_r($result);
         //update log end time and imported count
@@ -311,7 +319,7 @@ class OrdersController
                 'total_orders' => $totalorder,
                 'error' => isset($error) ? $error : '',
                 'log_details' => NULL, //json_encode($result),
-                'max_ordered_time' => $order['processed_time'] ?? '',
+                'max_ordered_time' => $maxOrderedTimeForLog,
                 'from_date' => $from_date,
                 'to_date' => $to_date,
                 'add_product_log' => NULL, //json_encode($pdata)
