@@ -249,6 +249,57 @@ class POSRegisterController
         }
     }
 
+    /**
+     * After full payment: import order from vendor API and create tax invoice for receipt screen.
+     */
+    private function finalizePosReceiptInvoice(mysqli $conn, string $orderNumber, string $paymentStage, array $compliance): array
+    {
+        $out = [
+            'import_status' => '',
+            'show_invoice_pdf_button' => false,
+            'invoice_pdf_url' => '',
+            'invoice_pdf_disabled_hint' => 'Tax invoice is available after payment is received in full.',
+        ];
+
+        if ($paymentStage !== 'final') {
+            return $out;
+        }
+
+        require_once __DIR__ . '/OrdersController.php';
+        require_once __DIR__ . '/PosInvoiceController.php';
+
+        $ordersCtrl = new OrdersController();
+        $import = $ordersCtrl->importSingleOrderForCheckout($orderNumber);
+
+        $posInv = new PosInvoiceController();
+        $invRes = $posInv->createAutoInvoiceForOrder($orderNumber);
+
+        if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
+            $invoiceId = (int)$invRes['invoice_id'];
+            $this->markInvoiceHighValueIfPresent($conn, $invoiceId, $compliance);
+            $out['import_status'] = !empty($import['success']) ? 'success' : 'failed';
+            $out['show_invoice_pdf_button'] = true;
+            $out['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
+            $out['invoice_pdf_disabled_hint'] = '';
+            return $out;
+        }
+
+        $existingId = $this->findInvoiceIdForOrderNumber($conn, $orderNumber);
+        if ($existingId) {
+            $this->markInvoiceHighValueIfPresent($conn, $existingId, $compliance);
+            $out['import_status'] = !empty($import['success']) ? 'success' : 'failed';
+            $out['show_invoice_pdf_button'] = true;
+            $out['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $existingId;
+            $out['invoice_pdf_disabled_hint'] = '';
+            return $out;
+        }
+
+        $out['import_status'] = 'failed';
+        $out['invoice_pdf_disabled_hint'] = $invRes['message']
+            ?? ($import['message'] ?? 'Invoice could not be created. Create it from POS Invoices after import.');
+        return $out;
+    }
+
     private function appendHighValueComplianceToNote(string $note, float $invoiceAmount, string $paymentMode, array $compliance): string
     {
         if (empty($compliance['is_high_value'])) {
@@ -2949,8 +3000,7 @@ class POSRegisterController
         $posDetailsModel = new Customer($conn);
         $posDetailsModel->upsertPosCustomerDetailsFromConfirmPayload($customerId, $payload);
         $this->persistCustomerComplianceDetails($conn, $customerId, $compliance);
-        $invoiceId = $this->findInvoiceIdForOrderNumber($conn, $orderNumber);
-        $this->markInvoiceHighValueIfPresent($conn, $invoiceId, $compliance);
+        $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance);
 
         $modeLabel = $this->mapPosPaymentModeLabel($paymentMode);
         $dt = new \DateTime('now', new \DateTimeZone('Asia/Kolkata'));
@@ -2986,10 +3036,10 @@ class POSRegisterController
             'receipt_amount_in_words' => '',
             'receipt_amount_received' => $paymentAmount,
             'receipt_pending_amount' => (float)($pay['pending_amount'] ?? 0),
-            'import_status' => '',
-            'show_invoice_pdf_button' => false,
-            'invoice_pdf_url' => '',
-            'invoice_pdf_disabled_hint' => 'Import the order into vp_orders to generate a tax invoice.',
+            'import_status' => $invoiceMeta['import_status'],
+            'show_invoice_pdf_button' => $invoiceMeta['show_invoice_pdf_button'],
+            'invoice_pdf_url' => $invoiceMeta['invoice_pdf_url'],
+            'invoice_pdf_disabled_hint' => $invoiceMeta['invoice_pdf_disabled_hint'],
             'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
             'receipt_company_tagline' => '',
             'receipt_company_gstin' => '',
