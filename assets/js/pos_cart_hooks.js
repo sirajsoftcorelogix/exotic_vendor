@@ -744,6 +744,58 @@
     persistLocalStockConfirmedMap();
   }
 
+  /** @param {Record<string, unknown>|null|undefined} cartData @param {string} ref */
+  function findCartRowByRef(cartData, ref) {
+    if (!ref) {
+      return null;
+    }
+    var items = getCartItems(cartData || {});
+    for (var i = 0; i < items.length; i++) {
+      if (lineCartRef(items[i]) === ref) {
+        return items[i];
+      }
+    }
+    return null;
+  }
+
+  /** Drop saved Y/N for a product so re-adding to cart asks again. */
+  function clearLocalStockConfirmedForProduct(row, ref) {
+    var prefixes = [];
+    if (row && typeof row === 'object') {
+      var code = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim().toUpperCase();
+      if (code) {
+        prefixes.push('sku:' + code + '|');
+      }
+    }
+    if (ref) {
+      prefixes.push('ref:' + String(ref) + '|');
+    }
+    if (!prefixes.length) {
+      return;
+    }
+    var changed = false;
+    Object.keys(posLocalStockConfirmedByRef).forEach(function (k) {
+      for (var pi = 0; pi < prefixes.length; pi++) {
+        if (k.indexOf(prefixes[pi]) === 0) {
+          delete posLocalStockConfirmedByRef[k];
+          changed = true;
+          break;
+        }
+      }
+    });
+    if (changed) {
+      persistLocalStockConfirmedMap();
+    }
+  }
+
+  function clearAllLocalStockConfirmed() {
+    if (Object.keys(posLocalStockConfirmedByRef).length === 0) {
+      return;
+    }
+    posLocalStockConfirmedByRef = {};
+    persistLocalStockConfirmedMap();
+  }
+
   /** @param {Record<string, unknown>|null|undefined} cartData */
   function pruneLocalStockConfirmed(refsUsed, cartData) {
     var keep = {};
@@ -1864,6 +1916,7 @@
     if (!items.length) {
       posLineAdjustByRef = {};
       lastRetrieveCartDataSnapshot = null;
+      clearAllLocalStockConfirmed();
     } else {
       pruneLineAdjustMaps(refsUsed);
       pruneLocalStockConfirmed(refsUsed, data);
@@ -2498,7 +2551,8 @@
           var wrapN = stockNo.closest('.pos-local-stock-confirm');
           var refN = wrapN ? String(wrapN.getAttribute('data-cartref') || '').trim() : '';
           if (refN) {
-            window.handleDeleteItem({ cartref: refN });
+            var codeN = wrapN ? String(wrapN.getAttribute('data-product-code') || '').trim() : '';
+            window.handleDeleteItem({ cartref: refN, product_code: codeN });
           }
           return;
         }
@@ -2508,7 +2562,9 @@
           e.stopPropagation();
           var refD = String(del.getAttribute('data-cartref') || '').trim();
           if (refD) {
-            window.handleDeleteItem({ cartref: refD });
+            var lineDel = del.closest('.pos-cart-line-item');
+            var codeD = lineDel ? String(lineDel.getAttribute('data-product-code') || '').trim() : '';
+            window.handleDeleteItem({ cartref: refD, product_code: codeD });
           }
           return;
         }
@@ -2765,11 +2821,17 @@
   /** @param {Record<string, unknown>} [payload] */
   window.handleDeleteItem = function (payload) {
     return withCartLock(function () {
-      var ref = String((payload || {}).cartref || '').trim();
+      var p = payload || {};
+      var ref = String(p.cartref || '').trim();
       if (!ref) {
         toast('Invalid delete', 'red');
         return undefined;
       }
+      var rowDel = findCartRowByRef(window.__posCartLastRetrieveData, ref);
+      if (!rowDel && p.product_code) {
+        rowDel = { code: String(p.product_code).trim() };
+      }
+      clearLocalStockConfirmedForProduct(rowDel, ref);
       setPanelBusy(true);
       return cartRequest('delete', { query: { cartid: ref } })
         .then(function (r) {
