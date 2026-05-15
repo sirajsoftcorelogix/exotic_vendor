@@ -221,21 +221,30 @@ if ($receipt_download_filename_base === '') {
           </div>
         </div>
 
-        <div class="no-print flex flex-wrap items-center gap-3">
-          <button type="button" onclick="printPaymentReceipt()" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Print / Save as PDF</button>
-          <?php if (!empty($show_invoice_pdf_button) && !empty($invoice_pdf_url)): ?>
-            <a href="<?= $h((string)$invoice_pdf_url) ?>" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Print Invoice (PDF)</a>
-          <?php else: ?>
-            <span class="inline-flex flex-col gap-0.5">
-              <span class="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed" title="<?= $h((string)($invoice_pdf_disabled_hint ?? '')) ?>">Print Invoice (PDF)</span>
-              <?php if (!empty($invoice_pdf_disabled_hint)): ?>
-                <span class="text-[11px] text-slate-500 max-w-sm"><?= $h((string)$invoice_pdf_disabled_hint) ?></span>
+        <div class="no-print space-y-3">
+          <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Print or download</div>
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="inline-flex flex-col gap-1">
+              <span class="text-[11px] text-slate-500">Payment receipt</span>
+              <button type="button" onclick="printPaymentReceipt()" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Print / Save as PDF</button>
+            </div>
+            <div class="inline-flex flex-col gap-1">
+              <span class="text-[11px] text-slate-500">Tax invoice</span>
+              <?php if (!empty($show_invoice_pdf_button) && !empty($invoice_pdf_url)): ?>
+                <a href="<?= $h((string)$invoice_pdf_url) ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Print / Download invoice (PDF)</a>
+              <?php else: ?>
+                <span class="inline-flex flex-col gap-0.5">
+                  <span class="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed" title="<?= $h((string)($invoice_pdf_disabled_hint ?? '')) ?>">Print / Download invoice (PDF)</span>
+                  <?php if (!empty($invoice_pdf_disabled_hint)): ?>
+                    <span class="max-w-md text-[11px] text-slate-500"><?= $h((string)$invoice_pdf_disabled_hint) ?></span>
+                  <?php endif; ?>
+                </span>
               <?php endif; ?>
-            </span>
-          <?php endif; ?>
-          <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Payment History</a>
-          <a href="index.php?page=pos_register&action=list" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to POS</a>
-          <p class="basis-full text-xs text-slate-500">Payment receipt: Print / Save as PDF. After full payment, tax invoice PDF is available beside it.</p>
+            </div>
+            <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" target="_blank" rel="noopener noreferrer" class="self-end rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:self-center">Payment History</a>
+            <a href="index.php?page=pos_register&action=list" class="self-end rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:self-center">Back to POS</a>
+          </div>
+          <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>; use the right for the <strong class="font-medium text-slate-600">tax invoice PDF</strong> (available once the order is imported and invoiced).</p>
         </div>
       </div>
     </div>
