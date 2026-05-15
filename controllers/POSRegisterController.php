@@ -331,10 +331,8 @@ class POSRegisterController
             $label = trim((string)($w['code'] ?? '')) !== ''
                 ? trim((string)$w['code'])
                 : trim((string)($w['title'] ?? 'Item'));
-            $lines[] = $label . ': cart qty ' . (float)($w['quantity'] ?? 0)
-                . ', local stock ' . (float)($w['local_stock'] ?? 0)
-                . ', shortage ' . (float)($w['shortage'] ?? 0)
-                . '. Sale allowed with warning.';
+            $lines[] = $label . ': qty ' . (float)($w['quantity'] ?? 0)
+                . ' > local ' . (float)($w['local_stock'] ?? 0);
         }
 
         $block = implode("\n", $lines);
