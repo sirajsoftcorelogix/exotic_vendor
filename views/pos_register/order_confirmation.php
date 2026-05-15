@@ -223,8 +223,6 @@ if ($receipt_download_filename_base === '') {
 
         <div class="no-print flex flex-wrap items-center gap-3">
           <button type="button" onclick="printPaymentReceipt()" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Print / Save as PDF</button>
-          <p class="basis-full text-xs text-slate-500">When you choose “Save as PDF”, the suggested file name uses your receipt number (Chrome, Edge and most Chromium browsers).</p>
-          <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Payment History</a>
           <?php if (!empty($show_invoice_pdf_button) && !empty($invoice_pdf_url)): ?>
             <a href="<?= $h((string)$invoice_pdf_url) ?>" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Print Invoice (PDF)</a>
           <?php else: ?>
@@ -235,7 +233,9 @@ if ($receipt_download_filename_base === '') {
               <?php endif; ?>
             </span>
           <?php endif; ?>
+          <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Payment History</a>
           <a href="index.php?page=pos_register&action=list" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to POS</a>
+          <p class="basis-full text-xs text-slate-500">Payment receipt: Print / Save as PDF. After full payment, tax invoice PDF is available beside it.</p>
         </div>
       </div>
     </div>
