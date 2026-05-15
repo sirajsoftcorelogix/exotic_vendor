@@ -657,8 +657,23 @@
     return warnings;
   }
 
-  function localStockWarningTitle() {
-    return 'Low / no stock available';
+  function formatLocalStockQty(n) {
+    if (n == null || isNaN(Number(n))) {
+      return '—';
+    }
+    var x = Number(n);
+    if (Math.abs(x - Math.round(x)) < 0.0001) {
+      return String(Math.round(x));
+    }
+    return String(x);
+  }
+
+  function localStockWarningTitle(localStock) {
+    var base = 'Low / no stock available';
+    if (localStock == null || isNaN(Number(localStock))) {
+      return base;
+    }
+    return base + ' (local stock: ' + formatLocalStockQty(localStock) + ')';
   }
 
   function localStockWarningSubline(plural) {
@@ -670,10 +685,21 @@
       return '';
     }
     var plural = warnings.length > 1;
-    var title =
-      plural
-        ? localStockWarningTitle() + ' (' + warnings.length + ' items)'
-        : localStockWarningTitle();
+    var title;
+    if (!plural) {
+      title = localStockWarningTitle(warnings[0].local_stock);
+    } else {
+      var stocks = warnings.map(function (w) {
+        return formatLocalStockQty(w.local_stock);
+      });
+      title =
+        localStockWarningTitle(null) +
+        ' (' +
+        warnings.length +
+        ' items, local stock: ' +
+        stocks.join(', ') +
+        ')';
+    }
     return title + '. ' + localStockWarningSubline(plural);
   }
 
@@ -1872,7 +1898,7 @@
           html +=
             '<div class="mt-1 flex max-w-full flex-col gap-0.5 rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-1.5 text-[10px] leading-snug text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert">' +
             '<span class="font-bold">' +
-            escapeHtml(localStockWarningTitle()) +
+            escapeHtml(localStockWarningTitle(localStockQty)) +
             '</span>' +
             '<span class="font-medium text-violet-800">' +
             escapeHtml(localStockWarningSubline(false)) +
