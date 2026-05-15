@@ -362,7 +362,12 @@ class OrdersController
 
             $customerdata = $ordersModel->addCustomerIfNotExists($order);
 
-            foreach ($order['cart'] as $item) {
+            $cart = $order['cart'] ?? [];
+            if (!is_array($cart) || count($cart) === 0) {
+                continue;
+            }
+
+            foreach ($cart as $item) {
                 $orderdate = !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s');
                 $esd = '0000-00-00';
                 $local_stock_int = (int)floatval($item['local_stock']);
@@ -452,7 +457,7 @@ class OrdersController
                     'esd' => $esd,
                     'agent_id' => 0,
                 ];
-                if (strtoupper($order['payment_type']) == 'COD' && $item['itemprice'] >= 5000) {
+                if (strtoupper((string)($order['payment_type'] ?? '')) === 'COD' && (float)($item['itemprice'] ?? 0) >= 5000) {
                     $rdata['status'] = 'cod_confirmation_required';
                     $rdata['agent_id'] = 31;
                 }
