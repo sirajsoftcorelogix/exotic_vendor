@@ -670,16 +670,12 @@
     return String(x);
   }
 
-  function localStockWarningTitle(localStock) {
-    var base = 'Low / no stock available';
-    if (localStock == null || isNaN(Number(localStock))) {
-      return base;
-    }
-    return base + ' (local stock: ' + formatLocalStockQty(localStock) + ')';
+  function localStockProceedPrompt(localStock) {
+    return 'Local Stock = ' + formatLocalStockQty(localStock) + ', Proceed';
   }
 
-  function localStockWarningSubline(plural) {
-    return plural ? 'You can still order these items.' : 'You can still order this item.';
+  function localStockAckLabel(localStock) {
+    return 'Local Stock = ' + formatLocalStockQty(localStock);
   }
 
   function localStockConfirmSignature(ref, qty, localStock) {
@@ -749,23 +745,10 @@
     if (!Array.isArray(warnings) || warnings.length === 0) {
       return '';
     }
-    var plural = warnings.length > 1;
-    var title;
-    if (!plural) {
-      title = localStockWarningTitle(warnings[0].local_stock);
-    } else {
-      var stocks = warnings.map(function (w) {
-        return formatLocalStockQty(w.local_stock);
-      });
-      title =
-        localStockWarningTitle(null) +
-        ' (' +
-        warnings.length +
-        ' items, local stock: ' +
-        stocks.join(', ') +
-        ')';
+    if (warnings.length === 1) {
+      return localStockProceedPrompt(warnings[0].local_stock) + ' (Y / N in cart)';
     }
-    return title + '. ' + localStockWarningSubline(plural);
+    return warnings.length + ' items need local stock confirmation in cart (Y / N)';
   }
 
   function lineTitle(row) {
@@ -1962,7 +1945,7 @@
         html += '</div>';
         if (localStockShort && ref && !isLocalStockConfirmed(ref, qty, localStockQty)) {
           html +=
-            '<div class="pos-local-stock-confirm mt-1 flex max-w-full flex-col gap-1.5 rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-2 text-[10px] leading-snug text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert"' +
+            '<div class="pos-local-stock-confirm mt-1 flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-1.5 text-[11px] font-semibold leading-snug text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert"' +
             ' data-cartref="' +
             escapeHtml(ref) +
             '" data-qty="' +
@@ -1970,16 +1953,14 @@
             '" data-local-stock="' +
             escapeHtml(formatLocalStockQty(localStockQty)) +
             '">' +
-            '<p class="font-bold m-0">' +
-            escapeHtml(localStockWarningTitle(localStockQty)) +
-            '</p>' +
-            '<p class="font-medium text-violet-800 m-0">' +
-            escapeHtml(localStockWarningSubline(false)) +
-            '</p>' +
-            '<div class="flex gap-2 pt-0.5">' +
-            '<button type="button" class="pos-local-stock-yes flex-1 rounded-md bg-violet-700 px-2 py-1.5 text-[10px] font-bold text-white shadow-sm transition hover:bg-violet-800">Yes</button>' +
-            '<button type="button" class="pos-local-stock-no flex-1 rounded-md border border-violet-400 bg-white px-2 py-1.5 text-[10px] font-bold text-violet-900 shadow-sm transition hover:bg-violet-50">No</button>' +
-            '</div>' +
+            '<span class="min-w-0 flex-1">' +
+            escapeHtml(localStockProceedPrompt(localStockQty)) +
+            '</span>' +
+            '<span class="inline-flex shrink-0 items-center gap-1.5">' +
+            '<button type="button" class="pos-local-stock-yes min-w-[2rem] rounded-md bg-violet-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-violet-800" title="Proceed with this item" aria-label="Proceed yes">Y</button>' +
+            '<span class="font-bold text-violet-500" aria-hidden="true">|</span>' +
+            '<button type="button" class="pos-local-stock-no min-w-[2rem] rounded-md border border-violet-400 bg-white px-2.5 py-1 text-[11px] font-bold text-violet-900 shadow-sm transition hover:bg-violet-50" title="Remove from cart" aria-label="Proceed no">N</button>' +
+            '</span>' +
             '</div>';
         } else if (
           localStockQty != null &&
@@ -1988,8 +1969,8 @@
           isLocalStockConfirmed(ref, qty, localStockQty)
         ) {
           html +=
-            '<div class="mt-1 text-[11px] font-medium tabular-nums text-slate-500">Local stock: ' +
-            escapeHtml(formatLocalStockQty(localStockQty)) +
+            '<div class="mt-1 inline-flex max-w-full items-center rounded-md border border-violet-200/80 bg-violet-50/90 px-2 py-1 text-[11px] font-semibold tabular-nums text-violet-900 shadow-sm">' +
+            escapeHtml(localStockAckLabel(localStockQty)) +
             '</div>';
         }
         html += '<div class="flex flex-wrap items-center gap-2 mt-1">';
@@ -2361,7 +2342,7 @@
           e.preventDefault();
           e.stopPropagation();
           if (typeof window.hasUnconfirmedLocalStockWarnings === 'function' && window.hasUnconfirmedLocalStockWarnings()) {
-            toast('Please confirm local stock for cart items (Yes or No) before checkout.', 'violet');
+            toast('Please confirm local stock for cart items (Y or N) before checkout.', 'violet');
             return;
           }
           if (typeof window.openPaymentModal === 'function') {

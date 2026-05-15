@@ -956,7 +956,7 @@
 
   function openPaymentModal() {
     if (typeof window.hasUnconfirmedLocalStockWarnings === "function" && window.hasUnconfirmedLocalStockWarnings()) {
-      showToast("Please confirm local stock for cart items (Yes or No) before checkout.", "violet");
+      showToast("Please confirm local stock for cart items (Y or N) before checkout.", "violet");
       return;
     }
     var pm = document.getElementById("paymentModal");
