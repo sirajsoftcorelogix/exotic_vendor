@@ -1981,6 +1981,16 @@
             '<button type="button" class="pos-local-stock-no flex-1 rounded-md border border-violet-400 bg-white px-2 py-1.5 text-[10px] font-bold text-violet-900 shadow-sm transition hover:bg-violet-50">No</button>' +
             '</div>' +
             '</div>';
+        } else if (
+          localStockQty != null &&
+          localStockShort &&
+          ref &&
+          isLocalStockConfirmed(ref, qty, localStockQty)
+        ) {
+          html +=
+            '<div class="mt-1 text-[11px] font-medium tabular-nums text-slate-500">Local stock: ' +
+            escapeHtml(formatLocalStockQty(localStockQty)) +
+            '</div>';
         }
         html += '<div class="flex flex-wrap items-center gap-2 mt-1">';
         if (ref) {
