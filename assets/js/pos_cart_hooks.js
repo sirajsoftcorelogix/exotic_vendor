@@ -19,6 +19,8 @@
   var posCustomDiscountPersist = null;
   /** Per cart line (cartref): line-level discount toward POST /order/pos_editorderprices after checkout. */
   var posLineAdjustByRef = {};
+  /** cartref → confirm signature (qty|local stock) after user clicks Yes on local-stock prompt. */
+  var posLocalStockConfirmedByRef = {};
   /** Last successful cart retrieve root `data` (for instant re-render after line discount edits). */
   var lastRetrieveCartDataSnapshot = null;
 
@@ -678,6 +680,69 @@
 
   function localStockWarningSubline(plural) {
     return plural ? 'You can still order these items.' : 'You can still order this item.';
+  }
+
+  function localStockConfirmSignature(ref, qty, localStock) {
+    return String(ref || '') + '|' + String(qty) + '|' + formatLocalStockQty(localStock);
+  }
+
+  function isLocalStockConfirmed(ref, qty, localStock) {
+    if (!ref) {
+      return false;
+    }
+    return posLocalStockConfirmedByRef[ref] === localStockConfirmSignature(ref, qty, localStock);
+  }
+
+  function setLocalStockConfirmed(ref, qty, localStock) {
+    if (!ref) {
+      return;
+    }
+    posLocalStockConfirmedByRef[ref] = localStockConfirmSignature(ref, qty, localStock);
+  }
+
+  function pruneLocalStockConfirmed(refsUsed) {
+    var next = {};
+    for (var i = 0; i < refsUsed.length; i++) {
+      var r = refsUsed[i];
+      if (r && posLocalStockConfirmedByRef[r]) {
+        next[r] = posLocalStockConfirmedByRef[r];
+      }
+    }
+    posLocalStockConfirmedByRef = next;
+  }
+
+  function getUnconfirmedLocalStockLines(cartData) {
+    var items = getCartItems(cartData || {});
+    var out = [];
+    items.forEach(function (row) {
+      var localStock = lineLocalStockQty(row);
+      if (localStock == null) {
+        return;
+      }
+      var qty = lineQty(row);
+      if (qty <= localStock) {
+        return;
+      }
+      var ref = lineCartRef(row);
+      if (!ref || isLocalStockConfirmed(ref, qty, localStock)) {
+        return;
+      }
+      out.push({
+        cartref: ref,
+        code: String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim(),
+        title: lineTitle(row),
+        quantity: qty,
+        local_stock: localStock
+      });
+    });
+    return out;
+  }
+
+  function rerenderCartFromSnapshot() {
+    var d = window.__posCartLastRetrieveData;
+    if (d && typeof d === 'object') {
+      renderCartUI(d);
+    }
   }
 
   function formatLocalStockWarning(warnings) {
@@ -1758,6 +1823,7 @@
       lastRetrieveCartDataSnapshot = null;
     } else {
       pruneLineAdjustMaps(refsUsed);
+      pruneLocalStockConfirmed(refsUsed);
       lastRetrieveCartDataSnapshot =
         data && typeof data === 'object' ? data : {};
     }
@@ -1894,15 +1960,26 @@
             ' <span class="text-[10px] font-semibold uppercase text-amber-700">Adj</span>';
         }
         html += '</div>';
-        if (localStockShort) {
+        if (localStockShort && ref && !isLocalStockConfirmed(ref, qty, localStockQty)) {
           html +=
-            '<div class="mt-1 flex max-w-full flex-col gap-0.5 rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-1.5 text-[10px] leading-snug text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert">' +
-            '<span class="font-bold">' +
+            '<div class="pos-local-stock-confirm mt-1 flex max-w-full flex-col gap-1.5 rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-2 text-[10px] leading-snug text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert"' +
+            ' data-cartref="' +
+            escapeHtml(ref) +
+            '" data-qty="' +
+            escapeHtml(String(qty)) +
+            '" data-local-stock="' +
+            escapeHtml(formatLocalStockQty(localStockQty)) +
+            '">' +
+            '<p class="font-bold m-0">' +
             escapeHtml(localStockWarningTitle(localStockQty)) +
-            '</span>' +
-            '<span class="font-medium text-violet-800">' +
+            '</p>' +
+            '<p class="font-medium text-violet-800 m-0">' +
             escapeHtml(localStockWarningSubline(false)) +
-            '</span>' +
+            '</p>' +
+            '<div class="flex gap-2 pt-0.5">' +
+            '<button type="button" class="pos-local-stock-yes flex-1 rounded-md bg-violet-700 px-2 py-1.5 text-[10px] font-bold text-white shadow-sm transition hover:bg-violet-800">Yes</button>' +
+            '<button type="button" class="pos-local-stock-no flex-1 rounded-md border border-violet-400 bg-white px-2 py-1.5 text-[10px] font-bold text-violet-900 shadow-sm transition hover:bg-violet-50">No</button>' +
+            '</div>' +
             '</div>';
         }
         html += '<div class="flex flex-wrap items-center gap-2 mt-1">';
@@ -2271,6 +2348,12 @@
         }
         var chkPay = e.target && e.target.closest ? e.target.closest('.pos-cart-checkout-btn') : null;
         if (chkPay && panel.contains(chkPay)) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof window.hasUnconfirmedLocalStockWarnings === 'function' && window.hasUnconfirmedLocalStockWarnings()) {
+            toast('Please confirm local stock for cart items (Yes or No) before checkout.', 'violet');
+            return;
+          }
           if (typeof window.openPaymentModal === 'function') {
             window.openPaymentModal();
           }
@@ -2337,8 +2420,35 @@
           }
           return;
         }
+        var stockYes = e.target && e.target.closest ? e.target.closest('.pos-local-stock-yes') : null;
+        if (stockYes && panel.contains(stockYes)) {
+          e.preventDefault();
+          e.stopPropagation();
+          var wrapY = stockYes.closest('.pos-local-stock-confirm');
+          var refY = wrapY ? String(wrapY.getAttribute('data-cartref') || '').trim() : '';
+          var qtyY = wrapY ? parseInt(String(wrapY.getAttribute('data-qty') || ''), 10) : NaN;
+          var lsY = wrapY ? parseFloat(String(wrapY.getAttribute('data-local-stock') || '')) : NaN;
+          if (refY && qtyY >= 1 && !isNaN(lsY)) {
+            setLocalStockConfirmed(refY, qtyY, lsY);
+            rerenderCartFromSnapshot();
+          }
+          return;
+        }
+        var stockNo = e.target && e.target.closest ? e.target.closest('.pos-local-stock-no') : null;
+        if (stockNo && panel.contains(stockNo)) {
+          e.preventDefault();
+          e.stopPropagation();
+          var wrapN = stockNo.closest('.pos-local-stock-confirm');
+          var refN = wrapN ? String(wrapN.getAttribute('data-cartref') || '').trim() : '';
+          if (refN) {
+            window.handleDeleteItem({ cartref: refN });
+          }
+          return;
+        }
         var del = e.target && e.target.closest ? e.target.closest('.pos-cart-delete-btn') : null;
         if (del && panel.contains(del)) {
+          e.preventDefault();
+          e.stopPropagation();
           var refD = String(del.getAttribute('data-cartref') || '').trim();
           if (refD) {
             window.handleDeleteItem({ cartref: refD });
@@ -2756,6 +2866,14 @@
       return [];
     }
     return getLocalStockWarnings(d);
+  };
+
+  window.hasUnconfirmedLocalStockWarnings = function () {
+    var d = window.__posCartLastRetrieveData;
+    if (!d || typeof d !== 'object') {
+      return false;
+    }
+    return getUnconfirmedLocalStockLines(d).length > 0;
   };
 
   window.formatPosLocalStockWarning = formatLocalStockWarning;
