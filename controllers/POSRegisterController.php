@@ -332,7 +332,7 @@ class POSRegisterController
                 ? trim((string)$w['code'])
                 : trim((string)($w['title'] ?? 'Item'));
             $local = (float)($w['local_stock'] ?? 0);
-            $lines[] = $label . ' — Low / no stock available (local stock: ' . $local . '). You can still order this item.';
+            $lines[] = $label . ' — Local Stock = ' . $local . ', Proceed Y';
         }
 
         $block = implode("\n", $lines);
