@@ -2235,16 +2235,6 @@
       html += moneyRowSummary('GST Total', totals.gstTotal, false);
       html += moneyRowSummary('GRAND Total', totals.grandTotal, true);
       html += '</div></div>';
-      var localStockWarnings = getLocalStockWarnings(data || {});
-      if (localStockWarnings.length) {
-        html +=
-          '<div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900">' +
-          '<div class="font-bold">Local stock warning</div>' +
-          '<div class="mt-1">' +
-          escapeHtml(formatLocalStockWarning(localStockWarnings)) +
-          '</div>' +
-          '</div>';
-      }
     }
 
     html +=
