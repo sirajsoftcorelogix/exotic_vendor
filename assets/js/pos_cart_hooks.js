@@ -19,8 +19,31 @@
   var posCustomDiscountPersist = null;
   /** Per cart line (cartref): line-level discount toward POST /order/pos_editorderprices after checkout. */
   var posLineAdjustByRef = {};
-  /** cartref → confirm signature (qty|local stock) after user clicks Yes on local-stock prompt. */
-  var posLocalStockConfirmedByRef = {};
+  /** Stable keys (sku+qty+local stock) persisted in sessionStorage across page reload. */
+  var POS_LOCAL_STOCK_CONFIRM_SS_KEY = 'pos_local_stock_confirmed_v1';
+
+  function loadLocalStockConfirmedMap() {
+    try {
+      var raw = sessionStorage.getItem(POS_LOCAL_STOCK_CONFIRM_SS_KEY);
+      if (!raw) {
+        return {};
+      }
+      var o = JSON.parse(raw);
+      return o && typeof o === 'object' ? o : {};
+    } catch (eLoad) {
+      return {};
+    }
+  }
+
+  function persistLocalStockConfirmedMap() {
+    try {
+      sessionStorage.setItem(POS_LOCAL_STOCK_CONFIRM_SS_KEY, JSON.stringify(posLocalStockConfirmedByRef));
+    } catch (eSave) {
+      /* ignore quota / private mode */
+    }
+  }
+
+  var posLocalStockConfirmedByRef = loadLocalStockConfirmedMap();
   /** Last successful cart retrieve root `data` (for instant re-render after line discount edits). */
   var lastRetrieveCartDataSnapshot = null;
 
@@ -682,29 +705,66 @@
     return String(ref || '') + '|' + String(qty) + '|' + formatLocalStockQty(localStock);
   }
 
-  function isLocalStockConfirmed(ref, qty, localStock) {
-    if (!ref) {
+  /** @param {Record<string, unknown>|null} [row] */
+  function localStockStableConfirmKey(row, ref, qty, localStock) {
+    var code = '';
+    if (row && typeof row === 'object') {
+      code = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim().toUpperCase();
+    }
+    if (!code && ref) {
+      return 'ref:' + localStockConfirmSignature(ref, qty, localStock);
+    }
+    if (!code) {
+      return '';
+    }
+    var variation = String(
+      pickFirst(row, ['variation', 'variant', 'subcode', 'options']) || ''
+    ).trim();
+    return (
+      'sku:' + code + '|' + variation + '|' + String(qty) + '|' + formatLocalStockQty(localStock)
+    );
+  }
+
+  /** @param {Record<string, unknown>|null} [row] */
+  function isLocalStockConfirmed(ref, qty, localStock, row) {
+    var key = localStockStableConfirmKey(row, ref, qty, localStock);
+    if (!key) {
       return false;
     }
-    return posLocalStockConfirmedByRef[ref] === localStockConfirmSignature(ref, qty, localStock);
+    return posLocalStockConfirmedByRef[key] === '1';
   }
 
-  function setLocalStockConfirmed(ref, qty, localStock) {
-    if (!ref) {
+  /** @param {Record<string, unknown>|null} [row] */
+  function setLocalStockConfirmed(ref, qty, localStock, row) {
+    var key = localStockStableConfirmKey(row, ref, qty, localStock);
+    if (!key) {
       return;
     }
-    posLocalStockConfirmedByRef[ref] = localStockConfirmSignature(ref, qty, localStock);
+    posLocalStockConfirmedByRef[key] = '1';
+    persistLocalStockConfirmedMap();
   }
 
-  function pruneLocalStockConfirmed(refsUsed) {
-    var next = {};
-    for (var i = 0; i < refsUsed.length; i++) {
-      var r = refsUsed[i];
-      if (r && posLocalStockConfirmedByRef[r]) {
-        next[r] = posLocalStockConfirmedByRef[r];
+  /** @param {Record<string, unknown>|null|undefined} cartData */
+  function pruneLocalStockConfirmed(refsUsed, cartData) {
+    var keep = {};
+    var items = getCartItems(cartData || {});
+    items.forEach(function (row) {
+      var localStock = lineLocalStockQty(row);
+      if (localStock == null) {
+        return;
       }
-    }
-    posLocalStockConfirmedByRef = next;
+      var qty = lineQty(row);
+      if (qty <= localStock) {
+        return;
+      }
+      var ref = lineCartRef(row);
+      var key = localStockStableConfirmKey(row, ref, qty, localStock);
+      if (key && posLocalStockConfirmedByRef[key] === '1') {
+        keep[key] = '1';
+      }
+    });
+    posLocalStockConfirmedByRef = keep;
+    persistLocalStockConfirmedMap();
   }
 
   function getUnconfirmedLocalStockLines(cartData) {
@@ -720,7 +780,7 @@
         return;
       }
       var ref = lineCartRef(row);
-      if (!ref || isLocalStockConfirmed(ref, qty, localStock)) {
+      if (!ref || isLocalStockConfirmed(ref, qty, localStock, row)) {
         return;
       }
       out.push({
@@ -1806,7 +1866,7 @@
       lastRetrieveCartDataSnapshot = null;
     } else {
       pruneLineAdjustMaps(refsUsed);
-      pruneLocalStockConfirmed(refsUsed);
+      pruneLocalStockConfirmed(refsUsed, data);
       lastRetrieveCartDataSnapshot =
         data && typeof data === 'object' ? data : {};
     }
@@ -1943,11 +2003,13 @@
             ' <span class="text-[10px] font-semibold uppercase text-amber-700">Adj</span>';
         }
         html += '</div>';
-        if (localStockShort && ref && !isLocalStockConfirmed(ref, qty, localStockQty)) {
+        if (localStockShort && ref && !isLocalStockConfirmed(ref, qty, localStockQty, row)) {
           html +=
             '<div class="pos-local-stock-confirm mt-1 flex max-w-full flex-col gap-1.5 rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-1.5 text-[11px] font-semibold leading-snug text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert"' +
             ' data-cartref="' +
             escapeHtml(ref) +
+            '" data-product-code="' +
+            escapeHtml(productCode) +
             '" data-qty="' +
             escapeHtml(String(qty)) +
             '" data-local-stock="' +
@@ -1966,7 +2028,7 @@
           localStockQty != null &&
           localStockShort &&
           ref &&
-          isLocalStockConfirmed(ref, qty, localStockQty)
+          isLocalStockConfirmed(ref, qty, localStockQty, row)
         ) {
           html +=
             '<div class="mt-1 inline-flex max-w-full items-center rounded-md border border-violet-200/80 bg-violet-50/90 px-2 py-1 text-[11px] font-semibold tabular-nums text-violet-900 shadow-sm">' +
@@ -2420,7 +2482,11 @@
           var qtyY = wrapY ? parseInt(String(wrapY.getAttribute('data-qty') || ''), 10) : NaN;
           var lsY = wrapY ? parseFloat(String(wrapY.getAttribute('data-local-stock') || '')) : NaN;
           if (refY && qtyY >= 1 && !isNaN(lsY)) {
-            setLocalStockConfirmed(refY, qtyY, lsY);
+            var rowY = {
+              code: wrapY ? wrapY.getAttribute('data-product-code') : '',
+              variation: wrapY ? wrapY.getAttribute('data-variation') : ''
+            };
+            setLocalStockConfirmed(refY, qtyY, lsY, rowY);
             rerenderCartFromSnapshot();
           }
           return;
