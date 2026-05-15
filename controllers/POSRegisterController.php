@@ -3082,13 +3082,39 @@ class POSRegisterController
     public function checkout_receipt(): void
     {
         is_login();
+        global $conn;
         $row = $_SESSION['pos_last_checkout_receipt'] ?? null;
         if (!is_array($row) || empty($row['receipt_number'])) {
             header('Location: index.php?page=pos_register&action=list');
             exit;
         }
         unset($_SESSION['pos_last_checkout_receipt']);
+        $row = $this->fillReceiptInvoicePdfFromDb($conn, $row);
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
+    }
+
+    /**
+     * If checkout did not store an invoice PDF link, resolve the latest invoice for this order from the DB.
+     */
+    private function fillReceiptInvoicePdfFromDb(mysqli $conn, array $row): array
+    {
+        if (!empty($row['show_invoice_pdf_button']) && !empty($row['invoice_pdf_url'])) {
+            return $row;
+        }
+        $orderNum = trim((string)($row['order_id'] ?? ''));
+        if ($orderNum === '') {
+            return $row;
+        }
+        $invoiceId = $this->findInvoiceIdForOrderNumber($conn, $orderNum);
+        if ($invoiceId) {
+            $row['show_invoice_pdf_button'] = true;
+            $row['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
+            $row['invoice_pdf_disabled_hint'] = '';
+            if (trim((string)($row['import_status'] ?? '')) === '') {
+                $row['import_status'] = 'success';
+            }
+        }
+        return $row;
     }
 
     /**
