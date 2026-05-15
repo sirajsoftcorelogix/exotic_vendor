@@ -955,6 +955,10 @@
   }
 
   function openPaymentModal() {
+    if (typeof window.hasUnconfirmedLocalStockWarnings === "function" && window.hasUnconfirmedLocalStockWarnings()) {
+      showToast("Please confirm local stock for cart items (Yes or No) before checkout.", "violet");
+      return;
+    }
     var pm = document.getElementById("paymentModal");
     if (!pm) {
       return;
@@ -1711,13 +1715,6 @@
         : [];
     if (Array.isArray(stockWarnings) && stockWarnings.length > 0) {
       body.local_stock_warnings = stockWarnings;
-      var stockMessage =
-        typeof window.formatPosLocalStockWarning === "function"
-          ? window.formatPosLocalStockWarning(stockWarnings)
-          : stockWarnings.length === 1
-            ? "Low / no stock available (local stock: " + stockWarnings[0].local_stock + "). You can still order this item."
-            : "Low / no stock available (" + stockWarnings.length + " items). You can still order these items.";
-      showToast(stockMessage, "violet");
     }
     var linePricePayload =
       typeof window.getPosLinePricesPayloadForCheckout === "function"
