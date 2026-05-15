@@ -265,39 +265,46 @@ class POSRegisterController
             return $out;
         }
 
-        require_once __DIR__ . '/OrdersController.php';
-        require_once __DIR__ . '/PosInvoiceController.php';
+        try {
+            require_once __DIR__ . '/OrdersController.php';
+            require_once __DIR__ . '/PosInvoiceController.php';
 
-        $ordersCtrl = new OrdersController();
-        $import = $ordersCtrl->importSingleOrderForCheckout($orderNumber);
+            $ordersCtrl = new OrdersController();
+            $import = $ordersCtrl->importSingleOrderForCheckout($orderNumber);
 
-        $posInv = new PosInvoiceController();
-        $invRes = $posInv->createAutoInvoiceForOrder($orderNumber);
+            $posInv = new PosInvoiceController();
+            $invRes = $posInv->createAutoInvoiceForOrder($orderNumber);
 
-        if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
-            $invoiceId = (int)$invRes['invoice_id'];
-            $this->markInvoiceHighValueIfPresent($conn, $invoiceId, $compliance);
-            $out['import_status'] = !empty($import['success']) ? 'success' : 'failed';
-            $out['show_invoice_pdf_button'] = true;
-            $out['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
-            $out['invoice_pdf_disabled_hint'] = '';
+            if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
+                $invoiceId = (int)$invRes['invoice_id'];
+                $this->markInvoiceHighValueIfPresent($conn, $invoiceId, $compliance);
+                $out['import_status'] = !empty($import['success']) ? 'success' : 'failed';
+                $out['show_invoice_pdf_button'] = true;
+                $out['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
+                $out['invoice_pdf_disabled_hint'] = '';
+                return $out;
+            }
+
+            $existingId = $this->findInvoiceIdForOrderNumber($conn, $orderNumber);
+            if ($existingId) {
+                $this->markInvoiceHighValueIfPresent($conn, $existingId, $compliance);
+                $out['import_status'] = !empty($import['success']) ? 'success' : 'failed';
+                $out['show_invoice_pdf_button'] = true;
+                $out['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $existingId;
+                $out['invoice_pdf_disabled_hint'] = '';
+                return $out;
+            }
+
+            $out['import_status'] = 'failed';
+            $out['invoice_pdf_disabled_hint'] = $invRes['message']
+                ?? ($import['message'] ?? 'Invoice could not be created. Create it from POS Invoices after import.');
+            return $out;
+        } catch (\Throwable $e) {
+            $out['import_status'] = 'failed';
+            $out['invoice_pdf_disabled_hint'] = 'Invoice step failed: open POS Invoices after import.';
+            error_log('[POS checkout finalize invoice] ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return $out;
         }
-
-        $existingId = $this->findInvoiceIdForOrderNumber($conn, $orderNumber);
-        if ($existingId) {
-            $this->markInvoiceHighValueIfPresent($conn, $existingId, $compliance);
-            $out['import_status'] = !empty($import['success']) ? 'success' : 'failed';
-            $out['show_invoice_pdf_button'] = true;
-            $out['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $existingId;
-            $out['invoice_pdf_disabled_hint'] = '';
-            return $out;
-        }
-
-        $out['import_status'] = 'failed';
-        $out['invoice_pdf_disabled_hint'] = $invRes['message']
-            ?? ($import['message'] ?? 'Invoice could not be created. Create it from POS Invoices after import.');
-        return $out;
     }
 
     private function appendHighValueComplianceToNote(string $note, float $invoiceAmount, string $paymentMode, array $compliance): string
