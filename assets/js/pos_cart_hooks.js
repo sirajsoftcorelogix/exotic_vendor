@@ -671,7 +671,7 @@
   }
 
   function localStockProceedPrompt(localStock) {
-    return 'Local Stock = ' + formatLocalStockQty(localStock) + ', Proceed';
+    return 'Local Stock = ' + formatLocalStockQty(localStock) + ', Proceed?';
   }
 
   function localStockAckLabel(localStock) {
@@ -1945,7 +1945,7 @@
         html += '</div>';
         if (localStockShort && ref && !isLocalStockConfirmed(ref, qty, localStockQty)) {
           html +=
-            '<div class="pos-local-stock-confirm mt-1 flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-1.5 text-[11px] font-semibold leading-snug text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert"' +
+            '<div class="pos-local-stock-confirm mt-1 flex max-w-full flex-col gap-1.5 rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-1.5 text-[11px] font-semibold leading-snug text-violet-950 shadow-sm ring-1 ring-violet-200/80" role="alert"' +
             ' data-cartref="' +
             escapeHtml(ref) +
             '" data-qty="' +
@@ -1953,13 +1953,12 @@
             '" data-local-stock="' +
             escapeHtml(formatLocalStockQty(localStockQty)) +
             '">' +
-            '<span class="min-w-0 flex-1">' +
+            '<span class="min-w-0">' +
             escapeHtml(localStockProceedPrompt(localStockQty)) +
             '</span>' +
-            '<span class="inline-flex shrink-0 items-center gap-1.5">' +
-            '<button type="button" class="pos-local-stock-yes min-w-[2rem] rounded-md bg-violet-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-violet-800" title="Proceed with this item" aria-label="Proceed yes">Y</button>' +
-            '<span class="font-bold text-violet-500" aria-hidden="true">|</span>' +
-            '<button type="button" class="pos-local-stock-no min-w-[2rem] rounded-md border border-violet-400 bg-white px-2.5 py-1 text-[11px] font-bold text-violet-900 shadow-sm transition hover:bg-violet-50" title="Remove from cart" aria-label="Proceed no">N</button>' +
+            '<span class="inline-flex shrink-0 items-center gap-2">' +
+            '<button type="button" class="pos-local-stock-yes min-w-[2.25rem] rounded-md bg-violet-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-violet-800" title="Proceed with this item" aria-label="Proceed yes">&quot;Y&quot;</button>' +
+            '<button type="button" class="pos-local-stock-no min-w-[2.25rem] rounded-md border border-violet-400 bg-white px-2.5 py-1 text-[11px] font-bold text-violet-900 shadow-sm transition hover:bg-violet-50" title="Remove from cart" aria-label="Proceed no">&quot;N&quot;</button>' +
             '</span>' +
             '</div>';
         } else if (
