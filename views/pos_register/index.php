@@ -1715,7 +1715,7 @@
         typeof window.formatPosLocalStockWarning === "function"
           ? window.formatPosLocalStockWarning(stockWarnings)
           : stockWarnings.length === 1
-            ? "Low / no stock available. You can still order this item."
+            ? "Low / no stock available (local stock: " + stockWarnings[0].local_stock + "). You can still order this item."
             : "Low / no stock available (" + stockWarnings.length + " items). You can still order these items.";
       showToast(stockMessage, "violet");
     }
