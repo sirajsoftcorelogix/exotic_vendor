@@ -1821,7 +1821,9 @@ class POSRegisterController
                 $upstream = [
                     'api_base' => 'https://www.exoticindia.com/api',
                     'endpoint' => 'POST /cart/add',
+                    'browser_request_json' => is_array($body) ? $body : ['_raw' => $raw],
                     'discount_query_merged_into_url' => $ctxAdd['query'],
+                    'extra_headers' => $ctxAdd['extraHeaders'],
                     'attempts' => [
                         [
                             'label' => 'primary',
