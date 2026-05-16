@@ -3217,7 +3217,114 @@ class POSRegisterController
         }
         unset($_SESSION['pos_last_checkout_receipt']);
         $row = $this->fillReceiptInvoicePdfFromDb($conn, $row);
+        $row['invoice_ensure_preview_url'] = $this->buildCheckoutInvoicePreviewUrl(
+            trim((string)($row['order_id'] ?? ''))
+        );
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
+    }
+
+    /**
+     * Receipt "Preview & print invoice": ensure order in DB (fetch from vendor API if needed), create invoice, open preview.
+     */
+    public function checkout_invoice_preview(): void
+    {
+        is_login();
+        global $conn;
+
+        $orderNumber = trim((string)($_GET['order_number'] ?? $_GET['order_id'] ?? ''));
+        if ($orderNumber === '') {
+            http_response_code(400);
+            echo '<p>Order number is missing.</p>';
+            exit;
+        }
+
+        if (!$this->posCheckoutOrderHasFinalPayment($conn, $orderNumber)) {
+            http_response_code(403);
+            echo '<p>Tax invoice preview is available only after payment is received in full.</p>';
+            exit;
+        }
+
+        try {
+            require_once __DIR__ . '/OrdersController.php';
+            require_once __DIR__ . '/PosInvoiceController.php';
+
+            $ordersCtrl = new OrdersController();
+
+            if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
+                $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 4, 2);
+                if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
+                    http_response_code(503);
+                    $detail = trim((string)($import['message'] ?? ''));
+                    echo '<p>Could not import order <strong>' . htmlspecialchars($orderNumber, ENT_QUOTES, 'UTF-8') . '</strong> from the vendor API.</p>';
+                    if ($detail !== '') {
+                        echo '<p>' . htmlspecialchars($detail, ENT_QUOTES, 'UTF-8') . '</p>';
+                    }
+                    echo '<p><a href="index.php?page=orders&action=list">Open Orders</a> to import manually, then create the invoice from Invoices.</p>';
+                    exit;
+                }
+            }
+
+            $posInv = new PosInvoiceController();
+            $invRes = $posInv->createAutoInvoiceForOrder($orderNumber);
+
+            $invoiceId = 0;
+            if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
+                $invoiceId = (int)$invRes['invoice_id'];
+            } else {
+                $existingId = $this->findInvoiceIdForOrderNumber($conn, $orderNumber);
+                if ($existingId) {
+                    $invoiceId = $existingId;
+                }
+            }
+
+            if ($invoiceId <= 0) {
+                http_response_code(404);
+                $msg = trim((string)($invRes['message'] ?? 'Invoice could not be created.'));
+                echo '<p>' . htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') . '</p>';
+                echo '<p><a href="index.php?page=invoices&action=create">Create invoice manually</a></p>';
+                exit;
+            }
+
+            header('Location: index.php?page=posinvoice&action=print-preview&invoice_id=' . $invoiceId);
+            exit;
+        } catch (\Throwable $e) {
+            error_log('[POS checkout invoice preview] ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            http_response_code(500);
+            echo '<p>Invoice preview failed. Try importing the order from Orders, then create the invoice from Invoices.</p>';
+            exit;
+        }
+    }
+
+    private function buildCheckoutInvoicePreviewUrl(string $orderNumber): string
+    {
+        if ($orderNumber === '') {
+            return '';
+        }
+
+        return 'index.php?page=pos_register&action=checkout-invoice-preview&order_number='
+            . rawurlencode($orderNumber);
+    }
+
+    private function posCheckoutOrderHasFinalPayment(mysqli $conn, string $orderNumber): bool
+    {
+        $stmt = $conn->prepare(
+            "SELECT payment_stage, pending_amount FROM pos_payments
+             WHERE order_number = ? ORDER BY id DESC LIMIT 1"
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!is_array($row)) {
+            return false;
+        }
+        $stage = strtolower(trim((string)($row['payment_stage'] ?? '')));
+        $pending = (float)($row['pending_amount'] ?? 0);
+
+        return $stage === 'final' && $pending <= 0.02;
     }
 
     /**
