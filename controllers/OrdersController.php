@@ -507,15 +507,15 @@ class OrdersController
     }
 
     /**
-     * Fetch and import one order for POS checkout (no secret key, no HTML output).
+     * True when vp_orders lines and vp_order_info exist (required for POS auto-invoice).
      */
-    public function importSingleOrderForCheckout(string $orderNumber): array
+    public function isOrderReadyForPosCheckout(string $orderNumber): bool
     {
         global $conn;
 
         $orderNumber = trim($orderNumber);
         if ($orderNumber === '') {
-            return ['success' => false, 'message' => 'Order number missing', 'imported' => 0, 'total' => 0];
+            return false;
         }
 
         $hasLines = false;
@@ -525,6 +525,31 @@ class OrdersController
             $stmt->execute();
             $hasLines = (bool)$stmt->get_result()->fetch_row();
             $stmt->close();
+        }
+        if (!$hasLines) {
+            return false;
+        }
+
+        $hasInfo = false;
+        $stmtInfo = $conn->prepare('SELECT 1 FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if ($stmtInfo) {
+            $stmtInfo->bind_param('s', $orderNumber);
+            $stmtInfo->execute();
+            $hasInfo = (bool)$stmtInfo->get_result()->fetch_row();
+            $stmtInfo->close();
+        }
+
+        return $hasInfo;
+    }
+
+    /**
+     * @return array{ok: bool, orders: array<int, array<string, mixed>>, error: string}
+     */
+    private function fetchVendorOrderPayloadForCheckout(string $orderNumber): array
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['ok' => false, 'orders' => [], 'error' => 'Order number missing'];
         }
 
         $url = 'https://www.exoticindia.com/vendor-api/order/fetch';
@@ -549,34 +574,111 @@ class OrdersController
         curl_close($ch);
 
         if ($response === false) {
-            return [
-                'success' => $hasLines,
-                'message' => 'Vendor API error: ' . $error,
-                'imported' => 0,
-                'total' => 0,
-            ];
+            return ['ok' => false, 'orders' => [], 'error' => 'Vendor API error: ' . $error];
         }
 
         $decoded = json_decode($response, true);
-        if (!is_array($decoded) || empty($decoded['orders'])) {
+        if (!is_array($decoded) || empty($decoded['orders']) || !is_array($decoded['orders'])) {
+            return ['ok' => false, 'orders' => [], 'error' => 'No order data from vendor API'];
+        }
+
+        return ['ok' => true, 'orders' => $decoded['orders'], 'error' => ''];
+    }
+
+    /**
+     * Fetch and import one order for POS checkout (no secret key, no HTML output).
+     */
+    public function importSingleOrderForCheckout(string $orderNumber): array
+    {
+        global $conn;
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['success' => false, 'message' => 'Order number missing', 'imported' => 0, 'total' => 0];
+        }
+
+        $hasLines = $this->isOrderReadyForPosCheckout($orderNumber);
+
+        $fetch = $this->fetchVendorOrderPayloadForCheckout($orderNumber);
+        if (!$fetch['ok']) {
             return [
                 'success' => $hasLines,
-                'message' => $hasLines ? 'Order already in system' : 'No order data from vendor API',
+                'message' => $hasLines ? 'Order already in system' : $fetch['error'],
                 'imported' => 0,
                 'total' => 0,
             ];
         }
 
-        $batch = $this->importVendorOrdersFromApiPayload($decoded['orders'], $orderNumber);
+        $batch = $this->importVendorOrdersFromApiPayload($fetch['orders'], $orderNumber);
+        $ready = $this->isOrderReadyForPosCheckout($orderNumber);
 
         return [
-            'success' => ($batch['imported'] > 0) || $hasLines,
+            'success' => $ready,
             'message' => ($batch['imported'] > 0)
                 ? 'Imported ' . $batch['imported'] . ' line(s)'
-                : ($hasLines ? 'Order already in system' : 'Import did not add new lines'),
+                : ($ready ? 'Order ready in system' : 'Import did not add order lines or address'),
             'imported' => (int)$batch['imported'],
             'total' => (int)$batch['total'],
         ];
+    }
+
+    /**
+     * Vendor order/fetch may lag right after order/create — retry until DB is ready or attempts exhausted.
+     */
+    public function importSingleOrderForCheckoutWithRetry(
+        string $orderNumber,
+        int $maxAttempts = 4,
+        int $delaySeconds = 2
+    ): array {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['success' => false, 'message' => 'Order number missing', 'imported' => 0, 'total' => 0, 'attempts' => 0];
+        }
+
+        $maxAttempts = max(1, min(6, $maxAttempts));
+        $delaySeconds = max(0, min(5, $delaySeconds));
+
+        $last = [
+            'success' => false,
+            'message' => 'Import not attempted',
+            'imported' => 0,
+            'total' => 0,
+            'attempts' => 0,
+        ];
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            if ($this->isOrderReadyForPosCheckout($orderNumber)) {
+                return [
+                    'success' => true,
+                    'message' => 'Order ready in database',
+                    'imported' => 0,
+                    'total' => 0,
+                    'attempts' => $attempt,
+                ];
+            }
+
+            $last = $this->importSingleOrderForCheckout($orderNumber);
+            $last['attempts'] = $attempt;
+
+            if ($this->isOrderReadyForPosCheckout($orderNumber)) {
+                $last['success'] = true;
+                if (trim((string)($last['message'] ?? '')) === '' || stripos((string)$last['message'], 'did not add') !== false) {
+                    $last['message'] = 'Order imported and ready for invoice';
+                }
+                return $last;
+            }
+
+            if ($attempt < $maxAttempts && $delaySeconds > 0) {
+                sleep($delaySeconds);
+            }
+        }
+
+        $last['success'] = false;
+        if (trim((string)($last['message'] ?? '')) === '') {
+            $last['message'] = 'Order not available from vendor API yet';
+        }
+
+        return $last;
     }
 
     public function createPurchaseOrder()
