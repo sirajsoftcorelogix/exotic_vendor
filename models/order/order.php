@@ -1492,11 +1492,13 @@ class Order
         $values       = [];
         $types        = '';
 
+        $addressInfo = (isset($data['address_info']) && is_array($data['address_info'])) ? $data['address_info'] : [];
+
         foreach ($columns as $col) {
-            if (array_key_exists($col, $data['address_info'])) {
+            if (array_key_exists($col, $addressInfo)) {
                 $insertCols[]   = $col;
                 $placeholders[] = '?';
-                $values[]       = $data['address_info'][$col];
+                $values[]       = $addressInfo[$col];
                 $types         .= 's'; // all strings (safe for phone, zip, email)
             }
         }
@@ -1590,7 +1592,7 @@ class Order
 
 
         if (empty($insertCols)) {
-            throw new Exception("No valid data provided for insert");
+            return ['success' => false, 'message' => 'No valid address data provided for insert'];
         }
 
         $sql = sprintf(
@@ -1601,7 +1603,7 @@ class Order
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
-            throw new Exception("Prepare failed: " . $this->db->error);
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
         }
 
         // mysqli requires references
@@ -1612,12 +1614,16 @@ class Order
         }
 
         call_user_func_array([$stmt, 'bind_param'], $bindParams);
-        //echo $stmt->$sql;
         if (!$stmt->execute()) {
-            throw new Exception("Execute failed: " . $stmt->error);
+            $err = $stmt->error;
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $err];
         }
 
-        return $stmt->insert_id;
+        $insertId = $stmt->insert_id;
+        $stmt->close();
+
+        return $insertId;
     }
     public function getAddressInfoByOrderNumber($order_number)
     {
