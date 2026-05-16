@@ -494,7 +494,12 @@ class OrdersController
                 }
             }
 
-            $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
+            try {
+                $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
+            } catch (\Throwable $e) {
+                error_log('[order import insertAddressInfo] ' . $e->getMessage());
+                $addressdata[] = ['success' => false, 'message' => $e->getMessage()];
+            }
         }
 
         return [

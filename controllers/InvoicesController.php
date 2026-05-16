@@ -147,8 +147,8 @@ class InvoicesController
         }
         // Generate invoice number from global_settings
         $globalSettings = $commanModel->getRecordById('global_settings', 1);
-        $invoice_prefix = $globalSettings['invoice_prefix'] ?? 'INV';
-        $invoice_series = $globalSettings['invoice_series'] ?? 0;
+        $invoice_prefix = is_array($globalSettings) ? (string)($globalSettings['invoice_prefix'] ?? 'INV') : 'INV';
+        $invoice_series = is_array($globalSettings) ? (int)($globalSettings['invoice_series'] ?? 0) : 0;
         $invoice_series++;
 
         // Update global_settings with new invoice_series
@@ -211,9 +211,12 @@ class InvoicesController
             // Calculate SGST/CGST/IGST (assuming 50/50 split for SGST/CGST, IGST is 0)
             //$sgstRate = $tax_rate / 2;
             //$cgstRate = $tax_rate / 2;
-            $sgstAmt = ($amount * $sgst[$idx] ?? 0) / 100;
-            $cgstAmt = ($amount * $cgst[$idx] ?? 0) / 100;
-            $igstAmt = ($amount * $igst[$idx] ?? 0) / 100;
+            $sgstRate = (float)($sgst[$idx] ?? 0);
+            $cgstRate = (float)($cgst[$idx] ?? 0);
+            $igstRate = (float)($igst[$idx] ?? 0);
+            $sgstAmt = ($amount * $sgstRate) / 100;
+            $cgstAmt = ($amount * $cgstRate) / 100;
+            $igstAmt = ($amount * $igstRate) / 100;
 
             $itemData = [
                 'invoice_id' => $invoiceId,
