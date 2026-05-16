@@ -635,7 +635,10 @@
   <div class="absolute inset-0 bg-black/40" onclick="closeAddressConfirmModal()"></div>
   <div class="address-confirm-panel relative mx-auto flex w-[96%] max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
     <div class="flex shrink-0 items-center justify-between border-b px-5 py-3">
-      <h2 class="text-lg font-semibold text-slate-800">Confirm Billing &amp; Shipping Details</h2>
+      <div>
+        <h2 class="text-lg font-semibold text-slate-800">Confirm Billing &amp; Shipping Details</h2>
+        <p class="mt-0.5 text-xs text-slate-500">Fields marked with <span class="text-red-600">*</span> are required.</p>
+      </div>
       <button type="button" onclick="closeAddressConfirmModal()" class="text-lg leading-none text-gray-500 hover:text-gray-800" aria-label="Close">✕</button>
     </div>
     <div class="address-confirm-body flex-1 overflow-y-auto overscroll-contain">
@@ -645,22 +648,22 @@
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">First Name<input id="confirm_first_name" class="w-full rounded border" placeholder="First Name"></label>
-          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
+          <label class="block text-xs font-medium text-slate-600">First Name<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_first_name" aria-hidden="true">*</span><input id="confirm_first_name" class="w-full rounded border" placeholder="First Name"></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_last_name" aria-hidden="true">*</span><input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
-          <label class="block text-xs font-medium text-slate-600">Phone<input id="confirm_phone" class="w-full rounded border" placeholder="Phone"></label>
+          <label class="block text-xs font-medium text-slate-600">Email<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_email" aria-hidden="true">*</span><input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
+          <label class="block text-xs font-medium text-slate-600">Phone<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_phone" aria-hidden="true">*</span><input id="confirm_phone" class="w-full rounded border" placeholder="Phone"></label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_address1" class="w-full rounded border" placeholder="Address 1"></label>
-        <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="w-full rounded border" placeholder="Address 2"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 1<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_address1" aria-hidden="true">*</span><input id="confirm_address1" class="w-full rounded border" placeholder="Address 1"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 2<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_address2" aria-hidden="true">*</span><input id="confirm_address2" class="w-full rounded border" placeholder="Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">City<input id="confirm_city" class="w-full rounded border" placeholder="City"></label>
-          <label class="block text-xs font-medium text-slate-600">State<input id="confirm_state" class="w-full rounded border" placeholder="State"></label>
+          <label class="block text-xs font-medium text-slate-600">City<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_city" aria-hidden="true">*</span><input id="confirm_city" class="w-full rounded border" placeholder="City"></label>
+          <label class="block text-xs font-medium text-slate-600">State<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_state" aria-hidden="true">*</span><input id="confirm_state" class="w-full rounded border" placeholder="State"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode<input id="confirm_zip" class="w-full rounded border" placeholder="ZIP / Pincode"></label>
-          <label class="block text-xs font-medium text-slate-600">Country
+          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_zip" aria-hidden="true">*</span><input id="confirm_zip" class="w-full rounded border" placeholder="ZIP / Pincode"></label>
+          <label class="block text-xs font-medium text-slate-600">Country<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_country" aria-hidden="true">*</span>
             <select id="confirm_country" class="w-full rounded border bg-white">
               <?php
               $selected_iso = 'IN';
@@ -673,7 +676,7 @@
         <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <div class="mb-2 font-semibold text-amber-950">High Value Transaction – Compliance Required</div>
           <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. GSTIN B2B invoices derive PAN automatically.</p>
-          <label class="block font-medium">Customer residency <span class="text-red-600">*</span>
+          <label class="block font-medium">Customer residency<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="customer_residency_status" aria-hidden="true">*</span>
             <select id="customer_residency_status" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm">
               <option value="INDIAN_RESIDENT">Indian Resident</option>
               <option value="NRI">NRI</option>
@@ -681,7 +684,7 @@
             </select>
           </label>
           <div id="panComplianceWrap" class="mt-3">
-            <label class="block font-medium">PAN <span id="panRequiredStar" class="text-red-600">*</span>
+            <label class="block font-medium">PAN<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="customer_pan" aria-hidden="true">*</span>
               <input id="customer_pan" maxlength="10" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="ABCDE1234F">
             </label>
             <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">PAN is required unless GSTIN is entered.</p>
@@ -692,12 +695,12 @@
             </label>
           </div>
           <div id="passportComplianceWrap" class="mt-3 hidden">
-            <label class="block font-medium">Passport Number <span id="passportRequiredStar" class="text-red-600">*</span>
+            <label class="block font-medium">Passport Number<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="passport_number" aria-hidden="true">*</span>
               <input id="passport_number" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="Passport number">
             </label>
           </div>
           <div id="countryResidenceWrap" class="mt-3 hidden">
-            <label class="block font-medium">Country of Residence <span class="text-red-600">*</span>
+            <label class="block font-medium">Country of Residence<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="country_of_residence" aria-hidden="true">*</span>
               <input id="country_of_residence" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm" placeholder="Country of residence">
             </label>
           </div>
@@ -713,19 +716,19 @@
           </label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">First Name<input id="confirm_sfirst_name" class="w-full rounded border" placeholder="First Name"></label>
-          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_slast_name" class="w-full rounded border" placeholder="Last Name"></label>
+          <label class="block text-xs font-medium text-slate-600">First Name<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_sfirst_name" aria-hidden="true">*</span><input id="confirm_sfirst_name" class="w-full rounded border" placeholder="First Name"></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_slast_name" aria-hidden="true">*</span><input id="confirm_slast_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">Phone<input id="confirm_sphone" class="w-full rounded border" placeholder="Phone"></label>
-        <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_saddress1" class="w-full rounded border" placeholder="Address 1"></label>
-        <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_saddress2" class="w-full rounded border" placeholder="Address 2"></label>
+        <label class="block text-xs font-medium text-slate-600">Phone<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_sphone" aria-hidden="true">*</span><input id="confirm_sphone" class="w-full rounded border" placeholder="Phone"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 1<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_saddress1" aria-hidden="true">*</span><input id="confirm_saddress1" class="w-full rounded border" placeholder="Address 1"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 2<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_saddress2" aria-hidden="true">*</span><input id="confirm_saddress2" class="w-full rounded border" placeholder="Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">City<input id="confirm_scity" class="w-full rounded border" placeholder="City"></label>
-          <label class="block text-xs font-medium text-slate-600">State<input id="confirm_sstate" class="w-full rounded border" placeholder="State"></label>
+          <label class="block text-xs font-medium text-slate-600">City<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_scity" aria-hidden="true">*</span><input id="confirm_scity" class="w-full rounded border" placeholder="City"></label>
+          <label class="block text-xs font-medium text-slate-600">State<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_sstate" aria-hidden="true">*</span><input id="confirm_sstate" class="w-full rounded border" placeholder="State"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode<input id="confirm_szip" class="w-full rounded border" placeholder="ZIP / Pincode"></label>
-          <label class="block text-xs font-medium text-slate-600">Country
+          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_szip" aria-hidden="true">*</span><input id="confirm_szip" class="w-full rounded border" placeholder="ZIP / Pincode"></label>
+          <label class="block text-xs font-medium text-slate-600">Country<span class="pos-req-star ml-0.5 hidden text-red-600" data-for="confirm_scountry" aria-hidden="true">*</span>
             <select id="confirm_scountry" class="w-full rounded border bg-white">
               <?php
               $selected_iso = 'IN';
@@ -1313,8 +1316,34 @@
     };
   }
 
-  /** Billing address fields are optional; blank address1 is sent as "dummy Address" on order create. */
+  /** Billing/shipping address fields are optional unless listed here; blank address1 uses "dummy Address" on order create. */
   var POS_REQUIRED_ADDRESS_FIELDS = [];
+
+  function getPosRequiredFieldIds() {
+    var ids = POS_REQUIRED_ADDRESS_FIELDS.map(function(row) { return row[0]; });
+    if (!isHighValueTransaction()) return ids;
+    ids.push("customer_residency_status");
+    var gstin = (document.getElementById("confirm_gstin")?.value || "").trim().toUpperCase();
+    var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
+    var pan = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").trim();
+    if (gstin !== "") return ids;
+    if (residency === "INDIAN_RESIDENT") ids.push("customer_pan");
+    if (residency === "FOREIGN_NATIONAL") {
+      ids.push("passport_number", "country_of_residence");
+    } else if (residency === "NRI" && pan === "") {
+      ids.push("passport_number", "country_of_residence");
+    }
+    return ids;
+  }
+
+  function syncPosRequiredFieldStars() {
+    var requiredSet = {};
+    getPosRequiredFieldIds().forEach(function(id) { requiredSet[id] = true; });
+    document.querySelectorAll("#addressConfirmModal .pos-req-star[data-for]").forEach(function(star) {
+      var fieldId = star.getAttribute("data-for");
+      star.classList.toggle("hidden", !requiredSet[fieldId]);
+    });
+  }
 
   function setPosFieldInvalid(id, invalid) {
     var el = document.getElementById(id);
@@ -1374,8 +1403,6 @@
     var passportWrap = document.getElementById("passportComplianceWrap");
     var countryWrap = document.getElementById("countryResidenceWrap");
     var panHint = document.getElementById("panComplianceHint");
-    var panStar = document.getElementById("panRequiredStar");
-    var passportStar = document.getElementById("passportRequiredStar");
 
     if (banner) {
       banner.textContent = "High Value Transaction – Compliance Required (limit " + formatInrAmount(getHighValueLimit()) + ")";
@@ -1383,6 +1410,7 @@
     }
     if (panel) panel.classList.toggle("hidden", !highValue);
     if (!highValue) {
+      syncPosRequiredFieldStars();
       updateConfirmAddressButtonState();
       return;
     }
@@ -1391,13 +1419,12 @@
     if (panWrap) panWrap.classList.toggle("hidden", residency === "FOREIGN_NATIONAL");
     if (passportWrap) passportWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
     if (countryWrap) countryWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
-    if (panStar) panStar.classList.toggle("hidden", hasGstin || residency === "FOREIGN_NATIONAL" || residency === "NRI");
-    if (passportStar) passportStar.classList.toggle("hidden", residency === "NRI");
     if (panHint) {
       panHint.textContent = hasGstin
         ? "GSTIN present. PAN will be derived automatically for B2B invoice handling."
         : (residency === "NRI" ? "For NRI, enter PAN or Passport Number with Country of Residence." : "PAN is required unless GSTIN is entered.");
     }
+    syncPosRequiredFieldStars();
     updateConfirmAddressButtonState();
   }
 
@@ -1765,7 +1792,7 @@
         });
       }
     });
-    ["customer_residency_status", "confirm_gstin"].forEach(function(id) {
+    ["customer_residency_status", "confirm_gstin", "customer_pan", "passport_number", "country_of_residence"].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
         el.addEventListener("change", syncHighValueComplianceUi);
