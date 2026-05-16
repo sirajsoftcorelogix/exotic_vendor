@@ -20,6 +20,28 @@ $(function () {
   // ────────────────────────────────────────────────
   // HELPERS (needed for products & modal)
   // ────────────────────────────────────────────────
+  const POS_PARENT_ITEM_CART_MSG = 'Parent Level Item can not be added to the cart';
+
+  function isParentLevelProduct(p) {
+    if (!p || typeof p !== 'object') return false;
+    if (p.is_parent_level === true || p.is_parent_level === 1 || p.is_parent_level === '1') {
+      return true;
+    }
+    return String(p.item_level || '').trim().toLowerCase() === 'parent';
+  }
+
+  function notifyParentItemCartBlocked() {
+    if (typeof window.toast === 'function') {
+      window.toast(POS_PARENT_ITEM_CART_MSG, 'red');
+    } else {
+      alert(POS_PARENT_ITEM_CART_MSG);
+    }
+  }
+
+  window.isParentLevelProduct = isParentLevelProduct;
+  window.notifyParentItemCartBlocked = notifyParentItemCartBlocked;
+  window.POS_PARENT_ITEM_CART_MSG = POS_PARENT_ITEM_CART_MSG;
+
   function formatPrice(price) {
     const p = parseFloat(price || 0);
     return '₹ ' + p.toLocaleString('en-IN', {
@@ -380,6 +402,10 @@ $(function () {
 
   $('#productModal').on('click', '#pmAddToCartBtn', function (e) {
     e.preventDefault();
+    if (String($('#modal_item_level').val() || '').trim().toLowerCase() === 'parent') {
+      notifyParentItemCartBlocked();
+      return;
+    }
     const selectedEntries = [];
     $('#productModal .addon-checkbox:checked').each(function () {
       const entry = $(this).data('entry');
@@ -409,7 +435,8 @@ $(function () {
         stock_check_code: String($('#modal_stock_check_code').val() || '').trim(),
         qty: qtyNum || getModalQty(),
         options: String($('#modal_options').val() || '').trim(),
-        variation: String($('#modal_variation').val() || '').trim()
+        variation: String($('#modal_variation').val() || '').trim(),
+        item_level: String($('#modal_item_level').val() || '').trim()
       });
     }
   });
@@ -512,6 +539,15 @@ $(function () {
     $('#modal_product_code').val(cp.cartCode || String(p.code || p.id || ''));
     $('#modal_variation').val(cp.variation);
     $('#modal_stock_check_code').val(cp.stockCheckCode);
+
+    const parentItem = isParentLevelProduct(p);
+    $('#modal_item_level').val(parentItem ? 'parent' : String(p.item_level || '').trim());
+    const $addBtn = $('#pmAddToCartBtn');
+    if ($addBtn.length) {
+      $addBtn.prop('disabled', parentItem);
+      $addBtn.toggleClass('opacity-50 cursor-not-allowed', parentItem);
+      $addBtn.attr('title', parentItem ? POS_PARENT_ITEM_CART_MSG : '');
+    }
 
     const badges = [];
     const icRaw = isMeaningful(p.item_code) ? String(p.item_code).trim() : '';
@@ -680,6 +716,8 @@ $(function () {
     }
 
     products.forEach(function (p) {
+      if (isParentLevelProduct(p)) return;
+
       const key = getProductKey(p);
       if (loadedKeys.has(key)) return;
 
@@ -874,6 +912,11 @@ data-code="${lookupCode}">
     $('#pmTitle').text('Loading...');
     $('#pmDetails').html('Loading...');
     $('#pmModalPrice').addClass('hidden').text('');
+    $('#modal_item_level').val('');
+    $('#pmAddToCartBtn')
+      .prop('disabled', false)
+      .removeClass('opacity-50 cursor-not-allowed')
+      .attr('title', '');
 
     $.ajax({
       url: '?page=pos_register&action=get-product-api',

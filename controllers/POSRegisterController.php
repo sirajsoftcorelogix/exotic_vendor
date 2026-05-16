@@ -22,6 +22,62 @@ class POSRegisterController
         }
     }
 
+    private const POS_PARENT_ITEM_CART_MESSAGE = 'Parent Level Item can not be added to the cart';
+
+    private function isParentItemLevel(?string $itemLevel): bool
+    {
+        return strtolower(trim((string)$itemLevel)) === 'parent';
+    }
+
+    /**
+     * Resolve item_level for a catalogue code (sku or item_code), including parent rows.
+     */
+    private function lookupProductItemLevelForCode(mysqli $conn, string $code): string
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return '';
+        }
+        $stmt = $conn->prepare(
+            'SELECT item_level FROM vp_products
+             WHERE is_active = 1 AND (sku = ? OR item_code = ?)
+             ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('ss', $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return trim((string)($row['item_level'] ?? ''));
+    }
+
+    /**
+     * @param list<string> $codes
+     * @return array{success: false, message: string}|null
+     */
+    private function cartAddBlockedIfParentLevelProduct(mysqli $conn, array $codes): ?array
+    {
+        $seen = [];
+        foreach ($codes as $code) {
+            $code = trim((string)$code);
+            if ($code === '' || isset($seen[$code])) {
+                continue;
+            }
+            $seen[$code] = true;
+            if ($this->isParentItemLevel($this->lookupProductItemLevelForCode($conn, $code))) {
+                return [
+                    'success' => false,
+                    'message' => self::POS_PARENT_ITEM_CART_MESSAGE,
+                ];
+            }
+        }
+
+        return null;
+    }
+
     private function columnExists(mysqli $conn, string $table, string $column): bool
     {
         $stmt = $conn->prepare(
@@ -507,6 +563,20 @@ class POSRegisterController
             ];
         }
 
+        $rawCountries = function_exists('country_array') ? country_array() : ['IN' => 'India'];
+        asort($rawCountries);
+        $countryList = [];
+        if (isset($rawCountries['IN'])) {
+            $countryList['IN'] = $rawCountries['IN'];
+            unset($rawCountries['IN']);
+        }
+        foreach ($rawCountries as $code => $name) {
+            $iso = strtoupper(substr(trim((string)$code), 0, 2));
+            if ($iso !== '' && !isset($countryList[$iso])) {
+                $countryList[$iso] = (string)$name;
+            }
+        }
+
         renderTemplate('views/pos_register/index.php', [
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
@@ -518,6 +588,7 @@ class POSRegisterController
             ],
             'selected_customer' => $selected_customer,
             'high_value_transaction_limit' => $highValueTransactionLimit,
+            'country_list' => $countryList,
         ]);
     }
 
@@ -1487,9 +1558,8 @@ class POSRegisterController
                 'SELECT id, item_code, sku, title, image, material, size, color, hsn, gst,
                         price_india, price_india_suggested, itemprice, finalprice, mrp_india,
                         product_weight, product_weight_unit,
-                        prod_height, prod_width, prod_length, length_unit
+                        prod_height, prod_width, prod_length, length_unit, item_level
                  FROM vp_products WHERE is_active = 1
-                   AND LOWER(TRIM(IFNULL(item_level, \'\'))) <> \'parent\'
                    AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
             );
             if ($stmt) {
@@ -1659,6 +1729,8 @@ class POSRegisterController
             'express_shipping_option' => $data['express_shipping_option'] ?? null,
             'addon_options' => $data['addon_options'] ?? [],
             'sibling_skus' => $siblingSkus,
+            'item_level' => trim((string)($dbRow['item_level'] ?? '')),
+            'is_parent_level' => $this->isParentItemLevel($dbRow['item_level'] ?? ''),
         ];
 
         $this->clearBufferedHttpOutput();
@@ -1832,6 +1904,17 @@ class POSRegisterController
                 $body = json_decode($raw, true);
                 if (!is_array($body)) {
                     $body = $_POST;
+                }
+                global $conn;
+                if ($conn instanceof mysqli) {
+                    $parentBlock = $this->cartAddBlockedIfParentLevelProduct($conn, [
+                        trim((string)($body['code'] ?? '')),
+                        trim((string)($body['stock_check_code'] ?? '')),
+                    ]);
+                    if ($parentBlock !== null) {
+                        echo json_encode($parentBlock, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                        exit;
+                    }
                 }
                 $split = $this->buildExoticCartAddSplit(is_array($body) ? $body : []);
                 $ctxAdd = $this->exoticCartDiscountContext();
@@ -2690,40 +2773,27 @@ class POSRegisterController
      * POST JSON: address confirm fields + payment_* + customer_id + order_total (from live cart).
      * Proxies Exotic POST /order/create, then inserts pos_payments with receipt number.
      */
+    private const POS_DUMMY_BILLING_ADDRESS1 = 'dummy Address';
+
+    /**
+     * Billing fields are optional in the confirm modal; blank address1 is replaced for order/create.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function normalizePosCheckoutBillingPayload(array $payload): array
+    {
+        if (trim((string)($payload['confirm_address1'] ?? '')) === '') {
+            $payload['confirm_address1'] = self::POS_DUMMY_BILLING_ADDRESS1;
+        }
+
+        return $payload;
+    }
+
     private function validatePosCheckoutAddressPayload(array $payload): array
     {
-        $required = [
-            'confirm_first_name' => 'Billing first name',
-            'confirm_phone' => 'Billing phone',
-            'confirm_address1' => 'Billing address 1',
-            'confirm_city' => 'Billing city',
-            'confirm_state' => 'Billing state',
-            'confirm_zip' => 'Billing ZIP / pincode',
-            'confirm_country' => 'Billing country',
-        ];
-
         $errors = [];
-        foreach ($required as $key => $label) {
-            if (trim((string)($payload[$key] ?? '')) === '') {
-                $errors[] = $label;
-            }
-        }
-
-        $email = trim((string)($payload['confirm_email'] ?? ''));
-        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'Valid billing email';
-        }
-
-        $billingPhoneDigits = preg_replace('/\D/', '', (string)($payload['confirm_phone'] ?? ''));
-        if ($billingPhoneDigits !== '' && strlen($billingPhoneDigits) < 6) {
-            $errors[] = 'Valid billing phone';
-        }
-
-        $billingCountry = strtoupper(trim((string)($payload['confirm_country'] ?? '')));
-        $billingZip = trim((string)($payload['confirm_zip'] ?? ''));
-        if (($billingCountry === 'IN' || $billingCountry === 'INDIA') && $billingZip !== '' && !preg_match('/^\d{6}$/', $billingZip)) {
-            $errors[] = 'Valid 6 digit billing pincode';
-        }
+        // Billing/shipping ZIP and pincode are optional (no empty or format checks).
 
         $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));
         if ($gstin !== '' && !preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
@@ -2748,6 +2818,8 @@ class POSRegisterController
             echo json_encode(['success' => false, 'message' => 'Invalid JSON body'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
+
+        $payload = $this->normalizePosCheckoutBillingPayload($payload);
 
         $customerId = (int)($payload['customer_id'] ?? 0);
         $sessionCid = (int)($_SESSION['pos_customer_id'] ?? 0);
@@ -3169,7 +3241,9 @@ class POSRegisterController
             'first_name' => trim((string)($payload['confirm_first_name'] ?? '')),
             'last_name' => trim((string)($payload['confirm_last_name'] ?? '')),
             'email' => $email,
-            'address1' => trim((string)($payload['confirm_address1'] ?? '')),
+            'address1' => trim((string)($payload['confirm_address1'] ?? '')) !== ''
+                ? trim((string)$payload['confirm_address1'])
+                : self::POS_DUMMY_BILLING_ADDRESS1,
             'address2' => trim((string)($payload['confirm_address2'] ?? '')),
             'city' => trim((string)($payload['confirm_city'] ?? '')),
             'state' => trim((string)($payload['confirm_state'] ?? '')),

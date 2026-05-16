@@ -176,6 +176,7 @@ class pos
         p.prod_length,
         p.length_unit,
         p.cost_price,
+        p.item_level,
         sm.running_stock AS stock_qty,
         sm.location AS warehouse_location,
         (IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) * (1 + IFNULL(p.gst, 0) / 100)) AS price
