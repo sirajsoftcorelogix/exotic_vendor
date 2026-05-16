@@ -617,9 +617,12 @@ class POSRegisterController
             }
         }
 
+        $posStorePincode = $conn instanceof mysqli ? $this->resolveStorePincodeForPos($conn) : '';
+
         renderTemplate('views/pos_register/index.php', [
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
+            'pos_store_pincode' => $posStorePincode,
             // Minimal placeholder until new cart; view must not depend on Exotic retrieve shape.
             'cartData' => [
                 'items' => [],
@@ -2819,10 +2822,99 @@ class POSRegisterController
      * Proxies Exotic POST /order/create, then inserts pos_payments with receipt number.
      */
     private const POS_DUMMY_BILLING_ADDRESS1 = 'dummy Address';
-    private const POS_DUMMY_EMAIL = 'dummy@exoticindia.com';
-    private const POS_DUMMY_PHONE = '0000000000';
+    private const POS_DUMMY_PHONE = '8031404444';
     private const POS_DUMMY_CITY = 'Delhi';
     private const POS_DEFAULT_STATE = 'Delhi';
+
+    /**
+     * Placeholder billing email when none provided: dummy-{timestamp}-{1000-9999}@exoticindia.com
+     */
+    private function generatePosDummyEmail(): string
+    {
+        return sprintf('dummy-%d-%d@exoticindia.com', time(), random_int(1000, 9999));
+    }
+
+    /**
+     * Extract 6-digit Indian pincode from free-text address (exotic_address.address).
+     */
+    private function extractPincodeFromAddressText(string $text): string
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return '';
+        }
+        if (preg_match('/\b(\d{6})\b/', $text, $matches)) {
+            return (string)$matches[1];
+        }
+
+        return '';
+    }
+
+    /**
+     * Pincode for current POS store (session warehouse, else default exotic_address; else firm_details.pin).
+     */
+    private function resolveStorePincodeForPos(mysqli $conn): string
+    {
+        $whId = (int)($_SESSION['warehouse_id'] ?? 0);
+        $row = null;
+
+        if ($whId > 0) {
+            $stmt = $conn->prepare(
+                'SELECT `address`, display_name, address_title FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('i', $whId);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc() ?: null;
+                $stmt->close();
+            }
+        }
+
+        if (!$row) {
+            $res = $conn->query(
+                'SELECT `address`, display_name, address_title FROM exotic_address
+                 WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
+            );
+            if ($res) {
+                $row = $res->fetch_assoc() ?: null;
+                $res->free();
+            }
+        }
+
+        if (!$row) {
+            $res = $conn->query(
+                'SELECT `address`, display_name, address_title FROM exotic_address
+                 WHERE is_active = 1 ORDER BY id ASC LIMIT 1'
+            );
+            if ($res) {
+                $row = $res->fetch_assoc() ?: null;
+                $res->free();
+            }
+        }
+
+        if ($row) {
+            foreach (['address', 'display_name', 'address_title'] as $col) {
+                $pin = $this->extractPincodeFromAddressText((string)($row[$col] ?? ''));
+                if ($pin !== '') {
+                    return $pin;
+                }
+            }
+        }
+
+        require_once __DIR__ . '/../models/comman/tables.php';
+        $comman = new Tables($conn);
+        $firm = $comman->getRecordById('firm_details', 1);
+        if (is_array($firm)) {
+            foreach (['pin', 'pincode', 'zip', 'zipcode'] as $col) {
+                $pin = trim((string)($firm[$col] ?? ''));
+                if ($pin !== '') {
+                    return $pin;
+                }
+            }
+        }
+
+        return '';
+    }
 
     /**
      * Fill API-required billing fields when blank so order/create validation passes.
@@ -2830,13 +2922,13 @@ class POSRegisterController
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
-    private function normalizePosCheckoutBillingPayload(array $payload): array
+    private function normalizePosCheckoutBillingPayload(array $payload, ?mysqli $conn = null): array
     {
         if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
             // Left empty; validatePosCheckoutAddressPayload blocks checkout.
         }
         if (trim((string)($payload['confirm_email'] ?? '')) === '') {
-            $payload['confirm_email'] = self::POS_DUMMY_EMAIL;
+            $payload['confirm_email'] = $this->generatePosDummyEmail();
         }
         if (trim((string)($payload['confirm_phone'] ?? '')) === '') {
             $payload['confirm_phone'] = self::POS_DUMMY_PHONE;
@@ -2850,6 +2942,12 @@ class POSRegisterController
         if (trim((string)($payload['confirm_state'] ?? '')) === '') {
             $payload['confirm_state'] = self::POS_DEFAULT_STATE;
         }
+        if (trim((string)($payload['confirm_zip'] ?? '')) === '' && $conn instanceof mysqli) {
+            $storePin = $this->resolveStorePincodeForPos($conn);
+            if ($storePin !== '') {
+                $payload['confirm_zip'] = $storePin;
+            }
+        }
 
         return $payload;
     }
@@ -2862,6 +2960,12 @@ class POSRegisterController
         }
         if (trim((string)($payload['confirm_state'] ?? '')) === '') {
             $errors[] = 'State';
+        }
+        if (trim((string)($payload['confirm_zip'] ?? '')) === '') {
+            $errors[] = 'ZIP / Pincode';
+        }
+        if (trim((string)($payload['confirm_phone'] ?? '')) === '') {
+            $errors[] = 'Phone';
         }
 
         return $errors;
@@ -2883,7 +2987,7 @@ class POSRegisterController
             exit;
         }
 
-        $payload = $this->normalizePosCheckoutBillingPayload($payload);
+        $payload = $this->normalizePosCheckoutBillingPayload($payload, $conn);
 
         $customerId = (int)($payload['customer_id'] ?? 0);
         $sessionCid = (int)($_SESSION['pos_customer_id'] ?? 0);
@@ -3284,6 +3388,48 @@ class POSRegisterController
      *
      * @return array<string, string>
      */
+    /**
+     * True when Confirm Billing & Shipping modal has shipping address data filled in.
+     */
+    private function hasPosConfirmShippingFilled(array $payload): bool
+    {
+        if (!empty($payload['confirm_shipping_same_as_billing'])
+            && (string)$payload['confirm_shipping_same_as_billing'] === '1') {
+            return true;
+        }
+
+        foreach ([
+            'confirm_sfirst_name',
+            'confirm_slast_name',
+            'confirm_sname',
+            'confirm_saddress1',
+            'confirm_saddress2',
+            'confirm_scity',
+            'confirm_sstate',
+            'confirm_szip',
+            'confirm_sphone',
+        ] as $key) {
+            if (trim((string)($payload[$key] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * When shipping is filled in POS confirm step, omit s* fields on order/create (checkoutdata + billing only).
+     */
+    private function shouldOmitShippingOnOrderCreate(array $payload): bool
+    {
+        if (!empty($payload['confirm_omit_shipping_api'])
+            && (string)$payload['confirm_omit_shipping_api'] === '1') {
+            return true;
+        }
+
+        return $this->hasPosConfirmShippingFilled($payload);
+    }
+
     private function buildOrderCreatePostFromPayload(array $payload, array $cartData): array
     {
         $posMode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
@@ -3293,31 +3439,21 @@ class POSRegisterController
         /** Exact string from GET /cart/retrieve JSON — posted as-is (only URL-encoded as form field by HTTP client). */
         $checkoutdata = $this->extractCheckoutDataStringFromCart($cartData);
 
-        $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
-        $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
-        $sname = trim((string)($payload['confirm_sname'] ?? ''));
-        if ($sname === '') {
-            $sname = trim($sf . ' ' . $sl);
-        }
+        $omitShippingOnOrder = $this->shouldOmitShippingOnOrderCreate($payload);
 
         $country = strtoupper(substr(trim((string)($payload['confirm_country'] ?? 'IN')), 0, 2));
         if ($country === '') {
             $country = 'IN';
         }
-        $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
-        if ($scountry === '') {
-            $scountry = 'IN';
-        }
         $email = trim((string)($payload['confirm_email'] ?? ''));
         if ($email === '') {
+            $email = $this->generatePosDummyEmail();
             $customerId = (int)($payload['customer_id'] ?? 0);
-            $email = $customerId > 0
-                ? 'pos-customer-' . $customerId . '@exoticindia.com'
-                : 'pos-walkin@exoticindia.com';
-
             global $conn;
             if ($customerId > 0 && $conn instanceof mysqli) {
-                $stmt = $conn->prepare("UPDATE vp_customers SET email = ? WHERE id = ? AND (email = '' OR email LIKE 'dummy-%@exoticindia.com')");
+                $stmt = $conn->prepare(
+                    "UPDATE vp_customers SET email = ? WHERE id = ? AND (email = '' OR email LIKE 'dummy-%@exoticindia.com')"
+                );
                 if ($stmt) {
                     $stmt->bind_param('si', $email, $customerId);
                     $stmt->execute();
@@ -3356,16 +3492,29 @@ class POSRegisterController
                 ? trim((string)$payload['confirm_phone'])
                 : self::POS_DUMMY_PHONE,
             'gstin' => trim((string)($payload['confirm_gstin'] ?? '')),
-            'sname' => $sname,
-            'saddress1' => trim((string)($payload['confirm_saddress1'] ?? '')),
-            'saddress2' => trim((string)($payload['confirm_saddress2'] ?? '')),
-            'scity' => trim((string)($payload['confirm_scity'] ?? '')),
-            'sstate' => trim((string)($payload['confirm_sstate'] ?? '')),
-            'szip' => trim((string)($payload['confirm_szip'] ?? '')),
-            'scountry' => $scountry,
-            'sphone' => trim((string)($payload['confirm_sphone'] ?? '')),
             'store_payment_details' => $storeId . '|' . $storePaymentMode . '|' . $txnField,
         ];
+
+        if (!$omitShippingOnOrder) {
+            $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
+            $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
+            $sname = trim((string)($payload['confirm_sname'] ?? ''));
+            if ($sname === '') {
+                $sname = trim($sf . ' ' . $sl);
+            }
+            $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
+            if ($scountry === '') {
+                $scountry = 'IN';
+            }
+            $out['sname'] = $sname;
+            $out['saddress1'] = trim((string)($payload['confirm_saddress1'] ?? ''));
+            $out['saddress2'] = trim((string)($payload['confirm_saddress2'] ?? ''));
+            $out['scity'] = trim((string)($payload['confirm_scity'] ?? ''));
+            $out['sstate'] = trim((string)($payload['confirm_sstate'] ?? ''));
+            $out['szip'] = trim((string)($payload['confirm_szip'] ?? ''));
+            $out['scountry'] = $scountry;
+            $out['sphone'] = trim((string)($payload['confirm_sphone'] ?? ''));
+        }
 
         if ($storePaymentMode === 'razorpay') {
             $rzPay = trim((string)($payload['razorpay_payment_id'] ?? $txn));

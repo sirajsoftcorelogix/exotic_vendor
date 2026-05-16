@@ -122,9 +122,9 @@
     window.POS_COUNTRY_ISO_BY_NAME = <?= json_encode($posCountryIsoByName, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_INDIA_STATES = <?= json_encode($pos_india_states ?? [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_DEFAULT_STATE = "Delhi";
+    window.POS_STORE_PINCODE = <?= json_encode(trim((string)($pos_store_pincode ?? '')), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_ADDRESS_API_DEFAULTS = {
-      confirm_email: "dummy@exoticindia.com",
-      confirm_phone: "0000000000",
+      confirm_phone: "8031404444",
       confirm_address1: "dummy Address",
       confirm_city: "Delhi",
       confirm_state: "Delhi"
@@ -671,7 +671,7 @@
         </div>
         <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
-          <label class="block text-xs font-medium text-slate-600">Phone<input id="confirm_phone" class="w-full rounded border" placeholder="Phone"></label>
+          <label class="block text-xs font-medium text-slate-600">Phone <span class="field-req-star text-red-600">*</span><input id="confirm_phone" class="w-full rounded border" placeholder="Phone"></label>
         </div>
         <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_address1" class="w-full rounded border" placeholder="Address 1"></label>
         <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="w-full rounded border" placeholder="Address 2"></label>
@@ -683,7 +683,7 @@
           </label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode<input id="confirm_zip" class="w-full rounded border" placeholder="ZIP / Pincode"></label>
+          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode <span class="field-req-star text-red-600">*</span><input id="confirm_zip" class="w-full rounded border" placeholder="ZIP / Pincode"></label>
           <label class="block text-xs font-medium text-slate-600">Country
             <select id="confirm_country" class="w-full rounded border bg-white">
               <?php
@@ -1292,12 +1292,12 @@
       confirm_first_name: firstNonEmpty(billing.first_name, billing.billing_first_name),
       confirm_last_name: firstNonEmpty(billing.last_name, billing.billing_last_name),
       confirm_email: firstNonEmpty(billing.email, billing.cus_email, billing.billing_email),
-      confirm_phone: firstNonEmpty(billing.phone, billing.mobile, billing.billing_mobile),
+      confirm_phone: firstNonEmpty(billing.phone, billing.mobile, billing.billing_mobile, (window.POS_ADDRESS_API_DEFAULTS || {}).confirm_phone || "8031404444"),
       confirm_address1: firstNonEmpty(billing.address1, billing.address_line1, billing.billing_address_line1),
       confirm_address2: firstNonEmpty(billing.address2, billing.address_line2, billing.billing_address_line2),
       confirm_city: firstNonEmpty(billing.city),
       confirm_state: firstNonEmpty(billing.state),
-      confirm_zip: firstNonEmpty(billing.zip, billing.zipcode),
+      confirm_zip: firstNonEmpty(billing.zip, billing.zipcode, window.POS_STORE_PINCODE || ""),
       confirm_gstin: firstNonEmpty(billing.gstin),
 
       // Shipping: support normalized keys + DB/raw aliases.
@@ -1442,6 +1442,19 @@
     }
   }
 
+  function hasConfirmShippingFieldsFilled() {
+    if (isShippingSameAsBillingChecked()) {
+      return true;
+    }
+    for (var i = 0; i < POS_SHIPPING_ADDRESS_FIELD_IDS.length; i++) {
+      var el = document.getElementById(POS_SHIPPING_ADDRESS_FIELD_IDS[i]);
+      if (el && String(el.value || "").trim() !== "") {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function getAddressConfirmPayload() {
     var read = function(id) {
       var el = document.getElementById(id);
@@ -1450,6 +1463,7 @@
     var shippingFirstName = read("confirm_sfirst_name");
     var shippingLastName = read("confirm_slast_name");
     var shippingFullName = [shippingFirstName, shippingLastName].filter(Boolean).join(" ").trim();
+    var omitShippingOnOrder = hasConfirmShippingFieldsFilled();
     return {
       confirm_address_submit: "1",
       confirm_first_name: read("confirm_first_name"),
@@ -1474,6 +1488,8 @@
       confirm_szip: read("confirm_szip"),
       confirm_scountry: read("confirm_scountry"),
       confirm_sphone: read("confirm_sphone"),
+      confirm_shipping_same_as_billing: isShippingSameAsBillingChecked() ? "1" : "0",
+      confirm_omit_shipping_api: omitShippingOnOrder ? "1" : "0",
       customer_residency_status: read("customer_residency_status") || "INDIAN_RESIDENT",
       customer_pan: read("customer_pan").replace(/\s+/g, "").toUpperCase(),
       customer_aadhaar: read("customer_aadhaar").replace(/\D/g, ""),
@@ -1494,6 +1510,12 @@
     if (!String(out.confirm_state || "").trim()) {
       out.confirm_state = String(window.POS_DEFAULT_STATE || "Delhi");
     }
+    if (!String(out.confirm_zip || "").trim() && window.POS_STORE_PINCODE) {
+      out.confirm_zip = String(window.POS_STORE_PINCODE).trim();
+    }
+    if (!String(out.confirm_phone || "").trim() && defaults.confirm_phone) {
+      out.confirm_phone = String(defaults.confirm_phone).trim();
+    }
     return out;
   }
 
@@ -1513,7 +1535,7 @@
   }
 
   function clearAddressValidationState() {
-    ["confirm_first_name", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
+    ["confirm_first_name", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
     POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
@@ -1622,10 +1644,22 @@
     var firstInvalidId = "";
     var firstName = String(payload.confirm_first_name || "").trim();
     var state = String(payload.confirm_state || "").trim();
+    var zip = String(payload.confirm_zip || "").trim();
     if (!firstName) {
       missing.push("First name");
       setPosFieldInvalid("confirm_first_name", true);
       firstInvalidId = "confirm_first_name";
+    }
+    if (!zip) {
+      missing.push("ZIP / Pincode");
+      setPosFieldInvalid("confirm_zip", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_zip";
+    }
+    var phone = String(payload.confirm_phone || "").trim();
+    if (!phone) {
+      missing.push("Phone");
+      setPosFieldInvalid("confirm_phone", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_phone";
     }
     if (!state) {
       missing.push("State");
