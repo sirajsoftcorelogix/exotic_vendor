@@ -1385,7 +1385,9 @@ class POSRegisterController
         if ($warehouseId <= 0) {
             $sql = 'SELECT id, sku, title, 0 AS stock_qty
                     FROM vp_products
-                    WHERE is_active = 1 AND item_code = ? AND sku <> ?
+                    WHERE is_active = 1
+                      AND LOWER(TRIM(IFNULL(item_level, \'\'))) <> \'parent\'
+                      AND item_code = ? AND sku <> ?
                     ORDER BY sku ASC';
             $stmt = $conn->prepare($sql);
             if (!$stmt) {
@@ -1422,7 +1424,9 @@ class POSRegisterController
                 ) latest ON latest.product_id = sm1.product_id AND latest.max_id = sm1.id
                 WHERE sm1.warehouse_id = ?
             ) sm ON sm.product_id = p.id
-            WHERE p.is_active = 1 AND p.item_code = ? AND p.sku <> ?
+            WHERE p.is_active = 1
+              AND LOWER(TRIM(IFNULL(p.item_level, \'\'))) <> \'parent\'
+              AND p.item_code = ? AND p.sku <> ?
             ORDER BY p.sku ASC';
 
         $stmt = $conn->prepare($sql);
@@ -2696,13 +2700,6 @@ class POSRegisterController
             'confirm_state' => 'Billing state',
             'confirm_zip' => 'Billing ZIP / pincode',
             'confirm_country' => 'Billing country',
-            'confirm_sfirst_name' => 'Shipping first name',
-            'confirm_sphone' => 'Shipping phone',
-            'confirm_saddress1' => 'Shipping address 1',
-            'confirm_scity' => 'Shipping city',
-            'confirm_sstate' => 'Shipping state',
-            'confirm_szip' => 'Shipping ZIP / pincode',
-            'confirm_scountry' => 'Shipping country',
         ];
 
         $errors = [];
@@ -2722,21 +2719,10 @@ class POSRegisterController
             $errors[] = 'Valid billing phone';
         }
 
-        $shippingPhoneDigits = preg_replace('/\D/', '', (string)($payload['confirm_sphone'] ?? ''));
-        if ($shippingPhoneDigits !== '' && strlen($shippingPhoneDigits) < 6) {
-            $errors[] = 'Valid shipping phone';
-        }
-
         $billingCountry = strtoupper(trim((string)($payload['confirm_country'] ?? '')));
         $billingZip = trim((string)($payload['confirm_zip'] ?? ''));
         if (($billingCountry === 'IN' || $billingCountry === 'INDIA') && $billingZip !== '' && !preg_match('/^\d{6}$/', $billingZip)) {
             $errors[] = 'Valid 6 digit billing pincode';
-        }
-
-        $shippingCountry = strtoupper(trim((string)($payload['confirm_scountry'] ?? '')));
-        $shippingZip = trim((string)($payload['confirm_szip'] ?? ''));
-        if (($shippingCountry === 'IN' || $shippingCountry === 'INDIA') && $shippingZip !== '' && !preg_match('/^\d{6}$/', $shippingZip)) {
-            $errors[] = 'Valid 6 digit shipping pincode';
         }
 
         $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));

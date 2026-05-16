@@ -658,19 +658,19 @@
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Shipping First Name <span class="text-red-600">*</span><input id="confirm_sfirst_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping First Name" required></label>
+          <label class="block text-xs font-medium text-slate-600">Shipping First Name<input id="confirm_sfirst_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping First Name"></label>
           <label class="block text-xs font-medium text-slate-600">Shipping Last Name<input id="confirm_slast_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Last Name"></label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">Shipping Phone <span class="text-red-600">*</span><input id="confirm_sphone" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Phone" required></label>
-        <label class="block text-xs font-medium text-slate-600">Shipping Address 1 <span class="text-red-600">*</span><input id="confirm_saddress1" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 1" required></label>
+        <label class="block text-xs font-medium text-slate-600">Shipping Phone<input id="confirm_sphone" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Phone"></label>
+        <label class="block text-xs font-medium text-slate-600">Shipping Address 1<input id="confirm_saddress1" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 1"></label>
         <label class="block text-xs font-medium text-slate-600">Shipping Address 2<input id="confirm_saddress2" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Shipping City <span class="text-red-600">*</span><input id="confirm_scity" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping City" required></label>
-          <label class="block text-xs font-medium text-slate-600">Shipping State <span class="text-red-600">*</span><input id="confirm_sstate" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping State" required></label>
+          <label class="block text-xs font-medium text-slate-600">Shipping City<input id="confirm_scity" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping City"></label>
+          <label class="block text-xs font-medium text-slate-600">Shipping State<input id="confirm_sstate" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping State"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Shipping ZIP / Pincode <span class="text-red-600">*</span><input id="confirm_szip" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping ZIP" required></label>
-          <label class="block text-xs font-medium text-slate-600">Shipping Country <span class="text-red-600">*</span><input id="confirm_scountry" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Country" required></label>
+          <label class="block text-xs font-medium text-slate-600">Shipping ZIP / Pincode<input id="confirm_szip" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping ZIP"></label>
+          <label class="block text-xs font-medium text-slate-600">Shipping Country<input id="confirm_scountry" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Country"></label>
         </div>
       </div>
     </div>
@@ -1174,14 +1174,19 @@
     ["confirm_city", "Billing city"],
     ["confirm_state", "Billing state"],
     ["confirm_zip", "Billing ZIP / pincode"],
-    ["confirm_country", "Billing country"],
-    ["confirm_sfirst_name", "Shipping first name"],
-    ["confirm_sphone", "Shipping phone"],
-    ["confirm_saddress1", "Shipping address 1"],
-    ["confirm_scity", "Shipping city"],
-    ["confirm_sstate", "Shipping state"],
-    ["confirm_szip", "Shipping ZIP / pincode"],
-    ["confirm_scountry", "Shipping country"]
+    ["confirm_country", "Billing country"]
+  ];
+
+  var POS_SHIPPING_ADDRESS_FIELD_IDS = [
+    "confirm_sfirst_name",
+    "confirm_slast_name",
+    "confirm_sphone",
+    "confirm_saddress1",
+    "confirm_saddress2",
+    "confirm_scity",
+    "confirm_sstate",
+    "confirm_szip",
+    "confirm_scountry"
   ];
 
   function setPosFieldInvalid(id, invalid) {
@@ -1195,6 +1200,9 @@
   function clearAddressValidationState() {
     POS_REQUIRED_ADDRESS_FIELDS.forEach(function(row) {
       setPosFieldInvalid(row[0], false);
+    });
+    POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
+      setPosFieldInvalid(id, false);
     });
     ["confirm_email", "confirm_gstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
       setPosFieldInvalid(id, false);
@@ -1324,26 +1332,12 @@
       setPosFieldInvalid("confirm_phone", true);
       if (!firstInvalidId) firstInvalidId = "confirm_phone";
     }
-    var shippingPhoneDigits = String(payload.confirm_sphone || "").replace(/\D/g, "");
-    if (shippingPhoneDigits !== "" && shippingPhoneDigits.length < 6) {
-      missing.push("Valid shipping phone");
-      setPosFieldInvalid("confirm_sphone", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_sphone";
-    }
-
     var country = String(payload.confirm_country || "").trim().toUpperCase();
-    var scountry = String(payload.confirm_scountry || "").trim().toUpperCase();
     var billingZip = String(payload.confirm_zip || "").trim();
-    var shippingZip = String(payload.confirm_szip || "").trim();
     if ((country === "IN" || country === "INDIA") && billingZip !== "" && !/^\d{6}$/.test(billingZip)) {
       missing.push("Valid 6 digit billing pincode");
       setPosFieldInvalid("confirm_zip", true);
       if (!firstInvalidId) firstInvalidId = "confirm_zip";
-    }
-    if ((scountry === "IN" || scountry === "INDIA") && shippingZip !== "" && !/^\d{6}$/.test(shippingZip)) {
-      missing.push("Valid 6 digit shipping pincode");
-      setPosFieldInvalid("confirm_szip", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_szip";
     }
 
     var gstin = String(payload.confirm_gstin || "").trim().toUpperCase();
