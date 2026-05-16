@@ -577,6 +577,19 @@ class POSRegisterController
             }
         }
 
+        $posIndiaStates = [];
+        if ($conn instanceof mysqli) {
+            require_once 'models/country/state.php';
+            $stateModel = new State($conn);
+            $stateRows = $stateModel->getAllStates(105);
+            foreach (($stateRows['states'] ?? []) as $row) {
+                $name = trim((string)($row['name'] ?? ''));
+                if ($name !== '') {
+                    $posIndiaStates[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
+                }
+            }
+        }
+
         renderTemplate('views/pos_register/index.php', [
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
@@ -589,7 +602,41 @@ class POSRegisterController
             'selected_customer' => $selected_customer,
             'high_value_transaction_limit' => $highValueTransactionLimit,
             'country_list' => $countryList,
+            'pos_india_states' => $posIndiaStates,
         ]);
+    }
+
+    /** JSON list of Indian states for POS address confirm dropdown (country_id 105). */
+    public function states_by_country(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        $country = strtoupper(trim((string)($_GET['country'] ?? 'IN')));
+        if ($country !== 'IN') {
+            echo json_encode([], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        if (!$conn instanceof mysqli) {
+            echo json_encode([], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        require_once 'models/country/state.php';
+        $stateModel = new State($conn);
+        $stateRows = $stateModel->getAllStates(105);
+        $out = [];
+        foreach (($stateRows['states'] ?? []) as $row) {
+            $name = trim((string)($row['name'] ?? ''));
+            if ($name !== '') {
+                $out[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
+            }
+        }
+        echo json_encode($out, JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     /**
@@ -2774,17 +2821,36 @@ class POSRegisterController
      * Proxies Exotic POST /order/create, then inserts pos_payments with receipt number.
      */
     private const POS_DUMMY_BILLING_ADDRESS1 = 'dummy Address';
+    private const POS_DUMMY_EMAIL = 'dummy@exoticindia.com';
+    private const POS_DUMMY_PHONE = '0000000000';
+    private const POS_DUMMY_CITY = 'Delhi';
+    private const POS_DEFAULT_STATE = 'Delhi';
 
     /**
-     * Billing fields are optional in the confirm modal; blank address1 is replaced for order/create.
+     * Fill API-required billing fields when blank so order/create validation passes.
      *
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
     private function normalizePosCheckoutBillingPayload(array $payload): array
     {
+        if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
+            // Left empty; validatePosCheckoutAddressPayload blocks checkout.
+        }
+        if (trim((string)($payload['confirm_email'] ?? '')) === '') {
+            $payload['confirm_email'] = self::POS_DUMMY_EMAIL;
+        }
+        if (trim((string)($payload['confirm_phone'] ?? '')) === '') {
+            $payload['confirm_phone'] = self::POS_DUMMY_PHONE;
+        }
         if (trim((string)($payload['confirm_address1'] ?? '')) === '') {
             $payload['confirm_address1'] = self::POS_DUMMY_BILLING_ADDRESS1;
+        }
+        if (trim((string)($payload['confirm_city'] ?? '')) === '') {
+            $payload['confirm_city'] = self::POS_DUMMY_CITY;
+        }
+        if (trim((string)($payload['confirm_state'] ?? '')) === '') {
+            $payload['confirm_state'] = self::POS_DEFAULT_STATE;
         }
 
         return $payload;
@@ -2793,11 +2859,11 @@ class POSRegisterController
     private function validatePosCheckoutAddressPayload(array $payload): array
     {
         $errors = [];
-        // Billing/shipping ZIP and pincode are optional (no empty or format checks).
-
-        $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));
-        if ($gstin !== '' && !preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-            $errors[] = 'Valid GSTIN';
+        if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
+            $errors[] = 'First name';
+        }
+        if (trim((string)($payload['confirm_state'] ?? '')) === '') {
+            $errors[] = 'State';
         }
 
         return $errors;
@@ -2876,16 +2942,6 @@ class POSRegisterController
         }
 
         $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $paymentAmount, $paymentMode, $conn);
-        if (empty($compliance['ok'])) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Additional details required for High Value Transaction: ' . implode(' ', $compliance['errors']),
-                'requires_compliance' => !empty($compliance['is_high_value']),
-                'requires_cash_confirmation' => !empty($compliance['cash_warning_required']),
-                'compliance' => $compliance,
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
 
         $ctx = $this->exoticCartDiscountContext();
         $retrieve = $this->exotic_api_call(
@@ -3245,11 +3301,17 @@ class POSRegisterController
                 ? trim((string)$payload['confirm_address1'])
                 : self::POS_DUMMY_BILLING_ADDRESS1,
             'address2' => trim((string)($payload['confirm_address2'] ?? '')),
-            'city' => trim((string)($payload['confirm_city'] ?? '')),
-            'state' => trim((string)($payload['confirm_state'] ?? '')),
+            'city' => trim((string)($payload['confirm_city'] ?? '')) !== ''
+                ? trim((string)$payload['confirm_city'])
+                : self::POS_DUMMY_CITY,
+            'state' => trim((string)($payload['confirm_state'] ?? '')) !== ''
+                ? trim((string)$payload['confirm_state'])
+                : self::POS_DEFAULT_STATE,
             'zip' => trim((string)($payload['confirm_zip'] ?? '')),
             'country' => $country,
-            'phone' => trim((string)($payload['confirm_phone'] ?? '')),
+            'phone' => trim((string)($payload['confirm_phone'] ?? '')) !== ''
+                ? trim((string)$payload['confirm_phone'])
+                : self::POS_DUMMY_PHONE,
             'gstin' => trim((string)($payload['confirm_gstin'] ?? '')),
             'sname' => $sname,
             'saddress1' => trim((string)($payload['confirm_saddress1'] ?? '')),
