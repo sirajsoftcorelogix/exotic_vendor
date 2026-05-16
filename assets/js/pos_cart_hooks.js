@@ -2757,11 +2757,12 @@
         code: String(p.code || '').trim(),
         qty: parseInt(String(p.qty != null ? p.qty : 1), 10) || 1,
         variation: String(p.variation || ''),
-        options: String(p.options || '')
+        options: String(p.options || ''),
+        item_level: String(p.item_level || '').trim(),
+        item_code: String(p.item_code || '').trim(),
+        size: String(p.size || '').trim(),
+        color: String(p.color || '').trim()
       };
-      if (p.stock_check_code != null && String(p.stock_check_code).trim() !== '') {
-        body.stock_check_code = String(p.stock_check_code).trim();
-      }
       if (!body.code) {
         toast('Missing product code', 'red');
         return undefined;
