@@ -232,12 +232,18 @@ if ($receipt_download_filename_base === '') {
               <?php
               $isPaymentInFull = !empty($is_payment_in_full)
                 || (strtolower(trim((string)($payment_stage ?? ''))) === 'final' && (float)($receipt_pending_amount ?? 0) <= 0.02);
-              $canInvoicePreview = $isPaymentInFull && !empty($show_invoice_preview_button) && !empty($invoice_preview_url);
+              $orderNumForInvoice = trim((string)($order_id ?? ''));
+              $invoiceEnsurePreviewUrl = trim((string)($invoice_ensure_preview_url ?? ''));
+              if ($invoiceEnsurePreviewUrl === '' && $orderNumForInvoice !== '') {
+                  $invoiceEnsurePreviewUrl = 'index.php?page=pos_register&action=checkout-invoice-preview&order_number='
+                      . rawurlencode($orderNumForInvoice);
+              }
+              $canInvoicePreview = $isPaymentInFull && $invoiceEnsurePreviewUrl !== '';
               $canInvoicePdf = $isPaymentInFull && !empty($show_invoice_pdf_button) && !empty($invoice_pdf_url);
               ?>
               <span class="text-[11px] text-slate-500">Tax invoice</span>
               <?php if ($canInvoicePreview): ?>
-                <a href="<?= $h((string)$invoice_preview_url) ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Preview &amp; print invoice</a>
+                <a href="<?= $h($invoiceEnsurePreviewUrl) ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Preview &amp; print invoice</a>
               <?php else: ?>
                 <span class="inline-flex flex-col gap-0.5">
                   <span class="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed" title="<?= $h((string)($invoice_pdf_disabled_hint ?? '')) ?>">Preview &amp; print invoice</span>
