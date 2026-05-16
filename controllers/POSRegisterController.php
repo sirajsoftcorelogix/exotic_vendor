@@ -329,7 +329,17 @@ class POSRegisterController
             require_once __DIR__ . '/PosInvoiceController.php';
 
             $ordersCtrl = new OrdersController();
-            $import = $ordersCtrl->importSingleOrderForCheckout($orderNumber);
+            $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 4, 2);
+
+            if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
+                $out['import_status'] = 'failed';
+                $out['invoice_pdf_disabled_hint'] = 'Order is not in the system yet (vendor API may still be syncing). '
+                    . 'Open Orders to import, then create the invoice from Invoices.';
+                if (!empty($import['message'])) {
+                    $out['invoice_pdf_disabled_hint'] .= ' (' . (string)$import['message'] . ')';
+                }
+                return $out;
+            }
 
             $posInv = new PosInvoiceController();
             $invRes = $posInv->createAutoInvoiceForOrder($orderNumber);

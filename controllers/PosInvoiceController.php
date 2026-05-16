@@ -698,16 +698,25 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
             ];
         }
 
-        $payment = $conn->query("
-        SELECT * FROM pos_payments
-        WHERE order_number = '" . $conn->real_escape_string($orderNumber) . "'
-        ORDER BY id DESC LIMIT 1
-    ")->fetch_assoc();
-
-        $stage = $payment['payment_stage'] ?? 'final';
-        $status = ($stage === 'final') ? 'final' : 'proforma';
+        $paymentStage = 'final';
+        $stmtPay = $conn->prepare(
+            'SELECT payment_stage FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+        );
+        if ($stmtPay) {
+            $stmtPay->bind_param('s', $orderNumber);
+            $stmtPay->execute();
+            $payment = $stmtPay->get_result()->fetch_assoc();
+            $stmtPay->close();
+            if (is_array($payment) && isset($payment['payment_stage'])) {
+                $paymentStage = (string)$payment['payment_stage'];
+            }
+        }
+        $status = (strtolower(trim($paymentStage)) === 'final') ? 'final' : 'proforma';
 
         $stmt = $conn->prepare('SELECT * FROM vp_orders WHERE order_number = ?');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Database error loading order lines'];
+        }
         $stmt->bind_param('s', $orderNumber);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -723,6 +732,10 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
         $stmt->close();
 
         $stmt2 = $conn->prepare('SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if (!$stmt2) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Database error loading order info'];
+        }
         $stmt2->bind_param('s', $orderNumber);
         $stmt2->execute();
         $info = $stmt2->get_result()->fetch_assoc();
