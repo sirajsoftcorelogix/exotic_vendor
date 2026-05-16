@@ -313,7 +313,10 @@ class POSRegisterController
         $out = [
             'import_status' => '',
             'show_invoice_pdf_button' => false,
+            'show_invoice_preview_button' => false,
+            'invoice_id' => 0,
             'invoice_pdf_url' => '',
+            'invoice_preview_url' => '',
             'invoice_pdf_disabled_hint' => 'Tax invoice is available after payment is received in full.',
         ];
 
@@ -335,9 +338,7 @@ class POSRegisterController
                 $invoiceId = (int)$invRes['invoice_id'];
                 $this->markInvoiceHighValueIfPresent($conn, $invoiceId, $compliance);
                 $out['import_status'] = !empty($import['success']) ? 'success' : 'failed';
-                $out['show_invoice_pdf_button'] = true;
-                $out['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
-                $out['invoice_pdf_disabled_hint'] = '';
+                $out = $this->applyPosReceiptInvoiceLinks($out, $invoiceId);
                 return $out;
             }
 
@@ -345,9 +346,7 @@ class POSRegisterController
             if ($existingId) {
                 $this->markInvoiceHighValueIfPresent($conn, $existingId, $compliance);
                 $out['import_status'] = !empty($import['success']) ? 'success' : 'failed';
-                $out['show_invoice_pdf_button'] = true;
-                $out['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $existingId;
-                $out['invoice_pdf_disabled_hint'] = '';
+                $out = $this->applyPosReceiptInvoiceLinks($out, $existingId);
                 return $out;
             }
 
@@ -3159,8 +3158,12 @@ class POSRegisterController
             'receipt_pending_amount' => (float)($pay['pending_amount'] ?? 0),
             'import_status' => $invoiceMeta['import_status'],
             'show_invoice_pdf_button' => $invoiceMeta['show_invoice_pdf_button'],
+            'show_invoice_preview_button' => $invoiceMeta['show_invoice_preview_button'] ?? false,
+            'invoice_id' => (int)($invoiceMeta['invoice_id'] ?? 0),
             'invoice_pdf_url' => $invoiceMeta['invoice_pdf_url'],
+            'invoice_preview_url' => $invoiceMeta['invoice_preview_url'] ?? '',
             'invoice_pdf_disabled_hint' => $invoiceMeta['invoice_pdf_disabled_hint'],
+            'is_payment_in_full' => ($paymentStage === 'final' && (float)($pay['pending_amount'] ?? 0) <= 0.02),
             'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
             'receipt_company_tagline' => '',
             'receipt_company_gstin' => '',
@@ -3210,25 +3213,66 @@ class POSRegisterController
     /**
      * If checkout did not store an invoice PDF link, resolve the latest invoice for this order from the DB.
      */
+    private function applyPosReceiptInvoiceLinks(array $row, int $invoiceId): array
+    {
+        if ($invoiceId <= 0) {
+            return $row;
+        }
+        $row['invoice_id'] = $invoiceId;
+        $row['show_invoice_pdf_button'] = true;
+        $row['show_invoice_preview_button'] = true;
+        $row['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
+        $row['invoice_preview_url'] = 'index.php?page=posinvoice&action=print-preview&invoice_id=' . $invoiceId;
+        $row['invoice_pdf_disabled_hint'] = '';
+
+        return $row;
+    }
+
+    private function enrichPosCheckoutReceiptRow(array $row): array
+    {
+        $stage = strtolower(trim((string)($row['payment_stage'] ?? '')));
+        $pending = (float)($row['receipt_pending_amount'] ?? 0);
+        $row['is_payment_in_full'] = ($stage === 'final' && $pending <= 0.02);
+
+        $invoiceId = (int)($row['invoice_id'] ?? 0);
+        if ($invoiceId <= 0 && !empty($row['invoice_pdf_url'])) {
+            if (preg_match('/invoice_id=(\d+)/', (string)$row['invoice_pdf_url'], $m)) {
+                $invoiceId = (int)$m[1];
+                $row['invoice_id'] = $invoiceId;
+            }
+        }
+
+        if ($row['is_payment_in_full'] && $invoiceId > 0) {
+            $row = $this->applyPosReceiptInvoiceLinks($row, $invoiceId);
+        } elseif (!$row['is_payment_in_full']) {
+            $row['show_invoice_pdf_button'] = false;
+            $row['show_invoice_preview_button'] = false;
+            if (trim((string)($row['invoice_pdf_disabled_hint'] ?? '')) === '') {
+                $row['invoice_pdf_disabled_hint'] = 'Tax invoice preview is available after payment is received in full.';
+            }
+        }
+
+        return $row;
+    }
+
     private function fillReceiptInvoicePdfFromDb(mysqli $conn, array $row): array
     {
         if (!empty($row['show_invoice_pdf_button']) && !empty($row['invoice_pdf_url'])) {
-            return $row;
+            return $this->enrichPosCheckoutReceiptRow($row);
         }
         $orderNum = trim((string)($row['order_id'] ?? ''));
         if ($orderNum === '') {
-            return $row;
+            return $this->enrichPosCheckoutReceiptRow($row);
         }
         $invoiceId = $this->findInvoiceIdForOrderNumber($conn, $orderNum);
         if ($invoiceId) {
-            $row['show_invoice_pdf_button'] = true;
-            $row['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
-            $row['invoice_pdf_disabled_hint'] = '';
             if (trim((string)($row['import_status'] ?? '')) === '') {
                 $row['import_status'] = 'success';
             }
+            $row = $this->applyPosReceiptInvoiceLinks($row, $invoiceId);
         }
-        return $row;
+
+        return $this->enrichPosCheckoutReceiptRow($row);
     }
 
     /**

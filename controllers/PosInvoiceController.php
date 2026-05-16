@@ -410,6 +410,43 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
             exit;
         }
     }
+
+    /**
+     * Printable tax invoice in a new browser tab (preview + window.print).
+     */
+    public function printPreview(): void
+    {
+        is_login();
+        global $invoiceModel, $commanModel;
+
+        $invoiceId = (int)($_GET['invoice_id'] ?? 0);
+        if ($invoiceId <= 0) {
+            http_response_code(400);
+            echo '<p>Invalid invoice.</p>';
+            exit;
+        }
+
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        $items = $invoiceModel->getInvoiceItems($invoiceId);
+        if (!$invoice) {
+            http_response_code(404);
+            echo '<p>Invoice not found.</p>';
+            exit;
+        }
+
+        $firmSettings = $commanModel->getRecordById('global_settings', 1);
+        $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
+
+        $invoiceHtml = $this->generateInvoiceHtml($invoice, $items, 'tax_invoice');
+        $pdfUrl = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
+
+        renderTemplateClean('views/posinvoice/print_preview.php', [
+            'invoice_html' => $invoiceHtml,
+            'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
+            'invoice_pdf_url' => $pdfUrl,
+        ], 'Invoice — ' . ($invoice['invoice_number'] ?? ''));
+    }
+
     private function generateInvoiceHtml($invoice, $items, $type = '')
     {
         global $commanModel;

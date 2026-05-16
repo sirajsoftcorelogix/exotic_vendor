@@ -1353,6 +1353,10 @@ switch ($page) {
                 $controller->generatePdf();
                 break;
 
+            case 'print-preview':
+                $controller->printPreview();
+                break;
+
             default:
                 $controller->index();
                 break;
