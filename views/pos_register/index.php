@@ -70,38 +70,30 @@
       letter-spacing: 0.01em;
     }
 
-    /* Confirm Billing & Shipping — fit laptop viewport */
+    /* Confirm Billing & Shipping — fit laptop viewport, scroll body only */
     #addressConfirmModal:not(.hidden) {
       display: flex !important;
       align-items: center;
       justify-content: center;
-      padding: 0.5rem;
+      padding: 1rem;
     }
     #addressConfirmModal .address-confirm-panel {
-      max-height: min(92vh, 680px);
+      max-height: min(90vh, 820px);
       width: 100%;
     }
     #addressConfirmModal .address-confirm-body {
       min-height: 0;
     }
-    #addressConfirmModal .address-confirm-body input,
+    #addressConfirmModal .address-confirm-body input:not([type="checkbox"]),
     #addressConfirmModal .address-confirm-body select {
-      margin-top: 0.125rem;
-      padding: 0.3rem 0.5rem;
-      font-size: 0.8125rem;
-      line-height: 1.25;
+      margin-top: 0.25rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+      line-height: 1.35;
+      border-color: #cbd5e1;
     }
     #addressConfirmModal .address-confirm-body label.block {
-      font-size: 0.75rem;
-    }
-    #addressConfirmModal #highValueCompliancePanel {
-      padding: 0.5rem 0.625rem;
-    }
-    #addressConfirmModal #highValueCompliancePanel .mt-3 {
-      margin-top: 0.5rem;
-    }
-    #addressConfirmModal #highValueCompliancePanel p.mb-3 {
-      margin-bottom: 0.5rem;
+      font-size: 0.8125rem;
     }
   </style>
   <?php
@@ -641,33 +633,33 @@
 <!-- ADDRESS CONFIRMATION MODAL -->
 <div id="addressConfirmModal" class="fixed inset-0 z-[10000] hidden">
   <div class="absolute inset-0 bg-black/40" onclick="closeAddressConfirmModal()"></div>
-  <div class="address-confirm-panel relative mx-auto flex w-[94%] max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
-    <div class="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
-      <h2 class="text-base font-semibold leading-tight">Confirm Billing &amp; Shipping Details</h2>
+  <div class="address-confirm-panel relative mx-auto flex w-[96%] max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+    <div class="flex shrink-0 items-center justify-between border-b px-5 py-3">
+      <h2 class="text-lg font-semibold text-slate-800">Confirm Billing &amp; Shipping Details</h2>
       <button type="button" onclick="closeAddressConfirmModal()" class="text-lg leading-none text-gray-500 hover:text-gray-800" aria-label="Close">✕</button>
     </div>
     <div class="address-confirm-body flex-1 overflow-y-auto overscroll-contain">
-    <div id="addressConfirmValidationSummary" class="mx-4 mt-2 hidden rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700"></div>
-    <div id="highValueComplianceBanner" class="mx-4 mt-2 hidden rounded border border-amber-300 bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-900">High Value Transaction – Compliance Required</div>
-    <div class="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:gap-4 sm:p-4">
-      <div class="space-y-2">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-700">Billing Information</h3>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-xs font-medium text-slate-600">First Name<input id="confirm_first_name" class="w-full rounded border" placeholder="First"></label>
-          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="w-full rounded border" placeholder="Last"></label>
+    <div id="addressConfirmValidationSummary" class="mx-5 mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></div>
+    <div id="highValueComplianceBanner" class="mx-5 mt-3 hidden rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">High Value Transaction – Compliance Required</div>
+    <div class="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
+      <div class="space-y-3">
+        <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block text-xs font-medium text-slate-600">First Name<input id="confirm_first_name" class="w-full rounded border" placeholder="First Name"></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
           <label class="block text-xs font-medium text-slate-600">Phone<input id="confirm_phone" class="w-full rounded border" placeholder="Phone"></label>
         </div>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_address1" class="w-full rounded border" placeholder="Address 1"></label>
-          <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="w-full rounded border" placeholder="Address 2"></label>
-        </div>
-        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_address1" class="w-full rounded border" placeholder="Address 1"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="w-full rounded border" placeholder="Address 2"></label>
+        <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">City<input id="confirm_city" class="w-full rounded border" placeholder="City"></label>
           <label class="block text-xs font-medium text-slate-600">State<input id="confirm_state" class="w-full rounded border" placeholder="State"></label>
-          <label class="block text-xs font-medium text-slate-600">ZIP<input id="confirm_zip" class="w-full rounded border" placeholder="ZIP"></label>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode<input id="confirm_zip" class="w-full rounded border" placeholder="ZIP / Pincode"></label>
           <label class="block text-xs font-medium text-slate-600">Country
             <select id="confirm_country" class="w-full rounded border bg-white">
               <?php
@@ -677,8 +669,8 @@
             </select>
           </label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN" maxlength="15"></label>
-        <div id="highValueCompliancePanel" class="hidden rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900">
+        <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
+        <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <div class="mb-2 font-semibold text-amber-950">High Value Transaction – Compliance Required</div>
           <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. GSTIN B2B invoices derive PAN automatically.</p>
           <label class="block font-medium">Customer residency <span class="text-red-600">*</span>
@@ -712,27 +704,27 @@
           <p id="complianceInlineError" class="mt-2 hidden text-[11px] font-medium text-red-700"></p>
         </div>
       </div>
-      <div class="space-y-2">
+      <div class="space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-700">Shipping Information</h3>
+          <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
           <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600">
             <input type="checkbox" id="confirm_shipping_same_as_billing" class="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500">
             Same as billing
           </label>
         </div>
-        <div class="grid grid-cols-3 gap-2">
-          <label class="block text-xs font-medium text-slate-600">First Name<input id="confirm_sfirst_name" class="w-full rounded border" placeholder="First"></label>
-          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_slast_name" class="w-full rounded border" placeholder="Last"></label>
-          <label class="block text-xs font-medium text-slate-600">Phone<input id="confirm_sphone" class="w-full rounded border" placeholder="Phone"></label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block text-xs font-medium text-slate-600">First Name<input id="confirm_sfirst_name" class="w-full rounded border" placeholder="First Name"></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_slast_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_saddress1" class="w-full rounded border" placeholder="Address 1"></label>
-          <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_saddress2" class="w-full rounded border" placeholder="Address 2"></label>
-        </div>
-        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <label class="block text-xs font-medium text-slate-600">Phone<input id="confirm_sphone" class="w-full rounded border" placeholder="Phone"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_saddress1" class="w-full rounded border" placeholder="Address 1"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_saddress2" class="w-full rounded border" placeholder="Address 2"></label>
+        <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">City<input id="confirm_scity" class="w-full rounded border" placeholder="City"></label>
           <label class="block text-xs font-medium text-slate-600">State<input id="confirm_sstate" class="w-full rounded border" placeholder="State"></label>
-          <label class="block text-xs font-medium text-slate-600">ZIP<input id="confirm_szip" class="w-full rounded border" placeholder="ZIP"></label>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode<input id="confirm_szip" class="w-full rounded border" placeholder="ZIP / Pincode"></label>
           <label class="block text-xs font-medium text-slate-600">Country
             <select id="confirm_scountry" class="w-full rounded border bg-white">
               <?php
@@ -745,9 +737,9 @@
       </div>
     </div>
     </div>
-    <div class="flex shrink-0 justify-end gap-2 border-t bg-slate-50 px-4 py-2.5">
-      <button type="button" onclick="closeAddressConfirmModal()" class="rounded-lg bg-gray-200 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-300">Cancel</button>
-      <button type="button" id="confirmAddressSubmitBtn" class="rounded-lg bg-orange-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-orange-700">
+    <div class="flex shrink-0 justify-end gap-3 border-t bg-slate-50 px-5 py-3">
+      <button type="button" onclick="closeAddressConfirmModal()" class="rounded-lg bg-gray-200 px-5 py-2 text-sm text-gray-700 hover:bg-gray-300">Cancel</button>
+      <button type="button" id="confirmAddressSubmitBtn" class="rounded-lg bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700">
         Confirm &amp; Submit Order
       </button>
     </div>
