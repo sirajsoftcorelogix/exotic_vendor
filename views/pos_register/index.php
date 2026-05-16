@@ -400,6 +400,9 @@
 
 
             <input type="hidden" id="modal_product_code" value="">
+            <input type="hidden" id="modal_item_code" value="">
+            <input type="hidden" id="modal_size" value="">
+            <input type="hidden" id="modal_color" value="">
             <input type="hidden" id="modal_item_level" value="">
             <input type="hidden" id="modal_stock_check_code" value="">
             <input type="hidden" id="modal_qty" value="1">

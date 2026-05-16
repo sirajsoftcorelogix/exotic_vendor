@@ -64,50 +64,33 @@ class POSRegisterController
     }
 
     /**
-     * Codes to validate for parent-level block on cart add (variant SKU only when using parent code + variation).
-     *
-     * @param array<string, mixed> $body
-     * @return list<string>
-     */
-    private function cartAddCodesForParentLevelCheck(array $body): array
-    {
-        $code = trim((string)($body['code'] ?? ''));
-        $stockCheck = trim((string)($body['stock_check_code'] ?? ''));
-        $variation = trim((string)($body['variation'] ?? ''));
-
-        if ($stockCheck !== '' && ($variation !== '' || ($code !== '' && strcasecmp($stockCheck, $code) !== 0))) {
-            return [$stockCheck];
-        }
-
-        $out = [];
-        foreach ([$stockCheck, $code] as $c) {
-            if ($c !== '' && !in_array($c, $out, true)) {
-                $out[] = $c;
-            }
-        }
-
-        return $out;
-    }
-
-    /**
-     * @param list<string> $codes
+     * @param array<string, mixed> $body Cart JSON (item_level, variation, code, …)
      * @return array{success: false, message: string}|null
      */
-    private function cartAddBlockedIfParentLevelProduct(mysqli $conn, array $codes): ?array
+    private function cartAddBlockedIfParentLevelProduct(mysqli $conn, array $body): ?array
     {
-        $seen = [];
-        foreach ($codes as $code) {
-            $code = trim((string)$code);
-            if ($code === '' || isset($seen[$code])) {
-                continue;
-            }
-            $seen[$code] = true;
-            if ($this->isParentItemLevel($this->lookupProductItemLevelForCode($conn, $code))) {
-                return [
-                    'success' => false,
-                    'message' => self::POS_PARENT_ITEM_CART_MESSAGE,
-                ];
-            }
+        $level = strtolower(trim((string)($body['item_level'] ?? '')));
+        if ($level === 'variation' || $level === 'standalone') {
+            return null;
+        }
+        if ($level === 'parent') {
+            return [
+                'success' => false,
+                'message' => self::POS_PARENT_ITEM_CART_MESSAGE,
+            ];
+        }
+
+        $variation = trim((string)($body['variation'] ?? ''));
+        if ($variation !== '') {
+            return null;
+        }
+
+        $code = trim((string)($body['code'] ?? ''));
+        if ($code !== '' && $this->isParentItemLevel($this->lookupProductItemLevelForCode($conn, $code))) {
+            return [
+                'success' => false,
+                'message' => self::POS_PARENT_ITEM_CART_MESSAGE,
+            ];
         }
 
         return null;
@@ -1138,6 +1121,17 @@ class POSRegisterController
         return trim((string)$dbRaw);
     }
 
+    /** Size/color for cart: trust vp_products row first (variant facets), then API. */
+    private function posProductFacetFromDbFirst(array $dbRow, array $apiData, string $field): string
+    {
+        $dbVal = trim((string)($dbRow[$field] ?? ''));
+        if ($dbVal !== '' && $dbVal !== '0' && strcasecmp($dbVal, 'n/a') !== 0) {
+            return $dbVal;
+        }
+
+        return $this->mergeProductTextField($apiData[$field] ?? '', $dbRow[$field] ?? '');
+    }
+
     /** GST % for POS: prefer API gst_rate / gst_percent / gst, else vp_products.gst. */
     private function mergeGstPercentField(array $apiData, array $dbRow): string
     {
@@ -1797,8 +1791,8 @@ class POSRegisterController
             'price' => $sellingPrice,
 
             'material' => $this->mergeProductTextField($data['material'] ?? '', $dbRow['material'] ?? ''),
-            'size' => $this->mergeProductTextField($data['size'] ?? '', $dbRow['size'] ?? ''),
-            'color' => $this->mergeProductTextField($data['color'] ?? '', $dbRow['color'] ?? ''),
+            'size' => $this->posProductFacetFromDbFirst($dbRow, $data, 'size'),
+            'color' => $this->posProductFacetFromDbFirst($dbRow, $data, 'color'),
             'hsn' => $this->mergeProductTextField($data['hsn'] ?? '', $dbRow['hsn'] ?? ''),
             'gst_percent' => $this->mergeGstPercentField($data, $dbRow),
             'mrp' => $mrpOut,
@@ -2002,7 +1996,7 @@ class POSRegisterController
                 if ($conn instanceof mysqli) {
                     $parentBlock = $this->cartAddBlockedIfParentLevelProduct(
                         $conn,
-                        $this->cartAddCodesForParentLevelCheck(is_array($body) ? $body : [])
+                        is_array($body) ? $body : []
                     );
                     if ($parentBlock !== null) {
                         echo json_encode($parentBlock, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -2020,40 +2014,6 @@ class POSRegisterController
                     $ctxAdd['extraHeaders']
                 );
                 $addRes = $primaryRes;
-                $retryRes = null;
-                $retryPostUsed = null;
-                // Some catalogue rows fail with parent-code + variation but succeed with direct variant SKU.
-                // Retry once with a safer payload shape before returning error to UI.
-                if (!$this->isExoticCartSuccess($addRes)) {
-                    $retryPost = $split['post'];
-                    $retryNeeded = false;
-                    $stockCheckCode = trim((string)($retryPost['stock_check_code'] ?? ''));
-                    $baseCode = trim((string)($retryPost['code'] ?? ''));
-                    if ($stockCheckCode !== '' && strcasecmp($stockCheckCode, $baseCode) !== 0) {
-                        $retryPost['code'] = $stockCheckCode;
-                        if (isset($retryPost['variation'])) {
-                            unset($retryPost['variation']);
-                        }
-                        $retryNeeded = true;
-                    } elseif (!empty($retryPost['variation'])) {
-                        unset($retryPost['variation']);
-                        $retryNeeded = true;
-                    }
-                    if ($retryNeeded) {
-                        $retryPostUsed = $retryPost;
-                        $retryRes = $this->exotic_api_call(
-                            '/cart/add',
-                            'POST',
-                            $split['query'],
-                            $retryPost,
-                            null,
-                            $ctxAdd['extraHeaders']
-                        );
-                        if ($this->isExoticCartSuccess($retryRes)) {
-                            $addRes = $retryRes;
-                        }
-                    }
-                }
                 $upstream = [
                     'api_base' => 'https://www.exoticindia.com/api',
                     'endpoint' => 'POST /cart/add',
@@ -2069,14 +2029,6 @@ class POSRegisterController
                         ],
                     ],
                 ];
-                if ($retryRes !== null) {
-                    $upstream['attempts'][] = [
-                        'label' => 'retry',
-                        'request_url' => $this->exoticCartAddPublicUrl($split['query']),
-                        'post_body' => $retryPostUsed ?? [],
-                        'response' => $this->compactUpstreamCartSnapshot($retryRes),
-                    ];
-                }
                 $this->emitCartApiResponse($addRes, ['upstream' => $upstream]);
 
                 return;
