@@ -24,6 +24,11 @@ class POSRegisterController
 
     private const POS_PARENT_ITEM_CART_MESSAGE = 'Parent Level Item can not be added to the cart';
 
+    /** Prefer exact variant SKU over shared item_code; deprioritize parent rows. */
+    private const VP_PRODUCT_BY_CODE_ORDER_SQL = ' ORDER BY (sku = ?) DESC,
+        CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+        id ASC ';
+
     private function isParentItemLevel(?string $itemLevel): bool
     {
         return strtolower(trim((string)$itemLevel)) === 'parent';
@@ -38,20 +43,50 @@ class POSRegisterController
         if ($code === '') {
             return '';
         }
+        // Prefer exact SKU, then non-parent rows (many variants share the same item_code).
         $stmt = $conn->prepare(
             'SELECT item_level FROM vp_products
              WHERE is_active = 1 AND (sku = ? OR item_code = ?)
-             ORDER BY id ASC LIMIT 1'
+             ORDER BY (sku = ?) DESC,
+                      CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+                      id ASC
+             LIMIT 1'
         );
         if (!$stmt) {
             return '';
         }
-        $stmt->bind_param('ss', $code, $code);
+        $stmt->bind_param('sss', $code, $code, $code);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
         return trim((string)($row['item_level'] ?? ''));
+    }
+
+    /**
+     * Codes to validate for parent-level block on cart add (variant SKU only when using parent code + variation).
+     *
+     * @param array<string, mixed> $body
+     * @return list<string>
+     */
+    private function cartAddCodesForParentLevelCheck(array $body): array
+    {
+        $code = trim((string)($body['code'] ?? ''));
+        $stockCheck = trim((string)($body['stock_check_code'] ?? ''));
+        $variation = trim((string)($body['variation'] ?? ''));
+
+        if ($stockCheck !== '' && ($variation !== '' || ($code !== '' && strcasecmp($stockCheck, $code) !== 0))) {
+            return [$stockCheck];
+        }
+
+        $out = [];
+        foreach ([$stockCheck, $code] as $c) {
+            if ($c !== '' && !in_array($c, $out, true)) {
+                $out[] = $c;
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -1248,12 +1283,13 @@ class POSRegisterController
         }
         $stmt = $conn->prepare(
             'SELECT price_india, price_india_suggested, finalprice, itemprice, gst
-             FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+             FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?)'
+            . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
         );
         if (!$stmt) {
             return 0.0;
         }
-        $stmt->bind_param('ss', $code, $code);
+        $stmt->bind_param('sss', $code, $code, $code);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -1279,12 +1315,13 @@ class POSRegisterController
             return [];
         }
         $stmt = $conn->prepare(
-            'SELECT gst FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+            'SELECT gst FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?)'
+            . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
         );
         if (!$stmt) {
             return [];
         }
-        $stmt->bind_param('ss', $code, $code);
+        $stmt->bind_param('sss', $code, $code, $code);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -1616,10 +1653,11 @@ class POSRegisterController
                         product_weight, product_weight_unit,
                         prod_height, prod_width, prod_length, length_unit, item_level
                  FROM vp_products WHERE is_active = 1
-                   AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+                   AND (sku = ? OR item_code = ?)'
+                . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
             );
             if ($stmt) {
-                $stmt->bind_param('ss', $code, $code);
+                $stmt->bind_param('sss', $code, $code, $code);
                 $stmt->execute();
                 $row = $stmt->get_result()->fetch_assoc();
                 $stmt->close();
@@ -1817,17 +1855,16 @@ class POSRegisterController
         }
 
         if ($productId <= 0) {
-            $sql = "SELECT id, item_code, sku, title
+            $sql = 'SELECT id, item_code, sku, title
                     FROM vp_products
-                    WHERE is_active = 1 AND (sku = ? OR item_code = ?)
-                    ORDER BY id ASC
-                    LIMIT 1";
+                    WHERE is_active = 1 AND (sku = ? OR item_code = ?)'
+                . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1';
             $stmt = $conn->prepare($sql);
             if (!$stmt) {
                 echo json_encode(['success' => false, 'message' => 'Could not prepare product query.']);
                 exit;
             }
-            $stmt->bind_param('ss', $q, $q);
+            $stmt->bind_param('sss', $q, $q, $q);
             $stmt->execute();
             $product = $stmt->get_result()->fetch_assoc();
             $stmt->close();
@@ -1963,10 +2000,10 @@ class POSRegisterController
                 }
                 global $conn;
                 if ($conn instanceof mysqli) {
-                    $parentBlock = $this->cartAddBlockedIfParentLevelProduct($conn, [
-                        trim((string)($body['code'] ?? '')),
-                        trim((string)($body['stock_check_code'] ?? '')),
-                    ]);
+                    $parentBlock = $this->cartAddBlockedIfParentLevelProduct(
+                        $conn,
+                        $this->cartAddCodesForParentLevelCheck(is_array($body) ? $body : [])
+                    );
                     if ($parentBlock !== null) {
                         echo json_encode($parentBlock, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
                         exit;
