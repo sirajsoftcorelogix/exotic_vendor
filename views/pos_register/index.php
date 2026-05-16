@@ -70,10 +70,24 @@
       letter-spacing: 0.01em;
     }
   </style>
+  <?php
+  $posCountryList = isset($country_list) && is_array($country_list)
+      ? $country_list
+      : (function_exists('country_array') ? country_array() : ['IN' => 'India']);
+  $posCountryIsoByName = [];
+  foreach ($posCountryList as $iso => $name) {
+      $code = strtoupper(substr(trim((string)$iso), 0, 2));
+      if ($code === '') {
+          continue;
+      }
+      $posCountryIsoByName[strtolower(trim((string)$name))] = $code;
+  }
+  ?>
   <script>
     window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
     window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_HIGH_VALUE_TRANSACTION_LIMIT = <?= json_encode((float)($high_value_transaction_limit ?? 200000.00)) ?>;
+    window.POS_COUNTRY_ISO_BY_NAME = <?= json_encode($posCountryIsoByName, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
   </script>
   <!-- ===== TOP BAR ===== -->
   <header class="border-b bg-white">
@@ -345,6 +359,7 @@
 
 
             <input type="hidden" id="modal_product_code" value="">
+            <input type="hidden" id="modal_item_level" value="">
             <input type="hidden" id="modal_stock_check_code" value="">
             <input type="hidden" id="modal_qty" value="1">
             <input type="hidden" id="modal_options" value="">
@@ -603,22 +618,29 @@
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">First Name <span class="text-red-600">*</span><input id="confirm_first_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="First Name" required></label>
+          <label class="block text-xs font-medium text-slate-600">First Name<input id="confirm_first_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="First Name"></label>
           <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Last Name"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Email (optional)"></label>
-          <label class="block text-xs font-medium text-slate-600">Phone <span class="text-red-600">*</span><input id="confirm_phone" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Phone" required></label>
+          <label class="block text-xs font-medium text-slate-600">Phone<input id="confirm_phone" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Phone"></label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">Address 1 <span class="text-red-600">*</span><input id="confirm_address1" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Address 1" required></label>
+        <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_address1" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Address 1 (optional)"></label>
         <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">City <span class="text-red-600">*</span><input id="confirm_city" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="City" required></label>
-          <label class="block text-xs font-medium text-slate-600">State <span class="text-red-600">*</span><input id="confirm_state" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="State" required></label>
+          <label class="block text-xs font-medium text-slate-600">City<input id="confirm_city" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="City"></label>
+          <label class="block text-xs font-medium text-slate-600">State<input id="confirm_state" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="State"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode <span class="text-red-600">*</span><input id="confirm_zip" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="ZIP" required></label>
-          <label class="block text-xs font-medium text-slate-600">Country <span class="text-red-600">*</span><input id="confirm_country" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Country" required></label>
+          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode (optional)<input id="confirm_zip" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="ZIP / Pincode (optional)"></label>
+          <label class="block text-xs font-medium text-slate-600">Country
+            <select id="confirm_country" class="mt-1 w-full border rounded px-3 py-2 text-sm bg-white">
+              <?php
+              $selected_iso = 'IN';
+              include __DIR__ . '/partials/iso_country_options.php';
+              ?>
+            </select>
+          </label>
         </div>
         <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="mt-1 w-full border rounded px-3 py-2 text-sm uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
         <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
@@ -656,7 +678,13 @@
         </div>
       </div>
       <div class="space-y-3">
-        <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
+          <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600">
+            <input type="checkbox" id="confirm_shipping_same_as_billing" class="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500">
+            Same as billing
+          </label>
+        </div>
         <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">Shipping First Name<input id="confirm_sfirst_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping First Name"></label>
           <label class="block text-xs font-medium text-slate-600">Shipping Last Name<input id="confirm_slast_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Last Name"></label>
@@ -669,8 +697,15 @@
           <label class="block text-xs font-medium text-slate-600">Shipping State<input id="confirm_sstate" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping State"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Shipping ZIP / Pincode<input id="confirm_szip" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping ZIP"></label>
-          <label class="block text-xs font-medium text-slate-600">Shipping Country<input id="confirm_scountry" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Country"></label>
+          <label class="block text-xs font-medium text-slate-600">Shipping ZIP / Pincode (optional)<input id="confirm_szip" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping ZIP (optional)"></label>
+          <label class="block text-xs font-medium text-slate-600">Shipping Country
+            <select id="confirm_scountry" class="mt-1 w-full border rounded px-3 py-2 text-sm bg-white">
+              <?php
+              $selected_iso = 'IN';
+              include __DIR__ . '/partials/iso_country_options.php';
+              ?>
+            </select>
+          </label>
         </div>
       </div>
     </div>
@@ -1003,6 +1038,7 @@
   }
 
   function closeAddressConfirmModal() {
+    setConfirmShippingSameAsBilling(false);
     document.getElementById("addressConfirmModal").classList.add("hidden");
   }
 
@@ -1012,6 +1048,46 @@
       fromSelect = fromSelect[0] || "";
     }
     return (fromSelect && String(fromSelect)) || (window.POS_SESSION_CUSTOMER_ID && String(window.POS_SESSION_CUSTOMER_ID)) || "";
+  }
+
+  function normalizePosCountryCode(raw, selectEl) {
+    var v = String(raw || "").trim();
+    if (v === "") {
+      return "IN";
+    }
+    var upper = v.toUpperCase();
+    if (upper.length === 2 && selectEl && selectEl.querySelector('option[value="' + upper + '"]')) {
+      return upper;
+    }
+    if (selectEl) {
+      var i;
+      for (i = 0; i < selectEl.options.length; i++) {
+        var opt = selectEl.options[i];
+        if (opt.value.toUpperCase() === upper) {
+          return opt.value;
+        }
+        if (opt.text.toLowerCase() === v.toLowerCase()) {
+          return opt.value;
+        }
+      }
+    }
+    var byName = window.POS_COUNTRY_ISO_BY_NAME || {};
+    var mapped = byName[v.toLowerCase()];
+    if (mapped) {
+      return String(mapped).toUpperCase().substring(0, 2);
+    }
+    return upper.length >= 2 ? upper.substring(0, 2) : "IN";
+  }
+
+  function setPosCountrySelect(id, raw) {
+    var el = document.getElementById(id);
+    if (!el || el.tagName !== "SELECT") {
+      return;
+    }
+    el.value = normalizePosCountryCode(raw, el);
+    if (!el.value) {
+      el.value = "IN";
+    }
   }
 
   function setAddressConfirmFields(payload) {
@@ -1051,7 +1127,6 @@
       confirm_city: firstNonEmpty(billing.city),
       confirm_state: firstNonEmpty(billing.state),
       confirm_zip: firstNonEmpty(billing.zip, billing.zipcode),
-      confirm_country: firstNonEmpty(billing.country, "IN"),
       confirm_gstin: firstNonEmpty(billing.gstin),
 
       // Shipping: support normalized keys + DB/raw aliases.
@@ -1062,13 +1137,16 @@
       confirm_scity: firstNonEmpty(shipping.scity, shipping.shipping_city, shipping.city),
       confirm_sstate: firstNonEmpty(shipping.sstate, shipping.shipping_state, shipping.state),
       confirm_szip: firstNonEmpty(shipping.szip, shipping.shipping_zipcode, shipping.zip, shipping.zipcode),
-      confirm_scountry: firstNonEmpty(shipping.scountry, shipping.shipping_country, shipping.country, "IN"),
       confirm_sphone: firstNonEmpty(shipping.sphone, shipping.shipping_mobile, shipping.mobile, shipping.phone)
     };
+    var billingCountryRaw = firstNonEmpty(billing.country, billing.billing_country, "IN");
+    var shippingCountryRaw = firstNonEmpty(shipping.scountry, shipping.shipping_country, shipping.country, "IN");
     Object.keys(map).forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.value = map[id];
     });
+    setPosCountrySelect("confirm_country", billingCountryRaw);
+    setPosCountrySelect("confirm_scountry", shippingCountryRaw);
     var compliance = (payload && payload.compliance) || {};
     [
       ["customer_residency_status", compliance.customer_residency_status || "INDIAN_RESIDENT"],
@@ -1083,47 +1161,87 @@
     syncHighValueComplianceUi();
   }
 
-  /** When shipping is blank but billing is present, mirror billing into shipping (same-as-billing / walk-in). */
-  function applyShippingFallbackFromBilling() {
-    function read(id) {
-      var el = document.getElementById(id);
-      return el ? String(el.value || "").trim() : "";
-    }
-    function write(id, v) {
-      var el = document.getElementById(id);
-      if (el) el.value = v;
-    }
-    var sf = read("confirm_sfirst_name");
-    var sl = read("confirm_slast_name");
-    if (sf === "" && sl === "") {
-      var bf = read("confirm_first_name");
-      var bl = read("confirm_last_name");
-      if (bf !== "") {
-        write("confirm_sfirst_name", bf);
-        write("confirm_slast_name", bl);
+  var POS_SHIPPING_ADDRESS_FIELD_IDS = [
+    "confirm_sfirst_name",
+    "confirm_slast_name",
+    "confirm_sphone",
+    "confirm_saddress1",
+    "confirm_saddress2",
+    "confirm_scity",
+    "confirm_sstate",
+    "confirm_szip",
+    "confirm_scountry"
+  ];
+
+  var POS_BILLING_TO_SHIPPING_FIELDS = [
+    ["confirm_first_name", "confirm_sfirst_name"],
+    ["confirm_last_name", "confirm_slast_name"],
+    ["confirm_phone", "confirm_sphone"],
+    ["confirm_address1", "confirm_saddress1"],
+    ["confirm_address2", "confirm_saddress2"],
+    ["confirm_city", "confirm_scity"],
+    ["confirm_state", "confirm_sstate"],
+    ["confirm_zip", "confirm_szip"],
+    ["confirm_country", "confirm_scountry"]
+  ];
+
+  function isShippingSameAsBillingChecked() {
+    var cb = document.getElementById("confirm_shipping_same_as_billing");
+    return !!(cb && cb.checked);
+  }
+
+  function copyBillingToShippingFields() {
+    POS_BILLING_TO_SHIPPING_FIELDS.forEach(function(pair) {
+      var billingEl = document.getElementById(pair[0]);
+      var shippingEl = document.getElementById(pair[1]);
+      if (billingEl && shippingEl) {
+        shippingEl.value = billingEl.value;
       }
+    });
+  }
+
+  function setShippingFieldsSyncedFromBilling(synced) {
+    POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.readOnly = synced;
+      el.classList.toggle("bg-slate-100", synced);
+      el.classList.toggle("cursor-not-allowed", synced);
+    });
+  }
+
+  function onBillingFieldChangedForShippingSync() {
+    if (isShippingSameAsBillingChecked()) {
+      copyBillingToShippingFields();
     }
-    if (read("confirm_sphone") === "" && read("confirm_phone") !== "") {
-      write("confirm_sphone", read("confirm_phone"));
+  }
+
+  function setConfirmShippingSameAsBilling(checked) {
+    var cb = document.getElementById("confirm_shipping_same_as_billing");
+    if (cb) {
+      cb.checked = !!checked;
     }
-    if (read("confirm_saddress1") === "" && read("confirm_address1") !== "") {
-      write("confirm_saddress1", read("confirm_address1"));
+    if (checked) {
+      copyBillingToShippingFields();
     }
-    if (read("confirm_saddress2") === "" && read("confirm_address2") !== "") {
-      write("confirm_saddress2", read("confirm_address2"));
+    setShippingFieldsSyncedFromBilling(!!checked);
+  }
+
+  function initConfirmShippingSameAsBilling() {
+    var cb = document.getElementById("confirm_shipping_same_as_billing");
+    if (!cb || cb.dataset.bound === "1") {
+      return;
     }
-    if (read("confirm_scity") === "" && read("confirm_city") !== "") {
-      write("confirm_scity", read("confirm_city"));
-    }
-    if (read("confirm_sstate") === "" && read("confirm_state") !== "") {
-      write("confirm_sstate", read("confirm_state"));
-    }
-    if (read("confirm_szip") === "" && read("confirm_zip") !== "") {
-      write("confirm_szip", read("confirm_zip"));
-    }
-    if (read("confirm_scountry") === "" && read("confirm_country") !== "") {
-      write("confirm_scountry", read("confirm_country"));
-    }
+    cb.dataset.bound = "1";
+    cb.addEventListener("change", function() {
+      setConfirmShippingSameAsBilling(cb.checked);
+    });
+    POS_BILLING_TO_SHIPPING_FIELDS.forEach(function(pair) {
+      var billingEl = document.getElementById(pair[0]);
+      if (!billingEl) return;
+      billingEl.addEventListener("input", onBillingFieldChangedForShippingSync);
+      billingEl.addEventListener("change", onBillingFieldChangedForShippingSync);
+    });
   }
 
   function getAddressConfirmPayload() {
@@ -1167,27 +1285,8 @@
     };
   }
 
-  var POS_REQUIRED_ADDRESS_FIELDS = [
-    ["confirm_first_name", "Billing first name"],
-    ["confirm_phone", "Billing phone"],
-    ["confirm_address1", "Billing address 1"],
-    ["confirm_city", "Billing city"],
-    ["confirm_state", "Billing state"],
-    ["confirm_zip", "Billing ZIP / pincode"],
-    ["confirm_country", "Billing country"]
-  ];
-
-  var POS_SHIPPING_ADDRESS_FIELD_IDS = [
-    "confirm_sfirst_name",
-    "confirm_slast_name",
-    "confirm_sphone",
-    "confirm_saddress1",
-    "confirm_saddress2",
-    "confirm_scity",
-    "confirm_sstate",
-    "confirm_szip",
-    "confirm_scountry"
-  ];
+  /** Billing address fields are optional; blank address1 is sent as "dummy Address" on order create. */
+  var POS_REQUIRED_ADDRESS_FIELDS = [];
 
   function setPosFieldInvalid(id, invalid) {
     var el = document.getElementById(id);
@@ -1308,38 +1407,6 @@
     syncHighValueComplianceUi();
     var missing = [];
     var firstInvalidId = "";
-    POS_REQUIRED_ADDRESS_FIELDS.forEach(function(row) {
-      var id = row[0];
-      var label = row[1];
-      var value = String(payload[id] || "").trim();
-      if (value === "") {
-        missing.push(label);
-        setPosFieldInvalid(id, true);
-        if (!firstInvalidId) firstInvalidId = id;
-      }
-    });
-
-    var email = String(payload.confirm_email || "").trim();
-    if (email !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      missing.push("Valid billing email");
-      setPosFieldInvalid("confirm_email", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_email";
-    }
-
-    var billingPhoneDigits = String(payload.confirm_phone || "").replace(/\D/g, "");
-    if (billingPhoneDigits !== "" && billingPhoneDigits.length < 6) {
-      missing.push("Valid billing phone");
-      setPosFieldInvalid("confirm_phone", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_phone";
-    }
-    var country = String(payload.confirm_country || "").trim().toUpperCase();
-    var billingZip = String(payload.confirm_zip || "").trim();
-    if ((country === "IN" || country === "INDIA") && billingZip !== "" && !/^\d{6}$/.test(billingZip)) {
-      missing.push("Valid 6 digit billing pincode");
-      setPosFieldInvalid("confirm_zip", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_zip";
-    }
-
     var gstin = String(payload.confirm_gstin || "").trim().toUpperCase();
     if (gstin !== "" && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
       missing.push("Valid GSTIN");
@@ -1426,7 +1493,8 @@
           return;
         }
         setAddressConfirmFields(data);
-        applyShippingFallbackFromBilling();
+        setConfirmShippingSameAsBilling(false);
+        initConfirmShippingSameAsBilling();
         openAddressConfirmModal();
       })
       .catch(function() {
@@ -1639,9 +1707,14 @@
       });
     }
 
+    initConfirmShippingSameAsBilling();
+
     var confirmAddressSubmitBtn = document.getElementById("confirmAddressSubmitBtn");
     if (confirmAddressSubmitBtn) {
       confirmAddressSubmitBtn.addEventListener("click", function() {
+        if (isShippingSameAsBillingChecked()) {
+          copyBillingToShippingFields();
+        }
         var payload = getAddressConfirmPayload();
         if (!validateAddressConfirmPayload(payload)) {
           return;
@@ -1655,6 +1728,14 @@
         setPosFieldInvalid(el.id, false);
         syncHighValueComplianceUi();
       });
+    });
+    ["confirm_country", "confirm_scountry"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("change", function() {
+          setPosFieldInvalid(id, false);
+        });
+      }
     });
     ["customer_residency_status", "confirm_gstin"].forEach(function(id) {
       var el = document.getElementById(id);
