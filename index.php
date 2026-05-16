@@ -1109,9 +1109,6 @@ switch ($page) {
             case 'checkout-receipt':
                 $controller->checkout_receipt();
                 break;
-            case 'checkout-invoice-preview':
-                $controller->checkout_invoice_preview();
-                break;
             default:
                 $controller->index();
                 break;

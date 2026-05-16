@@ -3217,72 +3217,7 @@ class POSRegisterController
         }
         unset($_SESSION['pos_last_checkout_receipt']);
         $row = $this->fillReceiptInvoicePdfFromDb($conn, $row);
-        $orderId = trim((string)($row['order_id'] ?? ''));
-        $row['invoice_ensure_preview_url'] = $orderId !== ''
-            ? 'index.php?page=pos_register&action=checkout-invoice-preview&order_number=' . rawurlencode($orderId)
-            : '';
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
-    }
-
-    /**
-     * Preview tax invoice: use existing invoice, else import order from API, else auto-create, then open print preview.
-     */
-    public function checkout_invoice_preview(): void
-    {
-        is_login();
-        global $conn;
-
-        $orderNumber = trim((string)($_GET['order_number'] ?? $_GET['order_id'] ?? ''));
-        if ($orderNumber === '') {
-            http_response_code(400);
-            echo '<p>Order number is missing.</p>';
-            exit;
-        }
-
-        try {
-            require_once __DIR__ . '/OrdersController.php';
-            require_once __DIR__ . '/PosInvoiceController.php';
-            global $invoiceModel;
-
-            $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
-            if (!empty($existing['id'])) {
-                header('Location: index.php?page=posinvoice&action=print-preview&invoice_id=' . (int)$existing['id']);
-                exit;
-            }
-
-            $ordersCtrl = new OrdersController();
-            if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
-                $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 4, 2);
-                if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
-                    http_response_code(503);
-                    $detail = trim((string)($import['message'] ?? 'Order not ready for invoice.'));
-                    echo '<p>' . htmlspecialchars($detail, ENT_QUOTES, 'UTF-8') . '</p>';
-                    echo '<p><a href="index.php?page=orders&action=list">Orders</a> · <a href="index.php?page=invoices&action=create">Invoices</a></p>';
-                    exit;
-                }
-            }
-
-            $invRes = (new PosInvoiceController())->createAutoInvoiceForOrder($orderNumber);
-            $invoiceId = (int)($invRes['invoice_id'] ?? 0);
-            if ($invoiceId <= 0) {
-                $again = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
-                $invoiceId = (int)($again['id'] ?? 0);
-            }
-
-            if ($invoiceId <= 0) {
-                http_response_code(404);
-                echo '<p>' . htmlspecialchars((string)($invRes['message'] ?? 'Invoice could not be created.'), ENT_QUOTES, 'UTF-8') . '</p>';
-                exit;
-            }
-
-            header('Location: index.php?page=posinvoice&action=print-preview&invoice_id=' . $invoiceId);
-            exit;
-        } catch (\Throwable $e) {
-            error_log('[POS checkout invoice preview] ' . $e->getMessage());
-            http_response_code(500);
-            echo '<p>Invoice preview failed: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</p>';
-            exit;
-        }
     }
 
     /**
