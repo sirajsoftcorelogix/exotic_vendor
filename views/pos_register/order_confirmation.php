@@ -238,10 +238,10 @@ if ($receipt_download_filename_base === '') {
               ?>
               <span class="text-[11px] text-slate-500">Tax invoice</span>
               <?php if ($canInvoicePreview): ?>
-                <a href="<?= $h($invoiceCreateUrl) ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Preview &amp; print invoice</a>
+                <a href="<?= $h($invoiceCreateUrl) ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Create invoice</a>
               <?php else: ?>
                 <span class="inline-flex flex-col gap-0.5">
-                  <span class="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed" title="Tax invoice is available after payment is received in full.">Preview &amp; print invoice</span>
+                  <span class="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed" title="Tax invoice is available after payment is received in full.">Create invoice</span>
                 </span>
               <?php endif; ?>
               <?php if ($canInvoicePdf): ?>
@@ -251,7 +251,7 @@ if ($receipt_download_filename_base === '') {
             <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" target="_blank" rel="noopener noreferrer" class="self-end rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:self-center">Payment History</a>
             <a href="index.php?page=pos_register&action=list" class="self-end rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:self-center">Back to POS</a>
           </div>
-          <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>. When payment is received in full, use <strong class="font-medium text-slate-600">Preview &amp; print invoice</strong> to open Invoices and create or print the tax invoice.</p>
+          <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>. When payment is received in full, use <strong class="font-medium text-slate-600">Create invoice</strong> to open the invoice screen.</p>
         </div>
       </div>
     </div>
