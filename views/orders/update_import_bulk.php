@@ -86,13 +86,16 @@
 
             <!-- Buttons -->
             <div class="flex gap-4">
-                <button id="pauseBtn" onclick="pauseProcess()" class="flex-1 px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 font-semibold transition">
+                <button id="startBtn" onclick="startProcess()" class="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition">
+                    Start Process
+                </button>
+                <button id="pauseBtn" onclick="pauseProcess()" class="flex-1 px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 font-semibold transition hidden">
                     Pause
                 </button>
                 <button id="resumeBtn" onclick="resumeProcess()" class="flex-1 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition hidden">
                     Resume
                 </button>
-                <button id="stopBtn" onclick="stopProcess()" class="flex-1 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition">
+                <button id="stopBtn" onclick="stopProcess()" class="flex-1 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition hidden">
                     Stop
                 </button>
                 <button id="reloadBtn" onclick="location.reload()" class="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition hidden">
@@ -112,7 +115,7 @@
 
         // State
         let state = {
-            isRunning: true,
+            isRunning: false,
             isPaused: false,
             totalImported: 0,
             maxLimit: CONFIG.MAX_LIMIT,
@@ -146,7 +149,32 @@
             document.getElementById('totalImported').textContent = state.totalImported;
             document.getElementById('batchTotal').textContent = state.batchTotal;
             document.getElementById('affectedRows').textContent = state.affectedRows;
-            document.getElementById('statusText').textContent = state.isPaused ? 'Paused' : (state.completed ? 'Completed' : 'Processing...');
+            
+            if (!state.isRunning && !state.completed) {
+                document.getElementById('statusText').textContent = 'Ready';
+            } else if (state.isPaused) {
+                document.getElementById('statusText').textContent = 'Paused';
+            } else if (state.completed) {
+                document.getElementById('statusText').textContent = 'Completed';
+            } else {
+                document.getElementById('statusText').textContent = 'Processing...';
+            }
+        }
+
+        // Start process
+        function startProcess() {
+            state.isRunning = true;
+            state.isPaused = false;
+            state.completed = false;
+            
+            document.getElementById('startBtn').classList.add('hidden');
+            document.getElementById('pauseBtn').classList.remove('hidden');
+            document.getElementById('stopBtn').classList.remove('hidden');
+            document.getElementById('reloadBtn').classList.add('hidden');
+            
+            addLog('🚀 Starting bulk order status update...', 'success');
+            updateUI();
+            processBatch();
         }
 
         // Process batch
@@ -252,48 +280,50 @@
         function finishProcess() {
             state.isRunning = false;
             state.completed = true;
-            document.getElementById('statusText').textContent = 'Completed';
             document.getElementById('pauseBtn').classList.add('hidden');
+            document.getElementById('resumeBtn').classList.add('hidden');
             document.getElementById('stopBtn').classList.add('hidden');
             document.getElementById('reloadBtn').classList.remove('hidden');
 
             const summary = `✓ Complete: ${state.totalImported} imported, ${state.errorCount} errors`;
             addLog(summary, state.errorCount === 0 ? 'success' : 'error');
+            updateUI();
         }
 
         // Pause process
         function pauseProcess() {
             state.isPaused = true;
-            document.getElementById('statusText').textContent = 'Paused';
             document.getElementById('pauseBtn').classList.add('hidden');
             document.getElementById('resumeBtn').classList.remove('hidden');
             addLog('⏸ Process paused by user.', 'info');
+            updateUI();
         }
 
         // Resume process
         function resumeProcess() {
             state.isPaused = false;
-            document.getElementById('statusText').textContent = 'Resuming...';
             document.getElementById('pauseBtn').classList.remove('hidden');
             document.getElementById('resumeBtn').classList.add('hidden');
             addLog('▶ Process resumed by user.', 'info');
+            updateUI();
             processBatch();
         }
 
         // Stop process
         function stopProcess() {
             state.isRunning = false;
-            document.getElementById('statusText').textContent = 'Stopped';
             document.getElementById('pauseBtn').classList.add('hidden');
+            document.getElementById('resumeBtn').classList.add('hidden');
             document.getElementById('stopBtn').classList.add('hidden');
             document.getElementById('reloadBtn').classList.remove('hidden');
             addLog('⏹ Process stopped by user.', 'error');
+            updateUI();
         }
 
-        // Start processing when page loads
+        // Initialize UI on page load
         window.addEventListener('load', function() {
-            addLog('🚀 Starting bulk order status update...', 'success');
-            processBatch();
+            updateUI();
+            addLog('Ready to start bulk order status update. Click "Start Process" button to begin.', 'info');
         });
 
         // Handle page unload
