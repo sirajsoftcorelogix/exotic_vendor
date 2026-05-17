@@ -69,11 +69,66 @@
     .pos-register-page h3 {
       letter-spacing: 0.01em;
     }
+
+    /* Confirm Billing & Shipping — fit laptop viewport, scroll body only */
+    #addressConfirmModal:not(.hidden) {
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    #addressConfirmModal .address-confirm-panel {
+      max-height: min(90vh, 820px);
+      width: 100%;
+    }
+    #addressConfirmModal .address-confirm-body {
+      min-height: 0;
+    }
+    #addressConfirmModal .address-confirm-body input:not([type="checkbox"]),
+    #addressConfirmModal .address-confirm-body select,
+    #addressConfirmModal .address-confirm-body .pos-state-select {
+      margin-top: 0.25rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+      line-height: 1.35;
+      border-color: #cbd5e1;
+    }
+    #addressConfirmModal .address-confirm-body label.block {
+      font-size: 0.8125rem;
+    }
+    #addressConfirmModal .field-req-star,
+    #addressConfirmModal .pos-req-star {
+      color: #dc2626 !important;
+      font-weight: 700;
+    }
   </style>
+  <?php
+  $posCountryList = isset($country_list) && is_array($country_list)
+      ? $country_list
+      : (function_exists('country_array') ? country_array() : ['IN' => 'India']);
+  $posCountryIsoByName = [];
+  foreach ($posCountryList as $iso => $name) {
+      $code = strtoupper(substr(trim((string)$iso), 0, 2));
+      if ($code === '') {
+          continue;
+      }
+      $posCountryIsoByName[strtolower(trim((string)$name))] = $code;
+  }
+  ?>
   <script>
     window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
     window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_HIGH_VALUE_TRANSACTION_LIMIT = <?= json_encode((float)($high_value_transaction_limit ?? 200000.00)) ?>;
+    window.POS_COUNTRY_ISO_BY_NAME = <?= json_encode($posCountryIsoByName, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+    window.POS_INDIA_STATES = <?= json_encode($pos_india_states ?? [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+    window.POS_DEFAULT_STATE = "Delhi";
+    window.POS_STORE_PINCODE = <?= json_encode(trim((string)($pos_store_pincode ?? '')), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+    window.POS_ADDRESS_API_DEFAULTS = {
+      confirm_phone: "8031404444",
+      confirm_address1: "dummy Address",
+      confirm_city: "Delhi",
+      confirm_state: "Delhi"
+    };
   </script>
   <!-- ===== TOP BAR ===== -->
   <header class="border-b bg-white">
@@ -345,6 +400,10 @@
 
 
             <input type="hidden" id="modal_product_code" value="">
+            <input type="hidden" id="modal_item_code" value="">
+            <input type="hidden" id="modal_size" value="">
+            <input type="hidden" id="modal_color" value="">
+            <input type="hidden" id="modal_item_level" value="">
             <input type="hidden" id="modal_stock_check_code" value="">
             <input type="hidden" id="modal_qty" value="1">
             <input type="hidden" id="modal_options" value="">
@@ -592,39 +651,53 @@
 <!-- ADDRESS CONFIRMATION MODAL -->
 <div id="addressConfirmModal" class="fixed inset-0 z-[10000] hidden">
   <div class="absolute inset-0 bg-black/40" onclick="closeAddressConfirmModal()"></div>
-  <div class="relative mx-auto mt-10 w-[96%] max-w-4xl rounded-2xl bg-white shadow-xl">
-    <div class="flex items-center justify-between border-b px-6 py-4">
-      <h2 class="text-lg font-semibold">Confirm Billing &amp; Shipping Details</h2>
-      <button type="button" onclick="closeAddressConfirmModal()" class="text-xl text-gray-500 hover:text-gray-800">✕</button>
+  <div class="address-confirm-panel relative mx-auto flex w-[96%] max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+    <div class="flex shrink-0 items-center justify-between border-b px-5 py-3">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-800">Confirm Billing &amp; Shipping Details</h2>
+        <p class="mt-0.5 text-xs text-slate-500">Required: First name and State. Other fields use defaults when left blank.</p>
+      </div>
+      <button type="button" onclick="closeAddressConfirmModal()" class="text-lg leading-none text-gray-500 hover:text-gray-800" aria-label="Close">✕</button>
     </div>
-    <div id="addressConfirmValidationSummary" class="mx-6 mt-4 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></div>
-    <div id="highValueComplianceBanner" class="mx-6 mt-4 hidden rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">High Value Transaction – Compliance Required</div>
-    <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
+    <div class="address-confirm-body flex-1 overflow-y-auto overscroll-contain">
+    <div id="addressConfirmValidationSummary" class="mx-5 mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></div>
+    <div id="highValueComplianceBanner" class="mx-5 mt-3 hidden rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">High Value Transaction – Compliance Required</div>
+    <div class="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">First Name <span class="text-red-600">*</span><input id="confirm_first_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="First Name" required></label>
-          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Last Name"></label>
+          <label class="block text-xs font-medium text-slate-600">First Name <span class="field-req-star text-red-600">*</span><input id="confirm_first_name" class="w-full rounded border" placeholder="First Name"></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Email (optional)"></label>
-          <label class="block text-xs font-medium text-slate-600">Phone <span class="text-red-600">*</span><input id="confirm_phone" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Phone" required></label>
+          <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
+          <label class="block text-xs font-medium text-slate-600">Phone <span class="field-req-star text-red-600">*</span><input id="confirm_phone" class="w-full rounded border" placeholder="Phone"></label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">Address 1 <span class="text-red-600">*</span><input id="confirm_address1" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Address 1" required></label>
-        <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Address 2"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_address1" class="w-full rounded border" placeholder="Address 1"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="w-full rounded border" placeholder="Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">City <span class="text-red-600">*</span><input id="confirm_city" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="City" required></label>
-          <label class="block text-xs font-medium text-slate-600">State <span class="text-red-600">*</span><input id="confirm_state" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="State" required></label>
+          <label class="block text-xs font-medium text-slate-600">City<input id="confirm_city" class="w-full rounded border" placeholder="City"></label>
+          <label class="block text-xs font-medium text-slate-600">State <span class="field-req-star text-red-600">*</span>
+            <input id="confirm_state" type="text" class="pos-state-input w-full rounded border bg-white" placeholder="State" autocomplete="address-level1">
+            <select id="confirm_state_select" class="pos-state-select hidden w-full rounded border bg-white"></select>
+          </label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode <span class="text-red-600">*</span><input id="confirm_zip" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="ZIP" required></label>
-          <label class="block text-xs font-medium text-slate-600">Country <span class="text-red-600">*</span><input id="confirm_country" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Country" required></label>
+          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode <span class="field-req-star text-red-600">*</span><input id="confirm_zip" class="w-full rounded border" placeholder="ZIP / Pincode"></label>
+          <label class="block text-xs font-medium text-slate-600">Country
+            <select id="confirm_country" class="w-full rounded border bg-white">
+              <?php
+              $selected_iso = 'IN';
+              include __DIR__ . '/partials/iso_country_options.php';
+              ?>
+            </select>
+          </label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="mt-1 w-full border rounded px-3 py-2 text-sm uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
+        <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
         <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <div class="mb-2 font-semibold text-amber-950">High Value Transaction – Compliance Required</div>
           <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. GSTIN B2B invoices derive PAN automatically.</p>
-          <label class="block font-medium">Customer residency <span class="text-red-600">*</span>
+          <label class="block font-medium">Customer residency <span class="field-req-star text-red-600">*</span>
             <select id="customer_residency_status" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm">
               <option value="INDIAN_RESIDENT">Indian Resident</option>
               <option value="NRI">NRI</option>
@@ -632,7 +705,7 @@
             </select>
           </label>
           <div id="panComplianceWrap" class="mt-3">
-            <label class="block font-medium">PAN <span id="panRequiredStar" class="text-red-600">*</span>
+            <label class="block font-medium">PAN <span id="panRequiredStar" class="field-req-star text-red-600">*</span>
               <input id="customer_pan" maxlength="10" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="ABCDE1234F">
             </label>
             <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">PAN is required unless GSTIN is entered.</p>
@@ -643,12 +716,12 @@
             </label>
           </div>
           <div id="passportComplianceWrap" class="mt-3 hidden">
-            <label class="block font-medium">Passport Number <span id="passportRequiredStar" class="text-red-600">*</span>
+            <label class="block font-medium">Passport Number <span id="passportRequiredStar" class="field-req-star text-red-600">*</span>
               <input id="passport_number" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="Passport number">
             </label>
           </div>
           <div id="countryResidenceWrap" class="mt-3 hidden">
-            <label class="block font-medium">Country of Residence <span class="text-red-600">*</span>
+            <label class="block font-medium">Country of Residence <span id="countryRequiredStar" class="field-req-star text-red-600">*</span>
               <input id="country_of_residence" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm" placeholder="Country of residence">
             </label>
           </div>
@@ -656,27 +729,44 @@
         </div>
       </div>
       <div class="space-y-3">
-        <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
-        <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Shipping First Name <span class="text-red-600">*</span><input id="confirm_sfirst_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping First Name" required></label>
-          <label class="block text-xs font-medium text-slate-600">Shipping Last Name<input id="confirm_slast_name" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Last Name"></label>
-        </div>
-        <label class="block text-xs font-medium text-slate-600">Shipping Phone <span class="text-red-600">*</span><input id="confirm_sphone" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Phone" required></label>
-        <label class="block text-xs font-medium text-slate-600">Shipping Address 1 <span class="text-red-600">*</span><input id="confirm_saddress1" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 1" required></label>
-        <label class="block text-xs font-medium text-slate-600">Shipping Address 2<input id="confirm_saddress2" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Address 2"></label>
-        <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Shipping City <span class="text-red-600">*</span><input id="confirm_scity" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping City" required></label>
-          <label class="block text-xs font-medium text-slate-600">Shipping State <span class="text-red-600">*</span><input id="confirm_sstate" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping State" required></label>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="text-sm font-semibold text-slate-800">Shipping Information</h3>
+          <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600">
+            <input type="checkbox" id="confirm_shipping_same_as_billing" class="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500">
+            Same as billing
+          </label>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Shipping ZIP / Pincode <span class="text-red-600">*</span><input id="confirm_szip" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping ZIP" required></label>
-          <label class="block text-xs font-medium text-slate-600">Shipping Country <span class="text-red-600">*</span><input id="confirm_scountry" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Shipping Country" required></label>
+          <label class="block text-xs font-medium text-slate-600">First Name<input id="confirm_sfirst_name" class="w-full rounded border" placeholder="First Name"></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_slast_name" class="w-full rounded border" placeholder="Last Name"></label>
+        </div>
+        <label class="block text-xs font-medium text-slate-600">Phone<input id="confirm_sphone" class="w-full rounded border" placeholder="Phone"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_saddress1" class="w-full rounded border" placeholder="Address 1"></label>
+        <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_saddress2" class="w-full rounded border" placeholder="Address 2"></label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block text-xs font-medium text-slate-600">City<input id="confirm_scity" class="w-full rounded border" placeholder="City"></label>
+          <label class="block text-xs font-medium text-slate-600">State
+            <input id="confirm_sstate" type="text" class="pos-state-input w-full rounded border bg-white" placeholder="State" autocomplete="address-level1">
+            <select id="confirm_sstate_select" class="pos-state-select hidden w-full rounded border bg-white"></select>
+          </label>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block text-xs font-medium text-slate-600">ZIP / Pincode<input id="confirm_szip" class="w-full rounded border" placeholder="ZIP / Pincode"></label>
+          <label class="block text-xs font-medium text-slate-600">Country
+            <select id="confirm_scountry" class="w-full rounded border bg-white">
+              <?php
+              $selected_iso = 'IN';
+              include __DIR__ . '/partials/iso_country_options.php';
+              ?>
+            </select>
+          </label>
         </div>
       </div>
     </div>
-    <div class="flex justify-end gap-3 border-t px-6 py-4">
-      <button type="button" onclick="closeAddressConfirmModal()" class="rounded-lg bg-gray-300 px-5 py-2 text-gray-700 hover:bg-gray-400">Cancel</button>
-      <button type="button" id="confirmAddressSubmitBtn" class="rounded-lg bg-orange-600 px-5 py-2 text-white hover:bg-orange-700">
+    </div>
+    <div class="flex shrink-0 justify-end gap-3 border-t bg-slate-50 px-5 py-3">
+      <button type="button" onclick="closeAddressConfirmModal()" class="rounded-lg bg-gray-200 px-5 py-2 text-sm text-gray-700 hover:bg-gray-300">Cancel</button>
+      <button type="button" id="confirmAddressSubmitBtn" class="rounded-lg bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700">
         Confirm &amp; Submit Order
       </button>
     </div>
@@ -1003,6 +1093,7 @@
   }
 
   function closeAddressConfirmModal() {
+    setConfirmShippingSameAsBilling(false);
     document.getElementById("addressConfirmModal").classList.add("hidden");
   }
 
@@ -1012,6 +1103,162 @@
       fromSelect = fromSelect[0] || "";
     }
     return (fromSelect && String(fromSelect)) || (window.POS_SESSION_CUSTOMER_ID && String(window.POS_SESSION_CUSTOMER_ID)) || "";
+  }
+
+  function normalizePosCountryCode(raw, selectEl) {
+    var v = String(raw || "").trim();
+    if (v === "") {
+      return "IN";
+    }
+    var upper = v.toUpperCase();
+    if (upper.length === 2 && selectEl && selectEl.querySelector('option[value="' + upper + '"]')) {
+      return upper;
+    }
+    if (selectEl) {
+      var i;
+      for (i = 0; i < selectEl.options.length; i++) {
+        var opt = selectEl.options[i];
+        if (opt.value.toUpperCase() === upper) {
+          return opt.value;
+        }
+        if (opt.text.toLowerCase() === v.toLowerCase()) {
+          return opt.value;
+        }
+      }
+    }
+    var byName = window.POS_COUNTRY_ISO_BY_NAME || {};
+    var mapped = byName[v.toLowerCase()];
+    if (mapped) {
+      return String(mapped).toUpperCase().substring(0, 2);
+    }
+    return upper.length >= 2 ? upper.substring(0, 2) : "IN";
+  }
+
+  function setPosCountrySelect(id, raw) {
+    var el = document.getElementById(id);
+    if (!el || el.tagName !== "SELECT") {
+      return;
+    }
+    el.value = normalizePosCountryCode(raw, el);
+    if (!el.value) {
+      el.value = "IN";
+    }
+  }
+
+  var POS_STATE_FIELD_CONFIG = {
+    billing: { countryId: "confirm_country", inputId: "confirm_state", selectId: "confirm_state_select" },
+    shipping: { countryId: "confirm_scountry", inputId: "confirm_sstate", selectId: "confirm_sstate_select" }
+  };
+
+  function isPosIndiaCountry(code) {
+    var c = String(code || "").trim().toUpperCase();
+    return c === "IN" || c === "IND" || c === "INDIA";
+  }
+
+  function fetchPosIndiaStates() {
+    if (Array.isArray(window.POS_INDIA_STATES) && window.POS_INDIA_STATES.length) {
+      return Promise.resolve(window.POS_INDIA_STATES);
+    }
+    return fetch("index.php?page=pos_register&action=states-by-country&country=IN", {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" }
+    })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        window.POS_INDIA_STATES = Array.isArray(data) ? data : [];
+        return window.POS_INDIA_STATES;
+      })
+      .catch(function() {
+        window.POS_INDIA_STATES = [];
+        return [];
+      });
+  }
+
+  function populatePosStateSelect(selectEl, states, selectedValue) {
+    if (!selectEl) return;
+    var selected = String(selectedValue || "").trim();
+    var selectedLower = selected.toLowerCase();
+    var html = '<option value="">Select state</option>';
+    (states || []).forEach(function(state) {
+      var name = String((state && state.name) || "").trim();
+      if (!name) return;
+      var esc = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+      html += '<option value="' + esc + '">' + esc + "</option>";
+    });
+    selectEl.innerHTML = html;
+    if (selected) {
+      var matched = false;
+      Array.prototype.forEach.call(selectEl.options, function(opt) {
+        if (opt.value.toLowerCase() === selectedLower) {
+          opt.selected = true;
+          matched = true;
+        }
+      });
+      if (!matched) {
+        var opt = document.createElement("option");
+        opt.value = selected;
+        opt.textContent = selected;
+        opt.selected = true;
+        selectEl.appendChild(opt);
+      }
+    }
+  }
+
+  function getPosStateValue(inputId) {
+    var selectEl = document.getElementById(inputId + "_select");
+    var inputEl = document.getElementById(inputId);
+    if (selectEl && !selectEl.classList.contains("hidden")) {
+      return String(selectEl.value || "").trim();
+    }
+    return inputEl ? String(inputEl.value || "").trim() : "";
+  }
+
+  function setPosStateValue(inputId, value) {
+    var val = String(value || "").trim();
+    var selectEl = document.getElementById(inputId + "_select");
+    var inputEl = document.getElementById(inputId);
+    if (selectEl && !selectEl.classList.contains("hidden")) {
+      populatePosStateSelect(selectEl, window.POS_INDIA_STATES || [], val);
+      return;
+    }
+    if (inputEl) inputEl.value = val;
+  }
+
+  function syncPosStateField(kind, preferredValue) {
+    var cfg = POS_STATE_FIELD_CONFIG[kind];
+    if (!cfg) return Promise.resolve();
+    var countryEl = document.getElementById(cfg.countryId);
+    var inputEl = document.getElementById(cfg.inputId);
+    var selectEl = document.getElementById(cfg.selectId);
+    if (!countryEl || !inputEl || !selectEl) return Promise.resolve();
+
+    var country = normalizePosCountryCode(countryEl.value, countryEl);
+    var isIndia = isPosIndiaCountry(country);
+    var defaultState = String(window.POS_DEFAULT_STATE || "Delhi");
+    var value = preferredValue !== undefined ? String(preferredValue || "").trim() : getPosStateValue(cfg.inputId);
+    if (!value) value = defaultState;
+
+    if (!isIndia) {
+      if (value) inputEl.value = value;
+      else if (selectEl.value && !inputEl.value) inputEl.value = selectEl.value;
+      selectEl.classList.add("hidden");
+      inputEl.classList.remove("hidden");
+      return Promise.resolve();
+    }
+
+    return fetchPosIndiaStates().then(function(states) {
+      populatePosStateSelect(selectEl, states, value || inputEl.value || selectEl.value);
+      inputEl.classList.add("hidden");
+      selectEl.classList.remove("hidden");
+    });
+  }
+
+  function syncAllPosStateFields(preferred) {
+    preferred = preferred || {};
+    return Promise.all([
+      syncPosStateField("billing", preferred.billing),
+      syncPosStateField("shipping", preferred.shipping)
+    ]);
   }
 
   function setAddressConfirmFields(payload) {
@@ -1045,13 +1292,12 @@
       confirm_first_name: firstNonEmpty(billing.first_name, billing.billing_first_name),
       confirm_last_name: firstNonEmpty(billing.last_name, billing.billing_last_name),
       confirm_email: firstNonEmpty(billing.email, billing.cus_email, billing.billing_email),
-      confirm_phone: firstNonEmpty(billing.phone, billing.mobile, billing.billing_mobile),
+      confirm_phone: firstNonEmpty(billing.phone, billing.mobile, billing.billing_mobile, (window.POS_ADDRESS_API_DEFAULTS || {}).confirm_phone || "8031404444"),
       confirm_address1: firstNonEmpty(billing.address1, billing.address_line1, billing.billing_address_line1),
       confirm_address2: firstNonEmpty(billing.address2, billing.address_line2, billing.billing_address_line2),
       confirm_city: firstNonEmpty(billing.city),
       confirm_state: firstNonEmpty(billing.state),
-      confirm_zip: firstNonEmpty(billing.zip, billing.zipcode),
-      confirm_country: firstNonEmpty(billing.country, "IN"),
+      confirm_zip: firstNonEmpty(billing.zip, billing.zipcode, window.POS_STORE_PINCODE || ""),
       confirm_gstin: firstNonEmpty(billing.gstin),
 
       // Shipping: support normalized keys + DB/raw aliases.
@@ -1062,13 +1308,16 @@
       confirm_scity: firstNonEmpty(shipping.scity, shipping.shipping_city, shipping.city),
       confirm_sstate: firstNonEmpty(shipping.sstate, shipping.shipping_state, shipping.state),
       confirm_szip: firstNonEmpty(shipping.szip, shipping.shipping_zipcode, shipping.zip, shipping.zipcode),
-      confirm_scountry: firstNonEmpty(shipping.scountry, shipping.shipping_country, shipping.country, "IN"),
       confirm_sphone: firstNonEmpty(shipping.sphone, shipping.shipping_mobile, shipping.mobile, shipping.phone)
     };
+    var billingCountryRaw = firstNonEmpty(billing.country, billing.billing_country, "IN");
+    var shippingCountryRaw = firstNonEmpty(shipping.scountry, shipping.shipping_country, shipping.country, "IN");
     Object.keys(map).forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.value = map[id];
     });
+    setPosCountrySelect("confirm_country", billingCountryRaw);
+    setPosCountrySelect("confirm_scountry", shippingCountryRaw);
     var compliance = (payload && payload.compliance) || {};
     [
       ["customer_residency_status", compliance.customer_residency_status || "INDIAN_RESIDENT"],
@@ -1080,50 +1329,130 @@
       var el = document.getElementById(row[0]);
       if (el) el.value = row[1];
     });
-    syncHighValueComplianceUi();
+    var defaultState = String(window.POS_DEFAULT_STATE || "Delhi");
+    syncAllPosStateFields({
+      billing: map.confirm_state || defaultState,
+      shipping: map.confirm_sstate || defaultState
+    }).then(function() {
+      syncHighValueComplianceUi();
+    });
   }
 
-  /** When shipping is blank but billing is present, mirror billing into shipping (same-as-billing / walk-in). */
-  function applyShippingFallbackFromBilling() {
-    function read(id) {
-      var el = document.getElementById(id);
-      return el ? String(el.value || "").trim() : "";
+  var POS_SHIPPING_ADDRESS_FIELD_IDS = [
+    "confirm_sfirst_name",
+    "confirm_slast_name",
+    "confirm_sphone",
+    "confirm_saddress1",
+    "confirm_saddress2",
+    "confirm_scity",
+    "confirm_sstate",
+    "confirm_szip",
+    "confirm_scountry"
+  ];
+
+  var POS_BILLING_TO_SHIPPING_FIELDS = [
+    ["confirm_first_name", "confirm_sfirst_name"],
+    ["confirm_last_name", "confirm_slast_name"],
+    ["confirm_phone", "confirm_sphone"],
+    ["confirm_address1", "confirm_saddress1"],
+    ["confirm_address2", "confirm_saddress2"],
+    ["confirm_city", "confirm_scity"],
+    ["confirm_state", "confirm_sstate"],
+    ["confirm_zip", "confirm_szip"],
+    ["confirm_country", "confirm_scountry"]
+  ];
+
+  function isShippingSameAsBillingChecked() {
+    var cb = document.getElementById("confirm_shipping_same_as_billing");
+    return !!(cb && cb.checked);
+  }
+
+  function copyBillingToShippingFields() {
+    var billingCountry = document.getElementById("confirm_country");
+    var shippingCountry = document.getElementById("confirm_scountry");
+    if (billingCountry && shippingCountry) {
+      shippingCountry.value = billingCountry.value;
     }
-    function write(id, v) {
+    var billingStateVal = getPosStateValue("confirm_state");
+    POS_BILLING_TO_SHIPPING_FIELDS.forEach(function(pair) {
+      if (pair[0] === "confirm_country" || pair[0] === "confirm_state") {
+        return;
+      }
+      var billingEl = document.getElementById(pair[0]);
+      var shippingEl = document.getElementById(pair[1]);
+      if (billingEl && shippingEl) {
+        shippingEl.value = billingEl.value;
+      }
+    });
+    syncPosStateField("shipping", billingStateVal);
+  }
+
+  function setShippingFieldsSyncedFromBilling(synced) {
+    POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
       var el = document.getElementById(id);
-      if (el) el.value = v;
+      if (el) {
+        el.readOnly = synced;
+        el.classList.toggle("bg-slate-100", synced);
+        el.classList.toggle("cursor-not-allowed", synced);
+      }
+      var stateSelect = document.getElementById(id + "_select");
+      if (stateSelect) {
+        stateSelect.disabled = synced;
+        stateSelect.classList.toggle("bg-slate-100", synced);
+        stateSelect.classList.toggle("cursor-not-allowed", synced);
+      }
+    });
+  }
+
+  function onBillingFieldChangedForShippingSync() {
+    if (isShippingSameAsBillingChecked()) {
+      copyBillingToShippingFields();
     }
-    var sf = read("confirm_sfirst_name");
-    var sl = read("confirm_slast_name");
-    if (sf === "" && sl === "") {
-      var bf = read("confirm_first_name");
-      var bl = read("confirm_last_name");
-      if (bf !== "") {
-        write("confirm_sfirst_name", bf);
-        write("confirm_slast_name", bl);
+  }
+
+  function setConfirmShippingSameAsBilling(checked) {
+    var cb = document.getElementById("confirm_shipping_same_as_billing");
+    if (cb) {
+      cb.checked = !!checked;
+    }
+    if (checked) {
+      copyBillingToShippingFields();
+    }
+    setShippingFieldsSyncedFromBilling(!!checked);
+  }
+
+  function initConfirmShippingSameAsBilling() {
+    var cb = document.getElementById("confirm_shipping_same_as_billing");
+    if (!cb || cb.dataset.bound === "1") {
+      return;
+    }
+    cb.dataset.bound = "1";
+    cb.addEventListener("change", function() {
+      setConfirmShippingSameAsBilling(cb.checked);
+    });
+    POS_BILLING_TO_SHIPPING_FIELDS.forEach(function(pair) {
+      var billingEl = document.getElementById(pair[0]);
+      if (!billingEl) return;
+      billingEl.addEventListener("input", onBillingFieldChangedForShippingSync);
+      billingEl.addEventListener("change", onBillingFieldChangedForShippingSync);
+    });
+    var billingStateSelect = document.getElementById("confirm_state_select");
+    if (billingStateSelect) {
+      billingStateSelect.addEventListener("change", onBillingFieldChangedForShippingSync);
+    }
+  }
+
+  function hasConfirmShippingFieldsFilled() {
+    if (isShippingSameAsBillingChecked()) {
+      return true;
+    }
+    for (var i = 0; i < POS_SHIPPING_ADDRESS_FIELD_IDS.length; i++) {
+      var el = document.getElementById(POS_SHIPPING_ADDRESS_FIELD_IDS[i]);
+      if (el && String(el.value || "").trim() !== "") {
+        return true;
       }
     }
-    if (read("confirm_sphone") === "" && read("confirm_phone") !== "") {
-      write("confirm_sphone", read("confirm_phone"));
-    }
-    if (read("confirm_saddress1") === "" && read("confirm_address1") !== "") {
-      write("confirm_saddress1", read("confirm_address1"));
-    }
-    if (read("confirm_saddress2") === "" && read("confirm_address2") !== "") {
-      write("confirm_saddress2", read("confirm_address2"));
-    }
-    if (read("confirm_scity") === "" && read("confirm_city") !== "") {
-      write("confirm_scity", read("confirm_city"));
-    }
-    if (read("confirm_sstate") === "" && read("confirm_state") !== "") {
-      write("confirm_sstate", read("confirm_state"));
-    }
-    if (read("confirm_szip") === "" && read("confirm_zip") !== "") {
-      write("confirm_szip", read("confirm_zip"));
-    }
-    if (read("confirm_scountry") === "" && read("confirm_country") !== "") {
-      write("confirm_scountry", read("confirm_country"));
-    }
+    return false;
   }
 
   function getAddressConfirmPayload() {
@@ -1134,6 +1463,7 @@
     var shippingFirstName = read("confirm_sfirst_name");
     var shippingLastName = read("confirm_slast_name");
     var shippingFullName = [shippingFirstName, shippingLastName].filter(Boolean).join(" ").trim();
+    var omitShippingOnOrder = hasConfirmShippingFieldsFilled();
     return {
       confirm_address_submit: "1",
       confirm_first_name: read("confirm_first_name"),
@@ -1143,7 +1473,7 @@
       confirm_address1: read("confirm_address1"),
       confirm_address2: read("confirm_address2"),
       confirm_city: read("confirm_city"),
-      confirm_state: read("confirm_state"),
+      confirm_state: getPosStateValue("confirm_state"),
       confirm_zip: read("confirm_zip"),
       confirm_country: read("confirm_country"),
       confirm_gstin: read("confirm_gstin"),
@@ -1154,10 +1484,12 @@
       confirm_saddress1: read("confirm_saddress1"),
       confirm_saddress2: read("confirm_saddress2"),
       confirm_scity: read("confirm_scity"),
-      confirm_sstate: read("confirm_sstate"),
+      confirm_sstate: getPosStateValue("confirm_sstate"),
       confirm_szip: read("confirm_szip"),
       confirm_scountry: read("confirm_scountry"),
       confirm_sphone: read("confirm_sphone"),
+      confirm_shipping_same_as_billing: isShippingSameAsBillingChecked() ? "1" : "0",
+      confirm_omit_shipping_api: omitShippingOnOrder ? "1" : "0",
       customer_residency_status: read("customer_residency_status") || "INDIAN_RESIDENT",
       customer_pan: read("customer_pan").replace(/\s+/g, "").toUpperCase(),
       customer_aadhaar: read("customer_aadhaar").replace(/\D/g, ""),
@@ -1167,22 +1499,32 @@
     };
   }
 
-  var POS_REQUIRED_ADDRESS_FIELDS = [
-    ["confirm_first_name", "Billing first name"],
-    ["confirm_phone", "Billing phone"],
-    ["confirm_address1", "Billing address 1"],
-    ["confirm_city", "Billing city"],
-    ["confirm_state", "Billing state"],
-    ["confirm_zip", "Billing ZIP / pincode"],
-    ["confirm_country", "Billing country"],
-    ["confirm_sfirst_name", "Shipping first name"],
-    ["confirm_sphone", "Shipping phone"],
-    ["confirm_saddress1", "Shipping address 1"],
-    ["confirm_scity", "Shipping city"],
-    ["confirm_sstate", "Shipping state"],
-    ["confirm_szip", "Shipping ZIP / pincode"],
-    ["confirm_scountry", "Shipping country"]
-  ];
+  function applyPosCheckoutAddressDefaults(payload) {
+    var defaults = window.POS_ADDRESS_API_DEFAULTS || {};
+    var out = Object.assign({}, payload);
+    Object.keys(defaults).forEach(function(key) {
+      if (!String(out[key] || "").trim()) {
+        out[key] = defaults[key];
+      }
+    });
+    if (!String(out.confirm_state || "").trim()) {
+      out.confirm_state = String(window.POS_DEFAULT_STATE || "Delhi");
+    }
+    if (!String(out.confirm_zip || "").trim() && window.POS_STORE_PINCODE) {
+      out.confirm_zip = String(window.POS_STORE_PINCODE).trim();
+    }
+    if (!String(out.confirm_phone || "").trim() && defaults.confirm_phone) {
+      out.confirm_phone = String(defaults.confirm_phone).trim();
+    }
+    return out;
+  }
+
+  function ensurePosDefaultStateOnForm() {
+    var defaultState = String(window.POS_DEFAULT_STATE || "Delhi");
+    if (!getPosStateValue("confirm_state")) {
+      setPosStateValue("confirm_state", defaultState);
+    }
+  }
 
   function setPosFieldInvalid(id, invalid) {
     var el = document.getElementById(id);
@@ -1193,10 +1535,10 @@
   }
 
   function clearAddressValidationState() {
-    POS_REQUIRED_ADDRESS_FIELDS.forEach(function(row) {
-      setPosFieldInvalid(row[0], false);
+    ["confirm_first_name", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
+      setPosFieldInvalid(id, false);
     });
-    ["confirm_email", "confirm_gstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
+    POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
     var summary = document.getElementById("addressConfirmValidationSummary");
@@ -1241,6 +1583,8 @@
     var panHint = document.getElementById("panComplianceHint");
     var panStar = document.getElementById("panRequiredStar");
     var passportStar = document.getElementById("passportRequiredStar");
+    var countryStar = document.getElementById("countryRequiredStar");
+    var panVal = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").trim();
 
     if (banner) {
       banner.textContent = "High Value Transaction – Compliance Required (limit " + formatInrAmount(getHighValueLimit()) + ")";
@@ -1256,8 +1600,9 @@
     if (panWrap) panWrap.classList.toggle("hidden", residency === "FOREIGN_NATIONAL");
     if (passportWrap) passportWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
     if (countryWrap) countryWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
-    if (panStar) panStar.classList.toggle("hidden", hasGstin || residency === "FOREIGN_NATIONAL" || residency === "NRI");
-    if (passportStar) passportStar.classList.toggle("hidden", residency === "NRI");
+    if (panStar) panStar.classList.toggle("hidden", hasGstin || residency === "FOREIGN_NATIONAL" || (residency === "NRI" && panVal !== ""));
+    if (passportStar) passportStar.classList.toggle("hidden", residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
+    if (countryStar) countryStar.classList.toggle("hidden", residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
     if (panHint) {
       panHint.textContent = hasGstin
         ? "GSTIN present. PAN will be derived automatically for B2B invoice handling."
@@ -1288,121 +1633,45 @@
   function updateConfirmAddressButtonState() {
     var btn = document.getElementById("confirmAddressSubmitBtn");
     if (!btn) return;
-    var disabled = isHighValueTransaction() && !isHighValueComplianceDataComplete();
-    btn.disabled = disabled;
-    btn.classList.toggle("opacity-50", disabled);
-    btn.classList.toggle("cursor-not-allowed", disabled);
-    btn.title = disabled ? "Complete high value transaction compliance details first." : "";
+    btn.disabled = false;
+    btn.classList.remove("opacity-50", "cursor-not-allowed");
+    btn.title = "";
   }
 
   function validateAddressConfirmPayload(payload) {
     clearAddressValidationState();
-    syncHighValueComplianceUi();
     var missing = [];
     var firstInvalidId = "";
-    POS_REQUIRED_ADDRESS_FIELDS.forEach(function(row) {
-      var id = row[0];
-      var label = row[1];
-      var value = String(payload[id] || "").trim();
-      if (value === "") {
-        missing.push(label);
-        setPosFieldInvalid(id, true);
-        if (!firstInvalidId) firstInvalidId = id;
-      }
-    });
-
-    var email = String(payload.confirm_email || "").trim();
-    if (email !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      missing.push("Valid billing email");
-      setPosFieldInvalid("confirm_email", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_email";
+    var firstName = String(payload.confirm_first_name || "").trim();
+    var state = String(payload.confirm_state || "").trim();
+    var zip = String(payload.confirm_zip || "").trim();
+    if (!firstName) {
+      missing.push("First name");
+      setPosFieldInvalid("confirm_first_name", true);
+      firstInvalidId = "confirm_first_name";
     }
-
-    var billingPhoneDigits = String(payload.confirm_phone || "").replace(/\D/g, "");
-    if (billingPhoneDigits !== "" && billingPhoneDigits.length < 6) {
-      missing.push("Valid billing phone");
-      setPosFieldInvalid("confirm_phone", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_phone";
-    }
-    var shippingPhoneDigits = String(payload.confirm_sphone || "").replace(/\D/g, "");
-    if (shippingPhoneDigits !== "" && shippingPhoneDigits.length < 6) {
-      missing.push("Valid shipping phone");
-      setPosFieldInvalid("confirm_sphone", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_sphone";
-    }
-
-    var country = String(payload.confirm_country || "").trim().toUpperCase();
-    var scountry = String(payload.confirm_scountry || "").trim().toUpperCase();
-    var billingZip = String(payload.confirm_zip || "").trim();
-    var shippingZip = String(payload.confirm_szip || "").trim();
-    if ((country === "IN" || country === "INDIA") && billingZip !== "" && !/^\d{6}$/.test(billingZip)) {
-      missing.push("Valid 6 digit billing pincode");
+    if (!zip) {
+      missing.push("ZIP / Pincode");
       setPosFieldInvalid("confirm_zip", true);
       if (!firstInvalidId) firstInvalidId = "confirm_zip";
     }
-    if ((scountry === "IN" || scountry === "INDIA") && shippingZip !== "" && !/^\d{6}$/.test(shippingZip)) {
-      missing.push("Valid 6 digit shipping pincode");
-      setPosFieldInvalid("confirm_szip", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_szip";
+    var phone = String(payload.confirm_phone || "").trim();
+    if (!phone) {
+      missing.push("Phone");
+      setPosFieldInvalid("confirm_phone", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_phone";
     }
-
-    var gstin = String(payload.confirm_gstin || "").trim().toUpperCase();
-    if (gstin !== "" && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
-      missing.push("Valid GSTIN");
-      setPosFieldInvalid("confirm_gstin", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_gstin";
-    }
-
-    var highValue = isHighValueTransaction();
-    var residency = String(document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
-    var pan = String(document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").toUpperCase();
-    var aadhaar = String(document.getElementById("customer_aadhaar")?.value || "").replace(/\D/g, "");
-    var passport = String(document.getElementById("passport_number")?.value || "").replace(/\s+/g, "").toUpperCase();
-    var countryResidence = String(document.getElementById("country_of_residence")?.value || "").trim();
-    if (document.getElementById("customer_pan")) document.getElementById("customer_pan").value = pan;
-    if (document.getElementById("customer_aadhaar")) document.getElementById("customer_aadhaar").value = aadhaar;
-    if (document.getElementById("passport_number")) document.getElementById("passport_number").value = passport;
-
-    if (highValue && gstin === "") {
-      if (residency === "INDIAN_RESIDENT" && pan === "") {
-        missing.push("Customer PAN");
-        setPosFieldInvalid("customer_pan", true);
-        if (!firstInvalidId) firstInvalidId = "customer_pan";
+    if (!state) {
+      missing.push("State");
+      var stateSelect = document.getElementById("confirm_state_select");
+      var stateInput = document.getElementById("confirm_state");
+      if (stateSelect && !stateSelect.classList.contains("hidden")) {
+        setPosFieldInvalid("confirm_state_select", true);
+        if (!firstInvalidId) firstInvalidId = "confirm_state_select";
+      } else if (stateInput) {
+        setPosFieldInvalid("confirm_state", true);
+        if (!firstInvalidId) firstInvalidId = "confirm_state";
       }
-      if (residency === "NRI" && pan === "" && (passport === "" || countryResidence === "")) {
-        missing.push("NRI PAN or Passport Number with Country of Residence");
-        setPosFieldInvalid("customer_pan", true);
-        setPosFieldInvalid("passport_number", true);
-        setPosFieldInvalid("country_of_residence", true);
-        if (!firstInvalidId) firstInvalidId = "customer_pan";
-      }
-      if (residency === "FOREIGN_NATIONAL") {
-        if (passport === "") {
-          missing.push("Passport Number");
-          setPosFieldInvalid("passport_number", true);
-          if (!firstInvalidId) firstInvalidId = "passport_number";
-        }
-        if (countryResidence === "") {
-          missing.push("Country of Residence");
-          setPosFieldInvalid("country_of_residence", true);
-          if (!firstInvalidId) firstInvalidId = "country_of_residence";
-        }
-      }
-    }
-    if (pan !== "" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
-      missing.push("Valid PAN");
-      setPosFieldInvalid("customer_pan", true);
-      if (!firstInvalidId) firstInvalidId = "customer_pan";
-    }
-    if (passport !== "" && passport.length < 6) {
-      missing.push("Valid Passport Number");
-      setPosFieldInvalid("passport_number", true);
-      if (!firstInvalidId) firstInvalidId = "passport_number";
-    }
-    if (aadhaar !== "" && !/^\d{12}$/.test(aadhaar)) {
-      missing.push("Valid Aadhaar");
-      setPosFieldInvalid("customer_aadhaar", true);
-      if (!firstInvalidId) firstInvalidId = "customer_aadhaar";
     }
 
     if (missing.length) {
@@ -1432,7 +1701,9 @@
           return;
         }
         setAddressConfirmFields(data);
-        applyShippingFallbackFromBilling();
+        setConfirmShippingSameAsBilling(false);
+        initConfirmShippingSameAsBilling();
+        ensurePosDefaultStateOnForm();
         openAddressConfirmModal();
       })
       .catch(function() {
@@ -1645,13 +1916,20 @@
       });
     }
 
+    initConfirmShippingSameAsBilling();
+
     var confirmAddressSubmitBtn = document.getElementById("confirmAddressSubmitBtn");
     if (confirmAddressSubmitBtn) {
       confirmAddressSubmitBtn.addEventListener("click", function() {
+        if (isShippingSameAsBillingChecked()) {
+          copyBillingToShippingFields();
+        }
+        ensurePosDefaultStateOnForm();
         var payload = getAddressConfirmPayload();
         if (!validateAddressConfirmPayload(payload)) {
           return;
         }
+        payload = applyPosCheckoutAddressDefaults(payload);
         createOrderNow(payload);
       });
     }
@@ -1662,7 +1940,27 @@
         syncHighValueComplianceUi();
       });
     });
-    ["customer_residency_status", "confirm_gstin"].forEach(function(id) {
+    ["confirm_country", "confirm_scountry"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("change", function() {
+          setPosFieldInvalid(id, false);
+          if (id === "confirm_country") {
+            syncPosStateField("billing").then(function() {
+              if (isShippingSameAsBillingChecked()) {
+                copyBillingToShippingFields();
+              }
+            });
+          } else {
+            syncPosStateField("shipping");
+          }
+        });
+      }
+    });
+    syncAllPosStateFields().then(function() {
+      ensurePosDefaultStateOnForm();
+    });
+    ["customer_residency_status", "confirm_gstin", "customer_pan", "passport_number", "country_of_residence"].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
         el.addEventListener("change", syncHighValueComplianceUi);

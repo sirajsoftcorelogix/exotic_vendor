@@ -41,25 +41,38 @@ class POSInvoice
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
-        $warehouse_id = $_SESSION['warehouse_id'] ?? 0;
-        $invoice_number = 'INV-' . date('Ymd') . '-' . mt_rand(1000, 9999);
-        $batch_no = $data['batch_no'] ?? null;
+        $warehouse_id = (int)($_SESSION['warehouse_id'] ?? 0);
+        $customer_id = (int)($data['customer_id'] ?? 0);
+        $vp_order_info_id = (int)($data['vp_order_info_id'] ?? 0);
+        $batch_no = (string)($data['batch_no'] ?? '');
+        $invoice_number = (string)($data['invoice_number'] ?? '');
+        $invoice_date = (string)($data['invoice_date'] ?? '');
+        $currency = (string)($data['currency'] ?? '');
+        $subtotal = (float)($data['subtotal'] ?? 0);
+        $tax_amount = (float)($data['tax_amount'] ?? 0);
+        $discount_amount = (float)($data['discount_amount'] ?? 0);
+        $total_amount = (float)($data['total_amount'] ?? 0);
+        $status = (string)($data['status'] ?? '');
+        $created_by = (int)($data['created_by'] ?? 0);
+        $created_at = (string)($data['created_at'] ?? '');
+        $exchange_text = (string)($data['exchange_text'] ?? '');
+        $converted_amount = (float)($data['converted_amount'] ?? 0);
         $stmt->bind_param(
-            'ssisssdddsdsdssi',
-            $data['invoice_number'],
-            $data['invoice_date'],
-            $data['customer_id'],
-            $data['vp_order_info_id'],
-            $data['currency'],
-            $data['subtotal'],
-            $data['tax_amount'],
-            $data['discount_amount'],
-            $data['total_amount'],
-            $data['status'],
-            $data['created_by'],
-            $data['created_at'],
-            $data['exchange_text'],
-            $data['converted_amount'],
+            'ssiisddddsissdsi',
+            $invoice_number,
+            $invoice_date,
+            $customer_id,
+            $vp_order_info_id,
+            $currency,
+            $subtotal,
+            $tax_amount,
+            $discount_amount,
+            $total_amount,
+            $status,
+            $created_by,
+            $created_at,
+            $exchange_text,
+            $converted_amount,
             $batch_no,
             $warehouse_id
         );

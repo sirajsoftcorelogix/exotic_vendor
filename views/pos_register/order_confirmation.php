@@ -221,21 +221,37 @@ if ($receipt_download_filename_base === '') {
           </div>
         </div>
 
-        <div class="no-print flex flex-wrap items-center gap-3">
-          <button type="button" onclick="printPaymentReceipt()" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Print / Save as PDF</button>
-          <p class="basis-full text-xs text-slate-500">When you choose “Save as PDF”, the suggested file name uses your receipt number (Chrome, Edge and most Chromium browsers).</p>
-          <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Payment History</a>
-          <?php if (!empty($show_invoice_pdf_button) && !empty($invoice_pdf_url)): ?>
-            <a href="<?= $h((string)$invoice_pdf_url) ?>" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Print Invoice (PDF)</a>
-          <?php else: ?>
-            <span class="inline-flex flex-col gap-0.5">
-              <span class="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed" title="<?= $h((string)($invoice_pdf_disabled_hint ?? '')) ?>">Print Invoice (PDF)</span>
-              <?php if (!empty($invoice_pdf_disabled_hint)): ?>
-                <span class="text-[11px] text-slate-500 max-w-sm"><?= $h((string)$invoice_pdf_disabled_hint) ?></span>
+        <div class="no-print space-y-3">
+          <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Print or download</div>
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="inline-flex flex-col gap-1">
+              <span class="text-[11px] text-slate-500">Payment receipt</span>
+              <button type="button" onclick="printPaymentReceipt()" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Print / Save as PDF</button>
+            </div>
+            <div class="inline-flex flex-col gap-1">
+              <?php
+              $isPaymentInFull = !empty($is_payment_in_full)
+                || (strtolower(trim((string)($payment_stage ?? ''))) === 'final' && (float)($receipt_pending_amount ?? 0) <= 0.02);
+              $invoiceCreateUrl = 'index.php?page=invoices&action=create';
+              $canInvoicePreview = $isPaymentInFull;
+              $canInvoicePdf = $isPaymentInFull && !empty($show_invoice_pdf_button) && !empty($invoice_pdf_url);
+              ?>
+              <span class="text-[11px] text-slate-500">Tax invoice</span>
+              <?php if ($canInvoicePreview): ?>
+                <a href="<?= $h($invoiceCreateUrl) ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Create invoice</a>
+              <?php else: ?>
+                <span class="inline-flex flex-col gap-0.5">
+                  <span class="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed" title="Tax invoice is available after payment is received in full.">Create invoice</span>
+                </span>
               <?php endif; ?>
-            </span>
-          <?php endif; ?>
-          <a href="index.php?page=pos_register&action=list" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to POS</a>
+              <?php if ($canInvoicePdf): ?>
+                <a href="<?= $h((string)$invoice_pdf_url) ?>" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-orange-700 hover:text-orange-800 underline">Download PDF</a>
+              <?php endif; ?>
+            </div>
+            <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" target="_blank" rel="noopener noreferrer" class="self-end rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:self-center">Payment History</a>
+            <a href="index.php?page=pos_register&action=list" class="self-end rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:self-center">Back to POS</a>
+          </div>
+          <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>. When payment is received in full, use <strong class="font-medium text-slate-600">Create invoice</strong> to open the invoice screen.</p>
         </div>
       </div>
     </div>

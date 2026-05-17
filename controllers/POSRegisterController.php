@@ -22,6 +22,80 @@ class POSRegisterController
         }
     }
 
+    private const POS_PARENT_ITEM_CART_MESSAGE = 'Parent Level Item can not be added to the cart';
+
+    /** Prefer exact variant SKU over shared item_code; deprioritize parent rows. */
+    private const VP_PRODUCT_BY_CODE_ORDER_SQL = ' ORDER BY (sku = ?) DESC,
+        CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+        id ASC ';
+
+    private function isParentItemLevel(?string $itemLevel): bool
+    {
+        return strtolower(trim((string)$itemLevel)) === 'parent';
+    }
+
+    /**
+     * Resolve item_level for a catalogue code (sku or item_code), including parent rows.
+     */
+    private function lookupProductItemLevelForCode(mysqli $conn, string $code): string
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return '';
+        }
+        // Prefer exact SKU, then non-parent rows (many variants share the same item_code).
+        $stmt = $conn->prepare(
+            'SELECT item_level FROM vp_products
+             WHERE is_active = 1 AND (sku = ? OR item_code = ?)
+             ORDER BY (sku = ?) DESC,
+                      CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+                      id ASC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('sss', $code, $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return trim((string)($row['item_level'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $body Cart JSON (item_level, variation, code, …)
+     * @return array{success: false, message: string}|null
+     */
+    private function cartAddBlockedIfParentLevelProduct(mysqli $conn, array $body): ?array
+    {
+        $level = strtolower(trim((string)($body['item_level'] ?? '')));
+        if ($level === 'variation' || $level === 'standalone') {
+            return null;
+        }
+        if ($level === 'parent') {
+            return [
+                'success' => false,
+                'message' => self::POS_PARENT_ITEM_CART_MESSAGE,
+            ];
+        }
+
+        $variation = trim((string)($body['variation'] ?? ''));
+        if ($variation !== '') {
+            return null;
+        }
+
+        $code = trim((string)($body['code'] ?? ''));
+        if ($code !== '' && $this->isParentItemLevel($this->lookupProductItemLevelForCode($conn, $code))) {
+            return [
+                'success' => false,
+                'message' => self::POS_PARENT_ITEM_CART_MESSAGE,
+            ];
+        }
+
+        return null;
+    }
+
     private function columnExists(mysqli $conn, string $table, string $column): bool
     {
         $stmt = $conn->prepare(
@@ -249,6 +323,73 @@ class POSRegisterController
         }
     }
 
+    /**
+     * After full payment: import order from vendor API and create tax invoice for receipt screen.
+     */
+    private function finalizePosReceiptInvoice(mysqli $conn, string $orderNumber, string $paymentStage, array $compliance): array
+    {
+        $out = [
+            'import_status' => '',
+            'show_invoice_pdf_button' => false,
+            'show_invoice_preview_button' => false,
+            'invoice_id' => 0,
+            'invoice_pdf_url' => '',
+            'invoice_preview_url' => '',
+            'invoice_pdf_disabled_hint' => 'Tax invoice is available after payment is received in full.',
+        ];
+
+        if ($paymentStage !== 'final') {
+            return $out;
+        }
+
+        try {
+            require_once __DIR__ . '/OrdersController.php';
+            require_once __DIR__ . '/PosInvoiceController.php';
+
+            $ordersCtrl = new OrdersController();
+            $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 4, 2);
+
+            if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
+                $out['import_status'] = 'failed';
+                $out['invoice_pdf_disabled_hint'] = 'Order is not in the system yet (vendor API may still be syncing). '
+                    . 'Open Orders to import, then create the invoice from Invoices.';
+                if (!empty($import['message'])) {
+                    $out['invoice_pdf_disabled_hint'] .= ' (' . (string)$import['message'] . ')';
+                }
+                return $out;
+            }
+
+            $posInv = new PosInvoiceController();
+            $invRes = $posInv->createAutoInvoiceForOrder($orderNumber);
+
+            if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
+                $invoiceId = (int)$invRes['invoice_id'];
+                $this->markInvoiceHighValueIfPresent($conn, $invoiceId, $compliance);
+                $out['import_status'] = !empty($import['success']) ? 'success' : 'failed';
+                $out = $this->applyPosReceiptInvoiceLinks($out, $invoiceId);
+                return $out;
+            }
+
+            $existingId = $this->findInvoiceIdForOrderNumber($conn, $orderNumber);
+            if ($existingId) {
+                $this->markInvoiceHighValueIfPresent($conn, $existingId, $compliance);
+                $out['import_status'] = !empty($import['success']) ? 'success' : 'failed';
+                $out = $this->applyPosReceiptInvoiceLinks($out, $existingId);
+                return $out;
+            }
+
+            $out['import_status'] = 'failed';
+            $out['invoice_pdf_disabled_hint'] = $invRes['message']
+                ?? ($import['message'] ?? 'Invoice could not be created. Create it from POS Invoices after import.');
+            return $out;
+        } catch (\Throwable $e) {
+            $out['import_status'] = 'failed';
+            $out['invoice_pdf_disabled_hint'] = 'Invoice step failed: open POS Invoices after import.';
+            error_log('[POS checkout finalize invoice] ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return $out;
+        }
+    }
+
     private function appendHighValueComplianceToNote(string $note, float $invoiceAmount, string $paymentMode, array $compliance): string
     {
         if (empty($compliance['is_high_value'])) {
@@ -449,9 +590,39 @@ class POSRegisterController
             ];
         }
 
+        $rawCountries = function_exists('country_array') ? country_array() : ['IN' => 'India'];
+        asort($rawCountries);
+        $countryList = [];
+        if (isset($rawCountries['IN'])) {
+            $countryList['IN'] = $rawCountries['IN'];
+            unset($rawCountries['IN']);
+        }
+        foreach ($rawCountries as $code => $name) {
+            $iso = strtoupper(substr(trim((string)$code), 0, 2));
+            if ($iso !== '' && !isset($countryList[$iso])) {
+                $countryList[$iso] = (string)$name;
+            }
+        }
+
+        $posIndiaStates = [];
+        if ($conn instanceof mysqli) {
+            require_once 'models/country/state.php';
+            $stateModel = new State($conn);
+            $stateRows = $stateModel->getAllStates(105);
+            foreach (($stateRows['states'] ?? []) as $row) {
+                $name = trim((string)($row['name'] ?? ''));
+                if ($name !== '') {
+                    $posIndiaStates[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
+                }
+            }
+        }
+
+        $posStorePincode = $conn instanceof mysqli ? $this->resolveStorePincodeForPos($conn) : '';
+
         renderTemplate('views/pos_register/index.php', [
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
+            'pos_store_pincode' => $posStorePincode,
             // Minimal placeholder until new cart; view must not depend on Exotic retrieve shape.
             'cartData' => [
                 'items' => [],
@@ -460,7 +631,42 @@ class POSRegisterController
             ],
             'selected_customer' => $selected_customer,
             'high_value_transaction_limit' => $highValueTransactionLimit,
+            'country_list' => $countryList,
+            'pos_india_states' => $posIndiaStates,
         ]);
+    }
+
+    /** JSON list of Indian states for POS address confirm dropdown (country_id 105). */
+    public function states_by_country(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        $country = strtoupper(trim((string)($_GET['country'] ?? 'IN')));
+        if ($country !== 'IN') {
+            echo json_encode([], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        if (!$conn instanceof mysqli) {
+            echo json_encode([], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        require_once 'models/country/state.php';
+        $stateModel = new State($conn);
+        $stateRows = $stateModel->getAllStates(105);
+        $out = [];
+        foreach (($stateRows['states'] ?? []) as $row) {
+            $name = trim((string)($row['name'] ?? ''));
+            if ($name !== '') {
+                $out[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
+            }
+        }
+        echo json_encode($out, JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     /**
@@ -918,6 +1124,17 @@ class POSRegisterController
         return trim((string)$dbRaw);
     }
 
+    /** Size/color for cart: trust vp_products row first (variant facets), then API. */
+    private function posProductFacetFromDbFirst(array $dbRow, array $apiData, string $field): string
+    {
+        $dbVal = trim((string)($dbRow[$field] ?? ''));
+        if ($dbVal !== '' && $dbVal !== '0' && strcasecmp($dbVal, 'n/a') !== 0) {
+            return $dbVal;
+        }
+
+        return $this->mergeProductTextField($apiData[$field] ?? '', $dbRow[$field] ?? '');
+    }
+
     /** GST % for POS: prefer API gst_rate / gst_percent / gst, else vp_products.gst. */
     private function mergeGstPercentField(array $apiData, array $dbRow): string
     {
@@ -1063,12 +1280,13 @@ class POSRegisterController
         }
         $stmt = $conn->prepare(
             'SELECT price_india, price_india_suggested, finalprice, itemprice, gst
-             FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+             FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?)'
+            . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
         );
         if (!$stmt) {
             return 0.0;
         }
-        $stmt->bind_param('ss', $code, $code);
+        $stmt->bind_param('sss', $code, $code, $code);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -1094,12 +1312,13 @@ class POSRegisterController
             return [];
         }
         $stmt = $conn->prepare(
-            'SELECT gst FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+            'SELECT gst FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?)'
+            . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
         );
         if (!$stmt) {
             return [];
         }
-        $stmt->bind_param('ss', $code, $code);
+        $stmt->bind_param('sss', $code, $code, $code);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -1327,7 +1546,9 @@ class POSRegisterController
         if ($warehouseId <= 0) {
             $sql = 'SELECT id, sku, title, 0 AS stock_qty
                     FROM vp_products
-                    WHERE is_active = 1 AND item_code = ? AND sku <> ?
+                    WHERE is_active = 1
+                      AND LOWER(TRIM(IFNULL(item_level, \'\'))) <> \'parent\'
+                      AND item_code = ? AND sku <> ?
                     ORDER BY sku ASC';
             $stmt = $conn->prepare($sql);
             if (!$stmt) {
@@ -1364,7 +1585,9 @@ class POSRegisterController
                 ) latest ON latest.product_id = sm1.product_id AND latest.max_id = sm1.id
                 WHERE sm1.warehouse_id = ?
             ) sm ON sm.product_id = p.id
-            WHERE p.is_active = 1 AND p.item_code = ? AND p.sku <> ?
+            WHERE p.is_active = 1
+              AND LOWER(TRIM(IFNULL(p.item_level, \'\'))) <> \'parent\'
+              AND p.item_code = ? AND p.sku <> ?
             ORDER BY p.sku ASC';
 
         $stmt = $conn->prepare($sql);
@@ -1425,13 +1648,13 @@ class POSRegisterController
                 'SELECT id, item_code, sku, title, image, material, size, color, hsn, gst,
                         price_india, price_india_suggested, itemprice, finalprice, mrp_india,
                         product_weight, product_weight_unit,
-                        prod_height, prod_width, prod_length, length_unit
+                        prod_height, prod_width, prod_length, length_unit, item_level
                  FROM vp_products WHERE is_active = 1
-                   AND LOWER(TRIM(IFNULL(item_level, \'\'))) <> \'parent\'
-                   AND (sku = ? OR item_code = ?) ORDER BY id ASC LIMIT 1'
+                   AND (sku = ? OR item_code = ?)'
+                . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
             );
             if ($stmt) {
-                $stmt->bind_param('ss', $code, $code);
+                $stmt->bind_param('sss', $code, $code, $code);
                 $stmt->execute();
                 $row = $stmt->get_result()->fetch_assoc();
                 $stmt->close();
@@ -1571,8 +1794,8 @@ class POSRegisterController
             'price' => $sellingPrice,
 
             'material' => $this->mergeProductTextField($data['material'] ?? '', $dbRow['material'] ?? ''),
-            'size' => $this->mergeProductTextField($data['size'] ?? '', $dbRow['size'] ?? ''),
-            'color' => $this->mergeProductTextField($data['color'] ?? '', $dbRow['color'] ?? ''),
+            'size' => $this->posProductFacetFromDbFirst($dbRow, $data, 'size'),
+            'color' => $this->posProductFacetFromDbFirst($dbRow, $data, 'color'),
             'hsn' => $this->mergeProductTextField($data['hsn'] ?? '', $dbRow['hsn'] ?? ''),
             'gst_percent' => $this->mergeGstPercentField($data, $dbRow),
             'mrp' => $mrpOut,
@@ -1597,6 +1820,8 @@ class POSRegisterController
             'express_shipping_option' => $data['express_shipping_option'] ?? null,
             'addon_options' => $data['addon_options'] ?? [],
             'sibling_skus' => $siblingSkus,
+            'item_level' => trim((string)($dbRow['item_level'] ?? '')),
+            'is_parent_level' => $this->isParentItemLevel($dbRow['item_level'] ?? ''),
         ];
 
         $this->clearBufferedHttpOutput();
@@ -1627,17 +1852,16 @@ class POSRegisterController
         }
 
         if ($productId <= 0) {
-            $sql = "SELECT id, item_code, sku, title
+            $sql = 'SELECT id, item_code, sku, title
                     FROM vp_products
-                    WHERE is_active = 1 AND (sku = ? OR item_code = ?)
-                    ORDER BY id ASC
-                    LIMIT 1";
+                    WHERE is_active = 1 AND (sku = ? OR item_code = ?)'
+                . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1';
             $stmt = $conn->prepare($sql);
             if (!$stmt) {
                 echo json_encode(['success' => false, 'message' => 'Could not prepare product query.']);
                 exit;
             }
-            $stmt->bind_param('ss', $q, $q);
+            $stmt->bind_param('sss', $q, $q, $q);
             $stmt->execute();
             $product = $stmt->get_result()->fetch_assoc();
             $stmt->close();
@@ -1771,6 +1995,17 @@ class POSRegisterController
                 if (!is_array($body)) {
                     $body = $_POST;
                 }
+                global $conn;
+                if ($conn instanceof mysqli) {
+                    $parentBlock = $this->cartAddBlockedIfParentLevelProduct(
+                        $conn,
+                        is_array($body) ? $body : []
+                    );
+                    if ($parentBlock !== null) {
+                        echo json_encode($parentBlock, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                        exit;
+                    }
+                }
                 $split = $this->buildExoticCartAddSplit(is_array($body) ? $body : []);
                 $ctxAdd = $this->exoticCartDiscountContext();
                 $primaryRes = $this->exotic_api_call(
@@ -1782,40 +2017,6 @@ class POSRegisterController
                     $ctxAdd['extraHeaders']
                 );
                 $addRes = $primaryRes;
-                $retryRes = null;
-                $retryPostUsed = null;
-                // Some catalogue rows fail with parent-code + variation but succeed with direct variant SKU.
-                // Retry once with a safer payload shape before returning error to UI.
-                if (!$this->isExoticCartSuccess($addRes)) {
-                    $retryPost = $split['post'];
-                    $retryNeeded = false;
-                    $stockCheckCode = trim((string)($retryPost['stock_check_code'] ?? ''));
-                    $baseCode = trim((string)($retryPost['code'] ?? ''));
-                    if ($stockCheckCode !== '' && strcasecmp($stockCheckCode, $baseCode) !== 0) {
-                        $retryPost['code'] = $stockCheckCode;
-                        if (isset($retryPost['variation'])) {
-                            unset($retryPost['variation']);
-                        }
-                        $retryNeeded = true;
-                    } elseif (!empty($retryPost['variation'])) {
-                        unset($retryPost['variation']);
-                        $retryNeeded = true;
-                    }
-                    if ($retryNeeded) {
-                        $retryPostUsed = $retryPost;
-                        $retryRes = $this->exotic_api_call(
-                            '/cart/add',
-                            'POST',
-                            $split['query'],
-                            $retryPost,
-                            null,
-                            $ctxAdd['extraHeaders']
-                        );
-                        if ($this->isExoticCartSuccess($retryRes)) {
-                            $addRes = $retryRes;
-                        }
-                    }
-                }
                 $upstream = [
                     'api_base' => 'https://www.exoticindia.com/api',
                     'endpoint' => 'POST /cart/add',
@@ -1831,14 +2032,6 @@ class POSRegisterController
                         ],
                     ],
                 ];
-                if ($retryRes !== null) {
-                    $upstream['attempts'][] = [
-                        'label' => 'retry',
-                        'request_url' => $this->exoticCartAddPublicUrl($split['query']),
-                        'post_body' => $retryPostUsed ?? [],
-                        'response' => $this->compactUpstreamCartSnapshot($retryRes),
-                    ];
-                }
                 $this->emitCartApiResponse($addRes, ['upstream' => $upstream]);
 
                 return;
@@ -2628,62 +2821,151 @@ class POSRegisterController
      * POST JSON: address confirm fields + payment_* + customer_id + order_total (from live cart).
      * Proxies Exotic POST /order/create, then inserts pos_payments with receipt number.
      */
-    private function validatePosCheckoutAddressPayload(array $payload): array
-    {
-        $required = [
-            'confirm_first_name' => 'Billing first name',
-            'confirm_phone' => 'Billing phone',
-            'confirm_address1' => 'Billing address 1',
-            'confirm_city' => 'Billing city',
-            'confirm_state' => 'Billing state',
-            'confirm_zip' => 'Billing ZIP / pincode',
-            'confirm_country' => 'Billing country',
-            'confirm_sfirst_name' => 'Shipping first name',
-            'confirm_sphone' => 'Shipping phone',
-            'confirm_saddress1' => 'Shipping address 1',
-            'confirm_scity' => 'Shipping city',
-            'confirm_sstate' => 'Shipping state',
-            'confirm_szip' => 'Shipping ZIP / pincode',
-            'confirm_scountry' => 'Shipping country',
-        ];
+    private const POS_DUMMY_BILLING_ADDRESS1 = 'dummy Address';
+    private const POS_DUMMY_PHONE = '8031404444';
+    private const POS_DUMMY_CITY = 'Delhi';
+    private const POS_DEFAULT_STATE = 'Delhi';
 
-        $errors = [];
-        foreach ($required as $key => $label) {
-            if (trim((string)($payload[$key] ?? '')) === '') {
-                $errors[] = $label;
+    /**
+     * Placeholder billing email when none provided: dummy-{timestamp}-{1000-9999}@exoticindia.com
+     */
+    private function generatePosDummyEmail(): string
+    {
+        return sprintf('dummy-%d-%d@exoticindia.com', time(), random_int(1000, 9999));
+    }
+
+    /**
+     * Extract 6-digit Indian pincode from free-text address (exotic_address.address).
+     */
+    private function extractPincodeFromAddressText(string $text): string
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return '';
+        }
+        if (preg_match('/\b(\d{6})\b/', $text, $matches)) {
+            return (string)$matches[1];
+        }
+
+        return '';
+    }
+
+    /**
+     * Pincode for current POS store (session warehouse, else default exotic_address; else firm_details.pin).
+     */
+    private function resolveStorePincodeForPos(mysqli $conn): string
+    {
+        $whId = (int)($_SESSION['warehouse_id'] ?? 0);
+        $row = null;
+
+        if ($whId > 0) {
+            $stmt = $conn->prepare(
+                'SELECT `address`, display_name, address_title FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('i', $whId);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc() ?: null;
+                $stmt->close();
             }
         }
 
-        $email = trim((string)($payload['confirm_email'] ?? ''));
-        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'Valid billing email';
+        if (!$row) {
+            $res = $conn->query(
+                'SELECT `address`, display_name, address_title FROM exotic_address
+                 WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
+            );
+            if ($res) {
+                $row = $res->fetch_assoc() ?: null;
+                $res->free();
+            }
         }
 
-        $billingPhoneDigits = preg_replace('/\D/', '', (string)($payload['confirm_phone'] ?? ''));
-        if ($billingPhoneDigits !== '' && strlen($billingPhoneDigits) < 6) {
-            $errors[] = 'Valid billing phone';
+        if (!$row) {
+            $res = $conn->query(
+                'SELECT `address`, display_name, address_title FROM exotic_address
+                 WHERE is_active = 1 ORDER BY id ASC LIMIT 1'
+            );
+            if ($res) {
+                $row = $res->fetch_assoc() ?: null;
+                $res->free();
+            }
         }
 
-        $shippingPhoneDigits = preg_replace('/\D/', '', (string)($payload['confirm_sphone'] ?? ''));
-        if ($shippingPhoneDigits !== '' && strlen($shippingPhoneDigits) < 6) {
-            $errors[] = 'Valid shipping phone';
+        if ($row) {
+            foreach (['address', 'display_name', 'address_title'] as $col) {
+                $pin = $this->extractPincodeFromAddressText((string)($row[$col] ?? ''));
+                if ($pin !== '') {
+                    return $pin;
+                }
+            }
         }
 
-        $billingCountry = strtoupper(trim((string)($payload['confirm_country'] ?? '')));
-        $billingZip = trim((string)($payload['confirm_zip'] ?? ''));
-        if (($billingCountry === 'IN' || $billingCountry === 'INDIA') && $billingZip !== '' && !preg_match('/^\d{6}$/', $billingZip)) {
-            $errors[] = 'Valid 6 digit billing pincode';
+        require_once __DIR__ . '/../models/comman/tables.php';
+        $comman = new Tables($conn);
+        $firm = $comman->getRecordById('firm_details', 1);
+        if (is_array($firm)) {
+            foreach (['pin', 'pincode', 'zip', 'zipcode'] as $col) {
+                $pin = trim((string)($firm[$col] ?? ''));
+                if ($pin !== '') {
+                    return $pin;
+                }
+            }
         }
 
-        $shippingCountry = strtoupper(trim((string)($payload['confirm_scountry'] ?? '')));
-        $shippingZip = trim((string)($payload['confirm_szip'] ?? ''));
-        if (($shippingCountry === 'IN' || $shippingCountry === 'INDIA') && $shippingZip !== '' && !preg_match('/^\d{6}$/', $shippingZip)) {
-            $errors[] = 'Valid 6 digit shipping pincode';
+        return '';
+    }
+
+    /**
+     * Fill API-required billing fields when blank so order/create validation passes.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function normalizePosCheckoutBillingPayload(array $payload, ?mysqli $conn = null): array
+    {
+        if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
+            // Left empty; validatePosCheckoutAddressPayload blocks checkout.
+        }
+        if (trim((string)($payload['confirm_email'] ?? '')) === '') {
+            $payload['confirm_email'] = $this->generatePosDummyEmail();
+        }
+        if (trim((string)($payload['confirm_phone'] ?? '')) === '') {
+            $payload['confirm_phone'] = self::POS_DUMMY_PHONE;
+        }
+        if (trim((string)($payload['confirm_address1'] ?? '')) === '') {
+            $payload['confirm_address1'] = self::POS_DUMMY_BILLING_ADDRESS1;
+        }
+        if (trim((string)($payload['confirm_city'] ?? '')) === '') {
+            $payload['confirm_city'] = self::POS_DUMMY_CITY;
+        }
+        if (trim((string)($payload['confirm_state'] ?? '')) === '') {
+            $payload['confirm_state'] = self::POS_DEFAULT_STATE;
+        }
+        if (trim((string)($payload['confirm_zip'] ?? '')) === '' && $conn instanceof mysqli) {
+            $storePin = $this->resolveStorePincodeForPos($conn);
+            if ($storePin !== '') {
+                $payload['confirm_zip'] = $storePin;
+            }
         }
 
-        $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));
-        if ($gstin !== '' && !preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-            $errors[] = 'Valid GSTIN';
+        return $payload;
+    }
+
+    private function validatePosCheckoutAddressPayload(array $payload): array
+    {
+        $errors = [];
+        if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
+            $errors[] = 'First name';
+        }
+        if (trim((string)($payload['confirm_state'] ?? '')) === '') {
+            $errors[] = 'State';
+        }
+        if (trim((string)($payload['confirm_zip'] ?? '')) === '') {
+            $errors[] = 'ZIP / Pincode';
+        }
+        if (trim((string)($payload['confirm_phone'] ?? '')) === '') {
+            $errors[] = 'Phone';
         }
 
         return $errors;
@@ -2704,6 +2986,8 @@ class POSRegisterController
             echo json_encode(['success' => false, 'message' => 'Invalid JSON body'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
+
+        $payload = $this->normalizePosCheckoutBillingPayload($payload, $conn);
 
         $customerId = (int)($payload['customer_id'] ?? 0);
         $sessionCid = (int)($_SESSION['pos_customer_id'] ?? 0);
@@ -2760,16 +3044,6 @@ class POSRegisterController
         }
 
         $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $paymentAmount, $paymentMode, $conn);
-        if (empty($compliance['ok'])) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Additional details required for High Value Transaction: ' . implode(' ', $compliance['errors']),
-                'requires_compliance' => !empty($compliance['is_high_value']),
-                'requires_cash_confirmation' => !empty($compliance['cash_warning_required']),
-                'compliance' => $compliance,
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
 
         $ctx = $this->exoticCartDiscountContext();
         $retrieve = $this->exotic_api_call(
@@ -2949,8 +3223,7 @@ class POSRegisterController
         $posDetailsModel = new Customer($conn);
         $posDetailsModel->upsertPosCustomerDetailsFromConfirmPayload($customerId, $payload);
         $this->persistCustomerComplianceDetails($conn, $customerId, $compliance);
-        $invoiceId = $this->findInvoiceIdForOrderNumber($conn, $orderNumber);
-        $this->markInvoiceHighValueIfPresent($conn, $invoiceId, $compliance);
+        $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance);
 
         $modeLabel = $this->mapPosPaymentModeLabel($paymentMode);
         $dt = new \DateTime('now', new \DateTimeZone('Asia/Kolkata'));
@@ -2986,10 +3259,14 @@ class POSRegisterController
             'receipt_amount_in_words' => '',
             'receipt_amount_received' => $paymentAmount,
             'receipt_pending_amount' => (float)($pay['pending_amount'] ?? 0),
-            'import_status' => '',
-            'show_invoice_pdf_button' => false,
-            'invoice_pdf_url' => '',
-            'invoice_pdf_disabled_hint' => 'Import the order into vp_orders to generate a tax invoice.',
+            'import_status' => $invoiceMeta['import_status'],
+            'show_invoice_pdf_button' => $invoiceMeta['show_invoice_pdf_button'],
+            'show_invoice_preview_button' => $invoiceMeta['show_invoice_preview_button'] ?? false,
+            'invoice_id' => (int)($invoiceMeta['invoice_id'] ?? 0),
+            'invoice_pdf_url' => $invoiceMeta['invoice_pdf_url'],
+            'invoice_preview_url' => $invoiceMeta['invoice_preview_url'] ?? '',
+            'invoice_pdf_disabled_hint' => $invoiceMeta['invoice_pdf_disabled_hint'],
+            'is_payment_in_full' => ($paymentStage === 'final' && (float)($pay['pending_amount'] ?? 0) <= 0.02),
             'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
             'receipt_company_tagline' => '',
             'receipt_company_gstin' => '',
@@ -3025,13 +3302,80 @@ class POSRegisterController
     public function checkout_receipt(): void
     {
         is_login();
+        global $conn;
         $row = $_SESSION['pos_last_checkout_receipt'] ?? null;
         if (!is_array($row) || empty($row['receipt_number'])) {
             header('Location: index.php?page=pos_register&action=list');
             exit;
         }
         unset($_SESSION['pos_last_checkout_receipt']);
+        $row = $this->fillReceiptInvoicePdfFromDb($conn, $row);
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
+    }
+
+    /**
+     * If checkout did not store an invoice PDF link, resolve the latest invoice for this order from the DB.
+     */
+    private function applyPosReceiptInvoiceLinks(array $row, int $invoiceId): array
+    {
+        if ($invoiceId <= 0) {
+            return $row;
+        }
+        $row['invoice_id'] = $invoiceId;
+        $row['show_invoice_pdf_button'] = true;
+        $row['show_invoice_preview_button'] = true;
+        $row['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
+        $row['invoice_preview_url'] = 'index.php?page=posinvoice&action=print-preview&invoice_id=' . $invoiceId;
+        $row['invoice_pdf_disabled_hint'] = '';
+
+        return $row;
+    }
+
+    private function enrichPosCheckoutReceiptRow(array $row): array
+    {
+        $stage = strtolower(trim((string)($row['payment_stage'] ?? '')));
+        $pending = (float)($row['receipt_pending_amount'] ?? 0);
+        $row['is_payment_in_full'] = ($stage === 'final' && $pending <= 0.02);
+
+        $invoiceId = (int)($row['invoice_id'] ?? 0);
+        if ($invoiceId <= 0 && !empty($row['invoice_pdf_url'])) {
+            if (preg_match('/invoice_id=(\d+)/', (string)$row['invoice_pdf_url'], $m)) {
+                $invoiceId = (int)$m[1];
+                $row['invoice_id'] = $invoiceId;
+            }
+        }
+
+        if ($row['is_payment_in_full'] && $invoiceId > 0) {
+            $row = $this->applyPosReceiptInvoiceLinks($row, $invoiceId);
+        } elseif (!$row['is_payment_in_full']) {
+            $row['show_invoice_pdf_button'] = false;
+            $row['show_invoice_preview_button'] = false;
+            if (trim((string)($row['invoice_pdf_disabled_hint'] ?? '')) === '') {
+                $row['invoice_pdf_disabled_hint'] = 'Tax invoice preview is available after payment is received in full.';
+            }
+        }
+
+        return $row;
+    }
+
+    private function fillReceiptInvoicePdfFromDb(mysqli $conn, array $row): array
+    {
+        if (!empty($row['show_invoice_pdf_button']) && !empty($row['invoice_pdf_url'])) {
+            return $this->enrichPosCheckoutReceiptRow($row);
+        }
+        $orderNum = trim((string)($row['order_id'] ?? ''));
+        if ($orderNum === '') {
+            return $this->enrichPosCheckoutReceiptRow($row);
+        }
+        $invoiceId = $this->findInvoiceIdForOrderNumber($conn, $orderNum);
+        if ($invoiceId) {
+            if (trim((string)($row['import_status'] ?? '')) === '') {
+                $row['import_status'] = 'success';
+            }
+            $row = $this->applyPosReceiptInvoiceLinks($row, $invoiceId);
+        }
+
+        return $this->enrichPosCheckoutReceiptRow($row);
     }
 
     /**
@@ -3044,6 +3388,48 @@ class POSRegisterController
      *
      * @return array<string, string>
      */
+    /**
+     * True when Confirm Billing & Shipping modal has shipping address data filled in.
+     */
+    private function hasPosConfirmShippingFilled(array $payload): bool
+    {
+        if (!empty($payload['confirm_shipping_same_as_billing'])
+            && (string)$payload['confirm_shipping_same_as_billing'] === '1') {
+            return true;
+        }
+
+        foreach ([
+            'confirm_sfirst_name',
+            'confirm_slast_name',
+            'confirm_sname',
+            'confirm_saddress1',
+            'confirm_saddress2',
+            'confirm_scity',
+            'confirm_sstate',
+            'confirm_szip',
+            'confirm_sphone',
+        ] as $key) {
+            if (trim((string)($payload[$key] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * When shipping is filled in POS confirm step, omit s* fields on order/create (checkoutdata + billing only).
+     */
+    private function shouldOmitShippingOnOrderCreate(array $payload): bool
+    {
+        if (!empty($payload['confirm_omit_shipping_api'])
+            && (string)$payload['confirm_omit_shipping_api'] === '1') {
+            return true;
+        }
+
+        return $this->hasPosConfirmShippingFilled($payload);
+    }
+
     private function buildOrderCreatePostFromPayload(array $payload, array $cartData): array
     {
         $posMode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
@@ -3053,31 +3439,21 @@ class POSRegisterController
         /** Exact string from GET /cart/retrieve JSON — posted as-is (only URL-encoded as form field by HTTP client). */
         $checkoutdata = $this->extractCheckoutDataStringFromCart($cartData);
 
-        $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
-        $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
-        $sname = trim((string)($payload['confirm_sname'] ?? ''));
-        if ($sname === '') {
-            $sname = trim($sf . ' ' . $sl);
-        }
+        $omitShippingOnOrder = $this->shouldOmitShippingOnOrderCreate($payload);
 
         $country = strtoupper(substr(trim((string)($payload['confirm_country'] ?? 'IN')), 0, 2));
         if ($country === '') {
             $country = 'IN';
         }
-        $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
-        if ($scountry === '') {
-            $scountry = 'IN';
-        }
         $email = trim((string)($payload['confirm_email'] ?? ''));
         if ($email === '') {
+            $email = $this->generatePosDummyEmail();
             $customerId = (int)($payload['customer_id'] ?? 0);
-            $email = $customerId > 0
-                ? 'pos-customer-' . $customerId . '@exoticindia.com'
-                : 'pos-walkin@exoticindia.com';
-
             global $conn;
             if ($customerId > 0 && $conn instanceof mysqli) {
-                $stmt = $conn->prepare("UPDATE vp_customers SET email = ? WHERE id = ? AND (email = '' OR email LIKE 'dummy-%@exoticindia.com')");
+                $stmt = $conn->prepare(
+                    "UPDATE vp_customers SET email = ? WHERE id = ? AND (email = '' OR email LIKE 'dummy-%@exoticindia.com')"
+                );
                 if ($stmt) {
                     $stmt->bind_param('si', $email, $customerId);
                     $stmt->execute();
@@ -3100,24 +3476,45 @@ class POSRegisterController
             'first_name' => trim((string)($payload['confirm_first_name'] ?? '')),
             'last_name' => trim((string)($payload['confirm_last_name'] ?? '')),
             'email' => $email,
-            'address1' => trim((string)($payload['confirm_address1'] ?? '')),
+            'address1' => trim((string)($payload['confirm_address1'] ?? '')) !== ''
+                ? trim((string)$payload['confirm_address1'])
+                : self::POS_DUMMY_BILLING_ADDRESS1,
             'address2' => trim((string)($payload['confirm_address2'] ?? '')),
-            'city' => trim((string)($payload['confirm_city'] ?? '')),
-            'state' => trim((string)($payload['confirm_state'] ?? '')),
+            'city' => trim((string)($payload['confirm_city'] ?? '')) !== ''
+                ? trim((string)$payload['confirm_city'])
+                : self::POS_DUMMY_CITY,
+            'state' => trim((string)($payload['confirm_state'] ?? '')) !== ''
+                ? trim((string)$payload['confirm_state'])
+                : self::POS_DEFAULT_STATE,
             'zip' => trim((string)($payload['confirm_zip'] ?? '')),
             'country' => $country,
-            'phone' => trim((string)($payload['confirm_phone'] ?? '')),
+            'phone' => trim((string)($payload['confirm_phone'] ?? '')) !== ''
+                ? trim((string)$payload['confirm_phone'])
+                : self::POS_DUMMY_PHONE,
             'gstin' => trim((string)($payload['confirm_gstin'] ?? '')),
-            'sname' => $sname,
-            'saddress1' => trim((string)($payload['confirm_saddress1'] ?? '')),
-            'saddress2' => trim((string)($payload['confirm_saddress2'] ?? '')),
-            'scity' => trim((string)($payload['confirm_scity'] ?? '')),
-            'sstate' => trim((string)($payload['confirm_sstate'] ?? '')),
-            'szip' => trim((string)($payload['confirm_szip'] ?? '')),
-            'scountry' => $scountry,
-            'sphone' => trim((string)($payload['confirm_sphone'] ?? '')),
             'store_payment_details' => $storeId . '|' . $storePaymentMode . '|' . $txnField,
         ];
+
+        if (!$omitShippingOnOrder) {
+            $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
+            $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
+            $sname = trim((string)($payload['confirm_sname'] ?? ''));
+            if ($sname === '') {
+                $sname = trim($sf . ' ' . $sl);
+            }
+            $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
+            if ($scountry === '') {
+                $scountry = 'IN';
+            }
+            $out['sname'] = $sname;
+            $out['saddress1'] = trim((string)($payload['confirm_saddress1'] ?? ''));
+            $out['saddress2'] = trim((string)($payload['confirm_saddress2'] ?? ''));
+            $out['scity'] = trim((string)($payload['confirm_scity'] ?? ''));
+            $out['sstate'] = trim((string)($payload['confirm_sstate'] ?? ''));
+            $out['szip'] = trim((string)($payload['confirm_szip'] ?? ''));
+            $out['scountry'] = $scountry;
+            $out['sphone'] = trim((string)($payload['confirm_sphone'] ?? ''));
+        }
 
         if ($storePaymentMode === 'razorpay') {
             $rzPay = trim((string)($payload['razorpay_payment_id'] ?? $txn));

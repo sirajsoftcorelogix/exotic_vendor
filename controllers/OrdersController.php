@@ -295,33 +295,87 @@ class OrdersController
                 }
             }
         }
+        $batch = $this->importVendorOrdersFromApiPayload($orders['orders']);
+        $imported = $batch['imported'];
+        $totalorder = $batch['total'];
+        $result = $batch['result'];
+        $pdata = $batch['pdata'];
+        $addressdata = $batch['addressdata'];
+
+        $maxOrderedTimeForLog = (int)$to_date;
+        foreach ($orders['orders'] ?? [] as $ord) {
+            $pt = (int)($ord['processed_time'] ?? 0);
+            if ($pt > $maxOrderedTimeForLog) {
+                $maxOrderedTimeForLog = $pt;
+            }
+        }
+        //print_array($pdata);
+        //print_r($result);
+        //update log end time and imported count
+        if ($log_id > 0) {
+            $log_update_data = [
+                'end_time' => date('Y-m-d H:i:s'),
+                'successful_imports' => $imported,
+                'total_orders' => $totalorder,
+                'error' => isset($error) ? $error : '',
+                'log_details' => NULL, //json_encode($result),
+                'max_ordered_time' => $maxOrderedTimeForLog,
+                'from_date' => $from_date,
+                'to_date' => $to_date,
+                'add_product_log' => NULL, //json_encode($pdata)
+            ];
+            //print_array($log_update_data);
+            $ordersModel->updateOrderImportLog($log_id, $log_update_data);
+        }
+        //print_array($result);
+        renderTemplateClean('views/orders/import_result.php', [
+            'imported' => $imported,
+            'result' => $result,
+            'total' => $totalorder,
+            'products' => json_encode($pdata)
+        ], 'Import Orders Result');
+    }
+
+    /**
+     * Import vendor API order payload into vp_orders (shared by cron import and POS checkout).
+     */
+    private function importVendorOrdersFromApiPayload(array $ordersList, ?string $onlyOrderNumber = null): array
+    {
+        global $ordersModel, $productModel;
+
+        $statusList = $ordersModel->adminOrderStatusList('true');
+        $skipIds = ['2658982', '2660434', '2662287', '469282', '2664206'];
         $imported = 0;
         $totalorder = 0;
         $result = [];
         $pdata = [];
         $addressdata = [];
-        foreach ($orders['orders'] as $order) {
 
-            //print_r($order['cart']);
-            // Check if the order has the required fields
-            // Map API fields to your table columns
-            //2658982 order_number continue;
-            if (in_array($order['orderid'], ['2658982', '2660434', '2662287', '469282', '2664206'])) {
-                continue; // Skip invalid orders
+        foreach ($ordersList as $order) {
+            $orderId = (string)($order['orderid'] ?? '');
+            if ($onlyOrderNumber !== null && $orderId !== $onlyOrderNumber) {
+                continue;
             }
-            //customer data
+            if (in_array($orderId, $skipIds, true)) {
+                continue;
+            }
+
             $customerdata = $ordersModel->addCustomerIfNotExists($order);
-            //print_array($customerdata);
-            foreach ($order['cart'] as $item) {
-                $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s');
+
+            $cart = $order['cart'] ?? [];
+            if (!is_array($cart) || count($cart) === 0) {
+                continue;
+            }
+
+            foreach ($cart as $item) {
+                $orderdate = !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s');
                 $esd = '0000-00-00';
-                $local_stock_int = (int) floatval($item['local_stock']);
-                $lead_time_int = (int) floatval($item['leadtime']);
+                $local_stock_int = (int)floatval($item['local_stock']);
+                $lead_time_int = (int)floatval($item['leadtime']);
                 if ($item['marketplace_vendor'] == 'exoticindia' || empty($item['marketplace_vendor'])) {
                     if (!empty($local_stock_int) && $local_stock_int > 0) {
                         $esd = date('Y-m-d', strtotime($orderdate . ' + 3 days'));
                     } else {
-                        // Normalize options to array and check for 'express'
                         $hasExpress = false;
                         $options = $item['options'] ?? null;
                         if (!empty($options)) {
@@ -330,7 +384,6 @@ class OrdersController
                                 if (is_array($decoded)) {
                                     $hasExpress = in_array('express', $decoded, true);
                                 } else {
-                                    // fallback: check substring (case-insensitive) for non-JSON values
                                     $hasExpress = stripos($options, 'express') !== false;
                                 }
                             } elseif (is_array($options)) {
@@ -398,18 +451,16 @@ class OrdersController
                     'author' => $item['author'] ?? '',
                     'shippingfee' => $item['shippingfee'] ?? '',
                     'sourcingfee' => $item['sourcingfee'] ?? '',
-                    //$orderStatus = productionOrderStatusList()[$item['status']] ?? 'pending',
                     'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
                         ? 'shipped'
                         : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
                     'esd' => $esd,
-                    'agent_id' => 0
+                    'agent_id' => 0,
                 ];
-                if (strtoupper($order['payment_type']) == 'COD' &&  $item['itemprice'] >= 5000) {
+                if (strtoupper((string)($order['payment_type'] ?? '')) === 'COD' && (float)($item['itemprice'] ?? 0) >= 5000) {
                     $rdata['status'] = 'cod_confirmation_required';
-                    $rdata['agent_id'] = 31; // Assign to specific agent Ashutosh for COD confirmation
+                    $rdata['agent_id'] = 31;
                 }
-                //customer id add
                 $rdata['customer_id'] = $customerdata['customer_id'] ?? 0;
                 $rdata['store_name'] = $order['store_name'] ?? '';
                 $rdata['custom_reduce'] = $order['custom_reduce'] ?? 0;
@@ -417,15 +468,12 @@ class OrdersController
 
                 $data = $ordersModel->insertOrder($rdata);
                 $result[] = $data;
-                //add products
                 $pdata[] = $ordersModel->addProducts($rdata);
 
                 if (isset($data['success']) && $data['success'] == 1) {
                     $imported++;
                 }
-                //print_array($rdata);   
-                // insert vendor name(s) into vp_vendors during import
-                $maped = [];
+
                 $vendorRaw = trim((string)($item['vendor'] ?? ''));
                 $vendorNames = array_values(array_unique(array_filter(array_map(
                     static function ($v) {
@@ -442,42 +490,200 @@ class OrdersController
                     }
                 }
                 if ($firstVendorId > 0) {
-                    // map primary vendor to product
-                    $maped[] = $productModel->saveProductVendor($rdata['item_code'], $firstVendorId, '');
+                    $productModel->saveProductVendor($rdata['item_code'], $firstVendorId, '');
                 }
-                //print_array($maped);             
             }
-            //add address info
-            $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
-            // print_array($addressdata);
-            // print_array($order);
-            // exit;
+
+            try {
+                $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
+            } catch (\Throwable $e) {
+                error_log('[order import insertAddressInfo] ' . $e->getMessage());
+                $addressdata[] = ['success' => false, 'message' => $e->getMessage()];
+            }
         }
-        //print_array($pdata);
-        //print_r($result);
-        //update log end time and imported count
-        if ($log_id > 0) {
-            $log_update_data = [
-                'end_time' => date('Y-m-d H:i:s'),
-                'successful_imports' => $imported,
-                'total_orders' => $totalorder,
-                'error' => isset($error) ? $error : '',
-                'log_details' => NULL, //json_encode($result),
-                'max_ordered_time' => $order['processed_time'] ?? '',
-                'from_date' => $from_date,
-                'to_date' => $to_date,
-                'add_product_log' => NULL, //json_encode($pdata)
-            ];
-            //print_array($log_update_data);
-            $ordersModel->updateOrderImportLog($log_id, $log_update_data);
-        }
-        //print_array($result);
-        renderTemplateClean('views/orders/import_result.php', [
+
+        return [
             'imported' => $imported,
-            'result' => $result,
             'total' => $totalorder,
-            'products' => json_encode($pdata)
-        ], 'Import Orders Result');
+            'result' => $result,
+            'pdata' => $pdata,
+            'addressdata' => $addressdata,
+        ];
+    }
+
+    /**
+     * True when vp_orders lines and vp_order_info exist (required for POS auto-invoice).
+     */
+    public function isOrderReadyForPosCheckout(string $orderNumber): bool
+    {
+        global $conn;
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return false;
+        }
+
+        $hasLines = false;
+        $stmt = $conn->prepare('SELECT 1 FROM vp_orders WHERE order_number = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $hasLines = (bool)$stmt->get_result()->fetch_row();
+            $stmt->close();
+        }
+        if (!$hasLines) {
+            return false;
+        }
+
+        $hasInfo = false;
+        $stmtInfo = $conn->prepare('SELECT 1 FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if ($stmtInfo) {
+            $stmtInfo->bind_param('s', $orderNumber);
+            $stmtInfo->execute();
+            $hasInfo = (bool)$stmtInfo->get_result()->fetch_row();
+            $stmtInfo->close();
+        }
+
+        return $hasInfo;
+    }
+
+    /**
+     * @return array{ok: bool, orders: array<int, array<string, mixed>>, error: string}
+     */
+    private function fetchVendorOrderPayloadForCheckout(string $orderNumber): array
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['ok' => false, 'orders' => [], 'error' => 'Order number missing'];
+        }
+
+        $url = 'https://www.exoticindia.com/vendor-api/order/fetch';
+        $postData = [
+            'makeRequestOf' => 'vendors-orderjson',
+            'orderid' => $orderNumber,
+        ];
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 45);
+        $response = curl_exec($ch);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false) {
+            return ['ok' => false, 'orders' => [], 'error' => 'Vendor API error: ' . $error];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded) || empty($decoded['orders']) || !is_array($decoded['orders'])) {
+            return ['ok' => false, 'orders' => [], 'error' => 'No order data from vendor API'];
+        }
+
+        return ['ok' => true, 'orders' => $decoded['orders'], 'error' => ''];
+    }
+
+    /**
+     * Fetch and import one order for POS checkout (no secret key, no HTML output).
+     */
+    public function importSingleOrderForCheckout(string $orderNumber): array
+    {
+        global $conn;
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['success' => false, 'message' => 'Order number missing', 'imported' => 0, 'total' => 0];
+        }
+
+        $hasLines = $this->isOrderReadyForPosCheckout($orderNumber);
+
+        $fetch = $this->fetchVendorOrderPayloadForCheckout($orderNumber);
+        if (!$fetch['ok']) {
+            return [
+                'success' => $hasLines,
+                'message' => $hasLines ? 'Order already in system' : $fetch['error'],
+                'imported' => 0,
+                'total' => 0,
+            ];
+        }
+
+        $batch = $this->importVendorOrdersFromApiPayload($fetch['orders'], $orderNumber);
+        $ready = $this->isOrderReadyForPosCheckout($orderNumber);
+
+        return [
+            'success' => $ready,
+            'message' => ($batch['imported'] > 0)
+                ? 'Imported ' . $batch['imported'] . ' line(s)'
+                : ($ready ? 'Order ready in system' : 'Import did not add order lines or address'),
+            'imported' => (int)$batch['imported'],
+            'total' => (int)$batch['total'],
+        ];
+    }
+
+    /**
+     * Vendor order/fetch may lag right after order/create — retry until DB is ready or attempts exhausted.
+     */
+    public function importSingleOrderForCheckoutWithRetry(
+        string $orderNumber,
+        int $maxAttempts = 4,
+        int $delaySeconds = 2
+    ): array {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['success' => false, 'message' => 'Order number missing', 'imported' => 0, 'total' => 0, 'attempts' => 0];
+        }
+
+        $maxAttempts = max(1, min(6, $maxAttempts));
+        $delaySeconds = max(0, min(5, $delaySeconds));
+
+        $last = [
+            'success' => false,
+            'message' => 'Import not attempted',
+            'imported' => 0,
+            'total' => 0,
+            'attempts' => 0,
+        ];
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            if ($this->isOrderReadyForPosCheckout($orderNumber)) {
+                return [
+                    'success' => true,
+                    'message' => 'Order ready in database',
+                    'imported' => 0,
+                    'total' => 0,
+                    'attempts' => $attempt,
+                ];
+            }
+
+            $last = $this->importSingleOrderForCheckout($orderNumber);
+            $last['attempts'] = $attempt;
+
+            if ($this->isOrderReadyForPosCheckout($orderNumber)) {
+                $last['success'] = true;
+                if (trim((string)($last['message'] ?? '')) === '' || stripos((string)$last['message'], 'did not add') !== false) {
+                    $last['message'] = 'Order imported and ready for invoice';
+                }
+                return $last;
+            }
+
+            if ($attempt < $maxAttempts && $delaySeconds > 0) {
+                sleep($delaySeconds);
+            }
+        }
+
+        $last['success'] = false;
+        if (trim((string)($last['message'] ?? '')) === '') {
+            $last['message'] = 'Order not available from vendor API yet';
+        }
+
+        return $last;
     }
 
     public function createPurchaseOrder()

@@ -8,10 +8,21 @@ class pos
         $this->db = $db;
     }
 
+    /**
+     * WHERE fragment: exclude vp_products rows with item_level = parent (grouping SKUs, not sellable variants).
+     */
+    private function sqlExcludeParentItemLevel(string $tableAlias = 'p'): string
+    {
+        $col = $tableAlias !== '' ? "{$tableAlias}.item_level" : 'item_level';
+
+        return " AND LOWER(TRIM(IFNULL({$col}, ''))) <> 'parent' ";
+    }
+
     // old method (still usable if needed somewhere else)
     public function getProducts()
     {
-        $stmt = $this->db->prepare("SELECT * FROM vp_products WHERE is_active = 1");
+        $excludeParent = $this->sqlExcludeParentItemLevel('');
+        $stmt = $this->db->prepare("SELECT * FROM vp_products WHERE is_active = 1{$excludeParent}");
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -36,7 +47,7 @@ class pos
         $warehouseId = $_SESSION['warehouse_id'] ?? 0;
 
         /* ================= FILTERS ================= */
-        $where  = " WHERE p.is_active = 1 AND LOWER(TRIM(IFNULL(p.item_level, ''))) <> 'parent' ";
+        $where  = ' WHERE p.is_active = 1 ' . $this->sqlExcludeParentItemLevel('p');
         $params = [];
         $types  = "";
 
@@ -165,6 +176,7 @@ class pos
         p.prod_length,
         p.length_unit,
         p.cost_price,
+        p.item_level,
         sm.running_stock AS stock_qty,
         sm.location AS warehouse_location,
         (IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) * (1 + IFNULL(p.gst, 0) / 100)) AS price
@@ -216,7 +228,8 @@ class pos
         /* =========================
      * 1) Total records
      * ========================= */
-        $totalSql = "SELECT COUNT(*) FROM vp_products WHERE is_active = 1";
+        $excludeParent = $this->sqlExcludeParentItemLevel('');
+        $totalSql = "SELECT COUNT(*) FROM vp_products WHERE is_active = 1{$excludeParent}";
         $totalStmt = $this->db->prepare($totalSql);
         $totalStmt->execute();
         $totalStmt->bind_result($recordsTotal);
@@ -226,7 +239,7 @@ class pos
         /* =========================
      * 2) Filters
      * ========================= */
-        $where  = " WHERE is_active = 1 ";
+        $where  = ' WHERE is_active = 1 ' . $this->sqlExcludeParentItemLevel('');
         $params = [];
         $types  = "";
 
@@ -376,7 +389,7 @@ class pos
             ) sm ON sm.product_id = p.id
         ";
 
-        $where = ' WHERE p.is_active = 1 ';
+        $where = ' WHERE p.is_active = 1 ' . $this->sqlExcludeParentItemLevel('p');
         $params = [$warehouseId, $warehouseId];
         $types = 'ii';
 
@@ -466,7 +479,7 @@ class pos
             ) sm ON sm.product_id = p.id
         ";
 
-        $where = ' WHERE p.is_active = 1 ';
+        $where = ' WHERE p.is_active = 1 ' . $this->sqlExcludeParentItemLevel('p');
         $params = [$warehouseId, $warehouseId];
         $types = 'ii';
 

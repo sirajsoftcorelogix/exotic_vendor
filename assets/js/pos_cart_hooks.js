@@ -2235,16 +2235,6 @@
       html += moneyRowSummary('GST Total', totals.gstTotal, false);
       html += moneyRowSummary('GRAND Total', totals.grandTotal, true);
       html += '</div></div>';
-      var localStockWarnings = getLocalStockWarnings(data || {});
-      if (localStockWarnings.length) {
-        html +=
-          '<div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900">' +
-          '<div class="font-bold">Local stock warning</div>' +
-          '<div class="mt-1">' +
-          escapeHtml(formatLocalStockWarning(localStockWarnings)) +
-          '</div>' +
-          '</div>';
-      }
     }
 
     html +=
@@ -2748,15 +2738,31 @@
   window.handleAddToCart = function (payload) {
     return withCartLock(function () {
       var p = payload || {};
+      var parentMsg =
+        typeof window.POS_PARENT_ITEM_CART_MSG === 'string'
+          ? window.POS_PARENT_ITEM_CART_MSG
+          : 'Parent Level Item can not be added to the cart';
+      if (
+        (typeof window.isParentLevelProduct === 'function' && window.isParentLevelProduct(p)) ||
+        String(p.item_level || '').trim().toLowerCase() === 'parent'
+      ) {
+        if (typeof window.notifyParentItemCartBlocked === 'function') {
+          window.notifyParentItemCartBlocked();
+        } else {
+          toast(parentMsg, 'red');
+        }
+        return undefined;
+      }
       var body = {
         code: String(p.code || '').trim(),
         qty: parseInt(String(p.qty != null ? p.qty : 1), 10) || 1,
         variation: String(p.variation || ''),
-        options: String(p.options || '')
+        options: String(p.options || ''),
+        item_level: String(p.item_level || '').trim(),
+        item_code: String(p.item_code || '').trim(),
+        size: String(p.size || '').trim(),
+        color: String(p.color || '').trim()
       };
-      if (p.stock_check_code != null && String(p.stock_check_code).trim() !== '') {
-        body.stock_check_code = String(p.stock_check_code).trim();
-      }
       if (!body.code) {
         toast('Missing product code', 'red');
         return undefined;
@@ -2767,6 +2773,18 @@
         .then(function (r) {
           cartHandleApiMessages(r);
           if (!r.success) {
+            var blockMsg = String(r.message || '');
+            if (
+              blockMsg === parentMsg ||
+              blockMsg.toLowerCase().indexOf('parent level item') !== -1
+            ) {
+              if (typeof window.notifyParentItemCartBlocked === 'function') {
+                window.notifyParentItemCartBlocked();
+              } else {
+                toast(parentMsg, 'red');
+              }
+              return r;
+            }
             openPosCartApiDebugModal();
             return r;
           }

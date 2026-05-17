@@ -1088,6 +1088,9 @@ switch ($page) {
             case 'customer-order-info':
                 $controller->customer_order_info();
                 break;
+            case 'states-by-country':
+                $controller->states_by_country();
+                break;
             case 'get-product-api':
                 $controller->getProductApi();
                 break;
@@ -1348,6 +1351,10 @@ switch ($page) {
 
             case 'generate_pdf':
                 $controller->generatePdf();
+                break;
+
+            case 'print-preview':
+                $controller->printPreview();
                 break;
 
             default:

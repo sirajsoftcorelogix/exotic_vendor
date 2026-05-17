@@ -782,9 +782,16 @@ class Order
         if (empty($log_id) || empty($data['end_time'])) {
             return ['success' => false, 'message' => 'Required fields are missing.'];
         }
+        $successfulImports = (int)($data['successful_imports'] ?? 0);
+        $totalOrders = (int)($data['total_orders'] ?? 0);
+        $maxOrderedTime = (int)($data['max_ordered_time'] ?? 0);
+        $error = (string)($data['error'] ?? '');
+        $addProductLog = $data['add_product_log'];
+        $logDetails = $data['log_details'];
+        $endTime = $data['end_time'];
         $sql = "UPDATE order_import_log SET end_time = ?, successful_imports = ?, total_orders = ?, error = ?, max_ordered_time = ?, add_product_log = ?, log_details = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssdisssd', $data['end_time'], $data['successful_imports'], $data['total_orders'], $data['error'], $data['max_ordered_time'], $data['add_product_log'], $data['log_details'], $log_id);
+        $stmt->bind_param('siisissi', $endTime, $successfulImports, $totalOrders, $error, $maxOrderedTime, $addProductLog, $logDetails, $log_id);
         if ($stmt->execute()) {
             return ['success' => true];
         } else {
@@ -1485,11 +1492,13 @@ class Order
         $values       = [];
         $types        = '';
 
+        $addressInfo = (isset($data['address_info']) && is_array($data['address_info'])) ? $data['address_info'] : [];
+
         foreach ($columns as $col) {
-            if (array_key_exists($col, $data['address_info'])) {
+            if (array_key_exists($col, $addressInfo)) {
                 $insertCols[]   = $col;
                 $placeholders[] = '?';
-                $values[]       = $data['address_info'][$col];
+                $values[]       = $addressInfo[$col];
                 $types         .= 's'; // all strings (safe for phone, zip, email)
             }
         }
@@ -1583,7 +1592,7 @@ class Order
 
 
         if (empty($insertCols)) {
-            throw new Exception("No valid data provided for insert");
+            return ['success' => false, 'message' => 'No valid address data provided for insert'];
         }
 
         $sql = sprintf(
@@ -1594,7 +1603,7 @@ class Order
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
-            throw new Exception("Prepare failed: " . $this->db->error);
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
         }
 
         // mysqli requires references
@@ -1605,12 +1614,16 @@ class Order
         }
 
         call_user_func_array([$stmt, 'bind_param'], $bindParams);
-        //echo $stmt->$sql;
         if (!$stmt->execute()) {
-            throw new Exception("Execute failed: " . $stmt->error);
+            $err = $stmt->error;
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $err];
         }
 
-        return $stmt->insert_id;
+        $insertId = $stmt->insert_id;
+        $stmt->close();
+
+        return $insertId;
     }
     public function getAddressInfoByOrderNumber($order_number)
     {

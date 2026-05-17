@@ -410,6 +410,43 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
             exit;
         }
     }
+
+    /**
+     * Printable tax invoice in a new browser tab (preview + window.print).
+     */
+    public function printPreview(): void
+    {
+        is_login();
+        global $invoiceModel, $commanModel;
+
+        $invoiceId = (int)($_GET['invoice_id'] ?? 0);
+        if ($invoiceId <= 0) {
+            http_response_code(400);
+            echo '<p>Invalid invoice.</p>';
+            exit;
+        }
+
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        $items = $invoiceModel->getInvoiceItems($invoiceId);
+        if (!$invoice) {
+            http_response_code(404);
+            echo '<p>Invoice not found.</p>';
+            exit;
+        }
+
+        $firmSettings = $commanModel->getRecordById('global_settings', 1);
+        $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
+
+        $invoiceHtml = $this->generateInvoiceHtml($invoice, $items, 'tax_invoice');
+        $pdfUrl = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
+
+        renderTemplateClean('views/posinvoice/print_preview.php', [
+            'invoice_html' => $invoiceHtml,
+            'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
+            'invoice_pdf_url' => $pdfUrl,
+        ], 'Invoice — ' . ($invoice['invoice_number'] ?? ''));
+    }
+
     private function generateInvoiceHtml($invoice, $items, $type = '')
     {
         global $commanModel;
@@ -630,100 +667,119 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
     {
         is_login();
         header('Content-Type: application/json');
-
-        global $conn, $invoiceModel;
-
         $input = json_decode(file_get_contents('php://input'), true);
         $orderNumber = $input['orderid'] ?? null;
-
         if (!$orderNumber) {
             echo json_encode(['success' => false, 'message' => 'Order number missing']);
             exit;
         }
+        echo json_encode($this->createAutoInvoiceForOrder((string)$orderNumber));
+        exit;
+    }
 
-        // ✅ CHECK EXISTING (ignore cancelled — allow new invoice)
-        $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
-        if ($existing) {
-            echo json_encode([
-                'success' => true,
-                'invoice_id' => $existing['id']
-            ]);
-            exit;
+    /**
+     * Build and create a POS invoice from vp_orders (used by AJAX and checkout).
+     */
+    public function createAutoInvoiceForOrder(string $orderNumber): array
+    {
+        global $conn, $invoiceModel;
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['success' => false, 'message' => 'Order number missing'];
         }
 
-        // ✅ GET PAYMENT STAGE
-        $payment = $conn->query("
-        SELECT * FROM pos_payments 
-        WHERE order_number = '" . $conn->real_escape_string($orderNumber) . "'
-        ORDER BY id DESC LIMIT 1
-    ")->fetch_assoc();
+        $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
+        if ($existing) {
+            return [
+                'success' => true,
+                'invoice_id' => (int)$existing['id'],
+                'invoice_number' => $existing['invoice_number'] ?? '',
+            ];
+        }
 
-        $stage = $payment['payment_stage'] ?? 'final';
+        $paymentStage = 'final';
+        $stmtPay = $conn->prepare(
+            'SELECT payment_stage FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+        );
+        if ($stmtPay) {
+            $stmtPay->bind_param('s', $orderNumber);
+            $stmtPay->execute();
+            $payment = $stmtPay->get_result()->fetch_assoc();
+            $stmtPay->close();
+            if (is_array($payment) && isset($payment['payment_stage'])) {
+                $paymentStage = (string)$payment['payment_stage'];
+            }
+        }
+        $status = (strtolower(trim($paymentStage)) === 'final') ? 'final' : 'proforma';
 
-        // ✅ SET STATUS
-        $status = ($stage === 'final') ? 'final' : 'proforma';
-
-        // ===== GET ORDER ITEMS =====
-        $stmt = $conn->prepare("SELECT * FROM vp_orders WHERE order_number = ?");
-        $stmt->bind_param("s", $orderNumber);
+        $stmt = $conn->prepare('SELECT * FROM vp_orders WHERE order_number = ?');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Database error loading order lines'];
+        }
+        $stmt->bind_param('s', $orderNumber);
         $stmt->execute();
         $result = $stmt->get_result();
-
-        if ($result->num_rows == 0) {
-            echo json_encode(['success' => false, 'message' => 'Order not found']);
-            exit;
+        if ($result->num_rows === 0) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Order not found in vp_orders'];
         }
 
         $items = [];
         while ($row = $result->fetch_assoc()) {
             $items[] = $row;
         }
+        $stmt->close();
 
-        // ===== GET ADDRESS =====
-        $stmt2 = $conn->prepare("SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1");
-        $stmt2->bind_param("s", $orderNumber);
+        $stmt2 = $conn->prepare('SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if (!$stmt2) {
+            return ['success' => false, 'message' => 'Database error loading order info'];
+        }
+        $stmt2->bind_param('s', $orderNumber);
         $stmt2->execute();
         $info = $stmt2->get_result()->fetch_assoc();
+        $stmt2->close();
 
-        // ===== BUILD POST =====
+        if (empty($info['id'])) {
+            return ['success' => false, 'message' => 'Order info not found'];
+        }
+
         $_POST = [
             'invoice_date' => date('Y-m-d'),
             'customer_id' => $items[0]['customer_id'],
             'vp_order_info_id' => $info['id'],
-            'status' => $status,   // 🔥 IMPORTANT
+            'status' => $status,
             'subtotal' => 0,
             'tax_amount' => 0,
             'discount_amount' => 0,
-            'total_amount' => 0
+            'total_amount' => 0,
         ];
 
         foreach ($items as $it) {
-
             $_POST['order_number'][] = $it['order_number'];
             $_POST['item_code'][] = $it['item_code'];
             $_POST['item_name'][] = $it['title'];
             $_POST['hsn'][] = $it['hsn'];
             $_POST['quantity'][] = $it['quantity'];
 
-            $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $it['quantity'];
+            $qty = max(1, (int)$it['quantity']);
+            $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $qty;
 
             $_POST['unit_price'][] = $unit;
             $_POST['tax_rate'][] = $it['gst'];
-
             $_POST['cgst'][] = $it['gst'] / 2;
             $_POST['sgst'][] = $it['gst'] / 2;
             $_POST['igst'][] = 0;
-
             $_POST['box_no'][] = '';
             $_POST['currency'][] = $it['currency'];
 
-            $_POST['subtotal'] += $unit * $it['quantity'];
-            $_POST['tax_amount'] += ($unit * $it['quantity']) * ($it['gst'] / 100);
+            $_POST['subtotal'] += $unit * $qty;
+            $_POST['tax_amount'] += ($unit * $qty) * ($it['gst'] / 100);
         }
 
         $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
 
-        return $this->createPost();
+        return $this->createPostInternal();
     }
     public function create_auto_from_order1()
     {
@@ -818,8 +874,14 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
     public function createPost()
     {
         is_login();
-        global $invoiceModel, $ordersModel, $commanModel, $conn;
         header('Content-Type: application/json');
+        echo json_encode($this->createPostInternal());
+        exit;
+    }
+
+    private function createPostInternal(): array
+    {
+        global $invoiceModel, $ordersModel, $commanModel, $conn;
         //print_r($_POST);
         //exit;
         // Validate form inputs
@@ -845,29 +907,24 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
         $box_no = isset($_POST['box_no']) && is_array($_POST['box_no']) ? $_POST['box_no'] : [];
 
         if ($customer_id <= 0 || empty($order_numbers)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
-            exit;
+            return ['success' => false, 'message' => 'Invalid parameters'];
         }
-        //validate if a non-cancelled invoice already exists for same order_number
         foreach ($order_numbers as $order_number) {
             $existingInvoice = $invoiceModel->getActiveInvoiceForOrderNumber($order_number);
             if ($existingInvoice) {
-                echo json_encode(['success' => false, 'message' => "Invoice already exists for Order Number: $order_number"]);
-                exit;
+                return ['success' => false, 'message' => "Invoice already exists for Order Number: $order_number"];
             }
         }
-        //validate currency same for all items
         $firstCurrency = $currency[0] ?? '';
         foreach ($currency as $curr) {
             if ($curr !== $firstCurrency) {
-                echo json_encode(['success' => false, 'message' => 'All items must have the same currency']);
-                exit;
+                return ['success' => false, 'message' => 'All items must have the same currency'];
             }
         }
         // Generate invoice number from global_settings
         $globalSettings = $commanModel->getRecordById('global_settings', 1);
-        $invoice_prefix = $globalSettings['invoice_prefix'] ?? 'INV';
-        $invoice_series = $globalSettings['invoice_series'] ?? 0;
+        $invoice_prefix = is_array($globalSettings) ? (string)($globalSettings['invoice_prefix'] ?? 'INV') : 'INV';
+        $invoice_series = is_array($globalSettings) ? (int)($globalSettings['invoice_series'] ?? 0) : 0;
         $invoice_series++;
 
         // Update global_settings with new invoice_series
@@ -906,8 +963,7 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
         $invoiceId = $invoiceModel->createInvoice($invoiceData);
 
         if (!$invoiceId) {
-            echo json_encode(['success' => false, 'message' => 'Failed to create invoice']);
-            exit;
+            return ['success' => false, 'message' => 'Failed to create invoice'];
         }
 
         // Create invoice items
@@ -926,9 +982,12 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
             // Calculate SGST/CGST/IGST (assuming 50/50 split for SGST/CGST, IGST is 0)
             //$sgstRate = $tax_rate / 2;
             //$cgstRate = $tax_rate / 2;
-            $sgstAmt = ($amount * $sgst[$idx] ?? 0) / 100;
-            $cgstAmt = ($amount * $cgst[$idx] ?? 0) / 100;
-            $igstAmt = ($amount * $igst[$idx] ?? 0) / 100;
+            $sgstRate = (float)($sgst[$idx] ?? 0);
+            $cgstRate = (float)($cgst[$idx] ?? 0);
+            $igstRate = (float)($igst[$idx] ?? 0);
+            $sgstAmt = ($amount * $sgstRate) / 100;
+            $cgstAmt = ($amount * $cgstRate) / 100;
+            $igstAmt = ($amount * $igstRate) / 100;
 
             $itemData = [
                 'invoice_id' => $invoiceId,
@@ -989,15 +1048,14 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
         // Clear session
         unset($_SESSION['invoice_items']);
 
-        echo json_encode([
+        return [
             'success' => true,
             'message' => "Invoice created with $itemCreated items",
             'invoice_id' => $invoiceId,
             'invoice_number' => $invoice_number,
             'items_created' => $itemCreated,
             'items_failed' => $itemsFailed,
-        ]);
-        exit;
+        ];
     }
     private function getCurrencyByCode($code)
     {

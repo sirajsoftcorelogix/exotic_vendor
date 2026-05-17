@@ -20,6 +20,28 @@ $(function () {
   // ────────────────────────────────────────────────
   // HELPERS (needed for products & modal)
   // ────────────────────────────────────────────────
+  const POS_PARENT_ITEM_CART_MSG = 'Parent Level Item can not be added to the cart';
+
+  function isParentLevelProduct(p) {
+    if (!p || typeof p !== 'object') return false;
+    if (p.is_parent_level === true || p.is_parent_level === 1 || p.is_parent_level === '1') {
+      return true;
+    }
+    return String(p.item_level || '').trim().toLowerCase() === 'parent';
+  }
+
+  function notifyParentItemCartBlocked() {
+    if (typeof window.toast === 'function') {
+      window.toast(POS_PARENT_ITEM_CART_MSG, 'red');
+    } else {
+      alert(POS_PARENT_ITEM_CART_MSG);
+    }
+  }
+
+  window.isParentLevelProduct = isParentLevelProduct;
+  window.notifyParentItemCartBlocked = notifyParentItemCartBlocked;
+  window.POS_PARENT_ITEM_CART_MSG = POS_PARENT_ITEM_CART_MSG;
+
   function formatPrice(price) {
     const p = parseFloat(price || 0);
     return '₹ ' + p.toLocaleString('en-IN', {
@@ -56,7 +78,7 @@ $(function () {
     return (p.id != null && p.id !== '') ? `id:${p.id}` : `code:${p.item_code || ''}`;
   }
 
-  /** Prefer full variant SKU when present (e.g. ITEM--blue); fallback to item_code; then API-only code. */
+  /** Scan/search lookup (may be variant SKU); cart add uses item_code + size/color instead. */
   function getLookupCode(p) {
     if (!p) return '';
     const sku = p.sku != null ? String(p.sku).trim() : '';
@@ -66,57 +88,52 @@ $(function () {
     return p.requested_code != null ? String(p.requested_code).trim() : '';
   }
 
-  function escapeRegExpStr(s) {
-    return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  function normalizeFacet(val) {
+    if (val == null) return '';
+    const s = String(val).trim();
+    if (s === '' || s === '0' || s.toLowerCase() === 'n/a') return '';
+    return s;
+  }
+
+  /** Exotic cart variation string from vp_products.size / color only. */
+  function buildVariationFromSizeColor(size, color) {
+    if (!size && !color) return '';
+    if (!size && color) return ':' + color;
+    if (size && !color) return size + ':';
+    return size + ':' + color;
   }
 
   /**
-   * Main-site cart expects parent item_code + variation "size:color" for multi-SKU parents.
-   * Single-SKU rows use full SKU as code with empty variation.
+   * Cart add: parent/variant rows use item_code + size:color from DB (not variant SKU).
    */
   function resolveCartPayload(p) {
-    const lookup = getLookupCode(p) || String(p.code || '').trim();
-    const icRaw = String(p.item_code || '').trim();
+    if (!p) return { cartCode: '', variation: '', stock_check_code: '' };
 
-    let size =
-      p.size != null && String(p.size).trim() !== '' && String(p.size).trim() !== '0'
-        ? String(p.size).trim()
-        : '';
-    let color =
-      p.color != null && String(p.color).trim() !== '' && String(p.color).trim() !== '0'
-        ? String(p.color).trim()
-        : '';
+    const ic = normalizeFacet(p.item_code);
+    const level = String(p.item_level || '').trim().toLowerCase();
+    const size = normalizeFacet(p.size);
+    const color = normalizeFacet(p.color);
+    const variation = buildVariationFromSizeColor(size, color);
 
-    const multiVariant = icRaw !== '' && lookup !== '' && lookup !== icRaw;
-
-    if (!color && icRaw && lookup) {
-      try {
-        const re = new RegExp('^' + escapeRegExpStr(icRaw) + '--(.+)$', 'i');
-        const m = lookup.match(re);
-        if (m) color = m[1].trim();
-      } catch (e) {
-        /* ignore */
-      }
+    if (level === 'parent') {
+      return { cartCode: ic, variation: '', stock_check_code: '' };
     }
 
-    let variation = '';
-    if (!size && color) variation = ':' + color;
-    else if (size && !color) variation = size + ':';
-    else if (size && color) variation = size + ':' + color;
-
-    if (!variation && color) variation = ':' + color;
-
-    let cartCode = multiVariant ? icRaw : lookup;
-    let variationOut = variation;
-
-    if (multiVariant && !variationOut) {
-      cartCode = lookup;
-      variationOut = '';
+    if (level === 'variation' || (ic !== '' && variation !== '')) {
+      return { cartCode: ic, variation: variation, stock_check_code: '' };
     }
 
-    const stockCheckCode = lookup || icRaw || cartCode;
+    const singleCode = ic || normalizeFacet(p.sku) || String(p.code || '').trim();
+    return { cartCode: singleCode, variation: '', stock_check_code: '' };
+  }
 
-    return { cartCode, variation: variationOut, stockCheckCode };
+  function setModalCartFields(p, cp) {
+    $('#modal_product_code').val(cp.cartCode || String(p.code || ''));
+    $('#modal_variation').val(cp.variation || '');
+    $('#modal_stock_check_code').val(cp.stock_check_code || '');
+    $('#modal_item_code').val(normalizeFacet(p.item_code));
+    $('#modal_size').val(normalizeFacet(p.size));
+    $('#modal_color').val(normalizeFacet(p.color));
   }
 
   function isMeaningful(val) {
@@ -380,6 +397,10 @@ $(function () {
 
   $('#productModal').on('click', '#pmAddToCartBtn', function (e) {
     e.preventDefault();
+    if (String($('#modal_item_level').val() || '').trim().toLowerCase() === 'parent') {
+      notifyParentItemCartBlocked();
+      return;
+    }
     const selectedEntries = [];
     $('#productModal .addon-checkbox:checked').each(function () {
       const entry = $(this).data('entry');
@@ -406,10 +427,13 @@ $(function () {
     if (typeof window.handleAddToCart === 'function') {
       window.handleAddToCart({
         code: String($('#modal_product_code').val() || '').trim(),
-        stock_check_code: String($('#modal_stock_check_code').val() || '').trim(),
         qty: qtyNum || getModalQty(),
         options: String($('#modal_options').val() || '').trim(),
-        variation: String($('#modal_variation').val() || '').trim()
+        variation: String($('#modal_variation').val() || '').trim(),
+        item_level: String($('#modal_item_level').val() || '').trim(),
+        item_code: String($('#modal_item_code').val() || '').trim(),
+        size: String($('#modal_size').val() || '').trim(),
+        color: String($('#modal_color').val() || '').trim()
       });
     }
   });
@@ -509,9 +533,16 @@ $(function () {
     }
 
     const cp = resolveCartPayload(p);
-    $('#modal_product_code').val(cp.cartCode || String(p.code || p.id || ''));
-    $('#modal_variation').val(cp.variation);
-    $('#modal_stock_check_code').val(cp.stockCheckCode);
+    setModalCartFields(p, cp);
+
+    const parentItem = isParentLevelProduct(p);
+    $('#modal_item_level').val(parentItem ? 'parent' : String(p.item_level || '').trim());
+    const $addBtn = $('#pmAddToCartBtn');
+    if ($addBtn.length) {
+      $addBtn.prop('disabled', parentItem);
+      $addBtn.toggleClass('opacity-50 cursor-not-allowed', parentItem);
+      $addBtn.attr('title', parentItem ? POS_PARENT_ITEM_CART_MSG : '');
+    }
 
     const badges = [];
     const icRaw = isMeaningful(p.item_code) ? String(p.item_code).trim() : '';
@@ -680,6 +711,8 @@ $(function () {
     }
 
     products.forEach(function (p) {
+      if (isParentLevelProduct(p)) return;
+
       const key = getProductKey(p);
       if (loadedKeys.has(key)) return;
 
@@ -874,6 +907,11 @@ data-code="${lookupCode}">
     $('#pmTitle').text('Loading...');
     $('#pmDetails').html('Loading...');
     $('#pmModalPrice').addClass('hidden').text('');
+    $('#modal_item_level').val('');
+    $('#pmAddToCartBtn')
+      .prop('disabled', false)
+      .removeClass('opacity-50 cursor-not-allowed')
+      .attr('title', '');
 
     $.ajax({
       url: '?page=pos_register&action=get-product-api',
@@ -928,9 +966,7 @@ data-code="${lookupCode}">
     `);
 
     const cpMd = resolveCartPayload(p);
-    $('#modal_product_code').val(cpMd.cartCode || String(p.code || ''));
-    $('#modal_variation').val(cpMd.variation);
-    $('#modal_stock_check_code').val(cpMd.stockCheckCode);
+    setModalCartFields(p, cpMd);
 
     // ADDONS
     let addonsHtml = '';
