@@ -1265,8 +1265,93 @@ class InboundingController {
             @unlink($thumbPath);
         }
     }
+
+    /**
+     * Image rename is expensive (disk I/O + optional GD). Only run when naming inputs or files actually changed.
+     */
+    private function desktopformSaveNeedsImageRename(
+        array $form1,
+        string $itemCode,
+        string $isVariant,
+        array $postedVariations,
+        array $oldVariationsById
+    ): bool {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return false;
+        }
+
+        $oldItemCode = trim((string) ($form1['Item_code'] ?? ''));
+        if ($oldItemCode !== $itemCode) {
+            return true;
+        }
+
+        $normVariant = static function ($v) {
+            return strtoupper(trim((string) $v)) === 'Y' ? 'Y' : 'N';
+        };
+        if ($normVariant($form1['is_variant'] ?? 'N') !== $normVariant($isVariant)) {
+            return true;
+        }
+
+        if (trim((string) ($form1['group_name'] ?? '')) !== trim((string) ($_POST['group_name'] ?? ''))) {
+            return true;
+        }
+
+        if (trim((string) ($form1['color'] ?? '')) !== trim((string) ($_POST['color'] ?? ''))
+            || trim((string) ($form1['size'] ?? '')) !== trim((string) ($_POST['size'] ?? ''))) {
+            return true;
+        }
+
+        if (trim((string) ($_POST['delete_gallery_image_ids_csv'] ?? '')) !== '') {
+            return true;
+        }
+        if (trim((string) ($_POST['deleted_variation_ids_csv'] ?? '')) !== '') {
+            return true;
+        }
+        if (!empty($_POST['clone_photo_from']) && is_array($_POST['clone_photo_from'])) {
+            return true;
+        }
+
+        if (isset($_FILES['product_photo_main']) && ($_FILES['product_photo_main']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            return true;
+        }
+        if (isset($_FILES['invoice_image']) && ($_FILES['invoice_image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            return true;
+        }
+        if (!empty($_FILES['variations']['error']) && is_array($_FILES['variations']['error'])) {
+            foreach ($_FILES['variations']['error'] as $keyErr) {
+                if (is_array($keyErr) && (($keyErr['photo'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK)) {
+                    return true;
+                }
+            }
+        }
+
+        foreach ($postedVariations as $key => $var) {
+            if ($key === 0 || !is_array($var)) {
+                continue;
+            }
+            $varId = isset($var['id']) && is_numeric($var['id']) ? (int) $var['id'] : 0;
+            if ($varId <= 0 || strpos((string) $key, 'new_') === 0) {
+                return true;
+            }
+            $old = $oldVariationsById[$varId] ?? null;
+            if ($old === null) {
+                continue;
+            }
+            if (trim((string) ($var['color'] ?? '')) !== trim((string) ($old['color'] ?? ''))
+                || trim((string) ($var['size'] ?? '')) !== trim((string) ($old['size'] ?? ''))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function updatedesktopform() {
         global $inboundingModel;
+        @set_time_limit(180);
+        @ini_set('max_execution_time', '180');
+
         // 1. Setup & Checks
         $id = (int) ($_GET['id'] ?? 0);
         if ($id <= 0) {
@@ -1281,6 +1366,11 @@ class InboundingController {
         $oldData = $inboundingModel->getform1data($id);
 
         if (!$oldData) { echo "Record not found."; exit; }
+
+        $oldVariationsById = [];
+        foreach ($inboundingModel->getVariations($id) as $ov) {
+            $oldVariationsById[(int) $ov['id']] = $ov;
+        }
 
         // Gallery deletions first (single CSV field avoids PHP max_input_vars dropping many delete_gallery_image_ids[] fields on large forms)
         $delCsv = trim((string) ($_POST['delete_gallery_image_ids_csv'] ?? ''));
@@ -1319,7 +1409,6 @@ class InboundingController {
             $postedVariant = 'N';
         }
         $is_variant = $postedVariant;
-        $shouldRename = false;
 
         if (($oldData['form1']['is_variant'] ?? '') == 'Y') {
             if ($is_variant !== ($oldData['form1']['is_variant'] ?? '')) {
@@ -1335,11 +1424,6 @@ class InboundingController {
         // --- SKU GENERATION ---
         $size  = trim($_POST['size'] ?? '');
         $color = trim($_POST['color'] ?? '');
-
-        // Always rename on every save so gallery filenames stay in sync with display_order.
-        if (!empty($item_code)) {
-            $shouldRename = true;
-        }
 
         $generated_sku = '';
         if ($is_variant === 'N') {
@@ -1519,11 +1603,9 @@ class InboundingController {
             $this->duplicateVariationMainImageFile($id, $varId, $currentPhoto);
         }
 
-        // 5. Update Image Order & Assignment
+        // 5. Update gallery → variation assignment (single query when many images)
         if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
-            foreach ($_POST['photo_variation'] as $img_id => $var_id) {
-                $inboundingModel->update_image_variation($img_id, $var_id);
-            }
+            $inboundingModel->update_image_variations_batch($id, $_POST['photo_variation']);
         }
 
         // 6. Duplicate gallery images for cloned variation cards.
@@ -1565,6 +1647,13 @@ class InboundingController {
             // =========================================================
             // START: ADVANCED RENAMING LOGIC (4 CASES)
             // =========================================================
+            $shouldRename = $this->desktopformSaveNeedsImageRename(
+                $oldData['form1'] ?? [],
+                $item_code,
+                $is_variant,
+                $allVariations,
+                $oldVariationsById
+            );
             if (!empty($item_code) && $shouldRename) {
                 // Pass current POST data to helper so we use fresh color/size values
                 // $currentDataForRename = [
