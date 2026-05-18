@@ -693,6 +693,57 @@ class Inbounding {
         
         return $stmt->execute();
     }
+
+    /**
+     * Assign many gallery images to variations in one query (avoids N round-trips on large forms).
+     *
+     * @param array<int,int|string> $assignments image_id => variation_id
+     */
+    public function update_image_variations_batch(int $item_id, array $assignments): bool {
+        $item_id = (int) $item_id;
+        if ($item_id <= 0 || empty($assignments)) {
+            return true;
+        }
+
+        $cases = [];
+        $params = [];
+        $types = '';
+        $ids = [];
+
+        foreach ($assignments as $img_id => $var_id) {
+            $img_id = (int) $img_id;
+            if ($img_id <= 0) {
+                continue;
+            }
+            $cases[] = 'WHEN ? THEN ?';
+            $types .= 'ii';
+            $params[] = $img_id;
+            $params[] = (int) $var_id;
+            $ids[] = $img_id;
+        }
+
+        if (empty($ids)) {
+            return true;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql = 'UPDATE item_images SET variation_id = CASE id ' . implode(' ', $cases)
+            . ' END WHERE item_id = ? AND id IN (' . $placeholders . ')';
+
+        $types .= 'i' . str_repeat('i', count($ids));
+        $params[] = $item_id;
+        foreach ($ids as $imgId) {
+            $params[] = $imgId;
+        }
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param($types, ...$params);
+        return $stmt->execute();
+    }
     public function get_item_image_by_id(int $item_id, int $img_id) {
         $sql = "SELECT id, file_name, display_order, image_caption FROM item_images WHERE item_id = ? AND id = ? LIMIT 1";
         $stmt = $this->conn->prepare($sql);

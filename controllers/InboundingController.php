@@ -1265,8 +1265,165 @@ class InboundingController {
             @unlink($thumbPath);
         }
     }
+
+    /**
+     * Image rename is expensive (disk I/O + optional GD). Only run when naming inputs or files actually changed.
+     */
+    private function desktopformSaveNeedsImageRename(
+        array $form1,
+        string $itemCode,
+        string $isVariant,
+        array $postedVariations,
+        array $oldVariationsById
+    ): bool {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return false;
+        }
+
+        $oldItemCode = trim((string) ($form1['Item_code'] ?? ''));
+        if ($oldItemCode !== $itemCode) {
+            return true;
+        }
+
+        $normVariant = static function ($v) {
+            return strtoupper(trim((string) $v)) === 'Y' ? 'Y' : 'N';
+        };
+        if ($normVariant($form1['is_variant'] ?? 'N') !== $normVariant($isVariant)) {
+            return true;
+        }
+
+        if (trim((string) ($form1['group_name'] ?? '')) !== trim((string) ($_POST['group_name'] ?? ''))) {
+            return true;
+        }
+
+        if (trim((string) ($form1['color'] ?? '')) !== trim((string) ($_POST['color'] ?? ''))
+            || trim((string) ($form1['size'] ?? '')) !== trim((string) ($_POST['size'] ?? ''))) {
+            return true;
+        }
+
+        if (trim((string) ($_POST['delete_gallery_image_ids_csv'] ?? '')) !== '') {
+            return true;
+        }
+        if (trim((string) ($_POST['deleted_variation_ids_csv'] ?? '')) !== '') {
+            return true;
+        }
+        if (!empty($_POST['clone_photo_from']) && is_array($_POST['clone_photo_from'])) {
+            return true;
+        }
+
+        if (isset($_FILES['product_photo_main']) && ($_FILES['product_photo_main']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            return true;
+        }
+        if (isset($_FILES['invoice_image']) && ($_FILES['invoice_image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            return true;
+        }
+        if (!empty($_FILES['variations']['error']) && is_array($_FILES['variations']['error'])) {
+            foreach ($_FILES['variations']['error'] as $keyErr) {
+                if (is_array($keyErr) && (($keyErr['photo'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK)) {
+                    return true;
+                }
+            }
+        }
+
+        foreach ($postedVariations as $key => $var) {
+            if ($key === 0 || !is_array($var)) {
+                continue;
+            }
+            $varId = isset($var['id']) && is_numeric($var['id']) ? (int) $var['id'] : 0;
+            if ($varId <= 0 || strpos((string) $key, 'new_') === 0) {
+                return true;
+            }
+            $old = $oldVariationsById[$varId] ?? null;
+            if ($old === null) {
+                continue;
+            }
+            if (trim((string) ($var['color'] ?? '')) !== trim((string) ($old['color'] ?? ''))
+                || trim((string) ($var['size'] ?? '')) !== trim((string) ($old['size'] ?? ''))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Resolve writable directory for desktopform save timing logs.
+     * Primary: logs/desktopform_save/ (under repo logs/, blocked from HTTP via logs/.htaccess).
+     */
+    private function resolveDesktopformSaveLogDir(): string
+    {
+        $candidates = [
+            dirname(__DIR__) . '/logs/desktopform_save',
+            sys_get_temp_dir() . '/exotic_desktopform_save',
+        ];
+        foreach ($candidates as $dir) {
+            if (is_dir($dir) && is_writable($dir)) {
+                return $dir;
+            }
+            if (@mkdir($dir, 0775, true) && is_writable($dir)) {
+                return $dir;
+            }
+        }
+        return $candidates[count($candidates) - 1];
+    }
+
+    /** @return array{inbound_id:int,started_at:float,last_at:float,steps:array,log_file:string,log_dir:string} */
+    private function createDesktopformSaveProfiler(int $inboundId): array
+    {
+        $logDir = $this->resolveDesktopformSaveLogDir();
+        $now = microtime(true);
+        return [
+            'inbound_id' => $inboundId,
+            'started_at' => $now,
+            'last_at' => $now,
+            'steps' => [],
+            'log_dir' => $logDir,
+            'log_file' => $logDir . '/save_' . date('Y-m-d') . '.log',
+        ];
+    }
+
+    private function logDesktopformSaveStep(array &$profile, string $step, array $meta = []): void
+    {
+        $now = microtime(true);
+        $stepMs = round(($now - $profile['last_at']) * 1000, 2);
+        $totalMs = round(($now - $profile['started_at']) * 1000, 2);
+        $profile['last_at'] = $now;
+        $profile['steps'][] = [
+            'step' => $step,
+            'step_ms' => $stepMs,
+            'total_ms' => $totalMs,
+            'meta' => $meta,
+        ];
+
+        $metaStr = $meta === [] ? '' : ' meta=' . json_encode($meta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $line = sprintf(
+            "[%s] inbound_id=%d save_action=%s step=%s step_ms=%.2f total_ms=%.2f%s\n",
+            date('Y-m-d H:i:s'),
+            $profile['inbound_id'],
+            (string) ($_POST['save_action'] ?? ''),
+            $step,
+            $stepMs,
+            $totalMs,
+            $metaStr
+        );
+        $written = @file_put_contents($profile['log_file'], $line, FILE_APPEND | LOCK_EX);
+        if ($written === false) {
+            error_log('[desktopform_save] write failed dir=' . ($profile['log_dir'] ?? '') . ' step=' . $step . $line);
+        }
+    }
+
+    private function finishDesktopformSaveProfile(array &$profile, string $status, array $meta = []): void
+    {
+        $meta['step_count'] = count($profile['steps']);
+        $this->logDesktopformSaveStep($profile, 'complete_' . $status, $meta);
+    }
+
     public function updatedesktopform() {
         global $inboundingModel;
+        @set_time_limit(180);
+        @ini_set('max_execution_time', '180');
+
         // 1. Setup & Checks
         $id = (int) ($_GET['id'] ?? 0);
         if ($id <= 0) {
@@ -1278,9 +1435,30 @@ class InboundingController {
             exit;
         }
 
-        $oldData = $inboundingModel->getform1data($id);
+        $profile = $this->createDesktopformSaveProfiler($id);
+        $this->logDesktopformSaveStep($profile, 'request_start', [
+            'log_dir' => $profile['log_dir'],
+            'log_file' => $profile['log_file'],
+            'memory_mb' => round(memory_get_usage(true) / 1048576, 2),
+            'post_field_count' => is_array($_POST) ? count($_POST, COUNT_RECURSIVE) : 0,
+        ]);
 
-        if (!$oldData) { echo "Record not found."; exit; }
+        $oldData = $inboundingModel->getform1data($id);
+        $this->logDesktopformSaveStep($profile, 'getform1data');
+
+        if (!$oldData) {
+            $this->finishDesktopformSaveProfile($profile, 'not_found');
+            echo "Record not found.";
+            exit;
+        }
+
+        $oldVariationsById = [];
+        foreach ($inboundingModel->getVariations($id) as $ov) {
+            $oldVariationsById[(int) $ov['id']] = $ov;
+        }
+        $this->logDesktopformSaveStep($profile, 'load_old_variations', [
+            'variation_count' => count($oldVariationsById),
+        ]);
 
         // Gallery deletions first (single CSV field avoids PHP max_input_vars dropping many delete_gallery_image_ids[] fields on large forms)
         $delCsv = trim((string) ($_POST['delete_gallery_image_ids_csv'] ?? ''));
@@ -1295,6 +1473,11 @@ class InboundingController {
                 $inboundingModel->delete_image_for_item((int) $delId, $id);
             }
         }
+        $this->logDesktopformSaveStep($profile, 'gallery_deletions', [
+            'deleted_count' => $delCsv !== ''
+                ? count(array_filter(array_map('intval', explode(',', $delCsv))))
+                : (is_array($_POST['delete_gallery_image_ids'] ?? null) ? count($_POST['delete_gallery_image_ids']) : 0),
+        ]);
 
         // --- Main Invoice File Upload Logic ---
         $invoicePath = $oldData['form1']['invoice_image'] ?? '';
@@ -1309,6 +1492,9 @@ class InboundingController {
                 }
             }
         }
+        $this->logDesktopformSaveStep($profile, 'invoice_upload', [
+            'uploaded' => isset($_FILES['invoice_image']) && ($_FILES['invoice_image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK,
+        ]);
 
         // 1. Capture Inputs — vp_inbound.is_variant is ENUM('Y','N'); empty/invalid POST causes "Data truncated".
         $postedVariant = isset($_POST['is_variant']) ? strtoupper(trim((string) $_POST['is_variant'])) : '';
@@ -1319,7 +1505,6 @@ class InboundingController {
             $postedVariant = 'N';
         }
         $is_variant = $postedVariant;
-        $shouldRename = false;
 
         if (($oldData['form1']['is_variant'] ?? '') == 'Y') {
             if ($is_variant !== ($oldData['form1']['is_variant'] ?? '')) {
@@ -1335,11 +1520,6 @@ class InboundingController {
         // --- SKU GENERATION ---
         $size  = trim($_POST['size'] ?? '');
         $color = trim($_POST['color'] ?? '');
-
-        // Always rename on every save so gallery filenames stay in sync with display_order.
-        if (!empty($item_code)) {
-            $shouldRename = true;
-        }
 
         $generated_sku = '';
         if ($is_variant === 'N') {
@@ -1380,7 +1560,10 @@ class InboundingController {
                 }
             }
         }
-        
+        $this->logDesktopformSaveStep($profile, 'main_photo_upload', [
+            'uploaded' => isset($_FILES['product_photo_main']) && ($_FILES['product_photo_main']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK,
+        ]);
+
         // Search String Logic
         $s_group   = $_POST['search_group'] ?? '';
         $s_cat_arr = $_POST['search_cat'] ?? [];
@@ -1458,9 +1641,18 @@ class InboundingController {
             'language' => $_POST['language'] ?? '',
             'pages'    => trim((string)($_POST['pages'] ?? '')) === '' ? null : (int) $_POST['pages'],
         ];
-        
+        $this->logDesktopformSaveStep($profile, 'prepare_inbound_data', [
+            'item_code' => $item_code,
+            'is_variant' => $is_variant,
+            'data_field_count' => count($data),
+        ]);
+
         // 4. Update Main Record
         $result = $inboundingModel->updatedesktopform($id, $data);
+        $this->logDesktopformSaveStep($profile, 'update_vp_inbound', [
+            'success' => !empty($result['success']),
+            'message' => $result['message'] ?? '',
+        ]);
 
         // --- VARIATIONS LOGIC ---
         $allVariations = $_POST['variations'] ?? [];
@@ -1491,7 +1683,16 @@ class InboundingController {
             }
         }
         unset($variant);
+        $variationUploadCount = count(array_filter($variationPhotoUploaded));
+        $this->logDesktopformSaveStep($profile, 'variation_photo_uploads', [
+            'variation_count' => is_array($allVariations) ? count($allVariations) : 0,
+            'uploaded_count' => $variationUploadCount,
+        ]);
+
         $inboundingModel->saveVariations($id, $allVariations, $item_code, $deletedVariationIds);
+        $this->logDesktopformSaveStep($profile, 'save_variations', [
+            'deleted_variation_count' => count($deletedVariationIds),
+        ]);
 
         // 4b. For cloned/new rows inheriting old_photo, create a dedicated copy of the main variation image.
         // This prevents multiple variations sharing one file path which can disappear after rename workflows.
@@ -1518,13 +1719,18 @@ class InboundingController {
 
             $this->duplicateVariationMainImageFile($id, $varId, $currentPhoto);
         }
+        $this->logDesktopformSaveStep($profile, 'duplicate_variation_main_images');
 
-        // 5. Update Image Order & Assignment
-        if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
-            foreach ($_POST['photo_variation'] as $img_id => $var_id) {
-                $inboundingModel->update_image_variation($img_id, $var_id);
-            }
+        // 5. Update gallery → variation assignment (single query when many images)
+        $photoVariationCount = isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])
+            ? count($_POST['photo_variation'])
+            : 0;
+        if ($photoVariationCount > 0) {
+            $inboundingModel->update_image_variations_batch($id, $_POST['photo_variation']);
         }
+        $this->logDesktopformSaveStep($profile, 'photo_variation_batch', [
+            'image_count' => $photoVariationCount,
+        ]);
 
         // 6. Duplicate gallery images for cloned variation cards.
         // Frontend sends clone_photo_from[new_key_or_id][] = source_image_id
@@ -1554,24 +1760,36 @@ class InboundingController {
                 $this->cloneVariationGalleryImages($id, $targetVariationId, $sourceIds);
             }
         }
+        $cloneTargetCount = is_array($cloneMap) ? count($cloneMap) : 0;
+        $this->logDesktopformSaveStep($profile, 'clone_variation_gallery', [
+            'clone_target_count' => $cloneTargetCount,
+        ]);
 
         // Run orphan cleanup only when variations were explicitly removed in this save.
         if (!empty($deletedVariationIds)) {
             $inboundingModel->deleteOrphanVariationGalleryImages($id);
         }
+        $this->logDesktopformSaveStep($profile, 'orphan_gallery_cleanup', [
+            'ran' => !empty($deletedVariationIds),
+        ]);
 
         if ($result['success']) {
             
             // =========================================================
             // START: ADVANCED RENAMING LOGIC (4 CASES)
             // =========================================================
+            $shouldRename = $this->desktopformSaveNeedsImageRename(
+                $oldData['form1'] ?? [],
+                $item_code,
+                $is_variant,
+                $allVariations,
+                $oldVariationsById
+            );
+            $this->logDesktopformSaveStep($profile, 'rename_check', [
+                'should_rename' => $shouldRename,
+                'has_item_code' => $item_code !== '',
+            ]);
             if (!empty($item_code) && $shouldRename) {
-                // Pass current POST data to helper so we use fresh color/size values
-                // $currentDataForRename = [
-                //     'is_variant' => $is_variant,
-                //     'color'      => $_POST['color'] ?? '',
-                //     'size'       => $_POST['size'] ?? ''
-                // ];
                 $this->ensureImagesAreRenamed(
                     $id, 
                     $item_code, 
@@ -1579,20 +1797,28 @@ class InboundingController {
                     $_POST['color'] ?? '', 
                     $_POST['size'] ?? ''
                 );
+                $this->logDesktopformSaveStep($profile, 'ensure_images_renamed');
             }
             // =========================================================
             
             $logData = ['userid_log' => $_POST['userid_log'] ?? '', 'i_id' => $id, 'stat' => 'Data Entry'];
             $inboundingModel->stat_logs($logData);
+            $this->logDesktopformSaveStep($profile, 'stat_logs');
 
             $action_clicked = $_POST['save_action'] ?? '';
-            if ($action_clicked === 'draft') {
-                header("location: " . base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved'));
-            } else {
-                header("location: " . base_url('?page=inbounding&action=list'));
-            }
+            $redirect = ($action_clicked === 'draft')
+                ? base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved')
+                : base_url('?page=inbounding&action=list');
+            $this->finishDesktopformSaveProfile($profile, 'success', [
+                'redirect' => $redirect,
+                'peak_memory_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
+            ]);
+            header('Location: ' . $redirect);
             exit;
         } else {
+            $this->finishDesktopformSaveProfile($profile, 'db_update_failed', [
+                'message' => $result['message'] ?? '',
+            ]);
             echo "Update failed: " . $result['message'];
         }
     }
