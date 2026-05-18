@@ -513,7 +513,7 @@ class product
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($product['size'] ?? ''), (string)($product['color'] ?? ''));
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ? WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
+                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
                     $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
@@ -763,7 +763,7 @@ class product
                     foreach ($product['variations'] as $variation) {
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
                         $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($variation['size'] ?? ''), (string)($variation['color'] ?? ''));
-                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ? WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
+                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                         if ($stmt) {
                             // $title = isset($product['title']) ? $product['title'] : '';
                             $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
@@ -3587,5 +3587,27 @@ class product
         }
 
         return ['success' => true, 'message' => 'Product updated successfully'];
+    }
+    public function fetchProductsForUpdateScript($offset = 0, $limit = 500)
+    {
+        $sql = "SELECT id, item_code, sku, size, color FROM vp_products WHERE update_flag IS NULL OR update_flag = 0 LIMIT ? OFFSET ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+        $stmt->bind_param("ii", $limit, $offset);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $products = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $products[] = $row['item_code'];
+            }
+        }
+        return array_unique($products);
+        // if ($result && $result->num_rows > 0) {
+        //     return ['success' => true, 'data' => $result->fetch_all(MYSQLI_ASSOC)];
+        // }
+        //return ['success' => false, 'message' => 'No products found'];
     }
 }

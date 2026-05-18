@@ -592,6 +592,12 @@ switch ($page) {
             case 'delete_purchase_list_item':
                 $controller->deletePurchaseItem();
                 break;
+            case 'show_bulk_update':
+                $controller->updateAllProduct();
+                break;
+            case 'updateAllProductScript':
+                $controller->updateAllProductScript();
+                break;
             /*case 'view':
                 $controller->product_view();
                 break;
@@ -930,6 +936,9 @@ switch ($page) {
                 $controller->download_photos();
                 break;
             case 'updatedesktopform':
+                if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+                    InboundingController::pingDesktopformSaveEntry('index_route');
+                }
                 $controller->updatedesktopform();
                 break;
             case 'saveform1':
