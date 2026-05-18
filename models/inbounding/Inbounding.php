@@ -630,29 +630,28 @@ class Inbounding {
 
         return $this->conn->query($sql);
     }
+    public function getInboundById(int $id): ?array {
+        $id = (int) $id;
+        if ($id <= 0) {
+            return null;
+        }
+        $stmt = $this->conn->prepare('SELECT * FROM vp_inbound WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        return $row ?: null;
+    }
+
 	public function getform1data($id) {
         $id = intval($id);
-        $inbounding = null;
+        $inbounding = $this->getInboundById($id);
         $vendors = null;
         $category = null;
-
-        // ---------------------------------------------------------
-        // 1. Secure Query: Get specific inbound record (Requires Prepared Statement)
-        // ---------------------------------------------------------
-        $sql_inbound = "SELECT * FROM vp_inbound WHERE id = ?";
-        $stmt = $this->conn->prepare($sql_inbound);
-
-        if ($stmt) {
-            $stmt->bind_param("i", $id);
-            $stmt->execute();
-            
-            $res = $stmt->get_result();
-            if ($res) {
-                $inbounding = $res->fetch_assoc();
-            }
-            // Critical: Close statement to free the connection for the next queries
-            $stmt->close();
-        }
 
         // ---------------------------------------------------------
         // 2. Static Query: Get all vendors (Standard query is safe here)
@@ -691,57 +690,6 @@ class Inbounding {
         // "ii" = Integer, Integer
         $stmt->bind_param("ii", $variation_id, $img_id);
         
-        return $stmt->execute();
-    }
-
-    /**
-     * Assign many gallery images to variations in one query (avoids N round-trips on large forms).
-     *
-     * @param array<int,int|string> $assignments image_id => variation_id
-     */
-    public function update_image_variations_batch(int $item_id, array $assignments): bool {
-        $item_id = (int) $item_id;
-        if ($item_id <= 0 || empty($assignments)) {
-            return true;
-        }
-
-        $cases = [];
-        $params = [];
-        $types = '';
-        $ids = [];
-
-        foreach ($assignments as $img_id => $var_id) {
-            $img_id = (int) $img_id;
-            if ($img_id <= 0) {
-                continue;
-            }
-            $cases[] = 'WHEN ? THEN ?';
-            $types .= 'ii';
-            $params[] = $img_id;
-            $params[] = (int) $var_id;
-            $ids[] = $img_id;
-        }
-
-        if (empty($ids)) {
-            return true;
-        }
-
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $sql = 'UPDATE item_images SET variation_id = CASE id ' . implode(' ', $cases)
-            . ' END WHERE item_id = ? AND id IN (' . $placeholders . ')';
-
-        $types .= 'i' . str_repeat('i', count($ids));
-        $params[] = $item_id;
-        foreach ($ids as $imgId) {
-            $params[] = $imgId;
-        }
-
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) {
-            return false;
-        }
-
-        $stmt->bind_param($types, ...$params);
         return $stmt->execute();
     }
     public function get_item_image_by_id(int $item_id, int $img_id) {
