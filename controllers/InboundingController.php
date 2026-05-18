@@ -1347,19 +1347,39 @@ class InboundingController {
         return false;
     }
 
-    /** @return array{inbound_id:int,started_at:float,last_at:float,steps:array,log_file:string} */
+    /**
+     * Resolve writable directory for desktopform save timing logs.
+     * Production uses log/ (same as publish_logs); repo also has logs/ for API logs.
+     */
+    private function resolveDesktopformSaveLogDir(): string
+    {
+        $candidates = [
+            dirname(__DIR__) . '/log/desktopform_save',
+            dirname(__DIR__) . '/logs/desktopform_save',
+            sys_get_temp_dir() . '/exotic_desktopform_save',
+        ];
+        foreach ($candidates as $dir) {
+            if (is_dir($dir) && is_writable($dir)) {
+                return $dir;
+            }
+            if (@mkdir($dir, 0775, true) && is_writable($dir)) {
+                return $dir;
+            }
+        }
+        return $candidates[count($candidates) - 1];
+    }
+
+    /** @return array{inbound_id:int,started_at:float,last_at:float,steps:array,log_file:string,log_dir:string} */
     private function createDesktopformSaveProfiler(int $inboundId): array
     {
-        $logDir = __DIR__ . '/../logs/desktopform_save';
-        if (!is_dir($logDir)) {
-            @mkdir($logDir, 0755, true);
-        }
+        $logDir = $this->resolveDesktopformSaveLogDir();
         $now = microtime(true);
         return [
             'inbound_id' => $inboundId,
             'started_at' => $now,
             'last_at' => $now,
             'steps' => [],
+            'log_dir' => $logDir,
             'log_file' => $logDir . '/save_' . date('Y-m-d') . '.log',
         ];
     }
@@ -1388,7 +1408,10 @@ class InboundingController {
             $totalMs,
             $metaStr
         );
-        @file_put_contents($profile['log_file'], $line, FILE_APPEND | LOCK_EX);
+        $written = @file_put_contents($profile['log_file'], $line, FILE_APPEND | LOCK_EX);
+        if ($written === false) {
+            error_log('[desktopform_save] write failed dir=' . ($profile['log_dir'] ?? '') . ' step=' . $step . $line);
+        }
     }
 
     private function finishDesktopformSaveProfile(array &$profile, string $status, array $meta = []): void
@@ -1415,6 +1438,8 @@ class InboundingController {
 
         $profile = $this->createDesktopformSaveProfiler($id);
         $this->logDesktopformSaveStep($profile, 'request_start', [
+            'log_dir' => $profile['log_dir'],
+            'log_file' => $profile['log_file'],
             'memory_mb' => round(memory_get_usage(true) / 1048576, 2),
             'post_field_count' => is_array($_POST) ? count($_POST, COUNT_RECURSIVE) : 0,
         ]);
