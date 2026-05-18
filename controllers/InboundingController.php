@@ -1358,14 +1358,69 @@ class InboundingController {
             sys_get_temp_dir() . '/exotic_desktopform_save',
         ];
         foreach ($candidates as $dir) {
-            if (is_dir($dir) && is_writable($dir)) {
-                return $dir;
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0775, true);
             }
-            if (@mkdir($dir, 0775, true) && is_writable($dir)) {
+            if (is_dir($dir) && is_writable($dir)) {
                 return $dir;
             }
         }
         return $candidates[count($candidates) - 1];
+    }
+
+    /**
+     * Earliest possible trace (index.php + controller entry). Survives fatals via shutdown handler.
+     */
+    public static function pingDesktopformSaveEntry(string $phase, array $extra = []): void
+    {
+        $id = (int) ($_GET['id'] ?? 0);
+        $root = dirname(__DIR__);
+        $dirs = [
+            $root . '/logs/desktopform_save',
+            sys_get_temp_dir() . '/exotic_desktopform_save',
+        ];
+        $payload = array_merge([
+            'phase' => $phase,
+            'inbound_id' => $id,
+            'save_action' => (string) ($_POST['save_action'] ?? ''),
+            'content_length' => (int) ($_SERVER['CONTENT_LENGTH'] ?? 0),
+            'memory_mb' => round(memory_get_usage(true) / 1048576, 2),
+        ], $extra);
+        $line = '[' . date('Y-m-d H:i:s') . '] ' . json_encode($payload, JSON_UNESCAPED_SLASHES) . "\n";
+        error_log('[desktopform_save] ' . trim($line));
+
+        foreach ($dirs as $dir) {
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0775, true);
+            }
+            if (!is_dir($dir) || !is_writable($dir)) {
+                continue;
+            }
+            @file_put_contents($dir . '/entry_' . date('Y-m-d') . '.log', $line, FILE_APPEND | LOCK_EX);
+            @file_put_contents($dir . '/save_' . date('Y-m-d') . '.log', $line, FILE_APPEND | LOCK_EX);
+        }
+    }
+
+    private function registerDesktopformSaveShutdown(array &$profile): void
+    {
+        register_shutdown_function(function () use (&$profile) {
+            $err = error_get_last();
+            $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+            $meta = [
+                'shutdown' => true,
+                'last_step' => !empty($profile['steps'])
+                    ? $profile['steps'][count($profile['steps']) - 1]['step']
+                    : 'none',
+                'step_count' => count($profile['steps'] ?? []),
+                'peak_memory_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
+            ];
+            if ($err && in_array($err['type'], $fatalTypes, true)) {
+                $meta['fatal'] = $err['message'] . ' in ' . $err['file'] . ':' . $err['line'];
+            }
+            if (!empty($profile['inbound_id'])) {
+                self::pingDesktopformSaveEntry('shutdown', $meta);
+            }
+        });
     }
 
     /** @return array{inbound_id:int,started_at:float,last_at:float,steps:array,log_file:string,log_dir:string} */
@@ -1408,8 +1463,13 @@ class InboundingController {
             $metaStr
         );
         $written = @file_put_contents($profile['log_file'], $line, FILE_APPEND | LOCK_EX);
+        $tmpDir = sys_get_temp_dir() . '/exotic_desktopform_save';
+        if (!is_dir($tmpDir)) {
+            @mkdir($tmpDir, 0775, true);
+        }
+        @file_put_contents($tmpDir . '/save_' . date('Y-m-d') . '.log', $line, FILE_APPEND | LOCK_EX);
         if ($written === false) {
-            error_log('[desktopform_save] write failed dir=' . ($profile['log_dir'] ?? '') . ' step=' . $step . $line);
+            error_log('[desktopform_save] write failed dir=' . ($profile['log_dir'] ?? '') . ' writable=' . (is_writable($profile['log_dir'] ?? '') ? 'yes' : 'no') . ' step=' . $step . trim($line));
         }
     }
 
@@ -1421,12 +1481,15 @@ class InboundingController {
 
     public function updatedesktopform() {
         global $inboundingModel;
+        self::pingDesktopformSaveEntry('controller_enter');
         @set_time_limit(180);
         @ini_set('max_execution_time', '180');
+        @ini_set('memory_limit', '512M');
 
         // 1. Setup & Checks
         $id = (int) ($_GET['id'] ?? 0);
         if ($id <= 0) {
+            self::pingDesktopformSaveEntry('invalid_id');
             echo "Invalid record.";
             exit;
         }
@@ -1436,6 +1499,7 @@ class InboundingController {
         }
 
         $profile = $this->createDesktopformSaveProfiler($id);
+        $this->registerDesktopformSaveShutdown($profile);
         $this->logDesktopformSaveStep($profile, 'request_start', [
             'log_dir' => $profile['log_dir'],
             'log_file' => $profile['log_file'],

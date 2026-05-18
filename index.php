@@ -936,6 +936,9 @@ switch ($page) {
                 $controller->download_photos();
                 break;
             case 'updatedesktopform':
+                if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+                    InboundingController::pingDesktopformSaveEntry('index_route');
+                }
                 $controller->updatedesktopform();
                 break;
             case 'saveform1':
