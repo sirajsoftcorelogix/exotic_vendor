@@ -6867,4 +6867,232 @@ class ProductsController
         }
         exit;
     }
+    public function updateAllProduct()
+    {
+        is_login();
+        renderTemplateClean('views/products/update_all_product.php', [], 'Bulk Order Update all products');
+    }
+    public function updateAllProductScript()
+    {
+        ini_set('max_execution_time', 30000);
+        set_time_limit(30000);
+        global $ordersModel, $productModel;
+        
+        // Security check
+        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+            http_response_code(403);
+            die('Unauthorized access.');
+        }
+        
+        header('Content-Type: application/json');
+        
+        // Initialize session for bulk import tracking
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['bulk_import'])) {
+            $_SESSION['bulk_import'] = [
+                'count' => 0,
+                'offset' => 0
+            ];
+        }
+        
+        // Configuration
+        $MAX_RECORDS = 5000;
+        $BATCH_SIZE = 50; // API batch size
+        $DB_LIMIT = 500;  // Database fetch limit per execution
+        $SLEEP_SECONDS = 5; // Recommended sleep between calls
+        
+        // Get current count and offset from session
+        $totalImported = (int)$_SESSION['bulk_import']['count'];
+        $currentOffset = (int)$_SESSION['bulk_import']['offset'];
+        
+        // Check if we've reached the limit
+        if ($totalImported >= $MAX_RECORDS) {
+            echo json_encode([
+                'success' => true,
+                'message' => "✓ Maximum limit of {$MAX_RECORDS} records reached for today. Process completed successfully.",
+                'batch_imported' => 0,
+                'batch_total_items' => 0,
+                'total_imported' => $totalImported,
+                'max_limit' => $MAX_RECORDS,
+                'progress_percent' => 100,
+                'completed' => true,
+                'should_continue' => false,
+                'next_action' => null
+            ]);
+            unset($_SESSION['bulk_import']);
+            exit;
+        }
+        
+        // Fetch up to 500 orders to update from database using offset
+        //$odr = $ordersModel->fetchOrdersForUpdateScript($currentOffset);
+        $odr = $productModel->fetchProductsForUpdateScript($currentOffset, $DB_LIMIT);
+        // print_array($odr);
+        // exit;
+        if (empty($odr)) {
+            echo json_encode([
+                'success' => true,
+                'message' => '✓ No more products found in database. All available products have been processed.',
+                'batch_imported' => 0,
+                'batch_total_items' => 0,
+                'total_imported' => $totalImported,
+                'max_limit' => $MAX_RECORDS,
+                'progress_percent' => round(($totalImported / $MAX_RECORDS) * 100, 2),
+                'completed' => true,
+                'should_continue' => false,
+                'next_action' => null
+            ]);
+            unset($_SESSION['bulk_import']);
+            exit;
+        }
+        
+        // API configuration for product fetch
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch';
+        
+        // Chunk products into batches of 50 for API calls
+        $productChunks = array_chunk(array_filter($odr, function ($product) {
+            return !empty($product);
+        }), $BATCH_SIZE);
+        // print_array($productChunks);
+        // exit;
+        $imported = 0;
+        $totalorder = 0;
+        $skipped = 0;
+        $result = [];
+        $errors = [];
+        $batchesProcessed = 0;
+        $affected_rows = 0;
+        
+        // Process all batches from this 500-record fetch
+        foreach ($productChunks as $chunkIndex => $chunk) {
+            // Check if we'll exceed limit before processing
+            if ($totalImported + $imported >= $MAX_RECORDS) {
+                break;
+            }
+            // print_array($chunk);
+            // exit;
+            $itemCodes = implode(',', $chunk);
+            $apiUrl = $url . '?itemcodes=' . urlencode($itemCodes);
+
+            $headers = [
+                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+                'x-adminapitest: 1',
+                'Content-Type: application/x-www-form-urlencoded'
+            ];
+
+            // Initialize cURL for GET request
+            $ch = curl_init($apiUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+            $response = curl_exec($ch);
+            //echo $apiUrl;
+            //print_array($response);
+            $error = curl_error($ch);
+            curl_close($ch);
+            
+            if (!empty($error)) {
+                $errors[] = "API Batch " . ($chunkIndex + 1) . " failed: " . $error;
+                continue;
+            }
+            
+            // Process API response - products data
+            $respData = json_decode($response, true);
+            if (!is_array($respData)) {
+                $errors[] = "Batch " . ($chunkIndex + 1) . " invalid response format";
+                continue;
+            }
+            
+            // Normalize product data if needed
+            $productData = $respData['data'] ?? $respData ?? [];
+            if (empty($productData)) {
+                continue;
+            }
+            
+            $batchesProcessed++;
+            // print_array($productData);
+            // exit;
+            // Update products using updateProductFromApi
+            $updateResult = $productModel->updateProductFromApi($productData, ['preserve_local_stock' => true]);
+            $affected_rows += $updateResult['updated_count'] ?? 0;
+            
+            // Count items processed
+            if (is_array($productData)) {
+                $itemsInBatch = count($productData);
+                $totalorder += $itemsInBatch;
+                $imported += $itemsInBatch;
+                $result[] = ['batch' => $chunkIndex + 1, 'items' => $itemsInBatch, 'result' => 'updated'];
+            }
+            
+            // Check if we've reached limit during processing
+            if ($totalImported + $imported >= $MAX_RECORDS) {
+                break;
+            }
+        }
+        
+        // Update total count and offset in session
+        $totalImported += $imported;
+        $_SESSION['bulk_import']['count'] = $totalImported;
+        
+        // Update offset for next batch (increase by 500)
+        $nextOffset = $currentOffset + $DB_LIMIT;
+        $_SESSION['bulk_import']['offset'] = $nextOffset;
+        
+        // Determine if process should continue
+        $completed = ($totalImported >= $MAX_RECORDS);
+        $shouldContinue = !$completed && count($odr) === $DB_LIMIT; // More records may exist
+        
+        if ($completed) {
+            unset($_SESSION['bulk_import']);
+        }
+        
+        // Build message
+        $messageStatus = $imported > 0 ? '✓' : 'ℹ';
+        $message = "{$messageStatus} Batch processing complete: {$imported} products updated";
+        if ($skipped > 0) {
+            $message .= ", {$skipped} skipped";
+        }
+        if (count($errors) > 0) {
+            $message .= ", " . count($errors) . " errors";
+        }
+        
+        // Prepare response
+        $response = [
+            'success' => true,
+            'message' => $message,
+            'batch_imported' => $imported,
+            'batch_total_items' => $totalorder,
+            'batch_skipped' => $skipped,
+            'batches_processed' => $batchesProcessed,
+            'total_imported' => $totalImported,
+            'max_limit' => $MAX_RECORDS,
+            'completed' => $completed,
+            'should_continue' => $shouldContinue,
+            'progress_percent' => round(($totalImported / $MAX_RECORDS) * 100, 2),
+            'timestamp' => date('Y-m-d H:i:s'),
+            'result' => $result,
+            'affected_rows' => $affected_rows,
+            'current_offset' => $currentOffset,
+            'next_offset' => $nextOffset
+        ];
+        
+        // Add next action if should continue
+        if ($shouldContinue) {
+            $response['next_action'] = [
+                'action' => 'Call updateAllProductScript again',
+                'wait_seconds' => $SLEEP_SECONDS,
+                'url' => 'index.php?page=products&action=update_all_product_script&secret_key=' . EXPECTED_SECRET_KEY
+            ];
+        }
+        
+        // Add errors if any
+        if (!empty($errors)) {
+            $response['errors'] = $errors;
+            $response['error_count'] = count($errors);
+        }
+        
+        echo json_encode($response);
+        exit;
+    }
 }
