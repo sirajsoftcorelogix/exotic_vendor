@@ -1639,6 +1639,7 @@ class InboundingController {
         $search_category_string = $s_subsub . '|' . $s_sub . '|' . $s_cat . '|' . $s_group;
         $search_term = $_POST['search_term'] ?? '';
 
+        
         // 3. Prepare Data
         $data = [
             'product_photo'       => $mainProductPhoto,
