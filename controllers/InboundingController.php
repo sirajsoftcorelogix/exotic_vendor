@@ -1349,12 +1349,11 @@ class InboundingController {
 
     /**
      * Resolve writable directory for desktopform save timing logs.
-     * Production uses log/ (same as publish_logs); repo also has logs/ for API logs.
+     * Primary: logs/desktopform_save/ (under repo logs/, blocked from HTTP via logs/.htaccess).
      */
     private function resolveDesktopformSaveLogDir(): string
     {
         $candidates = [
-            dirname(__DIR__) . '/log/desktopform_save',
             dirname(__DIR__) . '/logs/desktopform_save',
             sys_get_temp_dir() . '/exotic_desktopform_save',
         ];
