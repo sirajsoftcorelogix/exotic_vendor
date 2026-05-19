@@ -185,7 +185,7 @@ function renderSizeField($fieldName, $currentValue, $isClothing, $options, $cust
     return $html;
 }
 $currentSize = $data['form2']['size'] ?? '';
-function getThumbnail($filePath, $width = 150, $height = 150) {
+function getThumbnail($filePath, $width = 150, $height = 150, bool $generateIfMissing = true) {
     // 1. Sanitize Path (remove leading slash for file system check)
     $cleanPath = ltrim($filePath, '/');
 
@@ -209,6 +209,11 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             return $thumbPath;
         }
         @unlink($thumbPath);
+    }
+
+    // Large forms (30+ variations × many gallery images): do not run GD on page load.
+    if (!$generateIfMissing) {
+        return $cleanPath;
     }
 
     // 5. Create Thumb Directory if it doesn't exist
@@ -318,7 +323,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         $displayPhotoPath = $itemImageRelPath !== '' ? $itemImageRelPath : $mainPhoto;
                         $hasMainPhoto = !empty($displayPhotoPath);
 
-                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath)) : '';
+                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath, 150, 150, false)) : '';
                     ?>
                     <img id="main_photo_preview" 
                          src="<?= $mainPhotoThumb ?>" 
@@ -688,7 +693,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     $hasPhoto = (!empty($rawPhoto) && $rawPhoto !== '0');
                                     
                                     // Pass FULL path to generator
-                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto)) : '#';
+                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto, 150, 150, false)) : '#';
                                 ?>
                                 <img src="<?= $varThumbSrc ?>" 
                                      class="preview-img w-full h-full object-cover absolute inset-0 z-10"
@@ -902,7 +907,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         $fullPath = "uploads/itm_img/" . $img['file_name'];
 
         // 2. Pass the FULL PATH to the generator (filesystem-relative)
-        $thumbSrc = getThumbnail($fullPath);
+        $thumbSrc = getThumbnail($fullPath, 150, 150, false);
         $thumbVersion = @filemtime(ltrim($fullPath, '/')) ?: time();
         $thumbUrl = base_url($thumbSrc) . '?v=' . $thumbVersion;
         $fullUrl  = base_url($fullPath);

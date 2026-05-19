@@ -630,29 +630,37 @@ class Inbounding {
 
         return $this->conn->query($sql);
     }
-	public function getform1data($id) {
+    public function getInboundById(int $id): ?array {
+        $id = (int) $id;
+        if ($id <= 0) {
+            return null;
+        }
+        $stmt = $this->conn->prepare('SELECT * FROM vp_inbound WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        return $row ?: null;
+    }
+
+	public function getform1data($id, bool $withLookups = true) {
         $id = intval($id);
-        $inbounding = null;
+        $inbounding = $this->getInboundById($id);
+
+        if (!$withLookups) {
+            return [
+                'form1'    => $inbounding,
+                'vendors'  => null,
+                'category' => null,
+            ];
+        }
+
         $vendors = null;
         $category = null;
-
-        // ---------------------------------------------------------
-        // 1. Secure Query: Get specific inbound record (Requires Prepared Statement)
-        // ---------------------------------------------------------
-        $sql_inbound = "SELECT * FROM vp_inbound WHERE id = ?";
-        $stmt = $this->conn->prepare($sql_inbound);
-
-        if ($stmt) {
-            $stmt->bind_param("i", $id);
-            $stmt->execute();
-            
-            $res = $stmt->get_result();
-            if ($res) {
-                $inbounding = $res->fetch_assoc();
-            }
-            // Critical: Close statement to free the connection for the next queries
-            $stmt->close();
-        }
 
         // ---------------------------------------------------------
         // 2. Static Query: Get all vendors (Standard query is safe here)
@@ -695,7 +703,7 @@ class Inbounding {
     }
 
     /**
-     * Assign many gallery images to variations in one query (avoids N round-trips on large forms).
+     * Assign many gallery images to variations in one query (large forms: 150+ images).
      *
      * @param array<int,int|string> $assignments image_id => variation_id
      */
@@ -744,6 +752,7 @@ class Inbounding {
         $stmt->bind_param($types, ...$params);
         return $stmt->execute();
     }
+
     public function get_item_image_by_id(int $item_id, int $img_id) {
         $sql = "SELECT id, file_name, display_order, image_caption FROM item_images WHERE item_id = ? AND id = ? LIMIT 1";
         $stmt = $this->conn->prepare($sql);
