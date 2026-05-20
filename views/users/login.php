@@ -124,7 +124,7 @@ global $domain, $root_path;
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    successDiv.textContent = 'OTP sent to your email.';
+                    successDiv.textContent = data.message || 'OTP sent to your email.';
                     document.getElementById('login').readOnly = true;
                     document.getElementById('login').classList.add('bg-gray-100');
                     document.getElementById('sendOtpBtn').style.display = 'none';
