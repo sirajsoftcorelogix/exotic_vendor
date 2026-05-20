@@ -2671,13 +2671,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (localBtn) localBtn.disabled = true;
         if (cancelBtn) cancelBtn.disabled = true;
 
-        // First: Save the current form data so changes aren't lost
+        // First: Save the current form data so changes aren't lost (incl. full image rename for generate)
         fetch(form.action + '&save_action=generate', {
             method: 'POST',
             body: formData
         })
-        .then(() => {
-            // Second: Call the Publish API after save is successful
+        .then(async (saveResponse) => {
+            const saveText = await saveResponse.text();
+            if (!saveResponse.ok || /Record not found|Invalid record|Database Error/i.test(saveText)) {
+                throw new Error(saveText.trim().slice(0, 200) || ('Save failed (HTTP ' + saveResponse.status + ')'));
+            }
             return fetch(`index.php?page=inbounding&action=inbound_product_publish&id=${recordId}&publish_status=${publishStatus}`);
         })
         .then(response => response.json())
