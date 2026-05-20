@@ -12,6 +12,15 @@ global $domain;
 
 class UsersController
 {
+    /** Developer login: static OTP, no email sent */
+    private const DEV_LOGIN_EMAIL = 'siraj.php@gmail.com';
+    private const DEV_LOGIN_OTP = '1234';
+
+    private function isDevLoginEmail(string $login): bool
+    {
+        return strtolower(trim($login)) === strtolower(self::DEV_LOGIN_EMAIL);
+    }
+
     public function login()
     {
         // echo "This is the login page.";
@@ -47,6 +56,12 @@ class UsersController
 
         $user = $usersModel->findByLogin($login);
         if ($user) {
+            if ($this->isDevLoginEmail($login)) {
+                $usersModel->saveResetToken($user['id'], self::DEV_LOGIN_OTP);
+                echo json_encode(['success' => true, 'message' => 'OTP ready. Use 1234 to sign in.']);
+                exit;
+            }
+
             $token = rand(100000, 999999);
             $usersModel->saveResetToken($user['id'], $token);
 

