@@ -223,7 +223,7 @@ class Material
         }
 
         if ($isActive === 0) {
-            $block = $this->getDeactivateBlockReason($id);
+            $block = $this->getUsageBlockReason($id, 'deactivate');
             if ($block !== null) {
                 return ['success' => false, 'message' => $block];
             }
@@ -246,22 +246,48 @@ class Material
         return ['success' => false, 'message' => 'Could not update: ' . $err];
     }
 
-    private function getDeactivateBlockReason(int $materialId): ?string
+    /**
+     * @return array{inbound_count:int,in_use:bool}
+     */
+    public function getMaterialUsage(int $materialId): array
     {
+        $materialId = (int) $materialId;
+        $inboundCount = 0;
+
         $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_inbound WHERE material_code = ?');
-        if (!$stmt) {
-            return null;
+        if ($stmt) {
+            $stmt->bind_param('i', $materialId);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $inboundCount = (int) ($row['c'] ?? 0);
         }
-        $stmt->bind_param('i', $materialId);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        if ((int) ($row['c'] ?? 0) > 0) {
-            return 'Cannot deactivate: one or more inbound products use this material.';
-        }
-        return null;
+
+        return [
+            'inbound_count' => $inboundCount,
+            'in_use' => $inboundCount > 0,
+        ];
     }
 
+    private function getUsageBlockReason(int $materialId, string $actionLabel = 'modify'): ?string
+    {
+        $usage = $this->getMaterialUsage($materialId);
+        if (!$usage['in_use']) {
+            return null;
+        }
+
+        $count = $usage['inbound_count'];
+        $noun = $count === 1 ? 'inbound product' : 'inbound products';
+
+        return sprintf(
+            'Cannot %s: this material is used on %d %s. Change the material on those records first.',
+            $actionLabel,
+            $count,
+            $noun
+        );
+    }
+
+    /** Soft delete: mark inactive */
     public function deleteRecord(int $id): array
     {
         $id = (int) $id;
@@ -269,9 +295,13 @@ class Material
             return ['success' => false, 'message' => 'Invalid ID.'];
         }
 
-        $block = $this->getDeactivateBlockReason($id);
+        if (!$this->getRecord($id)) {
+            return ['success' => false, 'message' => 'Material not found.'];
+        }
+
+        $block = $this->getUsageBlockReason($id, 'deactivate');
         if ($block !== null) {
-            return ['success' => false, 'message' => $block];
+            return ['success' => false, 'message' => $block, 'usage' => $this->getMaterialUsage($id)];
         }
 
         $sql = 'UPDATE material SET is_active = 0, updated_at = NOW() WHERE id = ?';
@@ -284,5 +314,38 @@ class Material
         $err = $stmt->error;
         $stmt->close();
         return ['success' => false, 'message' => 'Update failed: ' . $err];
+    }
+
+    /** Hard delete: remove row from database (blocked when in use) */
+    public function permanentlyDeleteRecord(int $id): array
+    {
+        $id = (int) $id;
+        if ($id <= 0) {
+            return ['success' => false, 'message' => 'Invalid ID.'];
+        }
+
+        if (!$this->getRecord($id)) {
+            return ['success' => false, 'message' => 'Material not found.'];
+        }
+
+        $usage = $this->getMaterialUsage($id);
+        if ($usage['in_use']) {
+            $block = $this->getUsageBlockReason($id, 'delete');
+            return ['success' => false, 'message' => $block, 'usage' => $usage];
+        }
+
+        $sql = 'DELETE FROM material WHERE id = ?';
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Database error: ' . $this->conn->error];
+        }
+        $stmt->bind_param('i', $id);
+        if ($stmt->execute() && $stmt->affected_rows > 0) {
+            $stmt->close();
+            return ['success' => true, 'message' => 'Material deleted permanently.'];
+        }
+        $err = $stmt->error;
+        $stmt->close();
+        return ['success' => false, 'message' => 'Delete failed: ' . ($err ?: 'No rows removed.')];
     }
 }

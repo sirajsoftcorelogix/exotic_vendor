@@ -841,6 +841,12 @@ switch ($page) {
             case 'deleteRecord':
                 $controller->delete();
                 break;
+            case 'permanentDelete':
+                $controller->permanentDelete();
+                break;
+            case 'checkUsage':
+                $controller->checkUsage();
+                break;
             case 'getDetails':
                 $controller->getDetails();
                 break;
