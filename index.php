@@ -828,6 +828,27 @@ switch ($page) {
                 break;
         }
         break;
+    case 'materials':
+        require_once 'controllers/MaterialsController.php';
+        $controller = new MaterialsController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'courier_partners':
         require_once 'controllers/CourierPartnersController.php';
         $controller = new CourierPartnersController();
