@@ -899,6 +899,9 @@ class InboundingController {
         $altPhotoDir  = __DIR__ . '/../uploads/itm_img/';
 
         $inboundRow = $inboundingModel->getInboundById((int) $itemId);
+        if (!$inboundRow) {
+            return;
+        }
         $isBook = (string) ($inboundRow['group_name'] ?? '') === '-8';
 
         // 2. Fetch Variations from DB
@@ -913,9 +916,8 @@ class InboundingController {
             // CASE 1: Simple Product -> abc1234
             $baseName = $itemCode; 
         } elseif (!$isVariant && $hasVariations) {
-            // CASE 2: Complex Product (Base with variations) -> abc1234-blue (use color/size from parent)
-            $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
-            $baseName = $itemCode . ($suffix ? '-' . $suffix : '');
+            // CASE 2: Parent + color/size variations — base gallery uses plain item code (variations get suffixes)
+            $baseName = $itemCode;
         } else {
             // CASE 3 & 4: Variation -> abc1234-color
             $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
@@ -1174,18 +1176,20 @@ class InboundingController {
         return (bool) $ok;
     }
 
-    // --- HELPER 1: Suffix Logic (Color > Size) ---
+    // --- HELPER 1: Suffix Logic (align with variation SKU: itemcode-size-color) ---
     private function getNamingSuffix($color, $size) {
-        // Priority 1: Color
-        if (!empty($color)) {
-            // Lowercase and remove spaces (e.g. "Light Blue" -> "lightblue")
-            return strtolower(str_replace(' ', '', trim($color)));
+        $fSize  = preg_replace('/\s+/', '-', strtolower(trim((string) $size)));
+        $fColor = preg_replace('/\s+/', '-', strtolower(trim((string) $color)));
+        if ($fSize !== '' && $fColor !== '') {
+            return $fSize . '-' . $fColor;
         }
-        // Priority 2: Size
-        if (!empty($size)) {
-            return strtolower(str_replace(' ', '', trim($size)));
+        if ($fColor !== '') {
+            return $fColor;
         }
-        return ''; // No suffix
+        if ($fSize !== '') {
+            return $fSize;
+        }
+        return '';
     }
 
     // --- HELPER 2: File Renaming & DB Update ---
@@ -1808,7 +1812,12 @@ class InboundingController {
             ? count($_POST['photo_variation'])
             : 0;
         if ($photoVariationCount > 0) {
-            $inboundingModel->update_image_variations_batch($id, $_POST['photo_variation']);
+            $batchOk = $inboundingModel->update_image_variations_batch($id, $_POST['photo_variation']);
+            if (!$batchOk) {
+                foreach ($_POST['photo_variation'] as $img_id => $var_id) {
+                    $inboundingModel->update_image_variation($img_id, $var_id);
+                }
+            }
         }
         $this->logDesktopformSaveStep($profile, 'photo_variation_updates', [
             'image_count' => $photoVariationCount,
@@ -1866,11 +1875,17 @@ class InboundingController {
                 $allVariations,
                 $oldVariationsById
             );
+            $saveAction = (string) ($_POST['save_action'] ?? '');
+            // Publish flow saves with save_action=generate first — must rename all variation images for API
+            if ($saveAction === 'generate') {
+                $renameScope = ['rename_all' => true, 'base' => true, 'variation_ids' => []];
+            }
             $shouldRename = !empty($renameScope['rename_all'])
                 || !empty($renameScope['base'])
                 || !empty($renameScope['variation_ids']);
             $this->logDesktopformSaveStep($profile, 'rename_check', [
                 'should_rename' => $shouldRename,
+                'save_action' => $saveAction,
                 'rename_all' => !empty($renameScope['rename_all']),
                 'rename_base' => !empty($renameScope['base']),
                 'rename_variation_count' => count($renameScope['variation_ids']),
@@ -2339,12 +2354,21 @@ class InboundingController {
             ]);
             exit;
         }
+        $publishRow = $data1['data'];
+        $renameColor = $publishRow['color'] ?? '';
+        $renameSize = $publishRow['size'] ?? '';
+        // Parent + vp_variations: base gallery filenames use plain item code (not parent color/size)
+        if (($publishRow['is_variant'] ?? 'N') === 'N' && !empty($publishRow['var_rows'])) {
+            $renameColor = '';
+            $renameSize = '';
+        }
         $this->ensureImagesAreRenamed(
-            $id, 
-            $data1['data']['Item_code'], 
-            $data1['data']['is_variant'], 
-            $data1['data']['color'] ?? '', 
-            $data1['data']['size'] ?? ''
+            $id,
+            $publishRow['Item_code'],
+            $publishRow['is_variant'],
+            $renameColor,
+            $renameSize,
+            ['rename_all' => true, 'base' => true, 'variation_ids' => []]
         );
         $data = $inboundingModel->getpublishdata($id);
         if (!is_array($data) || !isset($data['data']) || !is_array($data['data'])) {
