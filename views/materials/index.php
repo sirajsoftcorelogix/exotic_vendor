@@ -157,7 +157,8 @@ $next_display_order = isset($next_display_order) ? (int) $next_display_order : 1
                                         <button type="button" class="menu-button" onclick="toggleMenu(this)">&#x22EE;</button>
                                         <ul class="menu-popup">
                                             <li onclick="openEditModal(<?= (int) $row['id'] ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
-                                            <li class="delete-btn" data-id="<?php echo (int) $row['id']; ?>"><i class="fa-solid fa-ban"></i> Deactivate</li>
+                                            <li class="deactivate-btn" data-id="<?php echo (int) $row['id']; ?>" data-name="<?php echo htmlspecialchars((string) ($row['material_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-ban"></i> Deactivate</li>
+                                            <li class="permanent-delete-btn text-red-700" data-id="<?php echo (int) $row['id']; ?>" data-name="<?php echo htmlspecialchars((string) ($row['material_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-trash"></i> Delete permanently</li>
                                         </ul>
                                     </div>
                                 </td>
@@ -460,13 +461,42 @@ $next_display_order = isset($next_display_order) ? (int) $next_display_order : 1
     };
 
     let successModalTimer;
+
+    function showMaterialActionResult(data) {
+        const title = document.getElementById('modalTitle');
+        title.innerText = data.success ? 'Success' : 'Error';
+        title.className = data.success ? 'text-2xl font-bold text-green-600 mb-4' : 'text-2xl font-bold text-red-600 mb-4';
+        document.getElementById('showMessage').innerText = data.message || 'Unknown error';
+        document.getElementById('deleteMsgBox').classList.remove('hidden');
+        clearTimeout(successModalTimer);
+        if (data.success) {
+            successModalTimer = setTimeout(() => closeDeleteModal(), 1500);
+        }
+    }
+
+    function checkMaterialUsage(id) {
+        return fetch('?page=materials&action=checkUsage&id=' + encodeURIComponent(id))
+            .then(res => res.json());
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.deactivate-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 const id = btn.getAttribute('data-id');
+                const name = btn.getAttribute('data-name') || 'this material';
                 window.closeAllMenus();
-                if (!confirm('Deactivate this material? It will be marked inactive.')) return;
+
+                const usage = await checkMaterialUsage(id);
+                if (usage.in_use) {
+                    showMaterialActionResult({
+                        success: false,
+                        message: 'Cannot deactivate: "' + name + '" is used on ' + usage.inbound_count + ' inbound product(s).'
+                    });
+                    return;
+                }
+
+                if (!confirm('Deactivate "' + name + '"? It will be marked inactive but kept in the database.')) return;
 
                 fetch('?page=materials&action=deleteRecord', {
                     method: 'POST',
@@ -474,15 +504,35 @@ $next_display_order = isset($next_display_order) ? (int) $next_display_order : 1
                     body: JSON.stringify({ id: id })
                 })
                 .then(res => res.json())
-                .then(data => {
-                    const title = document.getElementById('modalTitle');
-                    title.innerText = data.success ? 'Success' : 'Error';
-                    title.className = data.success ? 'text-2xl font-bold text-green-600 mb-4' : 'text-2xl font-bold text-red-600 mb-4';
-                    document.getElementById('showMessage').innerText = data.message;
-                    document.getElementById('deleteMsgBox').classList.remove('hidden');
-                    clearTimeout(successModalTimer);
-                    successModalTimer = setTimeout(() => closeDeleteModal(), 1500);
-                });
+                .then(showMaterialActionResult);
+            });
+        });
+
+        document.querySelectorAll('.permanent-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const id = btn.getAttribute('data-id');
+                const name = btn.getAttribute('data-name') || 'this material';
+                window.closeAllMenus();
+
+                const usage = await checkMaterialUsage(id);
+                if (usage.in_use) {
+                    showMaterialActionResult({
+                        success: false,
+                        message: 'Cannot delete: "' + name + '" is used on ' + usage.inbound_count + ' inbound product(s). Change the material on those records first.'
+                    });
+                    return;
+                }
+
+                if (!confirm('Permanently delete "' + name + '"? This cannot be undone.')) return;
+
+                fetch('?page=materials&action=permanentDelete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id })
+                })
+                .then(res => res.json())
+                .then(showMaterialActionResult);
             });
         });
     });

@@ -64,12 +64,55 @@ class MaterialsController
         global $materialsModel;
 
         $data = json_decode(file_get_contents('php://input'), true);
-        $id = isset($data['id']) ? (int) $data['id'] : (isset($_POST['id']) ? (int) $_POST['id'] : 0);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+        $id = isset($data['id']) ? (int) $data['id'] : 0;
         if ($id > 0) {
             echo json_encode($materialsModel->deleteRecord($id));
         } else {
             echo json_encode(['success' => false, 'message' => 'Invalid ID.']);
         }
+        exit;
+    }
+
+    public function permanentDelete()
+    {
+        is_login();
+        global $materialsModel;
+
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+        $id = isset($data['id']) ? (int) $data['id'] : 0;
+        if ($id > 0) {
+            echo json_encode($materialsModel->permanentlyDeleteRecord($id));
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid ID.']);
+        }
+        exit;
+    }
+
+    public function checkUsage()
+    {
+        is_login();
+        global $materialsModel;
+
+        $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+        if ($id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid ID.']);
+            exit;
+        }
+
+        $usage = $materialsModel->getMaterialUsage($id);
+        echo json_encode([
+            'success' => true,
+            'in_use' => $usage['in_use'],
+            'inbound_count' => $usage['inbound_count'],
+            'can_delete' => !$usage['in_use'],
+            'can_deactivate' => !$usage['in_use'],
+        ]);
         exit;
     }
 
