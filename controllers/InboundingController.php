@@ -7,6 +7,12 @@ $inboundingModel = new Inbounding($conn);
 global $root_path;
 global $domain;
 class InboundingController {
+    public static function pingDesktopformSaveEntry(string $route) {
+        // Legacy compatibility helper.
+        // The original index route called this static method before saving the desktop form.
+        // Since the save logic is implemented in updatedesktopform(), this is a no-op.
+        return true;
+    }
 
     public function index() {
         is_login();
