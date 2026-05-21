@@ -52,20 +52,20 @@
 
     <!-- Users Table Container -->
     <div class="bg-white rounded-xl shadow-md overflow-hidden">
-        <div class="p-6">
+        <div class="p-4">
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
                         <tr>
-                            <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">ID</th>
-                            <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Full Name</th>
-                            <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email Address</th>
-                            <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Role</th>
-                            <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Teams</th>
-                             <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Warehouse</th>
-                            <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Status</th>
-                            <!-- <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Last Login</th> -->
-                            <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Actions</th>
+                            <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">ID</th>
+                            <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Full Name</th>
+                            <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email Address</th>
+                            <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Role</th>
+                            <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Teams</th>
+                             <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Warehouse</th>
+                            <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Status</th>
+                            <!-- <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Last Login</th> -->
+                            <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
@@ -75,11 +75,11 @@
                             foreach ($data['users'] as $item):
                         ?>
                                 <tr class="table-content-text">
-                                    <td class="px-6 py-4 whitespace-nowrap"><?= $item["id"] ?></td>
-                                    <td class="px-6 py-4 whitespace-nowrap"><?= $item['name']; ?></td>
-                                    <td class="px-6 py-4 whitespace-nowrap"><?= $item['email']; ?></td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span style="width: 145px; height: 25px; padding:15px 0px 15px 0px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white">
+                                    <td class="px-2 py-3 whitespace-nowrap"><?= $item["id"] ?></td>
+                                    <td class="px-2 py-3 whitespace-nowrap"><?= $item['name']; ?></td>
+                                    <td class="px-2 py-3 whitespace-nowrap"><?= $item['email']; ?></td>
+                                    <td class="px-2 py-3 whitespace-nowrap">
+                                        <span style="min-width: 110px; height: 25px; padding: 15px 8px;" class="px-2 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white">
                                             <?php foreach ($roles_list as $role):
                                                 if ($item['role_id'] == $role['id']) {
                                                     echo $role['role_name'];
@@ -87,12 +87,12 @@
                                             endforeach; ?>
                                         </span>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap"><?php if ($item["team_names"] != "") {
+                                    <td class="px-2 py-3 whitespace-nowrap"><?php if ($item["team_names"] != "") {
                                                                                 echo str_replace(", ", "<br>", $item["team_names"]);
                                                                             } ?></td>
-                                    <td class="px-6 py-4 whitespace-nowrap"><?= $item['warehouse_name']; ?></td>
+                                    <td class="px-2 py-3 whitespace-nowrap"><?= $item['warehouse_name']; ?></td>
 
-                                    <td class="px-6 py-4 whitespace-nowrap">
+                                    <td class="px-2 py-3 whitespace-nowrap">
                                         <div class="flex items-center gap-2">
                                             <?php if ($item['is_active'] == 1): ?>
                                                 <span class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold text-white text-[13px]"
@@ -108,8 +108,8 @@
                                         </div>
                                     </td>
                                     <!-- <td class="px-6 py-4 whitespace-nowrap">23-08-2025 13:10</td> ?page=users&action=updateUser&id=<?= $item['id']; ?> data-toggle="modal" data-target="#editModal" data-id="<?php echo $item['id']; ?>"-->
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <div class="flex items-center space-x-4">
+                                    <td class="px-2 py-3 whitespace-nowrap text-sm font-medium">
+                                        <div class="flex items-center space-x-2">
                                             <a href="#" onclick="openEditModal(<?php echo $item['id']; ?>)" class="text-gray-400 hover:text-black" title="Edit User">
                                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                     <path d="M12.0465 8.20171C10.6474 9.47037 9.33829 11.0991 7.90075 12.3041C7.56581 12.5845 7.25417 12.7388 6.8125 12.7978C6.09762 12.8939 5.09165 12.9659 4.36744 12.9883C3.50508 13.0154 2.73585 12.5712 2.75448 11.6359C2.76884 10.909 2.86781 9.93098 2.95164 9.19835C2.992 8.84595 3.04983 8.53545 3.24582 8.2299L11.1585 0.415632C11.9227 -0.178697 12.8029 -0.120026 13.5279 0.491828C14.0922 0.968052 15.0966 1.93688 15.5631 2.49426C16.1484 3.19335 16.1422 4.07837 15.5631 4.77785C14.5839 5.96041 13.1029 7.05649 12.0461 8.20209L12.0465 8.20171ZM12.2572 1.03396C12.1435 1.04272 11.9914 1.11244 11.8971 1.17873C11.5144 1.44732 11.1364 2.00355 10.7525 2.30224L13.6765 5.13787C14.091 4.59726 15.3764 3.97665 14.7694 3.19678C14.2393 2.51559 13.2993 1.87897 12.7319 1.19664C12.6112 1.0972 12.416 1.02139 12.2568 1.03396H12.2572ZM3.89279 11.8744C3.9382 11.9216 4.10004 11.9635 4.17145 11.962C4.89643 11.9464 5.93228 11.858 6.65687 11.7692C6.78689 11.7532 6.92699 11.7174 7.03916 11.6492L12.8693 5.94022L9.99496 3.04591L4.13652 8.79985C4.00651 8.99529 3.98516 9.58505 3.96032 9.84602C3.9153 10.323 3.85631 10.8968 3.84195 11.368C3.83846 11.4842 3.82022 11.7989 3.8924 11.8744H3.89279Z" fill="black" />
