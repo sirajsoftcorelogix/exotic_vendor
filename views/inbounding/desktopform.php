@@ -185,7 +185,7 @@ function renderSizeField($fieldName, $currentValue, $isClothing, $options, $cust
     return $html;
 }
 $currentSize = $data['form2']['size'] ?? '';
-function getThumbnail($filePath, $width = 150, $height = 150, bool $generateIfMissing = true) {
+function getThumbnail($filePath, $width = 150, $height = 150) {
     // 1. Sanitize Path (remove leading slash for file system check)
     $cleanPath = ltrim($filePath, '/');
 
@@ -209,11 +209,6 @@ function getThumbnail($filePath, $width = 150, $height = 150, bool $generateIfMi
             return $thumbPath;
         }
         @unlink($thumbPath);
-    }
-
-    // Large forms (30+ variations × many gallery images): do not run GD on page load.
-    if (!$generateIfMissing) {
-        return $cleanPath;
     }
 
     // 5. Create Thumb Directory if it doesn't exist
@@ -323,7 +318,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         $displayPhotoPath = $itemImageRelPath !== '' ? $itemImageRelPath : $mainPhoto;
                         $hasMainPhoto = !empty($displayPhotoPath);
 
-                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath, 150, 150, false)) : '';
+                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath)) : '';
                     ?>
                     <img id="main_photo_preview" 
                          src="<?= $mainPhotoThumb ?>" 
@@ -693,7 +688,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     $hasPhoto = (!empty($rawPhoto) && $rawPhoto !== '0');
                                     
                                     // Pass FULL path to generator
-                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto, 150, 150, false)) : '#';
+                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto)) : '#';
                                 ?>
                                 <img src="<?= $varThumbSrc ?>" 
                                      class="preview-img w-full h-full object-cover absolute inset-0 z-10"
@@ -907,7 +902,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         $fullPath = "uploads/itm_img/" . $img['file_name'];
 
         // 2. Pass the FULL PATH to the generator (filesystem-relative)
-        $thumbSrc = getThumbnail($fullPath, 150, 150, false);
+        $thumbSrc = getThumbnail($fullPath);
         $thumbVersion = @filemtime(ltrim($fullPath, '/')) ?: time();
         $thumbUrl = base_url($thumbSrc) . '?v=' . $thumbVersion;
         $fullUrl  = base_url($fullPath);
@@ -2583,15 +2578,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (catChecked === 0) errors.push("Please select at least one 'Category'.");
 
         // Marketplace sourcing: no local stock — skip main quantity_received check
-		const hasMarketplaceVendor = getVal('marketplace') !== '';
+        const hasMarketplaceVendor = getVal('marketplace') !== '';
 
-		if (!hasMarketplaceVendor) {
-			const mainQty = parseFloat(getVal('quantity_received')) || 0;
-			// Ensure at least 1
-			if (mainQty < 1) {
-				errors.push("Main Item: 'Quantity' must be at least 1.");
-			}
-		}
+        if (!hasMarketplaceVendor) {
+            const mainQty = parseFloat(getVal('quantity_received')) || 0;
+            // Ensure at least 1
+            if (mainQty < 1) {
+                errors.push("Main Item: 'Quantity' must be at least 1.");
+            }
+        }
 
         if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
         if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
@@ -2671,16 +2666,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (localBtn) localBtn.disabled = true;
         if (cancelBtn) cancelBtn.disabled = true;
 
-        // First: Save the current form data so changes aren't lost (incl. full image rename for generate)
+        // First: Save the current form data so changes aren't lost
         fetch(form.action + '&save_action=generate', {
             method: 'POST',
             body: formData
         })
-        .then(async (saveResponse) => {
-            const saveText = await saveResponse.text();
-            if (!saveResponse.ok || /Record not found|Invalid record|Database Error/i.test(saveText)) {
-                throw new Error(saveText.trim().slice(0, 200) || ('Save failed (HTTP ' + saveResponse.status + ')'));
-            }
+        .then(() => {
+            // Second: Call the Publish API after save is successful
             return fetch(`index.php?page=inbounding&action=inbound_product_publish&id=${recordId}&publish_status=${publishStatus}`);
         })
         .then(response => response.json())
@@ -3824,7 +3816,7 @@ function validateAndSubmit(actionType) {
 
     // --- 2. MAIN ITEM VALIDATION ---
      // Marketplace sourcing: no local stock — skip main quantity_received check
-	const hasMarketplaceVendor = getVal('marketplace') !== '';
+    const hasMarketplaceVendor = getVal('marketplace') !== '';
 
     if (!hasMarketplaceVendor) {
         const mainQty = parseFloat(getVal('quantity_received')) || 0;
@@ -3863,13 +3855,13 @@ function validateAndSubmit(actionType) {
         };
 
         const hasMarketplaceVendor = getVal('marketplace') !== '';
-		if (!hasMarketplaceVendor) {
-			const mainQty = parseFloat(getVal('quantity_received')) || 0;
-			// Ensure at least 1
-			if (mainQty < 1) {
-				errors.push("Main Item: 'Quantity' must be at least 1.");
-			}
-		}
+        if (!hasMarketplaceVendor) {
+            const mainQty = parseFloat(getVal('quantity_received')) || 0;
+            // Ensure at least 1
+            if (mainQty < 1) {
+                errors.push("Main Item: 'Quantity' must be at least 1.");
+            }
+        }
         // UPDATED: Check for 0.00 inside variations
         if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
         if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
@@ -3888,13 +3880,13 @@ function validateAndSubmit(actionType) {
             if (vImgCount < 1) errors.push(`${cardTitle}: Please add at least 1 photo to Gallery.`);
         }
     });
-	
-	if (actionType === 'draft') {
-		// Skip validation, directly submit
-		document.getElementById('hidden_save_action').value = actionType;
-		form.submit();
-		return; // stop further execution
-	}
+    
+    if (actionType === 'draft') {
+        // Skip validation, directly submit
+        document.getElementById('hidden_save_action').value = actionType;
+        form.submit();
+        return; // stop further execution
+    }
 
     // --- 4. RESULT ---
     if (errors.length > 0) {
