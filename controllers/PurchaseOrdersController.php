@@ -1903,7 +1903,8 @@ class PurchaseOrdersController
             'total_cost' => $data['grand_total'] ?? 0,
             'terms_and_conditions' => $data['terms_and_conditions'] ?? '',
             'status' => 'pending',
-            'flag_star' => 0
+            'flag_star' => 0,
+            'notes' => $data['notes'] ?? '',
         ];
         //print_array($purchaseOrderData);
         // Save purchase order
