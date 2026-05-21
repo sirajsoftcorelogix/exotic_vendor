@@ -833,45 +833,45 @@ class InboundingController {
                         }
                     }
                 }
-				/*foreach ($_FILES['new_photos']['name'] as $key => $name) {
+                /*foreach ($_FILES['new_photos']['name'] as $key => $name) {
 
-					if ($_FILES['new_photos']['error'][$key] !== UPLOAD_ERR_OK) {
-						continue;
-					}
+                    if ($_FILES['new_photos']['error'][$key] !== UPLOAD_ERR_OK) {
+                        continue;
+                    }
 
-					$tmpName = $_FILES['new_photos']['tmp_name'][$key];
+                    $tmpName = $_FILES['new_photos']['tmp_name'][$key];
 
-					// ✅ Validate file size (e.g. 5MB max)
-					if ($_FILES['new_photos']['size'][$key] > 5 * 1024 * 1024) {
-						continue;
-					}
+                    // ✅ Validate file size (e.g. 5MB max)
+                    if ($_FILES['new_photos']['size'][$key] > 5 * 1024 * 1024) {
+                        continue;
+                    }
 
-					// ✅ MIME validation (fast + safe)
-					$finfo = finfo_open(FILEINFO_MIME_TYPE);
-					$mime  = finfo_file($finfo, $tmpName);
-					finfo_close($finfo);
+                    // ✅ MIME validation (fast + safe)
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $mime  = finfo_file($finfo, $tmpName);
+                    finfo_close($finfo);
 
-					if (!in_array($mime, ['image/jpeg','image/png'])) {
-						continue;
-					}
+                    if (!in_array($mime, ['image/jpeg','image/png'])) {
+                        continue;
+                    }
 
-					$ext = match($mime) {
-						'image/jpeg' => 'jpg',
-						'image/png'  => 'png',
-						default => 'bin'
-					};
+                    $ext = match($mime) {
+                        'image/jpeg' => 'jpg',
+                        'image/png'  => 'png',
+                        default => 'bin'
+                    };
 
-					// ✅ Faster unique name
-					$newName = 'raw_'.$id.'_'.bin2hex(random_bytes(8)).'.'.$ext;
-					
-					$varId = $_POST['new_image_variation_id'][$key] ?? -1;
+                    // ✅ Faster unique name
+                    $newName = 'raw_'.$id.'_'.bin2hex(random_bytes(8)).'.'.$ext;
+                    
+                    $varId = $_POST['new_image_variation_id'][$key] ?? -1;
 
-					// ✅ Atomic move
-					if (@rename($tmpName, $uploadDir . $newName)) {
-						$inboundingModel->add_raw_image($id, $newName, $varId);
-					}
-				}*/
-				/*for end here*/
+                    // ✅ Atomic move
+                    if (@rename($tmpName, $uploadDir . $newName)) {
+                        $inboundingModel->add_raw_image($id, $newName, $varId);
+                    }
+                }*/
+                /*for end here*/
             }
             
             $logData = [
@@ -885,24 +885,15 @@ class InboundingController {
             exit;
         }
     }
-    private function renameImagesToItemCode($itemId, $itemCode, $currentData, array $scope = ['rename_all' => true]) {
+    private function renameImagesToItemCode($itemId, $itemCode, $currentData) {
         global $inboundingModel;
-        $renameAll = !empty($scope['rename_all']);
-        $renameBase = $renameAll || !empty($scope['base']);
-        $allowedVarIds = null;
-        if (!$renameAll) {
-            $allowedVarIds = array_fill_keys($scope['variation_ids'] ?? [], true);
-        }
         $itemCode = strtolower($itemCode);
         // 1. Setup Directories
         $mainPhotoDir = __DIR__ . '/../uploads/products/';
         $altPhotoDir  = __DIR__ . '/../uploads/itm_img/';
 
-        $inboundRow = $inboundingModel->getInboundById((int) $itemId);
-        if (!$inboundRow) {
-            return;
-        }
-        $isBook = (string) ($inboundRow['group_name'] ?? '') === '-8';
+        $itemData = $inboundingModel->getform1data($itemId);
+        $isBook = (string) ($itemData['form1']['group_name'] ?? '') === '-8';
 
         // 2. Fetch Variations from DB
         $variations = $inboundingModel->getVariations($itemId);
@@ -916,8 +907,9 @@ class InboundingController {
             // CASE 1: Simple Product -> abc1234
             $baseName = $itemCode; 
         } elseif (!$isVariant && $hasVariations) {
-            // CASE 2: Parent + color/size variations — base gallery uses plain item code (variations get suffixes)
-            $baseName = $itemCode;
+            // CASE 2: Complex Product (Base with variations) -> abc1234-blue (use color/size from parent)
+            $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
+            $baseName = $itemCode . ($suffix ? '-' . $suffix : '');
         } else {
             // CASE 3 & 4: Variation -> abc1234-color
             $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
@@ -927,48 +919,48 @@ class InboundingController {
         // =================================================================
         // EXECUTION A: Rename Base Images (Variation ID -1 or 0)
         // =================================================================
-        if ($renameBase) {
-            $mainPhotoPath = $inboundRow['product_photo'] ?? '';
+        
+        // 1. Main product photo: book uses plain itemcode (…jpg); letters a,b,c… apply to gallery only.
+        $mainPhotoPath = $itemData['form1']['product_photo'] ?? ($itemData['form2']['product_photo'] ?? '');
+        
+        if (!empty($mainPhotoPath)) {
+            $this->processRename($mainPhotoPath, $mainPhotoDir, $baseName, $itemId, 'main', $inboundingModel, $isBook);
+        }
 
-            if (!empty($mainPhotoPath)) {
-                $this->processRename($mainPhotoPath, $mainPhotoDir, $baseName, $itemId, 'main', $inboundingModel, $isBook);
-            }
+        // 2. Rename Gallery Images (book: first gallery is always …a.jpg)
+        $baseImages = $inboundingModel->get_item_images_by_variation($itemId, -1);
+        if (empty($baseImages)) {
+            $baseImages = $inboundingModel->get_item_images_by_variation($itemId, 0);
+        }
 
-            $baseImages = $inboundingModel->get_item_images_by_variation($itemId, -1);
-            if (empty($baseImages)) {
-                $baseImages = $inboundingModel->get_item_images_by_variation($itemId, 0);
-            }
-
-            if (!empty($baseImages)) {
-                $this->renameGalleryImagesByDisplayOrder(
-                    $baseImages,
-                    $altPhotoDir,
-                    $baseName,
-                    $inboundingModel,
-                    $isBook,
-                    0
-                );
-            }
+        if (!empty($baseImages)) {
+            $this->renameGalleryImagesByDisplayOrder(
+                $baseImages,
+                $altPhotoDir,
+                $baseName,
+                $inboundingModel,
+                $isBook,
+                0
+            );
         }
 
         // =================================================================
-        // EXECUTION B: Rename Variations (all, or only IDs in scope)
+        // EXECUTION B: Rename Variations
         // =================================================================
         if ($hasVariations) {
             foreach ($variations as $var) {
-                $varId = (int) ($var['id'] ?? 0);
-                if (!$renameAll && $allowedVarIds !== null && !isset($allowedVarIds[$varId])) {
-                    continue;
-                }
-
+                
+                // Generate Suffix: abc1234-blue
                 $varSuffix = $this->getNamingSuffix($var['color'], $var['size']);
                 $varBaseName = $itemCode . ($varSuffix ? '-' . $varSuffix : '');
 
+                // 1. Variation main: book uses plain varBaseName; gallery gets …a, …b
                 if (!empty($var['variation_image'])) {
-                    $this->processRename($var['variation_image'], $mainPhotoDir, $varBaseName, $varId, 'variation_main', $inboundingModel, $isBook);
+                    $this->processRename($var['variation_image'], $mainPhotoDir, $varBaseName, $var['id'], 'variation_main', $inboundingModel, $isBook);
                 }
 
-                $varImages = $inboundingModel->get_item_images_by_variation($itemId, $varId);
+                // 2. Rename Variation Gallery Images
+                $varImages = $inboundingModel->get_item_images_by_variation($itemId, $var['id']);
                 if (!empty($varImages)) {
                     $this->renameGalleryImagesByDisplayOrder(
                         $varImages,
@@ -1176,20 +1168,18 @@ class InboundingController {
         return (bool) $ok;
     }
 
-    // --- HELPER 1: Suffix Logic (align with variation SKU: itemcode-size-color) ---
+    // --- HELPER 1: Suffix Logic (Color > Size) ---
     private function getNamingSuffix($color, $size) {
-        $fSize  = preg_replace('/\s+/', '-', strtolower(trim((string) $size)));
-        $fColor = preg_replace('/\s+/', '-', strtolower(trim((string) $color)));
-        if ($fSize !== '' && $fColor !== '') {
-            return $fSize . '-' . $fColor;
+        // Priority 1: Color
+        if (!empty($color)) {
+            // Lowercase and remove spaces (e.g. "Light Blue" -> "lightblue")
+            return strtolower(str_replace(' ', '', trim($color)));
         }
-        if ($fColor !== '') {
-            return $fColor;
+        // Priority 2: Size
+        if (!empty($size)) {
+            return strtolower(str_replace(' ', '', trim($size)));
         }
-        if ($fSize !== '') {
-            return $fSize;
-        }
-        return '';
+        return ''; // No suffix
     }
 
     // --- HELPER 2: File Renaming & DB Update ---
@@ -1275,246 +1265,11 @@ class InboundingController {
             @unlink($thumbPath);
         }
     }
-
-    /**
-     * Which image groups need rename on save (avoids renaming all 150+ files when one variation changed).
-     *
-     * @return array{rename_all:bool,base:bool,variation_ids:int[]}
-     */
-    private function desktopformSaveRenameScope(
-        array $form1,
-        string $itemCode,
-        string $isVariant,
-        array $postedVariations,
-        array $oldVariationsById
-    ): array {
-        $empty = ['rename_all' => false, 'base' => false, 'variation_ids' => []];
-        $itemCode = trim($itemCode);
-        if ($itemCode === '') {
-            return $empty;
-        }
-
-        $normVariant = static function ($v) {
-            return strtoupper(trim((string) $v)) === 'Y' ? 'Y' : 'N';
-        };
-
-        if (trim((string) ($form1['Item_code'] ?? '')) !== $itemCode) {
-            return ['rename_all' => true, 'base' => true, 'variation_ids' => []];
-        }
-        if ($normVariant($form1['is_variant'] ?? 'N') !== $normVariant($isVariant)) {
-            return ['rename_all' => true, 'base' => true, 'variation_ids' => []];
-        }
-        if (trim((string) ($form1['group_name'] ?? '')) !== trim((string) ($_POST['group_name'] ?? ''))) {
-            return ['rename_all' => true, 'base' => true, 'variation_ids' => []];
-        }
-        if (trim((string) ($form1['color'] ?? '')) !== trim((string) ($_POST['color'] ?? ''))
-            || trim((string) ($form1['size'] ?? '')) !== trim((string) ($_POST['size'] ?? ''))) {
-            return ['rename_all' => true, 'base' => true, 'variation_ids' => []];
-        }
-        if (trim((string) ($_POST['deleted_variation_ids_csv'] ?? '')) !== '') {
-            return ['rename_all' => true, 'base' => true, 'variation_ids' => []];
-        }
-
-        $renameBase = false;
-        $variationIds = [];
-
-        if (trim((string) ($_POST['delete_gallery_image_ids_csv'] ?? '')) !== '') {
-            $renameBase = true;
-        }
-        if (isset($_FILES['product_photo_main']) && ($_FILES['product_photo_main']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-            $renameBase = true;
-        }
-
-        if (!empty($_POST['clone_photo_from']) && is_array($_POST['clone_photo_from'])) {
-            foreach ($_POST['clone_photo_from'] as $targetKey => $sourceIdsRaw) {
-                if (!is_array($sourceIdsRaw) || empty($sourceIdsRaw)) {
-                    continue;
-                }
-                if (isset($postedVariations[$targetKey]['id']) && is_numeric($postedVariations[$targetKey]['id'])) {
-                    $variationIds[] = (int) $postedVariations[$targetKey]['id'];
-                } elseif (is_numeric($targetKey)) {
-                    $variationIds[] = (int) $targetKey;
-                } else {
-                    return ['rename_all' => true, 'base' => true, 'variation_ids' => []];
-                }
-            }
-        }
-
-        if (!empty($_FILES['variations']['error']) && is_array($_FILES['variations']['error'])) {
-            foreach ($_FILES['variations']['error'] as $key => $keyErr) {
-                if (!is_array($keyErr) || (($keyErr['photo'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK)) {
-                    continue;
-                }
-                if (strpos((string) $key, 'new_') === 0) {
-                    return ['rename_all' => true, 'base' => true, 'variation_ids' => []];
-                }
-                if (isset($postedVariations[$key]['id']) && is_numeric($postedVariations[$key]['id'])) {
-                    $variationIds[] = (int) $postedVariations[$key]['id'];
-                }
-            }
-        }
-
-        foreach ($postedVariations as $key => $var) {
-            if ($key === 0 || !is_array($var)) {
-                continue;
-            }
-            $varId = isset($var['id']) && is_numeric($var['id']) ? (int) $var['id'] : 0;
-            if ($varId <= 0 || strpos((string) $key, 'new_') === 0) {
-                return ['rename_all' => true, 'base' => true, 'variation_ids' => []];
-            }
-            $old = $oldVariationsById[$varId] ?? null;
-            if ($old === null) {
-                $variationIds[] = $varId;
-                continue;
-            }
-            if (trim((string) ($var['color'] ?? '')) !== trim((string) ($old['color'] ?? ''))
-                || trim((string) ($var['size'] ?? '')) !== trim((string) ($old['size'] ?? ''))) {
-                $variationIds[] = $varId;
-            }
-        }
-
-        return [
-            'rename_all' => false,
-            'base' => $renameBase,
-            'variation_ids' => array_values(array_unique(array_filter($variationIds))),
-        ];
-    }
-
-    private function resolveDesktopformSaveLogDir(): string
-    {
-        $candidates = [
-            dirname(__DIR__) . '/logs/desktopform_save',
-            sys_get_temp_dir() . '/exotic_desktopform_save',
-        ];
-        foreach ($candidates as $dir) {
-            if (!is_dir($dir)) {
-                @mkdir($dir, 0775, true);
-            }
-            if (is_dir($dir) && is_writable($dir)) {
-                return $dir;
-            }
-        }
-        return $candidates[count($candidates) - 1];
-    }
-
-    public static function pingDesktopformSaveEntry(string $phase, array $extra = []): void
-    {
-        $id = (int) ($_GET['id'] ?? 0);
-        $root = dirname(__DIR__);
-        $dirs = [
-            $root . '/logs/desktopform_save',
-            sys_get_temp_dir() . '/exotic_desktopform_save',
-        ];
-        $payload = array_merge([
-            'phase' => $phase,
-            'inbound_id' => $id,
-            'save_action' => (string) ($_POST['save_action'] ?? ''),
-            'content_length' => (int) ($_SERVER['CONTENT_LENGTH'] ?? 0),
-            'memory_mb' => round(memory_get_usage(true) / 1048576, 2),
-        ], $extra);
-        $line = '[' . date('Y-m-d H:i:s') . '] ' . json_encode($payload, JSON_UNESCAPED_SLASHES) . "\n";
-        error_log('[desktopform_save] ' . trim($line));
-
-        foreach ($dirs as $dir) {
-            if (!is_dir($dir)) {
-                @mkdir($dir, 0775, true);
-            }
-            if (!is_dir($dir) || !is_writable($dir)) {
-                continue;
-            }
-            @file_put_contents($dir . '/entry_' . date('Y-m-d') . '.log', $line, FILE_APPEND | LOCK_EX);
-            @file_put_contents($dir . '/save_' . date('Y-m-d') . '.log', $line, FILE_APPEND | LOCK_EX);
-        }
-    }
-
-    private function registerDesktopformSaveShutdown(array &$profile): void
-    {
-        register_shutdown_function(function () use (&$profile) {
-            $err = error_get_last();
-            $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
-            $meta = [
-                'shutdown' => true,
-                'last_step' => !empty($profile['steps'])
-                    ? $profile['steps'][count($profile['steps']) - 1]['step']
-                    : 'none',
-                'step_count' => count($profile['steps'] ?? []),
-                'peak_memory_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
-            ];
-            if ($err && in_array($err['type'], $fatalTypes, true)) {
-                $meta['fatal'] = $err['message'] . ' in ' . $err['file'] . ':' . $err['line'];
-            }
-            if (!empty($profile['inbound_id'])) {
-                self::pingDesktopformSaveEntry('shutdown', $meta);
-            }
-        });
-    }
-
-    private function createDesktopformSaveProfiler(int $inboundId): array
-    {
-        $logDir = $this->resolveDesktopformSaveLogDir();
-        $now = microtime(true);
-        return [
-            'inbound_id' => $inboundId,
-            'started_at' => $now,
-            'last_at' => $now,
-            'steps' => [],
-            'log_dir' => $logDir,
-            'log_file' => $logDir . '/save_' . date('Y-m-d') . '.log',
-        ];
-    }
-
-    private function logDesktopformSaveStep(array &$profile, string $step, array $meta = []): void
-    {
-        $now = microtime(true);
-        $stepMs = round(($now - $profile['last_at']) * 1000, 2);
-        $totalMs = round(($now - $profile['started_at']) * 1000, 2);
-        $profile['last_at'] = $now;
-        $profile['steps'][] = [
-            'step' => $step,
-            'step_ms' => $stepMs,
-            'total_ms' => $totalMs,
-            'meta' => $meta,
-        ];
-
-        $metaStr = $meta === [] ? '' : ' meta=' . json_encode($meta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $line = sprintf(
-            "[%s] inbound_id=%d save_action=%s step=%s step_ms=%.2f total_ms=%.2f%s\n",
-            date('Y-m-d H:i:s'),
-            $profile['inbound_id'],
-            (string) ($_POST['save_action'] ?? ''),
-            $step,
-            $stepMs,
-            $totalMs,
-            $metaStr
-        );
-        $written = @file_put_contents($profile['log_file'], $line, FILE_APPEND | LOCK_EX);
-        $tmpDir = sys_get_temp_dir() . '/exotic_desktopform_save';
-        if (!is_dir($tmpDir)) {
-            @mkdir($tmpDir, 0775, true);
-        }
-        @file_put_contents($tmpDir . '/save_' . date('Y-m-d') . '.log', $line, FILE_APPEND | LOCK_EX);
-        if ($written === false) {
-            error_log('[desktopform_save] write failed dir=' . ($profile['log_dir'] ?? '') . ' step=' . $step . trim($line));
-        }
-    }
-
-    private function finishDesktopformSaveProfile(array &$profile, string $status, array $meta = []): void
-    {
-        $meta['step_count'] = count($profile['steps']);
-        $this->logDesktopformSaveStep($profile, 'complete_' . $status, $meta);
-    }
-
     public function updatedesktopform() {
         global $inboundingModel;
-        self::pingDesktopformSaveEntry('controller_enter');
-        @set_time_limit(300);
-        @ini_set('max_execution_time', '300');
-        @ini_set('memory_limit', '512M');
-
         // 1. Setup & Checks
         $id = (int) ($_GET['id'] ?? 0);
         if ($id <= 0) {
-            self::pingDesktopformSaveEntry('invalid_id');
             echo "Invalid record.";
             exit;
         }
@@ -1523,31 +1278,9 @@ class InboundingController {
             exit;
         }
 
-        $profile = $this->createDesktopformSaveProfiler($id);
-        $this->registerDesktopformSaveShutdown($profile);
-        $this->logDesktopformSaveStep($profile, 'request_start', [
-            'log_dir' => $profile['log_dir'],
-            'log_file' => $profile['log_file'],
-            'memory_mb' => round(memory_get_usage(true) / 1048576, 2),
-            'post_field_count' => is_array($_POST) ? count($_POST, COUNT_RECURSIVE) : 0,
-        ]);
+        $oldData = $inboundingModel->getform1data($id);
 
-        $oldData = $inboundingModel->getform1data($id, false);
-        $this->logDesktopformSaveStep($profile, 'getform1data');
-
-        if (!$oldData || empty($oldData['form1'])) {
-            $this->finishDesktopformSaveProfile($profile, 'not_found');
-            echo "Record not found.";
-            exit;
-        }
-
-        $oldVariationsById = [];
-        foreach ($inboundingModel->getVariations($id) as $ov) {
-            $oldVariationsById[(int) $ov['id']] = $ov;
-        }
-        $this->logDesktopformSaveStep($profile, 'load_old_variations', [
-            'variation_count' => count($oldVariationsById),
-        ]);
+        if (!$oldData) { echo "Record not found."; exit; }
 
         // Gallery deletions first (single CSV field avoids PHP max_input_vars dropping many delete_gallery_image_ids[] fields on large forms)
         $delCsv = trim((string) ($_POST['delete_gallery_image_ids_csv'] ?? ''));
@@ -1562,11 +1295,6 @@ class InboundingController {
                 $inboundingModel->delete_image_for_item((int) $delId, $id);
             }
         }
-        $this->logDesktopformSaveStep($profile, 'gallery_deletions', [
-            'deleted_count' => $delCsv !== ''
-                ? count(array_filter(array_map('intval', explode(',', $delCsv))))
-                : (is_array($_POST['delete_gallery_image_ids'] ?? null) ? count($_POST['delete_gallery_image_ids']) : 0),
-        ]);
 
         // --- Main Invoice File Upload Logic ---
         $invoicePath = $oldData['form1']['invoice_image'] ?? '';
@@ -1581,9 +1309,6 @@ class InboundingController {
                 }
             }
         }
-        $this->logDesktopformSaveStep($profile, 'invoice_upload', [
-            'uploaded' => isset($_FILES['invoice_image']) && ($_FILES['invoice_image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK,
-        ]);
 
         // 1. Capture Inputs — vp_inbound.is_variant is ENUM('Y','N'); empty/invalid POST causes "Data truncated".
         $postedVariant = isset($_POST['is_variant']) ? strtoupper(trim((string) $_POST['is_variant'])) : '';
@@ -1594,6 +1319,7 @@ class InboundingController {
             $postedVariant = 'N';
         }
         $is_variant = $postedVariant;
+        $shouldRename = false;
 
         if (($oldData['form1']['is_variant'] ?? '') == 'Y') {
             if ($is_variant !== ($oldData['form1']['is_variant'] ?? '')) {
@@ -1609,6 +1335,11 @@ class InboundingController {
         // --- SKU GENERATION ---
         $size  = trim($_POST['size'] ?? '');
         $color = trim($_POST['color'] ?? '');
+
+        // Always rename on every save so gallery filenames stay in sync with display_order.
+        if (!empty($item_code)) {
+            $shouldRename = true;
+        }
 
         $generated_sku = '';
         if ($is_variant === 'N') {
@@ -1635,7 +1366,7 @@ class InboundingController {
         $day_val     = ($back_order_input == '1') ? (!empty($_POST['backorder_day'])     ? intval($_POST['backorder_day'])     : 0) : 0;
 
         // --- Main Photo Upload ---
-        $mainProductPhoto = $_POST['old_product_photo_main'] ?? ($oldData['form1']['product_photo'] ?? ''); 
+        $mainProductPhoto = $_POST['old_product_photo_main'] ?? ($oldData['form2']['product_photo'] ?? ''); 
         if (isset($_FILES['product_photo_main']) && $_FILES['product_photo_main']['error'] === UPLOAD_ERR_OK) {
             $tmpName = $_FILES['product_photo_main']['tmp_name'];
             $name    = $_FILES['product_photo_main']['name'];
@@ -1649,10 +1380,7 @@ class InboundingController {
                 }
             }
         }
-        $this->logDesktopformSaveStep($profile, 'main_photo_upload', [
-            'uploaded' => isset($_FILES['product_photo_main']) && ($_FILES['product_photo_main']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK,
-        ]);
-
+        
         // Search String Logic
         $s_group   = $_POST['search_group'] ?? '';
         $s_cat_arr = $_POST['search_cat'] ?? [];
@@ -1730,17 +1458,9 @@ class InboundingController {
             'language' => $_POST['language'] ?? '',
             'pages'    => trim((string)($_POST['pages'] ?? '')) === '' ? null : (int) $_POST['pages'],
         ];
-        $this->logDesktopformSaveStep($profile, 'prepare_inbound_data', [
-            'item_code' => $item_code,
-            'is_variant' => $is_variant,
-        ]);
-
+        
         // 4. Update Main Record
         $result = $inboundingModel->updatedesktopform($id, $data);
-        $this->logDesktopformSaveStep($profile, 'update_vp_inbound', [
-            'success' => !empty($result['success']),
-            'message' => $result['message'] ?? '',
-        ]);
 
         // --- VARIATIONS LOGIC ---
         $allVariations = $_POST['variations'] ?? [];
@@ -1771,14 +1491,7 @@ class InboundingController {
             }
         }
         unset($variant);
-        $this->logDesktopformSaveStep($profile, 'variation_photo_uploads', [
-            'variation_count' => is_array($allVariations) ? count($allVariations) : 0,
-            'uploaded_count' => count(array_filter($variationPhotoUploaded)),
-        ]);
         $inboundingModel->saveVariations($id, $allVariations, $item_code, $deletedVariationIds);
-        $this->logDesktopformSaveStep($profile, 'save_variations', [
-            'deleted_variation_count' => count($deletedVariationIds),
-        ]);
 
         // 4b. For cloned/new rows inheriting old_photo, create a dedicated copy of the main variation image.
         // This prevents multiple variations sharing one file path which can disappear after rename workflows.
@@ -1805,23 +1518,13 @@ class InboundingController {
 
             $this->duplicateVariationMainImageFile($id, $varId, $currentPhoto);
         }
-        $this->logDesktopformSaveStep($profile, 'duplicate_variation_main_images');
 
         // 5. Update Image Order & Assignment
-        $photoVariationCount = isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])
-            ? count($_POST['photo_variation'])
-            : 0;
-        if ($photoVariationCount > 0) {
-            $batchOk = $inboundingModel->update_image_variations_batch($id, $_POST['photo_variation']);
-            if (!$batchOk) {
-                foreach ($_POST['photo_variation'] as $img_id => $var_id) {
-                    $inboundingModel->update_image_variation($img_id, $var_id);
-                }
+        if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
+            foreach ($_POST['photo_variation'] as $img_id => $var_id) {
+                $inboundingModel->update_image_variation($img_id, $var_id);
             }
         }
-        $this->logDesktopformSaveStep($profile, 'photo_variation_updates', [
-            'image_count' => $photoVariationCount,
-        ]);
 
         // 6. Duplicate gallery images for cloned variation cards.
         // Frontend sends clone_photo_from[new_key_or_id][] = source_image_id
@@ -1851,77 +1554,45 @@ class InboundingController {
                 $this->cloneVariationGalleryImages($id, $targetVariationId, $sourceIds);
             }
         }
-        $this->logDesktopformSaveStep($profile, 'clone_variation_gallery', [
-            'clone_target_count' => is_array($cloneMap) ? count($cloneMap) : 0,
-        ]);
 
         // Run orphan cleanup only when variations were explicitly removed in this save.
         if (!empty($deletedVariationIds)) {
             $inboundingModel->deleteOrphanVariationGalleryImages($id);
         }
-        $this->logDesktopformSaveStep($profile, 'orphan_gallery_cleanup', [
-            'ran' => !empty($deletedVariationIds),
-        ]);
 
         if ($result['success']) {
             
             // =========================================================
             // START: ADVANCED RENAMING LOGIC (4 CASES)
             // =========================================================
-            $renameScope = $this->desktopformSaveRenameScope(
-                $oldData['form1'] ?? [],
-                $item_code,
-                $is_variant,
-                $allVariations,
-                $oldVariationsById
-            );
-            $saveAction = (string) ($_POST['save_action'] ?? '');
-            // Publish flow saves with save_action=generate first — must rename all variation images for API
-            if ($saveAction === 'generate') {
-                $renameScope = ['rename_all' => true, 'base' => true, 'variation_ids' => []];
-            }
-            $shouldRename = !empty($renameScope['rename_all'])
-                || !empty($renameScope['base'])
-                || !empty($renameScope['variation_ids']);
-            $this->logDesktopformSaveStep($profile, 'rename_check', [
-                'should_rename' => $shouldRename,
-                'save_action' => $saveAction,
-                'rename_all' => !empty($renameScope['rename_all']),
-                'rename_base' => !empty($renameScope['base']),
-                'rename_variation_count' => count($renameScope['variation_ids']),
-                'has_item_code' => $item_code !== '',
-            ]);
             if (!empty($item_code) && $shouldRename) {
+                // Pass current POST data to helper so we use fresh color/size values
+                // $currentDataForRename = [
+                //     'is_variant' => $is_variant,
+                //     'color'      => $_POST['color'] ?? '',
+                //     'size'       => $_POST['size'] ?? ''
+                // ];
                 $this->ensureImagesAreRenamed(
-                    $id,
-                    $item_code,
-                    $is_variant,
-                    $_POST['color'] ?? '',
-                    $_POST['size'] ?? '',
-                    $renameScope
+                    $id, 
+                    $item_code, 
+                    $is_variant, 
+                    $_POST['color'] ?? '', 
+                    $_POST['size'] ?? ''
                 );
-                $this->logDesktopformSaveStep($profile, 'ensure_images_renamed');
             }
             // =========================================================
             
             $logData = ['userid_log' => $_POST['userid_log'] ?? '', 'i_id' => $id, 'stat' => 'Data Entry'];
             $inboundingModel->stat_logs($logData);
-            $this->logDesktopformSaveStep($profile, 'stat_logs');
 
             $action_clicked = $_POST['save_action'] ?? '';
-            $redirect = ($action_clicked === 'draft')
-                ? base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved')
-                : base_url('?page=inbounding&action=list');
-            $this->finishDesktopformSaveProfile($profile, 'success', [
-                'redirect' => $redirect,
-                'peak_memory_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
-            ]);
-            header('Location: ' . $redirect);
+            if ($action_clicked === 'draft') {
+                header("location: " . base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved'));
+            } else {
+                header("location: " . base_url('?page=inbounding&action=list'));
+            }
             exit;
         } else {
-            $this->finishDesktopformSaveProfile($profile, 'db_update_failed', [
-                'message' => $result['message'] ?? '',
-            ]);
             echo "Update failed: " . $result['message'];
         }
     }
@@ -2239,18 +1910,20 @@ class InboundingController {
         $inboundingModel->update_variation_photo($variationId, 'uploads/products/' . $newName);
     }
 
-    private function ensureImagesAreRenamed($id, $item_code, $is_variant, $color = '', $size = '', array $scope = ['rename_all' => true]) {
-        if (empty($item_code)) {
-            return;
-        }
+    private function ensureImagesAreRenamed($id, $item_code, $is_variant, $color = '', $size = '') {
+        
+        if (empty($item_code)) return;
 
+        // Prepare the naming context
         $currentDataForRename = [
             'is_variant' => $is_variant,
             'color'      => $color,
-            'size'       => $size,
+            'size'       => $size
         ];
 
-        $this->renameImagesToItemCode($id, $item_code, $currentDataForRename, $scope);
+        // Call your existing renaming logic
+        // This ensures that even if renaming was skipped before, it happens now
+        $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
     }
 
     
@@ -2354,21 +2027,12 @@ class InboundingController {
             ]);
             exit;
         }
-        $publishRow = $data1['data'];
-        $renameColor = $publishRow['color'] ?? '';
-        $renameSize = $publishRow['size'] ?? '';
-        // Parent + vp_variations: base gallery filenames use plain item code (not parent color/size)
-        if (($publishRow['is_variant'] ?? 'N') === 'N' && !empty($publishRow['var_rows'])) {
-            $renameColor = '';
-            $renameSize = '';
-        }
         $this->ensureImagesAreRenamed(
-            $id,
-            $publishRow['Item_code'],
-            $publishRow['is_variant'],
-            $renameColor,
-            $renameSize,
-            ['rename_all' => true, 'base' => true, 'variation_ids' => []]
+            $id, 
+            $data1['data']['Item_code'], 
+            $data1['data']['is_variant'], 
+            $data1['data']['color'] ?? '', 
+            $data1['data']['size'] ?? ''
         );
         $data = $inboundingModel->getpublishdata($id);
         if (!is_array($data) || !isset($data['data']) || !is_array($data['data'])) {
