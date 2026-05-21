@@ -60,7 +60,6 @@
                             <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">ID</th>
                             <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Full Name</th>
                             <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email Address</th>
-                            <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Phone Number</th>
                             <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Role</th>
                             <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Teams</th>
                              <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Warehouse</th>
@@ -79,7 +78,6 @@
                                     <td class="px-6 py-4 whitespace-nowrap"><?= $item["id"] ?></td>
                                     <td class="px-6 py-4 whitespace-nowrap"><?= $item['name']; ?></td>
                                     <td class="px-6 py-4 whitespace-nowrap"><?= $item['email']; ?></td>
-                                    <td class="px-6 py-4 whitespace-nowrap"><?= $item['phone']; ?></td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span style="width: 145px; height: 25px; padding:15px 0px 15px 0px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white">
                                             <?php foreach ($roles_list as $role):
