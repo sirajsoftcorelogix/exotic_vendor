@@ -289,7 +289,12 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
-        $vendorApis = $this->vendorReferenceCache()->getDesktopformRefs(false);
+        try {
+            $vendorApis = $this->vendorReferenceCache()->getDesktopformRefs(false);
+        } catch (Throwable $e) {
+            error_log('desktopform vendor refs: ' . $e->getMessage());
+            $vendorApis = ['gecolormaps' => false, 'optionals_data' => false];
+        }
         $data['form2']['gecolormaps'] = $vendorApis['gecolormaps'];
         $data['form2']['optionals_data'] = $vendorApis['optionals_data'];
         $data['images'] = $inboundingModel->getitem_imgs($id);
