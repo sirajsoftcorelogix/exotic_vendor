@@ -1371,7 +1371,19 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                    value="<?php echo !empty($data['form2']['invoice_no']) ? $data['form2']['invoice_no'] : ''; ?>">
                         </div>
                         <div class="w-full">
-                            <label class="block text-xs font-bold text-[#222] mb-[5px]" for="vendor_code">Vendor:</label>
+                            <div class="flex items-center gap-1.5 mb-[5px]">
+                                <label class="text-xs font-bold text-[#222]" for="vendor_code">Vendor:</label>
+                                <button type="button"
+                                        id="vendor-cache-sync-btn"
+                                        class="inline-flex items-center justify-center w-6 h-6 rounded border border-[#ccc] bg-white text-[#555] hover:border-[#d97824] hover:text-[#d97824] transition-colors"
+                                        title="Refresh vendors from catalog">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M12 20h9"></path>
+                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                    </svg>
+                                    <span class="sr-only">Refresh vendors</span>
+                                </button>
+                            </div>
                             <select name="vendor_code" id="vendor_code" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Vendor...">
                                 <option value="">Select Vendor</option>
                                 <?php foreach ($data['vendors'] as $key4 => $value4) {
@@ -2554,6 +2566,91 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+(function () {
+    var SPIN = '<svg class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+
+    function notify(icon, title, body, asHtml) {
+        if (typeof Swal === 'undefined') {
+            alert(title + (body ? ': ' + String(body).replace(/<[^>]+>/g, '') : ''));
+            return;
+        }
+        var opts = { icon: icon, title: title };
+        opts[asHtml ? 'html' : 'text'] = body || '';
+        Swal.fire(opts);
+    }
+
+    window.bindDesktopCacheSync = function (btnId, cfg) {
+        var btn = document.getElementById(btnId);
+        if (!btn || !cfg || !cfg.url) return;
+
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            var run = function () {
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.classList.add('opacity-60', 'cursor-wait');
+                btn.innerHTML = SPIN;
+
+                fetch(cfg.url, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                })
+                    .then(function (res) {
+                        return res.json().then(function (data) {
+                            return { ok: res.ok, data: data };
+                        }).catch(function () {
+                            return { ok: false, data: {} };
+                        });
+                    })
+                    .then(function (payload) {
+                        var data = payload.data || {};
+                        if (!cfg.isOk(payload, data)) {
+                            notify('error', cfg.failTitle || 'Refresh failed', cfg.message(false, data), !!cfg.htmlMessage);
+                            return;
+                        }
+                        var after = cfg.afterSync ? cfg.afterSync(data) : null;
+                        return Promise.resolve(after).then(
+                            function () {
+                                notify('success', cfg.successTitle || 'Refreshed', cfg.message(true, data), !!cfg.htmlMessage);
+                            },
+                            function () {
+                                notify('warning', cfg.warnTitle || cfg.successTitle || 'Refreshed', cfg.warnMessage || 'Saved, but the form could not reload.', !!cfg.htmlMessage);
+                            }
+                        );
+                    })
+                    .catch(function (err) {
+                        notify('error', cfg.failTitle || 'Refresh failed', (err && err.message) || 'Network error.');
+                    })
+                    .finally(function () {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-60', 'cursor-wait');
+                        btn.innerHTML = orig;
+                    });
+            };
+
+            if (typeof Swal === 'undefined') {
+                if (window.confirm(cfg.confirmTitle || 'Refresh from catalog?')) run();
+                return;
+            }
+            Swal.fire({
+                title: cfg.confirmTitle || 'Refresh?',
+                html: cfg.confirmHtml || '',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Refresh now',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#d97824',
+            }).then(function (result) {
+                if (result.isConfirmed) run();
+            });
+        });
+    };
+})();
+</script>
+<script>
     function resetPublishPopup() {
         const idle = document.getElementById('publishConfirmIdle');
         const busy = document.getElementById('publishConfirmBusy');
@@ -3509,7 +3606,6 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Get PHP Data into JS
     let colorMapDB = <?php echo json_encode($colorMapData); ?>;
-    const vendorRefSyncUrl = <?php echo json_encode(base_url('?page=inbounding&action=syncVendorReferenceCache&format=json')); ?>;
     // 2. Function to determine the key (jewelry/textiles) from the Group Name
     function getColorMapKey() {
         const groupSelect = document.getElementById('group_select');
@@ -3588,101 +3684,43 @@ document.addEventListener('DOMContentLoaded', function() {
     // 5. Initial Run
     updateAllColorMaps();
 
-    const colormapSyncBtn = document.getElementById('colormap-cache-sync-btn');
-    if (colormapSyncBtn) {
-        colormapSyncBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (typeof Swal === 'undefined') {
-                if (window.confirm('Refresh color maps and optionals from the catalog API?')) {
-                    runVendorReferenceCacheSync(colormapSyncBtn);
-                }
-                return;
-            }
-            Swal.fire({
-                title: 'Refresh catalog data?',
-                html: 'This updates <strong>color maps</strong> and <strong>optionals</strong> from Exotic India and reloads the Color Map dropdowns on this form.',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Refresh now',
-                cancelButtonText: 'Cancel',
-                confirmButtonColor: '#d97824',
-            }).then(function(result) {
-                if (result.isConfirmed) {
-                    runVendorReferenceCacheSync(colormapSyncBtn);
-                }
-            });
-        });
-    }
-
-    function runVendorReferenceCacheSync(btn) {
-        const originalHtml = btn.innerHTML;
-        btn.disabled = true;
-        btn.classList.add('opacity-60', 'cursor-wait');
-        btn.innerHTML = '<svg class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-
-        fetch(vendorRefSyncUrl, {
-            method: 'GET',
-            credentials: 'include',
-            headers: { 'Accept': 'application/json' },
-        })
-            .then(function(res) {
-                return res.json().then(function(data) {
-                    return { ok: res.ok, data: data };
-                }).catch(function() {
-                    return { ok: false, data: null };
+    bindDesktopCacheSync('colormap-cache-sync-btn', {
+        url: <?php echo json_encode(base_url('?page=inbounding&action=syncVendorReferenceCache&format=json')); ?>,
+        confirmTitle: 'Refresh catalog data?',
+        confirmHtml: 'Updates <strong>color maps</strong> and <strong>optionals</strong> from Exotic India.',
+        isOk: function (p, d) { return p.ok && d.ok === true; },
+        afterSync: function (d) {
+            if (d.refs && d.refs.gecolormaps && d.refs.gecolormaps.colormaps) {
+                colorMapDB = d.refs.gecolormaps.colormaps;
+                document.querySelectorAll('.colormap-select').forEach(function (s) {
+                    s.removeAttribute('data-loaded-key');
                 });
-            })
-            .then(function(payload) {
-                const data = payload.data || {};
-                const syncOk = payload.ok && data.ok === true;
-
-                if (syncOk && data.refs && data.refs.gecolormaps && data.refs.gecolormaps.colormaps) {
-                    colorMapDB = data.refs.gecolormaps.colormaps;
-                    document.querySelectorAll('.colormap-select').forEach(function(select) {
-                        select.removeAttribute('data-loaded-key');
-                    });
-                    updateAllColorMaps();
-                }
-
-                const resultLines = [];
-                if (data.results) {
-                    Object.keys(data.results).forEach(function(key) {
-                        const row = data.results[key];
-                        resultLines.push(key + ': ' + (row.ok ? 'OK' : ('Failed — ' + (row.error || 'unknown'))));
+                updateAllColorMaps();
+            }
+        },
+        successTitle: 'Catalog data refreshed',
+        failTitle: 'Refresh failed',
+        htmlMessage: true,
+        message: function (ok, d) {
+            if (!ok) {
+                var fail = [];
+                if (d.results) {
+                    Object.keys(d.results).forEach(function (k) {
+                        var r = d.results[k];
+                        fail.push(k + ': ' + (r.ok ? 'OK' : ('Failed — ' + (r.error || 'unknown'))));
                     });
                 }
-                const detail = resultLines.length ? resultLines.join('<br>') : '';
-
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: syncOk ? 'success' : 'error',
-                        title: syncOk ? 'Catalog data refreshed' : 'Refresh failed',
-                        html: syncOk
-                            ? ('Color map lists were updated.' + (detail ? '<br><br><span class="text-xs text-gray-600">' + detail + '</span>' : ''))
-                            : (detail || 'Could not refresh catalog data. Please try again.'),
-                    });
-                } else {
-                    alert(syncOk ? 'Catalog data refreshed.' : 'Refresh failed.');
-                }
-            })
-            .catch(function(err) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Refresh failed',
-                        text: err && err.message ? err.message : 'Network error while refreshing catalog data.',
-                    });
-                } else {
-                    alert('Refresh failed.');
-                }
-            })
-            .finally(function() {
-                btn.disabled = false;
-                btn.classList.remove('opacity-60', 'cursor-wait');
-                btn.innerHTML = originalHtml;
-            });
-    }
+                return fail.length ? fail.join('<br>') : 'Could not refresh catalog data.';
+            }
+            var okLines = [];
+            if (d.results) {
+                Object.keys(d.results).forEach(function (k) {
+                    okLines.push(k + ': ' + (d.results[k].ok ? 'OK' : 'Failed'));
+                });
+            }
+            return 'Color map lists were updated.' + (okLines.length ? '<br><span class="text-xs text-gray-600">' + okLines.join('<br>') + '</span>' : '');
+        },
+    });
 });
 </script>
 <script>
@@ -4274,13 +4312,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 document.addEventListener('DOMContentLoaded', function() {
-    
-    // Function to fetch vendors based on selected group by Hedayat
     function updateVendorListBasedOnGroup() {
         const groupSelect = document.getElementById('group_select');
         const vendorSelect = document.getElementById('vendor_code');
         
         if (!groupSelect || !vendorSelect) return;
+
+        const savedVendor = vendorSelect.tomselect
+            ? vendorSelect.tomselect.getValue()
+            : vendorSelect.value;
 
         // Get the selected group value
         let groupValue = '';
@@ -4293,12 +4333,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!groupValue) {
             // Reset vendor list if no group selected
             vendorSelect.innerHTML = '<option value="">Select Vendor</option>';
-            return;
+            if (vendorSelect.tomselect) {
+                vendorSelect.tomselect.clearOptions();
+                vendorSelect.tomselect.addOption({ value: '', text: 'Select Vendor' });
+                vendorSelect.tomselect.setValue('', true);
+            }
+            return Promise.resolve();
         }
 
         // Call the API to fetch vendors for this group
-        fetch(`index.php?page=vendors&action=getAllVendors&groupname=${encodeURIComponent(groupValue)}`, {
+        return fetch(`index.php?page=vendors&action=getAllVendors&groupname=${encodeURIComponent(groupValue)}`, {
             method: 'GET',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json'
             }
@@ -4314,9 +4360,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check if data contains vendors
             if (data) {
                 const vendors = data || [];
-                //console.log('Fetched Vendors:', vendors); // Debug log
                 if (Array.isArray(vendors) && vendors.length > 0) {
-                    // Add vendor options
                     vendors.forEach(vendor => {
                         const vendorValue = String(vendor.id ?? vendor.vendor_id ?? '').trim();
                         if (!vendorValue) return;
@@ -4324,12 +4368,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         option.value = vendorValue;
                         option.textContent = vendor.vendor_name;
                         vendorSelect.appendChild(option);
-                        //console.log('options:', option);
                     });
                      
-                    // If TomSelect is initialized, refresh it
                     if (vendorSelect.tomselect) {
                         vendorSelect.tomselect.clearOptions();
+                        vendorSelect.tomselect.addOption({ value: '', text: 'Select Vendor' });
                         vendors.forEach(vendor => {
                             const vendorValue = String(vendor.id ?? vendor.vendor_id ?? '').trim();
                             if (!vendorValue) return;
@@ -4338,10 +4381,21 @@ document.addEventListener('DOMContentLoaded', function() {
                                 text: vendor.vendor_name
                             });
                         });
+                        if (savedVendor && vendorSelect.tomselect.options[savedVendor]) {
+                            vendorSelect.tomselect.setValue(savedVendor, true);
+                        } else {
+                            vendorSelect.tomselect.setValue('', true);
+                        }
+                    } else if (savedVendor) {
+                        vendorSelect.value = savedVendor;
                     }
-                   
                 } else {
                     vendorSelect.innerHTML = '<option value="">No vendors found</option>';
+                    if (vendorSelect.tomselect) {
+                        vendorSelect.tomselect.clearOptions();
+                        vendorSelect.tomselect.addOption({ value: '', text: 'No vendors found' });
+                        vendorSelect.tomselect.setValue('', true);
+                    }
                 }
             } else {
                 vendorSelect.innerHTML = '<option value="">No vendors available</option>';
@@ -4350,19 +4404,31 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             console.error('Error fetching vendors:', error);
             vendorSelect.innerHTML = '<option value="">Error loading vendors</option>';
+            throw error;
         });
     }
 
-    // Expose function globally so it can be called from other scripts
-    //window.updateVendorListBasedOnGroup = updateVendorListBasedOnGroup;
+    window.updateVendorListBasedOnGroup = updateVendorListBasedOnGroup;
 
-    //Hook into the group select change event
-    const groupSelect = document.getElementById('group_select');
+    bindDesktopCacheSync('vendor-cache-sync-btn', {
+        url: <?php echo json_encode(base_url('index.php?page=vendors&action=fetchAllVendors')); ?>,
+        confirmTitle: 'Refresh vendor list?',
+        confirmHtml: 'Syncs vendors from Exotic India (same as <strong>Vendors → Sync from API</strong>).',
+        isOk: function (p, d) { return p.ok && d.success === true && d.status !== 'error'; },
+        afterSync: function () { return updateVendorListBasedOnGroup(); },
+        successTitle: 'Vendors refreshed',
+        failTitle: 'Vendor refresh failed',
+        warnTitle: 'Vendors synced',
+        warnMessage: 'Database updated, but the dropdown could not refresh. Change group or reload the page.',
+        message: function (ok, d) {
+            if (!ok) return d.message || 'Could not sync vendors from the catalog API.';
+            return 'Inserted: ' + (d.inserted || 0) + ', Updated: ' + (d.updated || 0) + ', Total: ' + (d.total || 0) + '.';
+        },
+    });
+
+    var groupSelect = document.getElementById('group_select');
     if (groupSelect) {
         groupSelect.addEventListener('change', updateVendorListBasedOnGroup);
-        // if (groupSelect.tomselect) {
-        //     groupSelect.tomselect.on('change', updateVendorListBasedOnGroup);
-        // }
     }
 });
 
