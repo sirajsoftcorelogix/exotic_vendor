@@ -45,7 +45,7 @@
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <style>
     body {
-        overflow: hidden; /* Crucial Fix */
+        overflow-x: hidden;
     }
     .draggable-item {
         user-select: none;
@@ -111,6 +111,24 @@
     /* Dimension Input Style */
     .dim-input { transition: border-color 0.2s; }
     .dim-input:focus { border-color: #d97824 !important; }
+
+    /* Desktop form modals — keep hidden until opened (avoids Tailwind hidden/flex FOUC) */
+    #publishConfirmPopup,
+    #imagePopup,
+    #deleteConfirmPopup,
+    #materialModal {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+    #publishConfirmPopup.desktop-overlay-visible,
+    #imagePopup.desktop-overlay-visible,
+    #deleteConfirmPopup.desktop-overlay-visible,
+    #materialModal.desktop-overlay-visible {
+        display: flex !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+    }
 </style>
 <?php
 $record_id = $_GET['id'] ?? '';
@@ -123,7 +141,8 @@ $sizeOptions = [
     'XXL'  => 'Extra Extra Large (XXL)(44)',
     'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
 ];
-$colorMapData = $data['form2']['gecolormaps']['colormaps'] ?? [];
+$gecolormapsRef = $data['form2']['gecolormaps'] ?? [];
+$colorMapData = (is_array($gecolormapsRef) && isset($gecolormapsRef['colormaps'])) ? $gecolormapsRef['colormaps'] : [];
 function renderColorMapField($fieldName, $savedValue, $customClass = "", $showSyncIcon = false) {
     $labelHtml = '<label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>';
     if ($showSyncIcon) {
@@ -1596,7 +1615,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
     </form>
 </div>
-<div id="publishConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[80]">
+<div id="publishConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 justify-center items-center z-[80]" style="display:none!important;visibility:hidden!important;pointer-events:none!important" aria-hidden="true">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[420px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
         <div id="publishConfirmIdle">
             <h3 class="text-lg font-bold mb-2 text-gray-800">Publish product</h3>
@@ -1610,7 +1629,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <button type="button" id="publishCancelBtn" onclick="closePublishPopup()" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
             </div>
         </div>
-        <div id="publishConfirmBusy" class="hidden flex flex-col items-center gap-3 py-2">
+        <div id="publishConfirmBusy" class="hidden flex-col items-center gap-3 py-2">
             <svg class="animate-spin h-10 w-10 text-[#28a745]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -1620,7 +1639,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
     </div>
 </div>
-<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-80 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup(event)">
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-80 justify-center items-center z-[100]" style="display:none!important;visibility:hidden!important;pointer-events:none!important" aria-hidden="true" onclick="closeImagePopup(event)">
     <div class="bg-white p-2 rounded-md w-auto max-w-[95vw] max-h-[95vh] relative flex flex-col items-center shadow-2xl" onclick="event.stopPropagation();">
         
         <button onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-600 hover:bg-red-700 text-white w-8 h-8 flex items-center justify-center rounded-full text-sm shadow-md border-2 border-white">✕</button>
@@ -1629,7 +1648,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         
     </div>
 </div>
-<div id="deleteConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[60]">
+<div id="deleteConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 justify-center items-center z-[60]" style="display:none!important;visibility:hidden!important;pointer-events:none!important" aria-hidden="true">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
         <h3 class="text-lg font-bold mb-2 text-gray-800">Remove Invoice?</h3>
         <p class="text-sm text-gray-600 mb-4">
@@ -1649,7 +1668,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
     </div>
 </div>
-<div id="materialModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[70]">
+<div id="materialModal" class="fixed inset-0 bg-black bg-opacity-50 justify-center items-center z-[70]" style="display:none!important;visibility:hidden!important;pointer-events:none!important" aria-hidden="true">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative font-['Segoe_UI']">
         <h3 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Add New Material</h3>
         
@@ -1687,10 +1706,21 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     </div>
 </div>
 <script>
+(function () {
+    ['publishConfirmPopup', 'imagePopup', 'deleteConfirmPopup', 'materialModal'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.style.setProperty('display', 'none', 'important');
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('pointer-events', 'none', 'important');
+    });
+})();
+</script>
+<script>
     // 1. Open Modal & Fetch Next Order
     function openMaterialModal() {
         const modal = document.getElementById('materialModal');
-        modal.classList.remove('hidden');
+        showDesktopOverlay(modal);
         
         // Reset fields
         document.getElementById('new_material_name').value = '';
@@ -1708,7 +1738,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         document.getElementById('new_material_name').focus();
     }
     function closeMaterialModal() {
-        document.getElementById('materialModal').classList.add('hidden');
+        hideDesktopOverlay(document.getElementById('materialModal'));
     }
     // 2. Helper: Generate Slug automatically
     function generateSlug(text) {
@@ -2028,9 +2058,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // 3. Trigger Delete Popup
     function openDeletePopup(event) {
-        event.stopPropagation(); 
-        const popup = document.getElementById('deleteConfirmPopup');
-        popup.classList.remove('hidden');
+        event.stopPropagation();
+        showDesktopOverlay(document.getElementById('deleteConfirmPopup'));
         const input = document.getElementById('deleteConfirmationInput');
         input.value = '';
         input.focus();
@@ -2056,7 +2085,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // 5. Close Delete Popup
     function closeDeletePopup() {
-        document.getElementById('deleteConfirmPopup').classList.add('hidden');
+        hideDesktopOverlay(document.getElementById('deleteConfirmPopup'));
     }
 </script>
 <script>
@@ -2514,14 +2543,41 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <script>
+    function showDesktopOverlay(el) {
+        if (!el) return;
+        el.classList.add('desktop-overlay-visible');
+        el.setAttribute('aria-hidden', 'false');
+        el.style.setProperty('display', 'flex', 'important');
+        el.style.setProperty('visibility', 'visible', 'important');
+        el.style.setProperty('pointer-events', 'auto', 'important');
+    }
+    function hideDesktopOverlay(el) {
+        if (!el) return;
+        el.classList.remove('desktop-overlay-visible');
+        el.setAttribute('aria-hidden', 'true');
+        el.style.setProperty('display', 'none', 'important');
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('pointer-events', 'none', 'important');
+    }
+    function hideAllDesktopOverlays() {
+        ['publishConfirmPopup', 'imagePopup', 'deleteConfirmPopup', 'materialModal'].forEach(function (id) {
+            hideDesktopOverlay(document.getElementById(id));
+        });
+    }
+    hideAllDesktopOverlays();
+    document.addEventListener('DOMContentLoaded', hideAllDesktopOverlays);
+    window.addEventListener('load', hideAllDesktopOverlays);
+    setTimeout(hideAllDesktopOverlays, 0);
+    setTimeout(hideAllDesktopOverlays, 250);
     function openImagePopup(imageUrl) {
+        if (!imageUrl) return;
         popupImage.src = imageUrl;
-        document.getElementById('imagePopup').classList.remove('hidden');
+        showDesktopOverlay(document.getElementById('imagePopup'));
     }
     function closeImagePopup(event) {
-        document.getElementById('imagePopup').classList.add('hidden');
+        hideDesktopOverlay(document.getElementById('imagePopup'));
         document.getElementById('popupImage').src = '';
-    } 
+    }
 </script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
@@ -2608,13 +2664,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     .then(function (payload) {
                         var data = payload.data || {};
                         if (!cfg.isOk(payload, data)) {
-                            notify('error', cfg.failTitle || 'Refresh failed', cfg.message(false, data), !!cfg.htmlMessage);
+                            notify('error', cfg.failTitle || 'Refresh failed', typeof cfg.message === 'function' ? cfg.message(false, data) : '', !!cfg.htmlMessage);
                             return;
                         }
                         var after = cfg.afterSync ? cfg.afterSync(data) : null;
                         return Promise.resolve(after).then(
                             function () {
-                                notify('success', cfg.successTitle || 'Refreshed', cfg.message(true, data), !!cfg.htmlMessage);
+                                notify('success', cfg.successTitle || 'Refreshed', typeof cfg.message === 'function' ? cfg.message(true, data) : '', !!cfg.htmlMessage);
                             },
                             function () {
                                 notify('warning', cfg.warnTitle || cfg.successTitle || 'Refreshed', cfg.warnMessage || 'Saved, but the form could not reload.', !!cfg.htmlMessage);
@@ -2658,25 +2714,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const localBtn = document.getElementById('publishLocalBtn');
         const cancelBtn = document.getElementById('publishCancelBtn');
         if (idle) idle.classList.remove('hidden');
-        if (busy) busy.classList.add('hidden');
+        if (busy) {
+            busy.classList.add('hidden');
+            busy.classList.remove('flex');
+        }
         if (liveBtn) liveBtn.disabled = false;
         if (localBtn) localBtn.disabled = false;
         if (cancelBtn) cancelBtn.disabled = false;
     }
     function openPublishPopup() {
         resetPublishPopup();
-        const popup = document.getElementById('publishConfirmPopup');
-        if(popup) {
-            popup.classList.remove('hidden');
-        } else {
-            console.error("Popup element 'publishConfirmPopup' not found!");
-        }
+        showDesktopOverlay(document.getElementById('publishConfirmPopup'));
     }
     function closePublishPopup() {
-        const popup = document.getElementById('publishConfirmPopup');
-        if(popup) {
-            popup.classList.add('hidden');
-        }
+        hideDesktopOverlay(document.getElementById('publishConfirmPopup'));
         resetPublishPopup();
     }
     // 1. New function to bridge Validation and Publishing
@@ -2804,7 +2855,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const localBtn = document.getElementById('publishLocalBtn');
         const cancelBtn = document.getElementById('publishCancelBtn');
         if (idle) idle.classList.add('hidden');
-        if (busy) busy.classList.remove('hidden');
+        if (busy) {
+            busy.classList.remove('hidden');
+            busy.classList.add('flex');
+        }
         if (liveBtn) liveBtn.disabled = true;
         if (localBtn) localBtn.disabled = true;
         if (cancelBtn) cancelBtn.disabled = true;
@@ -3633,6 +3687,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const wrappers = document.querySelectorAll('.colormap-wrapper');
         wrappers.forEach(wrapper => {
             const select = wrapper.querySelector('.colormap-select');
+            if (!select) return;
             // A. If no matching category, Hide and Clear
             if (!key || !colorMapDB[key]) {
                 wrapper.style.display = 'none';
@@ -4491,7 +4546,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 3. Run on Load (in case editing existing data)
     // Only run if the input is currently empty (to avoid overwriting saved data on edit load)
-    if(imgDirInput.value === "") {
+    if (imgDirInput && imgDirInput.value === "") {
         setTimeout(updateImageDirectory, 500); // Small delay to let TomSelect load
     }
 });
