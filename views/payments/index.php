@@ -317,6 +317,14 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
     /* ================= LOAD PAYMENT LIST ================= */
 
+    function formatPaymentAmount(value) {
+        const n = parseFloat(value);
+        if (Number.isNaN(n)) {
+            return '0.00';
+        }
+        return n.toFixed(2);
+    }
+
     function loadPayments() {
 
 
@@ -363,7 +371,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
      ₹ ${p.amount ?? p.payment_amount ?? ''} <br>
    
 </td>
-<td> <span class="text-red-600 text-xs"> ₹ ${p.pending_balance ?? 0}</span></td>
+<td> <span class="text-red-600 text-xs tabular-nums"> ₹ ${formatPaymentAmount(p.pending_balance ?? 0)}</span></td>
         <td class="p-3">${p.payment_mode ?? ''}</td>
         <td class="p-3">${p.payment_stage ?? ''}</td>
         <td class="p-3">${p.user_name ?? ''}</td>
