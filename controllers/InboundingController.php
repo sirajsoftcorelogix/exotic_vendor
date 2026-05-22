@@ -2095,7 +2095,7 @@ class InboundingController {
         $stock_price_temp[0]['instock_leadtime'] = $d['in_stock_leadtime_days'] ?? '';
         $stock_price_temp[0]['cp'] = $d['cp'] ?? 0;
         $stock_price_temp[0]['usd'] = $d['usd_price'] ?? 0;
-        $stock_price_temp[0]['permanently_available'] = (($d['permanently_available'] ?? '0') === '1') ? '1' : '0';
+        $stock_price_temp[0]['permanently_available'] = (($d['permanently_available'] ?? 0) == 1) ? 1 : 0;
         $stock_price_temp[0]['amazon_sold'] = '0';
         $stock_price_temp[0]['amazon_leadtime'] = '10';
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
@@ -2147,7 +2147,7 @@ class InboundingController {
                 $stock_price_temp[$i]['instock_leadtime'] = $d['in_stock_leadtime_days'] ?? '';
                 $stock_price_temp[$i]['cp'] = $value['cp'] ?? 0;
                 $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
-                $stock_price_temp[$i]['permanently_available'] = (($d['permanently_available'] ?? '0') === '1') ? '1' : '0';
+                $stock_price_temp[$i]['permanently_available'] = (($d['permanently_available'] ?? 0) == 1) ? 1 : 0;
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
