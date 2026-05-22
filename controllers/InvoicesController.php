@@ -43,8 +43,11 @@ class InvoicesController
 
         $itemIds = isset($_POST['poitem']) ? $_POST['poitem'] : [];
         $posFlag = isset($_POST['pos_flag']) ? (int)$_POST['pos_flag'] : 0;
+        if ($posFlag === 0 && !empty($_SESSION['invoice_pos_flag'])) {
+            $posFlag = 1;
+        }
         if (empty($itemIds) && $posFlag === 1) {
-            $orderNumber = trim((string)($_POST['order_number'] ?? ''));
+            $orderNumber = trim((string)($_POST['order_number'] ?? $_GET['order_number'] ?? ''));
             if ($orderNumber !== '') {
                 $lines = $ordersModel->getOrderByOrderNumber($orderNumber);
                 if (is_array($lines)) {
@@ -69,6 +72,9 @@ class InvoicesController
 
         if (!empty($itemIds)) {
             $_SESSION['invoice_items'] = $itemIds;
+        }
+        if (!empty($_SESSION['invoice_pos_flag'])) {
+            unset($_SESSION['invoice_pos_flag']);
         }
 
         // Fetch order data for selected items

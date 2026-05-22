@@ -3348,6 +3348,52 @@ class POSRegisterController
     }
 
     /**
+     * Import POS order lines if needed, stash invoice item ids in session, redirect to invoice create.
+     */
+    public function create_invoice_from_receipt(): void
+    {
+        is_login();
+        global $conn;
+
+        $orderNumber = trim((string)($_GET['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            renderTemplate('views/errors/not_found.php', ['message' => 'Order number missing for invoice.'], 'No items selected');
+            exit;
+        }
+
+        require_once __DIR__ . '/OrdersController.php';
+        $ordersCtrl = new OrdersController();
+
+        if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
+            $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 6, 2);
+            if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
+                $hint = trim((string)($import['message'] ?? ''));
+                $message = 'Order lines are not in the system yet. Open Orders to import order '
+                    . htmlspecialchars($orderNumber, ENT_QUOTES, 'UTF-8') . ', then try again.';
+                if ($hint !== '') {
+                    $message .= ' (' . htmlspecialchars($hint, ENT_QUOTES, 'UTF-8') . ')';
+                }
+                renderTemplate('views/errors/not_found.php', ['message' => $message], 'No items selected');
+                exit;
+            }
+        }
+
+        $itemIds = $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber);
+        if ($itemIds === []) {
+            renderTemplate('views/errors/not_found.php', [
+                'message' => 'No order line items found for order '
+                    . htmlspecialchars($orderNumber, ENT_QUOTES, 'UTF-8') . '.',
+            ], 'No items selected');
+            exit;
+        }
+
+        $_SESSION['invoice_items'] = $itemIds;
+        $_SESSION['invoice_pos_flag'] = 1;
+        header('Location: index.php?page=invoices&action=create');
+        exit;
+    }
+
+    /**
      * If checkout did not store an invoice PDF link, resolve the latest invoice for this order from the DB.
      */
     private function applyPosReceiptInvoiceLinks(array $row, int $invoiceId): array

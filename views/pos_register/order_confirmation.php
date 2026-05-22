@@ -232,24 +232,14 @@ if ($receipt_download_filename_base === '') {
               <?php
               $isPaymentInFull = !empty($is_payment_in_full)
                 || (strtolower(trim((string)($payment_stage ?? ''))) === 'final' && (float)($receipt_pending_amount ?? 0) <= 0.02);
-              $invoiceCreateUrl = 'index.php?page=invoices&action=create';
-              $invoicePoitemIds = isset($invoice_poitem_ids) && is_array($invoice_poitem_ids) ? $invoice_poitem_ids : [];
               $invoiceOrderNumber = trim((string)($order_id ?? ''));
-              $canInvoicePreview = $isPaymentInFull;
+              $invoiceCreateUrl = 'index.php?page=pos_register&action=create-invoice-from-receipt&order_number=' . rawurlencode($invoiceOrderNumber);
+              $canInvoicePreview = $isPaymentInFull && $invoiceOrderNumber !== '';
               $canInvoicePdf = $isPaymentInFull && !empty($show_invoice_pdf_button) && !empty($invoice_pdf_url);
               ?>
               <span class="text-[11px] text-slate-500">Tax invoice</span>
               <?php if ($canInvoicePreview): ?>
-                <form method="POST" action="<?= $h($invoiceCreateUrl) ?>" target="_blank" rel="noopener noreferrer" class="inline-flex">
-                  <?php foreach ($invoicePoitemIds as $poitemId): ?>
-                    <input type="hidden" name="poitem[]" value="<?= (int)$poitemId ?>">
-                  <?php endforeach; ?>
-                  <?php if ($invoiceOrderNumber !== ''): ?>
-                    <input type="hidden" name="order_number" value="<?= $h($invoiceOrderNumber) ?>">
-                  <?php endif; ?>
-                  <input type="hidden" name="pos_flag" value="1">
-                  <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Create invoice</button>
-                </form>
+                <a href="<?= $h($invoiceCreateUrl) ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Create invoice</a>
               <?php else: ?>
                 <span class="inline-flex flex-col gap-0.5">
                   <span class="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed" title="Tax invoice is available after payment is received in full.">Create invoice</span>

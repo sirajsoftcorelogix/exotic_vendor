@@ -1148,6 +1148,9 @@ switch ($page) {
             case 'checkout-receipt':
                 $controller->checkout_receipt();
                 break;
+            case 'create-invoice-from-receipt':
+                $controller->create_invoice_from_receipt();
+                break;
             default:
                 $controller->index();
                 break;
