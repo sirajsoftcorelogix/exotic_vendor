@@ -773,10 +773,54 @@ class InvoicesController
                     'ack_date' => $irnResponse['AckDt'] ? date('Y-m-d H:i:s', strtotime($irnResponse['AckDt'])) : null,
                     'signed_invoice' => $irnResponse['SignedInvoice'] ?? null,
                     'qrcode_string' => $irnResponse['SignedQRCode'] ?? null,
+                    'ewb_number' => $irnResponse['EwbNo'] ?? null,
+                    'ewb_date' => $irnResponse['EwbDt'] ? date('Y-m-d H:i:s', strtotime($irnResponse['EwbDt'])) : null,
+                    'ewb_valid_till' => $irnResponse['EwbValidTill'] ? date('Y-m-d H:i:s', strtotime($irnResponse['EwbValidTill'])) : null,
                     'irn_status' => 'generated',
-                    'request_payload' => json_encode($irnPayload),
+                    'request_payload' => json_encode($payload),
                     'response_payload' => json_encode($irnResponse)
                 ];
+                //call ewb generate api if ewb number is not generated
+                    if (empty($irnResponse['EwbNo'])) {
+                        // Prepare EWB data for generation
+                        // $ewbData = [
+                        //     'irn' => $irnResponse['Irn'] ?? '',
+                        //     'distance' => 100, // Default distance; can be customized from $irnPayload if needed
+                        //     'trans_mode' => '1', // Default transport mode
+                        //     'trans_id' => $irnPayload['EwbDtls']['TransId'] ?? '12AWGPV7107B1Z1',
+                        //     'trans_name' => $irnPayload['EwbDtls']['TransName'] ?? '',
+                        //     'trn_doc_dt' => $irnPayload['EwbDtls']['TransDocDt'] ?? date('d/m/Y'),
+                        //     'trn_doc_no' => $irnPayload['EwbDtls']['TransDocNo'] ?? '',
+                        //     'veh_no' => $irnPayload['EwbDtls']['VehNo'] ?? '',
+                        //     'veh_type' => $irnPayload['EwbDtls']['VehType'] ?? 'R'
+                        // ];
+                        $ewbData = [
+                            'irn' => $irnResponse['Irn'] ?? '',
+                            'Distance' => 100,
+                            'TransId' => "07ABCDE1234F1Z5",
+                            'TransName' => "XYZ EXPORTS",
+                            'Distance' => 100,
+                            'TransDocNo' => "INV01",
+                            'TransDocDt' => date('d/m/Y'),
+                            'VehNo' => "kb123456",
+                            'VehType' => "R"                                
+                        ];
+                        $ewbResponse = $alankitClient->generateEwb($ewbData, $accessToken, $decryptedSek);
+                        
+                        if ($ewbResponse && isset($ewbResponse['Status']) && $ewbResponse['Status'] === 'ACT') {
+                            $updateData['ewb_number'] = $ewbResponse['EwbNo'] ?? null;
+                            $updateData['ewb_date'] = isset($ewbResponse['EwbDt']) ? date('Y-m-d H:i:s', strtotime($ewbResponse['EwbDt'])) : null;
+                            $updateData['ewb_valid_till'] = isset($ewbResponse['EwbValidTill']) ? date('Y-m-d H:i:s', strtotime($ewbResponse['EwbValidTill'])) : null;
+                            $updateData['ewb_request_payload'] = json_encode($ewbData);
+                            $updateData['ewb_response_payload'] = json_encode($ewbResponse);
+                            error_log("Alankit EWB generated successfully for invoice #$invoiceId: " . ($ewbResponse['EwbNo'] ?? 'No EWB'));
+                        } else {
+                            error_log("Alankit EWB generation failed for invoice #$invoiceId: " . ($ewbResponse['message'] ?? 'Unknown error'));
+                            $updateData['ewb_request_payload'] = json_encode($ewbData);
+                            $updateData['ewb_response_payload'] = json_encode($ewbResponse ?? ['error' => 'No response received']);
+                            $updateData['ewb_error_message'] = json_encode($ewbResponse['ErrorDetails'] ?? $ewbResponse['message'] ?? 'Unknown error');
+                        }
+                    }
 
                 // Update invoice international table with IRN details
                 $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
