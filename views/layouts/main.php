@@ -175,9 +175,15 @@ global $domain, $root_path, $page, $action, $conn;
 	// Create container centered in the page with backdrop
     var alertContainer = document.createElement('div');
     alertContainer.id = 'global-alert';
-    alertContainer.className = 'fixed inset-0 z-50 hidden flex items-center justify-center pointer-events-none';
+    alertContainer.style.display = 'none';
+    alertContainer.style.position = 'fixed';
+    alertContainer.style.inset = '0';
+    alertContainer.style.zIndex = '50';
+    alertContainer.style.alignItems = 'center';
+    alertContainer.style.justifyContent = 'center';
+    alertContainer.style.pointerEvents = 'none';
     alertContainer.innerHTML =
-        '<div id="global-alert-backdrop" class="absolute inset-0 bg-black bg-opacity-30 hidden"></div>' +
+        '<div id="global-alert-backdrop" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.3);"></div>' +
         '<div id="global-alert-inner" class="max-w-md w-full rounded-lg p-4 shadow-2xl text-white flex items-start gap-3 transform transition-all duration-200 scale-95 opacity-0 pointer-events-auto">' +
             '<div id="global-alert-icon" class="text-2xl flex-shrink-0"></div>' +
             '<div id="global-alert-message" class="flex-1 text-sm md:text-base"></div>' +
@@ -196,8 +202,8 @@ global $domain, $root_path, $page, $action, $conn;
         inner.style.opacity = '0';
         if (window._alertTimeout) { clearTimeout(window._alertTimeout); window._alertTimeout = null; }
         setTimeout(function() {
-            container.classList.add('hidden');
-            if (backdrop) backdrop.classList.add('hidden');
+            container.style.display = 'none';
+            if (backdrop) backdrop.style.display = 'none';
             container.style.pointerEvents = 'none';
         }, 200);
     }
@@ -213,8 +219,8 @@ global $domain, $root_path, $page, $action, $conn;
         msgEl.textContent = message;
         iconEl.innerHTML = type === 'success' ? '<i class="fas fa-check-circle"></i>' : type === 'warning' ? '<i class="fas fa-exclamation-triangle"></i>' : '<i class="fas fa-exclamation-circle"></i>';
         inner.className = 'max-w-md w-full rounded-lg p-4 shadow-2xl text-white flex items-start gap-3 transform transition-all duration-200 pointer-events-auto ' + (type === 'success' ? 'bg-green-600' : type === 'warning' ? 'bg-yellow-500' : 'bg-red-600');
-        container.classList.remove('hidden');
-        if (backdrop) backdrop.classList.remove('hidden');
+        container.style.display = 'flex';
+        if (backdrop) backdrop.style.display = 'block';
         container.style.pointerEvents = 'auto';
 
         // trigger transition
