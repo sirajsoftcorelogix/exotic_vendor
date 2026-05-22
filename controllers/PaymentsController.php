@@ -2,11 +2,9 @@
 
 require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
 require_once 'models/user/user.php';
-require_once 'models/PosInvoice/invoice.php';
 require_once 'models/order/order.php';
 require_once 'models/comman/tables.php';
 
-$invoiceModel = new Invoice($conn);
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 
