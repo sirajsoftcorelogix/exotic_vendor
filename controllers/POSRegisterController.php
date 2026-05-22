@@ -343,10 +343,7 @@ class POSRegisterController
         }
 
         try {
-            require_once __DIR__ . '/OrdersController.php';
-            require_once __DIR__ . '/PosInvoiceController.php';
-
-            $ordersCtrl = new OrdersController();
+            $ordersCtrl = $this->getOrdersControllerForImport();
             $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 4, 2);
 
             if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
@@ -359,7 +356,7 @@ class POSRegisterController
                 return $out;
             }
 
-            $posInv = new PosInvoiceController();
+            $posInv = $this->getPosInvoiceControllerForCheckout();
             $invRes = $posInv->createAutoInvoiceForOrder($orderNumber);
 
             if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
@@ -3318,6 +3315,61 @@ class POSRegisterController
     }
 
     /**
+     * OrdersController import methods use global $ordersModel; requiring that controller
+     * from inside a method only creates local variables in the required file.
+     */
+    private function bootstrapOrderImportGlobals(): void
+    {
+        global $conn, $ordersModel, $productModel, $commanModel, $savedSearchModel, $poInvoiceModel;
+
+        if (isset($ordersModel) && is_object($ordersModel)) {
+            return;
+        }
+
+        require_once 'models/order/order.php';
+        require_once 'models/comman/tables.php';
+        require_once 'models/searches/saved_search.php';
+        require_once 'models/order/po_invoice.php';
+        require_once 'models/product/product.php';
+
+        $ordersModel = new Order($conn);
+        $commanModel = new Tables($conn);
+        $savedSearchModel = new SavedSearch($conn);
+        $poInvoiceModel = new POInvoice($conn);
+        $productModel = new Product($conn);
+    }
+
+    private function getOrdersControllerForImport(): OrdersController
+    {
+        $this->bootstrapOrderImportGlobals();
+        require_once __DIR__ . '/OrdersController.php';
+
+        return new OrdersController();
+    }
+
+    private function getPosInvoiceControllerForCheckout(): PosInvoiceController
+    {
+        global $conn, $invoiceModel, $usersModel, $commanModel;
+
+        $this->bootstrapOrderImportGlobals();
+
+        if (!isset($invoiceModel) || !is_object($invoiceModel)) {
+            require_once 'models/PosInvoice/invoice.php';
+            require_once 'models/user/user.php';
+            $invoiceModel = new POSInvoice($conn);
+            $usersModel = new User($conn);
+        }
+        if (!isset($commanModel) || !is_object($commanModel)) {
+            require_once 'models/comman/tables.php';
+            $commanModel = new Tables($conn);
+        }
+
+        require_once __DIR__ . '/PosInvoiceController.php';
+
+        return new PosInvoiceController();
+    }
+
+    /**
      * vp_orders.id values for invoice create (InvoicesController expects poitem[]).
      */
     private function resolveInvoicePoitemIdsForOrderNumber(mysqli $conn, $orderNumber): array
@@ -3361,8 +3413,7 @@ class POSRegisterController
             exit;
         }
 
-        require_once __DIR__ . '/OrdersController.php';
-        $ordersCtrl = new OrdersController();
+        $ordersCtrl = $this->getOrdersControllerForImport();
 
         if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
             $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 6, 2);
