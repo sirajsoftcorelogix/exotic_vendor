@@ -1,4 +1,8 @@
 <div class="min-h-screen pos-register-page">
+<?php
+$posCheckoutApiDebug = isset($_SESSION['user']['email'])
+    && strtolower(trim((string) $_SESSION['user']['email'])) === 'siraj.php@gmail.com';
+?>
   <script>
     document.documentElement.classList.add('pos-page-hide-scrollbars');
   </script>
@@ -633,6 +637,7 @@
         <label class="text-xs text-slate-500">Note (optional)</label>
         <textarea id="payment_note" rows="2" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"></textarea>
       </div>
+      <?php if ($posCheckoutApiDebug): ?>
       <div id="paymentModalOrderApiPanel" class="hidden rounded-lg border border-slate-200 bg-slate-900 p-3">
         <div class="flex items-center justify-between gap-2 mb-2">
           <span class="text-xs font-semibold text-white">Last order-create API</span>
@@ -640,6 +645,7 @@
         </div>
         <pre id="paymentModalOrderApiPre" class="max-h-40 overflow-auto text-[10px] leading-snug text-slate-100 whitespace-pre-wrap break-words"></pre>
       </div>
+      <?php endif; ?>
     </div>
     <div class="flex justify-end gap-2 border-t border-slate-100 px-5 py-3 bg-slate-50 rounded-b-2xl shrink-0">
       <button type="button" onclick="closePaymentModal()" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
@@ -841,12 +847,6 @@
 </div>
 
 <!-- ===== END PAGE WRAPPER ===== -->
-<script>
-  window.POS_CART_API_DEBUG = <?php
-    $posCartApiDebugEmail = isset($_SESSION['user']['email']) ? strtolower(trim((string) $_SESSION['user']['email'])) : '';
-    echo $posCartApiDebugEmail === 'siraj.php@gmail.com' ? 'true' : 'false';
-  ?>;
-</script>
 <script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
 <!-- <script src="<?php echo 'http://' . $_SERVER['HTTP_HOST']; ?>/assets/js/pos.js"></script> -->
