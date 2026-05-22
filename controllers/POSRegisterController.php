@@ -3280,6 +3280,7 @@ class POSRegisterController
             'receipt_office_footer' => '',
             'receipt_signature_date' => $dt->format('d M Y'),
             'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
+            'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),
         ];
 
         $successMessage = 'Order placed.';
@@ -3310,7 +3311,40 @@ class POSRegisterController
         }
         unset($_SESSION['pos_last_checkout_receipt']);
         $row = $this->fillReceiptInvoicePdfFromDb($conn, $row);
+        if (empty($row['invoice_poitem_ids']) || !is_array($row['invoice_poitem_ids'])) {
+            $row['invoice_poitem_ids'] = $this->resolveInvoicePoitemIdsForOrderNumber($conn, $row['order_id'] ?? '');
+        }
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
+    }
+
+    /**
+     * vp_orders.id values for invoice create (InvoicesController expects poitem[]).
+     */
+    private function resolveInvoicePoitemIdsForOrderNumber(mysqli $conn, $orderNumber): array
+    {
+        $orderNumber = trim((string)$orderNumber);
+        if ($orderNumber === '') {
+            return [];
+        }
+        $stmt = $conn->prepare('SELECT id FROM vp_orders WHERE order_number = ? ORDER BY id ASC');
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $ids = [];
+        if ($result) {
+            while ($line = $result->fetch_assoc()) {
+                $id = (int)($line['id'] ?? 0);
+                if ($id > 0) {
+                    $ids[] = $id;
+                }
+            }
+        }
+        $stmt->close();
+
+        return $ids;
     }
 
     /**

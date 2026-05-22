@@ -234,7 +234,8 @@ if ($receipt_download_filename_base === '') {
                 || (strtolower(trim((string)($payment_stage ?? ''))) === 'final' && (float)($receipt_pending_amount ?? 0) <= 0.02);
               $invoiceCreateUrl = 'index.php?page=invoices&action=create';
               $invoicePoitemIds = isset($invoice_poitem_ids) && is_array($invoice_poitem_ids) ? $invoice_poitem_ids : [];
-              $canInvoicePreview = $isPaymentInFull && !empty($invoicePoitemIds);
+              $invoiceOrderNumber = trim((string)($order_id ?? ''));
+              $canInvoicePreview = $isPaymentInFull;
               $canInvoicePdf = $isPaymentInFull && !empty($show_invoice_pdf_button) && !empty($invoice_pdf_url);
               ?>
               <span class="text-[11px] text-slate-500">Tax invoice</span>
@@ -243,13 +244,12 @@ if ($receipt_download_filename_base === '') {
                   <?php foreach ($invoicePoitemIds as $poitemId): ?>
                     <input type="hidden" name="poitem[]" value="<?= (int)$poitemId ?>">
                   <?php endforeach; ?>
+                  <?php if ($invoiceOrderNumber !== ''): ?>
+                    <input type="hidden" name="order_number" value="<?= $h($invoiceOrderNumber) ?>">
+                  <?php endif; ?>
                   <input type="hidden" name="pos_flag" value="1">
                   <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Create invoice</button>
                 </form>
-              <?php elseif ($isPaymentInFull): ?>
-                <span class="inline-flex flex-col gap-0.5">
-                  <span class="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed" title="Order lines are not available yet. Open Orders to import this order, then create the invoice.">Create invoice</span>
-                </span>
               <?php else: ?>
                 <span class="inline-flex flex-col gap-0.5">
                   <span class="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed" title="Tax invoice is available after payment is received in full.">Create invoice</span>
