@@ -3341,6 +3341,7 @@ class POSRegisterController
 
     private function getOrdersControllerForImport(): OrdersController
     {
+        global $conn;
         $this->bootstrapOrderImportGlobals();
         require_once __DIR__ . '/OrdersController.php';
 
