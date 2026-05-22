@@ -227,9 +227,13 @@ if ($receipt_download_filename_base === '') {
           $isPaymentInFull = !empty($is_payment_in_full)
             || (strtolower(trim((string)($payment_stage ?? ''))) === 'final' && (float)($receipt_pending_amount ?? 0) <= 0.02);
           $invoiceOrderNumber = trim((string)($order_id ?? ''));
+          $invoiceId = (int)($invoice_id ?? 0);
+          $invoiceDownloadUrl = $invoiceId > 0
+            ? 'index.php?page=invoices&action=generate_pdf&invoice_id=' . $invoiceId
+            : trim((string)($invoice_pdf_url ?? ''));
           $invoiceCreateUrl = 'index.php?page=pos_register&action=create-invoice-from-receipt&order_number=' . rawurlencode($invoiceOrderNumber);
-          $canInvoicePreview = $isPaymentInFull && $invoiceOrderNumber !== '';
-          $canInvoicePdf = $isPaymentInFull && !empty($show_invoice_pdf_button) && !empty($invoice_pdf_url);
+          $canDownloadInvoice = $isPaymentInFull && $invoiceDownloadUrl !== '';
+          $canCreateInvoice = $isPaymentInFull && !$canDownloadInvoice && $invoiceOrderNumber !== '';
           $actionBtnClass = 'inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold';
           ?>
           <div class="flex flex-wrap items-end gap-3">
@@ -239,10 +243,17 @@ if ($receipt_download_filename_base === '') {
             </div>
             <div class="inline-flex flex-col gap-1">
               <span class="min-h-[14px] text-[11px] leading-none text-slate-500">Tax invoice</span>
-              <?php if ($canInvoicePreview): ?>
+              <?php if ($canDownloadInvoice): ?>
+                <a href="<?= $h($invoiceDownloadUrl) ?>" target="_blank" rel="noopener noreferrer" class="<?= $actionBtnClass ?> gap-1.5 bg-orange-600 text-white hover:bg-orange-700">
+                  <span>Download Invoice</span>
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="shrink-0">
+                    <path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                  </svg>
+                </a>
+              <?php elseif ($canCreateInvoice): ?>
                 <a href="<?= $h($invoiceCreateUrl) ?>" target="_blank" rel="noopener noreferrer" class="<?= $actionBtnClass ?> bg-orange-600 text-white hover:bg-orange-700">Create invoice</a>
               <?php else: ?>
-                <span class="<?= $actionBtnClass ?> cursor-not-allowed border border-slate-200 bg-slate-100 font-medium text-slate-500" title="Tax invoice is available after payment is received in full.">Create invoice</span>
+                <span class="<?= $actionBtnClass ?> cursor-not-allowed border border-slate-200 bg-slate-100 font-medium text-slate-500" title="Tax invoice is available after payment is received in full.">Download Invoice</span>
               <?php endif; ?>
             </div>
             <div class="inline-flex flex-col gap-1">
@@ -254,12 +265,7 @@ if ($receipt_download_filename_base === '') {
               <a href="index.php?page=pos_register&action=list" class="<?= $actionBtnClass ?> border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Back to POS</a>
             </div>
           </div>
-          <?php if ($canInvoicePdf): ?>
-            <div>
-              <a href="<?= $h((string)$invoice_pdf_url) ?>" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-orange-700 hover:text-orange-800 underline">Download PDF</a>
-            </div>
-          <?php endif; ?>
-          <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>. When payment is received in full, use <strong class="font-medium text-slate-600">Create invoice</strong> to open the invoice screen.</p>
+          <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>. When payment is received in full, use <strong class="font-medium text-slate-600">Download Invoice</strong> for the tax invoice PDF.</p>
         </div>
       </div>
     </div>
