@@ -124,10 +124,27 @@ $sizeOptions = [
     'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
 ];
 $colorMapData = $data['form2']['gecolormaps']['colormaps'] ?? [];
-function renderColorMapField($fieldName, $savedValue, $customClass = "") {
+function renderColorMapField($fieldName, $savedValue, $customClass = "", $showSyncIcon = false) {
+    $labelHtml = '<label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>';
+    if ($showSyncIcon) {
+        $labelHtml = '
+        <div class="flex items-center gap-1.5 mb-1">
+            <label class="text-xs font-bold text-[#555]">Color Map:</label>
+            <button type="button"
+                    id="colormap-cache-sync-btn"
+                    class="inline-flex items-center justify-center w-6 h-6 rounded border border-[#ccc] bg-white text-[#555] hover:border-[#d97824] hover:text-[#d97824] transition-colors"
+                    title="Refresh color maps from catalog">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+                <span class="sr-only">Refresh color maps</span>
+            </button>
+        </div>';
+    }
     return '
     <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
-        <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
+        ' . $labelHtml . '
         <select name="' . $fieldName . '" 
                 class="colormap-select ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]"
                 data-saved-value="' . htmlspecialchars($savedValue) . '">
@@ -624,7 +641,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['upc'] ?? '') ?>" name="upc" placeholder="upc">
                         </div>
                     </div>
-                    <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
+                    <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? '', '', true); ?>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
                         <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
@@ -3491,7 +3508,8 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Get PHP Data into JS
-    const colorMapDB = <?php echo json_encode($colorMapData); ?>;
+    let colorMapDB = <?php echo json_encode($colorMapData); ?>;
+    const vendorRefSyncUrl = <?php echo json_encode(base_url('?page=inbounding&action=syncVendorReferenceCache&format=json')); ?>;
     // 2. Function to determine the key (jewelry/textiles) from the Group Name
     function getColorMapKey() {
         const groupSelect = document.getElementById('group_select');
@@ -3569,6 +3587,102 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     // 5. Initial Run
     updateAllColorMaps();
+
+    const colormapSyncBtn = document.getElementById('colormap-cache-sync-btn');
+    if (colormapSyncBtn) {
+        colormapSyncBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof Swal === 'undefined') {
+                if (window.confirm('Refresh color maps and optionals from the catalog API?')) {
+                    runVendorReferenceCacheSync(colormapSyncBtn);
+                }
+                return;
+            }
+            Swal.fire({
+                title: 'Refresh catalog data?',
+                html: 'This updates <strong>color maps</strong> and <strong>optionals</strong> from Exotic India and reloads the Color Map dropdowns on this form.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Refresh now',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#d97824',
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    runVendorReferenceCacheSync(colormapSyncBtn);
+                }
+            });
+        });
+    }
+
+    function runVendorReferenceCacheSync(btn) {
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.classList.add('opacity-60', 'cursor-wait');
+        btn.innerHTML = '<svg class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+
+        fetch(vendorRefSyncUrl, {
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Accept': 'application/json' },
+        })
+            .then(function(res) {
+                return res.json().then(function(data) {
+                    return { ok: res.ok, data: data };
+                }).catch(function() {
+                    return { ok: false, data: null };
+                });
+            })
+            .then(function(payload) {
+                const data = payload.data || {};
+                const syncOk = payload.ok && data.ok === true;
+
+                if (syncOk && data.refs && data.refs.gecolormaps && data.refs.gecolormaps.colormaps) {
+                    colorMapDB = data.refs.gecolormaps.colormaps;
+                    document.querySelectorAll('.colormap-select').forEach(function(select) {
+                        select.removeAttribute('data-loaded-key');
+                    });
+                    updateAllColorMaps();
+                }
+
+                const resultLines = [];
+                if (data.results) {
+                    Object.keys(data.results).forEach(function(key) {
+                        const row = data.results[key];
+                        resultLines.push(key + ': ' + (row.ok ? 'OK' : ('Failed — ' + (row.error || 'unknown'))));
+                    });
+                }
+                const detail = resultLines.length ? resultLines.join('<br>') : '';
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: syncOk ? 'success' : 'error',
+                        title: syncOk ? 'Catalog data refreshed' : 'Refresh failed',
+                        html: syncOk
+                            ? ('Color map lists were updated.' + (detail ? '<br><br><span class="text-xs text-gray-600">' + detail + '</span>' : ''))
+                            : (detail || 'Could not refresh catalog data. Please try again.'),
+                    });
+                } else {
+                    alert(syncOk ? 'Catalog data refreshed.' : 'Refresh failed.');
+                }
+            })
+            .catch(function(err) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Refresh failed',
+                        text: err && err.message ? err.message : 'Network error while refreshing catalog data.',
+                    });
+                } else {
+                    alert('Refresh failed.');
+                }
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-wait');
+                btn.innerHTML = originalHtml;
+            });
+    }
 });
 </script>
 <script>
