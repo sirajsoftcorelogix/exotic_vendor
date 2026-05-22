@@ -289,7 +289,7 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
-        $vendorApis = $this->vendorReferenceCache()->getDesktopformRefs();
+        $vendorApis = $this->vendorReferenceCache()->getDesktopformRefs(false);
         $data['form2']['gecolormaps'] = $vendorApis['gecolormaps'];
         $data['form2']['optionals_data'] = $vendorApis['optionals_data'];
         $data['images'] = $inboundingModel->getitem_imgs($id);
@@ -366,12 +366,12 @@ class InboundingController {
     }
 
     function gecolormaps() {
-        $refs = $this->vendorReferenceCache()->getDesktopformRefs();
+        $refs = $this->vendorReferenceCache()->getDesktopformRefs(false);
         return $refs['gecolormaps'] ?: false;
     }
 
     function getoptionals() {
-        $refs = $this->vendorReferenceCache()->getDesktopformRefs();
+        $refs = $this->vendorReferenceCache()->getDesktopformRefs(false);
         return $refs['optionals_data'] ?: false;
     }
 
