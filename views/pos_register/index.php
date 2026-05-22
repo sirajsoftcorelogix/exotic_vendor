@@ -841,6 +841,12 @@
 </div>
 
 <!-- ===== END PAGE WRAPPER ===== -->
+<script>
+  window.POS_CART_API_DEBUG = <?php
+    $posCartApiDebugEmail = isset($_SESSION['user']['email']) ? strtolower(trim((string) $_SESSION['user']['email'])) : '';
+    echo $posCartApiDebugEmail === 'siraj.php@gmail.com' ? 'true' : 'false';
+  ?>;
+</script>
 <script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
 <!-- <script src="<?php echo 'http://' . $_SERVER['HTTP_HOST']; ?>/assets/js/pos.js"></script> -->
