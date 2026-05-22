@@ -40,40 +40,66 @@ function isFilled($value) {
 
 // 3. THUMBNAIL HELPER FUNCTION
 function getThumbnail($filePath, $width = 150, $height = 150) {
-    $cleanPath = ltrim($filePath, '/');
+    $cleanPath = ltrim((string) $filePath, '/');
 
-    // Return placeholder if file missing
-    if (empty($cleanPath) || !file_exists($cleanPath)) {
-        return ''; 
+    if ($cleanPath === '') {
+        return '';
     }
 
-    // Auto-detect directory
+    if (!is_file($cleanPath) || !is_readable($cleanPath)) {
+        $rootPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cleanPath);
+        if (is_file($rootPath) && is_readable($rootPath)) {
+            $cleanPath = $rootPath;
+        } else {
+            return '';
+        }
+    }
+
+    $fileSize = @filesize($cleanPath);
+    if ($fileSize === false || $fileSize <= 0) {
+        return '';
+    }
+
     $dirName  = dirname($cleanPath);
     $fileName = basename($cleanPath);
-    
-    $thumbDir  = $dirName . '/thumbs/'; 
+
+    $thumbDir  = $dirName . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR;
     $thumbPath = $thumbDir . $fileName;
 
-    // Return existing thumb
-    if (file_exists($thumbPath)) return $thumbPath;
+    if (is_file($thumbPath) && is_readable($thumbPath)) {
+        return str_replace(DIRECTORY_SEPARATOR, '/', $thumbPath);
+    }
 
-    // Create directory
-    if (!is_dir($thumbDir)) mkdir($thumbDir, 0777, true);
+    if (!is_dir($thumbDir) && !@mkdir($thumbDir, 0777, true) && !is_dir($thumbDir)) {
+        return '';
+    }
 
-    $info = getimagesize($cleanPath);
-    if (!$info) return $cleanPath; // Not an image or unknown format
+    $info = @getimagesize($cleanPath);
+    if ($info === false || empty($info['mime'])) {
+        return '';
+    }
 
     $mime = $info['mime'];
+    $image = null;
     switch ($mime) {
-        case 'image/jpeg': $image = imagecreatefromjpeg($cleanPath); break;
-        case 'image/png':  $image = imagecreatefrompng($cleanPath); break;
-        case 'image/gif':  $image = imagecreatefromgif($cleanPath); break;
-        case 'image/webp': $image = imagecreatefromwebp($cleanPath); break;
-        default: return $cleanPath;
+        case 'image/jpeg': $image = @imagecreatefromjpeg($cleanPath); break;
+        case 'image/png':  $image = @imagecreatefrompng($cleanPath); break;
+        case 'image/gif':  $image = @imagecreatefromgif($cleanPath); break;
+        case 'image/webp': $image = @imagecreatefromwebp($cleanPath); break;
+        default: return '';
+    }
+
+    if (!$image) {
+        return '';
     }
 
     $oldW = imagesx($image);
     $oldH = imagesy($image);
+    if ($oldW <= 0 || $oldH <= 0) {
+        imagedestroy($image);
+        return '';
+    }
+
     $aspectRatio = $oldW / $oldH;
 
     if ($width / $height > $aspectRatio) {
@@ -82,7 +108,11 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         $height = (int) ($width / $aspectRatio);
     }
 
-    $newImage = imagecreatetruecolor((int)$width, (int)$height);
+    $newImage = imagecreatetruecolor((int) $width, (int) $height);
+    if (!$newImage) {
+        imagedestroy($image);
+        return '';
+    }
 
     if ($mime == 'image/png' || $mime == 'image/webp') {
         imagecolortransparent($newImage, imagecolorallocatealpha($newImage, 0, 0, 0, 127));
@@ -92,18 +122,21 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
 
     imagecopyresampled($newImage, $image, 0, 0, 0, 0, $width, $height, $oldW, $oldH);
 
-    // Save Thumbnail
     switch ($mime) {
-        case 'image/jpeg': imagejpeg($newImage, $thumbPath, 70); break;
-        case 'image/png':  imagepng($newImage, $thumbPath); break;
-        case 'image/gif':  imagegif($newImage, $thumbPath); break;
-        case 'image/webp': imagewebp($newImage, $thumbPath); break;
+        case 'image/jpeg': @imagejpeg($newImage, $thumbPath, 70); break;
+        case 'image/png':  @imagepng($newImage, $thumbPath); break;
+        case 'image/gif':  @imagegif($newImage, $thumbPath); break;
+        case 'image/webp': @imagewebp($newImage, $thumbPath); break;
     }
 
     imagedestroy($image);
     imagedestroy($newImage);
 
-    return $thumbPath;
+    if (!is_file($thumbPath)) {
+        return '';
+    }
+
+    return str_replace(DIRECTORY_SEPARATOR, '/', $thumbPath);
 }
 ?>
 

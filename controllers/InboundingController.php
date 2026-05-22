@@ -1,5 +1,6 @@
 <?php
 require_once 'models/inbounding/Inbounding.php';
+require_once 'models/vendor/VendorReferenceCache.php';
 require_once 'controllers/ProductsController.php';
 
 $inboundingModel = new Inbounding($conn);
@@ -288,78 +289,56 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
-        $vendorApis = $this->fetchDesktopformVendorApisParallel();
+        try {
+            $vendorApis = $this->vendorReferenceCache()->getDesktopformRefs(false);
+        } catch (Throwable $e) {
+            error_log('desktopform vendor refs: ' . $e->getMessage());
+            $vendorApis = ['gecolormaps' => false, 'optionals_data' => false];
+        }
         $data['form2']['gecolormaps'] = $vendorApis['gecolormaps'];
         $data['form2']['optionals_data'] = $vendorApis['optionals_data'];
-        $data['form2']['getimgdir'] = $vendorApis['getimgdir'];
         $data['images'] = $inboundingModel->getitem_imgs($id);
         $data['markup_list'] = $inboundingModel->getMarkupData();
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
 
-    /**
-     * Fetches colormaps, optionals, and image-directories in parallel (same wall time as one round-trip).
-     *
-     * @return array{gecolormaps: mixed, optionals_data: mixed, getimgdir: mixed}
-     */
-    private function fetchDesktopformVendorApisParallel(): array {
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Accept: application/json',
-        ];
-        $endpoints = [
-            'gecolormaps' => 'https://www.exoticindia.com/vendor-api/product/colormaps',
-            'optionals_data' => 'https://www.exoticindia.com/vendor-api/product/optionals',
-            'getimgdir' => 'https://www.exoticindia.com/vendor-api/product/image-directories',
-        ];
-        $mh = curl_multi_init();
-        $handles = [];
-        foreach ($endpoints as $key => $url) {
-            $ch = curl_init();
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $url,
-                CURLOPT_HTTPGET => true,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTPHEADER => $headers,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_SSL_VERIFYPEER => false,
-            ]);
-            curl_multi_add_handle($mh, $ch);
-            $handles[$key] = $ch;
-        }
-        $running = null;
-        do {
-            $status = curl_multi_exec($mh, $running);
-            if ($running) {
-                curl_multi_select($mh, 1.0);
-            }
-        } while ($running && $status === CURLM_OK);
-
-        $out = [
-            'gecolormaps' => false,
-            'optionals_data' => false,
-            'getimgdir' => false,
-        ];
-        foreach ($handles as $key => $ch) {
-            if (curl_errno($ch)) {
-                error_log('cURL Error (' . $key . '): ' . curl_error($ch));
-            } else {
-                $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                $response = curl_multi_getcontent($ch);
-                if ($httpCode === 200) {
-                    $out[$key] = json_decode($response, true);
-                } else {
-                    error_log('API HTTP Status (' . $key . '): ' . $httpCode . ' - Response: ' . $response);
-                }
-            }
-            curl_multi_remove_handle($mh, $ch);
-            curl_close($ch);
-        }
-        curl_multi_close($mh);
-
-        return $out;
+    private function vendorReferenceCache(): VendorReferenceCache
+    {
+        global $conn;
+        return new VendorReferenceCache($conn);
     }
+
+    /**
+     * Admin/cron: refresh colormaps + optionals from vendor API into vendor_reference_cache.
+     */
+    public function syncVendorReferenceCache(): void
+    {
+        is_login();
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        $results = $this->vendorReferenceCache()->syncAll($userId > 0 ? $userId : null);
+
+        $allOk = !in_array(false, array_column($results, 'ok'), true);
+        $wantsJson = (
+            (isset($_GET['format']) && $_GET['format'] === 'json')
+            || (isset($_SERVER['HTTP_ACCEPT']) && stripos((string) $_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+        );
+
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => $allOk,
+                'results' => $results,
+                'meta' => $this->vendorReferenceCache()->getSyncMeta(),
+                'refs' => $this->vendorReferenceCache()->getDesktopformRefs(false),
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $msg = $allOk ? 'vendor_refs_synced' : 'vendor_refs_sync_failed';
+        header('Location: ' . base_url('?page=inbounding&action=list&msg=' . $msg));
+        exit;
+    }
+
     function getimgdir() {
         $url = 'https://www.exoticindia.com/vendor-api/product/image-directories';
         $headers = [
@@ -374,7 +353,7 @@ class InboundingController {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
+            CURLOPT_SSL_VERIFYPEER => false,
         ]);
         $response = curl_exec($ch);
         if (curl_errno($ch)) {
@@ -390,66 +369,17 @@ class InboundingController {
         }
         return json_decode($response, true);
     }
+
     function gecolormaps() {
-        $url = 'https://www.exoticindia.com/vendor-api/product/colormaps';
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Accept: application/json'
-        ];
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_HTTPGET => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
-        ]);
-        $response = curl_exec($ch);
-        if (curl_errno($ch)) {
-            error_log("cURL Error: " . curl_error($ch));
-            curl_close($ch);
-            return false;
-        }
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($httpCode != 200) {
-            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
-            return false;
-        }
-        return json_decode($response, true);
+        $refs = $this->vendorReferenceCache()->getDesktopformRefs(false);
+        return $refs['gecolormaps'] ?: false;
     }
+
     function getoptionals() {
-        $url = 'https://www.exoticindia.com/vendor-api/product/optionals';
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Accept: application/json'
-        ];
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_HTTPGET => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
-        ]);
-        $response = curl_exec($ch);
-        if (curl_errno($ch)) {
-            error_log("cURL Error: " . curl_error($ch));
-            curl_close($ch);
-            return false;
-        }
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($httpCode != 200) {
-            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
-            return false;
-        }
-        return json_decode($response, true);
+        $refs = $this->vendorReferenceCache()->getDesktopformRefs(false);
+        return $refs['optionals_data'] ?: false;
     }
+
     public function getform3() {
         is_login();
         global $inboundingModel;
@@ -2165,7 +2095,7 @@ class InboundingController {
         $stock_price_temp[0]['instock_leadtime'] = $d['in_stock_leadtime_days'] ?? '';
         $stock_price_temp[0]['cp'] = $d['cp'] ?? 0;
         $stock_price_temp[0]['usd'] = $d['usd_price'] ?? 0;
-        $stock_price_temp[0]['permanently_available'] = (($d['permanently_available'] ?? '0') === '1') ? '1' : '0';
+        $stock_price_temp[0]['permanently_available'] = (($d['permanently_available'] ?? 0) == 1) ? 1 : 0;
         $stock_price_temp[0]['amazon_sold'] = '0';
         $stock_price_temp[0]['amazon_leadtime'] = '10';
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
@@ -2217,7 +2147,7 @@ class InboundingController {
                 $stock_price_temp[$i]['instock_leadtime'] = $d['in_stock_leadtime_days'] ?? '';
                 $stock_price_temp[$i]['cp'] = $value['cp'] ?? 0;
                 $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
-                $stock_price_temp[$i]['permanently_available'] = (($d['permanently_available'] ?? '0') === '1') ? '1' : '0';
+                $stock_price_temp[$i]['permanently_available'] = (($d['permanently_available'] ?? 0) == 1) ? 1 : 0;
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';

@@ -44,8 +44,9 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <style>
-    body {
-        overflow: hidden; /* Crucial Fix */
+    html, body {
+        height: 100%;
+        overflow: hidden;
     }
     .draggable-item {
         user-select: none;
@@ -111,6 +112,45 @@
     /* Dimension Input Style */
     .dim-input { transition: border-color 0.2s; }
     .dim-input:focus { border-color: #d97824 !important; }
+
+    /* Desktop form modals — always fixed (never expand page height when closed) */
+    .desktop-form-modal {
+        display: none !important;
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        overflow: hidden !important;
+        z-index: -1 !important;
+    }
+    .desktop-form-modal.is-open {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        overflow: auto !important;
+    }
+    #publishConfirmPopup.is-open {
+        z-index: 80 !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+    }
+    #imagePopup.is-open {
+        z-index: 100 !important;
+        background: rgba(0, 0, 0, 0.8) !important;
+    }
+    #deleteConfirmPopup.is-open {
+        z-index: 60 !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+    }
+    #materialModal.is-open {
+        z-index: 70 !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+    }
 </style>
 <?php
 $record_id = $_GET['id'] ?? '';
@@ -123,11 +163,29 @@ $sizeOptions = [
     'XXL'  => 'Extra Extra Large (XXL)(44)',
     'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
 ];
-$colorMapData = $data['form2']['gecolormaps']['colormaps'] ?? [];
-function renderColorMapField($fieldName, $savedValue, $customClass = "") {
+$gecolormapsRef = $data['form2']['gecolormaps'] ?? [];
+$colorMapData = (is_array($gecolormapsRef) && isset($gecolormapsRef['colormaps'])) ? $gecolormapsRef['colormaps'] : [];
+function renderColorMapField($fieldName, $savedValue, $customClass = "", $showSyncIcon = false) {
+    $labelHtml = '<label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>';
+    if ($showSyncIcon) {
+        $labelHtml = '
+        <div class="flex items-center gap-1.5 mb-1">
+            <label class="text-xs font-bold text-[#555]">Color Map:</label>
+            <button type="button"
+                    id="colormap-cache-sync-btn"
+                    class="inline-flex items-center justify-center w-6 h-6 rounded border border-[#ccc] bg-white text-[#555] hover:border-[#d97824] hover:text-[#d97824] transition-colors"
+                    title="Refresh color maps from catalog">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+                <span class="sr-only">Refresh color maps</span>
+            </button>
+        </div>';
+    }
     return '
     <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
-        <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
+        ' . $labelHtml . '
         <select name="' . $fieldName . '" 
                 class="colormap-select ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]"
                 data-saved-value="' . htmlspecialchars($savedValue) . '">
@@ -185,53 +243,78 @@ function renderSizeField($fieldName, $currentValue, $isClothing, $options, $cust
     return $html;
 }
 $currentSize = $data['form2']['size'] ?? '';
-function getThumbnail($filePath, $width = 150, $height = 150) {
-    // 1. Sanitize Path (remove leading slash for file system check)
-    $cleanPath = ltrim($filePath, '/');
+function getThumbnail($filePath, $width = 150, $height = 150, bool $generateIfMissing = true) {
+    $placeholder = 'assets/images/placeholder.png';
+    $webPath = ltrim((string) $filePath, '/');
 
-    // 2. Check if original file exists
-    if (empty($cleanPath) || !file_exists($cleanPath)) {
-        return 'assets/images/placeholder.png'; // Make sure this placeholder file exists!
+    if ($webPath === '') {
+        return $placeholder;
     }
 
-    // 3. Determine Directories automatically
-    $dirName  = dirname($cleanPath); // Gets "products" or "uploads/itm_img"
-    $fileName = basename($cleanPath); // Gets "image.jpg"
-    
-    $thumbDir  = $dirName . '/thumbs/'; 
-    $thumbPath = $thumbDir . $fileName;
-
-    // 4. Return cached thumbnail only if it's fresh. If source changed, rebuild thumb.
-    if (file_exists($thumbPath)) {
-        $srcMtime = @filemtime($cleanPath);
-        $thumbMtime = @filemtime($thumbPath);
-        if ($srcMtime !== false && $thumbMtime !== false && $thumbMtime >= $srcMtime) {
-            return $thumbPath;
+    $fsPath = $webPath;
+    if (!is_file($fsPath) || !is_readable($fsPath)) {
+        $rootPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $webPath);
+        if (is_file($rootPath) && is_readable($rootPath)) {
+            $fsPath = $rootPath;
+        } else {
+            return $placeholder;
         }
-        @unlink($thumbPath);
     }
 
-    // 5. Create Thumb Directory if it doesn't exist
-    if (!is_dir($thumbDir)) {
-        mkdir($thumbDir, 0777, true);
+    $fileSize = @filesize($fsPath);
+    if ($fileSize === false || $fileSize <= 0) {
+        return $placeholder;
     }
 
-    // 6. Generate Thumbnail
-    $info = getimagesize($cleanPath);
-    if (!$info) return $cleanPath; // Return original if not an image
+    $dirName = dirname($webPath);
+    $fileName = basename($webPath);
+    $thumbWebPath = $dirName . '/thumbs/' . $fileName;
+    $thumbFsPath = dirname($fsPath) . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $fileName;
+
+    if (is_file($thumbFsPath) && is_readable($thumbFsPath)) {
+        $srcMtime = @filemtime($fsPath);
+        $thumbMtime = @filemtime($thumbFsPath);
+        if ($srcMtime !== false && $thumbMtime !== false && $thumbMtime >= $srcMtime) {
+            return $thumbWebPath;
+        }
+        @unlink($thumbFsPath);
+    }
+
+    if (!$generateIfMissing) {
+        return $placeholder;
+    }
+
+    $thumbDir = dirname($thumbFsPath);
+    if (!is_dir($thumbDir) && !@mkdir($thumbDir, 0777, true) && !is_dir($thumbDir)) {
+        return $placeholder;
+    }
+
+    $info = @getimagesize($fsPath);
+    if ($info === false || empty($info['mime'])) {
+        return $placeholder;
+    }
 
     $mime = $info['mime'];
-    
+    $image = null;
     switch ($mime) {
-        case 'image/jpeg': $image = imagecreatefromjpeg($cleanPath); break;
-        case 'image/png':  $image = imagecreatefrompng($cleanPath); break;
-        case 'image/gif':  $image = imagecreatefromgif($cleanPath); break;
-        case 'image/webp': $image = imagecreatefromwebp($cleanPath); break;
-        default: return $cleanPath;
+        case 'image/jpeg': $image = @imagecreatefromjpeg($fsPath); break;
+        case 'image/png':  $image = @imagecreatefrompng($fsPath); break;
+        case 'image/gif':  $image = @imagecreatefromgif($fsPath); break;
+        case 'image/webp': $image = @imagecreatefromwebp($fsPath); break;
+        default: return $placeholder;
+    }
+
+    if (!$image) {
+        return $placeholder;
     }
 
     $oldW = imagesx($image);
     $oldH = imagesy($image);
+    if ($oldW <= 0 || $oldH <= 0) {
+        imagedestroy($image);
+        return $placeholder;
+    }
+
     $aspectRatio = $oldW / $oldH;
 
     if ($width / $height > $aspectRatio) {
@@ -240,7 +323,11 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         $height = (int) ($width / $aspectRatio);
     }
 
-    $newImage = imagecreatetruecolor((int)$width, (int)$height);
+    $newImage = imagecreatetruecolor((int) $width, (int) $height);
+    if (!$newImage) {
+        imagedestroy($image);
+        return $placeholder;
+    }
 
     if ($mime == 'image/png' || $mime == 'image/webp') {
         imagecolortransparent($newImage, imagecolorallocatealpha($newImage, 0, 0, 0, 127));
@@ -251,16 +338,16 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
     imagecopyresampled($newImage, $image, 0, 0, 0, 0, $width, $height, $oldW, $oldH);
 
     switch ($mime) {
-        case 'image/jpeg': imagejpeg($newImage, $thumbPath, 80); break;
-        case 'image/png':  imagepng($newImage, $thumbPath); break;
-        case 'image/gif':  imagegif($newImage, $thumbPath); break;
-        case 'image/webp': imagewebp($newImage, $thumbPath); break;
+        case 'image/jpeg': @imagejpeg($newImage, $thumbFsPath, 80); break;
+        case 'image/png':  @imagepng($newImage, $thumbFsPath); break;
+        case 'image/gif':  @imagegif($newImage, $thumbFsPath); break;
+        case 'image/webp': @imagewebp($newImage, $thumbFsPath); break;
     }
 
     imagedestroy($image);
     imagedestroy($newImage);
 
-    return $thumbPath;
+    return is_file($thumbFsPath) ? $thumbWebPath : $placeholder;
 }
 
 /**
@@ -318,7 +405,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         $displayPhotoPath = $itemImageRelPath !== '' ? $itemImageRelPath : $mainPhoto;
                         $hasMainPhoto = !empty($displayPhotoPath);
 
-                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath)) : '';
+                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath, 150, 150, false)) : '';
                     ?>
                     <img id="main_photo_preview" 
                          src="<?= $mainPhotoThumb ?>" 
@@ -595,7 +682,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['upc'] ?? '') ?>" name="upc" placeholder="upc">
                         </div>
                     </div>
-                    <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
+                    <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? '', '', true); ?>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
                         <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
@@ -688,7 +775,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     $hasPhoto = (!empty($rawPhoto) && $rawPhoto !== '0');
                                     
                                     // Pass FULL path to generator
-                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto)) : '#';
+                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto, 150, 150, false)) : '#';
                                 ?>
                                 <img src="<?= $varThumbSrc ?>" 
                                      class="preview-img w-full h-full object-cover absolute inset-0 z-10"
@@ -902,7 +989,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         $fullPath = "uploads/itm_img/" . $img['file_name'];
 
         // 2. Pass the FULL PATH to the generator (filesystem-relative)
-        $thumbSrc = getThumbnail($fullPath);
+        $thumbSrc = getThumbnail($fullPath, 150, 150, false);
         $thumbVersion = @filemtime(ltrim($fullPath, '/')) ?: time();
         $thumbUrl = base_url($thumbSrc) . '?v=' . $thumbVersion;
         $fullUrl  = base_url($fullPath);
@@ -1325,7 +1412,19 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                    value="<?php echo !empty($data['form2']['invoice_no']) ? $data['form2']['invoice_no'] : ''; ?>">
                         </div>
                         <div class="w-full">
-                            <label class="block text-xs font-bold text-[#222] mb-[5px]" for="vendor_code">Vendor:</label>
+                            <div class="flex items-center gap-1.5 mb-[5px]">
+                                <label class="text-xs font-bold text-[#222]" for="vendor_code">Vendor:</label>
+                                <button type="button"
+                                        id="vendor-cache-sync-btn"
+                                        class="inline-flex items-center justify-center w-6 h-6 rounded border border-[#ccc] bg-white text-[#555] hover:border-[#d97824] hover:text-[#d97824] transition-colors"
+                                        title="Refresh vendors from catalog">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M12 20h9"></path>
+                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                    </svg>
+                                    <span class="sr-only">Refresh vendors</span>
+                                </button>
+                            </div>
                             <select name="vendor_code" id="vendor_code" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Vendor...">
                                 <option value="">Select Vendor</option>
                                 <?php foreach ($data['vendors'] as $key4 => $value4) {
@@ -1538,7 +1637,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
     </form>
 </div>
-<div id="publishConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[80]">
+<div id="publishConfirmPopup" class="desktop-form-modal" hidden aria-hidden="true">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[420px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
         <div id="publishConfirmIdle">
             <h3 class="text-lg font-bold mb-2 text-gray-800">Publish product</h3>
@@ -1552,7 +1651,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <button type="button" id="publishCancelBtn" onclick="closePublishPopup()" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
             </div>
         </div>
-        <div id="publishConfirmBusy" class="hidden flex flex-col items-center gap-3 py-2">
+        <div id="publishConfirmBusy" class="hidden flex-col items-center gap-3 py-2">
             <svg class="animate-spin h-10 w-10 text-[#28a745]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -1562,7 +1661,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
     </div>
 </div>
-<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-80 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup(event)">
+<div id="imagePopup" class="desktop-form-modal" hidden aria-hidden="true" onclick="closeImagePopup(event)">
     <div class="bg-white p-2 rounded-md w-auto max-w-[95vw] max-h-[95vh] relative flex flex-col items-center shadow-2xl" onclick="event.stopPropagation();">
         
         <button onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-600 hover:bg-red-700 text-white w-8 h-8 flex items-center justify-center rounded-full text-sm shadow-md border-2 border-white">✕</button>
@@ -1571,7 +1670,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         
     </div>
 </div>
-<div id="deleteConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[60]">
+<div id="deleteConfirmPopup" class="desktop-form-modal" hidden aria-hidden="true">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
         <h3 class="text-lg font-bold mb-2 text-gray-800">Remove Invoice?</h3>
         <p class="text-sm text-gray-600 mb-4">
@@ -1591,7 +1690,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
     </div>
 </div>
-<div id="materialModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[70]">
+<div id="materialModal" class="desktop-form-modal" hidden aria-hidden="true">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative font-['Segoe_UI']">
         <h3 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Add New Material</h3>
         
@@ -1629,10 +1728,18 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     </div>
 </div>
 <script>
+(function () {
+    document.querySelectorAll('.desktop-form-modal').forEach(function (el) {
+        el.hidden = true;
+        el.classList.remove('is-open');
+    });
+})();
+</script>
+<script>
     // 1. Open Modal & Fetch Next Order
     function openMaterialModal() {
         const modal = document.getElementById('materialModal');
-        modal.classList.remove('hidden');
+        showDesktopOverlay(modal);
         
         // Reset fields
         document.getElementById('new_material_name').value = '';
@@ -1650,7 +1757,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         document.getElementById('new_material_name').focus();
     }
     function closeMaterialModal() {
-        document.getElementById('materialModal').classList.add('hidden');
+        hideDesktopOverlay(document.getElementById('materialModal'));
     }
     // 2. Helper: Generate Slug automatically
     function generateSlug(text) {
@@ -1970,9 +2077,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // 3. Trigger Delete Popup
     function openDeletePopup(event) {
-        event.stopPropagation(); 
-        const popup = document.getElementById('deleteConfirmPopup');
-        popup.classList.remove('hidden');
+        event.stopPropagation();
+        showDesktopOverlay(document.getElementById('deleteConfirmPopup'));
         const input = document.getElementById('deleteConfirmationInput');
         input.value = '';
         input.focus();
@@ -1998,7 +2104,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // 5. Close Delete Popup
     function closeDeletePopup() {
-        document.getElementById('deleteConfirmPopup').classList.add('hidden');
+        hideDesktopOverlay(document.getElementById('deleteConfirmPopup'));
     }
 </script>
 <script>
@@ -2456,14 +2562,61 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <script>
+    function showDesktopOverlay(el) {
+        if (!el) return;
+        el.hidden = false;
+        el.classList.add('is-open');
+        el.setAttribute('aria-hidden', 'false');
+    }
+    function hideDesktopOverlay(el) {
+        if (!el) return;
+        el.hidden = true;
+        el.classList.remove('is-open');
+        el.setAttribute('aria-hidden', 'true');
+    }
+    function hideAllDesktopOverlays() {
+        document.querySelectorAll('.desktop-form-modal').forEach(hideDesktopOverlay);
+    }
+    function clearStuckPageOverlays() {
+        hideAllDesktopOverlays();
+        document.querySelectorAll('.swal2-container').forEach(function (el) { el.remove(); });
+        document.body.classList.remove('swal2-shown', 'swal2-height-auto');
+        document.body.style.removeProperty('padding-right');
+        document.body.style.overflow = 'hidden';
+        var ga = document.getElementById('global-alert');
+        if (ga) {
+            ga.style.display = 'none';
+        }
+        var gab = document.getElementById('global-alert-backdrop');
+        if (gab) {
+            gab.style.display = 'none';
+        }
+    }
+    function mountDesktopFormModals() {
+        document.querySelectorAll('.desktop-form-modal').forEach(function (el) {
+            if (el.parentElement !== document.body) {
+                document.body.appendChild(el);
+            }
+        });
+    }
+    mountDesktopFormModals();
+    clearStuckPageOverlays();
+    document.addEventListener('DOMContentLoaded', function () {
+        mountDesktopFormModals();
+        clearStuckPageOverlays();
+    });
+    window.addEventListener('load', clearStuckPageOverlays);
+    setTimeout(clearStuckPageOverlays, 0);
+    setTimeout(clearStuckPageOverlays, 300);
     function openImagePopup(imageUrl) {
+        if (!imageUrl) return;
         popupImage.src = imageUrl;
-        document.getElementById('imagePopup').classList.remove('hidden');
+        showDesktopOverlay(document.getElementById('imagePopup'));
     }
     function closeImagePopup(event) {
-        document.getElementById('imagePopup').classList.add('hidden');
+        hideDesktopOverlay(document.getElementById('imagePopup'));
         document.getElementById('popupImage').src = '';
-    } 
+    }
 </script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
@@ -2508,6 +2661,91 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+(function () {
+    var SPIN = '<svg class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+
+    function notify(icon, title, body, asHtml) {
+        if (typeof Swal === 'undefined') {
+            alert(title + (body ? ': ' + String(body).replace(/<[^>]+>/g, '') : ''));
+            return;
+        }
+        var opts = { icon: icon, title: title };
+        opts[asHtml ? 'html' : 'text'] = body || '';
+        Swal.fire(opts);
+    }
+
+    window.bindDesktopCacheSync = function (btnId, cfg) {
+        var btn = document.getElementById(btnId);
+        if (!btn || !cfg || !cfg.url) return;
+
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            var run = function () {
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.classList.add('opacity-60', 'cursor-wait');
+                btn.innerHTML = SPIN;
+
+                fetch(cfg.url, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                })
+                    .then(function (res) {
+                        return res.json().then(function (data) {
+                            return { ok: res.ok, data: data };
+                        }).catch(function () {
+                            return { ok: false, data: {} };
+                        });
+                    })
+                    .then(function (payload) {
+                        var data = payload.data || {};
+                        if (!cfg.isOk(payload, data)) {
+                            notify('error', cfg.failTitle || 'Refresh failed', typeof cfg.message === 'function' ? cfg.message(false, data) : '', !!cfg.htmlMessage);
+                            return;
+                        }
+                        var after = cfg.afterSync ? cfg.afterSync(data) : null;
+                        return Promise.resolve(after).then(
+                            function () {
+                                notify('success', cfg.successTitle || 'Refreshed', typeof cfg.message === 'function' ? cfg.message(true, data) : '', !!cfg.htmlMessage);
+                            },
+                            function () {
+                                notify('warning', cfg.warnTitle || cfg.successTitle || 'Refreshed', cfg.warnMessage || 'Saved, but the form could not reload.', !!cfg.htmlMessage);
+                            }
+                        );
+                    })
+                    .catch(function (err) {
+                        notify('error', cfg.failTitle || 'Refresh failed', (err && err.message) || 'Network error.');
+                    })
+                    .finally(function () {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-60', 'cursor-wait');
+                        btn.innerHTML = orig;
+                    });
+            };
+
+            if (typeof Swal === 'undefined') {
+                if (window.confirm(cfg.confirmTitle || 'Refresh from catalog?')) run();
+                return;
+            }
+            Swal.fire({
+                title: cfg.confirmTitle || 'Refresh?',
+                html: cfg.confirmHtml || '',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Refresh now',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#d97824',
+            }).then(function (result) {
+                if (result.isConfirmed) run();
+            });
+        });
+    };
+})();
+</script>
+<script>
     function resetPublishPopup() {
         const idle = document.getElementById('publishConfirmIdle');
         const busy = document.getElementById('publishConfirmBusy');
@@ -2515,25 +2753,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const localBtn = document.getElementById('publishLocalBtn');
         const cancelBtn = document.getElementById('publishCancelBtn');
         if (idle) idle.classList.remove('hidden');
-        if (busy) busy.classList.add('hidden');
+        if (busy) {
+            busy.classList.add('hidden');
+            busy.classList.remove('flex');
+        }
         if (liveBtn) liveBtn.disabled = false;
         if (localBtn) localBtn.disabled = false;
         if (cancelBtn) cancelBtn.disabled = false;
     }
     function openPublishPopup() {
         resetPublishPopup();
-        const popup = document.getElementById('publishConfirmPopup');
-        if(popup) {
-            popup.classList.remove('hidden');
-        } else {
-            console.error("Popup element 'publishConfirmPopup' not found!");
-        }
+        showDesktopOverlay(document.getElementById('publishConfirmPopup'));
     }
     function closePublishPopup() {
-        const popup = document.getElementById('publishConfirmPopup');
-        if(popup) {
-            popup.classList.add('hidden');
-        }
+        hideDesktopOverlay(document.getElementById('publishConfirmPopup'));
         resetPublishPopup();
     }
     // 1. New function to bridge Validation and Publishing
@@ -2661,7 +2894,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const localBtn = document.getElementById('publishLocalBtn');
         const cancelBtn = document.getElementById('publishCancelBtn');
         if (idle) idle.classList.add('hidden');
-        if (busy) busy.classList.remove('hidden');
+        if (busy) {
+            busy.classList.remove('hidden');
+            busy.classList.add('flex');
+        }
         if (liveBtn) liveBtn.disabled = true;
         if (localBtn) localBtn.disabled = true;
         if (cancelBtn) cancelBtn.disabled = true;
@@ -3462,7 +3698,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Get PHP Data into JS
-    const colorMapDB = <?php echo json_encode($colorMapData); ?>;
+    let colorMapDB = <?php echo json_encode($colorMapData); ?>;
     // 2. Function to determine the key (jewelry/textiles) from the Group Name
     function getColorMapKey() {
         const groupSelect = document.getElementById('group_select');
@@ -3490,6 +3726,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const wrappers = document.querySelectorAll('.colormap-wrapper');
         wrappers.forEach(wrapper => {
             const select = wrapper.querySelector('.colormap-select');
+            if (!select) return;
             // A. If no matching category, Hide and Clear
             if (!key || !colorMapDB[key]) {
                 wrapper.style.display = 'none';
@@ -3540,6 +3777,44 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     // 5. Initial Run
     updateAllColorMaps();
+
+    bindDesktopCacheSync('colormap-cache-sync-btn', {
+        url: <?php echo json_encode(base_url('?page=inbounding&action=syncVendorReferenceCache&format=json')); ?>,
+        confirmTitle: 'Refresh catalog data?',
+        confirmHtml: 'Updates <strong>color maps</strong> and <strong>optionals</strong> from Exotic India.',
+        isOk: function (p, d) { return p.ok && d.ok === true; },
+        afterSync: function (d) {
+            if (d.refs && d.refs.gecolormaps && d.refs.gecolormaps.colormaps) {
+                colorMapDB = d.refs.gecolormaps.colormaps;
+                document.querySelectorAll('.colormap-select').forEach(function (s) {
+                    s.removeAttribute('data-loaded-key');
+                });
+                updateAllColorMaps();
+            }
+        },
+        successTitle: 'Catalog data refreshed',
+        failTitle: 'Refresh failed',
+        htmlMessage: true,
+        message: function (ok, d) {
+            if (!ok) {
+                var fail = [];
+                if (d.results) {
+                    Object.keys(d.results).forEach(function (k) {
+                        var r = d.results[k];
+                        fail.push(k + ': ' + (r.ok ? 'OK' : ('Failed — ' + (r.error || 'unknown'))));
+                    });
+                }
+                return fail.length ? fail.join('<br>') : 'Could not refresh catalog data.';
+            }
+            var okLines = [];
+            if (d.results) {
+                Object.keys(d.results).forEach(function (k) {
+                    okLines.push(k + ': ' + (d.results[k].ok ? 'OK' : 'Failed'));
+                });
+            }
+            return 'Color map lists were updated.' + (okLines.length ? '<br><span class="text-xs text-gray-600">' + okLines.join('<br>') + '</span>' : '');
+        },
+    });
 });
 </script>
 <script>
@@ -4131,13 +4406,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 document.addEventListener('DOMContentLoaded', function() {
-    
-    // Function to fetch vendors based on selected group by Hedayat
     function updateVendorListBasedOnGroup() {
         const groupSelect = document.getElementById('group_select');
         const vendorSelect = document.getElementById('vendor_code');
         
         if (!groupSelect || !vendorSelect) return;
+
+        const savedVendor = vendorSelect.tomselect
+            ? vendorSelect.tomselect.getValue()
+            : vendorSelect.value;
 
         // Get the selected group value
         let groupValue = '';
@@ -4150,12 +4427,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!groupValue) {
             // Reset vendor list if no group selected
             vendorSelect.innerHTML = '<option value="">Select Vendor</option>';
-            return;
+            if (vendorSelect.tomselect) {
+                vendorSelect.tomselect.clearOptions();
+                vendorSelect.tomselect.addOption({ value: '', text: 'Select Vendor' });
+                vendorSelect.tomselect.setValue('', true);
+            }
+            return Promise.resolve();
         }
 
         // Call the API to fetch vendors for this group
-        fetch(`index.php?page=vendors&action=getAllVendors&groupname=${encodeURIComponent(groupValue)}`, {
+        return fetch(`index.php?page=vendors&action=getAllVendors&groupname=${encodeURIComponent(groupValue)}`, {
             method: 'GET',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json'
             }
@@ -4171,9 +4454,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check if data contains vendors
             if (data) {
                 const vendors = data || [];
-                //console.log('Fetched Vendors:', vendors); // Debug log
                 if (Array.isArray(vendors) && vendors.length > 0) {
-                    // Add vendor options
                     vendors.forEach(vendor => {
                         const vendorValue = String(vendor.id ?? vendor.vendor_id ?? '').trim();
                         if (!vendorValue) return;
@@ -4181,12 +4462,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         option.value = vendorValue;
                         option.textContent = vendor.vendor_name;
                         vendorSelect.appendChild(option);
-                        //console.log('options:', option);
                     });
                      
-                    // If TomSelect is initialized, refresh it
                     if (vendorSelect.tomselect) {
                         vendorSelect.tomselect.clearOptions();
+                        vendorSelect.tomselect.addOption({ value: '', text: 'Select Vendor' });
                         vendors.forEach(vendor => {
                             const vendorValue = String(vendor.id ?? vendor.vendor_id ?? '').trim();
                             if (!vendorValue) return;
@@ -4195,10 +4475,21 @@ document.addEventListener('DOMContentLoaded', function() {
                                 text: vendor.vendor_name
                             });
                         });
+                        if (savedVendor && vendorSelect.tomselect.options[savedVendor]) {
+                            vendorSelect.tomselect.setValue(savedVendor, true);
+                        } else {
+                            vendorSelect.tomselect.setValue('', true);
+                        }
+                    } else if (savedVendor) {
+                        vendorSelect.value = savedVendor;
                     }
-                   
                 } else {
                     vendorSelect.innerHTML = '<option value="">No vendors found</option>';
+                    if (vendorSelect.tomselect) {
+                        vendorSelect.tomselect.clearOptions();
+                        vendorSelect.tomselect.addOption({ value: '', text: 'No vendors found' });
+                        vendorSelect.tomselect.setValue('', true);
+                    }
                 }
             } else {
                 vendorSelect.innerHTML = '<option value="">No vendors available</option>';
@@ -4207,19 +4498,31 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             console.error('Error fetching vendors:', error);
             vendorSelect.innerHTML = '<option value="">Error loading vendors</option>';
+            throw error;
         });
     }
 
-    // Expose function globally so it can be called from other scripts
-    //window.updateVendorListBasedOnGroup = updateVendorListBasedOnGroup;
+    window.updateVendorListBasedOnGroup = updateVendorListBasedOnGroup;
 
-    //Hook into the group select change event
-    const groupSelect = document.getElementById('group_select');
+    bindDesktopCacheSync('vendor-cache-sync-btn', {
+        url: <?php echo json_encode(base_url('index.php?page=vendors&action=fetchAllVendors')); ?>,
+        confirmTitle: 'Refresh vendor list?',
+        confirmHtml: 'Syncs vendors from Exotic India (same as <strong>Vendors → Sync from API</strong>).',
+        isOk: function (p, d) { return p.ok && d.success === true && d.status !== 'error'; },
+        afterSync: function () { return updateVendorListBasedOnGroup(); },
+        successTitle: 'Vendors refreshed',
+        failTitle: 'Vendor refresh failed',
+        warnTitle: 'Vendors synced',
+        warnMessage: 'Database updated, but the dropdown could not refresh. Change group or reload the page.',
+        message: function (ok, d) {
+            if (!ok) return d.message || 'Could not sync vendors from the catalog API.';
+            return 'Inserted: ' + (d.inserted || 0) + ', Updated: ' + (d.updated || 0) + ', Total: ' + (d.total || 0) + '.';
+        },
+    });
+
+    var groupSelect = document.getElementById('group_select');
     if (groupSelect) {
         groupSelect.addEventListener('change', updateVendorListBasedOnGroup);
-        // if (groupSelect.tomselect) {
-        //     groupSelect.tomselect.on('change', updateVendorListBasedOnGroup);
-        // }
     }
 });
 
@@ -4282,7 +4585,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 3. Run on Load (in case editing existing data)
     // Only run if the input is currently empty (to avoid overwriting saved data on edit load)
-    if(imgDirInput.value === "") {
+    if (imgDirInput && imgDirInput.value === "") {
         setTimeout(updateImageDirectory, 500); // Small delay to let TomSelect load
     }
 });

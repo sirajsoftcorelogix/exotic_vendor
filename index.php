@@ -1004,6 +1004,9 @@ switch ($page) {
             case 'bulkAssign':
                 $controller->bulk_assign_action();
                 break;
+            case 'syncVendorReferenceCache':
+                $controller->syncVendorReferenceCache();
+                break;
             case 'printInboundLabel':
                 $controller->printInboundLabel();
                 break;

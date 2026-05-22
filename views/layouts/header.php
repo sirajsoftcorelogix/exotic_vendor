@@ -389,14 +389,17 @@ $msgCnt = $notificationController->getUnreadCount();
     function checkNewNotification() {
         if (processing) return;
 
-        $.get("index.php?page=notifications&action=fetch_notifications", function(data) {
-            let notifs = JSON.parse(data);
-
-            if (notifs.length > 0) {
-                processing = true;
-                showNotificationsQueue(notifs);
-            }
-        });
+        $.get("index.php?page=notifications&action=fetch_notifications")
+            .done(function(data) {
+                let notifs = JSON.parse(data);
+                if (notifs.length > 0) {
+                    processing = true;
+                    showNotificationsQueue(notifs);
+                }
+            })
+            .fail(function() {
+                // Server busy (502) — skip silently; poll will retry
+            });
     }
 
     function playNotificationSound() {
@@ -454,7 +457,7 @@ $msgCnt = $notificationController->getUnreadCount();
         setTimeout(() => showNotificationsQueue(notifs), 5000);
     }
 
-    setInterval(checkNewNotification, 5000);
+    setInterval(checkNewNotification, 30000);
 
     
 // Global alert popup (toast)
