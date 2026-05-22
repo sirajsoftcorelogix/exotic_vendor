@@ -3456,8 +3456,8 @@ class POSRegisterController
         $row['invoice_id'] = $invoiceId;
         $row['show_invoice_pdf_button'] = true;
         $row['show_invoice_preview_button'] = true;
-        $row['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
-        $row['invoice_preview_url'] = 'index.php?page=posinvoice&action=print-preview&invoice_id=' . $invoiceId;
+        $row['invoice_pdf_url'] = 'index.php?page=invoices&action=generate_pdf&invoice_id=' . $invoiceId;
+        $row['invoice_preview_url'] = 'index.php?page=invoices&action=preview&invoice_id=' . $invoiceId;
         $row['invoice_pdf_disabled_hint'] = '';
 
         return $row;
