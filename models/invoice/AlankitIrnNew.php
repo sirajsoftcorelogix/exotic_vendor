@@ -415,10 +415,121 @@ return base64_encode($encryptedData);
                 'CntCode' => (string)($invoice['shipping_country_code'] ?? ''),
                 'ExpDuty' => (float)($invoice['shipping_exp_duty'] ?? 0)
             ],
-            "EwbDtls" => null,
+            "EwbDtls" => [
+                'TransId' => "12AWGPV7107B1Z1",
+                'TransName' => "XYZ EXPORTS",
+                'Distance' => 100,
+                'TransDocNo' => "DOC01",
+                'TransDocDt' => "18/08/2020",
+                'VehNo' => "ka123456",
+                'VehType' => "R",
+                'TransMode' => "1"
+            ],
         ];
     }
 
-   
+    /**
+     * Prepare E-Way Bill payload in official Alankit/Eraahi format
+     * @param array $ewbData E-way bill data
+     * @return array Formatted payload matching Alankit specifications
+     */
+    public function prepareEwbPayload($ewbData) {
+        return [
+            'Irn' => $ewbData['irn'] ?? '',
+            'Distance' => (int)($ewbData['distance'] ?? 100),
+            'TransMode' => (string)($ewbData['trans_mode'] ?? '1'),
+            'TransId' => (string)($ewbData['trans_id'] ?? ''),
+            'TransName' => (string)($ewbData['trans_name'] ?? 'trans name'),
+            'TrnDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
+            'TrnDocNo' => (string)($ewbData['trn_doc_no'] ?? ''),
+            'VehNo' => (string)($ewbData['veh_no'] ?? 'KA12ER1234'),
+            'VehType' => (string)($ewbData['veh_type'] ?? 'R')
+        ];
+    }
+
+    /**
+     * Generate E-Way Bill with encrypted request and response
+     * @param array $ewbData E-way bill data
+     * @param string $accessToken Authentication token
+     * @param string $decryptedSek Decrypted SEK for encryption/decryption
+     * @return array API response
+     */
+    public function generateEwb($ewbData, $accessToken, $decryptedSek) {
+        $url = $this->baseUrl . self::EWAYBILL_ENDPOINT;
+        
+        // Prepare EWB payload
+        $payload = $this->prepareEwbPayload($ewbData);
+        
+        // Encrypt payload
+        $payloadJson = json_encode($payload);
+        $payloadB64 = base64_encode($payloadJson);
+        $encryptedPayload = $this->encryptBySymmetricKey($payloadB64, $decryptedSek);
+        
+        if (!$encryptedPayload) {
+            error_log("Alankit EWB: Payload encryption failed");
+            return [
+                'status' => false,
+                'message' => 'Payload encryption failed'
+            ];
+        }
+        
+        $ch = curl_init();
+        
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        
+        $headers = [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'Gstin: ' . $this->gstin,
+            'user_name: AL001',
+            'Ocp-Apim-Subscription-Key: ' . $this->subscriptionKey,
+            'AuthToken: ' . $accessToken
+        ];
+        
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['Data' => $encryptedPayload]));
+        
+        $response = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($curlError) {
+            error_log("Alankit EWB cURL Error ($httpCode): $curlError for URL: $url");
+            return [
+                'status' => false,
+                'message' => 'cURL Error: ' . $curlError,
+                'http_code' => $httpCode
+            ];
+        }
+        
+        $decoded = json_decode($response, true);
+        
+        if ($httpCode >= 400) {
+            error_log("Alankit EWB HTTP Error ($httpCode) for URL: $url. Response: " . substr($response, 0, 500));
+            return [
+                'status' => false,
+                'message' => 'HTTP Error ' . $httpCode,
+                'data' => $decoded
+            ];
+        }
+        
+        // Decrypt response
+        if ($decoded && isset($decoded['Data'])) {
+            $decryptedResponse = $this->decrypt_irn($decoded['Data'], $decryptedSek);
+            $ewbResponse = json_decode($decryptedResponse, true);
+            error_log("Alankit EWB: Response decrypted successfully");
+            return $ewbResponse;
+        }
+        
+        error_log("Alankit EWB: No response data received");
+        return $decoded;
+    }
 }
 ?>
