@@ -22,7 +22,7 @@ foreach ($images as $img) {
 function getThumbnail($filePath, $width = 150, $height = 150) {
     $cleanPath = ltrim($filePath, '/');
 
-    if (empty($cleanPath) || !file_exists($cleanPath)) {
+    if (empty($cleanPath) || !file_exists($cleanPath) || !is_file($cleanPath) || !is_readable($cleanPath)) {
         return 'assets/images/placeholder.png'; 
     }
 
@@ -43,8 +43,10 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
 
     if (!is_dir($thumbDir)) mkdir($thumbDir, 0777, true);
 
-    $info = getimagesize($cleanPath);
-    if (!$info) return $cleanPath;
+    $info = @getimagesize($cleanPath);
+    if ($info === false) {
+        return 'assets/images/placeholder.png';
+    }
 
     $mime = $info['mime'];
     switch ($mime) {
