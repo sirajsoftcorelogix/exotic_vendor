@@ -185,53 +185,78 @@ function renderSizeField($fieldName, $currentValue, $isClothing, $options, $cust
     return $html;
 }
 $currentSize = $data['form2']['size'] ?? '';
-function getThumbnail($filePath, $width = 150, $height = 150) {
-    // 1. Sanitize Path (remove leading slash for file system check)
-    $cleanPath = ltrim($filePath, '/');
+function getThumbnail($filePath, $width = 150, $height = 150, bool $generateIfMissing = true) {
+    $placeholder = 'assets/images/placeholder.png';
+    $webPath = ltrim((string) $filePath, '/');
 
-    // 2. Check if original file exists
-    if (empty($cleanPath) || !file_exists($cleanPath)) {
-        return 'assets/images/placeholder.png'; // Make sure this placeholder file exists!
+    if ($webPath === '') {
+        return $placeholder;
     }
 
-    // 3. Determine Directories automatically
-    $dirName  = dirname($cleanPath); // Gets "products" or "uploads/itm_img"
-    $fileName = basename($cleanPath); // Gets "image.jpg"
-    
-    $thumbDir  = $dirName . '/thumbs/'; 
-    $thumbPath = $thumbDir . $fileName;
-
-    // 4. Return cached thumbnail only if it's fresh. If source changed, rebuild thumb.
-    if (file_exists($thumbPath)) {
-        $srcMtime = @filemtime($cleanPath);
-        $thumbMtime = @filemtime($thumbPath);
-        if ($srcMtime !== false && $thumbMtime !== false && $thumbMtime >= $srcMtime) {
-            return $thumbPath;
+    $fsPath = $webPath;
+    if (!is_file($fsPath) || !is_readable($fsPath)) {
+        $rootPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $webPath);
+        if (is_file($rootPath) && is_readable($rootPath)) {
+            $fsPath = $rootPath;
+        } else {
+            return $placeholder;
         }
-        @unlink($thumbPath);
     }
 
-    // 5. Create Thumb Directory if it doesn't exist
-    if (!is_dir($thumbDir)) {
-        mkdir($thumbDir, 0777, true);
+    $fileSize = @filesize($fsPath);
+    if ($fileSize === false || $fileSize <= 0) {
+        return $placeholder;
     }
 
-    // 6. Generate Thumbnail
-    $info = getimagesize($cleanPath);
-    if (!$info) return $cleanPath; // Return original if not an image
+    $dirName = dirname($webPath);
+    $fileName = basename($webPath);
+    $thumbWebPath = $dirName . '/thumbs/' . $fileName;
+    $thumbFsPath = dirname($fsPath) . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $fileName;
+
+    if (is_file($thumbFsPath) && is_readable($thumbFsPath)) {
+        $srcMtime = @filemtime($fsPath);
+        $thumbMtime = @filemtime($thumbFsPath);
+        if ($srcMtime !== false && $thumbMtime !== false && $thumbMtime >= $srcMtime) {
+            return $thumbWebPath;
+        }
+        @unlink($thumbFsPath);
+    }
+
+    if (!$generateIfMissing) {
+        return $placeholder;
+    }
+
+    $thumbDir = dirname($thumbFsPath);
+    if (!is_dir($thumbDir) && !@mkdir($thumbDir, 0777, true) && !is_dir($thumbDir)) {
+        return $placeholder;
+    }
+
+    $info = @getimagesize($fsPath);
+    if ($info === false || empty($info['mime'])) {
+        return $placeholder;
+    }
 
     $mime = $info['mime'];
-    
+    $image = null;
     switch ($mime) {
-        case 'image/jpeg': $image = imagecreatefromjpeg($cleanPath); break;
-        case 'image/png':  $image = imagecreatefrompng($cleanPath); break;
-        case 'image/gif':  $image = imagecreatefromgif($cleanPath); break;
-        case 'image/webp': $image = imagecreatefromwebp($cleanPath); break;
-        default: return $cleanPath;
+        case 'image/jpeg': $image = @imagecreatefromjpeg($fsPath); break;
+        case 'image/png':  $image = @imagecreatefrompng($fsPath); break;
+        case 'image/gif':  $image = @imagecreatefromgif($fsPath); break;
+        case 'image/webp': $image = @imagecreatefromwebp($fsPath); break;
+        default: return $placeholder;
+    }
+
+    if (!$image) {
+        return $placeholder;
     }
 
     $oldW = imagesx($image);
     $oldH = imagesy($image);
+    if ($oldW <= 0 || $oldH <= 0) {
+        imagedestroy($image);
+        return $placeholder;
+    }
+
     $aspectRatio = $oldW / $oldH;
 
     if ($width / $height > $aspectRatio) {
@@ -240,7 +265,11 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         $height = (int) ($width / $aspectRatio);
     }
 
-    $newImage = imagecreatetruecolor((int)$width, (int)$height);
+    $newImage = imagecreatetruecolor((int) $width, (int) $height);
+    if (!$newImage) {
+        imagedestroy($image);
+        return $placeholder;
+    }
 
     if ($mime == 'image/png' || $mime == 'image/webp') {
         imagecolortransparent($newImage, imagecolorallocatealpha($newImage, 0, 0, 0, 127));
@@ -251,16 +280,16 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
     imagecopyresampled($newImage, $image, 0, 0, 0, 0, $width, $height, $oldW, $oldH);
 
     switch ($mime) {
-        case 'image/jpeg': imagejpeg($newImage, $thumbPath, 80); break;
-        case 'image/png':  imagepng($newImage, $thumbPath); break;
-        case 'image/gif':  imagegif($newImage, $thumbPath); break;
-        case 'image/webp': imagewebp($newImage, $thumbPath); break;
+        case 'image/jpeg': @imagejpeg($newImage, $thumbFsPath, 80); break;
+        case 'image/png':  @imagepng($newImage, $thumbFsPath); break;
+        case 'image/gif':  @imagegif($newImage, $thumbFsPath); break;
+        case 'image/webp': @imagewebp($newImage, $thumbFsPath); break;
     }
 
     imagedestroy($image);
     imagedestroy($newImage);
 
-    return $thumbPath;
+    return is_file($thumbFsPath) ? $thumbWebPath : $placeholder;
 }
 
 /**
@@ -318,7 +347,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         $displayPhotoPath = $itemImageRelPath !== '' ? $itemImageRelPath : $mainPhoto;
                         $hasMainPhoto = !empty($displayPhotoPath);
 
-                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath)) : '';
+                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath, 150, 150, false)) : '';
                     ?>
                     <img id="main_photo_preview" 
                          src="<?= $mainPhotoThumb ?>" 
@@ -688,7 +717,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     $hasPhoto = (!empty($rawPhoto) && $rawPhoto !== '0');
                                     
                                     // Pass FULL path to generator
-                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto)) : '#';
+                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto, 150, 150, false)) : '#';
                                 ?>
                                 <img src="<?= $varThumbSrc ?>" 
                                      class="preview-img w-full h-full object-cover absolute inset-0 z-10"
@@ -902,7 +931,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         $fullPath = "uploads/itm_img/" . $img['file_name'];
 
         // 2. Pass the FULL PATH to the generator (filesystem-relative)
-        $thumbSrc = getThumbnail($fullPath);
+        $thumbSrc = getThumbnail($fullPath, 150, 150, false);
         $thumbVersion = @filemtime(ltrim($fullPath, '/')) ?: time();
         $thumbUrl = base_url($thumbSrc) . '?v=' . $thumbVersion;
         $fullUrl  = base_url($fullPath);
