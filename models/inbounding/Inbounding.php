@@ -744,7 +744,7 @@ class Inbounding {
         $r = $this->conn->query("SELECT id, category, display_name, parent FROM `category` ORDER BY parent, display_name");
         $category = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
-        $r = $this->conn->query("SELECT id, display_name as `` FROM `exotic_address` ORDER BY address_title ASC");
+        $r = $this->conn->query("SELECT id, display_name as `address_title` FROM `exotic_address` ORDER BY address_title ASC");
         $address = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
         // 3. Variations for this item (also on form2 so the view does not call getVariations() again)
