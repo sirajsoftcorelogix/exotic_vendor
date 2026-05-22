@@ -44,8 +44,9 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <style>
-    body {
-        overflow-x: hidden;
+    html, body {
+        height: 100%;
+        overflow: hidden;
     }
     .draggable-item {
         user-select: none;
@@ -112,17 +113,27 @@
     .dim-input { transition: border-color 0.2s; }
     .dim-input:focus { border-color: #d97824 !important; }
 
-    /* Desktop form modals — plain CSS only (immune to Tailwind hidden/flex conflicts) */
+    /* Desktop form modals — always fixed (never expand page height when closed) */
     .desktop-form-modal {
         display: none !important;
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        overflow: hidden !important;
+        z-index: -1 !important;
     }
     .desktop-form-modal.is-open {
         display: flex !important;
-        position: fixed !important;
-        inset: 0 !important;
         align-items: center !important;
         justify-content: center !important;
+        visibility: visible !important;
         pointer-events: auto !important;
+        overflow: auto !important;
     }
     #publishConfirmPopup.is-open {
         z-index: 80 !important;
@@ -2570,25 +2581,33 @@ document.addEventListener('DOMContentLoaded', function() {
         hideAllDesktopOverlays();
         document.querySelectorAll('.swal2-container').forEach(function (el) { el.remove(); });
         document.body.classList.remove('swal2-shown', 'swal2-height-auto');
-        document.body.style.removeProperty('overflow');
         document.body.style.removeProperty('padding-right');
+        document.body.style.overflow = 'hidden';
         var ga = document.getElementById('global-alert');
         if (ga) {
             ga.style.display = 'none';
-            ga.classList.add('hidden');
         }
         var gab = document.getElementById('global-alert-backdrop');
         if (gab) {
             gab.style.display = 'none';
-            gab.classList.add('hidden');
         }
     }
+    function mountDesktopFormModals() {
+        document.querySelectorAll('.desktop-form-modal').forEach(function (el) {
+            if (el.parentElement !== document.body) {
+                document.body.appendChild(el);
+            }
+        });
+    }
+    mountDesktopFormModals();
     clearStuckPageOverlays();
-    document.addEventListener('DOMContentLoaded', clearStuckPageOverlays);
+    document.addEventListener('DOMContentLoaded', function () {
+        mountDesktopFormModals();
+        clearStuckPageOverlays();
+    });
     window.addEventListener('load', clearStuckPageOverlays);
     setTimeout(clearStuckPageOverlays, 0);
     setTimeout(clearStuckPageOverlays, 300);
-    setTimeout(clearStuckPageOverlays, 1000);
     function openImagePopup(imageUrl) {
         if (!imageUrl) return;
         popupImage.src = imageUrl;
