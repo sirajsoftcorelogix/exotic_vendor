@@ -178,6 +178,7 @@ class Dispatch {
                 ];
                 $ch = curl_init($url);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 30);
                 curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
                 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
                 $response = curl_exec($ch); 
@@ -221,6 +222,7 @@ class Dispatch {
         ];
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $response = curl_exec($ch); 
         curl_close($ch);
@@ -254,6 +256,7 @@ class Dispatch {
         
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         // GET is the default, no need to set it explicitly
         $response = curl_exec($ch);
@@ -284,6 +287,7 @@ class Dispatch {
         ]);
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
@@ -300,6 +304,7 @@ class Dispatch {
         ];
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $response = curl_exec($ch); 
         curl_close($ch);
@@ -314,6 +319,7 @@ class Dispatch {
         ];
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $response = curl_exec($ch); 
         curl_close($ch);
@@ -333,6 +339,7 @@ class Dispatch {
         $postData = json_encode($body);
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -457,6 +464,7 @@ class Dispatch {
         ]);
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
@@ -511,6 +519,22 @@ class Dispatch {
         // Dynamically bind parameters
         $types = str_repeat('i', count($ids));
         $stmt->bind_param($types, ...$ids);
+
+        if ($stmt->execute()) {
+            return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        }
+        return false;
+    }
+    public function getDispatchRecordsByInvoiceIds($invoiceIds) {
+        if(empty($invoiceIds)) return [];
+        $placeholders = implode(',', array_fill(0, count($invoiceIds), '?'));
+        $sql = "SELECT * FROM vp_dispatch_details WHERE invoice_id IN ($placeholders)";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+
+        // Dynamically bind parameters
+        $types = str_repeat('i', count($invoiceIds));
+        $stmt->bind_param($types, ...$invoiceIds);
 
         if ($stmt->execute()) {
             return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
