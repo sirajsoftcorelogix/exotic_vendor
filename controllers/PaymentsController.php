@@ -2,11 +2,9 @@
 
 require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
 require_once 'models/user/user.php';
-require_once 'models/PosInvoice/invoice.php';
 require_once 'models/order/order.php';
 require_once 'models/comman/tables.php';
 
-$invoiceModel = new Invoice($conn);
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 
@@ -90,7 +88,7 @@ SELECT
     w.address_title AS warehouse,
     vo.order_id AS order_id,
 
-    (
+    ROUND(
         IFNULL(vo.order_line_total, 0)
         -
         IFNULL(
@@ -101,7 +99,8 @@ SELECT
                       = p.order_number COLLATE utf8mb4_unicode_ci
                 AND p2.id <= p.id
             ), 0
-        )
+        ),
+        2
     ) AS pending_balance
 
 FROM pos_payments p

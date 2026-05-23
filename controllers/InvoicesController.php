@@ -42,6 +42,24 @@ class InvoicesController
         global $ordersModel, $usersModel, $commanModel;
 
         $itemIds = isset($_POST['poitem']) ? $_POST['poitem'] : [];
+        $posFlag = isset($_POST['pos_flag']) ? (int)$_POST['pos_flag'] : 0;
+        if ($posFlag === 0 && !empty($_SESSION['invoice_pos_flag'])) {
+            $posFlag = 1;
+        }
+        if (empty($itemIds) && $posFlag === 1) {
+            $orderNumber = trim((string)($_POST['order_number'] ?? $_GET['order_number'] ?? ''));
+            if ($orderNumber !== '') {
+                $lines = $ordersModel->getOrderByOrderNumber($orderNumber);
+                if (is_array($lines)) {
+                    foreach ($lines as $line) {
+                        $id = (int)($line['id'] ?? 0);
+                        if ($id > 0) {
+                            $itemIds[] = $id;
+                        }
+                    }
+                }
+            }
+        }
         //print_r($itemIds);
         if (empty($itemIds)) {
             if (isset($_SESSION['invoice_items']) && !empty($_SESSION['invoice_items'])) {
@@ -51,11 +69,12 @@ class InvoicesController
                 exit;
             }
         }
-        //check pos flag
-        $posFlag = isset($_POST['pos_flag']) ? (int)$_POST['pos_flag'] : 0;
 
         if (!empty($itemIds)) {
             $_SESSION['invoice_items'] = $itemIds;
+        }
+        if (!empty($_SESSION['invoice_pos_flag'])) {
+            unset($_SESSION['invoice_pos_flag']);
         }
 
         // Fetch order data for selected items

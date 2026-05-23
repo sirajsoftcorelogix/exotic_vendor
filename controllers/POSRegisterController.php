@@ -343,10 +343,7 @@ class POSRegisterController
         }
 
         try {
-            require_once __DIR__ . '/OrdersController.php';
-            require_once __DIR__ . '/PosInvoiceController.php';
-
-            $ordersCtrl = new OrdersController();
+            $ordersCtrl = $this->getOrdersControllerForImport();
             $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 4, 2);
 
             if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
@@ -359,7 +356,7 @@ class POSRegisterController
                 return $out;
             }
 
-            $posInv = new PosInvoiceController();
+            $posInv = $this->getPosInvoiceControllerForCheckout();
             $invRes = $posInv->createAutoInvoiceForOrder($orderNumber);
 
             if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
@@ -3280,6 +3277,7 @@ class POSRegisterController
             'receipt_office_footer' => '',
             'receipt_signature_date' => $dt->format('d M Y'),
             'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
+            'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),
         ];
 
         $successMessage = 'Order placed.';
@@ -3310,7 +3308,141 @@ class POSRegisterController
         }
         unset($_SESSION['pos_last_checkout_receipt']);
         $row = $this->fillReceiptInvoicePdfFromDb($conn, $row);
+        if (empty($row['invoice_poitem_ids']) || !is_array($row['invoice_poitem_ids'])) {
+            $row['invoice_poitem_ids'] = $this->resolveInvoicePoitemIdsForOrderNumber($conn, $row['order_id'] ?? '');
+        }
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
+    }
+
+    /**
+     * OrdersController import methods use global $ordersModel; requiring that controller
+     * from inside a method only creates local variables in the required file.
+     */
+    private function bootstrapOrderImportGlobals(): void
+    {
+        global $conn, $ordersModel, $productModel, $commanModel, $savedSearchModel, $poInvoiceModel;
+
+        if (isset($ordersModel) && is_object($ordersModel)) {
+            return;
+        }
+
+        require_once 'models/order/order.php';
+        require_once 'models/comman/tables.php';
+        require_once 'models/searches/saved_search.php';
+        require_once 'models/order/po_invoice.php';
+        require_once 'models/product/product.php';
+
+        $ordersModel = new Order($conn);
+        $commanModel = new Tables($conn);
+        $savedSearchModel = new SavedSearch($conn);
+        $poInvoiceModel = new POInvoice($conn);
+        $productModel = new Product($conn);
+    }
+
+    private function getOrdersControllerForImport(): OrdersController
+    {
+        global $conn;
+        $this->bootstrapOrderImportGlobals();
+        require_once __DIR__ . '/OrdersController.php';
+
+        return new OrdersController();
+    }
+
+    private function getPosInvoiceControllerForCheckout(): PosInvoiceController
+    {
+        global $conn, $invoiceModel, $usersModel, $commanModel;
+
+        $this->bootstrapOrderImportGlobals();
+
+        if (!isset($invoiceModel) || !is_object($invoiceModel)) {
+            require_once 'models/PosInvoice/invoice.php';
+            require_once 'models/user/user.php';
+            $invoiceModel = new POSInvoice($conn);
+            $usersModel = new User($conn);
+        }
+        if (!isset($commanModel) || !is_object($commanModel)) {
+            require_once 'models/comman/tables.php';
+            $commanModel = new Tables($conn);
+        }
+
+        require_once __DIR__ . '/PosInvoiceController.php';
+
+        return new PosInvoiceController();
+    }
+
+    /**
+     * vp_orders.id values for invoice create (InvoicesController expects poitem[]).
+     */
+    private function resolveInvoicePoitemIdsForOrderNumber(mysqli $conn, $orderNumber): array
+    {
+        $orderNumber = trim((string)$orderNumber);
+        if ($orderNumber === '') {
+            return [];
+        }
+        $stmt = $conn->prepare('SELECT id FROM vp_orders WHERE order_number = ? ORDER BY id ASC');
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $ids = [];
+        if ($result) {
+            while ($line = $result->fetch_assoc()) {
+                $id = (int)($line['id'] ?? 0);
+                if ($id > 0) {
+                    $ids[] = $id;
+                }
+            }
+        }
+        $stmt->close();
+
+        return $ids;
+    }
+
+    /**
+     * Import POS order lines if needed, stash invoice item ids in session, redirect to invoice create.
+     */
+    public function create_invoice_from_receipt(): void
+    {
+        is_login();
+        global $conn;
+
+        $orderNumber = trim((string)($_GET['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            renderTemplate('views/errors/not_found.php', ['message' => 'Order number missing for invoice.'], 'No items selected');
+            exit;
+        }
+
+        $ordersCtrl = $this->getOrdersControllerForImport();
+
+        if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
+            $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 6, 2);
+            if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
+                $hint = trim((string)($import['message'] ?? ''));
+                $message = 'Order lines are not in the system yet. Open Orders to import order '
+                    . htmlspecialchars($orderNumber, ENT_QUOTES, 'UTF-8') . ', then try again.';
+                if ($hint !== '') {
+                    $message .= ' (' . htmlspecialchars($hint, ENT_QUOTES, 'UTF-8') . ')';
+                }
+                renderTemplate('views/errors/not_found.php', ['message' => $message], 'No items selected');
+                exit;
+            }
+        }
+
+        $itemIds = $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber);
+        if ($itemIds === []) {
+            renderTemplate('views/errors/not_found.php', [
+                'message' => 'No order line items found for order '
+                    . htmlspecialchars($orderNumber, ENT_QUOTES, 'UTF-8') . '.',
+            ], 'No items selected');
+            exit;
+        }
+
+        $_SESSION['invoice_items'] = $itemIds;
+        $_SESSION['invoice_pos_flag'] = 1;
+        header('Location: index.php?page=invoices&action=create');
+        exit;
     }
 
     /**
@@ -3324,8 +3456,8 @@ class POSRegisterController
         $row['invoice_id'] = $invoiceId;
         $row['show_invoice_pdf_button'] = true;
         $row['show_invoice_preview_button'] = true;
-        $row['invoice_pdf_url'] = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
-        $row['invoice_preview_url'] = 'index.php?page=posinvoice&action=print-preview&invoice_id=' . $invoiceId;
+        $row['invoice_pdf_url'] = 'index.php?page=invoices&action=generate_pdf&invoice_id=' . $invoiceId;
+        $row['invoice_preview_url'] = 'index.php?page=invoices&action=preview&invoice_id=' . $invoiceId;
         $row['invoice_pdf_disabled_hint'] = '';
 
         return $row;
