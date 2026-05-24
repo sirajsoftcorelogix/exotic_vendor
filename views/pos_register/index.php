@@ -495,8 +495,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         <div>
           <label class="text-gray-500">Country</label>
           <select name="country" id="customer_country" class="w-full border rounded px-2 py-1.5 bg-white">
-            <option value="IN" selected>India</option>
-            <option value="US">USA</option>
+            <?php
+            $selected_iso = 'IN';
+            include __DIR__ . '/partials/iso_country_options.php';
+            ?>
           </select>
         </div>
 
@@ -565,8 +567,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         <div>
           <label class="text-gray-500">Country</label>
           <select name="shipping_country" id="customer_shipping_country" class="w-full border rounded px-2 py-1.5 bg-white">
-            <option value="IN" selected>India</option>
-            <option value="US">USA</option>
+            <?php
+            $selected_iso = 'IN';
+            include __DIR__ . '/partials/iso_country_options.php';
+            ?>
           </select>
         </div>
 
