@@ -460,4 +460,20 @@ class Invoice
         }
         return $invoices;
     }
+    public function getInvoiceItemsByInvoiceIds($invoiceIds)
+    {
+        if (empty($invoiceIds)) {
+            return [];
+        }
+        $idsString = implode(',', array_map('intval', $invoiceIds));
+        $sql = "SELECT * FROM vp_invoice_items WHERE invoice_id IN ($idsString)";
+        $result = $this->db->query($sql);
+        $items = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $items[] = $row;
+            }
+        }
+        return $items;
+    }
 }

@@ -844,10 +844,17 @@ class DispatchController {
         // Fetch paginated invoices
         $invoices = $invoiceModel->getAllInvoicesPaginated($perPage, $offset, $filters);
         //print_array($invoices);
+        
+        // Batch load dispatch records and items to avoid N+1 queries
+        $invoiceIds = array_column($invoices, 'id');
+        $allDispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceIds($invoiceIds);
+        $allInvoiceItems = $invoiceModel->getInvoiceItemsByInvoiceIds($invoiceIds);
+        
+        // Map data to invoices
         foreach ($invoices as &$invoice) {
-            $invoice_dispatch[$invoice['id']] = $dispatchModel->getDispatchRecordsByInvoiceId($invoice['id']);
-            //get items
-            $invoice['items'] = $invoiceModel->getInvoiceItems($invoice['id']);
+            $invoice_id = $invoice['id'];
+            $invoice_dispatch[$invoice_id] = $allDispatchRecords[$invoice_id] ?? [];
+            $invoice['items'] = $allInvoiceItems[$invoice_id] ?? [];
         }
         unset($invoice);
         renderTemplate('views/dispatch/index.php', [

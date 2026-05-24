@@ -125,6 +125,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     window.POS_HIGH_VALUE_TRANSACTION_LIMIT = <?= json_encode((float)($high_value_transaction_limit ?? 200000.00)) ?>;
     window.POS_COUNTRY_ISO_BY_NAME = <?= json_encode($posCountryIsoByName, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_INDIA_STATES = <?= json_encode($pos_india_states ?? [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+    window.POS_COUNTRY_STATES = <?= json_encode($pos_country_states ?? ['IN' => ($pos_india_states ?? [])], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_DEFAULT_STATE = "Delhi";
     window.POS_STORE_PINCODE = <?= json_encode(trim((string)($pos_store_pincode ?? '')), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_ADDRESS_API_DEFAULTS = {
@@ -492,8 +493,21 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         </div>
 
         <div>
+          <label class="text-gray-500">Country</label>
+          <select name="country" id="customer_country" class="w-full border rounded px-2 py-1.5 bg-white">
+            <?php
+            $selected_iso = 'IN';
+            include __DIR__ . '/partials/iso_country_options.php';
+            ?>
+          </select>
+        </div>
+
+        <div>
           <label class="text-gray-500">State</label>
-          <input name="state" class="w-full border rounded px-2 py-1.5">
+          <select name="state" id="customer_state" class="w-full border rounded px-2 py-1.5 bg-white">
+            <option value="">Select state</option>
+          </select>
+          <input id="customer_state_text" class="hidden w-full border rounded px-2 py-1.5" placeholder="State">
         </div>
 
         <div>
@@ -552,8 +566,21 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         </div>
 
         <div>
+          <label class="text-gray-500">Country</label>
+          <select name="shipping_country" id="customer_shipping_country" class="w-full border rounded px-2 py-1.5 bg-white">
+            <?php
+            $selected_iso = 'IN';
+            include __DIR__ . '/partials/iso_country_options.php';
+            ?>
+          </select>
+        </div>
+
+        <div>
           <label class="text-gray-500">State</label>
-          <input name="shipping_state" class="w-full border rounded px-2 py-1.5">
+          <select name="shipping_state" id="customer_shipping_state" class="w-full border rounded px-2 py-1.5 bg-white">
+            <option value="">Select state</option>
+          </select>
+          <input id="customer_shipping_state_text" class="hidden w-full border rounded px-2 py-1.5" placeholder="State">
         </div>
 
         <div>
@@ -1161,21 +1188,41 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     return c === "IN" || c === "IND" || c === "INDIA";
   }
 
+  function isPosStateDropdownCountry(code) {
+    var c = String(code || "").trim().toUpperCase();
+    return c === "IN" || c === "IND" || c === "INDIA" || c === "US" || c === "USA" || c === "UNITED STATES";
+  }
+
   function fetchPosIndiaStates() {
-    if (Array.isArray(window.POS_INDIA_STATES) && window.POS_INDIA_STATES.length) {
-      return Promise.resolve(window.POS_INDIA_STATES);
+    return fetchPosCountryStates("IN").then(function(states) {
+      window.POS_INDIA_STATES = states;
+      return states;
+    });
+  }
+
+  function fetchPosCountryStates(countryCode) {
+    var country = String(countryCode || "IN").trim().toUpperCase().substring(0, 2) || "IN";
+    var stateMap = window.POS_COUNTRY_STATES || {};
+    if (Array.isArray(stateMap[country]) && stateMap[country].length) {
+      return Promise.resolve(stateMap[country]);
     }
-    return fetch("index.php?page=pos_register&action=states-by-country&country=IN", {
+
+    return fetch("index.php?page=pos_register&action=states-by-country&country=" + encodeURIComponent(country), {
       credentials: "same-origin",
       headers: { Accept: "application/json" }
     })
       .then(function(res) { return res.json(); })
       .then(function(data) {
-        window.POS_INDIA_STATES = Array.isArray(data) ? data : [];
-        return window.POS_INDIA_STATES;
+        window.POS_COUNTRY_STATES = window.POS_COUNTRY_STATES || {};
+        window.POS_COUNTRY_STATES[country] = Array.isArray(data) ? data : [];
+        if (country === "IN") {
+          window.POS_INDIA_STATES = window.POS_COUNTRY_STATES[country];
+        }
+        return window.POS_COUNTRY_STATES[country];
       })
       .catch(function() {
-        window.POS_INDIA_STATES = [];
+        window.POS_COUNTRY_STATES = window.POS_COUNTRY_STATES || {};
+        window.POS_COUNTRY_STATES[country] = [];
         return [];
       });
   }
@@ -1210,6 +1257,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     }
   }
 
+  function resetPosStateSelect(selectEl, message) {
+    if (!selectEl) return;
+    var label = message || "Select state";
+    var esc = label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    selectEl.innerHTML = '<option value="">' + esc + "</option>";
+    selectEl.value = "";
+  }
+
   function getPosStateValue(inputId) {
     var selectEl = document.getElementById(inputId + "_select");
     var inputEl = document.getElementById(inputId);
@@ -1224,7 +1279,11 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var selectEl = document.getElementById(inputId + "_select");
     var inputEl = document.getElementById(inputId);
     if (selectEl && !selectEl.classList.contains("hidden")) {
-      populatePosStateSelect(selectEl, window.POS_INDIA_STATES || [], val);
+      var cfg = inputId === "confirm_sstate" ? POS_STATE_FIELD_CONFIG.shipping : POS_STATE_FIELD_CONFIG.billing;
+      var countryEl = cfg ? document.getElementById(cfg.countryId) : null;
+      var country = countryEl ? normalizePosCountryCode(countryEl.value, countryEl) : "IN";
+      var stateMap = window.POS_COUNTRY_STATES || {};
+      populatePosStateSelect(selectEl, stateMap[country] || [], val);
       return;
     }
     if (inputEl) inputEl.value = val;
@@ -1239,12 +1298,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (!countryEl || !inputEl || !selectEl) return Promise.resolve();
 
     var country = normalizePosCountryCode(countryEl.value, countryEl);
-    var isIndia = isPosIndiaCountry(country);
-    var defaultState = String(window.POS_DEFAULT_STATE || "Delhi");
+    var useStateDropdown = isPosStateDropdownCountry(country);
+    var defaultState = isPosIndiaCountry(country) ? String(window.POS_DEFAULT_STATE || "Delhi") : "";
     var value = preferredValue !== undefined ? String(preferredValue || "").trim() : getPosStateValue(cfg.inputId);
     if (!value) value = defaultState;
 
-    if (!isIndia) {
+    if (!useStateDropdown) {
       if (value) inputEl.value = value;
       else if (selectEl.value && !inputEl.value) inputEl.value = selectEl.value;
       selectEl.classList.add("hidden");
@@ -1252,8 +1311,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       return Promise.resolve();
     }
 
-    return fetchPosIndiaStates().then(function(states) {
-      populatePosStateSelect(selectEl, states, value || inputEl.value || selectEl.value);
+    inputEl.value = "";
+    resetPosStateSelect(selectEl, "Loading states...");
+    inputEl.classList.add("hidden");
+    selectEl.classList.remove("hidden");
+    return fetchPosCountryStates(country).then(function(states) {
+      populatePosStateSelect(selectEl, states, value);
       inputEl.classList.add("hidden");
       selectEl.classList.remove("hidden");
     });
@@ -1335,10 +1398,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       var el = document.getElementById(row[0]);
       if (el) el.value = row[1];
     });
+    var billingCountry = normalizePosCountryCode(document.getElementById("confirm_country")?.value || "IN", document.getElementById("confirm_country"));
+    var shippingCountry = normalizePosCountryCode(document.getElementById("confirm_scountry")?.value || "IN", document.getElementById("confirm_scountry"));
     var defaultState = String(window.POS_DEFAULT_STATE || "Delhi");
     syncAllPosStateFields({
-      billing: map.confirm_state || defaultState,
-      shipping: map.confirm_sstate || defaultState
+      billing: map.confirm_state || (isPosIndiaCountry(billingCountry) ? defaultState : ""),
+      shipping: map.confirm_sstate || (isPosIndiaCountry(shippingCountry) ? defaultState : "")
     }).then(function() {
       syncHighValueComplianceUi();
     });
@@ -1526,6 +1591,11 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function ensurePosDefaultStateOnForm() {
+    var countryEl = document.getElementById("confirm_country");
+    var country = countryEl ? normalizePosCountryCode(countryEl.value, countryEl) : "IN";
+    if (!isPosIndiaCountry(country)) {
+      return;
+    }
     var defaultState = String(window.POS_DEFAULT_STATE || "Delhi");
     if (!getPosStateValue("confirm_state")) {
       setPosStateValue("confirm_state", defaultState);
@@ -1952,13 +2022,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         el.addEventListener("change", function() {
           setPosFieldInvalid(id, false);
           if (id === "confirm_country") {
-            syncPosStateField("billing").then(function() {
+            syncPosStateField("billing", "").then(function() {
               if (isShippingSameAsBillingChecked()) {
                 copyBillingToShippingFields();
               }
             });
           } else {
-            syncPosStateField("shipping");
+            syncPosStateField("shipping", "");
           }
         });
       }
@@ -2127,16 +2197,74 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 </script>
 <script>
   function openCustomerModal() {
-    document.getElementById("customerModal").classList.remove("hidden")
+    document.getElementById("customerModal").classList.remove("hidden");
+    syncCustomerCountryStateFields();
   }
 
   function closeCustomerModal() {
     document.getElementById("customerModal").classList.add("hidden")
   }
   let customerData = {};
+
+  function syncCustomerStateSelect(countryId, stateId, preferredValue) {
+    var countryEl = document.getElementById(countryId);
+    var stateEl = document.getElementById(stateId);
+    var textEl = document.getElementById(stateId + "_text");
+    if (!countryEl || !stateEl || !textEl) {
+      return Promise.resolve();
+    }
+
+    var fieldName = stateEl.getAttribute("data-field-name") || textEl.getAttribute("data-field-name") || stateEl.name || textEl.name;
+    if (fieldName) {
+      stateEl.setAttribute("data-field-name", fieldName);
+      textEl.setAttribute("data-field-name", fieldName);
+    }
+    var country = String(countryEl.value || "IN").trim().toUpperCase().substring(0, 2) || "IN";
+    var selected = preferredValue !== undefined ? preferredValue : (stateEl.classList.contains("hidden") ? textEl.value : stateEl.value);
+    if (country !== "IN" && country !== "US") {
+      textEl.value = selected || stateEl.value || textEl.value;
+      textEl.name = fieldName;
+      stateEl.name = "";
+      stateEl.classList.add("hidden");
+      textEl.classList.remove("hidden");
+      return Promise.resolve();
+    }
+
+    resetPosStateSelect(stateEl, "Loading states...");
+    textEl.classList.add("hidden");
+    stateEl.classList.remove("hidden");
+    return fetchPosCountryStates(country).then(function(states) {
+      populatePosStateSelect(stateEl, states, selected);
+      stateEl.name = fieldName;
+      textEl.name = "";
+      textEl.classList.add("hidden");
+      stateEl.classList.remove("hidden");
+    });
+  }
+
+  function syncCustomerCountryStateFields() {
+    return Promise.all([
+      syncCustomerStateSelect("customer_country", "customer_state"),
+      syncCustomerStateSelect("customer_shipping_country", "customer_shipping_state")
+    ]);
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     var customerForm = document.getElementById("customerForm");
     if (!customerForm) return;
+
+    syncCustomerCountryStateFields();
+    [
+      ["customer_country", "customer_state"],
+      ["customer_shipping_country", "customer_shipping_state"]
+    ].forEach(function(pair) {
+      var countryEl = document.getElementById(pair[0]);
+      if (countryEl) {
+        countryEl.addEventListener("change", function() {
+          syncCustomerStateSelect(pair[0], pair[1], "");
+        });
+      }
+    });
 
     customerForm.addEventListener("submit", function (e) {
       e.preventDefault();
@@ -2261,6 +2389,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       "address_line1": "shipping_address_line1",
       "address_line2": "shipping_address_line2",
       "city": "shipping_city",
+      "country": "shipping_country",
       "state": "shipping_state",
       "zipcode": "shipping_zipcode"
     };
@@ -2276,14 +2405,30 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
       if (checkbox.checked) {
 
-        shippingInput.value = billingInput.value;
+        const syncShippingValue = function() {
+          shippingInput.value = billingInput.value;
+          if (billingField === "country") {
+            const billingState = document.querySelector('[name="state"]');
+            syncCustomerStateSelect("customer_shipping_country", "customer_shipping_state", billingState ? billingState.value : "");
+          }
+          if (billingField === "state") {
+            syncCustomerStateSelect("customer_shipping_country", "customer_shipping_state", billingInput.value);
+          }
+        };
+
+        syncShippingValue();
         // shippingInput.readOnly = true;
         shippingInput.classList.add("bg-gray-100");
 
         /* LIVE SYNC */
         billingInput.addEventListener("input", function() {
           if (checkbox.checked) {
-            shippingInput.value = billingInput.value;
+            syncShippingValue();
+          }
+        });
+        billingInput.addEventListener("change", function() {
+          if (checkbox.checked) {
+            syncShippingValue();
           }
         });
 

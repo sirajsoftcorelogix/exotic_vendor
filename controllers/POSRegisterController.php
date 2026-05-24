@@ -601,17 +601,59 @@ class POSRegisterController
             }
         }
 
-        $posIndiaStates = [];
-        if ($conn instanceof mysqli) {
+        $resolveCountryIdForStates = function (string $iso, array $names = []) use ($conn): int {
+            if (!$conn instanceof mysqli) {
+                return 0;
+            }
+
+            $codes = array_values(array_unique(array_filter([
+                strtoupper(substr(trim($iso), 0, 2)),
+                strtoupper(trim($iso)),
+            ])));
+            $nameCandidates = array_values(array_unique(array_filter(array_map('trim', $names))));
+            $sql = 'SELECT id FROM countries WHERE UPPER(country_code) IN (?, ?) OR name IN (?, ?) LIMIT 1';
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                return 0;
+            }
+
+            $codeA = $codes[0] ?? '';
+            $codeB = $codes[1] ?? $codeA;
+            $nameA = $nameCandidates[0] ?? '';
+            $nameB = $nameCandidates[1] ?? $nameA;
+            $stmt->bind_param('ssss', $codeA, $codeB, $nameA, $nameB);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            return (int)($row['id'] ?? 0);
+        };
+        $posCountryStates = [];
+        $loadPosStatesForCountry = function (int $countryId) use ($conn): array {
+            if (!$conn instanceof mysqli) {
+                return [];
+            }
+
             require_once 'models/country/state.php';
             $stateModel = new State($conn);
-            $stateRows = $stateModel->getAllStates(105);
+            $stateRows = $stateModel->getAllStates($countryId);
+            $states = [];
             foreach (($stateRows['states'] ?? []) as $row) {
                 $name = trim((string)($row['name'] ?? ''));
                 if ($name !== '') {
-                    $posIndiaStates[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
+                    $states[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
                 }
             }
+
+            return $states;
+        };
+        if ($conn instanceof mysqli) {
+            $indiaCountryId = $resolveCountryIdForStates('IN', ['India']) ?: 105;
+            $usCountryId = $resolveCountryIdForStates('US', ['United States', 'USA', 'United States of America']);
+            $posCountryStates = [
+                'IN' => $loadPosStatesForCountry($indiaCountryId),
+                'US' => $loadPosStatesForCountry($usCountryId),
+            ];
         }
 
         $posStorePincode = $conn instanceof mysqli ? $this->resolveStorePincodeForPos($conn) : '';
@@ -629,11 +671,12 @@ class POSRegisterController
             'selected_customer' => $selected_customer,
             'high_value_transaction_limit' => $highValueTransactionLimit,
             'country_list' => $countryList,
-            'pos_india_states' => $posIndiaStates,
+            'pos_india_states' => $posCountryStates['IN'] ?? [],
+            'pos_country_states' => $posCountryStates,
         ]);
     }
 
-    /** JSON list of Indian states for POS address confirm dropdown (country_id 105). */
+    /** JSON list of supported POS states by ISO country code. */
     public function states_by_country(): void
     {
         is_login();
@@ -641,8 +684,8 @@ class POSRegisterController
         header('Content-Type: application/json; charset=utf-8');
         global $conn;
 
-        $country = strtoupper(trim((string)($_GET['country'] ?? 'IN')));
-        if ($country !== 'IN') {
+        $country = strtoupper(substr(trim((string)($_GET['country'] ?? 'IN')), 0, 2));
+        if (!in_array($country, ['IN', 'US'], true)) {
             echo json_encode([], JSON_UNESCAPED_UNICODE);
             exit;
         }
@@ -652,9 +695,38 @@ class POSRegisterController
             exit;
         }
 
+        $resolveCountryId = function (string $iso, array $names = []) use ($conn): int {
+            $codes = array_values(array_unique(array_filter([
+                strtoupper(substr(trim($iso), 0, 2)),
+                strtoupper(trim($iso)),
+            ])));
+            $nameCandidates = array_values(array_unique(array_filter(array_map('trim', $names))));
+            $stmt = $conn->prepare('SELECT id FROM countries WHERE UPPER(country_code) IN (?, ?) OR name IN (?, ?) LIMIT 1');
+            if (!$stmt) {
+                return 0;
+            }
+
+            $codeA = $codes[0] ?? '';
+            $codeB = $codes[1] ?? $codeA;
+            $nameA = $nameCandidates[0] ?? '';
+            $nameB = $nameCandidates[1] ?? $nameA;
+            $stmt->bind_param('ssss', $codeA, $codeB, $nameA, $nameB);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            return (int)($row['id'] ?? 0);
+        };
+        $countryId = $country === 'US'
+            ? $resolveCountryId('US', ['United States', 'USA', 'United States of America'])
+            : $resolveCountryId('IN', ['India']);
+        if ($countryId <= 0) {
+            $countryId = $country === 'US' ? 233 : 105;
+        }
+
         require_once 'models/country/state.php';
         $stateModel = new State($conn);
-        $stateRows = $stateModel->getAllStates(105);
+        $stateRows = $stateModel->getAllStates($countryId);
         $out = [];
         foreach (($stateRows['states'] ?? []) as $row) {
             $name = trim((string)($row['name'] ?? ''));

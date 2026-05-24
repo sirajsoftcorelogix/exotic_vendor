@@ -128,10 +128,22 @@ class OrdersController
         //print_r($filters);
         $orders = $ordersModel->getAllOrders($filters, $limit, $offset);
 
-        $assignmentDates = [];
+        $statusLogsByOrder = [];
+        $orderIds = array_map('intval', array_column($orders, 'order_id'));
+        if (!empty($orderIds)) {
+            global $conn;
+            $orderList = implode(',', $orderIds);
+            $sql = "SELECT osl.*, u.name AS changed_by_username\n                    FROM vp_order_status_log osl\n                    JOIN vp_users u ON osl.changed_by = u.id\n                    WHERE osl.order_id IN ($orderList)\n                      AND u.is_deleted = 0\n                    ORDER BY osl.order_id ASC, osl.id ASC";
+            $result = $conn->query($sql);
+            if ($result && $result->num_rows > 0) {
+                while ($row = $result->fetch_assoc()) {
+                    $statusLogsByOrder[$row['order_id']][] = $row;
+                }
+            }
+        }
+
         foreach ($orders as $key => $order) {
-            $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['order_id']);
-            $assignmentDates[$order['order_id']] =  $orders[$key]['status_log']['change_date'] ?? '';
+            $orders[$key]['status_log'] = $statusLogsByOrder[$order['order_id']] ?? [];
         }
         // Agent filter: use assignment from vp_order_status_log (change_date) instead of vp_orders.assign_date
         //    if (!empty($_GET['agent'])) {
