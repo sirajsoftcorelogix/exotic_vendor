@@ -387,6 +387,125 @@ class POSRegisterController
         }
     }
 
+    /**
+     * POS counter sale is handed over immediately, so mark imported local rows as shipped
+     * and mirror the item-level status to Exotic vendor API (shipped admin code = 5).
+     *
+     * @return array{local_rows:int,local_updated:bool,api_called:int,api_failed:int,message:string}
+     */
+    private function markPosCheckoutOrderShipped(mysqli $conn, string $orderNumber): array
+    {
+        $result = [
+            'local_rows' => 0,
+            'local_updated' => false,
+            'api_called' => 0,
+            'api_failed' => 0,
+            'message' => '',
+        ];
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            $result['message'] = 'Order number missing for shipped status sync.';
+            return $result;
+        }
+
+        $stmt = $conn->prepare('SELECT id, item_code, size, color FROM vp_orders WHERE order_number = ? ORDER BY id ASC');
+        if (!$stmt) {
+            $result['message'] = 'Could not prepare order item lookup for shipped status sync.';
+            return $result;
+        }
+
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        $result['local_rows'] = count($rows);
+        if (empty($rows)) {
+            $result['message'] = 'Order was not found locally for shipped status sync.';
+            return $result;
+        }
+
+        foreach ($rows as $row) {
+            $apiRes = $this->updateExoticVendorOrderItemStatus([
+                'orderid' => $orderNumber,
+                'level' => 'item',
+                'order_status' => 5,
+                'itemcode' => trim((string)($row['item_code'] ?? '')),
+                'size' => trim((string)($row['size'] ?? '')),
+                'color' => trim((string)($row['color'] ?? '')),
+            ]);
+            ++$result['api_called'];
+            if (empty($apiRes['success'])) {
+                ++$result['api_failed'];
+                error_log('[POS shipped status API] Order ' . $orderNumber . ' item ' . (string)($row['id'] ?? '') . ': ' . (string)($apiRes['error'] ?? 'failed'));
+            }
+        }
+
+        $upd = $conn->prepare("UPDATE vp_orders SET status = 'shipped' WHERE order_number = ?");
+        if (!$upd) {
+            $result['message'] = 'Could not prepare local shipped status update.';
+            return $result;
+        }
+        $upd->bind_param('s', $orderNumber);
+        $result['local_updated'] = $upd->execute();
+        $upd->close();
+
+        if ($result['api_failed'] > 0) {
+            $result['message'] = 'Order marked shipped locally, but Exotic shipped status API failed for ' . $result['api_failed'] . ' item(s).';
+        } elseif (!$result['local_updated']) {
+            $result['message'] = 'Exotic shipped status API completed, but local shipped status update failed.';
+        } else {
+            $result['message'] = 'Order marked shipped locally and on Exotic.';
+        }
+
+        return $result;
+    }
+
+    /**
+     * Mirrors models/comman/tables.php::updateExoticIndiaOrderStatus for POS checkout.
+     *
+     * @param array{orderid:string,level:string,order_status:int,itemcode:string,size:string,color:string} $apiData
+     * @return array{success:bool,http_code:int,raw:string,error:string}
+     */
+    private function updateExoticVendorOrderItemStatus(array $apiData): array
+    {
+        $postData = [
+            'makeRequestOf' => 'vendors-orderjson',
+            'orderid' => $apiData['orderid'],
+            'level' => $apiData['level'],
+            'order_status' => (string)$apiData['order_status'],
+            'itemcode' => $apiData['itemcode'],
+            'size' => $apiData['size'],
+            'color' => $apiData['color'],
+        ];
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+
+        $ch = curl_init('https://www.exoticindia.com/vendor-api/order/modify');
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $response = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        $raw = (string)$response;
+        $ok = ($error === '' && $httpCode >= 200 && $httpCode < 300);
+        return [
+            'success' => $ok,
+            'http_code' => $httpCode,
+            'raw' => $raw,
+            'error' => $error !== '' ? $error : ($ok ? '' : 'HTTP ' . $httpCode . ' ' . substr($raw, 0, 500)),
+        ];
+    }
+
     private function appendHighValueComplianceToNote(string $note, float $invoiceAmount, string $paymentMode, array $compliance): string
     {
         if (empty($compliance['is_high_value'])) {
@@ -3293,6 +3412,7 @@ class POSRegisterController
         $posDetailsModel->upsertPosCustomerDetailsFromConfirmPayload($customerId, $payload);
         $this->persistCustomerComplianceDetails($conn, $customerId, $compliance);
         $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance);
+        $shippedStatusMeta = $this->markPosCheckoutOrderShipped($conn, $orderNumber);
 
         $modeLabel = $this->mapPosPaymentModeLabel($paymentMode);
         $dt = new \DateTime('now', new \DateTimeZone('Asia/Kolkata'));
@@ -3356,6 +3476,9 @@ class POSRegisterController
         if (!empty($localStockWarnings)) {
             $successMessage .= ' Local stock warning: ' . count($localStockWarnings) . ' item(s) sold above local stock.';
         }
+        if (!empty($shippedStatusMeta['message']) && (empty($shippedStatusMeta['local_updated']) || !empty($shippedStatusMeta['api_failed']))) {
+            $successMessage .= ' ' . $shippedStatusMeta['message'];
+        }
 
         echo json_encode([
             'success' => true,
@@ -3364,6 +3487,7 @@ class POSRegisterController
             'receipt_number' => $receiptNo,
             'payment_id' => (int)($pay['payment_id'] ?? 0),
             'local_stock_warnings' => $localStockWarnings,
+            'shipped_status_sync' => $shippedStatusMeta,
             'redirect_url' => 'index.php?page=pos_register&action=checkout-receipt',
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
