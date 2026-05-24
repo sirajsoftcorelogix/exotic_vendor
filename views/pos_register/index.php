@@ -1257,6 +1257,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     }
   }
 
+  function resetPosStateSelect(selectEl, message) {
+    if (!selectEl) return;
+    var label = message || "Select state";
+    var esc = label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    selectEl.innerHTML = '<option value="">' + esc + "</option>";
+    selectEl.value = "";
+  }
+
   function getPosStateValue(inputId) {
     var selectEl = document.getElementById(inputId + "_select");
     var inputEl = document.getElementById(inputId);
@@ -1303,8 +1311,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       return Promise.resolve();
     }
 
+    inputEl.value = "";
+    resetPosStateSelect(selectEl, "Loading states...");
+    inputEl.classList.add("hidden");
+    selectEl.classList.remove("hidden");
     return fetchPosCountryStates(country).then(function(states) {
-      populatePosStateSelect(selectEl, states, value || inputEl.value || selectEl.value);
+      populatePosStateSelect(selectEl, states, value);
       inputEl.classList.add("hidden");
       selectEl.classList.remove("hidden");
     });
@@ -2010,13 +2022,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         el.addEventListener("change", function() {
           setPosFieldInvalid(id, false);
           if (id === "confirm_country") {
-            syncPosStateField("billing").then(function() {
+            syncPosStateField("billing", "").then(function() {
               if (isShippingSameAsBillingChecked()) {
                 copyBillingToShippingFields();
               }
             });
           } else {
-            syncPosStateField("shipping");
+            syncPosStateField("shipping", "");
           }
         });
       }
@@ -2218,6 +2230,9 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       return Promise.resolve();
     }
 
+    resetPosStateSelect(stateEl, "Loading states...");
+    textEl.classList.add("hidden");
+    stateEl.classList.remove("hidden");
     return fetchPosCountryStates(country).then(function(states) {
       populatePosStateSelect(stateEl, states, selected);
       stateEl.name = fieldName;
