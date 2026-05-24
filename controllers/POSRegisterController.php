@@ -601,6 +601,33 @@ class POSRegisterController
             }
         }
 
+        $resolveCountryIdForStates = function (string $iso, array $names = []) use ($conn): int {
+            if (!$conn instanceof mysqli) {
+                return 0;
+            }
+
+            $codes = array_values(array_unique(array_filter([
+                strtoupper(substr(trim($iso), 0, 2)),
+                strtoupper(trim($iso)),
+            ])));
+            $nameCandidates = array_values(array_unique(array_filter(array_map('trim', $names))));
+            $sql = 'SELECT id FROM countries WHERE UPPER(country_code) IN (?, ?) OR name IN (?, ?) LIMIT 1';
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                return 0;
+            }
+
+            $codeA = $codes[0] ?? '';
+            $codeB = $codes[1] ?? $codeA;
+            $nameA = $nameCandidates[0] ?? '';
+            $nameB = $nameCandidates[1] ?? $nameA;
+            $stmt->bind_param('ssss', $codeA, $codeB, $nameA, $nameB);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            return (int)($row['id'] ?? 0);
+        };
         $posCountryStates = [];
         $loadPosStatesForCountry = function (int $countryId) use ($conn): array {
             if (!$conn instanceof mysqli) {
@@ -621,9 +648,11 @@ class POSRegisterController
             return $states;
         };
         if ($conn instanceof mysqli) {
+            $indiaCountryId = $resolveCountryIdForStates('IN', ['India']) ?: 105;
+            $usCountryId = $resolveCountryIdForStates('US', ['United States', 'USA', 'United States of America']);
             $posCountryStates = [
-                'IN' => $loadPosStatesForCountry(105),
-                'US' => $loadPosStatesForCountry(233),
+                'IN' => $loadPosStatesForCountry($indiaCountryId),
+                'US' => $loadPosStatesForCountry($usCountryId),
             ];
         }
 
@@ -656,11 +685,7 @@ class POSRegisterController
         global $conn;
 
         $country = strtoupper(substr(trim((string)($_GET['country'] ?? 'IN')), 0, 2));
-        $countryIdByIso = [
-            'IN' => 105,
-            'US' => 233,
-        ];
-        if (!isset($countryIdByIso[$country])) {
+        if (!in_array($country, ['IN', 'US'], true)) {
             echo json_encode([], JSON_UNESCAPED_UNICODE);
             exit;
         }
@@ -670,9 +695,38 @@ class POSRegisterController
             exit;
         }
 
+        $resolveCountryId = function (string $iso, array $names = []) use ($conn): int {
+            $codes = array_values(array_unique(array_filter([
+                strtoupper(substr(trim($iso), 0, 2)),
+                strtoupper(trim($iso)),
+            ])));
+            $nameCandidates = array_values(array_unique(array_filter(array_map('trim', $names))));
+            $stmt = $conn->prepare('SELECT id FROM countries WHERE UPPER(country_code) IN (?, ?) OR name IN (?, ?) LIMIT 1');
+            if (!$stmt) {
+                return 0;
+            }
+
+            $codeA = $codes[0] ?? '';
+            $codeB = $codes[1] ?? $codeA;
+            $nameA = $nameCandidates[0] ?? '';
+            $nameB = $nameCandidates[1] ?? $nameA;
+            $stmt->bind_param('ssss', $codeA, $codeB, $nameA, $nameB);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            return (int)($row['id'] ?? 0);
+        };
+        $countryId = $country === 'US'
+            ? $resolveCountryId('US', ['United States', 'USA', 'United States of America'])
+            : $resolveCountryId('IN', ['India']);
+        if ($countryId <= 0) {
+            $countryId = $country === 'US' ? 233 : 105;
+        }
+
         require_once 'models/country/state.php';
         $stateModel = new State($conn);
-        $stateRows = $stateModel->getAllStates($countryIdByIso[$country]);
+        $stateRows = $stateModel->getAllStates($countryId);
         $out = [];
         foreach (($stateRows['states'] ?? []) as $row) {
             $name = trim((string)($row['name'] ?? ''));
