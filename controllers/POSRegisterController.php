@@ -623,7 +623,7 @@ class POSRegisterController
         if ($conn instanceof mysqli) {
             $posCountryStates = [
                 'IN' => $loadPosStatesForCountry(105),
-                'US' => $loadPosStatesForCountry(2),
+                'US' => $loadPosStatesForCountry(233),
             ];
         }
 
@@ -658,7 +658,7 @@ class POSRegisterController
         $country = strtoupper(substr(trim((string)($_GET['country'] ?? 'IN')), 0, 2));
         $countryIdByIso = [
             'IN' => 105,
-            'US' => 2,
+            'US' => 233,
         ];
         if (!isset($countryIdByIso[$country])) {
             echo json_encode([], JSON_UNESCAPED_UNICODE);

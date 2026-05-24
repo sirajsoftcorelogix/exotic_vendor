@@ -507,6 +507,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <select name="state" id="customer_state" class="w-full border rounded px-2 py-1.5 bg-white">
             <option value="">Select state</option>
           </select>
+          <input id="customer_state_text" class="hidden w-full border rounded px-2 py-1.5" placeholder="State">
         </div>
 
         <div>
@@ -579,6 +580,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <select name="shipping_state" id="customer_shipping_state" class="w-full border rounded px-2 py-1.5 bg-white">
             <option value="">Select state</option>
           </select>
+          <input id="customer_shipping_state_text" class="hidden w-full border rounded px-2 py-1.5" placeholder="State">
         </div>
 
         <div>
@@ -2179,14 +2181,33 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   function syncCustomerStateSelect(countryId, stateId, preferredValue) {
     var countryEl = document.getElementById(countryId);
     var stateEl = document.getElementById(stateId);
-    if (!countryEl || !stateEl) {
+    var textEl = document.getElementById(stateId + "_text");
+    if (!countryEl || !stateEl || !textEl) {
       return Promise.resolve();
     }
 
+    var fieldName = stateEl.getAttribute("data-field-name") || textEl.getAttribute("data-field-name") || stateEl.name || textEl.name;
+    if (fieldName) {
+      stateEl.setAttribute("data-field-name", fieldName);
+      textEl.setAttribute("data-field-name", fieldName);
+    }
     var country = String(countryEl.value || "IN").trim().toUpperCase().substring(0, 2) || "IN";
-    var selected = preferredValue !== undefined ? preferredValue : stateEl.value;
+    var selected = preferredValue !== undefined ? preferredValue : (stateEl.classList.contains("hidden") ? textEl.value : stateEl.value);
+    if (country !== "IN" && country !== "US") {
+      textEl.value = selected || stateEl.value || textEl.value;
+      textEl.name = fieldName;
+      stateEl.name = "";
+      stateEl.classList.add("hidden");
+      textEl.classList.remove("hidden");
+      return Promise.resolve();
+    }
+
     return fetchPosCountryStates(country).then(function(states) {
       populatePosStateSelect(stateEl, states, selected);
+      stateEl.name = fieldName;
+      textEl.name = "";
+      textEl.classList.add("hidden");
+      stateEl.classList.remove("hidden");
     });
   }
 
