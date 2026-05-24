@@ -601,17 +601,30 @@ class POSRegisterController
             }
         }
 
-        $posIndiaStates = [];
-        if ($conn instanceof mysqli) {
+        $posCountryStates = [];
+        $loadPosStatesForCountry = function (int $countryId) use ($conn): array {
+            if (!$conn instanceof mysqli) {
+                return [];
+            }
+
             require_once 'models/country/state.php';
             $stateModel = new State($conn);
-            $stateRows = $stateModel->getAllStates(105);
+            $stateRows = $stateModel->getAllStates($countryId);
+            $states = [];
             foreach (($stateRows['states'] ?? []) as $row) {
                 $name = trim((string)($row['name'] ?? ''));
                 if ($name !== '') {
-                    $posIndiaStates[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
+                    $states[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
                 }
             }
+
+            return $states;
+        };
+        if ($conn instanceof mysqli) {
+            $posCountryStates = [
+                'IN' => $loadPosStatesForCountry(105),
+                'US' => $loadPosStatesForCountry(2),
+            ];
         }
 
         $posStorePincode = $conn instanceof mysqli ? $this->resolveStorePincodeForPos($conn) : '';
@@ -629,11 +642,12 @@ class POSRegisterController
             'selected_customer' => $selected_customer,
             'high_value_transaction_limit' => $highValueTransactionLimit,
             'country_list' => $countryList,
-            'pos_india_states' => $posIndiaStates,
+            'pos_india_states' => $posCountryStates['IN'] ?? [],
+            'pos_country_states' => $posCountryStates,
         ]);
     }
 
-    /** JSON list of Indian states for POS address confirm dropdown (country_id 105). */
+    /** JSON list of supported POS states by ISO country code. */
     public function states_by_country(): void
     {
         is_login();
@@ -641,8 +655,12 @@ class POSRegisterController
         header('Content-Type: application/json; charset=utf-8');
         global $conn;
 
-        $country = strtoupper(trim((string)($_GET['country'] ?? 'IN')));
-        if ($country !== 'IN') {
+        $country = strtoupper(substr(trim((string)($_GET['country'] ?? 'IN')), 0, 2));
+        $countryIdByIso = [
+            'IN' => 105,
+            'US' => 2,
+        ];
+        if (!isset($countryIdByIso[$country])) {
             echo json_encode([], JSON_UNESCAPED_UNICODE);
             exit;
         }
@@ -654,7 +672,7 @@ class POSRegisterController
 
         require_once 'models/country/state.php';
         $stateModel = new State($conn);
-        $stateRows = $stateModel->getAllStates(105);
+        $stateRows = $stateModel->getAllStates($countryIdByIso[$country]);
         $out = [];
         foreach (($stateRows['states'] ?? []) as $row) {
             $name = trim((string)($row['name'] ?? ''));
