@@ -112,6 +112,33 @@ switch ($page) {
                 break;
         }
         break;
+    case 'publishers':
+        require_once 'controllers/PublishersController.php';
+        $controller = new PublishersController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'details':
+                $controller->details();
+                break;
+            case 'status':
+                $controller->status();
+                break;
+            case 'delete':
+                $controller->delete();
+                break;
+            case 'syncFromAdmin':
+                $controller->syncFromAdmin();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'vendors':
         require_once 'controllers/VendorsController.php';
         $controller = new VendorsController($conn);
