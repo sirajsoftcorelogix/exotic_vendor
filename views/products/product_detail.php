@@ -1003,6 +1003,36 @@
     </div>
   </div>
 </div>
+<div id="refreshStockChoiceModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+  <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-amber-100 bg-gradient-to-r from-amber-50 via-white to-orange-50">
+      <div class="flex items-start gap-3">
+        <div class="h-10 w-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+          <i class="fas fa-sync-alt"></i>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-base font-semibold text-gray-900">Refresh Product From API</h3>
+          <p class="mt-1 text-sm text-gray-600 leading-relaxed">
+            Do you want to update the local stock from API as well?
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="px-5 py-4">
+      <div class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+        Choose <strong>Yes</strong> to sync API stock into local stock. Choose <strong>No</strong> to refresh product details but keep the current local stock unchanged.
+      </div>
+    </div>
+    <div class="px-5 py-4 border-t border-gray-100 bg-gray-50 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+      <button type="button" id="refreshStockChoiceNoBtn" class="px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-100">
+        No, keep local stock
+      </button>
+      <button type="button" id="refreshStockChoiceYesBtn" class="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-sm">
+        Yes, update local stock
+      </button>
+    </div>
+  </div>
+</div>
 <div id="refreshProductApiDebugModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
   <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-5 relative">
     <button type="button" onclick="closeRefreshProductApiDebugModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-700">✕</button>
@@ -1075,6 +1105,54 @@
     modal.classList.remove('hidden');
   }
 
+  function askRefreshLocalStockChoice() {
+    var modal = document.getElementById('refreshStockChoiceModal');
+    var yesBtn = document.getElementById('refreshStockChoiceYesBtn');
+    var noBtn = document.getElementById('refreshStockChoiceNoBtn');
+
+    if (!modal || !yesBtn || !noBtn) {
+      return Promise.resolve(false);
+    }
+
+    return new Promise(function (resolve) {
+      var settled = false;
+
+      function cleanup(choice) {
+        if (settled) return;
+        settled = true;
+        modal.classList.add('hidden');
+        yesBtn.removeEventListener('click', onYes);
+        noBtn.removeEventListener('click', onNo);
+        modal.removeEventListener('click', onBackdrop);
+        document.removeEventListener('keydown', onKeydown);
+        resolve(choice);
+      }
+
+      function onYes() {
+        cleanup(true);
+      }
+
+      function onNo() {
+        cleanup(false);
+      }
+
+      function onBackdrop(e) {
+        if (e.target === modal) cleanup(false);
+      }
+
+      function onKeydown(e) {
+        if (e.key === 'Escape') cleanup(false);
+      }
+
+      yesBtn.addEventListener('click', onYes);
+      noBtn.addEventListener('click', onNo);
+      modal.addEventListener('click', onBackdrop);
+      document.addEventListener('keydown', onKeydown);
+      modal.classList.remove('hidden');
+      setTimeout(function () { noBtn.focus(); }, 50);
+    });
+  }
+
   async function updateProductProfileFromApi(btn) {
     var itemCode = (btn && btn.dataset && btn.dataset.itemCode) ? String(btn.dataset.itemCode).trim() : '';
     if (!itemCode) {
@@ -1082,7 +1160,7 @@
       return;
     }
 
-    var updateLocalStock = window.confirm('Do you want to update local stock from API as well?\n\nOK = Yes, update local stock\nCancel = No, keep current local stock');
+    var updateLocalStock = await askRefreshLocalStockChoice();
     var oldHtml = btn.innerHTML;
     btn.disabled = true;
     btn.classList.add('opacity-70', 'cursor-not-allowed');
