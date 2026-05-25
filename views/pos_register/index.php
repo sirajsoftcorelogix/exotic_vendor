@@ -660,6 +660,11 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <p id="transaction_id_required_hint" class="hidden mt-1 text-[11px] text-amber-700">Razorpay requires a transaction ID.</p>
         </div>
       </div>
+      <div id="customInvoiceNumberWrap" class="hidden rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+        <label class="text-xs font-medium text-emerald-900">Custom invoice number</label>
+        <input type="text" id="custom_invoice_number" maxlength="50" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm" placeholder="Leave blank to auto-generate">
+        <p class="mt-1 text-[11px] text-emerald-700">Shown only for full final payment. If entered, this number will be used for the auto-created invoice.</p>
+      </div>
       <div>
         <label class="text-xs text-slate-500">Note (optional)</label>
         <textarea id="payment_note" rows="2" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"></textarea>
@@ -1100,6 +1105,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (pa && ct && ct.grandTotal != null && !isNaN(parseFloat(String(ct.grandTotal)))) {
       pa.value = String(ct.grandTotal);
     }
+    syncCustomInvoiceNumberField();
     pm.classList.remove("hidden");
   }
 
@@ -1635,6 +1641,26 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     return isFinite(total) ? total : 0;
   }
 
+  function isFullFinalPaymentSelected() {
+    var stageEl = document.getElementById("payment_stage");
+    var amountEl = document.getElementById("payment_amount");
+    var stage = stageEl ? String(stageEl.value || "").toLowerCase() : "";
+    var amount = amountEl ? parseFloat(String(amountEl.value || "")) : NaN;
+    var total = getCurrentCheckoutTotal();
+    return stage === "final" && isFinite(amount) && total > 0 && Math.abs(amount - total) <= 0.02;
+  }
+
+  function syncCustomInvoiceNumberField() {
+    var wrap = document.getElementById("customInvoiceNumberWrap");
+    var input = document.getElementById("custom_invoice_number");
+    if (!wrap) return;
+    var show = isFullFinalPaymentSelected();
+    wrap.classList.toggle("hidden", !show);
+    if (!show && input) {
+      input.value = "";
+    }
+  }
+
   function isHighValueTransaction() {
     return getCurrentCheckoutTotal() >= getHighValueLimit();
   }
@@ -1901,6 +1927,15 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       paymentModeSelect.addEventListener("change", syncRazorpayTxnHint);
       syncRazorpayTxnHint();
     }
+    var paymentStageEl = document.getElementById("payment_stage");
+    var paymentAmountEl = document.getElementById("payment_amount");
+    if (paymentStageEl) {
+      paymentStageEl.addEventListener("change", syncCustomInvoiceNumberField);
+    }
+    if (paymentAmountEl) {
+      paymentAmountEl.addEventListener("input", syncCustomInvoiceNumberField);
+      paymentAmountEl.addEventListener("change", syncCustomInvoiceNumberField);
+    }
 
     var paymentDateInput = document.getElementById("payment_date");
     if (paymentDateInput && typeof posPaymentDateLocalYmd === "function") {
@@ -2062,6 +2097,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var gstTotal = live && live.gstTotal != null ? parseFloat(String(live.gstTotal)) : NaN;
     var couponDeduction = live && live.couponDeduction != null ? parseFloat(String(live.couponDeduction)) : NaN;
     var customDeduction = live && live.customDeduction != null ? parseFloat(String(live.customDeduction)) : NaN;
+    var customInvoiceEl = document.getElementById("custom_invoice_number");
+    var customInvoiceNumber = isFullFinalPaymentSelected() && customInvoiceEl
+      ? (customInvoiceEl.value || "").trim()
+      : "";
     var body = Object.assign({}, addressPayload, {
       customer_id: String(customerId),
       payment_stage: payStage,
@@ -2075,6 +2114,9 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       receipt_coupon_discount: isFinite(couponDeduction) ? couponDeduction : 0,
       receipt_cash_discount: isFinite(customDeduction) ? customDeduction : 0
     });
+    if (customInvoiceNumber !== "") {
+      body.custom_invoice_number = customInvoiceNumber;
+    }
     if (String(payMode || "").toLowerCase() === "cash" && isFinite(payAmt) && payAmt >= getHighValueLimit()) {
       var okCash = window.confirm("Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?");
       if (!okCash) {

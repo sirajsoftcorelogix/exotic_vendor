@@ -326,7 +326,7 @@ class POSRegisterController
     /**
      * After full payment: import order from vendor API and create tax invoice for receipt screen.
      */
-    private function finalizePosReceiptInvoice(mysqli $conn, string $orderNumber, string $paymentStage, array $compliance): array
+    private function finalizePosReceiptInvoice(mysqli $conn, string $orderNumber, string $paymentStage, array $compliance, string $customInvoiceNumber = ''): array
     {
         $out = [
             'import_status' => '',
@@ -357,7 +357,7 @@ class POSRegisterController
             }
 
             $posInv = $this->getPosInvoiceControllerForCheckout();
-            $invRes = $posInv->createAutoInvoiceForOrder($orderNumber);
+            $invRes = $posInv->createAutoInvoiceForOrder($orderNumber, $customInvoiceNumber);
 
             if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
                 $invoiceId = (int)$invRes['invoice_id'];
@@ -3411,7 +3411,11 @@ class POSRegisterController
         $posDetailsModel = new Customer($conn);
         $posDetailsModel->upsertPosCustomerDetailsFromConfirmPayload($customerId, $payload);
         $this->persistCustomerComplianceDetails($conn, $customerId, $compliance);
-        $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance);
+        $customInvoiceNumber = trim((string)($payload['custom_invoice_number'] ?? ''));
+        if (!($paymentStage === 'final' && abs($paymentAmount - $orderTotal) <= 0.02)) {
+            $customInvoiceNumber = '';
+        }
+        $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
         $shippedStatusMeta = $this->markPosCheckoutOrderShipped($conn, $orderNumber);
 
         $modeLabel = $this->mapPosPaymentModeLabel($paymentMode);

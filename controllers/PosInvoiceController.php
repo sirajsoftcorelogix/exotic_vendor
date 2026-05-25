@@ -680,7 +680,7 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
     /**
      * Build and create a POS invoice from vp_orders (used by AJAX and checkout).
      */
-    public function createAutoInvoiceForOrder(string $orderNumber): array
+    public function createAutoInvoiceForOrder(string $orderNumber, string $customInvoiceNumber = ''): array
     {
         global $conn, $invoiceModel;
 
@@ -754,6 +754,10 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
             'discount_amount' => 0,
             'total_amount' => 0,
         ];
+        $customInvoiceNumber = trim($customInvoiceNumber);
+        if ($customInvoiceNumber !== '') {
+            $_POST['custom_invoice_number'] = $customInvoiceNumber;
+        }
 
         foreach ($items as $it) {
             $_POST['order_number'][] = $it['order_number'];
@@ -921,16 +925,34 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
                 return ['success' => false, 'message' => 'All items must have the same currency'];
             }
         }
-        // Generate invoice number from global_settings
-        $globalSettings = $commanModel->getRecordById('global_settings', 1);
-        $invoice_prefix = is_array($globalSettings) ? (string)($globalSettings['invoice_prefix'] ?? 'INV') : 'INV';
-        $invoice_series = is_array($globalSettings) ? (int)($globalSettings['invoice_series'] ?? 0) : 0;
-        $invoice_series++;
+        $customInvoiceNumber = trim((string)($_POST['custom_invoice_number'] ?? ''));
+        if ($customInvoiceNumber !== '') {
+            if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9._\/-]{0,49}$/', $customInvoiceNumber)) {
+                return ['success' => false, 'message' => 'Custom invoice number can contain letters, numbers, dot, slash, underscore, and hyphen only.'];
+            }
+            $stmtInvNo = $conn->prepare('SELECT id FROM vp_invoices WHERE invoice_number = ? LIMIT 1');
+            if ($stmtInvNo) {
+                $stmtInvNo->bind_param('s', $customInvoiceNumber);
+                $stmtInvNo->execute();
+                $existingInvoiceNo = $stmtInvNo->get_result()->fetch_assoc();
+                $stmtInvNo->close();
+                if (!empty($existingInvoiceNo['id'])) {
+                    return ['success' => false, 'message' => 'Custom invoice number already exists.'];
+                }
+            }
+            $invoice_number = $customInvoiceNumber;
+        } else {
+            // Generate invoice number from global_settings
+            $globalSettings = $commanModel->getRecordById('global_settings', 1);
+            $invoice_prefix = is_array($globalSettings) ? (string)($globalSettings['invoice_prefix'] ?? 'INV') : 'INV';
+            $invoice_series = is_array($globalSettings) ? (int)($globalSettings['invoice_series'] ?? 0) : 0;
+            $invoice_series++;
 
-        // Update global_settings with new invoice_series
-        $commanModel->updateRecord('global_settings', ['invoice_series' => $invoice_series], ['id' => 1]);
+            // Update global_settings with new invoice_series
+            $commanModel->updateRecord('global_settings', ['invoice_series' => $invoice_series], ['id' => 1]);
 
-        $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
+            $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
+        }
 
         // Create invoice header
         $isInternational = ($firstCurrency && $firstCurrency !== 'INR') ? 1 : 0;
