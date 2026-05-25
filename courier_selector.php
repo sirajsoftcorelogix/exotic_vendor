@@ -183,6 +183,17 @@ function parseETD($etd)
 /** Numeric sort key for delivery time (Shiprocket: days / hours / date text). */
 function courierEtdDays(array $c)
 {
+    $etdText = trim((string)($c['etd'] ?? ''));
+    if ($etdText !== '') {
+        $timestamp = strtotime($etdText);
+        if ($timestamp !== false) {
+            $today = strtotime(date('Y-m-d')) ?: time();
+            return max(1, (int)ceil(($timestamp - $today) / 86400));
+        }
+
+        return parseETD($etdText);
+    }
+
     if (isset($c['estimated_delivery_days']) && $c['estimated_delivery_days'] !== '') {
         $d = (int)$c['estimated_delivery_days'];
         if ($d > 0) {
@@ -194,6 +205,16 @@ function courierEtdDays(array $c)
     }
 
     return parseETD((string)($c['etd'] ?? ''));
+}
+
+function courierHasUsableRate(array $c): bool
+{
+    return isset($c['freight_charge']) && $c['freight_charge'] !== '' && is_numeric($c['freight_charge']);
+}
+
+function courierHasUsableEtd(array $c): bool
+{
+    return trim((string)($c['etd'] ?? '')) !== '';
 }
 
 function calculateConfidence($c)
@@ -248,11 +269,26 @@ function courierExclusionDetails(array $c, $isCOD)
         $negativeParameters['cod'] = 'expected 1, got ' . json_encode($c['cod'] ?? null);
     }
 
-    if ((int)($c['pickup_availability'] ?? 0) === 0) {
-        $pa = $c['pickup_availability'] ?? null;
-        $reasons[] = 'Reliability filter: pickup not available at pickup location (pickup_availability must be 1; got '
-            . json_encode($pa) . ').';
-        $negativeParameters['pickup_availability'] = 'expected 1, got ' . json_encode($pa);
+    if ((int)($c['blocked'] ?? 0) === 1) {
+        $blocked = $c['blocked'] ?? null;
+        $blockedReason = trim((string)($c['reason'] ?? ''));
+        $reasons[] = $blockedReason !== ''
+            ? 'Courier is blocked by Shiprocket: ' . $blockedReason
+            : 'Courier is blocked by Shiprocket and cannot be selected.';
+        $negativeParameters['blocked'] = 'expected 0, got ' . json_encode($blocked);
+        if ($blockedReason !== '') {
+            $negativeParameters['blocked_reason'] = $blockedReason;
+        }
+    }
+
+    if (!courierHasUsableRate($c)) {
+        $reasons[] = 'Courier rate is missing from Shiprocket response.';
+        $negativeParameters['rate'] = 'missing or invalid freight_charge';
+    }
+
+    if (!courierHasUsableEtd($c)) {
+        $reasons[] = 'Courier ETD is missing from Shiprocket response.';
+        $negativeParameters['etd'] = 'missing or invalid etd';
     }
 
     return [
@@ -300,7 +336,7 @@ function prepareCouriers($shiprocketResponse, $isCOD = false, $isExpress = false
             'name'      => $c['courier_name'],
             'rating'    => $c['rating'] ?? 0,
             'etd'       => courierEtdDays($c),
-            'freight'   => $c['freight_charge'] ?? 999999,
+            'freight'   => (float)$c['freight_charge'],
 
             'delivery_performance' => $c['delivery_performance'] ?? 0,
             'pickup_performance'   => $c['pickup_performance'] ?? 0,
@@ -310,6 +346,7 @@ function prepareCouriers($shiprocketResponse, $isCOD = false, $isExpress = false
             'sla_breach'    => $c['SLA_Breach'] ?? 1,
             'sla_adherence' => $c['SLA_Adherence'] ?? 0,
 
+            'blocked' => $c['blocked'] ?? null,
             'stress_flag' => !empty($c['stress_flag']),
         ];
     }
