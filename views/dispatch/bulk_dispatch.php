@@ -1033,6 +1033,18 @@
                 if (key === 'cod') {
                     return 'COD not available';
                 }
+                if (key === 'blocked') {
+                    return 'Courier blocked';
+                }
+                if (key === 'blocked_reason') {
+                    return 'Reason: ' + value;
+                }
+                if (key === 'rate') {
+                    return 'Rate missing';
+                }
+                if (key === 'etd') {
+                    return 'ETD missing';
+                }
                 return key + ': ' + value;
             };
 
