@@ -537,7 +537,20 @@ class Dispatch {
         $stmt->bind_param($types, ...$invoiceIds);
 
         if ($stmt->execute()) {
-            return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $grouped = [];
+            foreach ($rows as $row) {
+                $invoiceId = (int)($row['invoice_id'] ?? 0);
+                if ($invoiceId <= 0) {
+                    continue;
+                }
+                if (!isset($grouped[$invoiceId])) {
+                    $grouped[$invoiceId] = [];
+                }
+                $grouped[$invoiceId][] = $row;
+            }
+
+            return $grouped;
         }
         return false;
     }
