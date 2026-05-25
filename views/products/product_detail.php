@@ -1082,12 +1082,14 @@
       return;
     }
 
+    var updateLocalStock = window.confirm('Do you want to update local stock from API as well?\n\nOK = Yes, update local stock\nCancel = No, keep current local stock');
     var oldHtml = btn.innerHTML;
     btn.disabled = true;
     btn.classList.add('opacity-70', 'cursor-not-allowed');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin text-[11px]" aria-hidden="true"></i> Updating...';
 
-    var requestUrl = 'index.php?page=products&action=update_api_call&itemCode=' + encodeURIComponent(itemCode);
+    var requestUrl = 'index.php?page=products&action=update_api_call&itemCode=' + encodeURIComponent(itemCode)
+      + '&update_local_stock=' + (updateLocalStock ? '1' : '0');
     try {
       var res = await fetch(requestUrl, {
         credentials: 'same-origin',
@@ -1115,7 +1117,11 @@
         }
       };
       if (data && data.success) {
-        showProfileStatusModal('Product updated successfully from API.', 'success', true);
+        showProfileStatusModal(
+          'Product updated successfully from API. Local stock was ' + (updateLocalStock ? 'updated.' : 'not updated.'),
+          'success',
+          true
+        );
         return;
       }
       showProfileStatusModal('Update failed: ' + ((data && data.message) ? data.message : 'Unknown error'), 'error', false);
