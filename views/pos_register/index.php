@@ -663,7 +663,6 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       <div id="customInvoiceNumberWrap" class="hidden rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
         <label class="text-xs font-medium text-emerald-900">Custom invoice number</label>
         <input type="text" id="custom_invoice_number" maxlength="50" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm" placeholder="Leave blank to auto-generate">
-        <p class="mt-1 text-[11px] text-emerald-700">Shown only for full final payment. If entered, this number will be used for the auto-created invoice.</p>
       </div>
       <div>
         <label class="text-xs text-slate-500">Note (optional)</label>
