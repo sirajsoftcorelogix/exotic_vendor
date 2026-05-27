@@ -901,6 +901,9 @@ class Inbounding {
             if ($key === 'is_variant') {
                 $val = (strtoupper(trim((string) $val)) === 'Y') ? 'Y' : 'N';
             }
+            if ($key === 'permanently_available') {
+                $val = ((int) $val === 1) ? 1 : 0;
+            }
             $cols[] = "$key = ?";
             $values[] = $val;
                 
