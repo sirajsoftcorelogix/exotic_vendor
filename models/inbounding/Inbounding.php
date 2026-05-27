@@ -260,9 +260,10 @@ class Inbounding {
         $data = ['vendors' => [], 'users' => [], 'groups' => [], 'updated_users' => []];
 
         // 1. Get Vendors (Only those present in vp_inbound)
-        $v_sql = "SELECT DISTINCT v.id, v.vendor_name 
+        $v_sql = "SELECT DISTINCT v.vendor_id, v.vendor_name 
                   FROM vp_vendors v 
-                  INNER JOIN vp_inbound i ON i.vendor_code = v.id 
+                  INNER JOIN vp_inbound i ON i.vendor_code = v.vendor_id 
+                  WHERE v.vendor_id IS NOT NULL AND TRIM(v.vendor_id) <> ''
                   ORDER BY v.vendor_name ASC";
         $v_res = $this->conn->query($v_sql);
         if($v_res) {
@@ -366,7 +367,7 @@ class Inbounding {
         // Adjust table names (e.g., 'vendors' or 'vp_vendors') if needed
         $sql = "SELECT vi.*,c.display_name as category,vv.vendor_name as vendor_name,m.material_name as material,vu.name as recived_by_name FROM vp_inbound as vi
             LEFT JOIN category as c on vi.group_name=c.category
-            LEFT JOIN vp_vendors as vv on vi.vendor_code=vv.id
+            LEFT JOIN vp_vendors as vv on vi.vendor_code=vv.vendor_id
             LEFT JOIN material as m on vi.material_code=m.id
             LEFT JOIN vp_users as vu on vi.received_by_user_id=vu.id
             WHERE vi.id=".$id;
@@ -624,7 +625,7 @@ class Inbounding {
                     m.material_name AS material_real_name
                 FROM vp_inbound vi
                 LEFT JOIN category grp ON vi.group_name = grp.category    -- Join for Category Name
-                LEFT JOIN vp_vendors v ON vi.vendor_code = v.id        -- Join for Vendor
+                LEFT JOIN vp_vendors v ON vi.vendor_code = v.vendor_id        -- Join for Vendor
                 LEFT JOIN material m   ON vi.material_code = m.id      -- Join for Material
                 WHERE vi.id IN ($ids_clean)";
 
@@ -723,7 +724,7 @@ class Inbounding {
             vv.vendor_name,
             m.material_name
         FROM vp_inbound AS vi 
-        LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id 
+        LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.vendor_id 
         LEFT JOIN material AS m ON vi.material_code = m.id
         WHERE vi.id = $id";
         $result = $this->conn->query($sql);
@@ -733,8 +734,7 @@ class Inbounding {
         $r = $this->conn->query("SELECT id, name FROM `vp_users` ORDER BY name ASC");
         $user = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
         
-        // Use local vendor PK as option value because vp_inbound.vendor_code stores vp_vendors.id
-        // (not remote vendor_id). Using vendor_id here breaks selected state and save/update joins.
+        // vp_inbound.vendor_code stores Exotic vendor_id (from vendorlist API), not vp_vendors.id
         $r = $this->conn->query("SELECT id, vendor_id, vendor_name FROM `vp_vendors` WHERE vendor_id IS NOT NULL AND TRIM(vendor_id) <> '' ORDER BY vendor_name ASC");
         $vendors = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
         
@@ -1073,7 +1073,7 @@ class Inbounding {
         $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name,v.store_location as location  FROM vp_inbound as v 
         LEFT JOIN category as c on v.group_name=c.category
         LEFT JOIN material as m on v.material_code=m.id
-        LEFT JOIN vp_vendors as vv on v.vendor_code=vv.id
+        LEFT JOIN vp_vendors as vv on v.vendor_code=vv.vendor_id
         WHERE v.id = $id";
         $result = $this->conn->query($sql);
         $inbounding = [];
