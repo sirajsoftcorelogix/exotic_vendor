@@ -1056,6 +1056,7 @@ class vendor
         $sql = "SELECT id, vendor_id, vendor_name 
                 FROM vp_vendors 
                 WHERE FIND_IN_SET(?, groupname) > 0
+                  AND vendor_id IS NOT NULL AND TRIM(vendor_id) <> ''
                   AND (LOWER(TRIM(CAST(is_active AS CHAR))) = 'active' OR CAST(is_active AS CHAR) = '1')";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('s', $groupname);
