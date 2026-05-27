@@ -297,6 +297,7 @@ class InboundingController {
         }
         $data['form2']['gecolormaps'] = $vendorApis['gecolormaps'];
         $data['form2']['optionals_data'] = $vendorApis['optionals_data'];
+        $data['form2']['permanently_available'] = ((int) ($data['form2']['permanently_available'] ?? 0) === 1) ? 1 : 0;
         $data['images'] = $inboundingModel->getitem_imgs($id);
         $data['markup_list'] = $inboundingModel->getMarkupData();
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
@@ -1367,11 +1368,7 @@ class InboundingController {
             'size'                => $_POST['size'] ?? '',
             'color'               => $_POST['color'] ?? '',
             'quantity_received'   => (int) ($_POST['quantity_received'] ?? 0),
-            'permanently_available' => in_array(
-                strtoupper(trim((string) ($_POST['permanently_available'] ?? '0'))),
-                ['1', 'Y', 'TRUE'],
-                true
-            ) ? 1 : 0,
+            'permanently_available' => ((int) ($_POST['permanently_available'] ?? 0) === 1) ? 1 : 0,
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
             'marketplace'         => $_POST['marketplace'] ?? ' ',
@@ -2095,7 +2092,8 @@ class InboundingController {
         $stock_price_temp[0]['instock_leadtime'] = $d['in_stock_leadtime_days'] ?? '';
         $stock_price_temp[0]['cp'] = $d['cp'] ?? 0;
         $stock_price_temp[0]['usd'] = $d['usd_price'] ?? 0;
-        $stock_price_temp[0]['permanently_available'] = (($d['permanently_available'] ?? 0) == 1) ? 1 : 0;
+        $permAvailable = ((int) ($d['permanently_available'] ?? 0) === 1) ? 1 : 0;
+        $stock_price_temp[0]['permanently_available'] = $permAvailable;
         $stock_price_temp[0]['amazon_sold'] = '0';
         $stock_price_temp[0]['amazon_leadtime'] = '10';
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
@@ -2147,7 +2145,7 @@ class InboundingController {
                 $stock_price_temp[$i]['instock_leadtime'] = $d['in_stock_leadtime_days'] ?? '';
                 $stock_price_temp[$i]['cp'] = $value['cp'] ?? 0;
                 $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
-                $stock_price_temp[$i]['permanently_available'] = (($d['permanently_available'] ?? 0) == 1) ? 1 : 0;
+                $stock_price_temp[$i]['permanently_available'] = $permAvailable;
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
