@@ -1371,7 +1371,7 @@ class InboundingController {
                 strtoupper(trim((string) ($_POST['permanently_available'] ?? '0'))),
                 ['1', 'Y', 'TRUE'],
                 true
-            ) ? '1' : '0',
+            ) ? 1 : 0,
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
             'marketplace'         => $_POST['marketplace'] ?? ' ',
