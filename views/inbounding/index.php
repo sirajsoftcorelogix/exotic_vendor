@@ -13,7 +13,10 @@ $usersModel = new User($conn);
 // 1. Processing Logic
 if (isset($inbounding_data) && is_array($inbounding_data)) {
     foreach ($inbounding_data as $key => $value) {
-        $vendor = $vendorsModel->getVendorById($value['vendor_code']);
+        $vendor = $vendorsModel->getVendorByVendorId($value['vendor_code']);
+        if (!$vendor && $value['vendor_code'] !== '' && $value['vendor_code'] !== null && ctype_digit((string) $value['vendor_code'])) {
+            $vendor = $vendorsModel->getVendorById((int) $value['vendor_code']);
+        }
         $inbounding_data[$key]['vendor_name'] = $vendor ? $vendor['vendor_name'] : '';
         
         $userDetails = $usersModel->getUserById($value['received_by_user_id']);
@@ -272,9 +275,10 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                     $selVen = $data['filters']['vendor_code'] ?? '';
                                     if(!empty($data['vendor_list'])) {
                                         foreach($data['vendor_list'] as $v) {
-                                            // Correctly uses 'id' and 'vendor_name' from the DB query
-                                            $s = ($selVen == $v['id']) ? 'selected' : '';
-                                            echo "<option value='{$v['id']}' $s>{$v['vendor_name']}</option>";
+                                            $vendorId = htmlspecialchars((string) ($v['vendor_id'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                            $vendorName = htmlspecialchars((string) ($v['vendor_name'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                            $s = ((string) $selVen === (string) ($v['vendor_id'] ?? '')) ? 'selected' : '';
+                                            echo "<option value='{$vendorId}' $s>{$vendorName}</option>";
                                         }
                                     }
                                 ?>

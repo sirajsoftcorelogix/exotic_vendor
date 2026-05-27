@@ -1428,11 +1428,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <select name="vendor_code" id="vendor_code" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Vendor...">
                                 <option value="">Select Vendor</option>
                                 <?php foreach ($data['vendors'] as $key4 => $value4) {
-                                    $isSelected = (isset($data['form2']['vendor_code']) && $data['form2']['vendor_code'] == $value4['id']) ? 'selected' : '';
                                     $vendorExternalCode = trim((string) ($value4['vendor_id'] ?? ''));
+                                    $isSelected = (isset($data['form2']['vendor_code']) && (string) $data['form2']['vendor_code'] === $vendorExternalCode) ? 'selected' : '';
                                     $vendorLabel = ($vendorExternalCode !== '' ? $vendorExternalCode : ' ') . ' - ' . ($value4['vendor_name'] ?? '');
                                 ?>
-                                    <option value="<?php echo $value4['id']; ?>" <?php echo $isSelected; ?>>
+                                    <option value="<?php echo htmlspecialchars($vendorExternalCode); ?>" <?php echo $isSelected; ?>>
                                         <?php echo htmlspecialchars($vendorLabel); ?>
                                     </option>
                                 <?php } ?>
@@ -4461,7 +4461,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const vendors = data || [];
                 if (Array.isArray(vendors) && vendors.length > 0) {
                     vendors.forEach(vendor => {
-                        const vendorValue = String(vendor.id ?? vendor.vendor_id ?? '').trim();
+                        const vendorValue = String(vendor.vendor_id ?? '').trim();
                         if (!vendorValue) return;
                         const option = document.createElement('option');
                         option.value = vendorValue;
@@ -4473,7 +4473,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         vendorSelect.tomselect.clearOptions();
                         vendorSelect.tomselect.addOption({ value: '', text: 'Select Vendor' });
                         vendors.forEach(vendor => {
-                            const vendorValue = String(vendor.id ?? vendor.vendor_id ?? '').trim();
+                            const vendorValue = String(vendor.vendor_id ?? '').trim();
                             if (!vendorValue) return;
                             vendorSelect.tomselect.addOption({
                                 value: vendorValue,

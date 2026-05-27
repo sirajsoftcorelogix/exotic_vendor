@@ -30,6 +30,20 @@ class vendor
         $result = $stmt->get_result();
         return $result->fetch_assoc();
     }
+
+    public function getVendorByVendorId($vendorId)
+    {
+        $vendorId = trim((string) $vendorId);
+        if ($vendorId === '') {
+            return null;
+        }
+        $sql = "SELECT * FROM vp_vendors WHERE vendor_id = ? LIMIT 1";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('s', $vendorId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_assoc();
+    }
     public function getBankDetailsById($vendor_id)
     {
         global $secretKey;
