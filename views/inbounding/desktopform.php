@@ -1429,9 +1429,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 <option value="">Select Vendor</option>
                                 <?php foreach ($data['vendors'] as $key4 => $value4) {
                                     $isSelected = (isset($data['form2']['vendor_code']) && $data['form2']['vendor_code'] == $value4['id']) ? 'selected' : '';
+                                    $vendorExternalCode = trim((string) ($value4['vendor_id'] ?? ''));
+                                    $vendorLabel = ($vendorExternalCode !== '' ? $vendorExternalCode : ' ') . ' - ' . ($value4['vendor_name'] ?? '');
                                 ?>
                                     <option value="<?php echo $value4['id']; ?>" <?php echo $isSelected; ?>>
-                                        <?php echo htmlspecialchars($value4['vendor_name'] ?? ''); ?>
+                                        <?php echo htmlspecialchars($vendorLabel); ?>
                                     </option>
                                 <?php } ?>
                             </select>
@@ -4403,6 +4405,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 document.addEventListener('DOMContentLoaded', function() {
+    function formatVendorDropdownLabel(vendor) {
+        const code = String(vendor.vendor_id ?? '').trim();
+        const name = String(vendor.vendor_name ?? '').trim();
+        return (code !== '' ? code : ' ') + ' - ' + name;
+    }
+
     function updateVendorListBasedOnGroup() {
         const groupSelect = document.getElementById('group_select');
         const vendorSelect = document.getElementById('vendor_code');
@@ -4457,7 +4465,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (!vendorValue) return;
                         const option = document.createElement('option');
                         option.value = vendorValue;
-                        option.textContent = vendor.vendor_name;
+                        option.textContent = formatVendorDropdownLabel(vendor);
                         vendorSelect.appendChild(option);
                     });
                      
@@ -4469,7 +4477,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (!vendorValue) return;
                             vendorSelect.tomselect.addOption({
                                 value: vendorValue,
-                                text: vendor.vendor_name
+                                text: formatVendorDropdownLabel(vendor)
                             });
                         });
                         if (savedVendor && vendorSelect.tomselect.options[savedVendor]) {
