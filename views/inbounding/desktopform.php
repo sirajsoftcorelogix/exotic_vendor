@@ -2788,6 +2788,8 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 <script>
+    const printJsonPreviewUrl = <?php echo json_encode(base_url('?page=inbounding&action=inbound_product_preview_json')); ?>;
+
     function resetPublishPopup() {
         const idle = document.getElementById('publishConfirmIdle');
         const busy = document.getElementById('publishConfirmBusy');
@@ -2886,12 +2888,37 @@ document.addEventListener('DOMContentLoaded', function() {
 
         fetch(form.action + '&save_action=generate', {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'same-origin'
         })
-        .then(function () {
-            return fetch('index.php?page=inbounding&action=inbound_product_preview_json&id=' + encodeURIComponent(recordId) + '&publish_status=' + publishStatus);
+        .then(function (saveResponse) {
+            if (!saveResponse.ok) {
+                throw new Error('Form save failed (HTTP ' + saveResponse.status + ').');
+            }
+            const previewUrl = printJsonPreviewUrl
+                + '&id=' + encodeURIComponent(recordId)
+                + '&publish_status=' + encodeURIComponent(publishStatus);
+            return fetch(previewUrl, {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+            });
         })
-        .then(function (response) { return response.json(); })
+        .then(function (response) {
+            return response.text().then(function (text) {
+                if (!response.ok) {
+                    throw new Error('Preview request failed (HTTP ' + response.status + ').');
+                }
+                const trimmed = (text || '').trim();
+                if (trimmed.charAt(0) === '<') {
+                    throw new Error('Server returned HTML instead of JSON. Refresh the page, confirm you are logged in, and ensure the preview route is deployed.');
+                }
+                try {
+                    return JSON.parse(trimmed);
+                } catch (parseErr) {
+                    throw new Error('Invalid JSON from server: ' + parseErr.message);
+                }
+            });
+        })
         .then(function (data) {
             if (busy) {
                 busy.classList.add('hidden');
