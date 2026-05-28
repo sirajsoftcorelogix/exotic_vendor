@@ -2217,8 +2217,10 @@ class InboundingController {
             || (isset($_GET['preview_only']) && (int) $_GET['preview_only'] === 1);
 
         if ($previewOnly) {
-            if (ob_get_length()) { ob_clean(); }
-            header('Content-Type: application/json');
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'status' => 'success',
                 'api_url' => $apiurl,
@@ -2370,8 +2372,37 @@ class InboundingController {
 
     public function inbound_product_preview_json()
     {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        ob_start();
+
+        $_GET['preview_only'] = '1';
         $GLOBALS['inbound_publish_preview_only'] = true;
-        $this->inbound_product_publish();
+
+        try {
+            $this->inbound_product_publish();
+        } catch (Throwable $e) {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Preview failed: ' . $e->getMessage(),
+            ]);
+            exit;
+        }
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Preview did not return JSON. Ensure inbound_product_preview_json route is deployed.',
+        ]);
+        exit;
     }
 
     /**
