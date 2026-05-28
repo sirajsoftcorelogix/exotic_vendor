@@ -2230,12 +2230,18 @@ class InboundingController {
                 ob_end_clean();
             }
             header('Content-Type: application/json; charset=utf-8');
+            $discreteVendorId = (int) ($API_data['discrete_vendors'][0]['vendor'] ?? 0);
             echo json_encode([
                 'status' => 'success',
                 'api_url' => $apiurl,
                 'publish_status' => $publish_status_req,
                 'payload' => $API_data,
                 'json' => json_encode($API_data, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+                'vendor_debug' => [
+                    'vendor_code_db' => $d['vendor_code'] ?? null,
+                    'discrete_vendors_vendor' => $discreteVendorId,
+                    'vendor_name' => $d['vendor_name'] ?? null,
+                ],
             ]);
             exit;
         }
