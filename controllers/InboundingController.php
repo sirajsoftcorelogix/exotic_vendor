@@ -2213,6 +2213,22 @@ class InboundingController {
             ? $baseUrl . '?new_variation=1'
             : $baseUrl;
 
+        $previewOnly = !empty($GLOBALS['inbound_publish_preview_only'])
+            || (isset($_GET['preview_only']) && (int) $_GET['preview_only'] === 1);
+
+        if ($previewOnly) {
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode([
+                'status' => 'success',
+                'api_url' => $apiurl,
+                'publish_status' => $publish_status_req,
+                'payload' => $API_data,
+                'json' => json_encode($API_data, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+            ]);
+            exit;
+        }
+
         $url = $apiurl;
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
@@ -2350,6 +2366,12 @@ class InboundingController {
             echo json_encode(['status' => 'error', 'message' => 'Publish failed. ' . $errorMsg, 'response' => $response, 'log_file' => $logFileData['filename']]);
         }
         exit;
+    }
+
+    public function inbound_product_preview_json()
+    {
+        $GLOBALS['inbound_publish_preview_only'] = true;
+        $this->inbound_product_publish();
     }
 
     /**

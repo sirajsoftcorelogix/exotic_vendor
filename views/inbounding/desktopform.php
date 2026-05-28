@@ -139,6 +139,10 @@
         z-index: 80 !important;
         background: rgba(0, 0, 0, 0.5) !important;
     }
+    #printJsonPopup.is-open {
+        z-index: 85 !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+    }
     #imagePopup.is-open {
         z-index: 100 !important;
         background: rgba(0, 0, 0, 0.8) !important;
@@ -1615,6 +1619,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                     Publish Product
                 </button>
+                <button type="button" onclick="handlePrintJsonClick()" class="bg-[#17a2b8] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#138496] transition flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                    Print JSON
+                </button>
             <?php } ?>
 
             <button type="button" onclick="validateAndSubmit('draft')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#db8235] transition">
@@ -1657,6 +1665,41 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             </svg>
             <p class="text-sm font-semibold text-gray-800">Saving &amp; publishing…</p>
             <p class="text-xs text-gray-600 leading-relaxed px-1">Talking to the remote catalog and refreshing local stock. Do not close this page until you see a success or error message.</p>
+        </div>
+    </div>
+</div>
+<div id="printJsonPopup" class="desktop-form-modal" hidden aria-hidden="true">
+    <div class="bg-white p-6 rounded-md w-[95%] max-w-[900px] shadow-lg relative font-['Segoe_UI'] max-h-[90vh] flex flex-col" onclick="event.stopPropagation();">
+        <div id="printJsonChoose" class="text-center">
+            <h3 class="text-lg font-bold mb-2 text-gray-800">Print JSON</h3>
+            <p class="text-sm text-gray-600 mb-3">Saves the form and builds the same publish payload as <strong>Publish Product</strong>, without calling the API.</p>
+            <p class="text-xs text-gray-500 mb-4">Choose <code class="text-[11px] bg-gray-100 px-1 rounded">status</code>: <strong>Live = 1</strong>, <strong>Local = 0</strong>.</p>
+            <div class="flex flex-col gap-2 mb-4">
+                <button type="button" id="printJsonLiveBtn" onclick="triggerPrintJsonPreview(1)" class="w-full bg-[#17a2b8] text-white px-4 py-2.5 rounded text-sm font-semibold hover:bg-[#138496] transition shadow-md">Preview Live JSON (status = 1)</button>
+                <button type="button" id="printJsonLocalBtn" onclick="triggerPrintJsonPreview(0)" class="w-full bg-white text-gray-800 border-2 border-gray-300 px-4 py-2.5 rounded text-sm font-semibold hover:bg-gray-50 transition">Preview Local JSON (status = 0)</button>
+            </div>
+            <button type="button" id="printJsonCancelBtn" onclick="closePrintJsonPopup()" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
+        </div>
+        <div id="printJsonBusy" class="hidden flex-col items-center gap-3 py-6 text-center">
+            <svg class="animate-spin h-10 w-10 text-[#17a2b8]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-sm font-semibold text-gray-800">Saving &amp; preparing JSON…</p>
+        </div>
+        <div id="printJsonResult" class="hidden flex-col min-h-0 flex-1">
+            <div class="flex items-start justify-between gap-3 mb-3">
+                <div class="min-w-0 text-left">
+                    <h3 class="text-lg font-bold text-gray-800">Publish JSON preview</h3>
+                    <p id="printJsonMeta" class="text-xs text-gray-500 mt-1 break-all"></p>
+                </div>
+                <button type="button" onclick="closePrintJsonPopup()" class="shrink-0 text-gray-400 hover:text-gray-700 text-xl leading-none" aria-label="Close">&times;</button>
+            </div>
+            <textarea id="printJsonOutput" readonly class="w-full flex-1 min-h-[320px] max-h-[55vh] border border-gray-300 rounded p-3 text-xs font-mono text-gray-800 bg-gray-50 resize-y focus:outline-none focus:border-[#17a2b8]"></textarea>
+            <div class="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t border-gray-200">
+                <a href="#" id="printJsonCopyLink" onclick="copyPrintJsonToClipboard(event)" class="inline-flex items-center gap-2 text-[#17a2b8] hover:text-[#138496] text-sm font-semibold underline">Copy JSON to clipboard</a>
+                <button type="button" onclick="closePrintJsonPopup()" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Close</button>
+            </div>
         </div>
     </div>
 </div>
@@ -2776,6 +2819,150 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if(isValid) {
             openPublishPopup();
+        }
+    }
+
+    function resetPrintJsonPopup() {
+        const choose = document.getElementById('printJsonChoose');
+        const busy = document.getElementById('printJsonBusy');
+        const result = document.getElementById('printJsonResult');
+        const liveBtn = document.getElementById('printJsonLiveBtn');
+        const localBtn = document.getElementById('printJsonLocalBtn');
+        const cancelBtn = document.getElementById('printJsonCancelBtn');
+        const output = document.getElementById('printJsonOutput');
+        if (choose) choose.classList.remove('hidden');
+        if (busy) {
+            busy.classList.add('hidden');
+            busy.classList.remove('flex');
+        }
+        if (result) {
+            result.classList.add('hidden');
+            result.classList.remove('flex');
+        }
+        if (output) output.value = '';
+        if (liveBtn) liveBtn.disabled = false;
+        if (localBtn) localBtn.disabled = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+    }
+
+    function openPrintJsonPopup() {
+        resetPrintJsonPopup();
+        showDesktopOverlay(document.getElementById('printJsonPopup'));
+    }
+
+    function closePrintJsonPopup() {
+        hideDesktopOverlay(document.getElementById('printJsonPopup'));
+        resetPrintJsonPopup();
+    }
+
+    function handlePrintJsonClick() {
+        const isValid = performValidationOnly();
+        if (isValid) {
+            openPrintJsonPopup();
+        }
+    }
+
+    function triggerPrintJsonPreview(apiStatus) {
+        const publishStatus = (Number(apiStatus) === 0) ? 0 : 1;
+        const form = document.getElementById('product_form');
+        const formData = new FormData(form);
+        const recordId = new URLSearchParams(window.location.search).get('id');
+
+        const choose = document.getElementById('printJsonChoose');
+        const busy = document.getElementById('printJsonBusy');
+        const result = document.getElementById('printJsonResult');
+        const liveBtn = document.getElementById('printJsonLiveBtn');
+        const localBtn = document.getElementById('printJsonLocalBtn');
+        const cancelBtn = document.getElementById('printJsonCancelBtn');
+
+        if (choose) choose.classList.add('hidden');
+        if (busy) {
+            busy.classList.remove('hidden');
+            busy.classList.add('flex');
+        }
+        if (liveBtn) liveBtn.disabled = true;
+        if (localBtn) localBtn.disabled = true;
+        if (cancelBtn) cancelBtn.disabled = true;
+
+        fetch(form.action + '&save_action=generate', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function () {
+            return fetch('index.php?page=inbounding&action=inbound_product_preview_json&id=' + encodeURIComponent(recordId) + '&publish_status=' + publishStatus);
+        })
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+            if (busy) {
+                busy.classList.add('hidden');
+                busy.classList.remove('flex');
+            }
+
+            if (data.status === 'success' && data.json) {
+                const output = document.getElementById('printJsonOutput');
+                const meta = document.getElementById('printJsonMeta');
+                if (output) output.value = data.json;
+                if (meta) {
+                    meta.textContent = 'API URL: ' + (data.api_url || '') + ' | status = ' + (data.publish_status != null ? data.publish_status : publishStatus);
+                }
+                if (result) {
+                    result.classList.remove('hidden');
+                    result.classList.add('flex');
+                }
+                return;
+            }
+
+            closePrintJsonPopup();
+            Swal.fire({
+                icon: 'error',
+                title: 'JSON preview failed',
+                text: data.message || 'Could not prepare publish JSON.'
+            });
+        })
+        .catch(function (error) {
+            closePrintJsonPopup();
+            Swal.fire({ icon: 'error', title: 'Error', text: 'JSON preview failed: ' + error.message });
+        })
+        .finally(function () {
+            if (liveBtn) liveBtn.disabled = false;
+            if (localBtn) localBtn.disabled = false;
+            if (cancelBtn) cancelBtn.disabled = false;
+        });
+    }
+
+    function copyPrintJsonToClipboard(event) {
+        if (event) event.preventDefault();
+        const output = document.getElementById('printJsonOutput');
+        const link = document.getElementById('printJsonCopyLink');
+        const text = output ? output.value : '';
+        if (!text) return;
+
+        const done = function () {
+            if (link) {
+                const prev = link.textContent;
+                link.textContent = 'Copied!';
+                setTimeout(function () { link.textContent = prev; }, 2000);
+            }
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(function () {
+                if (output) {
+                    output.focus();
+                    output.select();
+                    try { document.execCommand('copy'); done(); } catch (e) {}
+                }
+            });
+            return;
+        }
+
+        if (output) {
+            output.focus();
+            output.select();
+            try {
+                document.execCommand('copy');
+                done();
+            } catch (e) {}
         }
     }
 
