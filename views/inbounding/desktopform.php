@@ -1690,7 +1690,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         <div id="printJsonResult" class="hidden flex-col min-h-0 flex-1">
             <div class="flex items-start justify-between gap-3 mb-3">
                 <div class="min-w-0 text-left">
-                    <h3 class="text-lg font-bold text-gray-800">Publish JSON preview</h3>
+                    <h3 id="printJsonResultTitle" class="text-lg font-bold text-gray-800">Publish JSON preview</h3>
                     <p id="printJsonMeta" class="text-xs text-gray-500 mt-1 break-all"></p>
                 </div>
                 <button type="button" onclick="closePrintJsonPopup()" class="shrink-0 text-gray-400 hover:text-gray-700 text-xl leading-none" aria-label="Close">&times;</button>
@@ -2842,9 +2842,60 @@ document.addEventListener('DOMContentLoaded', function() {
             result.classList.remove('flex');
         }
         if (output) output.value = '';
+        const titleEl = document.getElementById('printJsonResultTitle');
+        const meta = document.getElementById('printJsonMeta');
+        const copyLink = document.getElementById('printJsonCopyLink');
+        if (titleEl) titleEl.textContent = 'Publish JSON preview';
+        if (meta) {
+            meta.textContent = '';
+            meta.classList.remove('text-red-600');
+            meta.classList.add('text-gray-500');
+        }
+        if (copyLink) copyLink.textContent = 'Copy JSON to clipboard';
         if (liveBtn) liveBtn.disabled = false;
         if (localBtn) localBtn.disabled = false;
         if (cancelBtn) cancelBtn.disabled = false;
+    }
+
+    function showPrintJsonDiagnostic(title, summary, rawBody, httpStatus) {
+        const busy = document.getElementById('printJsonBusy');
+        const result = document.getElementById('printJsonResult');
+        const output = document.getElementById('printJsonOutput');
+        const meta = document.getElementById('printJsonMeta');
+        const titleEl = document.getElementById('printJsonResultTitle');
+        const copyLink = document.getElementById('printJsonCopyLink');
+
+        if (busy) {
+            busy.classList.add('hidden');
+            busy.classList.remove('flex');
+        }
+        if (titleEl) titleEl.textContent = title || 'Server response (diagnostic)';
+        if (meta) {
+            let metaText = summary || '';
+            if (httpStatus != null) {
+                metaText = (metaText ? metaText + ' | ' : '') + 'HTTP ' + httpStatus;
+            }
+            meta.textContent = metaText;
+            meta.classList.remove('text-gray-500');
+            meta.classList.add('text-red-600');
+        }
+        if (output) {
+            output.value = (rawBody != null && String(rawBody).length) ? String(rawBody) : '(empty response body)';
+        }
+        if (copyLink) copyLink.textContent = 'Copy response to clipboard';
+        if (result) {
+            result.classList.remove('hidden');
+            result.classList.add('flex');
+        }
+    }
+
+    function createPrintJsonDiagnosticError(title, summary, rawBody, httpStatus) {
+        const err = new Error(summary || title || 'Request failed');
+        err.isPrintJsonDiagnostic = true;
+        err.diagnosticTitle = title;
+        err.rawBody = rawBody;
+        err.httpStatus = httpStatus;
+        return err;
     }
 
     function openPrintJsonPopup() {
@@ -2892,30 +2943,52 @@ document.addEventListener('DOMContentLoaded', function() {
             credentials: 'same-origin'
         })
         .then(function (saveResponse) {
-            if (!saveResponse.ok) {
-                throw new Error('Form save failed (HTTP ' + saveResponse.status + ').');
-            }
-            const previewUrl = printJsonPreviewUrl
-                + '&id=' + encodeURIComponent(recordId)
-                + '&publish_status=' + encodeURIComponent(publishStatus);
-            return fetch(previewUrl, {
-                credentials: 'same-origin',
-                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+            return saveResponse.text().then(function (saveText) {
+                if (!saveResponse.ok) {
+                    throw createPrintJsonDiagnosticError(
+                        'Form save failed',
+                        'Form save failed (HTTP ' + saveResponse.status + '). Server response below.',
+                        saveText,
+                        saveResponse.status
+                    );
+                }
+                const previewUrl = printJsonPreviewUrl
+                    + '&id=' + encodeURIComponent(recordId)
+                    + '&publish_status=' + encodeURIComponent(publishStatus);
+                return fetch(previewUrl, {
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                });
             });
         })
         .then(function (response) {
             return response.text().then(function (text) {
                 if (!response.ok) {
-                    throw new Error('Preview request failed (HTTP ' + response.status + ').');
+                    throw createPrintJsonDiagnosticError(
+                        'Preview request failed',
+                        'Preview request failed (HTTP ' + response.status + '). Server response below.',
+                        text,
+                        response.status
+                    );
                 }
                 const trimmed = (text || '').trim();
                 if (trimmed.charAt(0) === '<') {
-                    throw new Error('Server returned HTML instead of JSON. Refresh the page, confirm you are logged in, and ensure the preview route is deployed.');
+                    throw createPrintJsonDiagnosticError(
+                        'Non-JSON response',
+                        'Server returned HTML instead of JSON. Check login, routing, or PHP errors below.',
+                        text,
+                        response.status
+                    );
                 }
                 try {
                     return JSON.parse(trimmed);
                 } catch (parseErr) {
-                    throw new Error('Invalid JSON from server: ' + parseErr.message);
+                    throw createPrintJsonDiagnosticError(
+                        'Invalid JSON',
+                        'Server response was not valid JSON (' + parseErr.message + '). Raw response below.',
+                        text,
+                        response.status
+                    );
                 }
             });
         })
@@ -2928,10 +3001,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.status === 'success' && data.json) {
                 const output = document.getElementById('printJsonOutput');
                 const meta = document.getElementById('printJsonMeta');
+                const titleEl = document.getElementById('printJsonResultTitle');
+                const copyLink = document.getElementById('printJsonCopyLink');
+                if (titleEl) titleEl.textContent = 'Publish JSON preview';
                 if (output) output.value = data.json;
                 if (meta) {
                     meta.textContent = 'API URL: ' + (data.api_url || '') + ' | status = ' + (data.publish_status != null ? data.publish_status : publishStatus);
+                    meta.classList.remove('text-red-600');
+                    meta.classList.add('text-gray-500');
                 }
+                if (copyLink) copyLink.textContent = 'Copy JSON to clipboard';
                 if (result) {
                     result.classList.remove('hidden');
                     result.classList.add('flex');
@@ -2939,14 +3018,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            closePrintJsonPopup();
-            Swal.fire({
-                icon: 'error',
-                title: 'JSON preview failed',
-                text: data.message || 'Could not prepare publish JSON.'
-            });
+            const diagnosticBody = (typeof data === 'object' && data !== null)
+                ? JSON.stringify(data, null, 2)
+                : String(data);
+            throw createPrintJsonDiagnosticError(
+                'JSON preview failed',
+                data.message || 'Could not prepare publish JSON.',
+                diagnosticBody,
+                null
+            );
         })
         .catch(function (error) {
+            if (error && error.isPrintJsonDiagnostic) {
+                showPrintJsonDiagnostic(
+                    error.diagnosticTitle,
+                    error.message,
+                    error.rawBody,
+                    error.httpStatus
+                );
+                return;
+            }
             closePrintJsonPopup();
             Swal.fire({ icon: 'error', title: 'Error', text: 'JSON preview failed: ' + error.message });
         })
