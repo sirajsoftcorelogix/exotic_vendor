@@ -2937,17 +2937,45 @@ document.addEventListener('DOMContentLoaded', function() {
         if (localBtn) localBtn.disabled = true;
         if (cancelBtn) cancelBtn.disabled = true;
 
-        fetch(form.action + '&save_action=generate', {
+        fetch(form.action + '&save_action=preview_json', {
             method: 'POST',
             body: formData,
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            redirect: 'manual'
         })
         .then(function (saveResponse) {
             return saveResponse.text().then(function (saveText) {
+                if (saveResponse.type === 'opaqueredirect' || (saveResponse.status >= 300 && saveResponse.status < 400)) {
+                    throw createPrintJsonDiagnosticError(
+                        'Form save redirected',
+                        'Form save redirected instead of returning JSON. Deploy preview_json save handler on the server.',
+                        saveText,
+                        saveResponse.status
+                    );
+                }
                 if (!saveResponse.ok) {
                     throw createPrintJsonDiagnosticError(
                         'Form save failed',
                         'Form save failed (HTTP ' + saveResponse.status + '). Server response below.',
+                        saveText,
+                        saveResponse.status
+                    );
+                }
+                let saveData;
+                try {
+                    saveData = JSON.parse((saveText || '').trim());
+                } catch (parseErr) {
+                    throw createPrintJsonDiagnosticError(
+                        'Form save returned non-JSON',
+                        'Form save did not return JSON (server may need preview_json handler). Response below.',
+                        saveText,
+                        saveResponse.status
+                    );
+                }
+                if (!saveData || saveData.status !== 'success') {
+                    throw createPrintJsonDiagnosticError(
+                        'Form save failed',
+                        (saveData && saveData.message) ? saveData.message : 'Form save failed.',
                         saveText,
                         saveResponse.status
                     );
@@ -2973,9 +3001,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 const trimmed = (text || '').trim();
                 if (trimmed.charAt(0) === '<') {
+                    let htmlSummary = 'Server returned HTML instead of JSON. Check login, routing, or PHP errors below.';
+                    if (/Inbound Dashboard|Onboarding Dashboard/i.test(trimmed)) {
+                        htmlSummary = 'Preview route is not deployed on this server (got Inbound list page). Deploy index.php case inbound_product_preview_json and InboundingController::inbound_product_preview_json(), then retry.';
+                    } else if (/<title>\s*Login|sign in/i.test(trimmed)) {
+                        htmlSummary = 'Session may have expired (login page returned). Sign in again and retry.';
+                    }
                     throw createPrintJsonDiagnosticError(
                         'Non-JSON response',
-                        'Server returned HTML instead of JSON. Check login, routing, or PHP errors below.',
+                        htmlSummary,
                         text,
                         response.status
                     );
