@@ -2915,9 +2915,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    /** Sync TomSelect values into native selects so FormData includes current choices. */
+    function syncFormTomSelectValues(form) {
+        if (!form) return;
+        form.querySelectorAll('select').forEach(function (el) {
+            if (el.tomselect) {
+                el.value = el.tomselect.getValue();
+            }
+        });
+    }
+
     function triggerPrintJsonPreview(apiStatus) {
         const publishStatus = (Number(apiStatus) === 0) ? 0 : 1;
         const form = document.getElementById('product_form');
+        syncFormTomSelectValues(form);
         const formData = new FormData(form);
         const recordId = new URLSearchParams(window.location.search).get('id');
 
@@ -3040,9 +3051,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (titleEl) titleEl.textContent = 'Publish JSON preview';
                 if (output) output.value = data.json;
                 if (meta) {
-                    meta.textContent = 'API URL: ' + (data.api_url || '') + ' | status = ' + (data.publish_status != null ? data.publish_status : publishStatus);
-                    meta.classList.remove('text-red-600');
-                    meta.classList.add('text-gray-500');
+                    let metaText = 'API URL: ' + (data.api_url || '') + ' | status = ' + (data.publish_status != null ? data.publish_status : publishStatus);
+                    if (data.vendor_debug) {
+                        const vd = data.vendor_debug;
+                        metaText += ' | vendor_code (DB): ' + (vd.vendor_code_db != null ? vd.vendor_code_db : '(empty)');
+                        metaText += ' | discrete_vendors[0].vendor: ' + (vd.discrete_vendors_vendor != null ? vd.discrete_vendors_vendor : '0');
+                        if (vd.vendor_name) {
+                            metaText += ' (' + vd.vendor_name + ')';
+                        }
+                        if (!vd.vendor_code_db || Number(vd.discrete_vendors_vendor) === 0) {
+                            metaText += ' — WARNING: vendor will not be sent to Exotic API';
+                            meta.classList.add('text-red-600');
+                            meta.classList.remove('text-gray-500');
+                        } else {
+                            meta.classList.remove('text-red-600');
+                            meta.classList.add('text-gray-500');
+                        }
+                    } else {
+                        meta.classList.remove('text-red-600');
+                        meta.classList.add('text-gray-500');
+                    }
+                    meta.textContent = metaText;
                 }
                 if (copyLink) copyLink.textContent = 'Copy JSON to clipboard';
                 if (result) {
@@ -3223,6 +3252,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function triggerPublishController(apiStatus) {
         const publishStatus = (Number(apiStatus) === 0) ? 0 : 1;
         const form = document.getElementById('product_form');
+        syncFormTomSelectValues(form);
         const formData = new FormData(form);
         const recordId = new URLSearchParams(window.location.search).get('id');
 
