@@ -1494,11 +1494,12 @@ class InboundingController {
         }
 
         if ($result['success']) {
-            
+            $action_clicked = $_POST['save_action'] ?? '';
+
             // =========================================================
             // START: ADVANCED RENAMING LOGIC (4 CASES)
             // =========================================================
-            if (!empty($item_code) && $shouldRename) {
+            if (!empty($item_code) && $shouldRename && $action_clicked !== 'preview_json') {
                 // Pass current POST data to helper so we use fresh color/size values
                 // $currentDataForRename = [
                 //     'is_variant' => $is_variant,
@@ -1514,11 +1515,19 @@ class InboundingController {
                 );
             }
             // =========================================================
-            
+
+            if ($action_clicked === 'preview_json') {
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['status' => 'success', 'id' => $id]);
+                exit;
+            }
+
             $logData = ['userid_log' => $_POST['userid_log'] ?? '', 'i_id' => $id, 'stat' => 'Data Entry'];
             $inboundingModel->stat_logs($logData);
 
-            $action_clicked = $_POST['save_action'] ?? '';
             if ($action_clicked === 'draft') {
                 header("location: " . base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved'));
             } else {
