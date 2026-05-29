@@ -29,7 +29,7 @@ $queryBase = [
                     Author <span class="text-amber-800">Listing</span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-                    Manage author names used in inbounding book metadata and sync the latest author list from Admin.
+                    Manage author names for inbounding book metadata. Add, edit, and delete sync with Exotic India (<code class="text-xs bg-amber-50 px-1 rounded">vendorcreate</code>, <code class="text-xs bg-amber-50 px-1 rounded">vendormodify</code>, <code class="text-xs bg-amber-50 px-1 rounded">vendordelete</code>).
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">
@@ -210,9 +210,17 @@ $queryBase = [
                     <option value="0">Inactive</option>
                 </select>
             </div>
+            <div>
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" name="webpage" id="author_webpage" value="1"
+                        class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                    <span>Allow webpage on Exotic India</span>
+                </label>
+                <p class="mt-1 text-xs text-gray-500">Maps to the <code>webpage</code> parameter (0 or 1) on the vendor API.</p>
+            </div>
             <div class="flex justify-end gap-3 border-t pt-4">
                 <button type="button" onclick="closeAuthorModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Author</button>
+                <button type="submit" id="authorSaveBtn" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Author</button>
             </div>
         </form>
     </div>
@@ -233,6 +241,7 @@ function openAuthorModal(author) {
     document.getElementById('author_id').value = author.author_id || '';
     document.getElementById('author_name').value = author.author || '';
     document.getElementById('author_is_active').value = author.is_active != null ? String(author.is_active) : '1';
+    document.getElementById('author_webpage').checked = author.webpage === 1 || author.webpage === '1';
     document.getElementById('authorModal').classList.remove('hidden');
     document.getElementById('authorModal').classList.add('flex');
     setTimeout(function () { document.getElementById('author_name').focus(); }, 50);
@@ -258,6 +267,15 @@ document.getElementById('openAuthorModalBtn')?.addEventListener('click', functio
 document.getElementById('authorForm')?.addEventListener('submit', function (e) {
     e.preventDefault();
     const form = new FormData(this);
+    if (!document.getElementById('author_webpage').checked) {
+        form.set('webpage', '0');
+    }
+    const btn = document.getElementById('authorSaveBtn');
+    const oldLabel = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+    }
     postAuthorAction('save', form).then(function (res) {
         showAuthorAlert(res.message || (res.success ? 'Author saved.' : 'Could not save author.'), !!res.success);
         if (res.success) {
@@ -266,6 +284,11 @@ document.getElementById('authorForm')?.addEventListener('submit', function (e) {
         }
     }).catch(function () {
         showAuthorAlert('Could not save author.', false);
+    }).finally(function () {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = oldLabel;
+        }
     });
 });
 
@@ -282,7 +305,7 @@ function setAuthorStatus(id, isActive) {
 }
 
 function deleteAuthor(id) {
-    if (!confirm('Delete this author? This cannot be undone.')) return;
+    if (!confirm('Delete this author on Exotic India and locally? This cannot be undone.')) return;
     const form = new FormData();
     form.append('author_id', id);
     postAuthorAction('delete', form).then(function (res) {

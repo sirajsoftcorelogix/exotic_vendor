@@ -93,23 +93,18 @@ class Author
             return ['success' => false, 'message' => 'Author name is required.'];
         }
 
-        if ($id && $id > 0) {
-            $stmt = $this->conn->prepare('UPDATE vp_author SET author = ?, is_active = ? WHERE author_id = ?');
-            if (!$stmt) {
-                return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
-            }
-            $stmt->bind_param('sii', $name, $isActive, $id);
-        } else {
-            $stmt = $this->conn->prepare('INSERT INTO vp_author (author, is_active) VALUES (?, ?)');
-            if (!$stmt) {
-                return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
-            }
-            $stmt->bind_param('si', $name, $isActive);
+        if (!$id || $id <= 0) {
+            return ['success' => false, 'message' => 'Author id is required for update.'];
         }
+
+        $stmt = $this->conn->prepare('UPDATE vp_author SET author = ?, is_active = ? WHERE author_id = ?');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+        $stmt->bind_param('sii', $name, $isActive, $id);
 
         try {
             $ok = $stmt->execute();
-            $newId = $id ?: (int)$stmt->insert_id;
             $error = $stmt->error;
             $stmt->close();
         } catch (mysqli_sql_exception $e) {
@@ -118,7 +113,40 @@ class Author
         }
 
         return $ok
-            ? ['success' => true, 'message' => 'Author saved successfully.', 'author_id' => $newId]
+            ? ['success' => true, 'message' => 'Author saved successfully.', 'author_id' => $id]
+            : ['success' => false, 'message' => 'Could not save author: ' . $error];
+    }
+
+    public function insertAuthor(int $authorId, string $name, int $isActive): array
+    {
+        $authorId = (int) $authorId;
+        $name = trim($name);
+        $isActive = $isActive ? 1 : 0;
+
+        if ($authorId <= 0) {
+            return ['success' => false, 'message' => 'Remote author vendor_id is required.'];
+        }
+        if ($name === '') {
+            return ['success' => false, 'message' => 'Author name is required.'];
+        }
+
+        $stmt = $this->conn->prepare('INSERT INTO vp_author (author_id, author, is_active) VALUES (?, ?, ?)');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+        $stmt->bind_param('isi', $authorId, $name, $isActive);
+
+        try {
+            $ok = $stmt->execute();
+            $error = $stmt->error;
+            $stmt->close();
+        } catch (mysqli_sql_exception $e) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Could not save author: ' . $e->getMessage()];
+        }
+
+        return $ok
+            ? ['success' => true, 'message' => 'Author saved successfully.', 'author_id' => $authorId]
             : ['success' => false, 'message' => 'Could not save author: ' . $error];
     }
 

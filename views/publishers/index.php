@@ -29,7 +29,7 @@ $queryBase = [
                     Publisher <span class="text-amber-800">Listing</span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-                    Manage publisher names used in inbounding book metadata and sync the latest publisher list from Admin.
+                    Manage publisher names for inbounding book metadata. Add, edit, and delete sync with Exotic India (<code class="text-xs bg-amber-50 px-1 rounded">vendorcreate</code>, <code class="text-xs bg-amber-50 px-1 rounded">vendormodify</code>, <code class="text-xs bg-amber-50 px-1 rounded">vendordelete</code>).
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">
@@ -211,9 +211,17 @@ $queryBase = [
                     <option value="0">Inactive</option>
                 </select>
             </div>
+            <div>
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" name="webpage" id="publisher_webpage" value="1"
+                        class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                    <span>Allow webpage on Exotic India</span>
+                </label>
+                <p class="mt-1 text-xs text-gray-500">Maps to the <code>webpage</code> parameter (0 or 1) on the vendor API.</p>
+            </div>
             <div class="flex justify-end gap-3 border-t pt-4">
                 <button type="button" onclick="closePublisherModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Publisher</button>
+                <button type="submit" id="publisherSaveBtn" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Publisher</button>
             </div>
         </form>
     </div>
@@ -234,6 +242,7 @@ function openPublisherModal(publisher) {
     document.getElementById('publisher_id').value = publisher.id || '';
     document.getElementById('publisher_name').value = publisher.publishers || '';
     document.getElementById('publisher_is_active').value = publisher.is_active != null ? String(publisher.is_active) : '1';
+    document.getElementById('publisher_webpage').checked = publisher.webpage === 1 || publisher.webpage === '1';
     document.getElementById('publisherModal').classList.remove('hidden');
     document.getElementById('publisherModal').classList.add('flex');
     setTimeout(function () { document.getElementById('publisher_name').focus(); }, 50);
@@ -259,6 +268,15 @@ document.getElementById('openPublisherModalBtn')?.addEventListener('click', func
 document.getElementById('publisherForm')?.addEventListener('submit', function (e) {
     e.preventDefault();
     const form = new FormData(this);
+    if (!document.getElementById('publisher_webpage').checked) {
+        form.set('webpage', '0');
+    }
+    const btn = document.getElementById('publisherSaveBtn');
+    const oldLabel = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+    }
     postPublisherAction('save', form).then(function (res) {
         showPublisherAlert(res.message || (res.success ? 'Publisher saved.' : 'Could not save publisher.'), !!res.success);
         if (res.success) {
@@ -267,6 +285,11 @@ document.getElementById('publisherForm')?.addEventListener('submit', function (e
         }
     }).catch(function () {
         showPublisherAlert('Could not save publisher.', false);
+    }).finally(function () {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = oldLabel;
+        }
     });
 });
 
@@ -283,7 +306,7 @@ function setPublisherStatus(id, isActive) {
 }
 
 function deletePublisher(id) {
-    if (!confirm('Delete this publisher? This cannot be undone.')) return;
+    if (!confirm('Delete this publisher on Exotic India and locally? This cannot be undone.')) return;
     const form = new FormData();
     form.append('id', id);
     postPublisherAction('delete', form).then(function (res) {
