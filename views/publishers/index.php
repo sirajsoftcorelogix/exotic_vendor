@@ -202,6 +202,7 @@ $queryBase = [
                 <label class="mb-1 block text-sm font-semibold text-gray-700">Publisher Name</label>
                 <input type="text" name="publishers" id="publisher_name" required
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                <span id="publisherNameMsg" class="text-sm text-red-500"></span>
             </div>
             <div>
                 <label class="mb-1 block text-sm font-semibold text-gray-700">Status</label>
@@ -228,6 +229,37 @@ $queryBase = [
 </div>
 
 <script>
+let publisherNameExists = false;
+
+function bindCreatorNameDuplicateCheck(inputEl, msgEl, page, existsFlagSetter, excludeIdGetter, duplicateMessage) {
+    if (!inputEl || !msgEl) return;
+    inputEl.addEventListener('keyup', function () {
+        const value = inputEl.value.trim();
+        if (value.length < 2) {
+            existsFlagSetter(false);
+            msgEl.textContent = '';
+            return;
+        }
+        const excludeId = excludeIdGetter ? excludeIdGetter() : 0;
+        let url = 'index.php?page=' + page + '&action=checkName&name=' + encodeURIComponent(value);
+        if (excludeId && parseInt(excludeId, 10) > 0) {
+            url += '&excludeId=' + encodeURIComponent(String(excludeId));
+        }
+        fetch(url, { credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data.exists) {
+                    msgEl.textContent = duplicateMessage;
+                    existsFlagSetter(true);
+                } else {
+                    msgEl.textContent = '';
+                    existsFlagSetter(false);
+                }
+            })
+            .catch(function (err) { console.error('Duplicate check error:', err); });
+    });
+}
+
 function showPublisherAlert(message, success) {
     const box = document.getElementById('publisherAlert');
     if (!box) return;
@@ -238,6 +270,9 @@ function showPublisherAlert(message, success) {
 
 function openPublisherModal(publisher) {
     publisher = publisher || {};
+    publisherNameExists = false;
+    const publisherNameMsg = document.getElementById('publisherNameMsg');
+    if (publisherNameMsg) publisherNameMsg.textContent = '';
     document.getElementById('publisherModalTitle').textContent = publisher.id ? 'Edit Publisher' : 'Add Publisher';
     document.getElementById('publisher_id').value = publisher.id || '';
     document.getElementById('publisher_name').value = publisher.publishers || '';
@@ -265,8 +300,21 @@ document.getElementById('openPublisherModalBtn')?.addEventListener('click', func
     openPublisherModal();
 });
 
+bindCreatorNameDuplicateCheck(
+    document.getElementById('publisher_name'),
+    document.getElementById('publisherNameMsg'),
+    'publishers',
+    function (v) { publisherNameExists = v; },
+    function () { return document.getElementById('publisher_id') ? document.getElementById('publisher_id').value : 0; },
+    'Publisher name already exists'
+);
+
 document.getElementById('publisherForm')?.addEventListener('submit', function (e) {
     e.preventDefault();
+    if (publisherNameExists) {
+        showPublisherAlert('Publisher name already exists', false);
+        return;
+    }
     const form = new FormData(this);
     if (!document.getElementById('publisher_webpage').checked) {
         form.set('webpage', '0');
