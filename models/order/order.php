@@ -524,6 +524,10 @@ class Order
             return ['success' => false, 'message' => 'Duplicate ' . $data['order_number'] . '-' . $data['item_code'] . ' order_number + item_code combination.'];
         }
 
+        $data['local_stock'] = is_numeric($data['local_stock'] ?? null)
+            ? (float) $data['local_stock']
+            : 0.0;
+
         // Insert
         $table_name = 'vp_orders';
         $InsertFields = [
@@ -1116,6 +1120,10 @@ class Order
         if (empty($data['order_number']) || empty($data['item_code'])) {
             return ['success' => false, 'message' => 'Order number or item code is missing.'];
         }
+
+        $data['local_stock'] = is_numeric($data['local_stock'] ?? null)
+            ? (float) $data['local_stock']
+            : 0.0;
 
         // Prepare SQL statement
         $sql = "UPDATE vp_orders SET 
