@@ -53,6 +53,11 @@ class AuthorsController
             exit;
         }
 
+        if ($this->authorModel->authorNameExists($name, ($id && $id > 0) ? $id : null)) {
+            echo json_encode(['success' => false, 'message' => 'Author name already exists'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
         if ($id && $id > 0) {
             $existing = $this->authorModel->getAuthorById($id);
             if (!$existing) {
@@ -161,6 +166,20 @@ class AuthorsController
             $result['message'] = 'Author deleted on Exotic India and locally.';
         }
         echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function checkName(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $name = trim((string)($_GET['name'] ?? ''));
+        $excludeId = isset($_GET['excludeId']) ? (int) $_GET['excludeId'] : 0;
+        echo json_encode(
+            $this->authorModel->checkAuthorName($name, $excludeId > 0 ? $excludeId : null),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
         exit;
     }
 

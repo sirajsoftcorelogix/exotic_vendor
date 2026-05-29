@@ -104,6 +104,9 @@ switch ($page) {
             case 'delete':
                 $controller->delete();
                 break;
+            case 'checkName':
+                $controller->checkName();
+                break;
             case 'syncFromAdmin':
                 $controller->syncFromAdmin();
                 break;
@@ -130,6 +133,9 @@ switch ($page) {
                 break;
             case 'delete':
                 $controller->delete();
+                break;
+            case 'checkName':
+                $controller->checkName();
                 break;
             case 'syncFromAdmin':
                 $controller->syncFromAdmin();

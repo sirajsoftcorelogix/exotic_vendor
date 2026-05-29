@@ -85,6 +85,40 @@ class Author
         return $row ?: null;
     }
 
+    public function authorNameExists(string $name, ?int $excludeAuthorId = null): bool
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return false;
+        }
+
+        if ($excludeAuthorId !== null && $excludeAuthorId > 0) {
+            $stmt = $this->conn->prepare(
+                'SELECT author_id FROM vp_author WHERE LOWER(TRIM(author)) = LOWER(TRIM(?)) AND author_id != ? LIMIT 1'
+            );
+            $stmt->bind_param('si', $name, $excludeAuthorId);
+        } else {
+            $stmt = $this->conn->prepare(
+                'SELECT author_id FROM vp_author WHERE LOWER(TRIM(author)) = LOWER(TRIM(?)) LIMIT 1'
+            );
+            $stmt->bind_param('s', $name);
+        }
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
+    public function checkAuthorName(string $name, ?int $excludeAuthorId = null): array
+    {
+        return ['exists' => $this->authorNameExists($name, $excludeAuthorId)];
+    }
+
     public function saveAuthor(?int $id, string $name, int $isActive): array
     {
         $name = trim($name);
@@ -95,6 +129,10 @@ class Author
 
         if (!$id || $id <= 0) {
             return ['success' => false, 'message' => 'Author id is required for update.'];
+        }
+
+        if ($this->authorNameExists($name, $id)) {
+            return ['success' => false, 'message' => 'Author name already exists'];
         }
 
         $stmt = $this->conn->prepare('UPDATE vp_author SET author = ?, is_active = ? WHERE author_id = ?');
@@ -128,6 +166,10 @@ class Author
         }
         if ($name === '') {
             return ['success' => false, 'message' => 'Author name is required.'];
+        }
+
+        if ($this->authorNameExists($name)) {
+            return ['success' => false, 'message' => 'Author name already exists'];
         }
 
         $stmt = $this->conn->prepare('INSERT INTO vp_author (author_id, author, is_active) VALUES (?, ?, ?)');

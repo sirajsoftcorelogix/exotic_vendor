@@ -201,6 +201,7 @@ $queryBase = [
                 <label class="mb-1 block text-sm font-semibold text-gray-700">Author Name</label>
                 <input type="text" name="author" id="author_name" required
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                <span id="authorNameMsg" class="text-sm text-red-500"></span>
             </div>
             <div>
                 <label class="mb-1 block text-sm font-semibold text-gray-700">Status</label>
@@ -227,6 +228,37 @@ $queryBase = [
 </div>
 
 <script>
+let authorNameExists = false;
+
+function bindCreatorNameDuplicateCheck(inputEl, msgEl, page, existsFlagSetter, excludeIdGetter, duplicateMessage) {
+    if (!inputEl || !msgEl) return;
+    inputEl.addEventListener('keyup', function () {
+        const value = inputEl.value.trim();
+        if (value.length < 2) {
+            existsFlagSetter(false);
+            msgEl.textContent = '';
+            return;
+        }
+        const excludeId = excludeIdGetter ? excludeIdGetter() : 0;
+        let url = 'index.php?page=' + page + '&action=checkName&name=' + encodeURIComponent(value);
+        if (excludeId && parseInt(excludeId, 10) > 0) {
+            url += '&excludeId=' + encodeURIComponent(String(excludeId));
+        }
+        fetch(url, { credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data.exists) {
+                    msgEl.textContent = duplicateMessage;
+                    existsFlagSetter(true);
+                } else {
+                    msgEl.textContent = '';
+                    existsFlagSetter(false);
+                }
+            })
+            .catch(function (err) { console.error('Duplicate check error:', err); });
+    });
+}
+
 function showAuthorAlert(message, success) {
     const box = document.getElementById('authorAlert');
     if (!box) return;
@@ -237,6 +269,9 @@ function showAuthorAlert(message, success) {
 
 function openAuthorModal(author) {
     author = author || {};
+    authorNameExists = false;
+    const authorNameMsg = document.getElementById('authorNameMsg');
+    if (authorNameMsg) authorNameMsg.textContent = '';
     document.getElementById('authorModalTitle').textContent = author.author_id ? 'Edit Author' : 'Add Author';
     document.getElementById('author_id').value = author.author_id || '';
     document.getElementById('author_name').value = author.author || '';
@@ -264,8 +299,21 @@ document.getElementById('openAuthorModalBtn')?.addEventListener('click', functio
     openAuthorModal();
 });
 
+bindCreatorNameDuplicateCheck(
+    document.getElementById('author_name'),
+    document.getElementById('authorNameMsg'),
+    'authors',
+    function (v) { authorNameExists = v; },
+    function () { return document.getElementById('author_id') ? document.getElementById('author_id').value : 0; },
+    'Author name already exists'
+);
+
 document.getElementById('authorForm')?.addEventListener('submit', function (e) {
     e.preventDefault();
+    if (authorNameExists) {
+        showAuthorAlert('Author name already exists', false);
+        return;
+    }
     const form = new FormData(this);
     if (!document.getElementById('author_webpage').checked) {
         form.set('webpage', '0');

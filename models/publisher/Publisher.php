@@ -85,6 +85,40 @@ class Publisher
         return $row ?: null;
     }
 
+    public function publisherNameExists(string $name, ?int $excludeLocalId = null): bool
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return false;
+        }
+
+        if ($excludeLocalId !== null && $excludeLocalId > 0) {
+            $stmt = $this->conn->prepare(
+                'SELECT id FROM vp_publishers WHERE LOWER(TRIM(publishers)) = LOWER(TRIM(?)) AND id != ? LIMIT 1'
+            );
+            $stmt->bind_param('si', $name, $excludeLocalId);
+        } else {
+            $stmt = $this->conn->prepare(
+                'SELECT id FROM vp_publishers WHERE LOWER(TRIM(publishers)) = LOWER(TRIM(?)) LIMIT 1'
+            );
+            $stmt->bind_param('s', $name);
+        }
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
+    public function checkPublisherName(string $name, ?int $excludeLocalId = null): array
+    {
+        return ['exists' => $this->publisherNameExists($name, $excludeLocalId)];
+    }
+
     public function savePublisher(?int $id, string $name, int $isActive): array
     {
         $name = trim($name);
@@ -95,6 +129,10 @@ class Publisher
 
         if (!$id || $id <= 0) {
             return ['success' => false, 'message' => 'Publisher id is required for update.'];
+        }
+
+        if ($this->publisherNameExists($name, $id)) {
+            return ['success' => false, 'message' => 'Publisher name already exists'];
         }
 
         $stmt = $this->conn->prepare('UPDATE vp_publishers SET publishers = ?, is_active = ? WHERE id = ?');
@@ -128,6 +166,10 @@ class Publisher
         }
         if ($name === '') {
             return ['success' => false, 'message' => 'Publisher name is required.'];
+        }
+
+        if ($this->publisherNameExists($name)) {
+            return ['success' => false, 'message' => 'Publisher name already exists'];
         }
 
         $stmt = $this->conn->prepare('INSERT INTO vp_publishers (publishers_id, publishers, is_active) VALUES (?, ?, ?)');
