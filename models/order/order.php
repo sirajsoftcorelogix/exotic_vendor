@@ -7,6 +7,49 @@ class Order
     {
         $this->db = $db;
     }
+
+    /**
+     * Coerce API/import values so empty strings are not sent to numeric DB columns.
+     */
+    private function normalizeOrderNumericFields(array $data): array
+    {
+        $decimalFields = [
+            'itemprice',
+            'finalprice',
+            'local_stock',
+            'cost_price',
+            'product_weight',
+            'prod_height',
+            'prod_width',
+            'prod_length',
+            'coupon_reduce',
+            'giftvoucher_reduce',
+            'credit',
+            'shippingfee',
+            'sourcingfee',
+            'custom_reduce',
+        ];
+        foreach ($decimalFields as $field) {
+            $data[$field] = is_numeric($data[$field] ?? null) ? (float) $data[$field] : 0.0;
+        }
+
+        $intFields = [
+            'quantity',
+            'gst',
+            'processed_time',
+            'numsold',
+            'backorder_status',
+            'backorder_percent',
+            'agent_id',
+            'customer_id',
+        ];
+        foreach ($intFields as $field) {
+            $data[$field] = is_numeric($data[$field] ?? null) ? (int) $data[$field] : 0;
+        }
+
+        return $data;
+    }
+
     public function getAllOrders($filters = [], $limit = 50, $offset = 0)
     {
 
@@ -524,9 +567,7 @@ class Order
             return ['success' => false, 'message' => 'Duplicate ' . $data['order_number'] . '-' . $data['item_code'] . ' order_number + item_code combination.'];
         }
 
-        $data['local_stock'] = is_numeric($data['local_stock'] ?? null)
-            ? (float) $data['local_stock']
-            : 0.0;
+        $data = $this->normalizeOrderNumericFields($data);
 
         // Insert
         $table_name = 'vp_orders';
@@ -1121,9 +1162,7 @@ class Order
             return ['success' => false, 'message' => 'Order number or item code is missing.'];
         }
 
-        $data['local_stock'] = is_numeric($data['local_stock'] ?? null)
-            ? (float) $data['local_stock']
-            : 0.0;
+        $data = $this->normalizeOrderNumericFields($data);
 
         // Prepare SQL statement
         $sql = "UPDATE vp_orders SET 
