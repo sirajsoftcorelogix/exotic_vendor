@@ -1,5 +1,6 @@
 <?php
 require_once 'models/author/Author.php';
+require_once __DIR__ . '/../helpers/vendor_external_api.php';
 
 class AuthorsController
 {
@@ -45,8 +46,53 @@ class AuthorsController
         $id = trim((string)($_POST['author_id'] ?? '')) !== '' ? (int)$_POST['author_id'] : null;
         $name = trim((string)($_POST['author'] ?? ''));
         $isActive = (int)($_POST['is_active'] ?? 1);
+        $webpage = (string)($_POST['webpage'] ?? '0') === '1' ? '1' : '0';
 
-        echo json_encode($this->authorModel->saveAuthor($id, $name, $isActive), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($name === '') {
+            echo json_encode(['success' => false, 'message' => 'Author name is required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if ($id && $id > 0) {
+            $existing = $this->authorModel->getAuthorById($id);
+            if (!$existing) {
+                echo json_encode(['success' => false, 'message' => 'Author not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+
+            $api = vendor_external_api_modify(
+                vendor_external_api_modify_creator_payload((string) $id, 'author', $name, $webpage)
+            );
+            if (!$api['success']) {
+                echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+
+            $result = $this->authorModel->saveAuthor($id, $name, $isActive);
+            if ($result['success']) {
+                $result['message'] = 'Author saved on Exotic India and locally.';
+            }
+            echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $api = vendor_external_api_create(vendor_external_api_creator_payload('author', $name, $webpage));
+        if (!$api['success']) {
+            echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $remoteId = (int) ($api['vendor_id'] ?? 0);
+        if ($remoteId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Author API did not return vendor_id.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $result = $this->authorModel->insertAuthor($remoteId, $name, $isActive);
+        if ($result['success']) {
+            $result['message'] = 'Author created on Exotic India and saved locally.';
+        }
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 
@@ -93,7 +139,28 @@ class AuthorsController
         }
 
         $id = (int)($_POST['author_id'] ?? 0);
-        echo json_encode($this->authorModel->deleteAuthor($id), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid author id.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $existing = $this->authorModel->getAuthorById($id);
+        if (!$existing) {
+            echo json_encode(['success' => false, 'message' => 'Author not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $api = vendor_external_api_delete((string) $id);
+        if (!$api['success']) {
+            echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $result = $this->authorModel->deleteAuthor($id);
+        if ($result['success']) {
+            $result['message'] = 'Author deleted on Exotic India and locally.';
+        }
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 

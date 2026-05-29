@@ -93,24 +93,18 @@ class Publisher
             return ['success' => false, 'message' => 'Publisher name is required.'];
         }
 
-        if ($id && $id > 0) {
-            $stmt = $this->conn->prepare('UPDATE vp_publishers SET publishers = ?, is_active = ? WHERE id = ?');
-            if (!$stmt) {
-                return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
-            }
-            $stmt->bind_param('sii', $name, $isActive, $id);
-        } else {
-            $publisherExternalId = $this->getNextPublisherExternalId();
-            $stmt = $this->conn->prepare('INSERT INTO vp_publishers (publishers_id, publishers, is_active) VALUES (?, ?, ?)');
-            if (!$stmt) {
-                return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
-            }
-            $stmt->bind_param('isi', $publisherExternalId, $name, $isActive);
+        if (!$id || $id <= 0) {
+            return ['success' => false, 'message' => 'Publisher id is required for update.'];
         }
+
+        $stmt = $this->conn->prepare('UPDATE vp_publishers SET publishers = ?, is_active = ? WHERE id = ?');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+        $stmt->bind_param('sii', $name, $isActive, $id);
 
         try {
             $ok = $stmt->execute();
-            $newId = $id ?: (int)$stmt->insert_id;
             $error = $stmt->error;
             $stmt->close();
         } catch (mysqli_sql_exception $e) {
@@ -119,8 +113,62 @@ class Publisher
         }
 
         return $ok
-            ? ['success' => true, 'message' => 'Publisher saved successfully.', 'id' => $newId]
+            ? ['success' => true, 'message' => 'Publisher saved successfully.', 'id' => $id]
             : ['success' => false, 'message' => 'Could not save publisher: ' . $error];
+    }
+
+    public function insertPublisher(int $publishersId, string $name, int $isActive): array
+    {
+        $publishersId = (int) $publishersId;
+        $name = trim($name);
+        $isActive = $isActive ? 1 : 0;
+
+        if ($publishersId <= 0) {
+            return ['success' => false, 'message' => 'Remote publisher vendor_id is required.'];
+        }
+        if ($name === '') {
+            return ['success' => false, 'message' => 'Publisher name is required.'];
+        }
+
+        $stmt = $this->conn->prepare('INSERT INTO vp_publishers (publishers_id, publishers, is_active) VALUES (?, ?, ?)');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+        $stmt->bind_param('isi', $publishersId, $name, $isActive);
+
+        try {
+            $ok = $stmt->execute();
+            $newId = (int) $stmt->insert_id;
+            $error = $stmt->error;
+            $stmt->close();
+        } catch (mysqli_sql_exception $e) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Could not save publisher: ' . $e->getMessage()];
+        }
+
+        return $ok
+            ? ['success' => true, 'message' => 'Publisher saved successfully.', 'id' => $newId, 'publishers_id' => $publishersId]
+            : ['success' => false, 'message' => 'Could not save publisher: ' . $error];
+    }
+
+    public function updatePublisherRemoteId(int $localId, int $publishersId): array
+    {
+        if ($localId <= 0 || $publishersId <= 0) {
+            return ['success' => false, 'message' => 'Invalid publisher ids.'];
+        }
+
+        $stmt = $this->conn->prepare('UPDATE vp_publishers SET publishers_id = ? WHERE id = ?');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+        $stmt->bind_param('ii', $publishersId, $localId);
+        $ok = $stmt->execute();
+        $error = $stmt->error;
+        $stmt->close();
+
+        return $ok
+            ? ['success' => true, 'message' => 'Publisher remote id updated.']
+            : ['success' => false, 'message' => 'Could not update publisher remote id: ' . $error];
     }
 
     public function setStatus(int $id, int $isActive): array
@@ -223,14 +271,4 @@ class Publisher
         ];
     }
 
-    private function getNextPublisherExternalId(): int
-    {
-        $result = $this->conn->query('SELECT COALESCE(MAX(publishers_id), 0) + 1 AS next_id FROM vp_publishers');
-        if (!$result) {
-            return 1;
-        }
-
-        $row = $result->fetch_assoc();
-        return max(1, (int)($row['next_id'] ?? 1));
-    }
 }

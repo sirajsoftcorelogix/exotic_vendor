@@ -1,5 +1,6 @@
 <?php
 require_once 'models/publisher/Publisher.php';
+require_once __DIR__ . '/../helpers/vendor_external_api.php';
 
 class PublishersController
 {
@@ -45,8 +46,69 @@ class PublishersController
         $id = trim((string)($_POST['id'] ?? '')) !== '' ? (int)$_POST['id'] : null;
         $name = trim((string)($_POST['publishers'] ?? ''));
         $isActive = (int)($_POST['is_active'] ?? 1);
+        $webpage = (string)($_POST['webpage'] ?? '0') === '1' ? '1' : '0';
 
-        echo json_encode($this->publisherModel->savePublisher($id, $name, $isActive), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($name === '') {
+            echo json_encode(['success' => false, 'message' => 'Publisher name is required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if ($id && $id > 0) {
+            $existing = $this->publisherModel->getPublisherById($id);
+            if (!$existing) {
+                echo json_encode(['success' => false, 'message' => 'Publisher not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+
+            $remoteId = (int) ($existing['publishers_id'] ?? 0);
+            if ($remoteId > 0) {
+                $api = vendor_external_api_modify(
+                    vendor_external_api_modify_creator_payload((string) $remoteId, 'publisher', $name, $webpage)
+                );
+            } else {
+                $api = vendor_external_api_create(vendor_external_api_creator_payload('publisher', $name, $webpage));
+                if ($api['success']) {
+                    $remoteId = (int) ($api['vendor_id'] ?? 0);
+                    if ($remoteId > 0) {
+                        $link = $this->publisherModel->updatePublisherRemoteId($id, $remoteId);
+                        if (!$link['success']) {
+                            echo json_encode($link, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                            exit;
+                        }
+                    }
+                }
+            }
+
+            if (!$api['success']) {
+                echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+
+            $result = $this->publisherModel->savePublisher($id, $name, $isActive);
+            if ($result['success']) {
+                $result['message'] = 'Publisher saved on Exotic India and locally.';
+            }
+            echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $api = vendor_external_api_create(vendor_external_api_creator_payload('publisher', $name, $webpage));
+        if (!$api['success']) {
+            echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $remoteId = (int) ($api['vendor_id'] ?? 0);
+        if ($remoteId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Publisher API did not return vendor_id.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $result = $this->publisherModel->insertPublisher($remoteId, $name, $isActive);
+        if ($result['success']) {
+            $result['message'] = 'Publisher created on Exotic India and saved locally.';
+        }
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 
@@ -93,7 +155,31 @@ class PublishersController
         }
 
         $id = (int)($_POST['id'] ?? 0);
-        echo json_encode($this->publisherModel->deletePublisher($id), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid publisher id.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $existing = $this->publisherModel->getPublisherById($id);
+        if (!$existing) {
+            echo json_encode(['success' => false, 'message' => 'Publisher not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $remoteId = (int) ($existing['publishers_id'] ?? 0);
+        if ($remoteId > 0) {
+            $api = vendor_external_api_delete((string) $remoteId);
+            if (!$api['success']) {
+                echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+        }
+
+        $result = $this->publisherModel->deletePublisher($id);
+        if ($result['success']) {
+            $result['message'] = 'Publisher deleted on Exotic India and locally.';
+        }
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 

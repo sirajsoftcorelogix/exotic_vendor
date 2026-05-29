@@ -2788,7 +2788,7 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 <script>
-    const printJsonPreviewUrl = <?php echo json_encode(base_url('?page=inbounding&action=inbound_product_preview_json')); ?>;
+    const printJsonPreviewUrl = <?php echo json_encode(base_url('?page=inbounding&action=inbound_product_publish&preview_only=1')); ?>;
 
     function resetPublishPopup() {
         const idle = document.getElementById('publishConfirmIdle');
