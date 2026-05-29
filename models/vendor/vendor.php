@@ -127,6 +127,91 @@ class vendor
             return ['success' => false, 'message' => 'Secret key is not set. Cannot encrypt bank details.'];
         }
     }
+
+    /**
+     * @return array{success:false,message:string}|null null when no duplicate conflict
+     */
+    private function validateVendorUniqueness(
+        ?string $vendorName,
+        ?string $phone,
+        ?string $email,
+        ?string $gst,
+        ?string $pan,
+        ?int $excludeId = null
+    ): ?array {
+        $excludeId = ($excludeId !== null && $excludeId > 0) ? $excludeId : null;
+
+        if ($vendorName !== null && trim($vendorName) !== '' && $this->vendorNameExists(trim($vendorName), $excludeId)) {
+            return ['success' => false, 'message' => 'Vendor name already exists. Please use a different vendor name.'];
+        }
+        if ($phone !== null && trim($phone) !== '' && $this->vendorFieldExists('vendor_phone', trim($phone), $excludeId)) {
+            return ['success' => false, 'message' => 'Phone number already exists. Please use a different phone number.'];
+        }
+        if ($email !== null && trim($email) !== '' && $this->vendorFieldExists('vendor_email', trim($email), $excludeId)) {
+            return ['success' => false, 'message' => 'Email already exists. Please use a different email.'];
+        }
+        if ($gst !== null && trim($gst) !== '' && $this->vendorFieldExists('gst_number', trim($gst), $excludeId)) {
+            return ['success' => false, 'message' => 'GST number already exists. Please use a different GST number.'];
+        }
+        if ($pan !== null && trim($pan) !== '' && $this->vendorFieldExists('pan_number', trim($pan), $excludeId)) {
+            return ['success' => false, 'message' => 'PAN number already exists. Please use a different PAN number.'];
+        }
+
+        return null;
+    }
+
+    private function vendorNameExists(string $name, ?int $excludeId = null): bool
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return false;
+        }
+
+        if ($excludeId !== null && $excludeId > 0) {
+            $stmt = $this->conn->prepare('SELECT id FROM vp_vendors WHERE LOWER(TRIM(vendor_name)) = LOWER(TRIM(?)) AND id != ? LIMIT 1');
+            $stmt->bind_param('si', $name, $excludeId);
+        } else {
+            $stmt = $this->conn->prepare('SELECT id FROM vp_vendors WHERE LOWER(TRIM(vendor_name)) = LOWER(TRIM(?)) LIMIT 1');
+            $stmt->bind_param('s', $name);
+        }
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
+    private function vendorFieldExists(string $column, string $value, ?int $excludeId = null): bool
+    {
+        $allowed = ['vendor_phone', 'vendor_email', 'gst_number', 'pan_number'];
+        if (!in_array($column, $allowed, true)) {
+            return false;
+        }
+
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+
+        $sql = 'SELECT id FROM vp_vendors WHERE ' . $column . ' = ?';
+        if ($excludeId !== null && $excludeId > 0) {
+            $sql .= ' AND id != ? LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bind_param('si', $value, $excludeId);
+        } else {
+            $sql .= ' LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bind_param('s', $value);
+        }
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
     public function addVendor($data)
     {
         $groupnameValue = '';
@@ -140,67 +225,17 @@ class vendor
                 $groupnameValue = trim((string)$data['groupname']);
             }
         }
-        // Vendor Name
-        if (!empty($data['addVendorName'])) {
-            $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_name = ?";
-            $checkGstStmt = $this->conn->prepare($checkGstSql);
-            $checkGstStmt->bind_param('s', $data['addVendorName']);
-            $checkGstStmt->execute();
-            $checkGstStmt->store_result();
-            if ($checkGstStmt->num_rows > 0) {
-                return ['success' => false, 'message' => 'Vendor name already exists. Please use a differentVendor name.'];
-            }
-            $checkGstStmt->close();
-        }
-        // Phone Number
-        if (!empty($data['addPhone'])) {
-            $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_phone = ?";
-            $checkGstStmt = $this->conn->prepare($checkGstSql);
-            $checkGstStmt->bind_param('s', $data['addPhone']);
-            $checkGstStmt->execute();
-            $checkGstStmt->store_result();
-            if ($checkGstStmt->num_rows > 0) {
-                return ['success' => false, 'message' => 'Phone number already exists. Please use a different Phone number.'];
-            }
-            $checkGstStmt->close();
-        }
-        //Email
-        if (!empty($data['addEmail'])) {
-            $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_email = ?";
-            $checkGstStmt = $this->conn->prepare($checkGstSql);
-            $checkGstStmt->bind_param('s', $data['addEmail']);
-            $checkGstStmt->execute();
-            $checkGstStmt->store_result();
-            if ($checkGstStmt->num_rows > 0) {
-                return ['success' => false, 'message' => 'Email already exists. Please use a different Email.'];
-            }
-            $checkGstStmt->close();
-        }
-        // Check if gst_number already exists (if provided)
-        if (!empty($data['addGstNumber'])) {
-            $checkGstSql = "SELECT id FROM vp_vendors WHERE gst_number = ?";
-            $checkGstStmt = $this->conn->prepare($checkGstSql);
-            $checkGstStmt->bind_param('s', $data['addGstNumber']);
-            $checkGstStmt->execute();
-            $checkGstStmt->store_result();
-            if ($checkGstStmt->num_rows > 0) {
-                return ['success' => false, 'message' => 'GST number already exists. Please use a different GST number.'];
-            }
-            $checkGstStmt->close();
+        $duplicate = $this->validateVendorUniqueness(
+            isset($data['addVendorName']) ? (string) $data['addVendorName'] : null,
+            isset($data['addPhone']) ? (string) $data['addPhone'] : null,
+            isset($data['addEmail']) ? (string) $data['addEmail'] : null,
+            isset($data['addGstNumber']) ? (string) $data['addGstNumber'] : null,
+            isset($data['addPanNumber']) ? (string) $data['addPanNumber'] : null
+        );
+        if ($duplicate !== null) {
+            return $duplicate;
         }
 
-        // Check if pan_number already exists (if provided)
-        if (!empty($data['addPanNumber'])) {
-            $checkPanSql = "SELECT id FROM vp_vendors WHERE pan_number = ?";
-            $checkPanStmt = $this->conn->prepare($checkPanSql);
-            $checkPanStmt->bind_param('s', $data['addPanNumber']);
-            $checkPanStmt->execute();
-            $checkPanStmt->store_result();
-            if ($checkPanStmt->num_rows > 0) {
-                return ['success' => false, 'message' => 'PAN number already exists. Please use a different PAN number.'];
-            }
-            $checkPanStmt->close();
-        }
         $vendorCode = generateVendorCode($this->conn);
         $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active, groupname) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
@@ -250,6 +285,23 @@ class vendor
     }
     public function updateVendor($id, $data)
     {
+        $id = (int) $id;
+        if ($id <= 0) {
+            return ['success' => false, 'message' => 'Invalid vendor id.'];
+        }
+
+        $duplicate = $this->validateVendorUniqueness(
+            isset($data['editVendorName']) ? (string) $data['editVendorName'] : null,
+            isset($data['editPhone']) ? (string) $data['editPhone'] : null,
+            isset($data['editEmail']) ? (string) $data['editEmail'] : null,
+            isset($data['editGstNumber']) ? (string) $data['editGstNumber'] : null,
+            isset($data['editPanNumber']) ? (string) $data['editPanNumber'] : null,
+            $id
+        );
+        if ($duplicate !== null) {
+            return $duplicate;
+        }
+
         $groupnameValue = '';
         if (isset($data['editGroupname'])) {
             if (is_array($data['editGroupname'])) {
@@ -615,32 +667,20 @@ class vendor
         }
         return $vendors;
     }
-    public function checkVendorName($val)
+    public function checkVendorName($val, $excludeId = null)
     {
-        $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_name = ?");
-        $stmt->bind_param("s", $val);
-        $stmt->execute();
-        $stmt->store_result();
-        $response = ['exists' => $stmt->num_rows > 0];
-        return $response;
+        $excludeId = ($excludeId !== null && (int) $excludeId > 0) ? (int) $excludeId : null;
+        return ['exists' => $this->vendorNameExists(trim((string) $val), $excludeId)];
     }
-    public function checkEmail($email)
+    public function checkEmail($email, $excludeId = null)
     {
-        $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $stmt->store_result();
-        $response = ['exists' => $stmt->num_rows > 0];
-        return $response;
+        $excludeId = ($excludeId !== null && (int) $excludeId > 0) ? (int) $excludeId : null;
+        return ['exists' => $this->vendorFieldExists('vendor_email', trim((string) $email), $excludeId)];
     }
-    public function checkPhoneNumber($val)
+    public function checkPhoneNumber($val, $excludeId = null)
     {
-        $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_phone = ?");
-        $stmt->bind_param("s", $val);
-        $stmt->execute();
-        $stmt->store_result();
-        $response = ['exists' => $stmt->num_rows > 0];
-        return $response;
+        $excludeId = ($excludeId !== null && (int) $excludeId > 0) ? (int) $excludeId : null;
+        return ['exists' => $this->vendorFieldExists('vendor_phone', trim((string) $val), $excludeId)];
     }
     public function getProductsByVendorId($vendor_id)
     {

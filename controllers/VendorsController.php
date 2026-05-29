@@ -391,7 +391,8 @@ class VendorsController {
         }
 
         $vendorName = trim($_GET['vendorName']);
-        $result = $vendorsModel->checkVendorName($vendorName);
+        $excludeId = isset($_GET['excludeId']) ? (int) $_GET['excludeId'] : 0;
+        $result = $vendorsModel->checkVendorName($vendorName, $excludeId > 0 ? $excludeId : null);
         header('Content-Type: application/json');
         echo json_encode($result);
         exit;
@@ -404,7 +405,8 @@ class VendorsController {
         }
 
         $email = trim($_GET['email']);
-        $result = $vendorsModel->checkEmail($email);
+        $excludeId = isset($_GET['excludeId']) ? (int) $_GET['excludeId'] : 0;
+        $result = $vendorsModel->checkEmail($email, $excludeId > 0 ? $excludeId : null);
         header('Content-Type: application/json');
         echo json_encode($result);
         exit;
@@ -418,7 +420,8 @@ class VendorsController {
         }
 
         $phone = trim($_GET['phone']);
-        $result = $vendorsModel->checkPhoneNumber($phone);
+        $excludeId = isset($_GET['excludeId']) ? (int) $_GET['excludeId'] : 0;
+        $result = $vendorsModel->checkPhoneNumber($phone, $excludeId > 0 ? $excludeId : null);
         header('Content-Type: application/json');
         echo json_encode($result);
         exit;
