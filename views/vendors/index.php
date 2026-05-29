@@ -567,6 +567,7 @@
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Vendor Name <span class="text-red-500">*</span></label>
                                     <input type="text" class="form-input w-full mt-1" required name="editVendorName" id="editVendorName" />
+                                    <span id="editVendorNameMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Contact Person <span class="text-red-500">*</span></label>
@@ -585,11 +586,12 @@
                                 </div>
                                 <div>
                                     <input type="number" class="form-input w-full mt-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" style="margin-top: 25px;" />
-                                    <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
+                                    <span id="editPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Email</label>
                                     <input type="email" class="form-input w-full mt-1" name="editEmail" id="editEmail" />
+                                    <span id="editEmailMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
@@ -946,101 +948,112 @@
     let vendorNameExists = false;
     let emailExists = false;
     let phoneExists = false;
-    //Vendor Name
-    const vendorNameInput = document.getElementById('addVendorName');
-    const vendorNameMsg = document.getElementById('addVendorNameMsg');
+    let editVendorNameExists = false;
+    let editEmailExists = false;
+    let editPhoneExists = false;
 
-    vendorNameInput.addEventListener('keyup', () => {
-        const vendorName = vendorNameInput.value.trim();
-        if (vendorName.length < 10) {
-            vendorNameExists = false;
-            vendorNameMsg.textContent = 'Invalid Vendor Name.';
-            return;
+    function buildVendorDuplicateUrl(action, paramName, value, excludeId) {
+        let url = '?page=vendors&action=' + action + '&' + paramName + '=' + encodeURIComponent(value);
+        if (excludeId && parseInt(excludeId, 10) > 0) {
+            url += '&excludeId=' + encodeURIComponent(String(excludeId));
         }
+        return url;
+    }
 
-        fetch('?page=vendors&action=checkVendorName&vendorName=' + encodeURIComponent(vendorName))
-            .then(response => response.json())
-            .then(data => {
-                if (data.exists) {
-                    vendorNameMsg.textContent = 'This vendor name is already registered!';
-                    vendorNameMsg.style.color = 'red';
-                    vendorNameExists = true;
-                } else {
-                    vendorNameExists = false;
-                }
-                setTimeout(() => {
-                    vendorNameMsg.textContent = '';
-                }, 3000);
-            })
-            .catch(err => {
-                console.error('Error:', err);
-            });
-    });
+    function bindVendorDuplicateCheck(inputEl, msgEl, action, paramName, minLen, existsFlagSetter, excludeIdGetter) {
+        if (!inputEl || !msgEl) return;
+        inputEl.addEventListener('keyup', () => {
+            const value = inputEl.value.trim();
+            if (value.length < minLen) {
+                existsFlagSetter(false);
+                msgEl.textContent = '';
+                return;
+            }
 
-    //Phone Number
-    const phoneInput = document.getElementById('addPhone');
-    const phoneMsg = document.getElementById('addPhoneMsg');
+            const excludeId = excludeIdGetter ? excludeIdGetter() : 0;
+            fetch(buildVendorDuplicateUrl(action, paramName, value, excludeId), { credentials: 'include' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.exists) {
+                        msgEl.textContent = 'This value is already registered for another vendor.';
+                        msgEl.style.color = 'red';
+                        existsFlagSetter(true);
+                    } else {
+                        msgEl.textContent = '';
+                        existsFlagSetter(false);
+                    }
+                })
+                .catch(err => console.error('Duplicate check error:', err));
+        });
+    }
 
-    phoneInput.addEventListener('keyup', () => {
-        const phone = phoneInput.value.trim();
-        if (phone.length < 10) {
-            phoneExists = false;
-            phoneMsg.textContent = 'Invalid Phone number.';
-            return;
+    bindVendorDuplicateCheck(
+        document.getElementById('addVendorName'),
+        document.getElementById('addVendorNameMsg'),
+        'checkVendorName',
+        'vendorName',
+        2,
+        (v) => { vendorNameExists = v; },
+        null
+    );
+    bindVendorDuplicateCheck(
+        document.getElementById('addPhone'),
+        document.getElementById('addPhoneMsg'),
+        'checkPhoneNumber',
+        'phone',
+        10,
+        (v) => { phoneExists = v; },
+        null
+    );
+    bindVendorDuplicateCheck(
+        document.getElementById('addEmail'),
+        document.getElementById('addEmailMsg'),
+        'checkEmail',
+        'email',
+        5,
+        (v) => { emailExists = v; },
+        null
+    );
+    bindVendorDuplicateCheck(
+        document.getElementById('editVendorName'),
+        document.getElementById('editVendorNameMsg'),
+        'checkVendorName',
+        'vendorName',
+        2,
+        (v) => { editVendorNameExists = v; },
+        () => document.getElementById('editVendorId') ? document.getElementById('editVendorId').value : 0
+    );
+    bindVendorDuplicateCheck(
+        document.getElementById('editPhone'),
+        document.getElementById('editPhoneMsg'),
+        'checkPhoneNumber',
+        'phone',
+        10,
+        (v) => { editPhoneExists = v; },
+        () => document.getElementById('editVendorId') ? document.getElementById('editVendorId').value : 0
+    );
+    bindVendorDuplicateCheck(
+        document.getElementById('editEmail'),
+        document.getElementById('editEmailMsg'),
+        'checkEmail',
+        'email',
+        5,
+        (v) => { editEmailExists = v; },
+        () => document.getElementById('editVendorId') ? document.getElementById('editVendorId').value : 0
+    );
+
+    function vendorDuplicateBlocked(isEdit) {
+        if (isEdit) {
+            return editVendorNameExists || editPhoneExists || editEmailExists;
         }
+        return vendorNameExists || phoneExists || emailExists;
+    }
 
-        fetch('?page=vendors&action=checkPhoneNumber&phone=' + encodeURIComponent(phone))
-            .then(response => response.json())
-            .then(data => {
-                if (data.exists) {
-                    phoneMsg.textContent = 'This phone number is already registered!';
-                    phoneMsg.style.color = 'red';
-                    phoneExists = true;
-                } else {
-                    phoneExists = false;
-                }
-                setTimeout(() => {
-                    phoneMsg.textContent = '';
-                }, 3000);
-            })
-            .catch(err => {
-                console.error('Error:', err);
-            });
-    });
-    const emailInput = document.getElementById('addEmail');
-    const emailMsg = document.getElementById('addEmailMsg');
-
-    emailInput.addEventListener('keyup', () => {
-        const email = emailInput.value.trim();
-        if (email.length < 0) {
-            emailExists = false;
-            emailMsg.textContent = 'Invalid Email ID.';
-            return;
-        }
-
-        fetch('?page=vendors&action=checkEmail&email=' + encodeURIComponent(email))
-            .then(response => response.json())
-            .then(data => {
-                if (data.exists) {
-                    emailMsg.textContent = 'This email address is already registered!';
-                    emailMsg.style.color = 'red';
-                    emailExists = true;
-                } else {
-                    emailExists = false;
-                }
-                setTimeout(() => {
-                    emailMsg.textContent = '';
-                }, 3000);
-            })
-            .catch(err => {
-                console.error('Error:', err);
-            });
-    });
     const addForm = document.getElementById('addVendorForm');
     addForm.addEventListener('submit', (e) => {
-        if (vendorNameExists || phoneExists || emailExists) {
+        if (vendorDuplicateBlocked(false)) {
             e.preventDefault();
-            alert('This phone number already exists. Please enter a different one.');
+            alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
         }
     });
 
@@ -1316,6 +1329,10 @@
 
     document.getElementById('addVendorForm').onsubmit = function(e) {
         e.preventDefault();
+        if (vendorDuplicateBlocked(false)) {
+            alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
+            return;
+        }
         var form = new FormData(this);
         var params = new URLSearchParams(form).toString();
         fetch('?page=vendors&action=addPost', {
@@ -1560,6 +1577,10 @@
 
     document.getElementById('editUserForm').onsubmit = function(e) {
         e.preventDefault();
+        if (vendorDuplicateBlocked(true)) {
+            alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
+            return;
+        }
         var form = new FormData(this);        
         var params = new URLSearchParams(form).toString();
         fetch('?page=vendors&action=addPost', {
