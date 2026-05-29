@@ -408,6 +408,7 @@ class ProductsController
     public function updateApiCall()
     {
         is_login();
+        header('Content-Type: application/json; charset=UTF-8');
         global $productModel;
         // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
         $raw = isset($_GET['itemCode']) ? trim((string)$_GET['itemCode']) : '';
@@ -429,54 +430,75 @@ class ProductsController
         $itemcodesQuery = implode(',', $codes);
         $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemcodesQuery);
 
-        // if (!empty($_GET['item_code'])) {
-        //     $postData = [
-        //         'makeRequestOf' => 'vendors-orderjson',
-        //         'item_code' => $_GET['item_code']
-        //     ];
-        // }
-
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
             'Content-Type: application/x-www-form-urlencoded'
         ];
 
-        // Initialize cURL
         $ch = curl_init($url);
-        //curl_setopt($ch, CURLOPT_POST, true);
-        //curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         $response = curl_exec($ch);
-
         $error = curl_error($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        // print_r($error);
-        // print_r($headers);
-        // print_r($response);
+
         if ($response === false) {
-            renderTemplateClean('views/errors/error.php', ['message' => 'API request failed: ' . $error], 'API Error');
-            return;
+            echo json_encode([
+                'success' => false,
+                'message' => 'API request failed: ' . $error,
+                'external_api' => [
+                    'url' => $url,
+                    'http_code' => $httpCode,
+                    'curl_error' => $error,
+                ],
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            exit;
         }
 
         $decoded = json_decode($response, true);
         if (!is_array($decoded)) {
-            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Invalid API response format.']], 'API Error');
-            return;
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invalid API response format.',
+                'external_api' => [
+                    'url' => $url,
+                    'http_code' => $httpCode,
+                    'raw_body' => $response,
+                ],
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            exit;
         }
+
+        $externalApi = [
+            'url' => $url,
+            'http_code' => $httpCode,
+            'itemcodes_requested' => $codes,
+            'payload' => $decoded,
+        ];
+
         $productRows = product::normalizeVendorProductFetchItems($decoded);
         if ($productRows === []) {
-            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No product rows in API response.']], 'No Products Found');
-            return;
+            echo json_encode([
+                'success' => false,
+                'message' => 'No product rows in API response.',
+                'external_api' => $externalApi,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            exit;
         }
+
+        $externalApi['normalized_rows'] = $productRows;
         $updateLocalStock = isset($_GET['update_local_stock']) && (string)$_GET['update_local_stock'] === '1';
         $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
-        if (is_array($updateResult)) {
-            $updateResult['local_stock_updated'] = $updateLocalStock;
+        if (!is_array($updateResult)) {
+            $updateResult = ['success' => false, 'message' => 'Product update failed.'];
         }
-        echo json_encode($updateResult);
+        $updateResult['local_stock_updated'] = $updateLocalStock;
+        $updateResult['external_api'] = $externalApi;
+        echo json_encode($updateResult, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         exit;
         // if ($updatedCount['success']) {
         //     renderTemplateClean('views/success/success.php', ['message' => 'Product updated successfully. Total products updated: ' . $updatedCount['updated_count']], 'Update Successful');

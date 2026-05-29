@@ -1047,6 +1047,43 @@
   var profileStatusReloadOnClose = false;
   var lastRefreshProductApiDebug = null;
 
+  function refreshProductApiDebugStorageKey(itemCode) {
+    return 'refreshProductApiDebug:' + String(itemCode || '').trim();
+  }
+
+  function saveRefreshProductApiDebug(itemCode, debug) {
+    lastRefreshProductApiDebug = debug;
+    var key = refreshProductApiDebugStorageKey(itemCode);
+    if (!key || key === 'refreshProductApiDebug:') return;
+    try {
+      sessionStorage.setItem(key, JSON.stringify(debug));
+    } catch (e) {}
+  }
+
+  function loadRefreshProductApiDebug(itemCode) {
+    if (lastRefreshProductApiDebug) {
+      return lastRefreshProductApiDebug;
+    }
+    var key = refreshProductApiDebugStorageKey(itemCode);
+    if (!key || key === 'refreshProductApiDebug:') {
+      return null;
+    }
+    try {
+      var raw = sessionStorage.getItem(key);
+      if (raw) {
+        lastRefreshProductApiDebug = JSON.parse(raw);
+        return lastRefreshProductApiDebug;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  (function restoreRefreshProductApiDebugFromStorage() {
+    var refreshBtn = document.getElementById('refreshProductApiBtn');
+    if (!refreshBtn || !refreshBtn.dataset || !refreshBtn.dataset.itemCode) return;
+    loadRefreshProductApiDebug(String(refreshBtn.dataset.itemCode).trim());
+  })();
+
   function showProfileStatusModal(message, type, reloadOnClose) {
     var modal = document.getElementById('profileStatusModal');
     var titleEl = document.getElementById('profileStatusModalTitle');
@@ -1089,20 +1126,67 @@
     if (modal) modal.classList.add('hidden');
   }
 
-  function openRefreshProductApiDebugModal() {
+  async function openRefreshProductApiDebugModal() {
     var modal = document.getElementById('refreshProductApiDebugModal');
     var pre = document.getElementById('refreshProductApiDebugPre');
+    var refreshBtn = document.getElementById('refreshProductApiBtn');
     if (!modal || !pre) return;
-    if (!lastRefreshProductApiDebug) {
-      pre.textContent = 'No refresh API call recorded yet.';
-    } else {
+
+    var itemCode = (refreshBtn && refreshBtn.dataset && refreshBtn.dataset.itemCode)
+      ? String(refreshBtn.dataset.itemCode).trim()
+      : '';
+    var debug = loadRefreshProductApiDebug(itemCode);
+
+    modal.classList.remove('hidden');
+
+    if (!debug && itemCode) {
+      pre.textContent = 'Loading external API response for ' + itemCode + '...';
       try {
-        pre.textContent = JSON.stringify(lastRefreshProductApiDebug, null, 2);
+        var fetchUrl = 'index.php?page=products&action=vendor_product_fetch_payload&itemCode='
+          + encodeURIComponent(itemCode);
+        var res = await fetch(fetchUrl, {
+          credentials: 'same-origin',
+          headers: { 'Accept': 'application/json' }
+        });
+        var rawText = await res.text();
+        var data = null;
+        try {
+          data = rawText ? JSON.parse(rawText) : null;
+        } catch (parseErr) {
+          data = null;
+        }
+        debug = {
+          at: new Date().toISOString(),
+          source: 'live_fetch_on_debug_open',
+          request: {
+            method: 'GET',
+            url: fetchUrl,
+            headers: { 'Accept': 'application/json' }
+          },
+          response: {
+            http_status: res.status,
+            ok: !!res.ok,
+            data: data,
+            raw: rawText
+          }
+        };
+        saveRefreshProductApiDebug(itemCode, debug);
       } catch (e) {
-        pre.textContent = String(lastRefreshProductApiDebug);
+        pre.textContent = 'Could not load API response: ' + ((e && e.message) ? e.message : String(e));
+        return;
       }
     }
-    modal.classList.remove('hidden');
+
+    if (!debug) {
+      pre.textContent = 'No refresh API call recorded yet. Click "Refresh from API" first, or ensure this product has an item code.';
+      return;
+    }
+
+    try {
+      pre.textContent = JSON.stringify(debug, null, 2);
+    } catch (e) {
+      pre.textContent = String(debug);
+    }
   }
 
   function askRefreshLocalStockChoice() {
@@ -1180,8 +1264,9 @@
       } catch (parseErr) {
         data = null;
       }
-      lastRefreshProductApiDebug = {
+      var debugPayload = {
         at: new Date().toISOString(),
+        source: 'refresh_from_api',
         request: {
           method: 'GET',
           url: requestUrl,
@@ -1194,6 +1279,10 @@
           raw: rawText
         }
       };
+      if (data && data.external_api) {
+        debugPayload.external_api = data.external_api;
+      }
+      saveRefreshProductApiDebug(itemCode, debugPayload);
       if (data && data.success) {
         showProfileStatusModal(
           'Product updated successfully from API. Local stock was ' + (updateLocalStock ? 'updated.' : 'not updated.'),
@@ -1204,8 +1293,9 @@
       }
       showProfileStatusModal('Update failed: ' + ((data && data.message) ? data.message : 'Unknown error'), 'error', false);
     } catch (e) {
-      lastRefreshProductApiDebug = {
+      saveRefreshProductApiDebug(itemCode, {
         at: new Date().toISOString(),
+        source: 'refresh_from_api',
         request: {
           method: 'GET',
           url: requestUrl,
@@ -1214,7 +1304,7 @@
         response: {
           network_error: (e && e.message) ? e.message : String(e)
         }
-      };
+      });
       showProfileStatusModal('An error occurred while updating this product.', 'error', false);
     } finally {
       btn.disabled = false;
