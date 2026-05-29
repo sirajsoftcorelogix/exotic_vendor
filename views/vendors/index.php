@@ -960,7 +960,7 @@
         return url;
     }
 
-    function bindVendorDuplicateCheck(inputEl, msgEl, action, paramName, minLen, existsFlagSetter, excludeIdGetter) {
+    function bindVendorDuplicateCheck(inputEl, msgEl, action, paramName, minLen, existsFlagSetter, excludeIdGetter, duplicateMessage) {
         if (!inputEl || !msgEl) return;
         inputEl.addEventListener('keyup', () => {
             const value = inputEl.value.trim();
@@ -975,7 +975,7 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.exists) {
-                        msgEl.textContent = 'This value is already registered for another vendor.';
+                        msgEl.textContent = duplicateMessage;
                         msgEl.style.color = 'red';
                         existsFlagSetter(true);
                     } else {
@@ -994,7 +994,8 @@
         'vendorName',
         2,
         (v) => { vendorNameExists = v; },
-        null
+        null,
+        'Vendor name already exists'
     );
     bindVendorDuplicateCheck(
         document.getElementById('addPhone'),
@@ -1003,7 +1004,8 @@
         'phone',
         10,
         (v) => { phoneExists = v; },
-        null
+        null,
+        'Phone number already exists'
     );
     bindVendorDuplicateCheck(
         document.getElementById('addEmail'),
@@ -1012,7 +1014,8 @@
         'email',
         5,
         (v) => { emailExists = v; },
-        null
+        null,
+        'Email already exists'
     );
     bindVendorDuplicateCheck(
         document.getElementById('editVendorName'),
@@ -1021,7 +1024,8 @@
         'vendorName',
         2,
         (v) => { editVendorNameExists = v; },
-        () => document.getElementById('editVendorId') ? document.getElementById('editVendorId').value : 0
+        () => document.getElementById('editVendorId') ? document.getElementById('editVendorId').value : 0,
+        'Vendor name already exists'
     );
     bindVendorDuplicateCheck(
         document.getElementById('editPhone'),
@@ -1030,7 +1034,8 @@
         'phone',
         10,
         (v) => { editPhoneExists = v; },
-        () => document.getElementById('editVendorId') ? document.getElementById('editVendorId').value : 0
+        () => document.getElementById('editVendorId') ? document.getElementById('editVendorId').value : 0,
+        'Phone number already exists'
     );
     bindVendorDuplicateCheck(
         document.getElementById('editEmail'),
@@ -1039,7 +1044,8 @@
         'email',
         5,
         (v) => { editEmailExists = v; },
-        () => document.getElementById('editVendorId') ? document.getElementById('editVendorId').value : 0
+        () => document.getElementById('editVendorId') ? document.getElementById('editVendorId').value : 0,
+        'Email already exists'
     );
 
     function vendorDuplicateBlocked(isEdit) {
