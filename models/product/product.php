@@ -175,6 +175,46 @@ class product
         return $rows;
     }
 
+    /**
+     * @return list<array{vendor_id:int,priority:int}>
+     */
+    public static function extractDiscreteVendorEntriesFromApiItem(array $apiItem): array
+    {
+        if (!empty($apiItem['discrete_vendor_list']) && is_array($apiItem['discrete_vendor_list'])) {
+            $entries = [];
+            foreach ($apiItem['discrete_vendor_list'] as $idx => $vendorId) {
+                $exoticId = (int) preg_replace('/\D/', '', (string) $vendorId);
+                if ($exoticId > 0) {
+                    $entries[] = ['vendor_id' => $exoticId, 'priority' => $idx + 1];
+                }
+            }
+
+            return $entries;
+        }
+
+        if (!empty($apiItem['discrete_vendors']) && is_array($apiItem['discrete_vendors'])) {
+            $entries = [];
+            foreach ($apiItem['discrete_vendors'] as $entry) {
+                if (!is_array($entry)) {
+                    continue;
+                }
+                $exoticId = (int) preg_replace('/\D/', '', (string) ($entry['vendor'] ?? $entry['vendor_id'] ?? ''));
+                if ($exoticId <= 0) {
+                    continue;
+                }
+                $priority = (int) ($entry['priority'] ?? 0);
+                $entries[] = [
+                    'vendor_id' => $exoticId,
+                    'priority' => $priority > 0 ? $priority : (count($entries) + 1),
+                ];
+            }
+
+            return $entries;
+        }
+
+        return [];
+    }
+
     public function __construct($db)
     {
         $this->db = $db;
@@ -500,6 +540,8 @@ class product
         $preserveLocalStock = !array_key_exists('preserve_local_stock', $options) || !empty($options['preserve_local_stock']);
         // print_array($productData);
         // exit;
+        $vendorMapSynced = 0;
+        $vendorMapSkipped = 0;
         if (isset($productData) && is_array($productData)) {
             foreach ($productData as $product) {
                 if (!is_array($product)) {
@@ -1010,9 +1052,21 @@ class product
                         }
                     }
                 }
+
+                if ($itemcode !== '') {
+                    $mapResult = $this->syncProductVendorMapFromApiItem($itemcode, $product);
+                    $vendorMapSynced += (int) ($mapResult['synced'] ?? 0);
+                    $vendorMapSkipped += (int) ($mapResult['skipped'] ?? 0);
+                }
             }
         }
-        return ['success' => true, 'updated_count' => $updatedCount, 'message' => 'Products updated successfully.'];
+        return [
+            'success' => true,
+            'updated_count' => $updatedCount,
+            'vendor_map_synced' => $vendorMapSynced,
+            'vendor_map_skipped' => $vendorMapSkipped,
+            'message' => 'Products updated successfully.',
+        ];
     }
 
     private function resolveVpStockMovementsItemCodeColumn(): string
@@ -1788,6 +1842,131 @@ class product
         }
         return null;
     }
+    private function resolveLocalVendorIdByExoticVendorId(string $exoticVendorId): ?int
+    {
+        $exoticVendorId = trim($exoticVendorId);
+        if ($exoticVendorId === '') {
+            return null;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT id FROM vp_vendors
+             WHERE TRIM(COALESCE(vendor_id, \'\')) = ?
+                OR TRIM(COALESCE(vendor_code, \'\')) = ?
+             ORDER BY id ASC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('ss', $exoticVendorId, $exoticVendorId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return $row ? (int) $row['id'] : null;
+    }
+
+    /**
+     * Upsert product_vendor_map from Exotic discrete_vendor_list / discrete_vendors.
+     *
+     * @return array{synced:int,skipped:int,missing_local_vendor:list<int>}
+     */
+    public function syncProductVendorMapFromApiItem(string $itemCode, array $apiItem): array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return ['synced' => 0, 'skipped' => 0, 'missing_local_vendor' => []];
+        }
+
+        $entries = self::extractDiscreteVendorEntriesFromApiItem($apiItem);
+        if ($entries === []) {
+            return ['synced' => 0, 'skipped' => 0, 'missing_local_vendor' => []];
+        }
+
+        $synced = 0;
+        $skipped = 0;
+        $missingLocalVendor = [];
+
+        foreach ($entries as $entry) {
+            $exoticVendorId = (int) ($entry['vendor_id'] ?? 0);
+            $priority = max(1, (int) ($entry['priority'] ?? 1));
+            if ($exoticVendorId <= 0) {
+                $skipped++;
+                continue;
+            }
+
+            $localVendorId = $this->resolveLocalVendorIdByExoticVendorId((string) $exoticVendorId);
+            if ($localVendorId === null) {
+                $missingLocalVendor[] = $exoticVendorId;
+                $skipped++;
+                continue;
+            }
+
+            if ($this->upsertProductVendorMapEntry($itemCode, $localVendorId, (string) $exoticVendorId, $priority)) {
+                $synced++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        return [
+            'synced' => $synced,
+            'skipped' => $skipped,
+            'missing_local_vendor' => $missingLocalVendor,
+        ];
+    }
+
+    public function upsertProductVendorMapEntry(string $itemCode, int $localVendorId, string $exoticVendorCode, int $priority): bool
+    {
+        $itemCode = trim($itemCode);
+        $exoticVendorCode = trim($exoticVendorCode);
+        if ($itemCode === '' || $localVendorId <= 0) {
+            return false;
+        }
+        if ($exoticVendorCode === '') {
+            $exoticVendorCode = (string) $localVendorId;
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $priority = max(1, $priority);
+
+        $stmt = $this->db->prepare('SELECT id FROM product_vendor_map WHERE item_code = ? AND vendor_id = ? LIMIT 1');
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('si', $itemCode, $localVendorId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        if ($row) {
+            $id = (int) $row['id'];
+            $upd = $this->db->prepare(
+                'UPDATE product_vendor_map SET vendor_code = ?, priority = ?, updated_at = ? WHERE id = ?'
+            );
+            if (!$upd) {
+                return false;
+            }
+            $upd->bind_param('sisi', $exoticVendorCode, $priority, $now, $id);
+
+            return $upd->execute();
+        }
+
+        $ins = $this->db->prepare(
+            'INSERT INTO product_vendor_map (item_code, vendor_id, vendor_code, priority, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        if (!$ins) {
+            return false;
+        }
+        $ins->bind_param('sisiss', $itemCode, $localVendorId, $exoticVendorCode, $priority, $now, $now);
+
+        return $ins->execute();
+    }
+
     public function getVendorByItemCode($item_code)
     {
         $sql = "SELECT pvm.id as pvm_id, pvm.*, vv.* FROM product_vendor_map pvm 

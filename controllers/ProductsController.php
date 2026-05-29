@@ -810,6 +810,9 @@ class ProductsController
                         }
                     } else $failed[] = $code;
                 }
+
+                $productModel->syncProductVendorMapFromApiItem($code, $apiItem);
+
                 // echo "Processed item code: " . $code . "\n";
                 // echo "Created: $created, Updated: $updated, Failed: " . count($failed) . "\n";
                 // print_r($existing);
