@@ -2,11 +2,10 @@
 
 declare(strict_types=1);
 
-use Endroid\QrCode\QrCode;
-use Endroid\QrCode\Writer\PngWriter;
+use Com\Tecnick\Barcode\Barcode;
 
 /**
- * 100 × 12.9 mm jewelry label: left 47% — QR (SKU payload); text block row Color | Size | MRP; then SKU (full width, wraps).
+ * 100 × 12.9 mm jewelry label: left 47% — Data Matrix (SKU payload); text block row Color | Size | MRP; then SKU (full width, wraps).
  * Remainder blank for margin / peel. Use from controllers, models, or CLI.
  */
 final class JewelryLabel
@@ -71,7 +70,7 @@ final class JewelryLabel
     }
 
     /**
-     * QR payload is the SKU string (empty SKU uses placeholder so the symbol still renders).
+     * Data Matrix payload is the SKU string (empty SKU uses placeholder so the symbol still renders).
      */
     public static function qrPayloadFromData(array $data): string
     {
@@ -81,31 +80,44 @@ final class JewelryLabel
     }
 
     /**
-     * PNG data URI for the QR encoding {@see qrPayloadFromData()}.
+     * PNG data URI for the Data Matrix encoding {@see qrPayloadFromData()}.
      *
      * @param array<string, mixed>|null $config
      */
     public static function qrDataUri(array $data, ?array $config = null): string
     {
         self::loadVendor();
+        if (!class_exists(Barcode::class)) {
+            throw new RuntimeException(
+                'Data Matrix library missing; run: composer require tecnickcom/tc-lib-barcode'
+            );
+        }
+
         $cfg = self::config($config);
         $payload = self::qrPayloadFromData($data);
-        $size = max(16, (int)($cfg['qr_builder_size_px'] ?? 72));
-        $margin = max(0, (int)($cfg['qr_margin'] ?? 0));
+        $modulePx = max(2, min(12, (int)($cfg['barcode_module_px'] ?? 4)));
+        $legacyModule = (int)($cfg['qr_builder_size_px'] ?? 0);
+        if (!array_key_exists('barcode_module_px', $cfg) && $legacyModule >= 2 && $legacyModule <= 12) {
+            $modulePx = $legacyModule;
+        }
+        $pad = max(0, (int)($cfg['qr_margin'] ?? 0));
 
-        $qrCode = new QrCode(
-            data: $payload,
-            size: $size,
-            margin: $margin
+        $barcode = new Barcode();
+        $bobj = $barcode->getBarcodeObj(
+            'DATAMATRIX',
+            $payload,
+            -$modulePx,
+            -$modulePx,
+            'black',
+            [$pad, $pad, $pad, $pad]
         );
-        $writer = new PngWriter();
-        $png = $writer->write($qrCode)->getString();
+        $png = $bobj->getPngData(false);
 
         return 'data:image/png;base64,' . base64_encode($png);
     }
 
     /**
-     * Effective QR box side in mm (fits inside label minus padding).
+     * Effective Data Matrix box side in mm (fits inside label minus padding).
      *
      * @param array<string, mixed> $cfg
      */

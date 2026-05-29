@@ -5,6 +5,7 @@
         "pear/text_languagedetect": "^1.0",
 		"cboden/ratchet": "^0.4",
         "endroid/qr-code": "^6.0",
+        "tecnickcom/tc-lib-barcode": "^2.4",
         "setasign/fpdi": "^2.6",
         "setasign/fpdf": "^1.8",
         "phpoffice/phpspreadsheet": "2.0",

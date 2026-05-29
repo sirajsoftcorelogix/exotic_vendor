@@ -9,12 +9,17 @@ return [
     /** Inner inset from label edge */
     'padding_mm' => 0.6,
     /**
-     * Max square side for the QR on the printed label (mm).
-     * Clamped to available height inside the label (padding). Lower = smaller QR vs text.
+     * Max square side for the barcode on the printed label (mm).
+     * Clamped to available height inside the label (padding). Lower = smaller symbol vs text.
      */
     'qr_max_side_mm' => 10.0,
-    /** Endroid PNG size in pixels (higher = sharper when the printed QR is scaled in mm). */
-    'qr_builder_size_px' => 72,
+    /**
+     * Data Matrix module size in pixels (tc-lib-barcode negative width/height factor).
+     * Higher = sharper when the printed symbol is scaled in mm.
+     */
+    'barcode_module_px' => 4,
+    /** @deprecated Use barcode_module_px. Kept for backward-compatible overrides. */
+    'qr_builder_size_px' => 4,
     'qr_margin' => 0,
     /** Body text (Color / Size / MRP / SKU labels and values) */
     'font_size_mm' => 1.85,
