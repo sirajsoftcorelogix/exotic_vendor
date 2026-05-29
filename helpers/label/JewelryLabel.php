@@ -89,7 +89,7 @@ final class JewelryLabel
         self::loadVendor();
         if (!class_exists(Barcode::class)) {
             throw new RuntimeException(
-                'Data Matrix library missing; run: composer require tecnickcom/tc-lib-barcode'
+                'Data Matrix library missing. On the server run: composer install (requires tecnickcom/tc-lib-barcode in composer.lock).'
             );
         }
 
@@ -111,9 +111,19 @@ final class JewelryLabel
             'black',
             [$pad, $pad, $pad, $pad]
         );
-        $png = $bobj->getPngData(false);
 
-        return 'data:image/png;base64,' . base64_encode($png);
+        if (function_exists('imagecreate')) {
+            try {
+                $png = $bobj->getPngData(false);
+                return 'data:image/png;base64,' . base64_encode($png);
+            } catch (Throwable $e) {
+                error_log('JewelryLabel PNG fallback to SVG: ' . $e->getMessage());
+            }
+        }
+
+        $svg = $bobj->getSvgCode();
+
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
     }
 
     /**
