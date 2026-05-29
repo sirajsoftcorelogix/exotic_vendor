@@ -1038,7 +1038,15 @@
     <button type="button" onclick="closeRefreshProductApiDebugModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-700">✕</button>
     <h3 class="text-base font-semibold text-gray-800 mb-3">Refresh API Debug</h3>
     <pre id="refreshProductApiDebugPre" class="max-h-[70vh] overflow-auto rounded-lg border border-gray-200 bg-slate-900 p-3 text-[11px] leading-relaxed text-slate-100 whitespace-pre-wrap break-words"></pre>
-    <div class="mt-4 flex justify-end">
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <button
+        type="button"
+        id="refreshProductApiDebugCopyBtn"
+        onclick="copyRefreshProductApiDebugJson(event)"
+        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-teal-300 bg-teal-50 text-teal-800 text-sm font-semibold hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1">
+        <i class="fas fa-copy text-xs" aria-hidden="true"></i>
+        Copy JSON
+      </button>
       <button type="button" onclick="closeRefreshProductApiDebugModal()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold">Close</button>
     </div>
   </div>
@@ -1124,6 +1132,58 @@
   function closeRefreshProductApiDebugModal() {
     var modal = document.getElementById('refreshProductApiDebugModal');
     if (modal) modal.classList.add('hidden');
+  }
+
+  function copyRefreshProductApiDebugJson(event) {
+    if (event) event.preventDefault();
+    var pre = document.getElementById('refreshProductApiDebugPre');
+    var btn = document.getElementById('refreshProductApiDebugCopyBtn');
+    var text = pre ? String(pre.textContent || '').trim() : '';
+    if (!text) return;
+
+    var done = function () {
+      if (!btn) return;
+      var prevHtml = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-check text-xs" aria-hidden="true"></i> Copied!';
+      btn.classList.remove('border-teal-300', 'bg-teal-50', 'text-teal-800', 'hover:bg-teal-100');
+      btn.classList.add('border-emerald-300', 'bg-emerald-50', 'text-emerald-800');
+      setTimeout(function () {
+        btn.innerHTML = prevHtml;
+        btn.classList.remove('border-emerald-300', 'bg-emerald-50', 'text-emerald-800');
+        btn.classList.add('border-teal-300', 'bg-teal-50', 'text-teal-800', 'hover:bg-teal-100');
+      }, 2000);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          done();
+        } catch (e) {}
+        document.body.removeChild(ta);
+      });
+      return;
+    }
+
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      done();
+    } catch (e) {}
+    document.body.removeChild(ta);
   }
 
   async function openRefreshProductApiDebugModal() {
