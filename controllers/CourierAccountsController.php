@@ -5,19 +5,20 @@ require_once 'models/courier/CourierAccount.php';
 
 $courierPartnerModel = new CourierPartner($conn);
 $courierAccountModel = new CourierAccount($conn);
+$courierCredentialSchemas = require __DIR__ . '/../helpers/courier/partner_credential_schemas.php';
 
 class CourierAccountsController
 {
     public function index()
     {
         is_login();
-        global $courierPartnerModel, $courierAccountModel;
+        global $courierPartnerModel, $courierAccountModel, $courierCredentialSchemas;
 
         $partnerId = isset($_GET['partner_id']) ? (int)$_GET['partner_id'] : 0;
         $partners = $courierPartnerModel->getActivePartners();
         $accounts = $courierAccountModel->listAccounts($partnerId);
         foreach ($accounts as &$accRow) {
-            $accRow['credentials'] = $courierAccountModel->getCredentials((int) ($accRow['id'] ?? 0));
+            $accRow['credentials_json'] = $courierAccountModel->getCredentialsJson((int) ($accRow['id'] ?? 0));
         }
         unset($accRow);
 
@@ -25,6 +26,7 @@ class CourierAccountsController
             'partners' => $partners,
             'partner_id' => $partnerId,
             'accounts' => $accounts,
+            'credential_schemas' => $courierCredentialSchemas,
         ], 'Courier Accounts & Credentials');
     }
 
@@ -46,12 +48,11 @@ class CourierAccountsController
             $effectiveId = (int) $conn->insert_id;
         }
 
-        if (!empty($res['success']) && $effectiveId > 0 && isset($_POST['cred_key']) && is_array($_POST['cred_key'])) {
-            $credRes = $courierAccountModel->saveCredentials(
+        if (!empty($res['success']) && $effectiveId > 0 && array_key_exists('credentials_json', $_POST)) {
+            $credRes = $courierAccountModel->saveCredentialsJson(
                 $effectiveId,
-                (array) ($_POST['cred_key'] ?? []),
-                (array) ($_POST['cred_value'] ?? []),
-                (array) ($_POST['cred_secret'] ?? [])
+                (string) ($_POST['credentials_json'] ?? ''),
+                (string) ($_POST['environment'] ?? 'sandbox')
             );
             if (empty($credRes['success'])) {
                 $res['message'] = trim((string) ($res['message'] ?? '') . ' — Credentials: ' . ($credRes['message'] ?? ''));

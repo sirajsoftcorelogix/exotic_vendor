@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../helpers/courier/credential_urls.php';
+
 $flash = $_SESSION['courier_account_flash'] ?? null;
 if ($flash) {
     unset($_SESSION['courier_account_flash']);
@@ -8,7 +10,13 @@ $accounts = $accounts ?? [];
 $partnerId = (int)($partner_id ?? 0);
 $accountCount = is_array($accounts) ? count($accounts) : 0;
 $filtersPanelOpen = $partnerId > 0;
-$caCredRows = 12;
+$credentialSchemas = $credential_schemas ?? [];
+$partnerCodeById = [];
+foreach ($partners as $p) {
+    $partnerCodeById[(int) ($p['id'] ?? 0)] = strtolower((string) ($p['partner_code'] ?? ''));
+}
+$schemasJson = json_encode($credentialSchemas, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+$partnerCodesJson = json_encode($partnerCodeById, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 
 function h($v)
 {
@@ -30,7 +38,7 @@ function h($v)
                 </div>
                 <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Courier accounts</h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-                    Map API accounts per partner (production/sandbox, regions). Store credential keys in the form below—encrypt at rest for production.
+                    Map API accounts per partner (production/sandbox, regions). Store credentials as one JSON object per account—each courier adapter reads the same shape.
                 </p>
                 <p class="mt-2 text-xs text-amber-800/90 font-medium rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 inline-block">
                     Note: secrets are stored as plain text today; plan encryption at rest for production.
@@ -121,6 +129,7 @@ function h($v)
                         <th class="px-5 py-3.5 whitespace-nowrap">Partner</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Account</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Environment</th>
                         <th class="px-5 py-3.5 whitespace-nowrap text-right">Priority</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Actions</th>
                     </tr>
@@ -128,7 +137,7 @@ function h($v)
                 <tbody class="divide-y divide-gray-100">
                     <?php if (!$accounts): ?>
                         <tr>
-                            <td colspan="5" class="px-5 py-16 text-center">
+                            <td colspan="6" class="px-5 py-16 text-center">
                                 <div class="mx-auto flex max-w-sm flex-col items-center">
                                     <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                         <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -144,26 +153,32 @@ function h($v)
                     <?php else: ?>
                         <?php foreach ($accounts as $a): ?>
                             <?php
-                                $credList = [];
-                                foreach ($a['credentials'] ?? [] as $c) {
-                                    $credList[] = [
-                                        'cred_key' => (string) ($c['cred_key'] ?? ''),
-                                        'cred_value' => (string) ($c['cred_value'] ?? ''),
-                                        'is_secret' => (int) ($c['is_secret'] ?? 0),
-                                    ];
+                                $credJson = $a['credentials_json'] ?? [];
+                                if (!is_array($credJson)) {
+                                    $credJson = [];
                                 }
+                                $accountEnv = normalizeCourierEnvironment($a['environment'] ?? ($credJson['environment'] ?? 'sandbox'));
                                 $payload = [
                                     'id' => (int) $a['id'],
                                     'partner_id' => (int) $a['partner_id'],
+                                    'partner_code' => (string) ($a['partner_code'] ?? ''),
                                     'account_code' => (string) $a['account_code'],
                                     'account_name' => (string) $a['account_name'],
                                     'is_active' => (int) $a['is_active'],
+                                    'environment' => $accountEnv,
                                     'priority' => (int) $a['priority'],
                                     'tags_json' => (string) ($a['tags_json'] ?? ''),
                                     'notes' => (string) ($a['notes'] ?? ''),
-                                    'credentials' => $credList,
+                                    'credentials_json' => $credJson,
                                 ];
                                 $payloadJson = json_encode($payload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+                                $credPreview = '';
+                                if (!empty($credJson)) {
+                                    $user = (string) ($credJson['username'] ?? $credJson['email'] ?? '');
+                                    $acct = (string) ($credJson['account_number'] ?? '');
+                                    $parts = array_filter([$user, $acct !== '' ? 'Acct ' . $acct : '']);
+                                    $credPreview = implode(' · ', $parts);
+                                }
                             ?>
                             <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors align-top">
                                 <td class="px-5 py-4">
@@ -173,12 +188,24 @@ function h($v)
                                 <td class="px-5 py-4">
                                     <div class="font-semibold text-gray-900"><?php echo h($a['account_name']); ?></div>
                                     <div class="text-xs text-gray-500 mt-0.5 font-mono"><?php echo h($a['account_code']); ?></div>
+                                    <?php if ($credPreview !== ''): ?>
+                                        <div class="text-xs text-emerald-700 mt-1"><?php echo h($credPreview); ?></div>
+                                    <?php else: ?>
+                                        <div class="text-xs text-amber-700 mt-1">No credentials</div>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-5 py-4">
                                     <?php if ((int) $a['is_active'] === 1): ?>
                                         <span class="inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-800">Active</span>
                                     <?php else: ?>
                                         <span class="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">Inactive</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="px-5 py-4">
+                                    <?php if ($accountEnv === 'production'): ?>
+                                        <span class="inline-flex rounded-full bg-indigo-100 px-3 py-1.5 text-xs font-semibold text-indigo-800">Production</span>
+                                    <?php else: ?>
+                                        <span class="inline-flex rounded-full bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-800">Sandbox</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-5 py-4 text-right tabular-nums text-sm font-medium text-gray-800"><?php echo (int) $a['priority']; ?></td>
@@ -228,7 +255,7 @@ function h($v)
                     <div class="min-w-0">
                         <p class="text-[11px] font-bold uppercase tracking-widest text-amber-800/80 mb-1">Courier account</p>
                         <h3 id="caModalTitle" class="text-xl font-bold text-gray-900 tracking-tight">Add account</h3>
-                        <p id="caModalSubtitle" class="text-sm text-gray-500 mt-1">Choose partner, codes, and optional credential keys.</p>
+                        <p id="caModalSubtitle" class="text-sm text-gray-500 mt-1">Choose partner, account details, and credentials JSON.</p>
                     </div>
                     <button type="button" class="ca-modal-close rounded-xl p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition -mr-1 -mt-1 shrink-0" aria-label="Close">
                         <i class="fas fa-times text-lg" aria-hidden="true"></i>
@@ -270,6 +297,14 @@ function h($v)
                                 class="h-11 w-full rounded-xl border border-gray-300 px-3.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition">
                         </div>
                         <div>
+                            <label for="ca_field_environment" class="block text-xs font-semibold text-gray-600 mb-1.5">Use environment</label>
+                            <select name="environment" id="ca_field_environment" class="h-11 w-full rounded-xl border border-gray-300 px-3.5 text-sm bg-white shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition">
+                                <option value="sandbox">Sandbox (test / UAT)</option>
+                                <option value="production">Production (live)</option>
+                            </select>
+                            <p class="mt-1 text-[11px] text-gray-500">Controls which URL set and credentials profile is used at runtime.</p>
+                        </div>
+                        <div>
                             <label for="ca_field_priority" class="block text-xs font-semibold text-gray-600 mb-1.5">Priority</label>
                             <input type="number" name="priority" id="ca_field_priority" value="100"
                                 class="h-11 w-full rounded-xl border border-gray-300 px-3.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition tabular-nums">
@@ -287,22 +322,23 @@ function h($v)
                     </div>
 
                     <div class="rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3">
-                        <div class="text-xs font-semibold text-gray-800 mb-2">Credentials (key / value)</div>
-                        <p class="text-[11px] text-gray-500 mb-3">Up to <?php echo (int) $caCredRows; ?> rows. Leave key empty to skip.</p>
-                        <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
-                            <?php for ($cr = 0; $cr < $caCredRows; $cr++): ?>
-                                <div class="grid grid-cols-12 gap-2 items-center">
-                                    <input type="text" name="cred_key[]" id="ca_cred_key_<?php echo $cr; ?>" placeholder="api_key"
-                                        class="col-span-12 sm:col-span-4 h-10 rounded-lg border border-gray-300 px-2 text-xs sm:text-sm shadow-sm font-mono">
-                                    <input type="text" name="cred_value[]" id="ca_cred_val_<?php echo $cr; ?>" placeholder="value"
-                                        class="col-span-12 sm:col-span-6 h-10 rounded-lg border border-gray-300 px-2 text-xs sm:text-sm shadow-sm">
-                                    <label class="col-span-12 sm:col-span-2 inline-flex items-center gap-2 text-xs text-gray-600 whitespace-nowrap">
-                                        <input type="checkbox" name="cred_secret[<?php echo $cr; ?>]" id="ca_cred_secret_<?php echo $cr; ?>" value="1" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
-                                        Secret
-                                    </label>
-                                </div>
-                            <?php endfor; ?>
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                            <div class="text-xs font-semibold text-gray-800">Credentials JSON</div>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" id="caBtnLoadTemplate" class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50 transition">
+                                    <i class="fas fa-file-code text-[10px]" aria-hidden="true"></i>
+                                    Load partner template
+                                </button>
+                                <button type="button" id="caBtnFormatJson" class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition">
+                                    <i class="fas fa-indent text-[10px]" aria-hidden="true"></i>
+                                    Format JSON
+                                </button>
+                            </div>
                         </div>
+                        <p id="caCredSchemaHint" class="text-[11px] text-gray-500 mb-2">Select a partner to see the expected JSON shape. Secrets (password, PIN) are stored as plain text today—encrypt at rest for production.</p>
+                        <textarea name="credentials_json" id="ca_field_credentials_json" rows="14" spellcheck="false" placeholder='{"environment":"sandbox","sandbox_api_base_url":"...","production_api_base_url":"..."}'
+                            class="w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-xs sm:text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition resize-y min-h-[12rem] font-mono leading-relaxed"></textarea>
+                        <p id="caCredJsonError" class="hidden mt-2 text-xs font-medium text-red-600"></p>
                     </div>
                 </div>
 
@@ -327,8 +363,130 @@ function h($v)
     var titleEl = document.getElementById('caModalTitle');
     var subtitleEl = document.getElementById('caModalSubtitle');
     var submitBtn = document.getElementById('caSubmitBtn');
-    var CRED_N = <?php echo (int) $caCredRows; ?>;
+    var credField = document.getElementById('ca_field_credentials_json');
+    var credHint = document.getElementById('caCredSchemaHint');
+    var credError = document.getElementById('caCredJsonError');
+    var partnerSelect = document.getElementById('ca_field_partner');
+    var envSelect = document.getElementById('ca_field_environment');
     var defaultPartnerId = <?php echo (int) $partnerId; ?>;
+    var SCHEMAS = <?php echo $schemasJson ?: '{}'; ?>;
+    var PARTNER_CODES = <?php echo $partnerCodesJson ?: '{}'; ?>;
+
+    function partnerCodeForId(id) {
+        return PARTNER_CODES[String(id)] || '';
+    }
+
+    function schemaForPartnerId(id) {
+        var code = partnerCodeForId(id);
+        if (code && SCHEMAS[code]) return SCHEMAS[code];
+        return SCHEMAS._default || null;
+    }
+
+    function updateSchemaHint() {
+        if (!credHint || !partnerSelect) return;
+        var schema = schemaForPartnerId(partnerSelect.value);
+        if (!schema) {
+            credHint.textContent = 'Select a partner to see the expected JSON shape.';
+            return;
+        }
+        credHint.textContent = (schema.label || 'Partner') + ': ' + (schema.description || 'Use the template as a starting point.');
+    }
+
+    function normalizeEnvironment(value) {
+        var v = String(value || '').toLowerCase();
+        if (v === 'live' || v === 'production' || v === 'prod') return 'production';
+        return 'sandbox';
+    }
+
+    function syncEnvironmentToJson() {
+        if (!envSelect || !credField) return;
+        var raw = credField.value.trim();
+        if (raw === '') return;
+        try {
+            var parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+            parsed.environment = normalizeEnvironment(envSelect.value);
+            setCredentialsJson(prettyJson(parsed));
+        } catch (e) {}
+    }
+
+    function setEnvironment(value) {
+        if (!envSelect) return;
+        envSelect.value = normalizeEnvironment(value);
+    }
+
+    function prettyJson(obj) {
+        return JSON.stringify(obj, null, 2);
+    }
+
+    function setCredentialsJson(value) {
+        if (!credField) return;
+        credField.value = value || '';
+        if (credError) {
+            credError.classList.add('hidden');
+            credError.textContent = '';
+        }
+    }
+
+    function credentialsFromAccount(creds) {
+        if (!creds) return '';
+        if (typeof creds === 'string') {
+            var trimmed = creds.trim();
+            if (trimmed === '') return '';
+            try {
+                return prettyJson(JSON.parse(trimmed));
+            } catch (e) {
+                return trimmed;
+            }
+        }
+        if (typeof creds === 'object' && Object.keys(creds).length) {
+            return prettyJson(creds);
+        }
+        return '';
+    }
+
+    function loadTemplate(mergeExisting) {
+        if (!partnerSelect || !credField) return;
+        var schema = schemaForPartnerId(partnerSelect.value);
+        if (!schema || !schema.template) return;
+
+        var next = JSON.parse(JSON.stringify(schema.template));
+        if (mergeExisting && credField.value.trim() !== '') {
+            try {
+                var existing = JSON.parse(credField.value);
+                if (existing && typeof existing === 'object') {
+                    Object.keys(existing).forEach(function (k) {
+                        if (existing[k] !== '' && existing[k] != null) {
+                            next[k] = existing[k];
+                        }
+                    });
+                }
+            } catch (e) {}
+        }
+        setCredentialsJson(prettyJson(next));
+        syncEnvironmentToJson();
+    }
+
+    function validateCredentialsJson() {
+        if (!credField || !credError) return true;
+        var raw = credField.value.trim();
+        if (raw === '') return true;
+        try {
+            var parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                credError.textContent = 'Credentials JSON must be a single object, not an array.';
+                credError.classList.remove('hidden');
+                return false;
+            }
+            credError.classList.add('hidden');
+            credError.textContent = '';
+            return true;
+        } catch (e) {
+            credError.textContent = 'Invalid JSON: ' + (e.message || 'parse error');
+            credError.classList.remove('hidden');
+            return false;
+        }
+    }
 
     function openModal() {
         if (!modal || !panel) return;
@@ -358,48 +516,24 @@ function h($v)
         }, 200);
     }
 
-    function clearCredRows() {
-        for (var i = 0; i < CRED_N; i++) {
-            var k = document.getElementById('ca_cred_key_' + i);
-            var v = document.getElementById('ca_cred_val_' + i);
-            var s = document.getElementById('ca_cred_secret_' + i);
-            if (k) k.value = '';
-            if (v) v.value = '';
-            if (s) s.checked = false;
-        }
-    }
-
-    function fillCredRows(creds) {
-        clearCredRows();
-        if (!creds || !creds.length) return;
-        for (var i = 0; i < CRED_N && i < creds.length; i++) {
-            var row = creds[i];
-            var k = document.getElementById('ca_cred_key_' + i);
-            var v = document.getElementById('ca_cred_val_' + i);
-            var s = document.getElementById('ca_cred_secret_' + i);
-            if (k) k.value = row.cred_key || '';
-            if (v) v.value = row.cred_value || '';
-            if (s) s.checked = !!row.is_secret;
-        }
-        var extra = creds.length - CRED_N;
-        if (extra > 0 && subtitleEl) {
-            subtitleEl.textContent = 'Note: only the first ' + CRED_N + ' credentials can be edited in this form (' + extra + ' more exist in DB — contact admin).';
-        }
-    }
-
     function resetFormAdd() {
         form.reset();
         document.getElementById('ca_field_id').value = '';
         titleEl.textContent = 'Add account';
-        subtitleEl.textContent = 'Choose partner, codes, and optional credential keys.';
+        subtitleEl.textContent = 'Choose partner, account details, and credentials JSON.';
         submitBtn.textContent = 'Save account';
         document.getElementById('ca_field_status').value = '1';
         document.getElementById('ca_field_priority').value = '100';
+        setEnvironment('sandbox');
         var sel = document.getElementById('ca_field_partner');
         if (sel && defaultPartnerId > 0) {
             sel.value = String(defaultPartnerId);
         }
-        clearCredRows();
+        setCredentialsJson('');
+        updateSchemaHint();
+        if (defaultPartnerId > 0) {
+            loadTemplate(false);
+        }
     }
 
     function fillFormEdit(p) {
@@ -411,10 +545,12 @@ function h($v)
         document.getElementById('ca_field_priority').value = String(p.priority != null ? p.priority : 100);
         document.getElementById('ca_field_tags').value = p.tags_json || '';
         document.getElementById('ca_field_notes').value = p.notes || '';
+        setEnvironment(p.environment || (p.credentials_json && p.credentials_json.environment) || 'sandbox');
         titleEl.textContent = 'Edit account';
         subtitleEl.textContent = 'Update ' + (p.account_name || p.account_code || 'account') + '.';
         submitBtn.textContent = 'Update account';
-        fillCredRows(p.credentials || []);
+        setCredentialsJson(credentialsFromAccount(p.credentials_json));
+        updateSchemaHint();
     }
 
     var btnAdd = document.getElementById('caBtnOpenAdd');
@@ -450,5 +586,40 @@ function h($v)
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
     });
+
+    if (envSelect) {
+        envSelect.addEventListener('change', syncEnvironmentToJson);
+    }
+
+    if (partnerSelect) {
+        partnerSelect.addEventListener('change', updateSchemaHint);
+    }
+
+    var btnTemplate = document.getElementById('caBtnLoadTemplate');
+    if (btnTemplate) {
+        btnTemplate.addEventListener('click', function () {
+            loadTemplate(true);
+        });
+    }
+
+    var btnFormat = document.getElementById('caBtnFormatJson');
+    if (btnFormat) {
+        btnFormat.addEventListener('click', function () {
+            if (!validateCredentialsJson() || !credField) return;
+            var raw = credField.value.trim();
+            if (raw === '') return;
+            setCredentialsJson(prettyJson(JSON.parse(raw)));
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            syncEnvironmentToJson();
+            if (!validateCredentialsJson()) {
+                e.preventDefault();
+                if (credField) credField.focus();
+            }
+        });
+    }
 })();
 </script>

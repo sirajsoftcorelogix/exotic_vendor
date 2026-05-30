@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS courier_partner_accounts (
     priority INT NOT NULL DEFAULT 100,
     tags_json TEXT NULL,
     notes TEXT NULL,
+    credentials_json TEXT NULL COMMENT 'Partner credentials as one JSON object',
+    environment VARCHAR(20) NOT NULL DEFAULT 'sandbox' COMMENT 'Active environment: sandbox or production',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_partner_account_code (partner_id, account_code),
