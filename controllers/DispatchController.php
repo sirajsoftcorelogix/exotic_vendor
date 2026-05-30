@@ -4,6 +4,9 @@ require_once 'models/invoice/invoice.php';
 require_once 'models/dispatch/dispatch.php';
 require_once 'models/order/order.php';
 require_once 'courier_selector.php';
+require_once __DIR__ . '/../helpers/courier/country_codes.php';
+require_once __DIR__ . '/../helpers/courier/Gateway/CourierGateway.php';
+require_once __DIR__ . '/../helpers/courier/CourierDispatchService.php';
 require_once __DIR__ . '/../models/order/stock.php';
 $commanModel = new Tables($conn);
 $invoiceModel = new Invoice($conn); 
@@ -1865,7 +1868,38 @@ class DispatchController {
             // $stmt->close();
 
             $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
-            if (!$orderInfo || empty($orderInfo['shipping_zipcode'])) {
+            if (!$orderInfo) {
+                http_response_code(404);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order not found'
+                ]);
+                exit;
+            }
+
+            $courierDispatch = new CourierDispatchService($GLOBALS['conn']);
+            $rateRequest = $courierDispatch->buildRateRequest($input, $orderInfo);
+            $gatewayResult = $courierDispatch->getRates($rateRequest);
+
+            if (empty($gatewayResult['use_shiprocket'])) {
+                $uiResponse = $courierDispatch->formatServiceabilityForUi($gatewayResult);
+                http_response_code(!empty($uiResponse['success']) ? 200 : 400);
+                echo json_encode($uiResponse);
+                exit;
+            }
+
+            if ($courierDispatch->isInternationalOrder($orderInfo)) {
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => $gatewayResult['message'] ?? 'International rates unavailable. Use single order dispatch for Aramex.',
+                    'international' => true,
+                    'debug' => $gatewayResult['debug'] ?? null,
+                ]);
+                exit;
+            }
+
+            if (empty($orderInfo['shipping_zipcode'])) {
                 http_response_code(404);
                 echo json_encode([
                     'success' => false,

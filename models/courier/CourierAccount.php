@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../../helpers/courier/credential_urls.php';
+
 class CourierAccount
 {
     private $conn;
@@ -47,6 +49,29 @@ class CourierAccount
                 ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
         $this->conn->query($sql2);
+        $this->ensureColumn(
+            'courier_partner_accounts',
+            'credentials_json',
+            'TEXT NULL AFTER notes'
+        );
+        $this->ensureColumn(
+            'courier_partner_accounts',
+            'environment',
+            "VARCHAR(20) NOT NULL DEFAULT 'sandbox' AFTER credentials_json"
+        );
+    }
+
+    private function ensureColumn(string $table, string $column, string $definition): void
+    {
+        $safeTable = preg_replace('/[^a-z0-9_]/i', '', $table);
+        $safeColumn = preg_replace('/[^a-z0-9_]/i', '', $column);
+        if ($safeTable === '' || $safeColumn === '') {
+            return;
+        }
+        $res = $this->conn->query("SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeColumn}'");
+        if ($res && $res->num_rows === 0) {
+            $this->conn->query("ALTER TABLE `{$safeTable}` ADD COLUMN `{$safeColumn}` {$definition}");
+        }
     }
 
     public function listAccounts(int $partnerId = 0): array
@@ -126,6 +151,103 @@ class CourierAccount
         return $rows;
     }
 
+    /** @return array<string, mixed> */
+    public function getCredentialsJson(int $accountId): array
+    {
+        if ($accountId <= 0) {
+            return [];
+        }
+        $stmt = $this->conn->prepare(
+            'SELECT environment, credentials_json FROM courier_partner_accounts WHERE id = ? LIMIT 1'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $accountId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        $accountEnv = normalizeCourierEnvironment($row['environment'] ?? 'sandbox');
+        $raw = trim((string) ($row['credentials_json'] ?? ''));
+        if ($raw === '') {
+            $creds = $this->legacyCredentialsToMap($accountId);
+        } else {
+            $decoded = json_decode($raw, true);
+            $creds = is_array($decoded) ? $decoded : [];
+        }
+
+        $creds['environment'] = $accountEnv;
+        return $creds;
+    }
+
+    public function saveCredentialsJson(int $accountId, string $json, ?string $environment = null): array
+    {
+        if ($accountId <= 0) {
+            return ['success' => false, 'message' => 'Invalid account id.'];
+        }
+
+        $json = trim($json);
+        if ($json === '') {
+            $stmt = $this->conn->prepare(
+                'UPDATE courier_partner_accounts SET credentials_json = NULL, updated_at = NOW() WHERE id = ?'
+            );
+            if (!$stmt) {
+                return ['success' => false, 'message' => 'Could not prepare credential update.'];
+            }
+            $stmt->bind_param('i', $accountId);
+            $ok = $stmt->execute();
+            $stmt->close();
+            return $ok
+                ? ['success' => true, 'message' => 'Credentials cleared.']
+                : ['success' => false, 'message' => 'Could not clear credentials.'];
+        }
+
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            return ['success' => false, 'message' => 'Credentials must be valid JSON object.'];
+        }
+
+        if ($environment !== null && $environment !== '') {
+            $decoded['environment'] = normalizeCourierEnvironment($environment);
+        }
+
+        $normalized = json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($normalized === false) {
+            return ['success' => false, 'message' => 'Could not encode credentials JSON.'];
+        }
+
+        $stmt = $this->conn->prepare(
+            'UPDATE courier_partner_accounts SET credentials_json = ?, updated_at = NOW() WHERE id = ?'
+        );
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Could not prepare credential update.'];
+        }
+        $stmt->bind_param('si', $normalized, $accountId);
+        $ok = $stmt->execute();
+        $err = $stmt->error;
+        $stmt->close();
+
+        return $ok
+            ? ['success' => true, 'message' => 'Credentials saved.']
+            : ['success' => false, 'message' => 'Save failed: ' . $err];
+    }
+
+    /** @return array<string, mixed> */
+    private function legacyCredentialsToMap(int $accountId): array
+    {
+        $map = [];
+        foreach ($this->getCredentials($accountId) as $row) {
+            $k = trim((string) ($row['cred_key'] ?? ''));
+            if ($k === '') {
+                continue;
+            }
+            $map[$k] = (string) ($row['cred_value'] ?? '');
+        }
+        return $map;
+    }
+
     public function upsertAccount(int $id, array $data): array
     {
         $partnerId = (int)($data['partner_id'] ?? 0);
@@ -139,15 +261,16 @@ class CourierAccount
         $priority = isset($data['priority']) ? (int)$data['priority'] : 100;
         $tagsJson = trim((string)($data['tags_json'] ?? ''));
         $notes = trim((string)($data['notes'] ?? ''));
+        $environment = normalizeCourierEnvironment($data['environment'] ?? 'sandbox');
 
         if ($id > 0) {
             $stmt = $this->conn->prepare(
                 "UPDATE courier_partner_accounts
-                 SET partner_id = ?, account_code = ?, account_name = ?, is_active = ?, priority = ?, tags_json = ?, notes = ?, updated_at = NOW()
+                 SET partner_id = ?, account_code = ?, account_name = ?, is_active = ?, priority = ?, tags_json = ?, notes = ?, environment = ?, updated_at = NOW()
                  WHERE id = ?"
             );
             if (!$stmt) return ['success' => false, 'message' => 'Could not prepare update statement.'];
-            $stmt->bind_param('issiissi', $partnerId, $accountCode, $accountName, $isActive, $priority, $tagsJson, $notes, $id);
+            $stmt->bind_param('issiisssi', $partnerId, $accountCode, $accountName, $isActive, $priority, $tagsJson, $notes, $environment, $id);
             if ($stmt->execute()) {
                 $stmt->close();
                 return ['success' => true, 'message' => 'Account updated successfully.'];
@@ -159,11 +282,11 @@ class CourierAccount
 
         $stmt = $this->conn->prepare(
             "INSERT INTO courier_partner_accounts
-             (partner_id, account_code, account_name, is_active, priority, tags_json, notes)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+             (partner_id, account_code, account_name, is_active, priority, tags_json, notes, environment)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         );
         if (!$stmt) return ['success' => false, 'message' => 'Could not prepare insert statement.'];
-        $stmt->bind_param('issiiss', $partnerId, $accountCode, $accountName, $isActive, $priority, $tagsJson, $notes);
+        $stmt->bind_param('issiisss', $partnerId, $accountCode, $accountName, $isActive, $priority, $tagsJson, $notes, $environment);
         if ($stmt->execute()) {
             $stmt->close();
             return ['success' => true, 'message' => 'Account added successfully.'];
@@ -219,6 +342,35 @@ class CourierAccount
         }
         $ins->close();
         return ['success' => true, 'message' => 'Credentials saved.'];
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function listActiveAccountsByPartnerCode(string $partnerCode): array
+    {
+        $code = strtolower(trim($partnerCode));
+        if ($code === '') {
+            return [];
+        }
+        $stmt = $this->conn->prepare(
+            "SELECT a.*, p.partner_code, p.partner_name
+             FROM courier_partner_accounts a
+             JOIN courier_partners p ON p.id = a.partner_id
+             WHERE LOWER(p.partner_code) = ? AND a.is_active = 1
+             ORDER BY a.priority ASC, a.account_name ASC"
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $code);
+        $rows = [];
+        if ($stmt->execute()) {
+            $res = $stmt->get_result();
+            while ($res && ($row = $res->fetch_assoc())) {
+                $rows[] = $row;
+            }
+        }
+        $stmt->close();
+        return $rows;
     }
 }
 
