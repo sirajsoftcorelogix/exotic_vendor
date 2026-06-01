@@ -2004,8 +2004,8 @@ class InboundingController {
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
 
-            $API_data['author'] = $d['author'] ?? '';
-            $API_data['publisher'] = $d['publisher'] ?? '';
+            $API_data['author'] = $d['author_name'] ?? '';
+            $API_data['publisher'] = $d['publishers_name'] ?? '';
             $API_data['language'] = $d['language'] ?? '';
             $API_data['pages'] = $d['pages'] ?? '';
             $API_data['isbn'] = $d['isbn'] ?? '';
