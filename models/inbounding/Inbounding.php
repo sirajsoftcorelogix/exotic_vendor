@@ -1409,11 +1409,13 @@ class Inbounding {
         $id = (int)$id;
 
         // 1. Get Main Inbound Data
-        $sql = "SELECT vi.*, vv.vendor_name, c.display_name as category, c.category as category_id, c.name as groupname, m.material_name 
+        $sql = "SELECT vi.*, vv.vendor_name,a.author as author_name,p.publishers as publishers_name, c.display_name as category, c.category as category_id, c.name as groupname, m.material_name 
                 FROM vp_inbound AS vi 
                 LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.vendor_id
                 LEFT JOIN category as c on vi.group_name = c.category
                 LEFT JOIN material as m on vi.material_code = m.id
+                LEFT JOIN vp_author as a on vi.author=a.author_id
+                LEFT JOIN vp_publishers as p on vi.publisher=a.publishers_id
                 WHERE vi.id = $id";
 
         $result = $this->conn->query($sql);
