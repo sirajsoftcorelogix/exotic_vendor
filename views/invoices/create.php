@@ -1,75 +1,90 @@
 <div class="bg-white p-4 md:p-8">
     <form action="<?php echo base_url('?page=invoices&action=create_post'); ?>" id="create_invoice" method="post">
         <!--international section add fields  -->
-        <?php if ($data[0]['currency'] && $data[0]['currency'] != 'INR') { ?>
+        <?php if ($data[0]['currency'] && $data[0]['currency'] != 'INR') {
+            $intl = $international_defaults ?? [];
+            $intlVal = static function (string $key) use ($intl): string {
+                if (!isset($intl[$key])) {
+                    return '';
+                }
+                $value = $intl[$key];
+                if (is_float($value) || is_int($value)) {
+                    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+                }
+                return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+            };
+        ?>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6" id="internationalSection">
+                <div class="lg:col-span-5 mb-1">
+                    <p class="text-sm text-gray-500">Export / IRN fields are pre-filled from the order and currency master. Review before creating the invoice.</p>
+                </div>
                 <div>
                     <label for="pre_carriage_by" class="block text-gray-700 form-label text-sm">Pre Carriage By</label>
-                    <input type="text" name="pre_carriage_by" id="pre_carriage_by" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="pre_carriage_by" id="pre_carriage_by" value="<?php echo $intlVal('pre_carriage_by'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="port_of_loading" class="block text-gray-700 form-label text-sm">Port of Loading</label>
-                    <input type="text" name="port_of_loading" id="port_of_loading" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="port_of_loading" id="port_of_loading" value="<?php echo $intlVal('port_of_loading'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="port_of_discharge" class="block text-gray-700 form-label text-sm">Port of Discharge</label>
-                    <input type="text" name="port_of_discharge" id="port_of_discharge" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="port_of_discharge" id="port_of_discharge" value="<?php echo $intlVal('port_of_discharge'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="country_of_origin" class="block text-gray-700 form-label text-sm">Country of Origin</label>
-                    <input type="text" name="country_of_origin" id="country_of_origin" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="country_of_origin" id="country_of_origin" value="<?php echo $intlVal('country_of_origin'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="country_of_final_destination" class="block text-gray-700 form-label text-sm">Country of Final Destination</label>
-                    <input type="text" name="country_of_final_destination" id="country_of_final_destination" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="country_of_final_destination" id="country_of_final_destination" value="<?php echo $intlVal('country_of_final_destination'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="final_destination" class="block text-gray-700 form-label text-sm">Final Destination</label>
-                    <input type="text" name="final_destination" id="final_destination" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="final_destination" id="final_destination" value="<?php echo $intlVal('final_destination'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="usd_export_rate" class="block text-gray-700 form-label text-sm">USD Export Rate</label>
-                    <input type="number" name="usd_export_rate" id="usd_export_rate" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="number" name="usd_export_rate" id="usd_export_rate" step="0.01" value="<?php echo $intlVal('usd_export_rate'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="ap_cost" class="block text-gray-700 form-label text-sm">AP Cost</label>
-                    <input type="number" name="ap_cost" id="ap_cost" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="number" name="ap_cost" id="ap_cost" step="0.01" value="<?php echo $intlVal('ap_cost'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="freight_charge" class="block text-gray-700 form-label text-sm">Freight Charge</label>
-                    <input type="number" name="freight_charge" id="freight_charge" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="number" name="freight_charge" id="freight_charge" step="0.01" value="<?php echo $intlVal('freight_charge'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="insurance_charge" class="block text-gray-700 form-label text-sm">Insurance Charge</label>
-                    <input type="number" name="insurance_charge" id="insurance_charge" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="number" name="insurance_charge" id="insurance_charge" step="0.01" value="<?php echo $intlVal('insurance_charge'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="shipping_bill_number" class="block text-gray-700 form-label text-sm">Shipping Bill Number</label>
-                    <input type="text" name="shipping_bill_number" id="shipping_bill_number" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="shipping_bill_number" id="shipping_bill_number" value="<?php echo $intlVal('shipping_bill_number'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="shipping_bill_date" class="block text-gray-700 form-label text-sm">Shipping Bill Date</label>
-                    <input type="date" name="shipping_bill_date" id="shipping_bill_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="date" name="shipping_bill_date" id="shipping_bill_date" value="<?php echo $intlVal('shipping_bill_date'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="shipping_port" class="block text-gray-700 form-label text-sm">Shipping Port Code</label>
-                    <input type="text" name="shipping_port" id="shipping_port" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="shipping_port" id="shipping_port" value="<?php echo $intlVal('shipping_port'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="shipping_ref_clm" class="block text-gray-700 form-label text-sm">Shipping Ref CLM</label>
-                    <input type="text" name="shipping_ref_clm" id="shipping_ref_clm" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="shipping_ref_clm" id="shipping_ref_clm" value="<?php echo $intlVal('shipping_ref_clm'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="shipping_currency" class="block text-gray-700 form-label text-sm">Shipping Currency</label>
-                    <input type="text" name="shipping_currency" id="shipping_currency" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="shipping_currency" id="shipping_currency" value="<?php echo $intlVal('shipping_currency'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="shipping_country_code" class="block text-gray-700 form-label text-sm">Shipping Country Code</label>
-                    <input type="text" name="shipping_country_code" id="shipping_country_code" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="text" name="shipping_country_code" id="shipping_country_code" value="<?php echo $intlVal('shipping_country_code'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
                 <div>
                     <label for="shipping_exp_duty" class="block text-gray-700 form-label text-sm">Shipping Exp Duty</label>
-                    <input type="number" name="shipping_exp_duty" id="shipping_exp_duty" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <input type="number" name="shipping_exp_duty" id="shipping_exp_duty" step="0.01" value="<?php echo $intlVal('shipping_exp_duty'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
             </div>
         <?php } ?>

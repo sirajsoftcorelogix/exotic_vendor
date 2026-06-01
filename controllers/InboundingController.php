@@ -2004,8 +2004,8 @@ class InboundingController {
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
 
-            $API_data['author'] = $d['author'] ?? '';
-            $API_data['publisher'] = $d['publisher'] ?? '';
+            $API_data['author'] = $d['author_name'] ?? '';
+            $API_data['publisher'] = $d['publishers_name'] ?? '';
             $API_data['language'] = $d['language'] ?? '';
             $API_data['pages'] = $d['pages'] ?? '';
             $API_data['isbn'] = $d['isbn'] ?? '';
@@ -2036,7 +2036,9 @@ class InboundingController {
         if (!empty($d['optionals'])) {
             $API_data['optionals'] = str_replace(',', '|', $d['optionals']);
         }
+        if ($d['groupname'] != 'book') {
         $API_data['material'] = $d['material_name'] ?? '';
+        }
         $vendorApiId = (int) preg_replace('/\D/', '', (string) ($d['vendor_code'] ?? ''));
         $API_data['discrete_vendors'][0]['vendor'] = $vendorApiId;
         $API_data['discrete_vendors'][0]['priority'] = 1;
