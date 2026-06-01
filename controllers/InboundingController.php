@@ -2036,7 +2036,9 @@ class InboundingController {
         if (!empty($d['optionals'])) {
             $API_data['optionals'] = str_replace(',', '|', $d['optionals']);
         }
+        if ($d['groupname'] != 'book') {
         $API_data['material'] = $d['material_name'] ?? '';
+        }
         $vendorApiId = (int) preg_replace('/\D/', '', (string) ($d['vendor_code'] ?? ''));
         $API_data['discrete_vendors'][0]['vendor'] = $vendorApiId;
         $API_data['discrete_vendors'][0]['priority'] = 1;
