@@ -8,7 +8,7 @@
 return [
     'aramex' => [
         'label' => 'Aramex',
-        'description' => 'International export (ProductGroup EXP). Two accounts in use: 60524328 and 60525897 — create one courier account row per Aramex account number. Label ReportID 9729.',
+        'description' => 'International export (ProductGroup EXP). Official Aramex TEST account: 60531487 (entity BOM) — see docs/ARAMEX_SANDBOX_SETUP.md. Production: separate rows for 60524328 and 60525897 (entity DEL). Label ReportID 9729.',
         'template' => [
             'username' => '',
             'password' => '',
