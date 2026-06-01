@@ -55,12 +55,10 @@ final class JewelryLabel
      */
     public static function fromProductRow(array $product): array
     {
+        require_once __DIR__ . '/label_price.php';
+
         $sku = trim((string)($product['sku'] ?? ''));
-        $mrpRaw = $product['price_india'] ?? '';
-        $mrp = $mrpRaw;
-        if ($mrpRaw !== '' && $mrpRaw !== null && is_numeric($mrpRaw)) {
-            $mrp = number_format((float)$mrpRaw, 0, '.', ',');
-        }
+        $mrp = formatLabelPriceIndia($product, 0);
         return [
             'sku' => $sku,
             'color' => trim((string)($product['color'] ?? '')),
