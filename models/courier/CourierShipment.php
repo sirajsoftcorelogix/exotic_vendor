@@ -102,4 +102,81 @@ class CourierShipment
         $stmt->execute();
         $stmt->close();
     }
+
+    /** @param array<string, mixed> $row */
+    public function saveShipment(array $row): ?int
+    {
+        $sql = 'INSERT INTO courier_shipments
+            (invoice_id, box_no, order_number, legacy_dispatch_id, partner_code, partner_account_id,
+             partner_shipment_id, awb, tracking_url, product_group, product_type, service_level,
+             payment_mode, cod_amount, is_international, currency, charges_total, label_url, status, status_text, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+
+        $invoiceId = isset($row['invoice_id']) ? (int) $row['invoice_id'] : null;
+        $boxNo = isset($row['box_no']) ? (int) $row['box_no'] : null;
+        $legacyDispatchId = isset($row['legacy_dispatch_id']) ? (int) $row['legacy_dispatch_id'] : null;
+        $partnerAccountId = isset($row['partner_account_id']) ? (int) $row['partner_account_id'] : null;
+        $codAmount = (float) ($row['cod_amount'] ?? 0);
+        $isInternational = !empty($row['is_international']) ? 1 : 0;
+        $chargesTotal = isset($row['charges_total']) ? (float) $row['charges_total'] : 0.0;
+        $metadataJson = null;
+        if (!empty($row['metadata_json'])) {
+            $metadataJson = is_string($row['metadata_json'])
+                ? $row['metadata_json']
+                : json_encode($row['metadata_json'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        $orderNumber = (string) ($row['order_number'] ?? '');
+        $partnerCode = (string) ($row['partner_code'] ?? '');
+        $partnerShipmentId = (string) ($row['partner_shipment_id'] ?? '');
+        $awb = (string) ($row['awb'] ?? '');
+        $trackingUrl = (string) ($row['tracking_url'] ?? '');
+        $productGroup = (string) ($row['product_group'] ?? '');
+        $productType = (string) ($row['product_type'] ?? '');
+        $serviceLevel = (string) ($row['service_level'] ?? '');
+        $paymentMode = (string) ($row['payment_mode'] ?? 'prepaid');
+        $currency = (string) ($row['currency'] ?? '');
+        $labelUrl = (string) ($row['label_url'] ?? '');
+        $status = (string) ($row['status'] ?? 'created');
+        $statusText = (string) ($row['status_text'] ?? '');
+
+        $stmt->bind_param(
+            'iisississsssssdidssss',
+            $invoiceId,
+            $boxNo,
+            $orderNumber,
+            $legacyDispatchId,
+            $partnerCode,
+            $partnerAccountId,
+            $partnerShipmentId,
+            $awb,
+            $trackingUrl,
+            $productGroup,
+            $productType,
+            $serviceLevel,
+            $paymentMode,
+            $codAmount,
+            $isInternational,
+            $currency,
+            $chargesTotal,
+            $labelUrl,
+            $status,
+            $statusText,
+            $metadataJson
+        );
+
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return null;
+        }
+
+        $id = (int) $this->conn->insert_id;
+        $stmt->close();
+        return $id > 0 ? $id : null;
+    }
 }
