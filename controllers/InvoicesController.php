@@ -771,8 +771,9 @@ class InvoicesController
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
             $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);
-            //echo "Alankit IRN: IRN generation response of irn #$invoiceId\n";
-            //print_r($irnResponse);
+            echo "Alankit IRN: IRN generation response of irn #$invoiceId\n";
+            print_r($irnResponse);
+            echo "Alankit IRN: End of IRN generation response for invoice #$invoiceId\n";
             //decrypt response
             if ($irnResponse && isset($irnResponse['Data'])) {
                 $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
@@ -825,7 +826,7 @@ class InvoicesController
                             'VehType' => "R"                                
                         ];
                         $ewbResponse = $alankitClient->generateEwb($ewbData, $accessToken, $decryptedSek);
-                        
+                        print_r($ewbResponse);
                         if ($ewbResponse && isset($ewbResponse['Status']) && $ewbResponse['Status'] === 'ACT') {
                             $updateData['ewb_number'] = $ewbResponse['EwbNo'] ?? null;
                             $updateData['ewb_date'] = isset($ewbResponse['EwbDt']) ? date('Y-m-d H:i:s', strtotime($ewbResponse['EwbDt'])) : null;

@@ -322,7 +322,7 @@ return base64_encode($encryptedData);
                     'SlNo' => (string)($idx + 1),
                     'PrdDesc' => $item['item_name'] ?? '',
                     'IsServc' => 'N',
-                    'HsnCd' => substr($item['hsn'] ?? '', 0, 4),
+                    'HsnCd' => substr($item['hsn'] ?? '', 0, 8),
                     'Qty' => (float)($item['quantity'] ?? 0),
                     'Unit' => $item['unit'] ?? 'NOS',
                     'UnitPrice' => (float)($item['unit_price'] ?? 0),
@@ -508,7 +508,11 @@ return base64_encode($encryptedData);
                 'http_code' => $httpCode
             ];
         }
-        
+        echo "Alankit EWB API Request to $url returned HTTP $httpCode. Response:\n";
+        print_r($response);
+        echo "\n";
+        echo "Decrypted SEK used for EWB encryption/decryption: " . $decryptedSek . "\n";
+        echo "Encrypted EWB Payload sent to API: " . $encryptedPayload . "\n";
         $decoded = json_decode($response, true);
         
         if ($httpCode >= 400) {
