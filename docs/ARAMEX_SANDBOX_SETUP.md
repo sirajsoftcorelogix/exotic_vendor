@@ -49,7 +49,7 @@ Set **account_code** to `60531487-SANDBOX`, **environment** to `sandbox`, then p
     "company_name": "Exotic India Art Pvt Ltd",
     "full_name": "Ritvik",
     "phone": "9810028401",
-    "email": "rithvik@exoticindia.com",
+    "email": "vipin@exoticindia.com",
     "line1": "A-16/1, Wazirpur Industrial Area",
     "line2": "",
     "city": "Delhi",

@@ -20,6 +20,8 @@
         </div>
     <?php endif; ?>
      <?php 
+    $isInternational = !empty($is_international);
+    $primaryOrderNumber = (string) ($primary_order_number ?? '');
     //if dispatch records not found for this invoice, show form to create dispatch, else show dispatch details and labels
     if(isset($dispatchRecords) && count($dispatchRecords) == 0) {
         //dispatch records not found, show form to create dispatch
@@ -46,7 +48,7 @@
   
       <!-- DYNAMIC BOXES -->
       <?php foreach($groupedItems as $boxNo => $boxItems): ?>
-      <div id="box-section-<?php echo $boxNo; ?>" class="shadow-[0px_10px_15px_-3px_#0000001A] bg-white rounded-2xl shadow overflow-hidden box-section mb-6" data-box-no="<?php echo $boxNo; ?>">
+      <div id="box-section-<?php echo $boxNo; ?>" class="shadow-[0px_10px_15px_-3px_#0000001A] bg-white rounded-2xl shadow overflow-hidden box-section mb-6" data-box-no="<?php echo $boxNo; ?>" data-order-number="<?php echo htmlspecialchars($boxItems[0]['order_number'] ?? $primaryOrderNumber); ?>">
 
         <div class="bg-orange-500 p-6 text-white">
 
@@ -179,6 +181,20 @@
             <?php endforeach; ?>
           </div>
         </div>
+        <?php if ($isInternational): ?>
+        <div class="px-6 pb-4 border-t border-orange-100 bg-orange-50/40">
+          <div class="flex items-center gap-2 mb-3 mt-4">
+            <span class="text-sm font-bold text-gray-900">International courier (Aramex)</span>
+            <span class="text-xs rounded-full bg-indigo-100 text-indigo-800 px-2 py-0.5 font-semibold">Required</span>
+          </div>
+          <div id="courier-container-<?php echo $boxNo; ?>" class="courier-container text-sm text-gray-600">Enter box dimensions and weight to load Aramex rates.</div>
+          <input type="hidden" name="partner_code[<?php echo $boxNo; ?>]" class="box-partner-code" value="">
+          <input type="hidden" name="partner_account_id[<?php echo $boxNo; ?>]" class="box-partner-account-id" value="">
+          <input type="hidden" name="product_group[<?php echo $boxNo; ?>]" class="box-product-group" value="">
+          <input type="hidden" name="product_type[<?php echo $boxNo; ?>]" class="box-product-type" value="">
+          <input type="hidden" name="courier_name[<?php echo $boxNo; ?>]" class="box-courier-name" value="">
+        </div>
+        <?php endif; ?>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5">
             <div id="labels-container-<?php echo $boxNo; ?>" class="p-4">
             <!-- <iframe src="https://docs.google.com/gview?url=https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf&embedded=true" class="w-full h-96 border border-gray-300 rounded-lg" ></iframe> -->
@@ -211,8 +227,13 @@
               Delivery Partner
             </label>
 
+            <?php if ($isInternational): ?>
+            <input type="text" name="delivery_partner" id="delivery_partner_display" value="Aramex (select service above)"
+              readonly class="h-12 px-4 rounded-xl border-2 border-gray-300 bg-gray-50 text-[#0A0A0A]">
+            <?php else: ?>
             <input type="text" name="delivery_partner" value="Shiprocket"
               class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 text-[#0A0A0A]">
+            <?php endif; ?>
           </div>
 
           <!-- <div class="flex flex-col gap-2">
@@ -457,6 +478,8 @@
 </div>
 
 <script>
+const DISPATCH_IS_INTERNATIONAL = <?php echo $isInternational ? 'true' : 'false'; ?>;
+
 function populateDimensions(element) {
     const boxSection = element.closest('.box-section');
     const selectedOption = element.options[element.selectedIndex];
@@ -509,6 +532,9 @@ function calculateWeight(element) {
         console.log('Updated billable weight input:', input.name, input.value);
     });
 
+    if (DISPATCH_IS_INTERNATIONAL) {
+        fetchCouriersForBox(boxSection);
+    }
 }
 function calculateShippingCharges(weight) {
     // Simple flat rate calculation for demonstration
@@ -521,6 +547,89 @@ function calculateShippingCharges(weight) {
 document.querySelectorAll('.box-section').forEach(section => {
     calculateWeight(section.querySelector('input'));
 });
+
+function escapeHtml(str) {
+    return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function syncCourierSelection(boxSection, radio) {
+    if (!boxSection || !radio) return;
+    boxSection.querySelector('.box-partner-code').value = radio.getAttribute('data-partner-code') || '';
+    boxSection.querySelector('.box-partner-account-id').value = radio.getAttribute('data-partner-account-id') || '';
+    boxSection.querySelector('.box-product-group').value = radio.getAttribute('data-product-group') || '';
+    boxSection.querySelector('.box-product-type').value = radio.getAttribute('data-product-type') || '';
+    boxSection.querySelector('.box-courier-name').value = radio.getAttribute('data-courier-name') || '';
+    const dp = document.getElementById('delivery_partner_display');
+    if (dp && radio.getAttribute('data-courier-name')) {
+        dp.value = radio.getAttribute('data-courier-name');
+    }
+}
+
+function fetchCouriersForBox(boxSection) {
+    const boxNo = boxSection.getAttribute('data-box-no');
+    const container = document.getElementById('courier-container-' + boxNo);
+    const orderNumber = boxSection.getAttribute('data-order-number') || '';
+    const lengthIn = parseFloat(boxSection.querySelector('.box-length')?.value) || 0;
+    const widthIn = parseFloat(boxSection.querySelector('.box-width')?.value) || 0;
+    const heightIn = parseFloat(boxSection.querySelector('.box-height')?.value) || 0;
+    const weight = parseFloat(boxSection.querySelector('.box-actual-weight')?.value) || 0;
+
+    if (!container || !orderNumber || weight <= 0 || lengthIn <= 0 || widthIn <= 0 || heightIn <= 0) {
+        return;
+    }
+
+    container.innerHTML = '<div class="text-gray-500 py-2"><span class="animate-pulse">Loading Aramex rates…</span></div>';
+
+    const payload = {
+        order_number: orderNumber,
+        length: Math.round(lengthIn * 2.54 * 100) / 100,
+        breadth: Math.round(widthIn * 2.54 * 100) / 100,
+        height: Math.round(heightIn * 2.54 * 100) / 100,
+        weight: weight,
+        cod: 0,
+        pickup_location: document.querySelector('[name="pickup_location"]')?.value || 'Head Off'
+    };
+
+    fetch('?page=dispatch&action=getCourierServiceability', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success || !data.couriers || !data.couriers.length) {
+            container.innerHTML = '<div class="text-red-600">' + escapeHtml(data.message || 'No Aramex rates returned.') + '</div>';
+            return;
+        }
+        const groupName = 'courier_pick_box_' + boxNo;
+        let html = '<div class="flex flex-wrap gap-3">';
+        data.couriers.forEach((courier, idx) => {
+            const currency = (courier.currency || 'USD').toUpperCase();
+            const price = courier.price != null ? (currency + ' ' + parseFloat(courier.price).toFixed(2)) : 'N/A';
+            const checked = idx === 0 ? ' checked' : '';
+            html += '<label class="relative flex w-full sm:w-56 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer hover:border-indigo-300">' +
+                '<input type="radio" name="' + groupName + '" class="courier-tile-radio absolute left-2.5 top-3.5"' + checked +
+                ' data-courier-name="' + escapeHtml(courier.name) + '"' +
+                ' data-partner-code="' + escapeHtml(courier.partner_code) + '"' +
+                ' data-product-group="' + escapeHtml(courier.product_group) + '"' +
+                ' data-product-type="' + escapeHtml(courier.product_type) + '"' +
+                ' data-partner-account-id="' + escapeHtml(String(courier.partner_account_id || '')) + '">' +
+                '<p class="text-sm font-semibold text-gray-900">' + escapeHtml(courier.name) + '</p>' +
+                '<p class="text-lg font-bold text-indigo-700 mt-1">' + escapeHtml(price) + '</p>' +
+                '<p class="text-xs text-gray-500 mt-1">ETD: ' + escapeHtml(courier.etd || 'N/A') + '</p></label>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
+        const selected = container.querySelector('.courier-tile-radio:checked') || container.querySelector('.courier-tile-radio');
+        if (selected) syncCourierSelection(boxSection, selected);
+        container.querySelectorAll('.courier-tile-radio').forEach(radio => {
+            radio.addEventListener('change', () => syncCourierSelection(boxSection, radio));
+        });
+    })
+    .catch(err => {
+        container.innerHTML = '<div class="text-red-600">' + escapeHtml(err.message || 'Failed to load couriers') + '</div>';
+    });
+}
 </script>
 
 <script>
@@ -550,6 +659,23 @@ function submitDispatchForm(event) {
         submitBtn.innerHTML = originalBtnText;
         return; // Stop form submission if validation fails
     }
+
+    if (DISPATCH_IS_INTERNATIONAL) {
+        let missingCourier = false;
+        boxSections.forEach(section => {
+            const partnerCode = section.querySelector('.box-partner-code')?.value || '';
+            if (!partnerCode) {
+                missingCourier = true;
+            }
+        });
+        if (missingCourier) {
+            showAlert('Select an Aramex courier service for each box before dispatch.', 'error');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+            return;
+        }
+    }
+
     // Disable button and show loading state
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
