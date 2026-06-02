@@ -766,7 +766,8 @@ class OrdersAPIController
                             'Sales Price' => floatval($item['unit_price'] ?? 0),
                             'Amount'      => round($itemAmount, 2),
                             'GST Rate'    => floatval($item['tax_rate'] ?? 0),
-                            'Discount'    => 0.0
+                            'Discount'    => 0.0,
+                            'Item Groupname' => $item['groupname'] ?? ''
                         ];
                     }
 
