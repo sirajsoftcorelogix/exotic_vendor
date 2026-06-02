@@ -1415,7 +1415,7 @@ class Inbounding {
                 LEFT JOIN category as c on vi.group_name = c.category
                 LEFT JOIN material as m on vi.material_code = m.id
                 LEFT JOIN vp_author as a on vi.author=a.author_id
-                LEFT JOIN vp_publishers as p on vi.publisher=a.publishers_id
+                LEFT JOIN vp_publishers as p on vi.publisher=p.publishers_id
                 WHERE vi.id = $id";
 
         $result = $this->conn->query($sql);
