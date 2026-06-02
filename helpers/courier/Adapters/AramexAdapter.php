@@ -30,7 +30,23 @@ class AramexAdapter implements CourierAdapterInterface
         $accountId = (int) ($request['partner_account_id'] ?? 0);
         $credentials = $this->accountModel->getCredentialsJson($accountId);
         $service = new AramexService($credentials);
-        return $service->createInternationalShipment($request);
+        $orderNumber = (string) ($request['order_number'] ?? '');
+        $result = $service->createInternationalShipment($request);
+
+        if ($this->shipmentModel) {
+            $this->shipmentModel->logApiCall(
+                'aramex',
+                'create_shipment',
+                $accountId > 0 ? $accountId : null,
+                $orderNumber !== '' ? $orderNumber : null,
+                $request,
+                $result,
+                !empty($result['success']),
+                !empty($result['success']) ? null : (string) ($result['message'] ?? $result['error'] ?? 'Create failed')
+            );
+        }
+
+        return $result;
     }
 
     /**

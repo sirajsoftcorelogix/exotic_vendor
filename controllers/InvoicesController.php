@@ -4,6 +4,7 @@ require_once 'models/order/order.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/product/product.php';
+require_once __DIR__ . '/../helpers/international_invoice_defaults.php';
 
 $invoiceModel = new Invoice($conn);
 $ordersModel = new Order($conn);
@@ -110,6 +111,21 @@ class InvoicesController
         $data['users'] = $usersModel->getAllUsers();
         $data['invoiceModel'] = null; // placeholder for next invoice number logic
         $data['pos_flag'] = $posFlag;
+
+        $firstCurrency = $data['data'][0]['currency'] ?? 'INR';
+        if ($firstCurrency && $firstCurrency !== 'INR') {
+            $firstAddress = null;
+            if (!empty($data['customer_address']) && is_array($data['customer_address'])) {
+                $firstAddress = reset($data['customer_address']);
+            }
+            $data['international_defaults'] = buildInternationalInvoiceDefaults(
+                $data['data'],
+                is_array($firstAddress) ? $firstAddress : null,
+                is_array($data['firm'] ?? null) ? $data['firm'] : null,
+                $commanModel,
+                $GLOBALS['conn'] ?? null
+            );
+        }
 
         renderTemplate('views/invoices/create.php', $data, 'Create Invoice');
         exit;
@@ -270,25 +286,46 @@ class InvoicesController
         }
         //save international fields
         if ($isInternational) {
+            $firstOrderNumber = $order_numbers[0] ?? '';
+            $orderAddress = $firstOrderNumber !== ''
+                ? $commanModel->get_customer_address($firstOrderNumber)
+                : null;
+            $firm = $commanModel->getRecordById('firm_details', 1);
+            $orderRows = [];
+            foreach ($order_numbers as $orderNumber) {
+                $lines = $ordersModel->getOrderByOrderNumber($orderNumber);
+                if (is_array($lines) && !empty($lines)) {
+                    $orderRows[] = $lines[0];
+                }
+            }
+            $intlPost = mergeInternationalInvoiceDefaults(
+                $_POST,
+                $orderRows,
+                is_array($orderAddress) ? $orderAddress : null,
+                is_array($firm) ? $firm : null,
+                $commanModel,
+                $conn
+            );
+
             $internationalData = [
                 'invoice_id' => $invoiceId,
-                'pre_carriage_by' => isset($_POST['pre_carriage_by']) ? trim($_POST['pre_carriage_by']) : '',
-                'port_of_loading' => isset($_POST['port_of_loading']) ? trim($_POST['port_of_loading']) : '',
-                'port_of_discharge' => isset($_POST['port_of_discharge']) ? trim($_POST['port_of_discharge']) : '',
-                'country_of_origin' => isset($_POST['country_of_origin']) ? trim($_POST['country_of_origin']) : '',
-                'country_of_final_destination' => isset($_POST['country_of_final_destination']) ? trim($_POST['country_of_final_destination']) : '',
-                'final_destination' => isset($_POST['final_destination']) ? trim($_POST['final_destination']) : '',
-                'usd_export_rate' => isset($_POST['usd_export_rate']) ? floatval($_POST['usd_export_rate']) : 0,
-                'ap_cost' => isset($_POST['ap_cost']) ? floatval($_POST['ap_cost']) : 0,
-                'freight_charge' => isset($_POST['freight_charge']) ? floatval($_POST['freight_charge']) : 0,
-                'insurance_charge' => isset($_POST['insurance_charge']) ? floatval($_POST['insurance_charge']) : 0,
-                'shipping_bill_number' => isset($_POST['shipping_bill_number']) ? trim($_POST['shipping_bill_number']) : '',
-                'shipping_bill_date' => isset($_POST['shipping_bill_date']) ? trim($_POST['shipping_bill_date']) : '',
-                'shipping_port' => isset($_POST['shipping_port']) ? trim($_POST['shipping_port']) : '',
-                'shipping_ref_clm' => isset($_POST['shipping_ref_clm']) ? trim($_POST['shipping_ref_clm']) : '',
-                'shipping_currency' => isset($_POST['shipping_currency']) ? trim($_POST['shipping_currency']) : '',
-                'shipping_country_code' => isset($_POST['shipping_country_code']) ? trim($_POST['shipping_country_code']) : '',
-                'shipping_exp_duty' => isset($_POST['shipping_exp_duty']) ? floatval($_POST['shipping_exp_duty']) : 0
+                'pre_carriage_by' => isset($intlPost['pre_carriage_by']) ? trim($intlPost['pre_carriage_by']) : '',
+                'port_of_loading' => isset($intlPost['port_of_loading']) ? trim($intlPost['port_of_loading']) : '',
+                'port_of_discharge' => isset($intlPost['port_of_discharge']) ? trim($intlPost['port_of_discharge']) : '',
+                'country_of_origin' => isset($intlPost['country_of_origin']) ? trim($intlPost['country_of_origin']) : '',
+                'country_of_final_destination' => isset($intlPost['country_of_final_destination']) ? trim($intlPost['country_of_final_destination']) : '',
+                'final_destination' => isset($intlPost['final_destination']) ? trim($intlPost['final_destination']) : '',
+                'usd_export_rate' => isset($intlPost['usd_export_rate']) ? floatval($intlPost['usd_export_rate']) : 0,
+                'ap_cost' => isset($intlPost['ap_cost']) ? floatval($intlPost['ap_cost']) : 0,
+                'freight_charge' => isset($intlPost['freight_charge']) ? floatval($intlPost['freight_charge']) : 0,
+                'insurance_charge' => isset($intlPost['insurance_charge']) ? floatval($intlPost['insurance_charge']) : 0,
+                'shipping_bill_number' => isset($intlPost['shipping_bill_number']) ? trim($intlPost['shipping_bill_number']) : '',
+                'shipping_bill_date' => isset($intlPost['shipping_bill_date']) ? trim($intlPost['shipping_bill_date']) : '',
+                'shipping_port' => isset($intlPost['shipping_port']) ? trim($intlPost['shipping_port']) : '',
+                'shipping_ref_clm' => isset($intlPost['shipping_ref_clm']) ? trim($intlPost['shipping_ref_clm']) : '',
+                'shipping_currency' => isset($intlPost['shipping_currency']) ? trim($intlPost['shipping_currency']) : '',
+                'shipping_country_code' => isset($intlPost['shipping_country_code']) ? trim($intlPost['shipping_country_code']) : '',
+                'shipping_exp_duty' => isset($intlPost['shipping_exp_duty']) ? floatval($intlPost['shipping_exp_duty']) : 0
             ];
             $invoiceModel->insert_international_invoice_data($internationalData);
 

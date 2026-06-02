@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/helpers/courier/credential_urls.php';
 require_once __DIR__ . '/helpers/courier/AramexShipmentBuilder.php';
+require_once __DIR__ . '/helpers/courier/AramexResponseParser.php';
 
 class AramexService
 {
@@ -90,7 +91,17 @@ class AramexService
         try {
             $params = AramexShipmentBuilder::buildCreateShipmentsRequest($this->fullConfig, $context);
             $response = $this->client->CreateShipments($params);
-            return $this->formatResponse($response);
+            $result = $this->formatResponse($response);
+            if (empty($result['success'])) {
+                return $result;
+            }
+
+            $parsed = AramexResponseParser::parseCreateShipment($result['data'] ?? null);
+            if (empty($parsed['success'])) {
+                return array_merge($result, $parsed);
+            }
+
+            return array_merge($result, $parsed);
         } catch (Exception $e) {
             return $this->error($e->getMessage());
         }

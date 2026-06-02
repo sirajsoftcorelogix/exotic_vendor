@@ -62,12 +62,10 @@ final class MgStoreLabel
      */
     public static function fromProductRow(array $product): array
     {
+        require_once __DIR__ . '/label_price.php';
+
         $sku = trim((string)($product['sku'] ?? ''));
-        $mrpRaw = $product['price_india'] ?? '';
-        $price = trim((string)$mrpRaw);
-        if ($mrpRaw !== '' && $mrpRaw !== null && is_numeric($mrpRaw)) {
-            $price = number_format((float)$mrpRaw, 0, '.', ',');
-        }
+        $price = formatLabelPriceIndia($product, 0);
 
         $unit = trim((string)($product['length_unit'] ?? 'inch'));
         if ($unit === '') {

@@ -7,6 +7,7 @@ require_once 'courier_selector.php';
 require_once __DIR__ . '/../helpers/courier/country_codes.php';
 require_once __DIR__ . '/../helpers/courier/Gateway/CourierGateway.php';
 require_once __DIR__ . '/../helpers/courier/CourierDispatchService.php';
+require_once __DIR__ . '/../models/courier/CourierShipment.php';
 require_once __DIR__ . '/../models/order/stock.php';
 $commanModel = new Tables($conn);
 $invoiceModel = new Invoice($conn); 
@@ -158,6 +159,13 @@ class DispatchController {
             // Build Shiprocket payload per requested format
             $firm = $commanModel->getRecordById('firm_details', 1) ?? [];
             $address = $commanModel->getDispatchAddress($invoice['vp_order_info_id'] ?? 0) ?? ($invoice['address'] ?? []);
+            $destCountry = normalizeCountryIso2(
+                $address['shipping_country'] ?? $address['country'] ?? 'IN',
+                $GLOBALS['conn'] ?? null
+            );
+            $isInternationalDispatch = isInternationalShipmentCountry($destCountry, $GLOBALS['conn'] ?? null);
+            $courierGateway = $isInternationalDispatch ? new CourierGateway($GLOBALS['conn']) : null;
+            $courierShipmentModel = $isInternationalDispatch ? new CourierShipment($GLOBALS['conn']) : null;
 
             // prepare order_items by mapping item ids from boxes to invoice items
             $invoiceItems = $invoiceModel->getInvoiceItems($invoice['id'] ?? $data['invoice_id']);
@@ -218,7 +226,155 @@ class DispatchController {
                     $invOrderNumber = is_array($box['order_numbers']) ? (array_values($box['order_numbers'])[0] ?? null) : $box['order_numbers'];
                 }
                 $orderNumber = $invOrderNumber ? ($invOrderNumber . '_box_' . $boxNo) : ('order_' . $data['invoice_id'] . '_box' . $boxNo);
-               
+
+                if ($isInternationalDispatch) {
+                    $partnerCode = strtolower(trim((string) ($data['partner_code'][$boxNo] ?? '')));
+                    if ($partnerCode !== 'aramex') {
+                        header('Content-Type: application/json');
+                        echo json_encode([
+                            'status' => 'error',
+                            'message' => 'Select an Aramex courier service for Box ' . $boxNo . ' before dispatch.',
+                        ]);
+                        exit();
+                    }
+
+                    $lengthIn = (float) ($box['box_length'] ?? 0);
+                    $widthIn = (float) ($box['box_width'] ?? 0);
+                    $heightIn = (float) ($box['box_height'] ?? 0);
+                    $lengthCm = $lengthIn * 2.54;
+                    $widthCm = $widthIn * 2.54;
+                    $heightCm = $heightIn * 2.54;
+                    $volumetricKg = ($lengthCm * $widthCm * $heightCm) / 5000;
+                    $actualKg = $totalBillableWeight > 0 ? $totalBillableWeight : (float) ($box['box_weight'] ?? 0);
+
+                    $aramexItems = [];
+                    foreach ($box['items'] as $itemId) {
+                        if (!isset($itemsMap[$itemId])) {
+                            continue;
+                        }
+                        $it = $itemsMap[$itemId];
+                        $aramexItems[] = [
+                            'hsn' => $it['hsn'] ?? '',
+                            'hs_code' => $it['hsn'] ?? '',
+                            'name' => $it['item_name'] ?? $it['title'] ?? '',
+                            'quantity' => (int) ($it['quantity'] ?? 1),
+                            'unit_price' => (float) ($it['unit_price'] ?? 0),
+                        ];
+                    }
+
+                    $createRequest = [
+                        'partner_code' => 'aramex',
+                        'partner_account_id' => (int) ($data['partner_account_id'][$boxNo] ?? 0),
+                        'product_group' => (string) ($data['product_group'][$boxNo] ?? 'EXP'),
+                        'product_type' => (string) ($data['product_type'][$boxNo] ?? 'PPX'),
+                        'order_number' => (string) ($invOrderNumber ?? $orderNumber),
+                        'destination_country' => $destCountry,
+                        'destination' => [
+                            'line1' => $address['shipping_address_line1'] ?? $address['address_line1'] ?? '',
+                            'line2' => $address['shipping_address_line2'] ?? $address['address_line2'] ?? '',
+                            'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                            'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                            'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                            'country_code' => $destCountry,
+                        ],
+                        'address' => $address,
+                        'box' => [
+                            'weight' => $actualKg,
+                            'volumetric_weight' => $volumetricKg,
+                            'pieces' => 1,
+                        ],
+                        'invoice' => [
+                            'invoice_number' => $invoice['invoice_number'] ?? '',
+                            'invoice_date' => $invoice['invoice_date'] ?? date('Y-m-d'),
+                            'total_amount' => (float) ($invoice['total_amount'] ?? $subTotal),
+                            'tax_amount' => (float) ($invoice['tax_amount'] ?? 0),
+                            'shipping_currency' => $invoice['currency'] ?? 'USD',
+                            'goods_description' => (string) ($box['groupname'] ?? 'Goods'),
+                        ],
+                        'items' => $aramexItems,
+                        'description' => (string) ($box['groupname'] ?? 'Goods'),
+                        'currency_code' => $invoice['currency'] ?? 'USD',
+                        'customs_value' => $subTotal > 0 ? $subTotal : (float) ($invoice['total_amount'] ?? 0),
+                        'tax_amount' => (float) ($invoice['tax_amount'] ?? 0),
+                    ];
+
+                    $createResult = $courierGateway->createShipment($createRequest);
+                    if (empty($createResult['success'])) {
+                        header('Content-Type: application/json');
+                        echo json_encode([
+                            'status' => 'error',
+                            'message' => (string) ($createResult['message'] ?? $createResult['error'] ?? ('Aramex shipment failed for Box ' . $boxNo)),
+                            'debug' => $createResult['debug'] ?? null,
+                        ]);
+                        exit();
+                    }
+
+                    $awbCode = (string) ($createResult['awb'] ?? '');
+                    $labelUrl = (string) ($createResult['label_url'] ?? '');
+                    $courierName = (string) ($data['courier_name'][$boxNo] ?? $data['delivery_partner'] ?? 'Aramex');
+                    $billingWeight = max($actualKg, $volumetricKg);
+
+                    $dispatchData = [
+                        'invoice_id' => $data['invoice_id'],
+                        'box_no' => $boxNo,
+                        'order_number' => $invOrderNumber,
+                        'pickup_location' => $data['pickup_location'],
+                        'box_items' => implode(',', $box['items']),
+                        'length' => $lengthIn,
+                        'width' => $widthIn,
+                        'height' => $heightIn,
+                        'weight' => $actualKg,
+                        'volumetric_weight' => $volumetricKg,
+                        'billing_weight' => $billingWeight,
+                        'shipping_charges' => $totalShippingCharges,
+                        'dispatch_date' => date('Y-m-d H:i:s'),
+                        'courier_name' => $courierName,
+                        'shiprocket_order_id' => null,
+                        'shiprocket_shipment_id' => null,
+                        'shiprocket_tracking_url' => null,
+                        'awb_code' => $awbCode !== '' ? $awbCode : null,
+                        'shipment_status' => 'created',
+                        'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                        'groupname' => $box['groupname'] ?? null,
+                        'created_by' => $_SESSION['user']['id'] ?? 0,
+                        'created_at' => date('Y-m-d H:i:s'),
+                    ];
+
+                    $dispatchId = $dispatchModel->createDispatch($dispatchData);
+                    if (!$dispatchId) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['status' => 'error', 'message' => 'Failed to save dispatch record for Box ' . $boxNo]);
+                        exit();
+                    }
+
+                    if ($courierShipmentModel) {
+                        $courierShipmentModel->saveShipment([
+                            'invoice_id' => (int) $data['invoice_id'],
+                            'box_no' => (int) $boxNo,
+                            'order_number' => (string) ($invOrderNumber ?? ''),
+                            'legacy_dispatch_id' => (int) $dispatchId,
+                            'partner_code' => 'aramex',
+                            'partner_account_id' => (int) ($data['partner_account_id'][$boxNo] ?? 0),
+                            'partner_shipment_id' => (string) ($createResult['partner_shipment_id'] ?? $awbCode),
+                            'awb' => $awbCode,
+                            'product_group' => (string) ($data['product_group'][$boxNo] ?? 'EXP'),
+                            'product_type' => (string) ($data['product_type'][$boxNo] ?? ''),
+                            'service_level' => $courierName,
+                            'is_international' => 1,
+                            'currency' => strtoupper((string) ($invoice['currency'] ?? 'USD')),
+                            'charges_total' => $totalShippingCharges,
+                            'label_url' => $labelUrl,
+                            'status' => 'created',
+                            'status_text' => 'Aramex shipment created',
+                        ]);
+                    }
+
+                    $dispatchRecords['awb'][$boxNo] = $awbCode;
+                    $dispatchRecords['labelUrl'][$boxNo] = $labelUrl;
+                    $dispatchRecords['awb_assign_status'][$boxNo] = $awbCode !== '' ? 1 : 0;
+                    $dispatchRecords['label_created'][$boxNo] = $labelUrl !== '' ? 1 : 0;
+                    $dispatchRecords['ids'][$boxNo] = $dispatchId;
+                } else {
 
                 $shiprocketPayload = [
                     'order_id' => $orderNumber,
@@ -369,8 +525,9 @@ class DispatchController {
                 //update invoice with dispatch status
                 //$invoiceModel->updateInvoiceDispatchStatus($data['invoice_id'], 'Dispatched');
                 //update orders table with dispatch status using order numbers from this box
-                            
-                
+
+                }
+
             }
             
             // All boxes processed successfully
@@ -390,6 +547,9 @@ class DispatchController {
             // Get list of invoices for dropdown
             $invoice_id = $_GET['invoice_id'] ?? null;
             $invoices = [];
+            $isInternational = false;
+            $primaryOrderNumber = '';
+            $destCountry = 'IN';
             if ($invoice_id) {
                 $invoice = $invoiceModel->getInvoiceById($invoice_id);
                 $invoice['items'] = $invoiceModel->getInvoiceItems($invoice_id);
@@ -399,13 +559,28 @@ class DispatchController {
                 $invoice['pickup_locations'] = $pickup['data']['shipping_address'] ?? [];
                 if ($invoice && isset($invoice['vp_order_info_id'])) {
                     $invoice['address'] = $commanModel->getDispatchAddress($invoice['vp_order_info_id']);
-                }                
+                }
+                $destCountry = normalizeCountryIso2(
+                    $invoice['address']['shipping_country'] ?? $invoice['address']['country'] ?? 'IN',
+                    $GLOBALS['conn'] ?? null
+                );
+                $isInternational = isInternationalShipmentCountry($destCountry, $GLOBALS['conn'] ?? null);
+                $primaryOrderNumber = '';
+                if (!empty($invoice['items'][0]['order_number'])) {
+                    $primaryOrderNumber = (string) $invoice['items'][0]['order_number'];
+                }
                 $invoices[] = $invoice;
                 //fetch dispatch records for this invoice   
                 $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoice_id);
                 //print_array($dispatchRecords);
             }
-            renderTemplate('views/dispatch/create.php', ['invoices' => $invoices, 'dispatchRecords' => $dispatchRecords]);
+            renderTemplate('views/dispatch/create.php', [
+                'invoices' => $invoices,
+                'dispatchRecords' => $dispatchRecords,
+                'is_international' => $isInternational ?? false,
+                'primary_order_number' => $primaryOrderNumber ?? '',
+                'destination_country' => $destCountry ?? 'IN',
+            ]);
         }
     }
     public function retryInvoice() {

@@ -17,6 +17,7 @@ foreach ($partners as $p) {
 }
 $schemasJson = json_encode($credentialSchemas, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 $partnerCodesJson = json_encode($partnerCodeById, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+$accountsPayloadJson = '';
 
 function h($v)
 {
@@ -151,8 +152,9 @@ function h($v)
                             </td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($accounts as $a): ?>
-                            <?php
+                        <?php
+                        $accountsPayload = [];
+                        foreach ($accounts as $a):
                                 $credJson = $a['credentials_json'] ?? [];
                                 if (!is_array($credJson)) {
                                     $credJson = [];
@@ -171,7 +173,7 @@ function h($v)
                                     'notes' => (string) ($a['notes'] ?? ''),
                                     'credentials_json' => $credJson,
                                 ];
-                                $payloadJson = json_encode($payload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+                                $accountsPayload[] = $payload;
                                 $credPreview = '';
                                 if (!empty($credJson)) {
                                     $user = (string) ($credJson['username'] ?? $credJson['email'] ?? '');
@@ -179,7 +181,7 @@ function h($v)
                                     $parts = array_filter([$user, $acct !== '' ? 'Acct ' . $acct : '']);
                                     $credPreview = implode(' · ', $parts);
                                 }
-                            ?>
+                        ?>
                             <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors align-top">
                                 <td class="px-5 py-4">
                                     <div class="font-semibold text-gray-900"><?php echo h($a['partner_name']); ?></div>
@@ -212,7 +214,7 @@ function h($v)
                                 <td class="px-5 py-4">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <button type="button" class="ca-btn-edit inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50 transition"
-                                            data-account="<?php echo $payloadJson; ?>">
+                                            data-account-id="<?php echo (int) $a['id']; ?>">
                                             <i class="fas fa-pen text-[10px] text-indigo-600" aria-hidden="true"></i>
                                             Edit
                                         </button>
@@ -227,6 +229,15 @@ function h($v)
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                        <?php
+                        $accountsPayloadJson = json_encode(
+                            $accountsPayload,
+                            JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
+                        );
+                        if ($accountsPayloadJson === false) {
+                            $accountsPayloadJson = '[]';
+                        }
+                        ?>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -243,6 +254,10 @@ function h($v)
         </p>
     </div>
 </div>
+
+<?php if (!empty($accountsPayloadJson)): ?>
+<script type="application/json" id="caAccountsData"><?php echo $accountsPayloadJson; ?></script>
+<?php endif; ?>
 
 <!-- Modal: Add / Edit account -->
 <div id="courierAccountModal" class="fixed inset-0 z-[100] hidden opacity-0 transition-opacity duration-200" aria-hidden="true" role="dialog" aria-labelledby="caModalTitle">
@@ -371,6 +386,23 @@ function h($v)
     var defaultPartnerId = <?php echo (int) $partnerId; ?>;
     var SCHEMAS = <?php echo $schemasJson ?: '{}'; ?>;
     var PARTNER_CODES = <?php echo $partnerCodesJson ?: '{}'; ?>;
+    var accountsById = {};
+
+    (function loadAccountsData() {
+        var el = document.getElementById('caAccountsData');
+        if (!el) return;
+        try {
+            var list = JSON.parse(el.textContent || '[]');
+            if (!Array.isArray(list)) return;
+            list.forEach(function (row) {
+                if (row && row.id != null) {
+                    accountsById[String(row.id)] = row;
+                }
+            });
+        } catch (err) {
+            console.error('Courier accounts: could not parse account data', err);
+        }
+    })();
 
     function partnerCodeForId(id) {
         return PARTNER_CODES[String(id)] || '';
@@ -517,6 +549,7 @@ function h($v)
     }
 
     function resetFormAdd() {
+        if (!form) return;
         form.reset();
         document.getElementById('ca_field_id').value = '';
         titleEl.textContent = 'Add account';
@@ -568,23 +601,30 @@ function h($v)
 
     document.querySelectorAll('.ca-btn-edit').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            var raw = btn.getAttribute('data-account');
-            if (!raw) return;
-            try {
-                var p = JSON.parse(raw);
-                fillFormEdit(p);
-                openModal();
-            } catch (e) {}
+            var id = btn.getAttribute('data-account-id');
+            if (!id) return;
+            var p = accountsById[String(id)];
+            if (!p) {
+                console.error('Courier accounts: account not found for id', id);
+                return;
+            }
+            fillFormEdit(p);
+            openModal();
         });
     });
 
-    modal.querySelectorAll('.ca-modal-close').forEach(function (el) {
-        el.addEventListener('click', closeModal);
-    });
-    modal.querySelector('.ca-modal-backdrop').addEventListener('click', closeModal);
+    if (modal) {
+        modal.querySelectorAll('.ca-modal-close').forEach(function (el) {
+            el.addEventListener('click', closeModal);
+        });
+        var backdrop = modal.querySelector('.ca-modal-backdrop');
+        if (backdrop) {
+            backdrop.addEventListener('click', closeModal);
+        }
+    }
 
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+        if (modal && e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
     });
 
     if (envSelect) {
