@@ -499,8 +499,21 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 
 </div>
 
+<?php
+$labelPdfBaseName = 'Labels_Print_Batch';
+$itemCodeForPdf = trim((string) ($label_data[0]['Item_code'] ?? ''));
+if ($itemCodeForPdf !== '') {
+    $sanitizedItemCode = preg_replace('/[\\\\\/:*?"<>|]+/', '_', $itemCodeForPdf);
+    $sanitizedItemCode = trim((string) $sanitizedItemCode, " \t\n\r\0\x0B._");
+    if ($sanitizedItemCode !== '') {
+        $labelPdfBaseName = $sanitizedItemCode;
+    }
+}
+?>
+
 <script>
     const recordId = "<?php echo isset($_GET['id']) ? $_GET['id'] : ''; ?>";
+    const labelPdfFileName = <?php echo json_encode($labelPdfBaseName, JSON_UNESCAPED_UNICODE); ?>;
 
     document.getElementById("back-btn").addEventListener("click", () => {
         window.history.back();
@@ -604,7 +617,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 const imgData = canvas.toDataURL("image/jpeg", 1.0);
                 pdf.addImage(imgData, "JPEG", 0, 0, 76.2, 50.8);
             }
-            pdf.save("Labels_Print_Batch.pdf");
+            pdf.save(labelPdfFileName + ".pdf");
         } catch (err) {
             console.error("PDF Error:", err);
             alert("An error occurred while generating the PDF.");
