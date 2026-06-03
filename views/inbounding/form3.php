@@ -9,11 +9,10 @@ $currentuserDetails = $usersModel->getUserById($_SESSION['user']['id']);
 unset($usersModel);
 
 $record_id = $_GET['id'] ?? '';
-$form2 = $data['form2'] ?? []; 
-$saved_category_code = $form2['group_name'] ?? ''; 
-
-// --- VARIANT DATA PREPARATION (Matches Desktop Logic) ---
-$is_variant = $form2['is_variant'] ?? 'N'; 
+$form2 = $form2 ?? ($data['form2'] ?? []);
+$raw_categories = $category ?? ($data['category'] ?? []);
+$saved_category_code = $form2['group_name'] ?? '';
+$is_variant = $form2['is_variant'] ?? 'N';
 
 // Initialize variables
 $current_sku = $form2['sku'] ?? ''; 
@@ -71,7 +70,7 @@ $sizeOptions = [
     'XXL'  => 'Extra Extra Large (XXL)(44)',
     'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
 ];
-$colorMapData = $data['form2']['gecolormaps']['colormaps'] ?? [];
+$colorMapData = $form2['gecolormaps']['colormaps'] ?? [];
 
 function renderColorMapField($index, $value) {
     $fieldName = "variations[$index][colormaps]";
@@ -125,6 +124,11 @@ $mainVar = [
     'dimensions'        => $form2['dimensions'] ?? '',
     'colormaps'       => $form2['colormaps'] ?? '',
 ];
+
+$invoicePath = trim((string)($mainVar['invoice'] ?? ''));
+$invoiceUrl = $invoicePath !== '' ? base_url($invoicePath) : '';
+$invoiceExt = $invoicePath !== '' ? strtolower(pathinfo($invoicePath, PATHINFO_EXTENSION)) : '';
+$isInvoicePdf = ($invoiceExt === 'pdf');
 
 global $inboundingModel;
 $extraVars = $inboundingModel->getVariations($record_id);
@@ -239,9 +243,17 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             
             <div class="flex flex-col lg:flex-row gap-6 items-start">
                 <div class="flex flex-row bg-gray-100 border border-gray-300 rounded p-2 gap-3 min-w-[350px] lg:w-1/3">
-                    <div class="w-24 h-28 bg-white border border-gray-300 flex-shrink-0 cursor-pointer overflow-hidden" onclick="openImagePopup('<?= !empty($mainVar['invoice']) ? base_url($mainVar['invoice']) : '' ?>')">
-                        <?php if(!empty($mainVar['invoice'])): ?>
-                            <img src="<?php echo base_url($mainVar['invoice']); ?>" class="w-full h-full object-cover hover:opacity-90">
+                    <div class="relative w-24 h-28 bg-white border border-gray-300 flex-shrink-0 cursor-pointer overflow-hidden"
+                         <?php if ($invoiceUrl !== ''): ?>
+                         onclick="openInvoicePreview(<?php echo json_encode($invoiceUrl); ?>, <?php echo $isInvoicePdf ? 'true' : 'false'; ?>)"
+                         <?php endif; ?>>
+                        <?php if ($invoiceUrl !== ''): ?>
+                            <?php if ($isInvoicePdf): ?>
+                                <iframe src="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>" class="w-full h-full border-0 pointer-events-none" title="Invoice PDF preview"></iframe>
+                                <span class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] font-semibold text-center py-0.5">PDF</span>
+                            <?php else: ?>
+                                <img src="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Invoice preview" class="w-full h-full object-cover hover:opacity-90">
+                            <?php endif; ?>
                         <?php else: ?>
                             <div class="w-full h-full flex items-center justify-center text-gray-400 text-xs text-center">No Inv</div>
                         <?php endif; ?>
@@ -530,9 +542,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
 </div>
 
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
-    <div class="bg-white p-2 rounded-md max-w-4xl max-h-[90vh] relative flex flex-col items-center" onclick="event.stopPropagation();">
-        <button onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold">✕</button>
-        <img id="popupImage" class="max-w-full max-h-[85vh] rounded" src="" alt="Image Preview">
+    <div class="bg-white p-2 rounded-md max-w-4xl max-h-[90vh] w-full relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button type="button" onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[85vh] rounded hidden" src="" alt="Invoice preview">
+        <iframe id="popupPdf" class="hidden w-full max-w-4xl h-[85vh] rounded border-0 bg-white" src="" title="Invoice PDF preview"></iframe>
     </div>
 </div>
 
@@ -1287,13 +1300,43 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
     
-    function openImagePopup(imageUrl) {
-        if(!imageUrl) return;
-        document.getElementById('popupImage').src = imageUrl;
-        document.getElementById('imagePopup').classList.remove('hidden');
+    function openInvoicePreview(fileUrl, isPdf) {
+        if (!fileUrl) return;
+        const popup = document.getElementById('imagePopup');
+        const img = document.getElementById('popupImage');
+        const pdf = document.getElementById('popupPdf');
+        if (!popup || !img || !pdf) return;
+
+        if (isPdf) {
+            img.classList.add('hidden');
+            img.removeAttribute('src');
+            pdf.src = fileUrl;
+            pdf.classList.remove('hidden');
+        } else {
+            pdf.classList.add('hidden');
+            pdf.removeAttribute('src');
+            img.src = fileUrl;
+            img.classList.remove('hidden');
+        }
+        popup.classList.remove('hidden');
     }
+
+    function openImagePopup(imageUrl) {
+        openInvoicePreview(imageUrl, String(imageUrl).toLowerCase().split('?')[0].endsWith('.pdf'));
+    }
+
     function closeImagePopup(event) {
-        document.getElementById('imagePopup').classList.add('hidden');
-        document.getElementById('popupImage').src = '';
-    } 
+        const popup = document.getElementById('imagePopup');
+        const img = document.getElementById('popupImage');
+        const pdf = document.getElementById('popupPdf');
+        if (popup) popup.classList.add('hidden');
+        if (img) {
+            img.classList.add('hidden');
+            img.removeAttribute('src');
+        }
+        if (pdf) {
+            pdf.classList.add('hidden');
+            pdf.removeAttribute('src');
+        }
+    }
 </script>
