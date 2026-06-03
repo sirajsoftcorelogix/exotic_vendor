@@ -24,6 +24,7 @@ class AccountGroupsController
         renderTemplate('views/account_groups/index.php', [
             'account_groups' => $listing['account_groups'],
             'item_groups' => $this->accountGroupModel->getParentItemGroups(),
+            'item_group_labels' => $this->accountGroupModel->getItemGroupLabelMap(),
             'search' => $search,
             'status_filter' => $status,
             'currentPage' => $listing['currentPage'],

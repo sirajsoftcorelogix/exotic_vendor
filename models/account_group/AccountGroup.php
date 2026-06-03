@@ -47,9 +47,9 @@ class AccountGroup
         $countStmt->close();
 
         $sql = 'SELECT ag.id, ag.account_group_name, ag.item_group, ag.is_active, ag.created_at, ag.updated_at,
-                       c.display_name AS item_group_name
+                       COALESCE(c.display_name, ag.item_group) AS item_group_name
                 FROM account_group ag
-                LEFT JOIN category c ON c.name = ag.item_group AND c.parent_id = 0 AND c.is_active = 1' . $whereSql . '
+                LEFT JOIN category c ON c.name = ag.item_group AND c.parent_id = 0' . $whereSql . '
                 ORDER BY ag.account_group_name ASC
                 LIMIT ? OFFSET ?';
         $stmt = $this->conn->prepare($sql);
@@ -63,6 +63,15 @@ class AccountGroup
         $stmt->execute();
         $accountGroups = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
+
+        $labelMap = $this->getItemGroupLabelMap();
+        foreach ($accountGroups as &$group) {
+            $stored = trim((string)($group['item_group'] ?? ''));
+            $group['item_group_display'] = $stored !== ''
+                ? ($labelMap[$stored] ?? (string)($group['item_group_name'] ?? $stored))
+                : '';
+        }
+        unset($group);
 
         return [
             'account_groups' => $accountGroups,
@@ -79,7 +88,7 @@ class AccountGroup
             'SELECT ag.id, ag.account_group_name, ag.item_group, ag.is_active, ag.created_at, ag.updated_at,
                     c.display_name AS item_group_name
              FROM account_group ag
-             LEFT JOIN category c ON c.name = ag.item_group AND c.parent_id = 0 AND c.is_active = 1
+             LEFT JOIN category c ON c.name = ag.item_group AND c.parent_id = 0
              WHERE ag.id = ? LIMIT 1'
         );
         if (!$stmt) {
@@ -91,6 +100,36 @@ class AccountGroup
         $stmt->close();
 
         return $row ?: null;
+    }
+
+    public function getItemGroupLabelMap(): array
+    {
+        $map = [];
+        foreach ($this->getParentItemGroups() as $row) {
+            $name = (string)($row['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $map[$name] = (string)($row['display_name'] ?? $name);
+        }
+
+        return $map;
+    }
+
+    public function resolveItemGroupDisplay(?string $itemGroup, ?string $joinedLabel = null): string
+    {
+        $itemGroup = trim((string)$itemGroup);
+        if ($itemGroup === '') {
+            return '';
+        }
+
+        if ($joinedLabel !== null && trim($joinedLabel) !== '') {
+            return trim($joinedLabel);
+        }
+
+        $map = $this->getItemGroupLabelMap();
+
+        return $map[$itemGroup] ?? $itemGroup;
     }
 
     public function getParentItemGroups(): array
