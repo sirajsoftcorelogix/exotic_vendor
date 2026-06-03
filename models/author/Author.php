@@ -46,7 +46,7 @@ class Author
         $totalRecords = (int)(($countStmt->get_result()->fetch_assoc()['total'] ?? 0));
         $countStmt->close();
 
-        $sql = 'SELECT author_id, author, is_active, created_at, updated_at
+        $sql = 'SELECT *
                 FROM vp_author' . $whereSql . '
                 ORDER BY author ASC
                 LIMIT ? OFFSET ?';
