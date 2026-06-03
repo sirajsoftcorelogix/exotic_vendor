@@ -1136,6 +1136,12 @@ class Inbounding {
         $isbn = trim($data['isbn'] ?? '');
         $language = trim($data['language'] ?? '');
         $pages = (int) ($data['pages'] ?? 0);
+        $cover_type = trim($data['cover_type'] ?? '');
+        $edition = trim($data['edition'] ?? '');
+        $publication_date = trim($data['publication_date'] ?? '');
+        if ($publication_date === '') {
+            $publication_date = null;
+        }
        
         $p_ind   = (float) ($data['price_india'] ?? 0);
         $p_mrp   = (float) ($data['price_india_mrp'] ?? 0);
@@ -1147,7 +1153,7 @@ class Inbounding {
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, product_photo = ?,
-              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, author = ?, publisher = ?, isbn = ?, language = ?, pages = ?, modified_at = NOW()
+              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, author = ?, publisher = ?, isbn = ?, cover_type = ?, edition = ?, publication_date = ?, language = ?, pages = ?, modified_at = NOW()
             WHERE id = ?";
 
         $stmt = $this->conn->prepare($sql);
@@ -1155,9 +1161,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        // 3. Correct Bind Param Types
-        // s = string, d = double (float), i = integer
-        $types = "sisssssisddddssdiissddsiissii";
+        $types = "sisssssisddddssdiissddsiisssssii";
 
         $stmt->bind_param(
             $types,
@@ -1187,9 +1191,12 @@ class Inbounding {
             $author,              // 21
             $publisher,           // 22
             $isbn,                // 23
-            $language,            // 24
-            $pages,               // 25
-            $id                   // 26
+            $cover_type,          // 24
+            $edition,             // 25
+            $publication_date,    // 26
+            $language,            // 27
+            $pages,               // 28
+            $id                   // 29
         );
 
         if ($stmt->execute()) {

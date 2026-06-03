@@ -171,6 +171,14 @@ if (!empty($selected_publisher_id) && method_exists($inboundingModel, 'getPublis
     $selected_publisher_name = $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
 }
 
+require_once __DIR__ . '/partials/book_cover_types.php';
+$saved_cover_type = trim((string) ($form2['cover_type'] ?? ''));
+$saved_edition = trim((string) ($form2['edition'] ?? ''));
+$publication_date_raw = trim((string) ($form2['publication_date'] ?? ''));
+$saved_publication_date = ($publication_date_raw !== '' && $publication_date_raw !== '0000-00-00')
+    ? date('Y-m-d', strtotime($publication_date_raw))
+    : '';
+
 $formAction = base_url('?page=inbounding&action=submitStep3');
 ?>
 
@@ -348,6 +356,25 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     <div>
                         <label class="block text-gray-800 font-bold text-xs mb-1">ISBN</label>
                         <input type="text" name="isbn" value="<?php echo htmlspecialchars($form2['isbn'] ?? ''); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Cover Type</label>
+                        <select name="cover_type" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white">
+                            <option value="">Select cover type</option>
+                            <?php foreach ($bookCoverTypeOptions as $coverOption): ?>
+                                <option value="<?php echo htmlspecialchars($coverOption); ?>" <?php echo $saved_cover_type === $coverOption ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($coverOption); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Edition</label>
+                        <input type="text" name="edition" value="<?php echo htmlspecialchars($saved_edition); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Publication Date</label>
+                        <input type="date" name="publication_date" value="<?php echo htmlspecialchars($saved_publication_date); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                     </div>
                     <div>
                         <label class="block text-gray-800 font-bold text-xs mb-1">Language</label>

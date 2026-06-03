@@ -229,6 +229,14 @@ if (!empty($selected_author_id) || !empty($selected_publisher_id)) {
         $selected_publisher_name = $publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
     }
 }
+
+require_once __DIR__ . '/partials/book_cover_types.php';
+$saved_cover_type = trim((string) ($data['form2']['cover_type'] ?? ''));
+$saved_edition = trim((string) ($data['form2']['edition'] ?? ''));
+$publication_date_raw = trim((string) ($data['form2']['publication_date'] ?? ''));
+$saved_publication_date = ($publication_date_raw !== '' && $publication_date_raw !== '0000-00-00')
+    ? date('Y-m-d', strtotime($publication_date_raw))
+    : '';
 function renderSizeField($fieldName, $currentValue, $isClothing, $options, $customClass = "") {
     $html = '';
     if ($isClothing) {
@@ -720,6 +728,25 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">ISBN</label>
                                 <input type="text" name="isbn" value="<?php echo htmlspecialchars($data['form2']['isbn'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Cover Type</label>
+                                <select name="cover_type" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                                    <option value="">Select cover type</option>
+                                    <?php foreach ($bookCoverTypeOptions as $coverOption): ?>
+                                        <option value="<?php echo htmlspecialchars($coverOption); ?>" <?php echo $saved_cover_type === $coverOption ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($coverOption); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Edition</label>
+                                <input type="text" name="edition" value="<?php echo htmlspecialchars($saved_edition); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Publication Date</label>
+                                <input type="date" name="publication_date" value="<?php echo htmlspecialchars($saved_publication_date); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">Language</label>
