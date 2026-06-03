@@ -298,7 +298,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     ?>
                     <input type="datetime-local" name="gate_entry_date_time" value="<?php echo $inputValue; ?>" class="w-full border border-gray-400 rounded px-2 py-1 text-sm focus:border-[#ea8c1e] outline-none">
                 </div>
-                <div>
+                <div id="material-code-field">
                     <label class="block text-gray-800 font-bold text-xs mb-1">Material</label>
                     <select name="material_code" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-[#ea8c1e] outline-none bg-white">
                         <option value="">Select Material</option>
@@ -392,7 +392,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             </div>
 
                             <div class="flex-1 grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-4 items-start">
-                                <div>
+                                <div class="variation-color-field">
                                     <label class="block text-xs font-bold text-black mb-1">Color:</label>
                                     <input type="text" name="variations[<?php echo $index; ?>][color]" value="<?php echo $var['color']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
@@ -444,7 +444,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <input type="text" name="variations[<?php echo $index; ?>][dimensions]" value="<?php echo $var['dimensions'] ?? 0; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
 
-                                <div>
+                                <div class="variation-colormap-field">
                                     <?php echo renderColorMapField($index, $var['colormaps'] ?? ''); ?>
                                 </div>
                             </div>
@@ -599,6 +599,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             <?php foreach ($sizeOptions as $k => $v) { echo '<option value="'.$k.'">'.$v.'</option>'; } ?>
         `;
 
+        const BOOK_CATEGORY_VALUE = '-8';
+
         // 2. HELPER: Detect Category Type
         function getCategoryType() {
             const selectedRadio = document.querySelector('input[name="category"]:checked');
@@ -614,8 +616,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     info.isClothing = true;
                 }
 
-                // Book Check
-                if (labelText.includes('book') || val.includes('book')) {
+                // Book Check (category value -8 or label "book")
+                if (selectedRadio.value === BOOK_CATEGORY_VALUE || labelText.includes('book') || val.includes('book')) {
                     info.isBook = true;
                 }
 
@@ -667,14 +669,15 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
 
         // 4. TOGGLE COLOR MAP FIELDS (Logic Fixed for Selection)
         function toggleColorMapFields() {
-            const { mapKey } = getCategoryType();
+            const { mapKey, isBook } = getCategoryType();
             const wrappers = document.querySelectorAll('.colormap-wrapper');
 
             wrappers.forEach(wrapper => {
                 const select = wrapper.querySelector('.colormap-select');
-                
-                // Hide if no match
-                if (!mapKey || !colorMapDB[mapKey]) {
+                const card = wrapper.closest('.variation-card');
+                const isMainVariant = card && card.getAttribute('data-index') === '0';
+
+                if ((isBook && isMainVariant) || !mapKey || !colorMapDB[mapKey]) {
                     wrapper.style.display = 'none';
                     return;
                 }
@@ -709,6 +712,29 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             });
                         }
                     }
+                }
+            });
+        }
+
+        function toggleBookCategoryFields() {
+            const { isBook } = getCategoryType();
+            const materialField = document.getElementById('material-code-field');
+            if (materialField) {
+                materialField.classList.toggle('hidden', isBook);
+            }
+
+            const mainCard = document.querySelector('.variation-card[data-index="0"]');
+            if (!mainCard) {
+                return;
+            }
+
+            const colorField = mainCard.querySelector('.variation-color-field');
+            const sizeField = mainCard.querySelector('.size-container');
+            const colormapField = mainCard.querySelector('.variation-colormap-field');
+
+            [colorField, sizeField, colormapField].forEach(function (el) {
+                if (el) {
+                    el.classList.toggle('hidden', isBook);
                 }
             });
         }
@@ -770,6 +796,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             toggleSizeFields();
             toggleColorMapFields();
             toggleBookFields();
+            toggleBookCategoryFields();
             toggleVariationControls();
         }
 
