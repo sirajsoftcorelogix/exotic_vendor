@@ -133,7 +133,7 @@ function vendorFriendlyMailErrorMessage(string $technical = ''): string
 }
 
 /**
- * @return array{success: bool, message: string}
+ * @return array{success: bool, message: string, smtp_error?: string}
  */
 function sendVendorOtpEmail(string $toEmail, string $otp, string $subject, string $templateFile): array
 {
@@ -157,13 +157,21 @@ function sendVendorOtpEmail(string $toEmail, string $otp, string $subject, strin
         $info = isset($mail) ? trim((string) ($mail->ErrorInfo ?? '')) : trim($e->getMessage());
         error_log('Vendor OTP mail failed: ' . $e->getMessage() . ($info !== '' ? ' | ' . $info : ''));
 
+        $technical = $info !== '' ? $info : $e->getMessage();
+
         return [
             'success' => false,
-            'message' => vendorFriendlyMailErrorMessage($info !== '' ? $info : $e->getMessage()),
+            'message' => vendorFriendlyMailErrorMessage($technical),
+            'smtp_error' => $technical,
         ];
     } catch (Throwable $e) {
         error_log('Vendor OTP mail failed: ' . $e->getMessage());
+        $technical = trim($e->getMessage());
 
-        return ['success' => false, 'message' => 'Could not send OTP email. Please try again.'];
+        return [
+            'success' => false,
+            'message' => 'Could not send OTP email. Please try again.',
+            'smtp_error' => $technical !== '' ? $technical : 'Unknown mail error.',
+        ];
     }
 }

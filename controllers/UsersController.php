@@ -73,10 +73,14 @@ class UsersController
             'login_otp.html'
         );
 
-        vendorJsonResponse([
+        $payload = [
             'success' => $result['success'],
             'message' => $result['message'],
-        ]);
+        ];
+        if (!empty($result['smtp_error'])) {
+            $payload['smtp_error'] = $result['smtp_error'];
+        }
+        vendorJsonResponse($payload);
     }
 
     public function logout()
@@ -128,6 +132,8 @@ class UsersController
             $payload = ['success' => $result['success'], 'message' => $result['message']];
             if ($result['success']) {
                 $payload['token'] = $token;
+            } elseif (!empty($result['smtp_error'])) {
+                $payload['smtp_error'] = $result['smtp_error'];
             }
             echo json_encode($payload);
         } else {

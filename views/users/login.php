@@ -134,8 +134,8 @@ global $domain, $root_path;
                     } catch (e) {
                         throw new Error(text ? text.substring(0, 200) : 'Invalid server response.');
                     }
-                    if (!response.ok && data && data.message) {
-                        throw new Error(data.message);
+                    if (!response.ok && data && (data.smtp_error || data.message)) {
+                        throw new Error(data.smtp_error || data.message);
                     }
                     return data;
                 });
@@ -153,7 +153,7 @@ global $domain, $root_path;
                 } else {
                     btn.textContent = 'Send OTP';
                     btn.disabled = false;
-                    errorDiv.textContent = data.message || 'Could not send OTP.';
+                    errorDiv.textContent = data.smtp_error || data.message || 'Could not send OTP.';
                 }
             })
             .catch(function(err) {
