@@ -214,20 +214,40 @@ if (!empty($data['category']) && !empty($saved_group_id)) {
 }
 
 // --- Book fields prefill (Author/Publisher names for TomSelect) ---
-$selected_author_id = $data['form2']['author'] ?? '';
-$selected_author_name = '';
+$selected_author_options = [];
 $selected_publisher_id = $data['form2']['publisher'] ?? '';
 $selected_publisher_name = '';
-if (!empty($selected_author_id) || !empty($selected_publisher_id)) {
-    global $inboundingModel;
-    if (!empty($selected_author_id) && isset($inboundingModel) && method_exists($inboundingModel, 'getAuthorById')) {
-        $authorRow = $inboundingModel->getAuthorById((int)$selected_author_id);
-        $selected_author_name = $authorRow['author'] ?? $authorRow['name'] ?? '';
+global $inboundingModel;
+if (!empty($data['form2']['author']) && isset($inboundingModel) && method_exists($inboundingModel, 'parseInboundAuthorIds')) {
+    foreach ($inboundingModel->parseInboundAuthorIds($data['form2']['author']) as $authorId) {
+        $authorRow = $inboundingModel->getAuthorById($authorId);
+        if (!empty($authorRow['id'])) {
+            $selected_author_options[] = $authorRow;
+        }
     }
-    if (!empty($selected_publisher_id) && isset($inboundingModel) && method_exists($inboundingModel, 'getPublisherById')) {
-        $publisherRow = $inboundingModel->getPublisherById((int)$selected_publisher_id);
-        $selected_publisher_name = $publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
+}
+$author_prefill_ids = array_map(static function ($opt) {
+    return (string) ($opt['id'] ?? '');
+}, $selected_author_options);
+$author_stored_value = (string) ($data['form2']['author'] ?? '');
+
+$selected_edited_by_options = [];
+if (!empty($data['form2']['edited_by']) && isset($inboundingModel) && method_exists($inboundingModel, 'parseInboundAuthorIds')) {
+    foreach ($inboundingModel->parseInboundAuthorIds($data['form2']['edited_by']) as $editorId) {
+        $editorRow = $inboundingModel->getAuthorById($editorId);
+        if (!empty($editorRow['id'])) {
+            $selected_edited_by_options[] = $editorRow;
+        }
     }
+}
+$edited_by_prefill_ids = array_map(static function ($opt) {
+    return (string) ($opt['id'] ?? '');
+}, $selected_edited_by_options);
+$edited_by_stored_value = (string) ($data['form2']['edited_by'] ?? '');
+
+if (!empty($selected_publisher_id) && isset($inboundingModel) && method_exists($inboundingModel, 'getPublisherById')) {
+    $publisherRow = $inboundingModel->getPublisherById((int)$selected_publisher_id);
+    $selected_publisher_name = $publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
 }
 
 require_once __DIR__ . '/partials/book_cover_types.php';
@@ -709,11 +729,20 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">Author</label>
-                                <select id="author_select" name="author" placeholder="Type author name..." autocomplete="off">
-                                    <option value=""></option>
-                                    <?php if (!empty($selected_author_id) && !empty($selected_author_name)): ?>
-                                        <option value="<?php echo htmlspecialchars($selected_author_id); ?>" selected><?php echo htmlspecialchars($selected_author_name); ?></option>
-                                    <?php endif; ?>
+                                <input type="hidden" name="author" id="author_pipe_value" value="<?php echo htmlspecialchars($author_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
+                                <select id="author_select" multiple autocomplete="off">
+                                    <?php foreach ($selected_author_options as $authorOpt): ?>
+                                        <option value="<?php echo htmlspecialchars((string) $authorOpt['id']); ?>" selected><?php echo htmlspecialchars($authorOpt['name'] ?? ''); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Edited By</label>
+                                <input type="hidden" name="edited_by" id="edited_by_pipe_value" value="<?php echo htmlspecialchars($edited_by_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
+                                <select id="edited_by_select" multiple autocomplete="off">
+                                    <?php foreach ($selected_edited_by_options as $editorOpt): ?>
+                                        <option value="<?php echo htmlspecialchars((string) $editorOpt['id']); ?>" selected><?php echo htmlspecialchars($editorOpt['name'] ?? ''); ?></option>
+                                    <?php endforeach; ?>
                                 </select>
                             </div>
                             <div>
@@ -1143,7 +1172,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Grouping</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                    <div class="w-full">
+                    <div class="w-full" id="material-code-field">
                         <label class="block text-xs font-bold text-[#222] mb-1">Material:</label>
                         <div class="flex gap-2 items-center w-full">
                             <div class="flex-1 w-full min-w-0"> 
@@ -2074,23 +2103,119 @@ document.addEventListener('DOMContentLoaded', function() {
         const searchAuthorsUrl = '<?php echo base_url('?page=inbounding&action=searchAuthors&q='); ?>';
         const searchPublishersUrl = '<?php echo base_url('?page=inbounding&action=searchPublishers&q='); ?>';
 
+        const authorPipeInput = document.getElementById('author_pipe_value');
         const authorEl = document.getElementById('author_select');
+        const initialAuthorOptions = <?php echo json_encode($selected_author_options, JSON_UNESCAPED_UNICODE); ?>;
+        const initialAuthorIds = <?php echo json_encode($author_prefill_ids, JSON_UNESCAPED_UNICODE); ?>;
+
+        function mapAuthorOptions(rows) {
+            return (rows || []).map(function (item) {
+                return { id: String(item.id), name: item.name || '' };
+            });
+        }
+
+        function syncAuthorPipeValue(ts) {
+            if (!authorPipeInput || !ts) return;
+            let vals = ts.getValue();
+            if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+            authorPipeInput.value = vals.filter(Boolean).join(',');
+        }
+
+        let authorTomSelect = null;
         if (authorEl && typeof window.safeTomSelect === 'function') {
-            window.safeTomSelect(authorEl, {
+            authorEl.setAttribute('multiple', 'multiple');
+            authorTomSelect = window.safeTomSelect(authorEl, {
+                plugins: ['remove_button'],
                 valueField: 'id',
                 labelField: 'name',
                 searchField: ['name'],
-                placeholder: 'Search author...',
+                placeholder: 'Search and select authors...',
+                maxItems: 100,
+                hideSelected: true,
+                closeAfterSelect: false,
                 create: false,
-                preload: false,
-                allowEmptyOption: true,
-                load: function(query, callback) {
+                persist: true,
+                onChange: function () { syncAuthorPipeValue(this); },
+                onItemAdd: function () {
+                    this.setTextboxValue('');
+                    syncAuthorPipeValue(this);
+                },
+                onItemRemove: function () { syncAuthorPipeValue(this); },
+                load: function (query, callback) {
                     if (!query || query.length < 2) return callback();
                     fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
-                        .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t); }))
-                        .then(json => callback(json))
-                        .catch(() => callback());
+                        .then(function (r) { return r.ok ? r.json() : []; })
+                        .then(function (json) { callback(mapAuthorOptions(json)); })
+                        .catch(function () { callback(); });
                 }
+            });
+            if (authorTomSelect) {
+                mapAuthorOptions(initialAuthorOptions).forEach(function (opt) {
+                    authorTomSelect.addOption(opt);
+                });
+                if (initialAuthorIds.length) {
+                    authorTomSelect.setValue(initialAuthorIds);
+                }
+                syncAuthorPipeValue(authorTomSelect);
+            }
+        }
+
+        const editedByPipeInput = document.getElementById('edited_by_pipe_value');
+        const editedByEl = document.getElementById('edited_by_select');
+        const initialEditedByOptions = <?php echo json_encode($selected_edited_by_options, JSON_UNESCAPED_UNICODE); ?>;
+        const initialEditedByIds = <?php echo json_encode($edited_by_prefill_ids, JSON_UNESCAPED_UNICODE); ?>;
+
+        function syncEditedByPipeValue(ts) {
+            if (!editedByPipeInput || !ts) return;
+            let vals = ts.getValue();
+            if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+            editedByPipeInput.value = vals.filter(Boolean).join(',');
+        }
+
+        let editedByTomSelect = null;
+        if (editedByEl && typeof window.safeTomSelect === 'function') {
+            editedByEl.setAttribute('multiple', 'multiple');
+            editedByTomSelect = window.safeTomSelect(editedByEl, {
+                plugins: ['remove_button'],
+                valueField: 'id',
+                labelField: 'name',
+                searchField: ['name'],
+                placeholder: 'Search and select editors...',
+                maxItems: 100,
+                hideSelected: true,
+                closeAfterSelect: false,
+                create: false,
+                persist: true,
+                onChange: function () { syncEditedByPipeValue(this); },
+                onItemAdd: function () {
+                    this.setTextboxValue('');
+                    syncEditedByPipeValue(this);
+                },
+                onItemRemove: function () { syncEditedByPipeValue(this); },
+                load: function (query, callback) {
+                    if (!query || query.length < 2) return callback();
+                    fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
+                        .then(function (r) { return r.ok ? r.json() : []; })
+                        .then(function (json) { callback(mapAuthorOptions(json)); })
+                        .catch(function () { callback(); });
+                }
+            });
+            if (editedByTomSelect) {
+                mapAuthorOptions(initialEditedByOptions).forEach(function (opt) {
+                    editedByTomSelect.addOption(opt);
+                });
+                if (initialEditedByIds.length) {
+                    editedByTomSelect.setValue(initialEditedByIds);
+                }
+                syncEditedByPipeValue(editedByTomSelect);
+            }
+        }
+
+        const desktopInboundForm = document.getElementById('inboundForm') || document.querySelector('form[method="post"]');
+        if (desktopInboundForm) {
+            desktopInboundForm.addEventListener('submit', function () {
+                if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
+                if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
             });
         }
 
@@ -3194,7 +3319,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
         if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
         if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
-        if (!getVal('material_code')) errors.push("Field 'Material' is required.");
+        const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+        if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
         if (!getVal('group_name')) errors.push("Field 'Group' is required.");
         if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
         if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
@@ -3862,24 +3988,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const BOOK_GROUP_VALUE = '-8';
+
     function isBookSelected() {
         const groupSelect = document.getElementById('group_select');
         if (!groupSelect) return false;
-        // TomSelect keeps underlying select updated (value), but we need the label/text.
+        if (String(groupSelect.value).trim() === BOOK_GROUP_VALUE) return true;
         const idx = groupSelect.selectedIndex;
         if (idx < 0) return false;
         const txt = (groupSelect.options[idx] && groupSelect.options[idx].text) ? groupSelect.options[idx].text.toLowerCase() : '';
         return txt.indexOf('book') !== -1;
     }
+    window.desktopFormIsBookGroup = isBookSelected;
 
     function toggleBookFieldsDesktop() {
         const bookBox = document.getElementById('book-meta-fields');
+        const materialField = document.getElementById('material-code-field');
         if (!bookBox) return;
 
         const variantSelect = document.getElementById('variant_select');
         const addVarBtn = document.querySelector('button[onclick*="addNewVariation"]');
 
         const isBook = isBookSelected();
+        if (materialField) {
+            materialField.classList.toggle('hidden', isBook);
+        }
         if (isBook) {
             bookBox.classList.remove('hidden');
             if (addVarBtn) addVarBtn.style.display = 'none';
@@ -4470,7 +4603,8 @@ function validateAndSubmit(actionType) {
     if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
     if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
     if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
-    if (!getVal('material_code')) errors.push("Field 'Material' is required.");
+    const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+    if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
     if (!getVal('group_name')) errors.push("Field 'Group' is required.");
     if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
     if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");

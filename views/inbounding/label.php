@@ -60,6 +60,20 @@ function labelInboundText($value, string $fallback = 'N/A'): string
     return $text;
 }
 
+function labelFirstAuthorName(array $row): string
+{
+    $name = trim((string) ($row['author_name'] ?? ''));
+    if ($name === '') {
+        return '';
+    }
+    $commaPos = strpos($name, ',');
+    if ($commaPos !== false) {
+        $name = trim(substr($name, 0, $commaPos));
+    }
+
+    return $name;
+}
+
 $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
 ?>
 
@@ -163,7 +177,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                                 <span class="text-[32px] font-bold text-black uppercase mb-2">author:</span>
                                 <span class="text-[42px] font-black text-black">
                                     <?php echo safe(
-                                        labelInboundText($current_label["author_name"] ?? '')
+                                        labelInboundText(labelFirstAuthorName($current_label))
                                     ); ?>
                                 </span>
                             </div>
