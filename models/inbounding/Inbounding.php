@@ -1111,6 +1111,27 @@ class Inbounding {
         return trim((string) ($row['name'] ?? $row['author'] ?? ''));
     }
 
+    /**
+     * Book publish API creator: "12,45, Edited by | 67,89" (author ids + edited-by ids).
+     */
+    public function buildBookCreatorApiValue($authorStored, $editedByStored): string
+    {
+        $authorPart = implode(',', $this->parseInboundAuthorIds($authorStored));
+        $editedPart = implode(',', $this->parseInboundAuthorIds($editedByStored));
+
+        if ($authorPart === '' && $editedPart === '') {
+            return '';
+        }
+        if ($editedPart === '') {
+            return $authorPart;
+        }
+        if ($authorPart === '') {
+            return 'Edited by | ' . $editedPart;
+        }
+
+        return $authorPart . ', Edited by | ' . $editedPart;
+    }
+
     public function searchAuthors($query) {
         $query = trim($query);
         if ($query === '') {
