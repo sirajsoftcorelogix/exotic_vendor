@@ -16,17 +16,23 @@ class AccountGroupsController
 
         $search = trim((string)($_GET['search_text'] ?? ''));
         $status = trim((string)($_GET['status_filter'] ?? ''));
+        $itemGroupFilter = trim((string)($_GET['item_group_filter'] ?? ''));
         $pageNo = max(1, (int)($_GET['page_no'] ?? 1));
         $limit = (int)($_GET['limit'] ?? 20);
         $limit = in_array($limit, [10, 20, 50, 100], true) ? $limit : 20;
 
-        $listing = $this->accountGroupModel->getAccountGroups($pageNo, $limit, $search, $status);
+        if ($itemGroupFilter !== '' && !$this->accountGroupModel->isValidItemGroup($itemGroupFilter)) {
+            $itemGroupFilter = '';
+        }
+
+        $listing = $this->accountGroupModel->getAccountGroups($pageNo, $limit, $search, $status, $itemGroupFilter);
         renderTemplate('views/account_groups/index.php', [
             'account_groups' => $listing['account_groups'],
             'item_groups' => $this->accountGroupModel->getParentItemGroups(),
             'item_group_labels' => $this->accountGroupModel->getItemGroupLabelMap(),
             'search' => $search,
             'status_filter' => $status,
+            'item_group_filter' => $itemGroupFilter,
             'currentPage' => $listing['currentPage'],
             'totalPages' => $listing['totalPages'],
             'totalRecords' => $listing['totalRecords'],

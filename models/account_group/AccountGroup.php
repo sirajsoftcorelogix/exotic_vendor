@@ -9,11 +9,12 @@ class AccountGroup
         $this->conn = $conn;
     }
 
-    public function getAccountGroups(int $page = 1, int $limit = 20, string $search = '', string $status = ''): array
+    public function getAccountGroups(int $page = 1, int $limit = 20, string $search = '', string $status = '', string $itemGroup = ''): array
     {
         $page = max(1, $page);
         $limit = in_array($limit, [10, 20, 50, 100], true) ? $limit : 20;
         $offset = ($page - 1) * $limit;
+        $itemGroup = trim($itemGroup);
 
         $where = [];
         $types = '';
@@ -24,6 +25,12 @@ class AccountGroup
             $types .= 'si';
             $params[] = '%' . $search . '%';
             $params[] = (int)$search;
+        }
+
+        if ($itemGroup !== '') {
+            $where[] = 'ag.item_group = ?';
+            $types .= 's';
+            $params[] = $itemGroup;
         }
 
         if ($status === 'active') {
