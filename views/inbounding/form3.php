@@ -440,15 +440,15 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Height (inch):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][height]" value="<?php echo $var['height'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][height]" value="<?php echo $var['height'] ?? ''; ?>" class="calc-h w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Width (inch):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][width]" value="<?php echo $var['width'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][width]" value="<?php echo $var['width'] ?? ''; ?>" class="calc-w w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Depth (inch):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="calc-d w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Weight (kg):</label>
@@ -825,6 +825,61 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             toggleBookFields();
             toggleBookCategoryFields();
             toggleVariationControls();
+            initAllVariationDimensions();
+        }
+
+        const formatDimensionsText = (h, w, d) => {
+            const hh = (h || '').trim();
+            const ww = (w || '').trim();
+            const dd = (d || '').trim();
+            if (!hh && !ww && !dd) {
+                return '';
+            }
+            return `${hh || '0'} Inches Height X ${ww || '0'} Inches Width X ${dd || '0'} Inches Depth`;
+        };
+
+        const setupVariationDimensionsCard = (card) => {
+            if (!card || card.dataset.dimsAutoSetup === '1') {
+                return;
+            }
+            card.dataset.dimsAutoSetup = '1';
+
+            const h = card.querySelector('.calc-h');
+            const w = card.querySelector('.calc-w');
+            const d = card.querySelector('.calc-d');
+            const dim = card.querySelector('input[name$="[dimensions]"]');
+            let manual = false;
+
+            if (!dim) {
+                return;
+            }
+
+            manual = dim.value.trim() !== '';
+            dim.addEventListener('input', () => {
+                manual = true;
+            });
+
+            const update = () => {
+                if (manual) {
+                    return;
+                }
+                dim.value = formatDimensionsText(h ? h.value : '', w ? w.value : '', d ? d.value : '');
+            };
+
+            [h, w, d].forEach((field) => {
+                if (field) {
+                    field.addEventListener('input', () => {
+                        manual = false;
+                        update();
+                    });
+                }
+            });
+
+            update();
+        };
+
+        function initAllVariationDimensions() {
+            document.querySelectorAll('.variation-card').forEach(setupVariationDimensionsCard);
         }
 
         radioButtons.forEach(radio => {
@@ -881,9 +936,9 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             </div>
 
                             <div><label class="block text-xs font-bold text-black mb-1">Cost Price(INR) <span class="text-red-500">*</span>:</label><input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Height (inch):</label><input type="number" step="any" min="0" name="variations[${index}][height]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Height (inch):</label><input type="number" step="any" min="0" name="variations[${index}][height]" class="calc-h w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="calc-w w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="calc-d w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Store Location <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][store_location]" value="4th Floor" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">HSN Code <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][hsn_code]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
