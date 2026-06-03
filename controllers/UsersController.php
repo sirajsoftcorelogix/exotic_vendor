@@ -148,12 +148,7 @@ class UsersController
 
                 echo json_encode(['success' => true, 'message' => 'OTP sent.', 'token' => $token]);
             } catch (Exception $e) {
-                $technical = trim((string) ($mail->ErrorInfo ?? $e->getMessage()));
-                error_log('Password reset mail failed: ' . $e->getMessage() . ($technical !== '' ? ' | ' . $technical : ''));
-                echo json_encode([
-                    'success' => false,
-                    'message' => vendorFriendlyMailErrorMessage($technical),
-                ]);
+                echo json_encode(['success' => false, 'message' => 'Mailer Error: ' . $mail->ErrorInfo]);
             }
         } else {
             echo json_encode(['success' => false, 'message' => 'User not found.']);
