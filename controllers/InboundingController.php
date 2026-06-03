@@ -2012,7 +2012,10 @@ class InboundingController {
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
 
-            $API_data['creator'] = $d['author_name'] ?? $inboundingModel->resolveInboundAuthorNames($d['author'] ?? '');
+            $API_data['creator'] = $inboundingModel->buildBookCreatorApiValue(
+                $d['author'] ?? '',
+                $d['edited_by'] ?? ''
+            );
             $API_data['publisher'] = $d['publishers_name'] ?? '';
             $API_data['language'] = $d['language'] ?? '';
             $API_data['pages'] = $d['pages'] ?? '';
