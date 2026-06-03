@@ -110,6 +110,7 @@ $queryBase = [
                         <th class="px-5 py-3.5 whitespace-nowrap">#</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">ID</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Account Group Name</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Item Group</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Updated</th>
                         <th class="px-5 py-3.5 whitespace-nowrap text-right">Action</th>
@@ -122,6 +123,9 @@ $queryBase = [
                             <?php
                             $id = (int)($group['id'] ?? 0);
                             $name = (string)($group['account_group_name'] ?? '');
+                            $itemGroupName = (string)($group['item_group_name'] ?? $group['item_group'] ?? '');
+                            $itemGroup = trim((string)($group['item_group'] ?? ''));
+                            $itemGroup = $itemGroup !== '' ? $itemGroup : null;
                             $active = (int)($group['is_active'] ?? 0) === 1;
                             $updatedRaw = (string)($group['updated_at'] ?? '');
                             $updatedDisplay = $updatedRaw !== '' && ($updatedTs = strtotime($updatedRaw))
@@ -132,6 +136,7 @@ $queryBase = [
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo ++$counter; ?></td>
                                 <td class="px-5 py-4 text-sm font-medium text-gray-800"><?php echo $id; ?></td>
                                 <td class="px-5 py-4 text-sm font-semibold text-gray-900"><?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($itemGroupName !== '' ? $itemGroupName : '—', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm">
                                     <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold <?php echo $active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'; ?>">
                                         <?php echo $active ? 'Active' : 'Inactive'; ?>
@@ -140,7 +145,7 @@ $queryBase = [
                                 <td class="px-5 py-4 text-sm text-gray-600"><?php echo htmlspecialchars($updatedDisplay, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm text-right whitespace-nowrap">
                                     <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                        onclick='openAccountGroupModal(<?php echo json_encode(['id' => $id, 'account_group_name' => $name, 'is_active' => $active ? 1 : 0], JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'>
+                                        onclick='openAccountGroupModal(<?php echo json_encode(['id' => $id, 'account_group_name' => $name, 'item_group' => $itemGroup, 'is_active' => $active ? 1 : 0], JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'>
                                         Edit
                                     </button>
                                     <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
@@ -156,7 +161,7 @@ $queryBase = [
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="6" class="px-5 py-12 text-center text-sm text-gray-500">No account groups found.</td>
+                            <td colspan="7" class="px-5 py-12 text-center text-sm text-gray-500">No account groups found.</td>
                         </tr>
                     <?php endif; ?>
                     </tbody>
@@ -199,6 +204,20 @@ $queryBase = [
                 <input type="text" name="account_group_name" id="account_group_name" required
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
                 <span id="accountGroupNameMsg" class="text-sm text-red-500"></span>
+            </div>
+            <div>
+                <label class="mb-1 block text-sm font-semibold text-gray-700">Item Group</label>
+                <select name="item_group" id="account_group_item_group"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    <option value="">Select item group</option>
+                    <?php foreach (($item_groups ?? []) as $itemGroupOption): ?>
+                        <?php
+                        $optionValue = (string)($itemGroupOption['name'] ?? '');
+                        $optionLabel = (string)($itemGroupOption['display_name'] ?? $optionValue);
+                        ?>
+                        <option value="<?php echo htmlspecialchars($optionValue, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($optionLabel, ENT_QUOTES, 'UTF-8'); ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div>
                 <label class="mb-1 block text-sm font-semibold text-gray-700">Status</label>
@@ -264,6 +283,7 @@ function openAccountGroupModal(group) {
     document.getElementById('accountGroupModalTitle').textContent = group.id ? 'Edit Account Group' : 'Add Account Group';
     document.getElementById('account_group_id').value = group.id || '';
     document.getElementById('account_group_name').value = group.account_group_name || '';
+    document.getElementById('account_group_item_group').value = group.item_group != null && group.item_group !== '' ? String(group.item_group) : '';
     document.getElementById('account_group_is_active').value = group.is_active != null ? String(group.is_active) : '1';
     document.getElementById('accountGroupModal').classList.remove('hidden');
     document.getElementById('accountGroupModal').classList.add('flex');
