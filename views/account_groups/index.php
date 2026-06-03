@@ -123,6 +123,10 @@ $queryBase = [
                             $id = (int)($group['id'] ?? 0);
                             $name = (string)($group['account_group_name'] ?? '');
                             $active = (int)($group['is_active'] ?? 0) === 1;
+                            $updatedRaw = (string)($group['updated_at'] ?? '');
+                            $updatedDisplay = $updatedRaw !== '' && ($updatedTs = strtotime($updatedRaw))
+                                ? date('jS F Y', $updatedTs)
+                                : '';
                             ?>
                             <tr class="hover:bg-amber-50/40 transition-colors">
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo ++$counter; ?></td>
@@ -133,7 +137,7 @@ $queryBase = [
                                         <?php echo $active ? 'Active' : 'Inactive'; ?>
                                     </span>
                                 </td>
-                                <td class="px-5 py-4 text-sm text-gray-600"><?php echo htmlspecialchars((string)($group['updated_at'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-600"><?php echo htmlspecialchars($updatedDisplay, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm text-right whitespace-nowrap">
                                     <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                                         onclick='openAccountGroupModal(<?php echo json_encode(['id' => $id, 'account_group_name' => $name, 'is_active' => $active ? 1 : 0], JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'>
