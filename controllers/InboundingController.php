@@ -2016,7 +2016,10 @@ class InboundingController {
                 $d['author'] ?? '',
                 $d['edited_by'] ?? ''
             );
-            $API_data['publisher'] = $d['publishers_name'] ?? '';
+            $publisherVendorId = (int) ($d['publisher'] ?? 0);
+            if ($publisherVendorId > 0) {
+                $API_data['publisher_vendor_id'] = $publisherVendorId;
+            }
             $API_data['language'] = $d['language'] ?? '';
             $API_data['pages'] = $d['pages'] ?? '';
             $API_data['isbn'] = $d['isbn'] ?? '';
