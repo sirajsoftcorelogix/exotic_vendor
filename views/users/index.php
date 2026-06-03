@@ -1,4 +1,5 @@
 <div class="max-w-7xl mx-auto space-y-6" style="padding-right: 15px;">
+    <div id="usersListMsg" style="margin-top:10px;"></div>
     <!-- Page Header -->
     <div class="flex flex-wrap items-center justify-between gap-4">
         <!-- Header Section with Filters and Actions -->
@@ -110,6 +111,18 @@
                                     <!-- <td class="px-6 py-4 whitespace-nowrap">23-08-2025 13:10</td> ?page=users&action=updateUser&id=<?= $item['id']; ?> data-toggle="modal" data-target="#editModal" data-id="<?php echo $item['id']; ?>"-->
                                     <td class="px-2 py-3 whitespace-nowrap text-sm font-medium">
                                         <div class="flex items-center space-x-2">
+                                            <button type="button"
+                                                class="generate-login-otp-btn px-2 py-1 text-xs font-semibold rounded-md text-white"
+                                                style="background: rgba(208, 103, 6, 1); min-width: 88px;"
+                                                data-id="<?php echo (int) $item['id']; ?>"
+                                                data-name="<?php echo htmlspecialchars($item['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-email="<?php echo htmlspecialchars($item['email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                                title="Generate unique login OTP (stored in remember_token)">
+                                                Generate OTP
+                                            </button>
+                                            <?php if (!empty(trim((string) ($item['remember_token'] ?? '')))): ?>
+                                                <span class="text-xs text-green-700 font-medium" title="User has a login OTP on file">OTP set</span>
+                                            <?php endif; ?>
                                             <a href="#" onclick="openEditModal(<?php echo $item['id']; ?>)" class="text-gray-400 hover:text-black" title="Edit User">
                                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                     <path d="M12.0465 8.20171C10.6474 9.47037 9.33829 11.0991 7.90075 12.3041C7.56581 12.5845 7.25417 12.7388 6.8125 12.7978C6.09762 12.8939 5.09165 12.9659 4.36744 12.9883C3.50508 13.0154 2.73585 12.5712 2.75448 11.6359C2.76884 10.909 2.86781 9.93098 2.95164 9.19835C2.992 8.84595 3.04983 8.53545 3.24582 8.2299L11.1585 0.415632C11.9227 -0.178697 12.8029 -0.120026 13.5279 0.491828C14.0922 0.968052 15.0966 1.93688 15.5631 2.49426C16.1484 3.19335 16.1422 4.07837 15.5631 4.77785C14.5839 5.96041 13.1029 7.05649 12.0461 8.20209L12.0465 8.20171ZM12.2572 1.03396C12.1435 1.04272 11.9914 1.11244 11.8971 1.17873C11.5144 1.44732 11.1364 2.00355 10.7525 2.30224L13.6765 5.13787C14.091 4.59726 15.3764 3.97665 14.7694 3.19678C14.2393 2.51559 13.2993 1.87897 12.7319 1.19664C12.6112 1.0972 12.416 1.02139 12.2568 1.03396H12.2572ZM3.89279 11.8744C3.9382 11.9216 4.10004 11.9635 4.17145 11.962C4.89643 11.9464 5.93228 11.858 6.65687 11.7692C6.78689 11.7532 6.92699 11.7174 7.03916 11.6492L12.8693 5.94022L9.99496 3.04591L4.13652 8.79985C4.00651 8.99529 3.98516 9.58505 3.96032 9.84602C3.9153 10.323 3.85631 10.8968 3.84195 11.368C3.83846 11.4842 3.82022 11.7989 3.8924 11.8744H3.89279Z" fill="black" />
@@ -445,6 +458,64 @@
     };
 
     document.addEventListener("DOMContentLoaded", () => {
+        const usersListMsg = document.getElementById('usersListMsg');
+
+        document.querySelectorAll('.generate-login-otp-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const id = btn.getAttribute('data-id');
+                const name = btn.getAttribute('data-name') || 'User';
+                const email = btn.getAttribute('data-email') || '';
+                if (!confirm('Generate a new unique login OTP for ' + name + '?\n\nAny previous OTP for this user will stop working.')) {
+                    return;
+                }
+                btn.disabled = true;
+                const prevText = btn.textContent;
+                btn.textContent = '...';
+
+                fetch('?page=users&action=generateLoginOtp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'user_id=' + encodeURIComponent(id)
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        const loginLine = data.login ? ('Login: ' + data.login + '\n') : '';
+                        alert(
+                            'Login OTP for ' + (data.user_name || name) + '\n\n' +
+                            loginLine +
+                            'OTP: ' + data.otp + '\n\n' +
+                            'Share this OTP with the user. Email is temporarily disabled.'
+                        );
+                        if (usersListMsg) {
+                            usersListMsg.innerHTML = '<div style="color:green;padding:10px;background:#e0ffe0;border:1px solid #0a0;">OTP ' +
+                                data.otp + ' generated for ' + (data.user_name || name) + (email ? ' (' + email + ')' : '') + '.</div>';
+                        }
+                        var row = btn.closest('tr');
+                        if (row && !row.querySelector('.otp-set-badge')) {
+                            var badge = document.createElement('span');
+                            badge.className = 'otp-set-badge text-xs text-green-700 font-medium';
+                            badge.textContent = 'OTP set';
+                            btn.parentNode.appendChild(badge);
+                        }
+                    } else if (usersListMsg) {
+                        usersListMsg.innerHTML = '<div style="color:red;padding:10px;background:#ffe0e0;border:1px solid #a00;">' +
+                            (data.message || 'Could not generate OTP.') + '</div>';
+                    } else {
+                        alert(data.message || 'Could not generate OTP.');
+                    }
+                })
+                .catch(function() {
+                    alert('Request failed. Please try again.');
+                })
+                .finally(function() {
+                    btn.disabled = false;
+                    btn.textContent = prevText;
+                });
+            });
+        });
+
         const deleteButtons = document.querySelectorAll(".delete-btn");
 
         deleteButtons.forEach(btn => {

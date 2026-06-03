@@ -80,6 +80,9 @@ switch ($page) {
             case 'sendLoginOtp':
                 $controller->sendLoginOtp();
                 break;
+            case 'generateLoginOtp':
+                $controller->generateLoginOtp();
+                break;
             default:
                 $controller->index();
                 break;
