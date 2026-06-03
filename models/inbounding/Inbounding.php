@@ -1240,7 +1240,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        $types = "sisssssisddddssdiissddsssissssssii";
+        $types = "sisssssisddddssdiissddsssisssssii";
 
         $stmt->bind_param(
             $types,
