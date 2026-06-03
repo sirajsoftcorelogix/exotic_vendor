@@ -1172,7 +1172,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Grouping</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                    <div class="w-full">
+                    <div class="w-full" id="material-code-field">
                         <label class="block text-xs font-bold text-[#222] mb-1">Material:</label>
                         <div class="flex gap-2 items-center w-full">
                             <div class="flex-1 w-full min-w-0"> 
@@ -3319,7 +3319,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
         if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
         if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
-        if (!getVal('material_code')) errors.push("Field 'Material' is required.");
+        const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+        if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
         if (!getVal('group_name')) errors.push("Field 'Group' is required.");
         if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
         if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
@@ -3987,24 +3988,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const BOOK_GROUP_VALUE = '-8';
+
     function isBookSelected() {
         const groupSelect = document.getElementById('group_select');
         if (!groupSelect) return false;
-        // TomSelect keeps underlying select updated (value), but we need the label/text.
+        if (String(groupSelect.value).trim() === BOOK_GROUP_VALUE) return true;
         const idx = groupSelect.selectedIndex;
         if (idx < 0) return false;
         const txt = (groupSelect.options[idx] && groupSelect.options[idx].text) ? groupSelect.options[idx].text.toLowerCase() : '';
         return txt.indexOf('book') !== -1;
     }
+    window.desktopFormIsBookGroup = isBookSelected;
 
     function toggleBookFieldsDesktop() {
         const bookBox = document.getElementById('book-meta-fields');
+        const materialField = document.getElementById('material-code-field');
         if (!bookBox) return;
 
         const variantSelect = document.getElementById('variant_select');
         const addVarBtn = document.querySelector('button[onclick*="addNewVariation"]');
 
         const isBook = isBookSelected();
+        if (materialField) {
+            materialField.classList.toggle('hidden', isBook);
+        }
         if (isBook) {
             bookBox.classList.remove('hidden');
             if (addVarBtn) addVarBtn.style.display = 'none';
@@ -4595,7 +4603,8 @@ function validateAndSubmit(actionType) {
     if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
     if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
     if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
-    if (!getVal('material_code')) errors.push("Field 'Material' is required.");
+    const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+    if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
     if (!getVal('group_name')) errors.push("Field 'Group' is required.");
     if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
     if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
