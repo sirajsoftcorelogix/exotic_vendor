@@ -1097,6 +1097,20 @@ class Inbounding {
         return implode(',', $names);
     }
 
+    /**
+     * First author only (for print labels).
+     */
+    public function resolveInboundAuthorFirstName($stored): string
+    {
+        $ids = $this->parseInboundAuthorIds($stored);
+        if ($ids === []) {
+            return '';
+        }
+
+        $row = $this->getAuthorById($ids[0]);
+        return trim((string) ($row['name'] ?? $row['author'] ?? ''));
+    }
+
     public function searchAuthors($query) {
         $query = trim($query);
         if ($query === '') {
@@ -1156,7 +1170,7 @@ class Inbounding {
         $stmt->close();
 
         if (!empty($labeldata)) {
-            $labeldata['author_name'] = $this->resolveInboundAuthorNames($labeldata['author'] ?? '');
+            $labeldata['author_name'] = $this->resolveInboundAuthorFirstName($labeldata['author'] ?? '');
         }
 
         return [
