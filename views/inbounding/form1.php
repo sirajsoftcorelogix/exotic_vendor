@@ -11,8 +11,9 @@ unset($usersModel);
 $record_id = $_GET['id'] ?? ''; 
 
 // Fetch Data
-$form1 = $data['form1'] ?? [];
-$raw_categories = $data['category'] ?? [];
+$form1 = $form1 ?? ($data['form1'] ?? []);
+$raw_categories = $category ?? ($data['category'] ?? []);
+$vendorsList = $vendors ?? ($data['vendors'] ?? []);
 
 // --- NEW LOGIC START ---
 $cat_id = $form1['group_name'] ?? ''; 
@@ -29,12 +30,12 @@ if (!empty($raw_categories) && !empty($cat_id)) {
 // --- NEW LOGIC END ---
 
 $photo    = $form1['product_photo'] ?? ''; 
-$vendor = $form1['vendor_code'] ?? '';
+$selectedVendorCode = trim((string)($form1['vendor_code'] ?? ''));
 $invoiceImg = $form1['invoice_image'] ?? '';
 $invoice_no = $form1['invoice_no'] ?? '';
 
 // Determine Edit Mode
-$isEdit  = (!empty($vendor) || !empty($invoiceImg));
+$isEdit  = (!empty($selectedVendorCode) || !empty($invoiceImg));
 $formAction = $isEdit
     ? base_url('?page=inbounding&action=updateform1&id=' . $record_id)
     : base_url('?page=inbounding&action=saveform1');
@@ -132,16 +133,36 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
                         </div>
 
                         <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative z-30">
-                            <label class="block text-gray-700 font-bold text-sm mb-2 ml-1">Select Vendor</label>
-                            
-                            <select id="vendor_id" name="vendor_id" placeholder="Type to search vendor..." autocomplete="off">
-                                <option value="">Select Vendor...</option>
-                                <?php if (!empty($data['vendors'])): ?>
-                                    <?php foreach ($data['vendors'] as $v) { ?>
-                                        <option value="<?php echo $v['id']; ?>" <?php echo ($vendor == $v['id']) ? 'selected' : ''; ?>>
-                                            <?php echo $v['vendor_name']; ?>
+                            <div class="flex items-center gap-2 mb-2 ml-1">
+                                <label class="block text-gray-700 font-bold text-sm" for="vendor_code">Select Vendor</label>
+                                <button type="button"
+                                        id="vendor-cache-sync-btn"
+                                        class="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-[#d9822b] hover:text-[#d9822b] transition-colors"
+                                        title="Refresh vendors from catalog">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M12 20h9"></path>
+                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                    </svg>
+                                    <span class="sr-only">Refresh vendors</span>
+                                </button>
+                            </div>
+
+                            <select id="vendor_code" name="vendor_code" placeholder="Type to search vendor..." autocomplete="off">
+                                <option value="">Select Vendor</option>
+                                <?php if (!empty($vendorsList)): ?>
+                                    <?php foreach ($vendorsList as $v): ?>
+                                        <?php
+                                        $vendorExternalCode = trim((string)($v['vendor_id'] ?? ''));
+                                        if ($vendorExternalCode === '') {
+                                            continue;
+                                        }
+                                        $isSelected = $selectedVendorCode !== '' && $selectedVendorCode === $vendorExternalCode;
+                                        $vendorLabel = $vendorExternalCode . ' - ' . ($v['vendor_name'] ?? '');
+                                        ?>
+                                        <option value="<?php echo htmlspecialchars($vendorExternalCode, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $isSelected ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($vendorLabel, ENT_QUOTES, 'UTF-8'); ?>
                                         </option>
-                                    <?php } ?>
+                                    <?php endforeach; ?>
                                 <?php endif; ?>
                             </select>
                             <p id="vendor-error" class="text-red-500 text-xs mt-1 font-semibold hidden"></p>
@@ -157,7 +178,7 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
                         </div>
                         <div class="hidden md:block mt-auto p-4 bg-orange-50 border border-orange-100 rounded-xl text-sm text-orange-800">
                             <p class="font-bold mb-1">Instructions:</p>
-                            <p class="opacity-80">Search for the vendor in the dropdown above. If not found, contact the admin.</p>
+                            <p class="opacity-80">Search for the vendor in the dropdown above. Use the refresh icon to sync vendors from Exotic India if not found.</p>
                         </div>
 
                     </div>
@@ -203,14 +224,84 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
 </div>
 
 <script>
-    // 1. Initialize Tom Select (Searchable Dropdown)
-    new TomSelect("#vendor_id",{
-        create: false,
-        sortField: {
-            field: "text",
-            direction: "asc"
+    function initForm1VendorTomSelect() {
+        const vendorEl = document.getElementById('vendor_code');
+        if (!vendorEl || vendorEl.tomselect) {
+            return vendorEl && vendorEl.tomselect ? vendorEl.tomselect : null;
         }
-    });
+        return new TomSelect('#vendor_code', {
+            create: false,
+            sortField: {
+                field: 'text',
+                direction: 'asc'
+            }
+        });
+    }
+
+    initForm1VendorTomSelect();
+
+    const vendorSyncBtn = document.getElementById('vendor-cache-sync-btn');
+    if (vendorSyncBtn) {
+        vendorSyncBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const runSync = function () {
+                const origHtml = vendorSyncBtn.innerHTML;
+                vendorSyncBtn.disabled = true;
+                vendorSyncBtn.classList.add('opacity-60', 'cursor-wait');
+
+                fetch(<?php echo json_encode(base_url('index.php?page=vendors&action=fetchAllVendors')); ?>, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(function (res) {
+                        return res.json().then(function (data) {
+                            return { ok: res.ok, data: data };
+                        }).catch(function () {
+                            return { ok: false, data: {} };
+                        });
+                    })
+                    .then(function (payload) {
+                        const data = payload.data || {};
+                        const success = payload.ok && data.success === true && data.status !== 'error';
+                        if (!success) {
+                            if (typeof showGlobalToast === 'function') {
+                                showGlobalToast(data.message || 'Could not sync vendors from the catalog API.', 'error');
+                            } else {
+                                alert(data.message || 'Could not sync vendors from the catalog API.');
+                            }
+                            return;
+                        }
+                        const msg = 'Inserted: ' + (data.inserted || 0) + ', Updated: ' + (data.updated || 0) + ', Total: ' + (data.total || 0) + '.';
+                        if (typeof showGlobalToast === 'function') {
+                            showGlobalToast(msg, 'success');
+                        }
+                        window.location.reload();
+                    })
+                    .catch(function () {
+                        if (typeof showGlobalToast === 'function') {
+                            showGlobalToast('Network error while syncing vendors.', 'error');
+                        } else {
+                            alert('Network error while syncing vendors.');
+                        }
+                    })
+                    .finally(function () {
+                        vendorSyncBtn.disabled = false;
+                        vendorSyncBtn.classList.remove('opacity-60', 'cursor-wait');
+                        vendorSyncBtn.innerHTML = origHtml;
+                    });
+            };
+
+            const confirmMsg = 'Sync vendors from Exotic India now? (Same as Vendors → Sync from API.)';
+            if (typeof customConfirm === 'function') {
+                customConfirm(confirmMsg, { title: 'Refresh vendor list?' }).then(function (ok) {
+                    if (ok) runSync();
+                });
+            } else if (confirm(confirmMsg)) {
+                runSync();
+            }
+        });
+    }
 
     const invoiceInput = document.getElementById('invoice');
     const previewImg = document.getElementById('preview');
@@ -269,8 +360,11 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
         let isValid = true;
         
         // --- 1. Get Inputs & Error Containers ---
-        const vendorInput = document.getElementById("vendor_id");
-        const vendorError = document.getElementById("vendor-error");
+        const vendorInput = document.getElementById('vendor_code');
+        const vendorError = document.getElementById('vendor-error');
+        const vendorValue = vendorInput && vendorInput.tomselect
+            ? vendorInput.tomselect.getValue()
+            : (vendorInput ? vendorInput.value : '');
         
         const invoiceNoInput = document.querySelector('input[name="invoice_no"]');
         const invoiceError = document.getElementById("invoice-no-error");
@@ -286,6 +380,12 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
         const tsControl = document.querySelector('.ts-control');
         if(tsControl) tsControl.style.borderColor = "#d1d5db"; // Reset TomSelect border
 
+        if (!vendorValue) {
+            isValid = false;
+            vendorError.classList.remove('hidden');
+            vendorError.innerText = 'Please select a vendor.';
+            if (tsControl) tsControl.style.borderColor = '#ef4444';
+        }
 
         // --- 5. Stop Form if Invalid ---
         if (!isValid) {
