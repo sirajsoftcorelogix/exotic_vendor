@@ -1210,6 +1210,7 @@ class Inbounding {
         $group_name = $data['group_name'] ?? '';
         $received_by_user_id = (int) ($data['received_by_user_id'] ?? 0);
         $author = $this->normalizeInboundAuthorValue($data['author'] ?? '');
+        $edited_by = $this->normalizeInboundAuthorValue($data['edited_by'] ?? '');
         $publisher = (int) ($data['publisher'] ?? 0);
         $isbn = trim($data['isbn'] ?? '');
         $language = trim($data['language'] ?? '');
@@ -1231,7 +1232,7 @@ class Inbounding {
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, product_photo = ?,
-              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, author = ?, publisher = ?, isbn = ?, cover_type = ?, edition = ?, publication_date = ?, language = ?, pages = ?, modified_at = NOW()
+              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, author = ?, edited_by = ?, publisher = ?, isbn = ?, cover_type = ?, edition = ?, publication_date = ?, language = ?, pages = ?, modified_at = NOW()
             WHERE id = ?";
 
         $stmt = $this->conn->prepare($sql);
@@ -1239,7 +1240,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        $types = "sisssssisddddssdiissddssisssssii";
+        $types = "sisssssisddddssdiissddsssissssssii";
 
         $stmt->bind_param(
             $types,
@@ -1267,14 +1268,15 @@ class Inbounding {
             $p_mrp,               // 19
             $colormaps,           // 20
             $author,              // 21
-            $publisher,           // 22
-            $isbn,                // 23
-            $cover_type,          // 24
-            $edition,             // 25
-            $publication_date,    // 26
-            $language,            // 27
-            $pages,               // 28
-            $id                   // 29
+            $edited_by,           // 22
+            $publisher,           // 23
+            $isbn,                // 24
+            $cover_type,          // 25
+            $edition,             // 26
+            $publication_date,    // 27
+            $language,            // 28
+            $pages,               // 29
+            $id                   // 30
         );
 
         if ($stmt->execute()) {

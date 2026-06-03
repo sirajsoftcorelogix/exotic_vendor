@@ -1385,7 +1385,8 @@ class InboundingController {
             'feedback'         => $_POST['feedback'] ?? '',
 
             // Book fields (saved when Group is Book)
-            'author'   => $inboundingModel->normalizeInboundAuthorValue($_POST['author'] ?? ''),
+            'author'    => $inboundingModel->normalizeInboundAuthorValue($_POST['author'] ?? ''),
+            'edited_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['edited_by'] ?? ''),
             'publisher'=> trim((string)($_POST['publisher'] ?? '')) === '' ? null : (int) $_POST['publisher'],
             'isbn'     => $_POST['isbn'] ?? '',
             'language' => $_POST['language'] ?? '',
@@ -1644,6 +1645,7 @@ class InboundingController {
           'gst_rate'   => $mainVariant['gst_rate'] ?? 0,
           'dimensions'   => $mainVariant['dimensions'] ?? 0,
           'author'      => $inboundingModel->normalizeInboundAuthorValue($_POST['author'] ?? ''),
+          'edited_by'   => $inboundingModel->normalizeInboundAuthorValue($_POST['edited_by'] ?? ''),
           'publisher'   => $_POST['publisher'] ?? '',
           'isbn'        => $_POST['isbn'] ?? '',
           'language'    => $_POST['language'] ?? '',

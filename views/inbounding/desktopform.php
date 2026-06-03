@@ -231,6 +231,20 @@ $author_prefill_ids = array_map(static function ($opt) {
 }, $selected_author_options);
 $author_stored_value = (string) ($data['form2']['author'] ?? '');
 
+$selected_edited_by_options = [];
+if (!empty($data['form2']['edited_by']) && isset($inboundingModel) && method_exists($inboundingModel, 'parseInboundAuthorIds')) {
+    foreach ($inboundingModel->parseInboundAuthorIds($data['form2']['edited_by']) as $editorId) {
+        $editorRow = $inboundingModel->getAuthorById($editorId);
+        if (!empty($editorRow['id'])) {
+            $selected_edited_by_options[] = $editorRow;
+        }
+    }
+}
+$edited_by_prefill_ids = array_map(static function ($opt) {
+    return (string) ($opt['id'] ?? '');
+}, $selected_edited_by_options);
+$edited_by_stored_value = (string) ($data['form2']['edited_by'] ?? '');
+
 if (!empty($selected_publisher_id) && isset($inboundingModel) && method_exists($inboundingModel, 'getPublisherById')) {
     $publisherRow = $inboundingModel->getPublisherById((int)$selected_publisher_id);
     $selected_publisher_name = $publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
@@ -719,6 +733,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 <select id="author_select" multiple autocomplete="off">
                                     <?php foreach ($selected_author_options as $authorOpt): ?>
                                         <option value="<?php echo htmlspecialchars((string) $authorOpt['id']); ?>" selected><?php echo htmlspecialchars($authorOpt['name'] ?? ''); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Edited By</label>
+                                <input type="hidden" name="edited_by" id="edited_by_pipe_value" value="<?php echo htmlspecialchars($edited_by_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
+                                <select id="edited_by_select" multiple autocomplete="off">
+                                    <?php foreach ($selected_edited_by_options as $editorOpt): ?>
+                                        <option value="<?php echo htmlspecialchars((string) $editorOpt['id']); ?>" selected><?php echo htmlspecialchars($editorOpt['name'] ?? ''); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -2137,10 +2160,62 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        const editedByPipeInput = document.getElementById('edited_by_pipe_value');
+        const editedByEl = document.getElementById('edited_by_select');
+        const initialEditedByOptions = <?php echo json_encode($selected_edited_by_options, JSON_UNESCAPED_UNICODE); ?>;
+        const initialEditedByIds = <?php echo json_encode($edited_by_prefill_ids, JSON_UNESCAPED_UNICODE); ?>;
+
+        function syncEditedByPipeValue(ts) {
+            if (!editedByPipeInput || !ts) return;
+            let vals = ts.getValue();
+            if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+            editedByPipeInput.value = vals.filter(Boolean).join(',');
+        }
+
+        let editedByTomSelect = null;
+        if (editedByEl && typeof window.safeTomSelect === 'function') {
+            editedByEl.setAttribute('multiple', 'multiple');
+            editedByTomSelect = window.safeTomSelect(editedByEl, {
+                plugins: ['remove_button'],
+                valueField: 'id',
+                labelField: 'name',
+                searchField: ['name'],
+                placeholder: 'Search and select editors...',
+                maxItems: 100,
+                hideSelected: true,
+                closeAfterSelect: false,
+                create: false,
+                persist: true,
+                onChange: function () { syncEditedByPipeValue(this); },
+                onItemAdd: function () {
+                    this.setTextboxValue('');
+                    syncEditedByPipeValue(this);
+                },
+                onItemRemove: function () { syncEditedByPipeValue(this); },
+                load: function (query, callback) {
+                    if (!query || query.length < 2) return callback();
+                    fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
+                        .then(function (r) { return r.ok ? r.json() : []; })
+                        .then(function (json) { callback(mapAuthorOptions(json)); })
+                        .catch(function () { callback(); });
+                }
+            });
+            if (editedByTomSelect) {
+                mapAuthorOptions(initialEditedByOptions).forEach(function (opt) {
+                    editedByTomSelect.addOption(opt);
+                });
+                if (initialEditedByIds.length) {
+                    editedByTomSelect.setValue(initialEditedByIds);
+                }
+                syncEditedByPipeValue(editedByTomSelect);
+            }
+        }
+
         const desktopInboundForm = document.getElementById('inboundForm') || document.querySelector('form[method="post"]');
         if (desktopInboundForm) {
             desktopInboundForm.addEventListener('submit', function () {
                 if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
+                if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
             });
         }
 
