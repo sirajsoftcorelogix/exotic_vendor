@@ -46,7 +46,7 @@ class Author
         $totalRecords = (int)(($countStmt->get_result()->fetch_assoc()['total'] ?? 0));
         $countStmt->close();
 
-        $sql = 'SELECT *
+        $sql = 'SELECT author_id, author, is_active, created_at, updated_at
                 FROM vp_author' . $whereSql . '
                 ORDER BY author ASC
                 LIMIT ? OFFSET ?';
@@ -73,7 +73,7 @@ class Author
 
     public function getAuthorById(int $id): ?array
     {
-        $stmt = $this->conn->prepare('SELECT author_id, author, is_active, create_at, update_at FROM vp_author WHERE author_id = ? LIMIT 1');
+        $stmt = $this->conn->prepare('SELECT author_id, author, is_active, created_at, updated_at FROM vp_author WHERE author_id = ? LIMIT 1');
         if (!$stmt) {
             return null;
         }
