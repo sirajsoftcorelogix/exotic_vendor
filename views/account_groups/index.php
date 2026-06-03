@@ -1,6 +1,7 @@
 <?php
 $searchValue = htmlspecialchars((string)($search ?? ''), ENT_QUOTES, 'UTF-8');
 $statusValue = (string)($status_filter ?? '');
+$itemGroupFilterValue = (string)($item_group_filter ?? '');
 $currentPage = max(1, (int)($currentPage ?? 1));
 $totalPages = max(1, (int)($totalPages ?? 1));
 $limit = (int)($limit ?? 20);
@@ -10,6 +11,7 @@ $queryBase = [
     'action' => 'list',
     'search_text' => (string)($search ?? ''),
     'status_filter' => $statusValue,
+    'item_group_filter' => $itemGroupFilterValue,
     'limit' => $limit,
 ];
 $itemGroupLabels = is_array($item_group_labels ?? null) ? $item_group_labels : [];
@@ -53,19 +55,34 @@ $itemGroupLabels = is_array($item_group_labels ?? null) ? $item_group_labels : [
                 </span>
                 <div class="min-w-0">
                     <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Find account groups by name, id, and active status.</p>
+                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Find account groups by name, id, item group, and active status.</p>
                 </div>
             </div>
         </div>
         <form method="get" id="filterForm" class="p-5">
             <input type="hidden" name="page" value="account_groups">
             <input type="hidden" name="action" value="list">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4">
-                <div class="sm:col-span-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-5 gap-y-4">
+                <div class="sm:col-span-2 lg:col-span-2">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Search</label>
                     <input type="text" name="search_text" placeholder="Search by account group name or id"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
                         value="<?php echo $searchValue; ?>" autocomplete="off">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Item Group</label>
+                    <select name="item_group_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="">All Item Groups</option>
+                        <?php foreach (($item_groups ?? []) as $itemGroupOption): ?>
+                            <?php
+                            $optionValue = (string)($itemGroupOption['name'] ?? '');
+                            $optionLabel = (string)($itemGroupOption['display_name'] ?? $optionValue);
+                            ?>
+                            <option value="<?php echo htmlspecialchars($optionValue, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $itemGroupFilterValue === $optionValue ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($optionLabel, ENT_QUOTES, 'UTF-8'); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
