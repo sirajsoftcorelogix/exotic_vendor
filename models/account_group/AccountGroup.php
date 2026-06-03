@@ -20,21 +20,21 @@ class AccountGroup
         $params = [];
 
         if ($search !== '') {
-            $where[] = '(account_group_name LIKE ? OR id = ?)';
+            $where[] = '(ag.account_group_name LIKE ? OR ag.id = ?)';
             $types .= 'si';
             $params[] = '%' . $search . '%';
             $params[] = (int)$search;
         }
 
         if ($status === 'active') {
-            $where[] = 'is_active = 1';
+            $where[] = 'ag.is_active = 1';
         } elseif ($status === 'inactive') {
-            $where[] = 'is_active = 0';
+            $where[] = 'ag.is_active = 0';
         }
 
         $whereSql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
 
-        $countSql = 'SELECT COUNT(*) AS total FROM account_group' . $whereSql;
+        $countSql = 'SELECT COUNT(*) AS total FROM account_group ag' . $whereSql;
         $countStmt = $this->conn->prepare($countSql);
         if (!$countStmt) {
             return ['account_groups' => [], 'totalRecords' => 0, 'totalPages' => 1, 'currentPage' => $page, 'limit' => $limit];
@@ -46,9 +46,11 @@ class AccountGroup
         $totalRecords = (int)(($countStmt->get_result()->fetch_assoc()['total'] ?? 0));
         $countStmt->close();
 
-        $sql = 'SELECT id, account_group_name, is_active, created_at, updated_at
-                FROM account_group' . $whereSql . '
-                ORDER BY account_group_name ASC
+        $sql = 'SELECT ag.id, ag.account_group_name, ag.item_group, ag.is_active, ag.created_at, ag.updated_at,
+                       c.display_name AS item_group_name
+                FROM account_group ag
+                LEFT JOIN category c ON c.name = ag.item_group AND c.parent_id = 0 AND c.is_active = 1' . $whereSql . '
+                ORDER BY ag.account_group_name ASC
                 LIMIT ? OFFSET ?';
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
@@ -73,7 +75,13 @@ class AccountGroup
 
     public function getAccountGroupById(int $id): ?array
     {
-        $stmt = $this->conn->prepare('SELECT id, account_group_name, is_active, created_at, updated_at FROM account_group WHERE id = ? LIMIT 1');
+        $stmt = $this->conn->prepare(
+            'SELECT ag.id, ag.account_group_name, ag.item_group, ag.is_active, ag.created_at, ag.updated_at,
+                    c.display_name AS item_group_name
+             FROM account_group ag
+             LEFT JOIN category c ON c.name = ag.item_group AND c.parent_id = 0 AND c.is_active = 1
+             WHERE ag.id = ? LIMIT 1'
+        );
         if (!$stmt) {
             return null;
         }
@@ -83,6 +91,45 @@ class AccountGroup
         $stmt->close();
 
         return $row ?: null;
+    }
+
+    public function getParentItemGroups(): array
+    {
+        $stmt = $this->conn->prepare(
+            'SELECT name, display_name
+             FROM category
+             WHERE parent_id = 0 AND is_active = 1
+             ORDER BY display_name ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        return $rows;
+    }
+
+    public function isValidItemGroup(?string $itemGroup): bool
+    {
+        if ($itemGroup === null || $itemGroup === '') {
+            return true;
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT name FROM category WHERE name = ? AND parent_id = 0 AND is_active = 1 LIMIT 1'
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $itemGroup);
+        $stmt->execute();
+        $stmt->store_result();
+        $valid = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $valid;
     }
 
     public function accountGroupNameExists(string $name, ?int $excludeId = null): bool
@@ -119,7 +166,7 @@ class AccountGroup
         return ['exists' => $this->accountGroupNameExists($name, $excludeId)];
     }
 
-    public function saveAccountGroup(int $id, string $name, int $isActive): array
+    public function saveAccountGroup(int $id, string $name, ?string $itemGroup, int $isActive): array
     {
         $name = trim($name);
         $isActive = $isActive ? 1 : 0;
@@ -129,15 +176,18 @@ class AccountGroup
         if ($id <= 0) {
             return ['success' => false, 'message' => 'Account group id is required for update.'];
         }
+        if (!$this->isValidItemGroup($itemGroup)) {
+            return ['success' => false, 'message' => 'Please select a valid item group.'];
+        }
         if ($this->accountGroupNameExists($name, $id)) {
             return ['success' => false, 'message' => 'Account group name already exists'];
         }
 
-        $stmt = $this->conn->prepare('UPDATE account_group SET account_group_name = ?, is_active = ? WHERE id = ?');
+        $stmt = $this->conn->prepare('UPDATE account_group SET account_group_name = ?, item_group = ?, is_active = ? WHERE id = ?');
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
-        $stmt->bind_param('sii', $name, $isActive, $id);
+        $stmt->bind_param('ssii', $name, $itemGroup, $isActive, $id);
 
         try {
             $ok = $stmt->execute();
@@ -153,22 +203,25 @@ class AccountGroup
             : ['success' => false, 'message' => 'Could not save account group: ' . $error];
     }
 
-    public function insertAccountGroup(string $name, int $isActive): array
+    public function insertAccountGroup(string $name, ?string $itemGroup, int $isActive): array
     {
         $name = trim($name);
         $isActive = $isActive ? 1 : 0;
         if ($name === '') {
             return ['success' => false, 'message' => 'Account group name is required.'];
         }
+        if (!$this->isValidItemGroup($itemGroup)) {
+            return ['success' => false, 'message' => 'Please select a valid item group.'];
+        }
         if ($this->accountGroupNameExists($name)) {
             return ['success' => false, 'message' => 'Account group name already exists'];
         }
 
-        $stmt = $this->conn->prepare('INSERT INTO account_group (account_group_name, is_active) VALUES (?, ?)');
+        $stmt = $this->conn->prepare('INSERT INTO account_group (account_group_name, item_group, is_active) VALUES (?, ?, ?)');
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
-        $stmt->bind_param('si', $name, $isActive);
+        $stmt->bind_param('ssi', $name, $itemGroup, $isActive);
 
         try {
             $ok = $stmt->execute();

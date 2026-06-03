@@ -23,6 +23,7 @@ class AccountGroupsController
         $listing = $this->accountGroupModel->getAccountGroups($pageNo, $limit, $search, $status);
         renderTemplate('views/account_groups/index.php', [
             'account_groups' => $listing['account_groups'],
+            'item_groups' => $this->accountGroupModel->getParentItemGroups(),
             'search' => $search,
             'status_filter' => $status,
             'currentPage' => $listing['currentPage'],
@@ -44,10 +45,17 @@ class AccountGroupsController
 
         $id = trim((string)($_POST['id'] ?? '')) !== '' ? (int)$_POST['id'] : null;
         $name = trim((string)($_POST['account_group_name'] ?? ''));
+        $itemGroupRaw = trim((string)($_POST['item_group'] ?? ''));
+        $itemGroup = $itemGroupRaw !== '' ? $itemGroupRaw : null;
         $isActive = (int)($_POST['is_active'] ?? 1);
 
         if ($name === '') {
             echo json_encode(['success' => false, 'message' => 'Account group name is required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if (!$this->accountGroupModel->isValidItemGroup($itemGroup)) {
+            echo json_encode(['success' => false, 'message' => 'Please select a valid item group.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
@@ -63,12 +71,12 @@ class AccountGroupsController
                 exit;
             }
 
-            $result = $this->accountGroupModel->saveAccountGroup($id, $name, $isActive);
+            $result = $this->accountGroupModel->saveAccountGroup($id, $name, $itemGroup, $isActive);
             echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
-        $result = $this->accountGroupModel->insertAccountGroup($name, $isActive);
+        $result = $this->accountGroupModel->insertAccountGroup($name, $itemGroup, $isActive);
         echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
