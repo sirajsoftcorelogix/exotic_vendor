@@ -63,9 +63,13 @@ class UsersController
 
         if ($this->isDevLoginEmail($login)) {
             $usersModel->saveResetToken($user['id'], self::DEV_LOGIN_OTP);
+            $user = $usersModel->findByLogin($login);
+            $storedOtp = trim((string) ($user['remember_token'] ?? ''));
             vendorJsonResponse([
-                'success' => true,
-                'message' => 'OTP ready. Use 1234 to sign in.',
+                'success' => $storedOtp !== '',
+                'message' => $storedOtp !== ''
+                    ? 'OTP ready. Enter your login OTP to sign in.'
+                    : 'Could not save login OTP. Please try again.',
             ]);
         }
 
@@ -74,17 +78,19 @@ class UsersController
             if ($existing !== '') {
                 vendorJsonResponse([
                     'success' => true,
-                    'message' => 'Enter the login OTP provided by your administrator.',
+                    'message' => 'Enter the login OTP from your administrator (see Users list).',
                 ]);
             }
             vendorJsonResponse([
                 'success' => false,
-                'message' => 'No login OTP assigned. Ask an administrator to generate one from the Users list.',
+                'message' => 'No login OTP in the system. Ask an administrator to generate one from the Users list.',
             ]);
         }
 
         $token = (string) random_int(100000, 999999);
-        $usersModel->saveResetToken($user['id'], $token);
+        if (!$usersModel->saveResetToken($user['id'], $token)) {
+            vendorJsonResponse(['success' => false, 'message' => 'Could not save login OTP. Please try again.']);
+        }
 
         $result = sendVendorOtpEmail(
             $login,

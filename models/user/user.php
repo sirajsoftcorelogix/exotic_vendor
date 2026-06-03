@@ -32,49 +32,40 @@ class User
         return false;
     }
 
+    /**
+     * Login OTP must match vp_users.remember_token (database only).
+     */
     public function loginWithOtp($login, $otp)
     {
         $login = trim($login);
         $otp = trim((string) $otp);
-
-        // Dev only: siraj.php@gmail.com + static OTP 1234
-        if (strtolower($login) === 'siraj.php@gmail.com' && $otp === '1234') {
-            $sql = "SELECT * FROM vp_users WHERE email = ? AND is_deleted = 0 LIMIT 1";
-            $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('s', $login);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            if ($result->num_rows > 0) {
-                $user = $result->fetch_assoc();
-                @session_start();
-                $_SESSION['user'] = $user;
-                $_SESSION['user_id'] = (int) ($user['id'] ?? 0);
-                $_SESSION['warehouse_id'] = $user['warehouse_id'];
-                assignAPIToken($user['id']);
-
-                return true;
-            }
-
+        if ($login === '' || $otp === '') {
             return false;
         }
 
-        $sql = "SELECT * FROM vp_users WHERE (email = ? OR phone = ?) AND remember_token = ? AND is_deleted = 0";
+        $sql = "SELECT * FROM vp_users
+            WHERE (email = ? OR phone = ?)
+              AND remember_token = ?
+              AND remember_token IS NOT NULL
+              AND remember_token != ''
+              AND is_deleted = 0
+            LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('sss', $login, $login, $otp);
         $stmt->execute();
         $result = $stmt->get_result();
-        if ($result->num_rows > 0) {
-            $user = $result->fetch_assoc();
-            @session_start();
-            $_SESSION['user'] = $user;
-            $_SESSION['user_id'] = (int)($user['id'] ?? 0);
-            $_SESSION['warehouse_id'] = $user['warehouse_id'];
-            assignAPIToken($user["id"]); // Insert Token for Chat
-
-            return true;
+        if ($result->num_rows === 0) {
+            return false;
         }
 
-        return false;
+        $user = $result->fetch_assoc();
+        @session_start();
+        $_SESSION['user'] = $user;
+        $_SESSION['user_id'] = (int) ($user['id'] ?? 0);
+        $_SESSION['warehouse_id'] = $user['warehouse_id'];
+        assignAPIToken($user['id']);
+
+        return true;
     }
     public function logout()
     {
