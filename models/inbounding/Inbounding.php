@@ -1070,19 +1070,29 @@ class Inbounding {
     }
 
     public function getlabeldata($id){
-        $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name,v.store_location as location  FROM vp_inbound as v 
-        LEFT JOIN category as c on v.group_name=c.category
-        LEFT JOIN material as m on v.material_code=m.id
-        LEFT JOIN vp_vendors as vv on v.vendor_code=vv.vendor_id
-        WHERE v.id = $id";
-        $result = $this->conn->query($sql);
-        $inbounding = [];
-        if ($result) {
-            $labeldata = $result->fetch_assoc();
-            $result->free();
+        $id = (int) $id;
+        $sql = "SELECT v.*, c.display_name AS category, m.material_name, vv.vendor_name AS vendor_name,
+                v.store_location AS location,
+                a.author AS author_name, p.publishers AS publishers_name
+                FROM vp_inbound AS v
+                LEFT JOIN category AS c ON v.group_name = c.category
+                LEFT JOIN material AS m ON v.material_code = m.id
+                LEFT JOIN vp_vendors AS vv ON v.vendor_code = vv.vendor_id
+                LEFT JOIN vp_author AS a ON v.author = a.author_id
+                LEFT JOIN vp_publishers AS p ON v.publisher = p.publishers_id
+                WHERE v.id = ?";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return ['form2' => []];
         }
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $labeldata = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
+        $stmt->close();
+
         return [
-            'form2' => $labeldata
+            'form2' => $labeldata ?: []
         ];
     }
     // 1. Fetch Category Name

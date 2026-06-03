@@ -1,5 +1,7 @@
 <?php
 // 1. PHP Logic & Data Fetching
+require_once __DIR__ . '/../../helpers/label/label_price.php';
+
 $label_data[0] = $data['form2'] ?? [];
 $variations = $data['variation'];
 if (isset($variations) && !empty($variations)) {
@@ -11,6 +13,15 @@ if (isset($variations) && !empty($variations)) {
         $label_data[$key]['material_name'] = $label_data[0]['material_name'];
         $label_data[$key]['vendor_name'] = $label_data[0]['vendor_name'];
         $label_data[$key]['gate_entry_date_time'] = $label_data[0]['gate_entry_date_time'];
+        foreach (['author_name', 'publishers_name', 'pages', 'cover_type', 'edition', 'isbn', 'language', 'group_name'] as $inheritField) {
+            if (($label_data[$key][$inheritField] ?? '') === '' && ($label_data[0][$inheritField] ?? '') !== '') {
+                $label_data[$key][$inheritField] = $label_data[0][$inheritField];
+            }
+        }
+        if ((float) ($label_data[$key]['price_india'] ?? 0) <= 0 && (float) ($label_data[0]['price_india'] ?? 0) > 0) {
+            $label_data[$key]['price_india'] = $label_data[0]['price_india'];
+            $label_data[$key]['gst_rate'] = $label_data[0]['gst_rate'] ?? 0;
+        }
     }
 }
 
@@ -43,6 +54,21 @@ if (!empty($label_data[0]["group_name"])) {
 function safeInt($value)
 {
     return intval($value ?? 0);
+}
+
+function labelInboundMrp(array $row): string
+{
+    return formatInboundLabelMrp($row);
+}
+
+function labelInboundText($value, string $fallback = 'N/A'): string
+{
+    $text = trim((string) ($value ?? ''));
+    if ($text === '' || $text === '0') {
+        return $fallback;
+    }
+
+    return $text;
 }
 
 $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
@@ -131,9 +157,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <div class="flex flex-col leading-none">
                                 <span class="text-[32px] font-bold text-black uppercase mb-3">MRP:</span>
                                 <span class="text-[54px] font-black text-black tracking-tight">
-                                    ₹ <?php echo safe(
-                                            $current_label["price_india_mrp"] ?? "0"
-                                        ); ?>
+                                    ₹ <?php echo safe(labelInboundMrp($current_label)); ?>
                                 </span>
                             </div>
                             <div class="flex flex-col leading-none">
@@ -148,7 +172,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                                 <span class="text-[32px] font-bold text-black uppercase mb-2">author:</span>
                                 <span class="text-[42px] font-black text-black">
                                     <?php echo safe(
-                                        $current_label["author"] ?? "N/A"
+                                        labelInboundText($current_label["author_name"] ?? '')
                                     ); ?>
                                 </span>
                             </div>
@@ -174,7 +198,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <span class="text-[30px] font-bold uppercase text-black">Pages:</span>
                             <span class="text-[42px] font-black text-black leading-none">
                                 <?php echo safe(
-                                    $current_label["page"] ?? "N/A"
+                                    labelInboundText($current_label["pages"] ?? '')
                                 ); ?>
 
                             </span>
@@ -184,7 +208,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <span class="text-[30px] font-bold uppercase text-black">cover:</span>
                             <span class="text-[42px] font-black text-black leading-none">
                                 <?php echo safe(
-                                    $current_label["cover"] ?? "N/A"
+                                    labelInboundText($current_label["cover_type"] ?? '')
                                 ); ?>
 
                             </span>
@@ -207,7 +231,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">PUBLISHER:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
                             <?php echo safe(
-                                $current_label["publisher"] ?? "N/A"
+                                labelInboundText($current_label["publishers_name"] ?? '')
                             ); ?>
                         </span>
                     </div>
@@ -412,9 +436,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <div class="flex flex-col leading-none">
                                 <span class="text-[32px] font-bold text-black uppercase mb-3">MRP:</span>
                                 <span class="text-[54px] font-black text-black tracking-tight">
-                                    ₹ <?php echo safe(
-                                            $current_label["price_india_mrp"] ?? "0"
-                                        ); ?>
+                                    ₹ <?php echo safe(labelInboundMrp($current_label)); ?>
                                 </span>
                             </div>
                             <div class="flex flex-col leading-none">

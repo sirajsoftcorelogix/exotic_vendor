@@ -31,3 +31,30 @@ function formatLabelPriceIndia(array $product, int $decimals = 0): string
 
     return number_format($amount, $decimals, '.', ',');
 }
+
+/**
+ * Inbound label MRP: price_india + GST (gst_rate on vp_inbound).
+ *
+ * @param array<string, mixed> $row
+ */
+function inboundLabelPriceIndiaIncludingGst(array $row): float
+{
+    $base = (float) ($row['price_india'] ?? 0);
+    if ($base <= 0) {
+        $fallback = (float) ($row['price_india_mrp'] ?? 0);
+
+        return $fallback > 0 ? $fallback : 0.0;
+    }
+
+    $gstPercent = max(0.0, (float) ($row['gst_rate'] ?? $row['gst'] ?? 0));
+
+    return $base * (1 + $gstPercent / 100);
+}
+
+/**
+ * @param array<string, mixed> $row
+ */
+function formatInboundLabelMrp(array $row): string
+{
+    return number_format(inboundLabelPriceIndiaIncludingGst($row), 2, '.', ',');
+}
