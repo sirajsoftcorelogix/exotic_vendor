@@ -115,41 +115,21 @@ class UsersController
 
             // ...
             //for test only
-            $token = rand(100000, 999999);
+            $token = (string) rand(100000, 999999);
             $usersModel->saveResetToken($user['id'], $token);
 
-            // Send email using PHPMailer
+            $result = sendVendorOtpEmail(
+                $login,
+                $token,
+                'VendorDesk - Password Recovery - OTP Inside',
+                'password_recovery.html'
+            );
 
-
-            $mail = new PHPMailer(true);
-            try {
-                //Server settings
-                $mail->isSMTP();
-                $mail->Host       = 'glacier.mxrouting.net'; // Set SMTP server
-                $mail->SMTPAuth   = true;
-                $mail->Username   = 'vendor-admin@exoticindia.com';   // SMTP username
-                $mail->Password   = 'yXuF9tpZjeuHM8PdEGGc';     // SMTP password
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port       = 587;
-
-                //Recipients
-                $mail->setFrom('vendor-admin@exoticindia.com', 'Admin');
-                $mail->addAddress($login); // Send to user email
-
-                // Content
-                $mail->isHTML(true);
-                $mail->Subject = 'VendorDesk - Password Recovery - OTP Inside';
-                $htmlBody = file_get_contents('templates/password_recovery.html');
-                $htmlBody = str_replace('{{OTP_CODE}}', $token, $htmlBody);
-                $htmlBody = str_replace('{{CURRENT_YEAR}}', date('Y'), $htmlBody);
-                $mail->Body    = $htmlBody;
-
-                $mail->send();
-
-                echo json_encode(['success' => true, 'message' => 'OTP sent.', 'token' => $token]);
-            } catch (Exception $e) {
-                echo json_encode(['success' => false, 'message' => 'Mailer Error: ' . $mail->ErrorInfo]);
+            $payload = ['success' => $result['success'], 'message' => $result['message']];
+            if ($result['success']) {
+                $payload['token'] = $token;
             }
+            echo json_encode($payload);
         } else {
             echo json_encode(['success' => false, 'message' => 'User not found.']);
         }

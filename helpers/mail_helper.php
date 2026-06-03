@@ -38,16 +38,54 @@ function loadVendorMailTemplate(string $filename): string
     return $html;
 }
 
+/**
+ * Apply SMTP settings from bootstrap/init/init.php (smtpHost, smtpPort, smtpUser, smtpPass, optional smtpSecure).
+ */
+function vendorConfigureSmtp(PHPMailer $mail): void
+{
+    if (!defined('smtpHost') || smtpHost === '' || !defined('smtpUser') || smtpUser === '') {
+        throw new RuntimeException('SMTP is not configured. Set smtpHost and smtpUser in bootstrap/init/init.php.');
+    }
+    if (!defined('smtpPass') || smtpPass === '') {
+        throw new RuntimeException('SMTP password is empty. Set smtpPass in bootstrap/init/init.php.');
+    }
+
+    $mail->isSMTP();
+    $mail->Host = smtpHost;
+    $mail->SMTPAuth = true;
+    $mail->Username = smtpUser;
+    $mail->Password = smtpPass;
+    $port = defined('smtpPort') ? (int) smtpPort : 587;
+    $mail->Port = $port;
+
+    if (defined('smtpSecure')) {
+        $secure = strtolower(trim((string) smtpSecure));
+        if ($secure === 'tls' || $secure === 'starttls') {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        } elseif ($secure === 'ssl' || $secure === 'smtps') {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+        } else {
+            $mail->SMTPSecure = '';
+            $mail->SMTPAutoTLS = false;
+        }
+    } else {
+        $mail->SMTPSecure = $port === 465 ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+    }
+}
+
+function vendorSmtpFromEmail(): string
+{
+    if (defined('smtpFrom') && smtpFrom !== '') {
+        return smtpFrom;
+    }
+
+    return smtpUser;
+}
+
 function createVendorMailer(int $timeoutSeconds = 20): PHPMailer
 {
     $mail = new PHPMailer(true);
-    $mail->isSMTP();
-    $mail->Host = defined('smtpHost') ? smtpHost : 'glacier.mxrouting.net';
-    $mail->SMTPAuth = true;
-    $mail->Username = defined('smtpUser') ? smtpUser : 'vendoradmin@exoticindia.com';
-    $mail->Password = defined('smtpPass') ? smtpPass : '';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = defined('smtpPort') ? (int) smtpPort : 587;
+    vendorConfigureSmtp($mail);
     $mail->Timeout = max(5, $timeoutSeconds);
     $mail->CharSet = PHPMailer::CHARSET_UTF8;
 
@@ -101,8 +139,7 @@ function sendVendorOtpEmail(string $toEmail, string $otp, string $subject, strin
 {
     try {
         $mail = createVendorMailer(20);
-        $fromEmail = defined('smtpUser') ? smtpUser : 'vendoradmin@exoticindia.com';
-        $mail->setFrom($fromEmail, 'Exotic India Vendor Portal');
+        $mail->setFrom(vendorSmtpFromEmail(), 'Exotic India Vendor Portal');
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
         $mail->Subject = $subject;
