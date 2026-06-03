@@ -322,9 +322,9 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     <input type="hidden" name="received_by_user_id" value="<?php echo $_SESSION['user']['id']; ?>">
                     <input type="text" name="received_by_name" value="<?php echo htmlspecialchars($currentuserDetails['name']); ?>"  class="w-full bg-gray-100 border border-gray-400 rounded px-2 py-1 text-sm text-gray-600 cursor-not-allowed">
                 </div>
-                <div>
+                <div class="md:col-span-4">
                     <label class="block text-gray-800 font-bold text-xs mb-1">Remarks</label>
-                    <input type="text" name="feedback" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none" value="<?php echo $feedback; ?>">
+                    <textarea name="feedback" rows="4" class="w-full min-h-[100px] border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none resize-y"><?php echo htmlspecialchars($feedback, ENT_QUOTES, 'UTF-8'); ?></textarea>
                 </div>
             </div>
 
