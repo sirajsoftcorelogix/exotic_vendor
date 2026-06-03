@@ -1070,19 +1070,29 @@ class Inbounding {
     }
 
     public function getlabeldata($id){
-        $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name,v.store_location as location  FROM vp_inbound as v 
-        LEFT JOIN category as c on v.group_name=c.category
-        LEFT JOIN material as m on v.material_code=m.id
-        LEFT JOIN vp_vendors as vv on v.vendor_code=vv.vendor_id
-        WHERE v.id = $id";
-        $result = $this->conn->query($sql);
-        $inbounding = [];
-        if ($result) {
-            $labeldata = $result->fetch_assoc();
-            $result->free();
+        $id = (int) $id;
+        $sql = "SELECT v.*, c.display_name AS category, m.material_name, vv.vendor_name AS vendor_name,
+                v.store_location AS location,
+                a.author AS author_name, p.publishers AS publishers_name
+                FROM vp_inbound AS v
+                LEFT JOIN category AS c ON v.group_name = c.category
+                LEFT JOIN material AS m ON v.material_code = m.id
+                LEFT JOIN vp_vendors AS vv ON v.vendor_code = vv.vendor_id
+                LEFT JOIN vp_author AS a ON v.author = a.author_id
+                LEFT JOIN vp_publishers AS p ON v.publisher = p.publishers_id
+                WHERE v.id = ?";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return ['form2' => []];
         }
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $labeldata = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
+        $stmt->close();
+
         return [
-            'form2' => $labeldata
+            'form2' => $labeldata ?: []
         ];
     }
     // 1. Fetch Category Name
@@ -1136,6 +1146,12 @@ class Inbounding {
         $isbn = trim($data['isbn'] ?? '');
         $language = trim($data['language'] ?? '');
         $pages = (int) ($data['pages'] ?? 0);
+        $cover_type = trim($data['cover_type'] ?? '');
+        $edition = trim($data['edition'] ?? '');
+        $publication_date = trim($data['publication_date'] ?? '');
+        if ($publication_date === '') {
+            $publication_date = null;
+        }
        
         $p_ind   = (float) ($data['price_india'] ?? 0);
         $p_mrp   = (float) ($data['price_india_mrp'] ?? 0);
@@ -1147,7 +1163,7 @@ class Inbounding {
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, product_photo = ?,
-              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, author = ?, publisher = ?, isbn = ?, language = ?, pages = ?, modified_at = NOW()
+              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, author = ?, publisher = ?, isbn = ?, cover_type = ?, edition = ?, publication_date = ?, language = ?, pages = ?, modified_at = NOW()
             WHERE id = ?";
 
         $stmt = $this->conn->prepare($sql);
@@ -1155,9 +1171,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        // 3. Correct Bind Param Types
-        // s = string, d = double (float), i = integer
-        $types = "sisssssisddddssdiissddsiissii";
+        $types = "sisssssisddddssdiissddsiisssssii";
 
         $stmt->bind_param(
             $types,
@@ -1187,9 +1201,12 @@ class Inbounding {
             $author,              // 21
             $publisher,           // 22
             $isbn,                // 23
-            $language,            // 24
-            $pages,               // 25
-            $id                   // 26
+            $cover_type,          // 24
+            $edition,             // 25
+            $publication_date,    // 26
+            $language,            // 27
+            $pages,               // 28
+            $id                   // 29
         );
 
         if ($stmt->execute()) {

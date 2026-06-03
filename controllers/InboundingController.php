@@ -1390,6 +1390,9 @@ class InboundingController {
             'isbn'     => $_POST['isbn'] ?? '',
             'language' => $_POST['language'] ?? '',
             'pages'    => trim((string)($_POST['pages'] ?? '')) === '' ? null : (int) $_POST['pages'],
+            'cover_type' => trim((string)($_POST['cover_type'] ?? '')),
+            'edition' => trim((string)($_POST['edition'] ?? '')),
+            'publication_date' => trim((string)($_POST['publication_date'] ?? '')) ?: null,
         ];
         
         // 4. Update Main Record
@@ -1645,6 +1648,9 @@ class InboundingController {
           'isbn'        => $_POST['isbn'] ?? '',
           'language'    => $_POST['language'] ?? '',
           'pages'       => $_POST['pages'] ?? '',
+          'cover_type'  => trim((string)($_POST['cover_type'] ?? '')),
+          'edition'     => trim((string)($_POST['edition'] ?? '')),
+          'publication_date' => trim((string)($_POST['publication_date'] ?? '')) ?: null,
 
           // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
           'quantity_received'  => $mainVariant['quantity'] ?? 0,
@@ -2009,6 +2015,16 @@ class InboundingController {
             $API_data['language'] = $d['language'] ?? '';
             $API_data['pages'] = $d['pages'] ?? '';
             $API_data['isbn'] = $d['isbn'] ?? '';
+            if (!empty($d['cover_type'])) {
+                $API_data['cover_type'] = $d['cover_type'];
+            }
+            if (!empty($d['edition'])) {
+                $API_data['edition'] = $d['edition'];
+            }
+            $pubDate = trim((string)($d['publication_date'] ?? ''));
+            if ($pubDate !== '' && $pubDate !== '0000-00-00') {
+                $API_data['publication_date'] = $pubDate;
+            }
         }
         $API_data['snippet_description'] = $d['snippet_description'] ?? '';
         // $API_data['creator'] = $data['data']['received_by_user_id'];

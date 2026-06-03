@@ -1,7 +1,7 @@
 <?php
 // 1. PHP Logic & Data Fetching
-$label_data[0] = $data['form2'] ?? [];
-$variations = $data['variation'];
+$label_data[0] = $form2 ?? $data['form2'] ?? [];
+$variations = $variation ?? $data['variation'] ?? [];
 if (isset($variations) && !empty($variations)) {
     foreach ($variations as $key => $value) {
         $key++;
@@ -11,6 +11,11 @@ if (isset($variations) && !empty($variations)) {
         $label_data[$key]['material_name'] = $label_data[0]['material_name'];
         $label_data[$key]['vendor_name'] = $label_data[0]['vendor_name'];
         $label_data[$key]['gate_entry_date_time'] = $label_data[0]['gate_entry_date_time'];
+        foreach (['author_name', 'publishers_name', 'pages', 'cover_type', 'edition', 'isbn', 'language', 'group_name'] as $inheritField) {
+            if (($label_data[$key][$inheritField] ?? '') === '' && ($label_data[0][$inheritField] ?? '') !== '') {
+                $label_data[$key][$inheritField] = $label_data[0][$inheritField];
+            }
+        }
     }
 }
 
@@ -43,6 +48,16 @@ if (!empty($label_data[0]["group_name"])) {
 function safeInt($value)
 {
     return intval($value ?? 0);
+}
+
+function labelInboundText($value, string $fallback = 'N/A'): string
+{
+    $text = trim((string) ($value ?? ''));
+    if ($text === '' || $text === '0') {
+        return $fallback;
+    }
+
+    return $text;
 }
 
 $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
@@ -148,7 +163,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                                 <span class="text-[32px] font-bold text-black uppercase mb-2">author:</span>
                                 <span class="text-[42px] font-black text-black">
                                     <?php echo safe(
-                                        $current_label["author"] ?? "N/A"
+                                        labelInboundText($current_label["author_name"] ?? '')
                                     ); ?>
                                 </span>
                             </div>
@@ -174,7 +189,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <span class="text-[30px] font-bold uppercase text-black">Pages:</span>
                             <span class="text-[42px] font-black text-black leading-none">
                                 <?php echo safe(
-                                    $current_label["page"] ?? "N/A"
+                                    labelInboundText($current_label["pages"] ?? '')
                                 ); ?>
 
                             </span>
@@ -184,7 +199,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <span class="text-[30px] font-bold uppercase text-black">cover:</span>
                             <span class="text-[42px] font-black text-black leading-none">
                                 <?php echo safe(
-                                    $current_label["cover"] ?? "N/A"
+                                    labelInboundText($current_label["cover_type"] ?? '')
                                 ); ?>
 
                             </span>
@@ -207,7 +222,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">PUBLISHER:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
                             <?php echo safe(
-                                $current_label["publisher"] ?? "N/A"
+                                labelInboundText($current_label["publishers_name"] ?? '')
                             ); ?>
                         </span>
                     </div>
@@ -484,8 +499,21 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 
 </div>
 
+<?php
+$labelPdfBaseName = 'Label_Labels_Print_Batch';
+$itemCodeForPdf = trim((string) ($label_data[0]['Item_code'] ?? ''));
+if ($itemCodeForPdf !== '') {
+    $sanitizedItemCode = preg_replace('/[\\\\\/:*?"<>|]+/', '_', $itemCodeForPdf);
+    $sanitizedItemCode = trim((string) $sanitizedItemCode, " \t\n\r\0\x0B._");
+    if ($sanitizedItemCode !== '') {
+        $labelPdfBaseName = 'Label_' . $sanitizedItemCode;
+    }
+}
+?>
+
 <script>
     const recordId = "<?php echo isset($_GET['id']) ? $_GET['id'] : ''; ?>";
+    const labelPdfFileName = <?php echo json_encode($labelPdfBaseName, JSON_UNESCAPED_UNICODE); ?>;
 
     document.getElementById("back-btn").addEventListener("click", () => {
         window.history.back();
@@ -589,7 +617,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 const imgData = canvas.toDataURL("image/jpeg", 1.0);
                 pdf.addImage(imgData, "JPEG", 0, 0, 76.2, 50.8);
             }
-            pdf.save("Labels_Print_Batch.pdf");
+            pdf.save(labelPdfFileName + ".pdf");
         } catch (err) {
             console.error("PDF Error:", err);
             alert("An error occurred while generating the PDF.");

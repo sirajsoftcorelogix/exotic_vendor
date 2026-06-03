@@ -221,7 +221,7 @@ global $domain, $root_path;
       })
       .then(r => r.json())
       .then(data => {
-        msgDiv.textContent = data.message;
+        msgDiv.textContent = data.success ? data.message : (data.smtp_error || data.message);
         msgDiv.style.color = data.success ? 'green' : 'red';
         if (data.success) {
           // Show verification popup

@@ -6,20 +6,15 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 require 'vendor/autoload.php';
+require_once __DIR__ . '/../helpers/mail_helper.php';
 
 global $root_path;
 global $domain;
 
 class UsersController
 {
-    /** Developer login: static OTP, no email sent */
-    private const DEV_LOGIN_EMAIL = 'siraj.php@gmail.com';
-    private const DEV_LOGIN_OTP = '1234';
-
-    private function isDevLoginEmail(string $login): bool
-    {
-        return strtolower(trim($login)) === strtolower(self::DEV_LOGIN_EMAIL);
-    }
+    /** Set false when SMTP email OTP is restored. */
+    private const SKIP_EMAIL_OTP = true;
 
     public function login()
     {
@@ -47,53 +42,88 @@ class UsersController
     public function sendLoginOtp()
     {
         global $usersModel;
-        global $domain;
         $login = trim($_POST['login'] ?? '');
         if (empty($login)) {
-            echo json_encode(['success' => false, 'message' => 'Please enter your email or phone.']);
-            exit;
+            vendorJsonResponse(['success' => false, 'message' => 'Please enter your email or phone.']);
         }
 
         $user = $usersModel->findByLogin($login);
-        if ($user) {
-            if ($this->isDevLoginEmail($login)) {
-                $usersModel->saveResetToken($user['id'], self::DEV_LOGIN_OTP);
-                echo json_encode(['success' => true, 'message' => 'OTP ready. Use 1234 to sign in.']);
-                exit;
-            }
-
-            $token = rand(100000, 999999);
-            $usersModel->saveResetToken($user['id'], $token);
-
-            $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
-            try {
-                $mail->isSMTP();
-                $mail->Host       = 'glacier.mxrouting.net';
-                $mail->SMTPAuth   = true;
-                $mail->Username   = 'vendoradmin@exoticindia.com';
-                $mail->Password   = 'xah5VfXUrdVaju576bpa';
-                $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port       = 587;
-
-                $mail->setFrom('vendoradmin@exoticindia.com', 'Admin');
-                $mail->addAddress($login);
-
-                $mail->isHTML(true);
-                $mail->Subject = 'VendorDesk - Login OTP';
-                $htmlBody = file_get_contents('templates/login_otp.html');
-                $htmlBody = str_replace('{{OTP_CODE}}', $token, $htmlBody);
-                $htmlBody = str_replace('{{CURRENT_YEAR}}', date('Y'), $htmlBody);
-                $mail->Body    = $htmlBody;
-
-                $mail->send();
-
-                echo json_encode(['success' => true, 'message' => 'OTP sent.', 'token' => $token]);
-            } catch (Exception $e) {
-                echo json_encode(['success' => false, 'message' => 'Mailer Error: ' . $mail->ErrorInfo]);
-            }
-        } else {
-            echo json_encode(['success' => false, 'message' => 'User not found.']);
+        if (!$user) {
+            vendorJsonResponse(['success' => false, 'message' => 'User not found.']);
         }
+
+        if (self::SKIP_EMAIL_OTP) {
+            $existing = trim((string) ($user['remember_token'] ?? ''));
+            if ($existing !== '') {
+                vendorJsonResponse([
+                    'success' => true,
+                    'message' => 'Enter the login OTP provided by your administrator.',
+                ]);
+            }
+            vendorJsonResponse([
+                'success' => false,
+                'message' => 'No login OTP assigned. Ask an administrator to generate one from the Users list.',
+            ]);
+        }
+
+        $token = (string) random_int(100000, 999999);
+        $usersModel->saveResetToken($user['id'], $token);
+
+        $result = sendVendorOtpEmail(
+            $login,
+            $token,
+            'VendorDesk - Login OTP',
+            'login_otp.html'
+        );
+
+        $payload = [
+            'success' => $result['success'],
+            'message' => $result['message'],
+        ];
+        if (!empty($result['smtp_error'])) {
+            $payload['smtp_error'] = $result['smtp_error'];
+        }
+        vendorJsonResponse($payload);
+    }
+
+    public function generateLoginOtp()
+    {
+        is_login();
+        global $usersModel;
+
+        header('Content-Type: application/json; charset=UTF-8');
+
+        $userId = (int) ($_POST['user_id'] ?? $_GET['user_id'] ?? 0);
+        if ($userId < 1) {
+            echo json_encode(['success' => false, 'message' => 'Invalid user.']);
+            exit;
+        }
+
+        $user = $usersModel->getUserById($userId);
+        if (!$user) {
+            echo json_encode(['success' => false, 'message' => 'User not found.']);
+            exit;
+        }
+
+        $otp = (string) random_int(100000, 999999);
+        if (!$usersModel->saveResetToken($userId, $otp)) {
+            echo json_encode(['success' => false, 'message' => 'Could not save OTP.']);
+            exit;
+        }
+
+        $loginHint = trim((string) ($user['email'] ?? ''));
+        if ($loginHint === '') {
+            $loginHint = trim((string) ($user['phone'] ?? ''));
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Login OTP generated for ' . ($user['name'] ?? 'user') . '.',
+            'otp' => $otp,
+            'user_id' => $userId,
+            'login' => $loginHint,
+            'user_name' => $user['name'] ?? '',
+        ]);
         exit;
     }
 
@@ -131,43 +161,34 @@ class UsersController
             $resetLink = "$domain/?page=reset_password&token=$token";
             mail($login, "Password Reset", "Click here to reset your password: $resetLink");*/
 
-            // ...
-            //for test only
-            $token = rand(100000, 999999);
+            if (self::SKIP_EMAIL_OTP) {
+                $token = (string) random_int(100000, 999999);
+                $usersModel->saveResetToken($user['id'], $token);
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'OTP generated. Share it with the user: ' . $token,
+                    'token' => $token,
+                ]);
+                exit;
+            }
+
+            $token = (string) random_int(100000, 999999);
             $usersModel->saveResetToken($user['id'], $token);
 
-            // Send email using PHPMailer
+            $result = sendVendorOtpEmail(
+                $login,
+                $token,
+                'VendorDesk - Password Recovery - OTP Inside',
+                'password_recovery.html'
+            );
 
-
-            $mail = new PHPMailer(true);
-            try {
-                //Server settings
-                $mail->isSMTP();
-                $mail->Host       = 'glacier.mxrouting.net'; // Set SMTP server
-                $mail->SMTPAuth   = true;
-                $mail->Username   = 'vendoradmin@exoticindia.com';   // SMTP username
-                $mail->Password   = 'xah5VfXUrdVaju576bpa';     // SMTP password
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port       = 587;
-
-                //Recipients
-                $mail->setFrom('vendoradmin@exoticindia.com', 'Admin');
-                $mail->addAddress($login); // Send to user email
-
-                // Content
-                $mail->isHTML(true);
-                $mail->Subject = 'VendorDesk - Password Recovery - OTP Inside';
-                $htmlBody = file_get_contents('templates/password_recovery.html');
-                $htmlBody = str_replace('{{OTP_CODE}}', $token, $htmlBody);
-                $htmlBody = str_replace('{{CURRENT_YEAR}}', date('Y'), $htmlBody);
-                $mail->Body    = $htmlBody;
-
-                $mail->send();
-
-                echo json_encode(['success' => true, 'message' => 'OTP sent.', 'token' => $token]);
-            } catch (Exception $e) {
-                echo json_encode(['success' => false, 'message' => 'Mailer Error: ' . $mail->ErrorInfo]);
+            $payload = ['success' => $result['success'], 'message' => $result['message']];
+            if ($result['success']) {
+                $payload['token'] = $token;
+            } elseif (!empty($result['smtp_error'])) {
+                $payload['smtp_error'] = $result['smtp_error'];
             }
+            echo json_encode($payload);
         } else {
             echo json_encode(['success' => false, 'message' => 'User not found.']);
         }

@@ -22,10 +22,13 @@ define('EXPECTED_SECRET_KEY', 'b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3
 
 $secretKey = "d71b3895474bad65c349de861e60acfbb0f38f104196a93368b4e4d97e9191e2"; //bank details encryption
 
+// SMTP — used for login OTP, password reset, and other portal mail (see helpers/mail_helper.php)
 define('smtpHost', 'glacier.mxrouting.net');
-define('smtpPort', 587);
-define('smtpUser', 'vendoradmin@exoticindia.com');
-define('smtpPass', 'xah5VfXUrdVaju576bpa'); // Use app password if 2FA is enabled
+define('smtpPort', 587);           // 587 = STARTTLS, 465 = SSL
+define('smtpSecure', 'tls');      // tls | ssl | none  (omit to auto-pick from port)
+define('smtpUser', 'vendor-admin@exoticindia.com');
+define('smtpPass', 'yXuF9tpZjeuHM8PdEGGc');
+// define('smtpFrom', smtpUser);   // optional; must be an allowed sender on your mail host
 
 
 // Load helpers

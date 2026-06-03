@@ -112,6 +112,7 @@ $mainVar = [
     'size'            => $form2['size'] ?? '',
     'quantity'        => $form2['quantity_received'] ?? '1',
     'cp'              => $form2['cp'] ?? '',
+    'price_india_mrp' => $form2['price_india_mrp'] ?? '',
     'photo'           => $form2['product_photo'] ?? '',
     'invoice'         => $form2['invoice_image'] ?? '',
     'height'          => $form2['height'] ?? '',
@@ -138,6 +139,7 @@ foreach ($extraVars as $ex) {
         'size'            => $ex['size'],
         'quantity'        => $ex['quantity_received'] ?? '1',
         'cp'              => $ex['cp'],
+        'price_india_mrp' => $ex['price_india_mrp'] ?? '',
         'photo'           => $ex['variation_image'] ?? '',
         'height'          => $ex['height'] ?? '',
         'width'           => $ex['width'] ?? '',
@@ -170,6 +172,14 @@ if (!empty($selected_publisher_id) && method_exists($inboundingModel, 'getPublis
     $publisherRow = $inboundingModel->getPublisherById($selected_publisher_id);
     $selected_publisher_name = $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
 }
+
+require_once __DIR__ . '/partials/book_cover_types.php';
+$saved_cover_type = trim((string) ($form2['cover_type'] ?? ''));
+$saved_edition = trim((string) ($form2['edition'] ?? ''));
+$publication_date_raw = trim((string) ($form2['publication_date'] ?? ''));
+$saved_publication_date = ($publication_date_raw !== '' && $publication_date_raw !== '0000-00-00')
+    ? date('Y-m-d', strtotime($publication_date_raw))
+    : '';
 
 $formAction = base_url('?page=inbounding&action=submitStep3');
 ?>
@@ -298,7 +308,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     ?>
                     <input type="datetime-local" name="gate_entry_date_time" value="<?php echo $inputValue; ?>" class="w-full border border-gray-400 rounded px-2 py-1 text-sm focus:border-[#ea8c1e] outline-none">
                 </div>
-                <div>
+                <div id="material-code-field">
                     <label class="block text-gray-800 font-bold text-xs mb-1">Material</label>
                     <select name="material_code" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-[#ea8c1e] outline-none bg-white">
                         <option value="">Select Material</option>
@@ -314,9 +324,9 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     <input type="hidden" name="received_by_user_id" value="<?php echo $_SESSION['user']['id']; ?>">
                     <input type="text" name="received_by_name" value="<?php echo htmlspecialchars($currentuserDetails['name']); ?>"  class="w-full bg-gray-100 border border-gray-400 rounded px-2 py-1 text-sm text-gray-600 cursor-not-allowed">
                 </div>
-                <div>
+                <div class="md:col-span-4">
                     <label class="block text-gray-800 font-bold text-xs mb-1">Remarks</label>
-                    <input type="text" name="feedback" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none" value="<?php echo $feedback; ?>">
+                    <textarea name="feedback" rows="4" class="w-full min-h-[100px] border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none resize-y"><?php echo htmlspecialchars($feedback, ENT_QUOTES, 'UTF-8'); ?></textarea>
                 </div>
             </div>
 
@@ -348,6 +358,25 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     <div>
                         <label class="block text-gray-800 font-bold text-xs mb-1">ISBN</label>
                         <input type="text" name="isbn" value="<?php echo htmlspecialchars($form2['isbn'] ?? ''); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Cover Type</label>
+                        <select name="cover_type" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white">
+                            <option value="">Select cover type</option>
+                            <?php foreach ($bookCoverTypeOptions as $coverOption): ?>
+                                <option value="<?php echo htmlspecialchars($coverOption); ?>" <?php echo $saved_cover_type === $coverOption ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($coverOption); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Edition</label>
+                        <input type="text" name="edition" value="<?php echo htmlspecialchars($saved_edition); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Publication Date</label>
+                        <input type="date" name="publication_date" value="<?php echo htmlspecialchars($saved_publication_date); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                     </div>
                     <div>
                         <label class="block text-gray-800 font-bold text-xs mb-1">Language</label>
@@ -392,7 +421,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             </div>
 
                             <div class="flex-1 grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-4 items-start">
-                                <div>
+                                <div class="variation-color-field">
                                     <label class="block text-xs font-bold text-black mb-1">Color:</label>
                                     <input type="text" name="variations[<?php echo $index; ?>][color]" value="<?php echo $var['color']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
@@ -407,21 +436,25 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <label class="block text-xs font-bold text-black mb-1">Cost Price(INR):</label>
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][cp]" value="<?php echo $var['cp']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Price India MRP:</label>
+                                    <input type="text" name="variations[<?php echo $index; ?>][price_india_mrp]" value="<?php echo htmlspecialchars($var['price_india_mrp'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
                                 <div class="size-container">
                                     <label class="block text-xs font-bold text-black mb-1">Size:</label>
                                     <?php echo renderSizeField($index, $var['size'], $saved_category_code, $sizeOptions); ?>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Height (inch):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][height]" value="<?php echo $var['height'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][height]" value="<?php echo $var['height'] ?? ''; ?>" class="calc-h w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Width (inch):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][width]" value="<?php echo $var['width'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][width]" value="<?php echo $var['width'] ?? ''; ?>" class="calc-w w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Depth (inch):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="calc-d w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Weight (kg):</label>
@@ -444,7 +477,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <input type="text" name="variations[<?php echo $index; ?>][dimensions]" value="<?php echo $var['dimensions'] ?? 0; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
 
-                                <div>
+                                <div class="variation-colormap-field">
                                     <?php echo renderColorMapField($index, $var['colormaps'] ?? ''); ?>
                                 </div>
                             </div>
@@ -599,6 +632,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             <?php foreach ($sizeOptions as $k => $v) { echo '<option value="'.$k.'">'.$v.'</option>'; } ?>
         `;
 
+        const BOOK_CATEGORY_VALUE = '-8';
+
         // 2. HELPER: Detect Category Type
         function getCategoryType() {
             const selectedRadio = document.querySelector('input[name="category"]:checked');
@@ -614,8 +649,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     info.isClothing = true;
                 }
 
-                // Book Check
-                if (labelText.includes('book') || val.includes('book')) {
+                // Book Check (category value -8 or label "book")
+                if (selectedRadio.value === BOOK_CATEGORY_VALUE || labelText.includes('book') || val.includes('book')) {
                     info.isBook = true;
                 }
 
@@ -667,14 +702,15 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
 
         // 4. TOGGLE COLOR MAP FIELDS (Logic Fixed for Selection)
         function toggleColorMapFields() {
-            const { mapKey } = getCategoryType();
+            const { mapKey, isBook } = getCategoryType();
             const wrappers = document.querySelectorAll('.colormap-wrapper');
 
             wrappers.forEach(wrapper => {
                 const select = wrapper.querySelector('.colormap-select');
-                
-                // Hide if no match
-                if (!mapKey || !colorMapDB[mapKey]) {
+                const card = wrapper.closest('.variation-card');
+                const isMainVariant = card && card.getAttribute('data-index') === '0';
+
+                if ((isBook && isMainVariant) || !mapKey || !colorMapDB[mapKey]) {
                     wrapper.style.display = 'none';
                     return;
                 }
@@ -709,6 +745,29 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             });
                         }
                     }
+                }
+            });
+        }
+
+        function toggleBookCategoryFields() {
+            const { isBook } = getCategoryType();
+            const materialField = document.getElementById('material-code-field');
+            if (materialField) {
+                materialField.classList.toggle('hidden', isBook);
+            }
+
+            const mainCard = document.querySelector('.variation-card[data-index="0"]');
+            if (!mainCard) {
+                return;
+            }
+
+            const colorField = mainCard.querySelector('.variation-color-field');
+            const sizeField = mainCard.querySelector('.size-container');
+            const colormapField = mainCard.querySelector('.variation-colormap-field');
+
+            [colorField, sizeField, colormapField].forEach(function (el) {
+                if (el) {
+                    el.classList.toggle('hidden', isBook);
                 }
             });
         }
@@ -770,7 +829,63 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             toggleSizeFields();
             toggleColorMapFields();
             toggleBookFields();
+            toggleBookCategoryFields();
             toggleVariationControls();
+            initAllVariationDimensions();
+        }
+
+        const formatDimensionsText = (h, w, d) => {
+            const hh = (h || '').trim();
+            const ww = (w || '').trim();
+            const dd = (d || '').trim();
+            if (!hh && !ww && !dd) {
+                return '';
+            }
+            return `${hh || '0'} Inches Height X ${ww || '0'} Inches Width X ${dd || '0'} Inches Depth`;
+        };
+
+        const setupVariationDimensionsCard = (card) => {
+            if (!card || card.dataset.dimsAutoSetup === '1') {
+                return;
+            }
+            card.dataset.dimsAutoSetup = '1';
+
+            const h = card.querySelector('.calc-h');
+            const w = card.querySelector('.calc-w');
+            const d = card.querySelector('.calc-d');
+            const dim = card.querySelector('input[name$="[dimensions]"]');
+            let manual = false;
+
+            if (!dim) {
+                return;
+            }
+
+            manual = dim.value.trim() !== '';
+            dim.addEventListener('input', () => {
+                manual = true;
+            });
+
+            const update = () => {
+                if (manual) {
+                    return;
+                }
+                dim.value = formatDimensionsText(h ? h.value : '', w ? w.value : '', d ? d.value : '');
+            };
+
+            [h, w, d].forEach((field) => {
+                if (field) {
+                    field.addEventListener('input', () => {
+                        manual = false;
+                        update();
+                    });
+                }
+            });
+
+            update();
+        };
+
+        function initAllVariationDimensions() {
+            document.querySelectorAll('.variation-card').forEach(setupVariationDimensionsCard);
         }
 
         radioButtons.forEach(radio => {
@@ -827,9 +942,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             </div>
 
                             <div><label class="block text-xs font-bold text-black mb-1">Cost Price(INR) <span class="text-red-500">*</span>:</label><input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Height (inch):</label><input type="number" step="any" min="0" name="variations[${index}][height]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Price India MRP:</label><input type="text" name="variations[${index}][price_india_mrp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Height (inch):</label><input type="number" step="any" min="0" name="variations[${index}][height]" class="calc-h w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="calc-w w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="calc-d w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Store Location <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][store_location]" value="4th Floor" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">HSN Code <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][hsn_code]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
@@ -869,6 +985,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     quantity: getData('quantity') || 1,
                     size: getData('size'),
                     cp: getData('cp'),
+                    price_india_mrp: getData('price_india_mrp'),
                     height: getData('height'),
                     width: getData('width'),
                     depth: getData('depth'),
@@ -899,6 +1016,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     setData('quantity', data.quantity || 1); 
                     setData('size', data.size);
                     setData('cp', data.cp);
+                    setData('price_india_mrp', data.price_india_mrp);
                     setData('height', data.height);
                     setData('width', data.width);
                     setData('depth', data.depth);
