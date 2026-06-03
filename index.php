@@ -148,6 +148,33 @@ switch ($page) {
                 break;
         }
         break;
+    case 'account_groups':
+        require_once 'controllers/AccountGroupsController.php';
+        $controller = new AccountGroupsController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'details':
+                $controller->details();
+                break;
+            case 'status':
+                $controller->status();
+                break;
+            case 'delete':
+                $controller->delete();
+                break;
+            case 'checkName':
+                $controller->checkName();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'vendors':
         require_once 'controllers/VendorsController.php';
         $controller = new VendorsController($conn);
