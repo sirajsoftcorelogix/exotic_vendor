@@ -55,6 +55,46 @@ function createVendorMailer(int $timeoutSeconds = 20): PHPMailer
 }
 
 /**
+ * Plain-language message for end users; technical details stay in server logs.
+ */
+function vendorFriendlyMailErrorMessage(string $technical = ''): string
+{
+    $lower = strtolower($technical);
+
+    if ($technical === '') {
+        return 'We could not send your email right now. Please try again in a few minutes.';
+    }
+
+    if (
+        str_contains($lower, 'connect')
+        || str_contains($lower, 'timeout')
+        || str_contains($lower, 'timed out')
+        || str_contains($lower, 'unreachable')
+        || preg_match('/smtp code:\s*110/i', $technical)
+    ) {
+        return 'We could not send your email right now. Please try again in a few minutes.';
+    }
+
+    if (
+        str_contains($lower, 'authenticate')
+        || str_contains($lower, 'authentication')
+        || str_contains($lower, 'credentials')
+        || preg_match('/smtp code:\s*53[45]/i', $technical)
+    ) {
+        return 'Email is temporarily unavailable. Please contact support if this continues.';
+    }
+
+    if (
+        (str_contains($lower, 'invalid') && (str_contains($lower, 'address') || str_contains($lower, 'recipient')))
+        || str_contains($lower, 'not a valid')
+    ) {
+        return 'That email address could not be used. Please check it and try again.';
+    }
+
+    return 'We could not send your OTP email. Please try again or contact support.';
+}
+
+/**
  * @return array{success: bool, message: string}
  */
 function sendVendorOtpEmail(string $toEmail, string $otp, string $subject, string $templateFile): array
@@ -79,11 +119,11 @@ function sendVendorOtpEmail(string $toEmail, string $otp, string $subject, strin
     } catch (MailException $e) {
         $info = isset($mail) ? trim((string) ($mail->ErrorInfo ?? '')) : trim($e->getMessage());
         error_log('Vendor OTP mail failed: ' . $e->getMessage() . ($info !== '' ? ' | ' . $info : ''));
-        if ($info === '') {
-            $info = 'Could not connect to mail server. Please try again or contact support.';
-        }
 
-        return ['success' => false, 'message' => 'Mailer error: ' . $info];
+        return [
+            'success' => false,
+            'message' => vendorFriendlyMailErrorMessage($info !== '' ? $info : $e->getMessage()),
+        ];
     } catch (Throwable $e) {
         error_log('Vendor OTP mail failed: ' . $e->getMessage());
 
