@@ -1,9 +1,7 @@
 <?php
 // 1. PHP Logic & Data Fetching
-require_once __DIR__ . '/../../helpers/label/label_price.php';
-
-$label_data[0] = $data['form2'] ?? [];
-$variations = $data['variation'];
+$label_data[0] = $form2 ?? $data['form2'] ?? [];
+$variations = $variation ?? $data['variation'] ?? [];
 if (isset($variations) && !empty($variations)) {
     foreach ($variations as $key => $value) {
         $key++;
@@ -17,10 +15,6 @@ if (isset($variations) && !empty($variations)) {
             if (($label_data[$key][$inheritField] ?? '') === '' && ($label_data[0][$inheritField] ?? '') !== '') {
                 $label_data[$key][$inheritField] = $label_data[0][$inheritField];
             }
-        }
-        if ((float) ($label_data[$key]['price_india'] ?? 0) <= 0 && (float) ($label_data[0]['price_india'] ?? 0) > 0) {
-            $label_data[$key]['price_india'] = $label_data[0]['price_india'];
-            $label_data[$key]['gst_rate'] = $label_data[0]['gst_rate'] ?? 0;
         }
     }
 }
@@ -54,11 +48,6 @@ if (!empty($label_data[0]["group_name"])) {
 function safeInt($value)
 {
     return intval($value ?? 0);
-}
-
-function labelInboundMrp(array $row): string
-{
-    return formatInboundLabelMrp($row);
 }
 
 function labelInboundText($value, string $fallback = 'N/A'): string
@@ -157,7 +146,9 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <div class="flex flex-col leading-none">
                                 <span class="text-[32px] font-bold text-black uppercase mb-3">MRP:</span>
                                 <span class="text-[54px] font-black text-black tracking-tight">
-                                    ₹ <?php echo safe(labelInboundMrp($current_label)); ?>
+                                    ₹ <?php echo safe(
+                                            $current_label["price_india_mrp"] ?? "0"
+                                        ); ?>
                                 </span>
                             </div>
                             <div class="flex flex-col leading-none">
@@ -436,7 +427,9 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <div class="flex flex-col leading-none">
                                 <span class="text-[32px] font-bold text-black uppercase mb-3">MRP:</span>
                                 <span class="text-[54px] font-black text-black tracking-tight">
-                                    ₹ <?php echo safe(labelInboundMrp($current_label)); ?>
+                                    ₹ <?php echo safe(
+                                            $current_label["price_india_mrp"] ?? "0"
+                                        ); ?>
                                 </span>
                             </div>
                             <div class="flex flex-col leading-none">

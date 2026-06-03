@@ -112,6 +112,7 @@ $mainVar = [
     'size'            => $form2['size'] ?? '',
     'quantity'        => $form2['quantity_received'] ?? '1',
     'cp'              => $form2['cp'] ?? '',
+    'price_india_mrp' => $form2['price_india_mrp'] ?? '',
     'photo'           => $form2['product_photo'] ?? '',
     'invoice'         => $form2['invoice_image'] ?? '',
     'height'          => $form2['height'] ?? '',
@@ -138,6 +139,7 @@ foreach ($extraVars as $ex) {
         'size'            => $ex['size'],
         'quantity'        => $ex['quantity_received'] ?? '1',
         'cp'              => $ex['cp'],
+        'price_india_mrp' => $ex['price_india_mrp'] ?? '',
         'photo'           => $ex['variation_image'] ?? '',
         'height'          => $ex['height'] ?? '',
         'width'           => $ex['width'] ?? '',
@@ -433,6 +435,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Cost Price(INR):</label>
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][cp]" value="<?php echo $var['cp']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Price India MRP:</label>
+                                    <input type="text" name="variations[<?php echo $index; ?>][price_india_mrp]" value="<?php echo htmlspecialchars($var['price_india_mrp'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div class="size-container">
                                     <label class="block text-xs font-bold text-black mb-1">Size:</label>
@@ -936,6 +942,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             </div>
 
                             <div><label class="block text-xs font-bold text-black mb-1">Cost Price(INR) <span class="text-red-500">*</span>:</label><input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Price India MRP:</label><input type="text" name="variations[${index}][price_india_mrp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Height (inch):</label><input type="number" step="any" min="0" name="variations[${index}][height]" class="calc-h w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="calc-w w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="calc-d w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
@@ -978,6 +985,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     quantity: getData('quantity') || 1,
                     size: getData('size'),
                     cp: getData('cp'),
+                    price_india_mrp: getData('price_india_mrp'),
                     height: getData('height'),
                     width: getData('width'),
                     depth: getData('depth'),
@@ -1008,6 +1016,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     setData('quantity', data.quantity || 1); 
                     setData('size', data.size);
                     setData('cp', data.cp);
+                    setData('price_india_mrp', data.price_india_mrp);
                     setData('height', data.height);
                     setData('width', data.width);
                     setData('depth', data.depth);
