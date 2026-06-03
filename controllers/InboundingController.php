@@ -413,7 +413,7 @@ class InboundingController {
     public function saveform1() {
         global $inboundingModel;
         
-        $vendor_id  = $_POST['vendor_id'] ?? '';
+        $vendor_id  = trim((string)($_POST['vendor_code'] ?? $_POST['vendor_id'] ?? ''));
         $record_id  = $_POST['record_id'] ?? '';
         $invoice_no = $_POST['invoice_no'] ?? '';
         
@@ -472,7 +472,7 @@ class InboundingController {
         global $inboundingModel;
 
         $id         = $_GET['id'] ?? 0;
-        $vendor_id  = $_POST['vendor_id'] ?? '';
+        $vendor_id  = trim((string)($_POST['vendor_code'] ?? $_POST['vendor_id'] ?? ''));
         $invoice_no = $_POST['invoice_no'] ?? '';
 
         $oldData = $inboundingModel->getform1data($id);

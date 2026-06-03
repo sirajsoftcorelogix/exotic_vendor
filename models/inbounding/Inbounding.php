@@ -658,11 +658,11 @@ class Inbounding {
         // ---------------------------------------------------------
         // 2. Static Query: Get all vendors (Standard query is safe here)
         // ---------------------------------------------------------
-        $res_vendors = $this->conn->query("SELECT * FROM vp_vendors");
+        // vp_inbound.vendor_code stores Exotic vendor_id (from vendorlist API), not vp_vendors.id
+        $res_vendors = $this->conn->query("SELECT id, vendor_id, vendor_name FROM `vp_vendors` WHERE vendor_id IS NOT NULL AND TRIM(vendor_id) <> '' ORDER BY vendor_name ASC");
         if ($res_vendors) {
             $vendors = $res_vendors->fetch_all(MYSQLI_ASSOC);
-            // Free result set memory
-            $res_vendors->free(); 
+            $res_vendors->free();
         }
 
         // ---------------------------------------------------------
