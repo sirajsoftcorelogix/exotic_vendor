@@ -1033,6 +1033,70 @@ class Inbounding {
         return $row ? $row : [];
     }
 
+    /**
+     * @return list<int>
+     */
+    public function parseInboundAuthorIds($stored): array
+    {
+        $stored = trim((string) $stored);
+        if ($stored === '') {
+            return [];
+        }
+
+        $ids = [];
+        foreach (explode('|', $stored) as $part) {
+            $part = trim($part);
+            if ($part !== '' && ctype_digit($part)) {
+                $ids[] = (int) $part;
+            }
+        }
+
+        if ($ids === [] && ctype_digit($stored)) {
+            $ids[] = (int) $stored;
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * Normalize POST/array author values to "id|id" for vp_inbound.author.
+     *
+     * @param mixed $input
+     */
+    public function normalizeInboundAuthorValue($input): string
+    {
+        if (is_array($input)) {
+            $ids = [];
+            foreach ($input as $value) {
+                $value = trim((string) $value);
+                if ($value !== '' && ctype_digit($value)) {
+                    $ids[] = (int) $value;
+                }
+            }
+
+            return $ids === [] ? '' : implode('|', array_values(array_unique($ids)));
+        }
+
+        return implode('|', $this->parseInboundAuthorIds($input));
+    }
+
+    /**
+     * Resolve stored author ids to pipe-separated display names (for labels/API creator).
+     */
+    public function resolveInboundAuthorNames($stored): string
+    {
+        $names = [];
+        foreach ($this->parseInboundAuthorIds($stored) as $authorId) {
+            $row = $this->getAuthorById($authorId);
+            $name = trim((string) ($row['name'] ?? $row['author'] ?? ''));
+            if ($name !== '') {
+                $names[] = $name;
+            }
+        }
+
+        return implode('|', $names);
+    }
+
     public function searchAuthors($query) {
         $query = trim($query);
         if ($query === '') {
@@ -1091,6 +1155,10 @@ class Inbounding {
         $labeldata = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
         $stmt->close();
 
+        if (!empty($labeldata)) {
+            $labeldata['author_name'] = $this->resolveInboundAuthorNames($labeldata['author'] ?? '');
+        }
+
         return [
             'form2' => $labeldata ?: []
         ];
@@ -1141,7 +1209,7 @@ class Inbounding {
         $material_code = (int) ($data['material_code'] ?? 0);
         $group_name = $data['group_name'] ?? '';
         $received_by_user_id = (int) ($data['received_by_user_id'] ?? 0);
-        $author = (int) ($data['author'] ?? 0);
+        $author = $this->normalizeInboundAuthorValue($data['author'] ?? '');
         $publisher = (int) ($data['publisher'] ?? 0);
         $isbn = trim($data['isbn'] ?? '');
         $language = trim($data['language'] ?? '');
@@ -1171,7 +1239,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        $types = "sisssssisddddssdiissddsiisssssii";
+        $types = "sisssssisddddssdiissddssisssssii";
 
         $stmt->bind_param(
             $types,
@@ -1439,9 +1507,11 @@ class Inbounding {
         
         // Check if data was found
         $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
-        
-        
-       
+
+        if ($inbounding) {
+            $inbounding['author_name'] = $this->resolveInboundAuthorNames($inbounding['author'] ?? '');
+        }
+
         // 3. Process the loop to create the string
         $cat_id_string = '';
 

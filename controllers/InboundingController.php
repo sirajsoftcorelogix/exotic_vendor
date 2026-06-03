@@ -1385,7 +1385,7 @@ class InboundingController {
             'feedback'         => $_POST['feedback'] ?? '',
 
             // Book fields (saved when Group is Book)
-            'author'   => trim((string)($_POST['author'] ?? '')) === '' ? null : (int) $_POST['author'],
+            'author'   => $inboundingModel->normalizeInboundAuthorValue($_POST['author'] ?? ''),
             'publisher'=> trim((string)($_POST['publisher'] ?? '')) === '' ? null : (int) $_POST['publisher'],
             'isbn'     => $_POST['isbn'] ?? '',
             'language' => $_POST['language'] ?? '',
@@ -1643,7 +1643,7 @@ class InboundingController {
           'hsn_code'   => $mainVariant['hsn_code'] ?? '',
           'gst_rate'   => $mainVariant['gst_rate'] ?? 0,
           'dimensions'   => $mainVariant['dimensions'] ?? 0,
-          'author'      => $_POST['author'] ?? '',
+          'author'      => $inboundingModel->normalizeInboundAuthorValue($_POST['author'] ?? ''),
           'publisher'   => $_POST['publisher'] ?? '',
           'isbn'        => $_POST['isbn'] ?? '',
           'language'    => $_POST['language'] ?? '',
@@ -2010,7 +2010,7 @@ class InboundingController {
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
 
-            $API_data['author'] = $d['author_name'] ?? '';
+            $API_data['creator'] = $d['author_name'] ?? $inboundingModel->resolveInboundAuthorNames($d['author'] ?? '');
             $API_data['publisher'] = $d['publishers_name'] ?? '';
             $API_data['language'] = $d['language'] ?? '';
             $API_data['pages'] = $d['pages'] ?? '';

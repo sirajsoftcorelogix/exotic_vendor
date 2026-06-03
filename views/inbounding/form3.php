@@ -159,12 +159,19 @@ $gate_entry_date_time = $form2['gate_entry_date_time'] ?? '';
 $material_code        = $form2['material_code'] ?? '';
 $feedback        = $form2['feedback'] ?? '';
 
-$selected_author_id = $form2['author'] ?? '';
-$selected_author_name = '';
-if (!empty($selected_author_id) && method_exists($inboundingModel, 'getAuthorById')) {
-    $authorRow = $inboundingModel->getAuthorById($selected_author_id);
-    $selected_author_name = $authorRow['author'] ?? $authorRow['name'] ?? '';
+$selected_author_options = [];
+if (!empty($form2['author']) && isset($inboundingModel) && method_exists($inboundingModel, 'parseInboundAuthorIds')) {
+    foreach ($inboundingModel->parseInboundAuthorIds($form2['author']) as $authorId) {
+        $authorRow = $inboundingModel->getAuthorById($authorId);
+        if (!empty($authorRow['id'])) {
+            $selected_author_options[] = $authorRow;
+        }
+    }
 }
+$author_prefill_ids = array_map(static function ($opt) {
+    return (string) ($opt['id'] ?? '');
+}, $selected_author_options);
+$author_stored_value = (string) ($form2['author'] ?? '');
 
 $selected_publisher_id = $form2['publisher'] ?? '';
 $selected_publisher_name = '';
@@ -199,7 +206,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         box-shadow: none;
     }
     /* Hide the dropdown arrow if strictly needed to match inputs, or keep it */
-    .ts-control { display: flex; align-items: center; }
+    .ts-control { display: flex; align-items: center; flex-wrap: wrap; min-height: 38px; }
+    .ts-wrapper.multi .ts-control > .item { margin: 2px 4px 2px 0; }
 </style>
 
 <div class="w-full min-h-screen bg-white p-2 md:p-6 font-sans">
@@ -335,11 +343,11 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div>
                         <label class="block text-gray-800 font-bold text-xs mb-1">Author</label>
-                        <select id="author_select" name="author" placeholder="Type author name..." class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
-                            <option value=""></option>
-                            <?php if (!empty($selected_author_id) && !empty($selected_author_name)): ?>
-                                <option value="<?php echo htmlspecialchars($selected_author_id); ?>" selected><?php echo htmlspecialchars($selected_author_name); ?></option>
-                            <?php endif; ?>
+                        <input type="hidden" name="author" id="author_pipe_value" value="<?php echo htmlspecialchars($author_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
+                        <select id="author_select" multiple class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
+                            <?php foreach ($selected_author_options as $authorOpt): ?>
+                                <option value="<?php echo htmlspecialchars((string) $authorOpt['id']); ?>" selected><?php echo htmlspecialchars($authorOpt['name'] ?? ''); ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div>
@@ -544,30 +552,75 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         const searchAuthorsUrl = '<?php echo base_url('?page=inbounding&action=searchAuthors&q='); ?>';
         const searchPublishersUrl = '<?php echo base_url('?page=inbounding&action=searchPublishers&q='); ?>';
 
-        const authorSelect = new TomSelect('#author_select', {
-            valueField: 'id',
-            labelField: 'name',
-            searchField: ['name'],
-            placeholder: 'Search author...',
-            create: false,
-            preload: false,
-            allowEmptyOption: true,
-            load: function(query, callback) {
-                if (!query || query.length < 2) {
-                    callback();
-                    return;
-                }
-                fetch(searchAuthorsUrl + encodeURIComponent(query))
-                    .then(response => {
-                        if (!response.ok) {
-                            return response.text().then(text => { throw new Error('Author request failed: ' + response.status + ' ' + text); });
-                        }
-                        return response.json();
-                    })
-                    .then(json => callback(json))
-                    .catch(err => { console.error('Author load error:', err); callback(); });
+        const authorPipeInput = document.getElementById('author_pipe_value');
+        const authorSelectEl = document.getElementById('author_select');
+        const initialAuthorOptions = <?php echo json_encode($selected_author_options, JSON_UNESCAPED_UNICODE); ?>;
+        const initialAuthorIds = <?php echo json_encode($author_prefill_ids, JSON_UNESCAPED_UNICODE); ?>;
+
+        function mapAuthorOptions(rows) {
+            return (rows || []).map(function (item) {
+                return { id: String(item.id), name: item.name || '' };
+            });
+        }
+
+        function syncAuthorPipeValue(ts) {
+            if (!authorPipeInput || !ts) {
+                return;
             }
-        });
+            let vals = ts.getValue();
+            if (!Array.isArray(vals)) {
+                vals = vals ? [String(vals)] : [];
+            }
+            authorPipeInput.value = vals.filter(Boolean).join('|');
+        }
+
+        let authorTomSelect = null;
+        if (authorSelectEl) {
+            authorSelectEl.setAttribute('multiple', 'multiple');
+            authorTomSelect = new TomSelect(authorSelectEl, {
+                plugins: ['remove_button'],
+                valueField: 'id',
+                labelField: 'name',
+                searchField: ['name'],
+                placeholder: 'Search and select authors...',
+                maxItems: 100,
+                hideSelected: true,
+                closeAfterSelect: false,
+                create: false,
+                persist: true,
+                onChange: function () { syncAuthorPipeValue(this); },
+                onItemAdd: function () {
+                    this.setTextboxValue('');
+                    syncAuthorPipeValue(this);
+                },
+                onItemRemove: function () { syncAuthorPipeValue(this); },
+                load: function (query, callback) {
+                    if (!query || query.length < 2) {
+                        callback();
+                        return;
+                    }
+                    fetch(searchAuthorsUrl + encodeURIComponent(query))
+                        .then(function (response) {
+                            if (!response.ok) {
+                                throw new Error('Author request failed: ' + response.status);
+                            }
+                            return response.json();
+                        })
+                        .then(function (json) { callback(mapAuthorOptions(json)); })
+                        .catch(function (err) {
+                            console.error('Author load error:', err);
+                            callback();
+                        });
+                }
+            });
+            mapAuthorOptions(initialAuthorOptions).forEach(function (opt) {
+                authorTomSelect.addOption(opt);
+            });
+            if (initialAuthorIds.length) {
+                authorTomSelect.setValue(initialAuthorIds);
+            }
+            syncAuthorPipeValue(authorTomSelect);
+        }
 
         const publisherSelect = new TomSelect('#publisher_select', {
             valueField: 'id',
@@ -1115,6 +1168,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     e.preventDefault();
                     return;
                 }
+            }
+
+            if (authorTomSelect) {
+                syncAuthorPipeValue(authorTomSelect);
             }
 
             if (!isValid) {
