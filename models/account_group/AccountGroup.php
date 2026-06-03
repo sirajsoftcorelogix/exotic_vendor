@@ -46,10 +46,8 @@ class AccountGroup
         $totalRecords = (int)(($countStmt->get_result()->fetch_assoc()['total'] ?? 0));
         $countStmt->close();
 
-        $sql = 'SELECT ag.id, ag.account_group_name, ag.item_group, ag.is_active, ag.created_at, ag.updated_at,
-                       COALESCE(c.display_name, ag.item_group) AS item_group_name
-                FROM account_group ag
-                LEFT JOIN category c ON c.name = ag.item_group AND c.parent_id = 0' . $whereSql . '
+        $sql = 'SELECT ag.id, ag.account_group_name, ag.item_group, ag.is_active, ag.created_at, ag.updated_at
+                FROM account_group ag' . $whereSql . '
                 ORDER BY ag.account_group_name ASC
                 LIMIT ? OFFSET ?';
         $stmt = $this->conn->prepare($sql);
@@ -68,7 +66,7 @@ class AccountGroup
         foreach ($accountGroups as &$group) {
             $stored = trim((string)($group['item_group'] ?? ''));
             $group['item_group_display'] = $stored !== ''
-                ? ($labelMap[$stored] ?? (string)($group['item_group_name'] ?? $stored))
+                ? ($labelMap[$stored] ?? $stored)
                 : '';
         }
         unset($group);
@@ -85,10 +83,8 @@ class AccountGroup
     public function getAccountGroupById(int $id): ?array
     {
         $stmt = $this->conn->prepare(
-            'SELECT ag.id, ag.account_group_name, ag.item_group, ag.is_active, ag.created_at, ag.updated_at,
-                    c.display_name AS item_group_name
+            'SELECT ag.id, ag.account_group_name, ag.item_group, ag.is_active, ag.created_at, ag.updated_at
              FROM account_group ag
-             LEFT JOIN category c ON c.name = ag.item_group AND c.parent_id = 0
              WHERE ag.id = ? LIMIT 1'
         );
         if (!$stmt) {
@@ -99,7 +95,19 @@ class AccountGroup
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        return $row ?: null;
+        if (!$row) {
+            return null;
+        }
+
+        $stored = trim((string)($row['item_group'] ?? ''));
+        if ($stored !== '') {
+            $labelMap = $this->getItemGroupLabelMap();
+            $row['item_group_display'] = $labelMap[$stored] ?? $stored;
+        } else {
+            $row['item_group_display'] = '';
+        }
+
+        return $row;
     }
 
     public function getItemGroupLabelMap(): array
@@ -157,7 +165,7 @@ class AccountGroup
         }
 
         $stmt = $this->conn->prepare(
-            'SELECT name FROM category WHERE name = ? AND parent_id = 0 AND is_active = 1 LIMIT 1'
+            'SELECT name FROM category WHERE name COLLATE utf8mb4_unicode_ci = ? AND parent_id = 0 AND is_active = 1 LIMIT 1'
         );
         if (!$stmt) {
             return false;
