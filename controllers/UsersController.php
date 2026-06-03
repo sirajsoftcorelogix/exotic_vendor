@@ -6,6 +6,7 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 require 'vendor/autoload.php';
+require_once __DIR__ . '/../helpers/mail_helper.php';
 
 global $root_path;
 global $domain;
@@ -47,54 +48,35 @@ class UsersController
     public function sendLoginOtp()
     {
         global $usersModel;
-        global $domain;
         $login = trim($_POST['login'] ?? '');
         if (empty($login)) {
-            echo json_encode(['success' => false, 'message' => 'Please enter your email or phone.']);
-            exit;
+            vendorJsonResponse(['success' => false, 'message' => 'Please enter your email or phone.']);
         }
 
         $user = $usersModel->findByLogin($login);
-        if ($user) {
-            if ($this->isDevLoginEmail($login)) {
-                $usersModel->saveResetToken($user['id'], self::DEV_LOGIN_OTP);
-                echo json_encode(['success' => true, 'message' => 'OTP ready. Use 1234 to sign in.']);
-                exit;
-            }
-
-            $token = rand(100000, 999999);
-            $usersModel->saveResetToken($user['id'], $token);
-
-            $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
-            try {
-                $mail->isSMTP();
-                $mail->Host       = 'glacier.mxrouting.net';
-                $mail->SMTPAuth   = true;
-                $mail->Username   = 'vendoradmin@exoticindia.com';
-                $mail->Password   = 'xah5VfXUrdVaju576bpa';
-                $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port       = 587;
-
-                $mail->setFrom('vendoradmin@exoticindia.com', 'Admin');
-                $mail->addAddress($login);
-
-                $mail->isHTML(true);
-                $mail->Subject = 'VendorDesk - Login OTP';
-                $htmlBody = file_get_contents('templates/login_otp.html');
-                $htmlBody = str_replace('{{OTP_CODE}}', $token, $htmlBody);
-                $htmlBody = str_replace('{{CURRENT_YEAR}}', date('Y'), $htmlBody);
-                $mail->Body    = $htmlBody;
-
-                $mail->send();
-
-                echo json_encode(['success' => true, 'message' => 'OTP sent.', 'token' => $token]);
-            } catch (Exception $e) {
-                echo json_encode(['success' => false, 'message' => 'Mailer Error: ' . $mail->ErrorInfo]);
-            }
-        } else {
-            echo json_encode(['success' => false, 'message' => 'User not found.']);
+        if (!$user) {
+            vendorJsonResponse(['success' => false, 'message' => 'User not found.']);
         }
-        exit;
+
+        if ($this->isDevLoginEmail($login)) {
+            $usersModel->saveResetToken($user['id'], self::DEV_LOGIN_OTP);
+            vendorJsonResponse(['success' => true, 'message' => 'OTP ready. Use 1234 to sign in.']);
+        }
+
+        $token = (string) rand(100000, 999999);
+        $usersModel->saveResetToken($user['id'], $token);
+
+        $result = sendVendorOtpEmail(
+            $login,
+            $token,
+            'VendorDesk - Login OTP',
+            'login_otp.html'
+        );
+
+        vendorJsonResponse([
+            'success' => $result['success'],
+            'message' => $result['message'],
+        ]);
     }
 
     public function logout()

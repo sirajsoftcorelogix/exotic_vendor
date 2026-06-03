@@ -114,14 +114,32 @@ global $domain, $root_path;
         btn.textContent = 'Sending...';
         btn.disabled = true;
 
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function() { controller.abort(); }, 30000);
+
         fetch('?page=users&action=sendLoginOtp', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: 'login=' + encodeURIComponent(login)
+                body: 'login=' + encodeURIComponent(login),
+                signal: controller.signal
             })
-            .then(response => response.json())
+            .then(function(response) {
+                clearTimeout(timeoutId);
+                return response.text().then(function(text) {
+                    var data;
+                    try {
+                        data = JSON.parse(text);
+                    } catch (e) {
+                        throw new Error(text ? text.substring(0, 200) : 'Invalid server response.');
+                    }
+                    if (!response.ok && data && data.message) {
+                        throw new Error(data.message);
+                    }
+                    return data;
+                });
+            })
             .then(data => {
                 if (data.success) {
                     successDiv.textContent = data.message || 'OTP sent to your email.';
@@ -135,13 +153,18 @@ global $domain, $root_path;
                 } else {
                     btn.textContent = 'Send OTP';
                     btn.disabled = false;
-                    errorDiv.textContent = data.message;
+                    errorDiv.textContent = data.message || 'Could not send OTP.';
                 }
             })
-            .catch(() => {
+            .catch(function(err) {
+                clearTimeout(timeoutId);
                 btn.textContent = 'Send OTP';
                 btn.disabled = false;
-                errorDiv.textContent = 'Failed to send OTP. Please try again.';
+                if (err.name === 'AbortError') {
+                    errorDiv.textContent = 'Request timed out. The mail server may be unreachable from this environment.';
+                } else {
+                    errorDiv.textContent = err.message || 'Failed to send OTP. Please try again.';
+                }
             });
     });
 
