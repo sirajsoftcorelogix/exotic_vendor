@@ -51,7 +51,6 @@ class User
                 $_SESSION['user_id'] = (int) ($user['id'] ?? 0);
                 $_SESSION['warehouse_id'] = $user['warehouse_id'];
                 assignAPIToken($user['id']);
-                $this->saveResetToken($user['id'], null);
 
                 return true;
             }
@@ -71,9 +70,7 @@ class User
             $_SESSION['user_id'] = (int)($user['id'] ?? 0);
             $_SESSION['warehouse_id'] = $user['warehouse_id'];
             assignAPIToken($user["id"]); // Insert Token for Chat
-            
-            // clear token
-            $this->saveResetToken($user['id'], null);
+
             return true;
         }
 
