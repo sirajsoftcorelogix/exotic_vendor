@@ -127,13 +127,13 @@ class UsersController
                 $mail->isSMTP();
                 $mail->Host       = 'glacier.mxrouting.net'; // Set SMTP server
                 $mail->SMTPAuth   = true;
-                $mail->Username   = 'vendoradmin@exoticindia.com';   // SMTP username
-                $mail->Password   = 'xah5VfXUrdVaju576bpa';     // SMTP password
+                $mail->Username   = 'vendor-admin@exoticindia.com';   // SMTP username
+                $mail->Password   = 'yXuF9tpZjeuHM8PdEGGc';     // SMTP password
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                 $mail->Port       = 587;
 
                 //Recipients
-                $mail->setFrom('vendoradmin@exoticindia.com', 'Admin');
+                $mail->setFrom('vendor-admin@exoticindia.com', 'Admin');
                 $mail->addAddress($login); // Send to user email
 
                 // Content
