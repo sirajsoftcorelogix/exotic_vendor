@@ -12,6 +12,7 @@ $queryBase = [
     'status_filter' => $statusValue,
     'limit' => $limit,
 ];
+$itemGroupLabels = is_array($item_group_labels ?? null) ? $item_group_labels : [];
 ?>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -123,9 +124,12 @@ $queryBase = [
                             <?php
                             $id = (int)($group['id'] ?? 0);
                             $name = (string)($group['account_group_name'] ?? '');
-                            $itemGroupName = (string)($group['item_group_name'] ?? $group['item_group'] ?? '');
                             $itemGroup = trim((string)($group['item_group'] ?? ''));
                             $itemGroup = $itemGroup !== '' ? $itemGroup : null;
+                            $itemGroupDisplay = trim((string)($group['item_group_display'] ?? ''));
+                            if ($itemGroupDisplay === '' && $itemGroup !== null) {
+                                $itemGroupDisplay = (string)($itemGroupLabels[$itemGroup] ?? $itemGroup);
+                            }
                             $active = (int)($group['is_active'] ?? 0) === 1;
                             $updatedRaw = (string)($group['updated_at'] ?? '');
                             $updatedDisplay = $updatedRaw !== '' && ($updatedTs = strtotime($updatedRaw))
@@ -136,7 +140,7 @@ $queryBase = [
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo ++$counter; ?></td>
                                 <td class="px-5 py-4 text-sm font-medium text-gray-800"><?php echo $id; ?></td>
                                 <td class="px-5 py-4 text-sm font-semibold text-gray-900"><?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($itemGroupName !== '' ? $itemGroupName : '—', ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($itemGroupDisplay !== '' ? $itemGroupDisplay : '—', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm">
                                     <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold <?php echo $active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'; ?>">
                                         <?php echo $active ? 'Active' : 'Inactive'; ?>
