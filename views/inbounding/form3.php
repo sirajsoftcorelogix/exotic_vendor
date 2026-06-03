@@ -571,7 +571,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             if (!Array.isArray(vals)) {
                 vals = vals ? [String(vals)] : [];
             }
-            authorPipeInput.value = vals.filter(Boolean).join('|');
+            authorPipeInput.value = vals.filter(Boolean).join(',');
         }
 
         let authorTomSelect = null;

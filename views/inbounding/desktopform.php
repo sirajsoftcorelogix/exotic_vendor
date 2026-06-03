@@ -2095,7 +2095,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!authorPipeInput || !ts) return;
             let vals = ts.getValue();
             if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
-            authorPipeInput.value = vals.filter(Boolean).join('|');
+            authorPipeInput.value = vals.filter(Boolean).join(',');
         }
 
         let authorTomSelect = null;

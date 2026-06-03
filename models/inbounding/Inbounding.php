@@ -1044,7 +1044,7 @@ class Inbounding {
         }
 
         $ids = [];
-        foreach (explode('|', $stored) as $part) {
+        foreach (preg_split('/\s*[,|]\s*/', $stored) as $part) {
             $part = trim($part);
             if ($part !== '' && ctype_digit($part)) {
                 $ids[] = (int) $part;
@@ -1059,7 +1059,7 @@ class Inbounding {
     }
 
     /**
-     * Normalize POST/array author values to "id|id" for vp_inbound.author.
+     * Normalize POST/array author values to "id,id" for vp_inbound.author.
      *
      * @param mixed $input
      */
@@ -1074,14 +1074,14 @@ class Inbounding {
                 }
             }
 
-            return $ids === [] ? '' : implode('|', array_values(array_unique($ids)));
+            return $ids === [] ? '' : implode(',', array_values(array_unique($ids)));
         }
 
-        return implode('|', $this->parseInboundAuthorIds($input));
+        return implode(',', $this->parseInboundAuthorIds($input));
     }
 
     /**
-     * Resolve stored author ids to pipe-separated display names (for labels/API creator).
+     * Resolve stored author ids to comma-separated display names (for labels/API creator).
      */
     public function resolveInboundAuthorNames($stored): string
     {
@@ -1094,7 +1094,7 @@ class Inbounding {
             }
         }
 
-        return implode('|', $names);
+        return implode(',', $names);
     }
 
     public function searchAuthors($query) {
