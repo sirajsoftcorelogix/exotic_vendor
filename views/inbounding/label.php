@@ -500,13 +500,13 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 </div>
 
 <?php
-$labelPdfBaseName = 'Labels_Print_Batch';
+$labelPdfBaseName = 'Label_Labels_Print_Batch';
 $itemCodeForPdf = trim((string) ($label_data[0]['Item_code'] ?? ''));
 if ($itemCodeForPdf !== '') {
     $sanitizedItemCode = preg_replace('/[\\\\\/:*?"<>|]+/', '_', $itemCodeForPdf);
     $sanitizedItemCode = trim((string) $sanitizedItemCode, " \t\n\r\0\x0B._");
     if ($sanitizedItemCode !== '') {
-        $labelPdfBaseName = $sanitizedItemCode;
+        $labelPdfBaseName = 'Label_' . $sanitizedItemCode;
     }
 }
 ?>
