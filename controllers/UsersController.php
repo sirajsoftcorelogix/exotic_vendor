@@ -13,8 +13,17 @@ global $domain;
 
 class UsersController
 {
+    /** Dev-only login while SMTP is down (no admin OTP required). */
+    private const DEV_LOGIN_EMAIL = 'siraj.php@gmail.com';
+    private const DEV_LOGIN_OTP = '1234';
+
     /** Set false when SMTP email OTP is restored. */
     private const SKIP_EMAIL_OTP = true;
+
+    private function isDevLoginEmail(string $login): bool
+    {
+        return strtolower(trim($login)) === strtolower(self::DEV_LOGIN_EMAIL);
+    }
 
     public function login()
     {
@@ -50,6 +59,14 @@ class UsersController
         $user = $usersModel->findByLogin($login);
         if (!$user) {
             vendorJsonResponse(['success' => false, 'message' => 'User not found.']);
+        }
+
+        if ($this->isDevLoginEmail($login)) {
+            $usersModel->saveResetToken($user['id'], self::DEV_LOGIN_OTP);
+            vendorJsonResponse([
+                'success' => true,
+                'message' => 'OTP ready. Use 1234 to sign in.',
+            ]);
         }
 
         if (self::SKIP_EMAIL_OTP) {
