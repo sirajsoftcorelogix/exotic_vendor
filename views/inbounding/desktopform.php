@@ -2696,12 +2696,12 @@ window.inboundCourierEstimate = function (heightIn, widthIn, depthIn, actualKg) 
     const adjustedActualKg = (parseFloat(actualKg) || 0) * 1.5;
     const chargeableKg = Math.max(volKg, adjustedActualKg);
     const priceInr = chargeableKg * 700;
-    const basis = volKg > adjustedActualKg ? 'Volumetric' : 'Actual weight (×1.5)';
+    const basis = volKg > adjustedActualKg ? 'volumetric' : 'actual×1.5';
+    const priceFormatted = priceInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const detail = [
-        'Dimensions: ' + hCm.toFixed(1) + ' × ' + wCm.toFixed(1) + ' × ' + dCm.toFixed(1) + ' cm',
-        'Volumetric weight: ' + volKg.toFixed(3) + ' kg',
-        'Actual weight × 1.5: ' + adjustedActualKg.toFixed(3) + ' kg',
-        'Chargeable: ' + chargeableKg.toFixed(3) + ' kg — ' + basis
+        'Dims ' + hCm.toFixed(1) + '×' + wCm.toFixed(1) + '×' + dCm.toFixed(1) + ' cm → vol ' + volKg.toFixed(2) + ' kg · actual×1.5 ' + adjustedActualKg.toFixed(2) + ' kg',
+        'Chargeable ' + chargeableKg.toFixed(2) + ' kg (' + basis + ')',
+        chargeableKg.toFixed(2) + ' kg × ₹700/kg = ₹' + priceFormatted
     ].join('\n');
     return { volKg, adjustedActualKg, chargeableKg, priceInr, basis, detail };
 };
