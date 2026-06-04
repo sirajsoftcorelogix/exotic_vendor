@@ -3801,6 +3801,76 @@ class product
     }
 
     /**
+     * Determine catalog tree level from category.parent (matches inbound desktop form hierarchy).
+     */
+    private function categoryLevelFromParent(string $parent): int
+    {
+        $parent = trim($parent);
+        if ($parent === '0') {
+            return 0;
+        }
+        if ($parent === '' || strpos($parent, '|') === false) {
+            return 1;
+        }
+
+        return min(3, 1 + substr_count($parent, '|'));
+    }
+
+    /**
+     * Split comma-separated category store codes into Group / Category / Sub / SubSub buckets.
+     *
+     * @return array{group:string,category:string,sub_category:string,sub_sub_category:string}
+     */
+    public function resolveFlatCategoryIdsToSections(string $raw): array
+    {
+        $empty = ['group' => '—', 'category' => '—', 'sub_category' => '—', 'sub_sub_category' => '—'];
+        $raw = trim($raw);
+        if ($raw === '') {
+            return $empty;
+        }
+
+        $codes = array_values(array_unique(array_filter(array_map('trim', explode(',', $raw)))));
+        if ($codes === []) {
+            return $empty;
+        }
+
+        $buckets = [0 => [], 1 => [], 2 => [], 3 => []];
+
+        foreach ($codes as $code) {
+            $stmt = $this->db->prepare('SELECT display_name, parent FROM category WHERE TRIM(CAST(category AS CHAR)) = ? LIMIT 1');
+            if (!$stmt) {
+                $buckets[1][] = $code;
+                continue;
+            }
+            $stmt->bind_param('s', $code);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+
+            if (!$row) {
+                $buckets[1][] = $code;
+                continue;
+            }
+
+            $level = $this->categoryLevelFromParent((string)($row['parent'] ?? ''));
+            $label = trim((string)($row['display_name'] ?? ''));
+            $buckets[$level][] = $label !== '' ? $label : $code;
+        }
+
+        $joinLabels = static function (array $labels): string {
+            return $labels !== [] ? implode(', ', $labels) : '—';
+        };
+
+        return [
+            'group' => $joinLabels($buckets[0]),
+            'category' => $joinLabels($buckets[1]),
+            'sub_category' => $joinLabels($buckets[2]),
+            'sub_sub_category' => $joinLabels($buckets[3]),
+        ];
+    }
+
+    /**
      * Format pipe-delimited category string (SubSub|Sub|Cat|Group) for read-only display.
      *
      * @return array{group:string,category:string,sub_category:string,sub_sub_category:string}
@@ -3819,22 +3889,25 @@ class product
 
         if (strpos($raw, '|') !== false) {
             $parts = explode('|', $raw);
-            return [
+            $sections = [
                 'sub_sub_category' => $joinLabels($this->resolveCategoryLabelList($parts[0] ?? '')),
                 'sub_category' => $joinLabels($this->resolveCategoryLabelList($parts[1] ?? '')),
                 'category' => $joinLabels($this->resolveCategoryLabelList($parts[2] ?? '')),
                 'group' => $joinLabels($this->resolveCategoryLabelList($parts[3] ?? '')),
             ];
+            $hasAny = false;
+            foreach ($sections as $val) {
+                if ($val !== '—') {
+                    $hasAny = true;
+                    break;
+                }
+            }
+            if ($hasAny) {
+                return $sections;
+            }
         }
 
-        $labels = $this->resolveCategoryLabelList($raw);
-
-        return [
-            'group' => '—',
-            'category' => $joinLabels($labels),
-            'sub_category' => '—',
-            'sub_sub_category' => '—',
-        ];
+        return $this->resolveFlatCategoryIdsToSections($raw);
     }
 
     /**
@@ -3862,6 +3935,15 @@ class product
             $itemSections['group'] = $groupFromName;
         } elseif ($itemSections['group'] === '—') {
             $itemSections['group'] = $groupFromName;
+        }
+        // Flat comma lists can mis-bucket group-level ids; never duplicate group into Category.
+        if ($groupFromName !== '—' && $itemSections['category'] !== '—') {
+            $groupLower = strtolower($groupFromName);
+            $catParts = array_map('trim', explode(',', $itemSections['category']));
+            $catParts = array_values(array_filter($catParts, static function ($part) use ($groupLower) {
+                return strtolower($part) !== $groupLower;
+            }));
+            $itemSections['category'] = $catParts !== [] ? implode(', ', $catParts) : '—';
         }
 
         $keywordsRaw = trim((string)($row['keywords'] ?? ''));
