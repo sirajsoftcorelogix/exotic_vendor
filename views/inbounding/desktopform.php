@@ -155,6 +155,22 @@
         z-index: 70 !important;
         background: rgba(0, 0, 0, 0.5) !important;
     }
+    .courier-calc-details {
+        font-size: 0.9375rem;
+        line-height: 1.5;
+        color: #374151;
+        font-weight: 500;
+        white-space: pre-line;
+        padding: 0.75rem 1rem;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: 0.5rem;
+    }
+    @media (min-width: 640px) {
+        .courier-calc-details {
+            font-size: 1rem;
+        }
+    }
 </style>
 <?php
 $record_id = $_GET['id'] ?? '';
@@ -801,7 +817,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <div class="text-base font-bold text-[#d97824]" id="courier_price_display">₹ 0.00</div>
                         </div>
                     </div>
-                    <p id="courier_calc_details" class="text-[10px] text-gray-500 text-right mt-2 leading-snug max-w-2xl ml-auto"></p>
+                    <div id="courier_calc_details" class="courier-calc-details mt-3 w-full sm:max-w-2xl sm:ml-auto text-left sm:text-right" role="note" aria-live="polite"></div>
                 </div>
             </div>
         </div>
@@ -2655,9 +2671,12 @@ window.inboundCourierEstimate = function (heightIn, widthIn, depthIn, actualKg) 
     const chargeableKg = Math.max(volKg, adjustedActualKg);
     const priceInr = chargeableKg * 700;
     const basis = volKg > adjustedActualKg ? 'Volumetric' : 'Actual weight (×1.5)';
-    const detail = 'Packed ' + hCm.toFixed(1) + '×' + wCm.toFixed(1) + '×' + dCm.toFixed(1)
-        + ' cm → vol ' + volKg.toFixed(3) + ' kg; actual×1.5 = ' + adjustedActualKg.toFixed(3)
-        + ' kg → chargeable ' + chargeableKg.toFixed(3) + ' kg (' + basis + ')';
+    const detail = [
+        'Packed size (+4 in buffer): ' + hCm.toFixed(1) + ' × ' + wCm.toFixed(1) + ' × ' + dCm.toFixed(1) + ' cm',
+        'Volumetric weight: ' + volKg.toFixed(3) + ' kg',
+        'Actual weight × 1.5: ' + adjustedActualKg.toFixed(3) + ' kg',
+        'Chargeable: ' + chargeableKg.toFixed(3) + ' kg — ' + basis
+    ].join('\n');
     return { volKg, adjustedActualKg, chargeableKg, priceInr, basis, detail };
 };
 
