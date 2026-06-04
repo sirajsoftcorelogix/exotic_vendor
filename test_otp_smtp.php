@@ -12,8 +12,10 @@ declare(strict_types=1);
 
 $root = __DIR__;
 $init = $root . '/bootstrap/init/init.php';
+$initLoadedFrom = $init;
 if (!is_file($init)) {
     $init = $root . '/folders/bootstrap/init/init.php';
+    $initLoadedFrom = $init;
 }
 if (!is_file($init)) {
     http_response_code(500);
@@ -61,6 +63,29 @@ function otpSmtpConfigSummary(): array
         'user' => defined('smtpUser') ? smtpUser : '',
         'pass_set' => defined('smtpPass') && smtpPass !== '',
         'from' => function_exists('vendorSmtpFromEmail') ? vendorSmtpFromEmail() : '',
+    ];
+}
+
+/** Can this web server open a TCP socket to the SMTP host:port? (not full AUTH) */
+function otpSmtpTcpProbe(string $host, int $port, int $timeoutSeconds = 8): array
+{
+    if ($host === '') {
+        return ['ok' => false, 'detail' => 'SMTP host is empty.'];
+    }
+    $errno = 0;
+    $errstr = '';
+    $target = 'tcp://' . $host . ':' . $port;
+    $fp = @stream_socket_client($target, $errno, $errstr, $timeoutSeconds, STREAM_CLIENT_CONNECT);
+    if (is_resource($fp)) {
+        fclose($fp);
+
+        return ['ok' => true, 'detail' => "TCP connect to {$host}:{$port} succeeded from this server."];
+    }
+
+    return [
+        'ok' => false,
+        'detail' => "TCP connect to {$host}:{$port} failed (errno {$errno}): {$errstr}. "
+            . 'The server may block outbound SMTP; ask hosting to allow this port.',
     ];
 }
 
@@ -146,6 +171,14 @@ if ($isPost && $action === 'send_otp') {
 }
 
 $cfg = otpSmtpConfigSummary();
+$tcpProbe = otpSmtpTcpProbe($cfg['host'], $cfg['port']);
+$serverDiag = [
+    'init_file' => $initLoadedFrom ?? '(unknown)',
+    'php' => PHP_VERSION,
+    'openssl' => extension_loaded('openssl'),
+    'server' => $_SERVER['SERVER_NAME'] ?? '(unknown)',
+    'server_addr' => $_SERVER['SERVER_ADDR'] ?? '(unknown)',
+];
 $keyParam = trim((string) ($_GET['key'] ?? $_POST['key'] ?? ''));
 $keyQs = $keyParam !== '' ? '?key=' . rawurlencode($keyParam) : '';
 
@@ -187,6 +220,18 @@ $keyQs = $keyParam !== '' ? '?key=' . rawurlencode($keyParam) : '';
 <div class="wrap">
     <h1>OTP SMTP Test</h1>
     <p class="sub">Same stack as login OTP: <code>sendVendorOtpEmail()</code> + <code>helpers/mail_helper.php</code></p>
+
+    <div class="card">
+        <h2>Server diagnostics (this host)</h2>
+        <dl>
+            <dt>Init loaded</dt><dd><?= htmlspecialchars($serverDiag['init_file'], ENT_QUOTES, 'UTF-8') ?></dd>
+            <dt>PHP</dt><dd><?= htmlspecialchars($serverDiag['php'], ENT_QUOTES, 'UTF-8') ?></dd>
+            <dt>OpenSSL</dt><dd><?= $serverDiag['openssl'] ? 'yes' : '<span class="badge">missing</span>' ?></dd>
+            <dt>Server</dt><dd><?= htmlspecialchars($serverDiag['server'], ENT_QUOTES, 'UTF-8') ?> (<?= htmlspecialchars($serverDiag['server_addr'], ENT_QUOTES, 'UTF-8') ?>)</dd>
+            <dt>TCP to SMTP</dt>
+            <dd><?= $tcpProbe['ok'] ? '<span style="color:#2e7d32">OK</span> — ' : '<span style="color:#c62828">FAIL</span> — ' ?><?= htmlspecialchars($tcpProbe['detail'], ENT_QUOTES, 'UTF-8') ?></dd>
+        </dl>
+    </div>
 
     <div class="card">
         <h2>Current SMTP config</h2>
