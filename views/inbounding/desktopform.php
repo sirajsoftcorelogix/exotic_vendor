@@ -171,6 +171,23 @@
             font-size: 1rem;
         }
     }
+    .courier-calc-toggle {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #d97824;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0.25rem 0;
+    }
+    .courier-calc-toggle:hover {
+        color: #bf7326;
+    }
+    .courier-calc-details-wrap.is-hidden {
+        display: none;
+    }
 </style>
 <?php
 $record_id = $_GET['id'] ?? '';
@@ -817,7 +834,18 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <div class="text-base font-bold text-[#d97824]" id="courier_price_display">₹ 0.00</div>
                         </div>
                     </div>
-                    <div id="courier_calc_details" class="courier-calc-details mt-3 w-full sm:max-w-2xl sm:ml-auto text-left sm:text-right" role="note" aria-live="polite"></div>
+                    <div class="flex justify-end mt-2 w-full">
+                        <button type="button"
+                                id="courier_calc_toggle"
+                                class="courier-calc-toggle"
+                                aria-expanded="false"
+                                aria-controls="courier_calc_details_wrap">
+                            Show calculation
+                        </button>
+                    </div>
+                    <div id="courier_calc_details_wrap" class="courier-calc-details-wrap is-hidden mt-3 w-full sm:max-w-2xl sm:ml-auto">
+                        <div id="courier_calc_details" class="courier-calc-details text-left sm:text-right" role="note" aria-live="polite"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2656,23 +2684,21 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 /**
  * Inbound desktop courier estimate (matches inch labels on H/W/D fields).
- * Buffer +4 in per side → convert to cm → volumetric kg = L×W×H(cm) / 5000.
+ * Convert in → cm → volumetric kg = L×W×H(cm) / 5000.
  * Chargeable = max(volumetric, actual kg × 1.5); price = chargeable × ₹700.
- * (Live dispatch uses CourierGateway::chargeableWeightKg without buffer or ×1.5.)
  */
 window.inboundCourierEstimate = function (heightIn, widthIn, depthIn, actualKg) {
-    const bufferIn = 4;
     const cmPerIn = 2.54;
-    const hCm = ((parseFloat(heightIn) || 0) + bufferIn) * cmPerIn;
-    const wCm = ((parseFloat(widthIn) || 0) + bufferIn) * cmPerIn;
-    const dCm = ((parseFloat(depthIn) || 0) + bufferIn) * cmPerIn;
+    const hCm = (parseFloat(heightIn) || 0) * cmPerIn;
+    const wCm = (parseFloat(widthIn) || 0) * cmPerIn;
+    const dCm = (parseFloat(depthIn) || 0) * cmPerIn;
     const volKg = (hCm * wCm * dCm) / 5000;
     const adjustedActualKg = (parseFloat(actualKg) || 0) * 1.5;
     const chargeableKg = Math.max(volKg, adjustedActualKg);
     const priceInr = chargeableKg * 700;
     const basis = volKg > adjustedActualKg ? 'Volumetric' : 'Actual weight (×1.5)';
     const detail = [
-        'Packed size (+4 in buffer): ' + hCm.toFixed(1) + ' × ' + wCm.toFixed(1) + ' × ' + dCm.toFixed(1) + ' cm',
+        'Dimensions: ' + hCm.toFixed(1) + ' × ' + wCm.toFixed(1) + ' × ' + dCm.toFixed(1) + ' cm',
         'Volumetric weight: ' + volKg.toFixed(3) + ' kg',
         'Actual weight × 1.5: ' + adjustedActualKg.toFixed(3) + ' kg',
         'Chargeable: ' + chargeableKg.toFixed(3) + ' kg — ' + basis
@@ -2691,8 +2717,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // Display Elements
     const displayElement = document.getElementById('courier_price_display');
     const detailsElement = document.getElementById('courier_calc_details');
+    const detailsWrap = document.getElementById('courier_calc_details_wrap');
+    const detailsToggle = document.getElementById('courier_calc_toggle');
     // New Element for Volumetric Weight
     const volDisplayElement = document.getElementById('volumetric_weight_display');
+
+    if (detailsToggle && detailsWrap) {
+        detailsToggle.addEventListener('click', function () {
+            const hidden = detailsWrap.classList.toggle('is-hidden');
+            detailsToggle.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+            detailsToggle.textContent = hidden ? 'Show calculation' : 'Hide calculation';
+        });
+    }
 
     // Dimensions field auto-fill logic (from height/width/depth)
     const dimensionsInput = document.getElementById('dimensions');
