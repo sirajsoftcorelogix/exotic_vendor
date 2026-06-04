@@ -176,6 +176,32 @@ class product
     }
 
     /**
+     * Vendor product/fetch exposes search fields under related_search, not always at top level.
+     *
+     * @return array{search_term:string,search_category:string}
+     */
+    public static function vendorApiRelatedSearchFields(array $apiItem): array
+    {
+        $term = trim((string)($apiItem['search_term'] ?? ''));
+        $cat = trim((string)($apiItem['search_category'] ?? ''));
+
+        $related = $apiItem['related_search'] ?? null;
+        if (is_array($related)) {
+            if ($term === '') {
+                $term = trim((string)($related['search_term'] ?? ''));
+            }
+            if ($cat === '') {
+                $cat = trim((string)($related['search_category'] ?? ''));
+            }
+        }
+
+        return [
+            'search_term' => $term,
+            'search_category' => $cat,
+        ];
+    }
+
+    /**
      * @return list<array{vendor_id:int,priority:int}>
      */
     public static function extractDiscreteVendorEntriesFromApiItem(array $apiItem): array
@@ -604,8 +630,9 @@ class product
                     $indiablock = isset($product['indiablock']) ? (int)$product['indiablock'] : 0;
                     $hscode = isset($product['hscode']) ? $product['hscode'] : '';
                     $date_first_added = isset($product['date_first_added']) ? $product['date_first_added'] : '';
-                    $search_term = isset($product['search_term']) ? $product['search_term'] : '';
-                    $search_category = isset($product['search_category']) ? $product['search_category'] : '';
+                    $relatedSearch = self::vendorApiRelatedSearchFields($product);
+                    $search_term = $relatedSearch['search_term'];
+                    $search_category = $relatedSearch['search_category'];
                     $long_description = isset($product['long_description']) ? $product['long_description'] : '';
                     $long_description_india = isset($product['long_description_india']) ? $product['long_description_india'] : '';
                     $aplus_content_ids = isset($product['aplus_content_ids']) ? $product['aplus_content_ids'] : '';
@@ -854,8 +881,14 @@ class product
                             $indiablock = isset($variation['indiablock']) ? (int)$variation['indiablock'] : (isset($product['indiablock']) ? (int)$product['indiablock'] : 0);
                             $hscode = isset($variation['hscode']) ? $variation['hscode'] : (isset($product['hscode']) ? $product['hscode'] : '');
                             $date_first_added = isset($variation['date_first_added']) ? $variation['date_first_added'] : (isset($product['date_first_added']) ? $product['date_first_added'] : '');
-                            $search_term = isset($variation['search_term']) ? $variation['search_term'] : (isset($product['search_term']) ? $product['search_term'] : '');
-                            $search_category = isset($variation['search_category']) ? $variation['search_category'] : (isset($product['search_category']) ? $product['search_category'] : '');
+                            $variationSearch = self::vendorApiRelatedSearchFields($variation);
+                            $parentSearch = self::vendorApiRelatedSearchFields($product);
+                            $search_term = $variationSearch['search_term'] !== ''
+                                ? $variationSearch['search_term']
+                                : $parentSearch['search_term'];
+                            $search_category = $variationSearch['search_category'] !== ''
+                                ? $variationSearch['search_category']
+                                : $parentSearch['search_category'];
                             $long_description = isset($variation['long_description']) ? $variation['long_description'] : (isset($product['long_description']) ? $product['long_description'] : '');
                             $long_description_india = isset($variation['long_description_india']) ? $variation['long_description_india'] : (isset($product['long_description_india']) ? $product['long_description_india'] : '');
                             $aplus_content_ids = isset($variation['aplus_content_ids']) ? $variation['aplus_content_ids'] : (isset($product['aplus_content_ids']) ? $product['aplus_content_ids'] : '');
@@ -3889,6 +3922,10 @@ class product
 
         if (strpos($raw, '|') !== false) {
             $parts = explode('|', $raw);
+            // Inbound/API order: SubSub | Sub | Cat | Group (API may omit empty Sub → 3 segments)
+            if (count($parts) === 3) {
+                $parts = [$parts[0], '', $parts[1], $parts[2]];
+            }
             $sections = [
                 'sub_sub_category' => $joinLabels($this->resolveCategoryLabelList($parts[0] ?? '')),
                 'sub_category' => $joinLabels($this->resolveCategoryLabelList($parts[1] ?? '')),
