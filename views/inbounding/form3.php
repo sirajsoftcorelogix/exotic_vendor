@@ -395,6 +395,7 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
                             $btnId = 'author-cache-sync-btn';
                             $title = 'Refresh authors from catalog';
                             $srLabel = 'Refresh authors';
+                            $iconType = 'author';
                             require __DIR__ . '/partials/catalog_refresh_btn.php';
                             ?>
                         </div>
@@ -421,6 +422,7 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
                             $btnId = 'publisher-cache-sync-btn';
                             $title = 'Refresh publishers from catalog';
                             $srLabel = 'Refresh publishers';
+                            $iconType = 'publisher';
                             require __DIR__ . '/partials/catalog_refresh_btn.php';
                             ?>
                         </div>

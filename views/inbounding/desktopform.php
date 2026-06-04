@@ -205,19 +205,17 @@ $colorMapData = (is_array($gecolormapsRef) && isset($gecolormapsRef['colormaps']
 function renderColorMapField($fieldName, $savedValue, $customClass = "", $showSyncIcon = false) {
     $labelHtml = '<label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>';
     if ($showSyncIcon) {
+        ob_start();
+        $btnId = 'colormap-cache-sync-btn';
+        $title = 'Refresh color maps from catalog';
+        $srLabel = 'Refresh color maps';
+        $iconType = 'palette';
+        require __DIR__ . '/partials/catalog_refresh_btn.php';
+        $syncBtnHtml = ob_get_clean();
         $labelHtml = '
         <div class="flex items-center gap-1.5 mb-1">
             <label class="text-xs font-bold text-[#555]">Color Map:</label>
-            <button type="button"
-                    id="colormap-cache-sync-btn"
-                    class="inline-flex items-center justify-center w-6 h-6 rounded border border-[#ccc] bg-white text-[#555] hover:border-[#d97824] hover:text-[#d97824] transition-colors"
-                    title="Refresh color maps from catalog">
-                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M12 20h9"></path>
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                </svg>
-                <span class="sr-only">Refresh color maps</span>
-            </button>
+            ' . $syncBtnHtml . '
         </div>';
     }
     return '
@@ -767,6 +765,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     $btnId = 'author-cache-sync-btn';
                                     $title = 'Refresh authors from catalog';
                                     $srLabel = 'Refresh authors';
+                                    $iconType = 'author';
                                     require __DIR__ . '/partials/catalog_refresh_btn.php';
                                     ?>
                                 </div>
@@ -793,6 +792,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     $btnId = 'publisher-cache-sync-btn';
                                     $title = 'Refresh publishers from catalog';
                                     $srLabel = 'Refresh publishers';
+                                    $iconType = 'publisher';
                                     require __DIR__ . '/partials/catalog_refresh_btn.php';
                                     ?>
                                 </div>
@@ -1549,16 +1549,13 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="w-full">
                             <div class="flex items-center gap-1.5 mb-[5px]">
                                 <label class="text-xs font-bold text-[#222]" for="vendor_code">Vendor:</label>
-                                <button type="button"
-                                        id="vendor-cache-sync-btn"
-                                        class="inline-flex items-center justify-center w-6 h-6 rounded border border-[#ccc] bg-white text-[#555] hover:border-[#d97824] hover:text-[#d97824] transition-colors"
-                                        title="Refresh vendors from catalog">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M12 20h9"></path>
-                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                                    </svg>
-                                    <span class="sr-only">Refresh vendors</span>
-                                </button>
+                                <?php
+                                $btnId = 'vendor-cache-sync-btn';
+                                $title = 'Refresh vendors from catalog';
+                                $srLabel = 'Refresh vendors';
+                                $iconType = 'vendor';
+                                require __DIR__ . '/partials/catalog_refresh_btn.php';
+                                ?>
                             </div>
                             <select name="vendor_code" id="vendor_code" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Vendor...">
                                 <option value="">Select Vendor</option>
