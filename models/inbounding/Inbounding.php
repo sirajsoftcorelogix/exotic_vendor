@@ -708,11 +708,76 @@ class Inbounding {
         return $row ?: null;
     }
     public function getBycateId($categoryRef){
+        $categoryRef = trim((string) $categoryRef);
+        if ($categoryRef === '') {
+            return null;
+        }
         $stmt = $this->conn->prepare("SELECT * FROM category WHERE category = ?");
-        $stmt->bind_param("i", $categoryRef);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param("s", $categoryRef);
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result->fetch_assoc();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        return $row ?: null;
+    }
+
+    /**
+     * Slug used by inbound label templates (book, sculptures, jewelry, …).
+     */
+    public function resolveInboundLabelCategorySlug($groupName): string
+    {
+        $raw = trim((string) $groupName);
+        if ($raw === '') {
+            return '';
+        }
+        if ($raw === '-8') {
+            return 'book';
+        }
+
+        $row = $this->getBycateId($raw);
+        $labels = [];
+        if ($row) {
+            if (!empty($row['name'])) {
+                $labels[] = (string) $row['name'];
+            }
+            if (!empty($row['display_name'])) {
+                $labels[] = (string) $row['display_name'];
+            }
+        }
+        if ($labels === [] && stripos($raw, 'book') !== false) {
+            return 'book';
+        }
+
+        foreach ($labels as $label) {
+            $norm = strtolower(preg_replace('/[^a-z0-9]/', '', $label));
+            if ($norm === 'book' || str_contains($norm, 'book')) {
+                return 'book';
+            }
+            if (in_array($norm, ['sculptures', 'sculpture', 'homeandliving', 'paintings', 'painting', 'jewelry', 'jewellery', 'textiles', 'textile'], true)) {
+                if ($norm === 'sculpture') {
+                    return 'sculptures';
+                }
+                if ($norm === 'painting') {
+                    return 'paintings';
+                }
+                if ($norm === 'jewellery') {
+                    return 'jewelry';
+                }
+                if ($norm === 'textile') {
+                    return 'textiles';
+                }
+                return $norm;
+            }
+        }
+
+        if ($row && !empty($row['name'])) {
+            return strtolower(preg_replace('/[^a-z0-9]/', '', (string) $row['name']));
+        }
+
+        return '';
     }
     public function getform2data($id) {
         $id = (int)$id;
@@ -786,8 +851,20 @@ class Inbounding {
         }
         return $inbounding;
     }
+    /**
+     * vp_inbound.vendor_code is INT (Exotic vendor_id). Empty POST must be NULL, not ''.
+     */
+    private function normalizeInboundVendorCode($raw) {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return null;
+        }
+        $digits = preg_replace('/\D/', '', $raw);
+        return $digits === '' ? null : (int) $digits;
+    }
+
     public function saveform1($record_id, $data) {
-        $vendor_code = $data['vendor_id'] ?? '';
+        $vendor_code = $this->normalizeInboundVendorCode($data['vendor_id'] ?? '');
         $invoice_img = $data['invoice'] ?? '';
         $invoice_no  = $data['invoice_no'] ?? '';
 
@@ -802,7 +879,6 @@ class Inbounding {
             return false;
         }
 
-        // Bind parameters (s = string)
         // We only bind 3 values; NOW() is handled by MySQL directly
         $stmt->bind_param("iss", $vendor_code, $invoice_img, $invoice_no);
 
@@ -877,10 +953,10 @@ class Inbounding {
             return false;
         }
         $id = intval($data['id']);
-        $vendor_code = $data['vendor_id'];
+        $vendor_code = $this->normalizeInboundVendorCode($data['vendor_id'] ?? '');
         $invoice_img = $data['invoice'];
         $invoice_no  = $data['invoice_no'];
-        $stmt->bind_param("sssi", $vendor_code, $invoice_img, $invoice_no, $id);
+        $stmt->bind_param("issi", $vendor_code, $invoice_img, $invoice_no, $id);
         return $stmt->execute();
     }
     public function updatedesktopform($id, $data) {

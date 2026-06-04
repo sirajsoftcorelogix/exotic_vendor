@@ -482,6 +482,11 @@ class InboundingController {
             exit;
         }
 
+        // Vendor is optional on form1; keep stored vendor when the select is left empty on update.
+        if ($vendor_id === '' && !empty($oldData['form1']['vendor_code'])) {
+            $vendor_id = (string) $oldData['form1']['vendor_code'];
+        }
+
         // Keep old image by default
         $invoicePath = $oldData['form1']['invoice_image'];
 
@@ -1380,6 +1385,7 @@ class InboundingController {
             'backorder_percent'   => $percent_val,
             'backorder_day'       => $day_val,
             'us_block' => (strtoupper($_POST['us_block'] ?? '') === 'Y') ? 'Y' : 'N',
+            'india_block' => (strtoupper($_POST['india_block'] ?? '') === 'Y') ? 'Y' : 'N',
             'dimention_unit'      => $_POST['dimention_unit'] ?? 'cm',
             'weight_unit'         => $_POST['weight_unit'] ?? 'kg',
             'feedback'         => $_POST['feedback'] ?? '',
@@ -1885,8 +1891,9 @@ class InboundingController {
         if (!$id) {
             die("Invalid ID");
         }
-        $data = $inboundingModel->getForm2Data($id);
-        include 'views/inbounding/label_inbound.php';
+        $data = $inboundingModel->getlabeldata($id);
+        $data['variation'] = $inboundingModel->getVariations($id);
+        include 'views/inbounding/label.php';
     }
     public function inbound_product_publish(){
         is_login();

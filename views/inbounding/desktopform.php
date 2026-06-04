@@ -155,6 +155,39 @@
         z-index: 70 !important;
         background: rgba(0, 0, 0, 0.5) !important;
     }
+    .courier-calc-details {
+        font-size: 0.703rem; /* 75% of 0.9375rem */
+        line-height: 1.45;
+        color: #374151;
+        font-weight: 500;
+        white-space: pre-line;
+        padding: 0.75rem 1rem;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: 0.5rem;
+    }
+    @media (min-width: 640px) {
+        .courier-calc-details {
+            font-size: 0.75rem; /* 75% of 1rem */
+        }
+    }
+    .courier-calc-toggle {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #d97824;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0.25rem 0;
+    }
+    .courier-calc-toggle:hover {
+        color: #bf7326;
+    }
+    .courier-calc-details-wrap.is-hidden {
+        display: none;
+    }
 </style>
 <?php
 $record_id = $_GET['id'] ?? '';
@@ -172,19 +205,17 @@ $colorMapData = (is_array($gecolormapsRef) && isset($gecolormapsRef['colormaps']
 function renderColorMapField($fieldName, $savedValue, $customClass = "", $showSyncIcon = false) {
     $labelHtml = '<label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>';
     if ($showSyncIcon) {
+        ob_start();
+        $btnId = 'colormap-cache-sync-btn';
+        $title = 'Refresh color maps from catalog';
+        $srLabel = 'Refresh color maps';
+        $iconType = 'palette';
+        require __DIR__ . '/partials/catalog_refresh_btn.php';
+        $syncBtnHtml = ob_get_clean();
         $labelHtml = '
         <div class="flex items-center gap-1.5 mb-1">
             <label class="text-xs font-bold text-[#555]">Color Map:</label>
-            <button type="button"
-                    id="colormap-cache-sync-btn"
-                    class="inline-flex items-center justify-center w-6 h-6 rounded border border-[#ccc] bg-white text-[#555] hover:border-[#d97824] hover:text-[#d97824] transition-colors"
-                    title="Refresh color maps from catalog">
-                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M12 20h9"></path>
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                </svg>
-                <span class="sr-only">Refresh color maps</span>
-            </button>
+            ' . $syncBtnHtml . '
         </div>';
     }
     return '
@@ -199,7 +230,20 @@ function renderColorMapField($fieldName, $savedValue, $customClass = "", $showSy
 }
 $is_clothing_initial = false; 
 $saved_group_id = $data['form2']['group_name'] ?? '';
-if (!empty($data['category']) && !empty($saved_group_id)) {
+$is_book_initial = ((string) $saved_group_id === '-8');
+if (!$is_book_initial && !empty($data['category']) && !empty($saved_group_id)) {
+    foreach ($data['category'] as $cat) {
+        if (isset($cat['category']) && (string) $cat['category'] === (string) $saved_group_id) {
+            $catName = strtolower($cat['name'] ?? '');
+            $catDisplay = strtolower($cat['display_name'] ?? '');
+            if (strpos($catName, 'book') !== false || strpos($catDisplay, 'book') !== false) {
+                $is_book_initial = true;
+            }
+            break;
+        }
+    }
+}
+if (!$is_clothing_initial && !empty($data['category']) && !empty($saved_group_id)) {
     foreach ($data['category'] as $cat) {
         if (isset($cat['category']) && $cat['category'] == $saved_group_id) {
             $catName = strtolower($cat['name'] ?? '');
@@ -275,26 +319,84 @@ function renderSizeField($fieldName, $currentValue, $isClothing, $options, $cust
     return $html;
 }
 $currentSize = $data['form2']['size'] ?? '';
+
+/**
+ * Normalize DB/view paths to a web-relative uploads/... path.
+ */
+function desktopform_normalize_upload_path(string $path): string
+{
+    $path = ltrim(trim($path), '/\\');
+    if ($path === '') {
+        return '';
+    }
+    if (strpos($path, 'uploads/') === 0) {
+        return $path;
+    }
+    if (preg_match('#^itm_img/#i', $path)) {
+        return 'uploads/' . $path;
+    }
+    if (strpos($path, '/') === false && strpos($path, '\\') === false) {
+        return 'uploads/itm_img/' . $path;
+    }
+    return $path;
+}
+
+/** Preview URL — same path the image popup uses (no generated-thumb fallback). */
+function desktopform_preview_image_url(string $path): string
+{
+    $webPath = desktopform_normalize_upload_path($path);
+    return $webPath !== '' ? base_url($webPath) : '';
+}
+
+/**
+ * Resolve uploads/... path on disk (subdir deploys often break a single relative check).
+ */
+function desktopform_resolve_upload_fs_path(string $webPath): ?string
+{
+    $webPath = ltrim($webPath, '/\\');
+    if ($webPath === '') {
+        return null;
+    }
+    $rel = str_replace('/', DIRECTORY_SEPARATOR, $webPath);
+    $candidates = [
+        $rel,
+        dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . $rel,
+    ];
+    if (!empty($GLOBALS['root_path'])) {
+        $candidates[] = rtrim((string) $GLOBALS['root_path'], '/\\') . DIRECTORY_SEPARATOR . $rel;
+    }
+    if (!empty($_SERVER['DOCUMENT_ROOT'])) {
+        $candidates[] = rtrim((string) $_SERVER['DOCUMENT_ROOT'], '/\\') . DIRECTORY_SEPARATOR . $rel;
+    }
+    foreach ($candidates as $candidate) {
+        if ($candidate !== '' && is_file($candidate) && is_readable($candidate)) {
+            return $candidate;
+        }
+    }
+    return null;
+}
+
 function getThumbnail($filePath, $width = 150, $height = 150, bool $generateIfMissing = true) {
     $placeholder = 'assets/images/placeholder.png';
-    $webPath = ltrim((string) $filePath, '/');
+    $webPath = desktopform_normalize_upload_path((string) $filePath);
 
     if ($webPath === '') {
         return $placeholder;
     }
 
-    $fsPath = $webPath;
-    if (!is_file($fsPath) || !is_readable($fsPath)) {
-        $rootPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $webPath);
-        if (is_file($rootPath) && is_readable($rootPath)) {
-            $fsPath = $rootPath;
-        } else {
-            return $placeholder;
+    $fsPath = desktopform_resolve_upload_fs_path($webPath);
+    if (!$fsPath) {
+        if (strpos($webPath, 'uploads/') === 0) {
+            return $webPath;
         }
+        return $placeholder;
     }
 
     $fileSize = @filesize($fsPath);
     if ($fileSize === false || $fileSize <= 0) {
+        if (strpos($webPath, 'uploads/') === 0) {
+            return $webPath;
+        }
         return $placeholder;
     }
 
@@ -313,7 +415,8 @@ function getThumbnail($filePath, $width = 150, $height = 150, bool $generateIfMi
     }
 
     if (!$generateIfMissing) {
-        return $placeholder;
+        // Sidebar/preview: show full image when thumb cache is missing (zoom already uses this path).
+        return $webPath;
     }
 
     $thumbDir = dirname($thumbFsPath);
@@ -435,13 +538,13 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         }
                         $itemImageRelPath = desktopform_item_image_thumb_path($item_photos_for_thumb, $variations_for_thumb);
                         $displayPhotoPath = $itemImageRelPath !== '' ? $itemImageRelPath : $mainPhoto;
-                        $hasMainPhoto = !empty($displayPhotoPath);
-
-                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath, 150, 150, false)) : '';
+                        $hasMainPhoto = desktopform_normalize_upload_path((string) $displayPhotoPath) !== '';
+                        $mainPhotoUrl = $hasMainPhoto ? desktopform_preview_image_url((string) $displayPhotoPath) : '';
+                        $mainPhotoPopupJson = json_encode($mainPhotoUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
                     ?>
                     <img id="main_photo_preview" 
-                         src="<?= $mainPhotoThumb ?>" 
-                         onclick="openImagePopup('<?= $hasMainPhoto ? base_url($displayPhotoPath) : '' ?>')"
+                         src="<?= htmlspecialchars($mainPhotoUrl, ENT_QUOTES, 'UTF-8') ?>" 
+                         onclick="openImagePopup(<?= $hasMainPhoto ? $mainPhotoPopupJson : "''" ?>)"
                          class="w-full h-full object-contain cursor-zoom-in absolute inset-0 z-10"
                          style="<?= $hasMainPhoto ? '' : 'display: none;' ?>">
                     <div id="main_photo_placeholder"
@@ -614,7 +717,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </div>
             <div class="bg-gray-50 p-5 rounded border border-gray-200 w-full">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
+                <div id="main-item-details-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                     
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Height / Length:</label>
@@ -644,11 +747,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span>
                         </div>
                     </div>
-                    <div class="w-full min-w-0">
+                    <div id="main-item-color-field" class="w-full min-w-0 book-color-size-field">
                         <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
                     </div>
-                    <div class="w-full min-w-0">
+                    <div id="main-item-size-field" class="w-full min-w-0 book-color-size-field">
                         <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
                         <?php echo renderSizeField('size', $currentSize, $is_clothing_initial, $sizeOptions); ?>
                     </div>
@@ -728,7 +831,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="text-[13px] font-bold text-[#333] mb-3">Book Details</div>
                         <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <div>
-                                <label class="block text-xs font-bold text-[#555] mb-1">Author</label>
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <label class="text-xs font-bold text-[#555]">Author</label>
+                                    <?php
+                                    $btnId = 'author-cache-sync-btn';
+                                    $title = 'Refresh authors from catalog';
+                                    $srLabel = 'Refresh authors';
+                                    $iconType = 'author';
+                                    require __DIR__ . '/partials/catalog_refresh_btn.php';
+                                    ?>
+                                </div>
                                 <input type="hidden" name="author" id="author_pipe_value" value="<?php echo htmlspecialchars($author_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
                                 <select id="author_select" multiple autocomplete="off">
                                     <?php foreach ($selected_author_options as $authorOpt): ?>
@@ -746,7 +858,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-[#555] mb-1">Publisher</label>
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <label class="text-xs font-bold text-[#555]">Publisher</label>
+                                    <?php
+                                    $btnId = 'publisher-cache-sync-btn';
+                                    $title = 'Refresh publishers from catalog';
+                                    $srLabel = 'Refresh publishers';
+                                    $iconType = 'publisher';
+                                    require __DIR__ . '/partials/catalog_refresh_btn.php';
+                                    ?>
+                                </div>
                                 <select id="publisher_select" name="publisher" placeholder="Type publisher name..." autocomplete="off">
                                     <option value=""></option>
                                     <?php if (!empty($selected_publisher_id) && !empty($selected_publisher_name)): ?>
@@ -785,19 +906,34 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 <label class="block text-xs font-bold text-[#555] mb-1">Pages</label>
                                 <input type="number" min="0" name="pages" value="<?php echo htmlspecialchars($data['form2']['pages'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
                             </div>
+                            <div id="book-meta-color-size-slot" class="contents"></div>
                         </div>
                     </div>
                 </div>
 
-                <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
-                    <div class="text-right min-w-[100px]">
-                        <span class="text-[10px] font-bold text-gray-500 uppercase">Volumetric</span>
-                        <div class="text-base font-bold text-[#555]" id="volumetric_weight_display">0.000 kg</div>
+                <div class="border-t border-dashed border-gray-300 pt-4 mt-6">
+                    <div class="flex flex-wrap justify-end items-center gap-6">
+                        <div class="text-right min-w-[100px]">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase">Volumetric</span>
+                            <div class="text-base font-bold text-[#555]" id="volumetric_weight_display">0.000 kg</div>
+                        </div>
+                        <div class="hidden sm:block h-8 w-px bg-gray-300"></div>
+                        <div class="text-right min-w-[140px]">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase">Est. Courier (₹700/kg)</span>
+                            <div class="text-base font-bold text-[#d97824]" id="courier_price_display">₹ 0.00</div>
+                        </div>
                     </div>
-                    <div class="hidden sm:block h-8 w-px bg-gray-300"></div>
-                    <div class="text-right min-w-[140px]">
-                        <span class="text-[10px] font-bold text-gray-500 uppercase">Est. Courier (₹700/kg)</span>
-                        <div class="text-base font-bold text-[#d97824]" id="courier_price_display">₹ 0.00</div>
+                    <div class="flex justify-end mt-2 w-full">
+                        <button type="button"
+                                id="courier_calc_toggle"
+                                class="courier-calc-toggle"
+                                aria-expanded="false"
+                                aria-controls="courier_calc_details_wrap">
+                            Show calculation
+                        </button>
+                    </div>
+                    <div id="courier_calc_details_wrap" class="courier-calc-details-wrap is-hidden mt-3 w-full sm:max-w-2xl sm:ml-auto">
+                        <div id="courier_calc_details" class="courier-calc-details text-left sm:text-right" role="note" aria-live="polite"></div>
                     </div>
                 </div>
             </div>
@@ -835,7 +971,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     $hasPhoto = (!empty($rawPhoto) && $rawPhoto !== '0');
                                     
                                     // Pass FULL path to generator
-                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto, 150, 150, false)) : '#';
+                                    $varThumbSrc = $hasPhoto ? desktopform_preview_image_url((string) $rawPhoto) : '#';
                                 ?>
                                 <img src="<?= $varThumbSrc ?>" 
                                      class="preview-img w-full h-full object-cover absolute inset-0 z-10"
@@ -1046,13 +1182,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     // ... inside your existing renderPhotoCard function ...
 
     function renderPhotoCard($img, $varId) {
-        $fullPath = "uploads/itm_img/" . $img['file_name'];
-
-        // 2. Pass the FULL PATH to the generator (filesystem-relative)
-        $thumbSrc = getThumbnail($fullPath, 150, 150, false);
-        $thumbVersion = @filemtime(ltrim($fullPath, '/')) ?: time();
-        $thumbUrl = base_url($thumbSrc) . '?v=' . $thumbVersion;
-        $fullUrl  = base_url($fullPath);
+        $fullPath = 'uploads/itm_img/' . $img['file_name'];
+        $fullUrl = desktopform_preview_image_url($fullPath);
         $popupUrlJson = json_encode($fullUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
     ?>
         <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group shadow-sm shrink-0 w-[132px]" 
@@ -1066,10 +1197,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
 
             <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-1" 
                  onclick="openImagePopup(<?php echo $popupUrlJson; ?>)">
-                <img src="<?php echo htmlspecialchars($thumbUrl); ?>" 
+                <img src="<?php echo htmlspecialchars($fullUrl, ENT_QUOTES, 'UTF-8'); ?>" 
                      alt=""
                      draggable="false"
                      loading="lazy" 
+                     onerror="this.onerror=null;this.src=<?php echo $popupUrlJson; ?>;"
                      class="max-w-full max-h-full object-contain cursor-pointer select-none">
             </div>
 
@@ -1486,16 +1618,13 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="w-full">
                             <div class="flex items-center gap-1.5 mb-[5px]">
                                 <label class="text-xs font-bold text-[#222]" for="vendor_code">Vendor:</label>
-                                <button type="button"
-                                        id="vendor-cache-sync-btn"
-                                        class="inline-flex items-center justify-center w-6 h-6 rounded border border-[#ccc] bg-white text-[#555] hover:border-[#d97824] hover:text-[#d97824] transition-colors"
-                                        title="Refresh vendors from catalog">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M12 20h9"></path>
-                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                                    </svg>
-                                    <span class="sr-only">Refresh vendors</span>
-                                </button>
+                                <?php
+                                $btnId = 'vendor-cache-sync-btn';
+                                $title = 'Refresh vendors from catalog';
+                                $srLabel = 'Refresh vendors';
+                                $iconType = 'vendor';
+                                require __DIR__ . '/partials/catalog_refresh_btn.php';
+                                ?>
                             </div>
                             <select name="vendor_code" id="vendor_code" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Vendor...">
                                 <option value="">Select Vendor</option>
@@ -1642,7 +1771,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="flex-1 pr-4 border-r border-[#ccc] flex flex-col justify-center h-[52px]"> 
                             <label class="block text-xs font-bold text-[#222] mb-[3px]">US Block:</label>
                             <div class="flex items-center gap-4">
-                                <?php $us_val = $data['form2']['us_block'] ?? 'N'; ?>
+                                <?php
+                                $us_raw = $data['form2']['us_block'] ?? 'N';
+                                $us_val = (strtoupper((string) $us_raw) === 'Y' || (string) $us_raw === '1') ? 'Y' : 'N';
+                                ?>
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="us_block" value="Y" class="w-3.5 h-3.5 accent-[#666]" <?= ($us_val == 'Y') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[12px] text-[#333]">Yes</span>
@@ -1656,7 +1788,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="flex-1 pl-4 flex flex-col justify-center h-[52px]"> 
                             <label class="block text-xs font-bold text-[#222] mb-[3px]">India Block:</label>
                             <div class="flex items-center gap-4">
-                                <?php $in_val = $data['form2']['india_block'] ?? 'N'; ?>
+                                <?php
+                                $in_raw = $data['form2']['india_block'] ?? 'N';
+                                $in_val = (strtoupper((string) $in_raw) === 'Y' || (string) $in_raw === '1') ? 'Y' : 'N';
+                                ?>
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="india_block" value="Y" class="w-3.5 h-3.5 accent-[#666]" <?= ($in_val == 'Y') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[12px] text-[#333]">Yes</span>
@@ -2635,6 +2770,30 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <script>
+/**
+ * Inbound desktop courier estimate (matches inch labels on H/W/D fields).
+ * Convert in → cm → volumetric kg = L×W×H(cm) / 5000.
+ * Chargeable = max(volumetric, actual kg × 1.5); price = chargeable × ₹700.
+ */
+window.inboundCourierEstimate = function (heightIn, widthIn, depthIn, actualKg) {
+    const cmPerIn = 2.54;
+    const hCm = (parseFloat(heightIn) || 0) * cmPerIn;
+    const wCm = (parseFloat(widthIn) || 0) * cmPerIn;
+    const dCm = (parseFloat(depthIn) || 0) * cmPerIn;
+    const volKg = (hCm * wCm * dCm) / 5000;
+    const adjustedActualKg = (parseFloat(actualKg) || 0) * 1.5;
+    const chargeableKg = Math.max(volKg, adjustedActualKg);
+    const priceInr = chargeableKg * 700;
+    const basis = volKg > adjustedActualKg ? 'volumetric' : 'actual×1.5';
+    const priceFormatted = priceInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const detail = [
+        'Dims ' + hCm.toFixed(1) + '×' + wCm.toFixed(1) + '×' + dCm.toFixed(1) + ' cm → vol ' + volKg.toFixed(2) + ' kg · actual×1.5 ' + adjustedActualKg.toFixed(2) + ' kg',
+        'Chargeable ' + chargeableKg.toFixed(2) + ' kg (' + basis + ')',
+        chargeableKg.toFixed(2) + ' kg × ₹700/kg = ₹' + priceFormatted
+    ].join('\n');
+    return { volKg, adjustedActualKg, chargeableKg, priceInr, basis, detail };
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Select Inputs
     const heightInput = document.getElementById('dim_height');
@@ -2646,8 +2805,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // Display Elements
     const displayElement = document.getElementById('courier_price_display');
     const detailsElement = document.getElementById('courier_calc_details');
+    const detailsWrap = document.getElementById('courier_calc_details_wrap');
+    const detailsToggle = document.getElementById('courier_calc_toggle');
     // New Element for Volumetric Weight
     const volDisplayElement = document.getElementById('volumetric_weight_display');
+
+    if (detailsToggle && detailsWrap) {
+        detailsToggle.addEventListener('click', function () {
+            const hidden = detailsWrap.classList.toggle('is-hidden');
+            detailsToggle.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+            detailsToggle.textContent = hidden ? 'Show calculation' : 'Hide calculation';
+        });
+    }
 
     // Dimensions field auto-fill logic (from height/width/depth)
     const dimensionsInput = document.getElementById('dimensions');
@@ -2763,55 +2932,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function calculateCourierPrice() {
         if (!heightInput || !widthInput || !depthInput || !weightInput) return;
-        // 1. Get Raw Values
-        let h = parseFloat(heightInput.value) || 0;
-        let w = parseFloat(widthInput.value) || 0;
-        let d = parseFloat(depthInput.value) || 0;
-        let actualWt = parseFloat(weightInput.value) || 0; // In KG
-        const dimUnit = dimUnitSelect ? dimUnitSelect.value : 'cm';
-         h = h + 4 ;
-         w = w + 4;
-         d = d + 4;
-        // --- STEP A: NORMALIZE TO INCHES ---
-        // If user entered CM, convert to Inch first (divide by 2.54)
-        // if (dimUnit === 'cm') {
-             h = h * 2.54;
-             w = w * 2.54;
-             d = d * 2.54;
-        // }
-        // --- STEP B: ADD BUFFER (4 inches) ---
-        let h_in = h;
-        let w_in = w;
-        let d_in = d;
-        // --- STEP C: CALCULATE VOLUMETRIC WEIGHT ---
-        // Formula: (L x W x H in inches) / 5000
-        const volWt = (h_in * w_in * d_in) / 5000;
-        // --- STEP D: CALCULATE ADJUSTED ACTUAL WEIGHT (x 1.5) ---
-        const adjustedActualWt = actualWt * 1.5;
-        // --- STEP E: DETERMINE CHARGEABLE WEIGHT ---
-        const chargeableWt = Math.max(volWt, adjustedActualWt);
-        // --- STEP F: CALCULATE PRICE ---
-        // Price: ₹700 per KG
-        const price = chargeableWt * 700;
-        // --- UPDATE UI ---
-        
-        // 1. Update Volumetric Weight (Compulsory)
+        const est = window.inboundCourierEstimate(
+            heightInput.value,
+            widthInput.value,
+            depthInput.value,
+            weightInput.value
+        );
         if (volDisplayElement) {
-            volDisplayElement.innerText = volWt.toFixed(3) + " kg";
+            volDisplayElement.innerText = est.volKg.toFixed(3) + ' kg';
         }
-        // 2. Update Price
         if (displayElement) {
-            displayElement.innerText = "₹ " + price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            displayElement.innerText = '₹ ' + est.priceInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
-        
-        // 3. Update Details text
         if (detailsElement) {
-            const usedType = (volWt > adjustedActualWt) ? "Volumetric" : "Actual Weight";
-            detailsElement.innerText = `Chargeable: ${chargeableWt.toFixed(3)} kg (${usedType})`;
+            detailsElement.textContent = est.detail;
         }
     }
     // Attach Listeners
-    const inputs = [heightInput, widthInput, depthInput, weightInput, dimUnitSelect];
+    const inputs = [heightInput, widthInput, depthInput, weightInput];
     inputs.forEach(input => {
         if(input) {
             input.addEventListener('input', calculateCourierPrice);
@@ -2947,91 +3085,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('DOMContentLoaded', toggleBackOrderFields);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-(function () {
-    var SPIN = '<svg class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-
-    function notify(icon, title, body, asHtml) {
-        if (typeof Swal === 'undefined') {
-            alert(title + (body ? ': ' + String(body).replace(/<[^>]+>/g, '') : ''));
-            return;
-        }
-        var opts = { icon: icon, title: title };
-        opts[asHtml ? 'html' : 'text'] = body || '';
-        Swal.fire(opts);
-    }
-
-    window.bindDesktopCacheSync = function (btnId, cfg) {
-        var btn = document.getElementById(btnId);
-        if (!btn || !cfg || !cfg.url) return;
-
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            var run = function () {
-                var orig = btn.innerHTML;
-                btn.disabled = true;
-                btn.classList.add('opacity-60', 'cursor-wait');
-                btn.innerHTML = SPIN;
-
-                fetch(cfg.url, {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                })
-                    .then(function (res) {
-                        return res.json().then(function (data) {
-                            return { ok: res.ok, data: data };
-                        }).catch(function () {
-                            return { ok: false, data: {} };
-                        });
-                    })
-                    .then(function (payload) {
-                        var data = payload.data || {};
-                        if (!cfg.isOk(payload, data)) {
-                            notify('error', cfg.failTitle || 'Refresh failed', typeof cfg.message === 'function' ? cfg.message(false, data) : '', !!cfg.htmlMessage);
-                            return;
-                        }
-                        var after = cfg.afterSync ? cfg.afterSync(data) : null;
-                        return Promise.resolve(after).then(
-                            function () {
-                                notify('success', cfg.successTitle || 'Refreshed', typeof cfg.message === 'function' ? cfg.message(true, data) : '', !!cfg.htmlMessage);
-                            },
-                            function () {
-                                notify('warning', cfg.warnTitle || cfg.successTitle || 'Refreshed', cfg.warnMessage || 'Saved, but the form could not reload.', !!cfg.htmlMessage);
-                            }
-                        );
-                    })
-                    .catch(function (err) {
-                        notify('error', cfg.failTitle || 'Refresh failed', (err && err.message) || 'Network error.');
-                    })
-                    .finally(function () {
-                        btn.disabled = false;
-                        btn.classList.remove('opacity-60', 'cursor-wait');
-                        btn.innerHTML = orig;
-                    });
-            };
-
-            if (typeof Swal === 'undefined') {
-                if (window.confirm(cfg.confirmTitle || 'Refresh from catalog?')) run();
-                return;
-            }
-            Swal.fire({
-                title: cfg.confirmTitle || 'Refresh?',
-                html: cfg.confirmHtml || '',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Refresh now',
-                cancelButtonText: 'Cancel',
-                confirmButtonColor: '#d97824',
-            }).then(function (result) {
-                if (result.isConfirmed) run();
-            });
-        });
-    };
-})();
-</script>
+<?php require __DIR__ . '/partials/catalog_sync_script.php'; ?>
 <script>
     const printJsonPreviewUrl = <?php echo json_encode(base_url('?page=inbounding&action=inbound_product_publish&preview_only=1')); ?>;
 
@@ -3898,28 +3952,15 @@ document.addEventListener('DOMContentLoaded', function() {
              priceDisplay = card.querySelector('.calc-price-display');
         }
         if (!hInput || !wInput || !dInput || !wtInput) return;
-        // Get Values
-        let h = parseFloat(hInput.value) || 0;
-        let w = parseFloat(wInput.value) || 0;
-        let d = parseFloat(dInput.value) || 0;
-        let actualWt = parseFloat(wtInput.value) || 0;
-        // Logic: Add 4 inches buffer + Volumetric Divisor 5000
-         h = h + 4;
-         w = w + 4;
-         d = d + 4;
-        let h_in = h / 2.54;
-        let w_in = w / 2.54;
-        let d_in = d / 2.54;
-        // Volumetric Weight
-        const volWt = (h_in * w_in * d_in) / 5000;
-        // Chargeable Weight = Max(Volumetric, Actual * 1.5)
-        const adjustedActualWt = actualWt * 1.5;
-        const chargeableWt = Math.max(volWt, adjustedActualWt);
-        // Price = Chargeable * 700
-        const price = chargeableWt * 700;
-        // Update UI
-        if (volDisplay) volDisplay.innerText = volWt.toFixed(3) + " kg";
-        if (priceDisplay) priceDisplay.innerText = "₹ " + price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const est = window.inboundCourierEstimate(hInput.value, wInput.value, dInput.value, wtInput.value);
+        if (volDisplay) volDisplay.innerText = est.volKg.toFixed(3) + ' kg';
+        if (priceDisplay) {
+            priceDisplay.innerText = '₹ ' + est.priceInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        const detailsEl = document.getElementById('courier_calc_details');
+        if (detailsEl && (!card || !card.classList.contains('calculation-card'))) {
+            detailsEl.textContent = est.detail;
+        }
     }
     document.body.addEventListener('input', function(e) {
         if (e.target.matches('.calc-h, .calc-w, .calc-d, .calc-wt') || 
@@ -4086,13 +4127,48 @@ document.addEventListener('DOMContentLoaded', function() {
     function isBookSelected() {
         const groupSelect = document.getElementById('group_select');
         if (!groupSelect) return false;
-        if (String(groupSelect.value).trim() === BOOK_GROUP_VALUE) return true;
-        const idx = groupSelect.selectedIndex;
-        if (idx < 0) return false;
-        const txt = (groupSelect.options[idx] && groupSelect.options[idx].text) ? groupSelect.options[idx].text.toLowerCase() : '';
-        return txt.indexOf('book') !== -1;
+
+        let val = '';
+        let text = '';
+        if (groupSelect.tomselect) {
+            val = String(groupSelect.tomselect.getValue() || '').trim();
+            const item = groupSelect.tomselect.getItem(val);
+            if (item) {
+                text = (item.textContent || item.innerText || '').toLowerCase();
+            }
+        } else {
+            val = String(groupSelect.value || '').trim();
+            const idx = groupSelect.selectedIndex;
+            if (idx >= 0 && groupSelect.options[idx]) {
+                text = (groupSelect.options[idx].text || '').toLowerCase();
+            }
+        }
+
+        if (val === BOOK_GROUP_VALUE) return true;
+        return text.indexOf('book') !== -1;
     }
     window.desktopFormIsBookGroup = isBookSelected;
+
+    function relocateBookColorSizeFields(isBook) {
+        const colorField = document.getElementById('main-item-color-field');
+        const sizeField = document.getElementById('main-item-size-field');
+        const mainGrid = document.getElementById('main-item-details-grid');
+        const bookSlot = document.getElementById('book-meta-color-size-slot');
+        if (!colorField || !sizeField) return;
+
+        const targetParent = (isBook && bookSlot) ? bookSlot : mainGrid;
+        if (!targetParent) return;
+
+        if (colorField.parentElement !== targetParent) {
+            targetParent.appendChild(colorField);
+            targetParent.appendChild(sizeField);
+        }
+
+        colorField.classList.remove('hidden');
+        sizeField.classList.remove('hidden');
+        colorField.style.removeProperty('display');
+        sizeField.style.removeProperty('display');
+    }
 
     function toggleBookFieldsDesktop() {
         const bookBox = document.getElementById('book-meta-fields');
@@ -4103,6 +4179,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const addVarBtn = document.querySelector('button[onclick*="addNewVariation"]');
 
         const isBook = isBookSelected();
+        relocateBookColorSizeFields(isBook);
         if (materialField) {
             materialField.classList.toggle('hidden', isBook);
         }
@@ -5145,6 +5222,40 @@ document.addEventListener('DOMContentLoaded', function() {
         message: function (ok, d) {
             if (!ok) return d.message || 'Could not sync vendors from the catalog API.';
             return 'Inserted: ' + (d.inserted || 0) + ', Updated: ' + (d.updated || 0) + ', Total: ' + (d.total || 0) + '.';
+        },
+    });
+
+    bindDesktopCacheSync('author-cache-sync-btn', {
+        method: 'POST',
+        url: <?php echo json_encode(base_url('index.php?page=authors&action=syncFromAdmin')); ?>,
+        confirmTitle: 'Refresh author list?',
+        confirmHtml: 'Syncs authors from Exotic India (same as <strong>Authors → Sync from Admin</strong>).',
+        htmlMessage: true,
+        isOk: function (p, d) { return p.ok && d.success === true; },
+        successTitle: 'Authors refreshed',
+        failTitle: 'Author refresh failed',
+        message: function (ok, d) {
+            if (!ok) return d.message || 'Could not sync authors from the catalog API.';
+            var msg = 'Imported/updated: ' + (d.imported || 0) + ', Skipped: ' + (d.skipped || 0);
+            if (d.api_count != null) msg += ', API: ' + d.api_count;
+            return msg + '. Search again to pick newly synced authors.';
+        },
+    });
+
+    bindDesktopCacheSync('publisher-cache-sync-btn', {
+        method: 'POST',
+        url: <?php echo json_encode(base_url('index.php?page=publishers&action=syncFromAdmin')); ?>,
+        confirmTitle: 'Refresh publisher list?',
+        confirmHtml: 'Syncs publishers from Exotic India (same as <strong>Publishers → Sync from Admin</strong>).',
+        htmlMessage: true,
+        isOk: function (p, d) { return p.ok && d.success === true; },
+        successTitle: 'Publishers refreshed',
+        failTitle: 'Publisher refresh failed',
+        message: function (ok, d) {
+            if (!ok) return d.message || 'Could not sync publishers from the catalog API.';
+            var msg = 'Imported/updated: ' + (d.imported || 0) + ', Skipped: ' + (d.skipped || 0);
+            if (d.api_count != null) msg += ', API: ' + d.api_count;
+            return msg + '. Search again to pick newly synced publishers.';
         },
     });
 
