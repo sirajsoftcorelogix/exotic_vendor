@@ -230,7 +230,20 @@ function renderColorMapField($fieldName, $savedValue, $customClass = "", $showSy
 }
 $is_clothing_initial = false; 
 $saved_group_id = $data['form2']['group_name'] ?? '';
-if (!empty($data['category']) && !empty($saved_group_id)) {
+$is_book_initial = ((string) $saved_group_id === '-8');
+if (!$is_book_initial && !empty($data['category']) && !empty($saved_group_id)) {
+    foreach ($data['category'] as $cat) {
+        if (isset($cat['category']) && (string) $cat['category'] === (string) $saved_group_id) {
+            $catName = strtolower($cat['name'] ?? '');
+            $catDisplay = strtolower($cat['display_name'] ?? '');
+            if (strpos($catName, 'book') !== false || strpos($catDisplay, 'book') !== false) {
+                $is_book_initial = true;
+            }
+            break;
+        }
+    }
+}
+if (!$is_clothing_initial && !empty($data['category']) && !empty($saved_group_id)) {
     foreach ($data['category'] as $cat) {
         if (isset($cat['category']) && $cat['category'] == $saved_group_id) {
             $catName = strtolower($cat['name'] ?? '');
@@ -704,7 +717,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </div>
             <div class="bg-gray-50 p-5 rounded border border-gray-200 w-full">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
+                <div id="main-item-details-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                     
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Height / Length:</label>
@@ -734,11 +747,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span>
                         </div>
                     </div>
-                    <div class="w-full min-w-0">
+                    <div id="main-item-color-field" class="w-full min-w-0 book-color-size-field">
                         <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
                     </div>
-                    <div class="w-full min-w-0">
+                    <div id="main-item-size-field" class="w-full min-w-0 book-color-size-field">
                         <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
                         <?php echo renderSizeField('size', $currentSize, $is_clothing_initial, $sizeOptions); ?>
                     </div>
@@ -893,6 +906,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 <label class="block text-xs font-bold text-[#555] mb-1">Pages</label>
                                 <input type="number" min="0" name="pages" value="<?php echo htmlspecialchars($data['form2']['pages'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
                             </div>
+                            <div id="book-meta-color-size-slot" class="contents"></div>
                         </div>
                     </div>
                 </div>
@@ -1757,7 +1771,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="flex-1 pr-4 border-r border-[#ccc] flex flex-col justify-center h-[52px]"> 
                             <label class="block text-xs font-bold text-[#222] mb-[3px]">US Block:</label>
                             <div class="flex items-center gap-4">
-                                <?php $us_val = $data['form2']['us_block'] ?? 'N'; ?>
+                                <?php
+                                $us_raw = $data['form2']['us_block'] ?? 'N';
+                                $us_val = (strtoupper((string) $us_raw) === 'Y' || (string) $us_raw === '1') ? 'Y' : 'N';
+                                ?>
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="us_block" value="Y" class="w-3.5 h-3.5 accent-[#666]" <?= ($us_val == 'Y') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[12px] text-[#333]">Yes</span>
@@ -1771,7 +1788,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="flex-1 pl-4 flex flex-col justify-center h-[52px]"> 
                             <label class="block text-xs font-bold text-[#222] mb-[3px]">India Block:</label>
                             <div class="flex items-center gap-4">
-                                <?php $in_val = $data['form2']['india_block'] ?? 'N'; ?>
+                                <?php
+                                $in_raw = $data['form2']['india_block'] ?? 'N';
+                                $in_val = (strtoupper((string) $in_raw) === 'Y' || (string) $in_raw === '1') ? 'Y' : 'N';
+                                ?>
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="india_block" value="Y" class="w-3.5 h-3.5 accent-[#666]" <?= ($in_val == 'Y') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[12px] text-[#333]">Yes</span>
@@ -4107,13 +4127,48 @@ document.addEventListener('DOMContentLoaded', function() {
     function isBookSelected() {
         const groupSelect = document.getElementById('group_select');
         if (!groupSelect) return false;
-        if (String(groupSelect.value).trim() === BOOK_GROUP_VALUE) return true;
-        const idx = groupSelect.selectedIndex;
-        if (idx < 0) return false;
-        const txt = (groupSelect.options[idx] && groupSelect.options[idx].text) ? groupSelect.options[idx].text.toLowerCase() : '';
-        return txt.indexOf('book') !== -1;
+
+        let val = '';
+        let text = '';
+        if (groupSelect.tomselect) {
+            val = String(groupSelect.tomselect.getValue() || '').trim();
+            const item = groupSelect.tomselect.getItem(val);
+            if (item) {
+                text = (item.textContent || item.innerText || '').toLowerCase();
+            }
+        } else {
+            val = String(groupSelect.value || '').trim();
+            const idx = groupSelect.selectedIndex;
+            if (idx >= 0 && groupSelect.options[idx]) {
+                text = (groupSelect.options[idx].text || '').toLowerCase();
+            }
+        }
+
+        if (val === BOOK_GROUP_VALUE) return true;
+        return text.indexOf('book') !== -1;
     }
     window.desktopFormIsBookGroup = isBookSelected;
+
+    function relocateBookColorSizeFields(isBook) {
+        const colorField = document.getElementById('main-item-color-field');
+        const sizeField = document.getElementById('main-item-size-field');
+        const mainGrid = document.getElementById('main-item-details-grid');
+        const bookSlot = document.getElementById('book-meta-color-size-slot');
+        if (!colorField || !sizeField) return;
+
+        const targetParent = (isBook && bookSlot) ? bookSlot : mainGrid;
+        if (!targetParent) return;
+
+        if (colorField.parentElement !== targetParent) {
+            targetParent.appendChild(colorField);
+            targetParent.appendChild(sizeField);
+        }
+
+        colorField.classList.remove('hidden');
+        sizeField.classList.remove('hidden');
+        colorField.style.removeProperty('display');
+        sizeField.style.removeProperty('display');
+    }
 
     function toggleBookFieldsDesktop() {
         const bookBox = document.getElementById('book-meta-fields');
@@ -4124,6 +4179,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const addVarBtn = document.querySelector('button[onclick*="addNewVariation"]');
 
         const isBook = isBookSelected();
+        relocateBookColorSizeFields(isBook);
         if (materialField) {
             materialField.classList.toggle('hidden', isBook);
         }
