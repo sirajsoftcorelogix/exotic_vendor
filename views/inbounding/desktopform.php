@@ -789,16 +789,19 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
                 </div>
 
-                <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
-                    <div class="text-right min-w-[100px]">
-                        <span class="text-[10px] font-bold text-gray-500 uppercase">Volumetric</span>
-                        <div class="text-base font-bold text-[#555]" id="volumetric_weight_display">0.000 kg</div>
+                <div class="border-t border-dashed border-gray-300 pt-4 mt-6">
+                    <div class="flex flex-wrap justify-end items-center gap-6">
+                        <div class="text-right min-w-[100px]">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase">Volumetric</span>
+                            <div class="text-base font-bold text-[#555]" id="volumetric_weight_display">0.000 kg</div>
+                        </div>
+                        <div class="hidden sm:block h-8 w-px bg-gray-300"></div>
+                        <div class="text-right min-w-[140px]">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase">Est. Courier (₹700/kg)</span>
+                            <div class="text-base font-bold text-[#d97824]" id="courier_price_display">₹ 0.00</div>
+                        </div>
                     </div>
-                    <div class="hidden sm:block h-8 w-px bg-gray-300"></div>
-                    <div class="text-right min-w-[140px]">
-                        <span class="text-[10px] font-bold text-gray-500 uppercase">Est. Courier (₹700/kg)</span>
-                        <div class="text-base font-bold text-[#d97824]" id="courier_price_display">₹ 0.00</div>
-                    </div>
+                    <p id="courier_calc_details" class="text-[10px] text-gray-500 text-right mt-2 leading-snug max-w-2xl ml-auto"></p>
                 </div>
             </div>
         </div>
@@ -2635,6 +2638,29 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <script>
+/**
+ * Inbound desktop courier estimate (matches inch labels on H/W/D fields).
+ * Buffer +4 in per side → convert to cm → volumetric kg = L×W×H(cm) / 5000.
+ * Chargeable = max(volumetric, actual kg × 1.5); price = chargeable × ₹700.
+ * (Live dispatch uses CourierGateway::chargeableWeightKg without buffer or ×1.5.)
+ */
+window.inboundCourierEstimate = function (heightIn, widthIn, depthIn, actualKg) {
+    const bufferIn = 4;
+    const cmPerIn = 2.54;
+    const hCm = ((parseFloat(heightIn) || 0) + bufferIn) * cmPerIn;
+    const wCm = ((parseFloat(widthIn) || 0) + bufferIn) * cmPerIn;
+    const dCm = ((parseFloat(depthIn) || 0) + bufferIn) * cmPerIn;
+    const volKg = (hCm * wCm * dCm) / 5000;
+    const adjustedActualKg = (parseFloat(actualKg) || 0) * 1.5;
+    const chargeableKg = Math.max(volKg, adjustedActualKg);
+    const priceInr = chargeableKg * 700;
+    const basis = volKg > adjustedActualKg ? 'Volumetric' : 'Actual weight (×1.5)';
+    const detail = 'Packed ' + hCm.toFixed(1) + '×' + wCm.toFixed(1) + '×' + dCm.toFixed(1)
+        + ' cm → vol ' + volKg.toFixed(3) + ' kg; actual×1.5 = ' + adjustedActualKg.toFixed(3)
+        + ' kg → chargeable ' + chargeableKg.toFixed(3) + ' kg (' + basis + ')';
+    return { volKg, adjustedActualKg, chargeableKg, priceInr, basis, detail };
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Select Inputs
     const heightInput = document.getElementById('dim_height');
@@ -2763,55 +2789,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function calculateCourierPrice() {
         if (!heightInput || !widthInput || !depthInput || !weightInput) return;
-        // 1. Get Raw Values
-        let h = parseFloat(heightInput.value) || 0;
-        let w = parseFloat(widthInput.value) || 0;
-        let d = parseFloat(depthInput.value) || 0;
-        let actualWt = parseFloat(weightInput.value) || 0; // In KG
-        const dimUnit = dimUnitSelect ? dimUnitSelect.value : 'cm';
-         h = h + 4 ;
-         w = w + 4;
-         d = d + 4;
-        // --- STEP A: NORMALIZE TO INCHES ---
-        // If user entered CM, convert to Inch first (divide by 2.54)
-        // if (dimUnit === 'cm') {
-             h = h * 2.54;
-             w = w * 2.54;
-             d = d * 2.54;
-        // }
-        // --- STEP B: ADD BUFFER (4 inches) ---
-        let h_in = h;
-        let w_in = w;
-        let d_in = d;
-        // --- STEP C: CALCULATE VOLUMETRIC WEIGHT ---
-        // Formula: (L x W x H in inches) / 5000
-        const volWt = (h_in * w_in * d_in) / 5000;
-        // --- STEP D: CALCULATE ADJUSTED ACTUAL WEIGHT (x 1.5) ---
-        const adjustedActualWt = actualWt * 1.5;
-        // --- STEP E: DETERMINE CHARGEABLE WEIGHT ---
-        const chargeableWt = Math.max(volWt, adjustedActualWt);
-        // --- STEP F: CALCULATE PRICE ---
-        // Price: ₹700 per KG
-        const price = chargeableWt * 700;
-        // --- UPDATE UI ---
-        
-        // 1. Update Volumetric Weight (Compulsory)
+        const est = window.inboundCourierEstimate(
+            heightInput.value,
+            widthInput.value,
+            depthInput.value,
+            weightInput.value
+        );
         if (volDisplayElement) {
-            volDisplayElement.innerText = volWt.toFixed(3) + " kg";
+            volDisplayElement.innerText = est.volKg.toFixed(3) + ' kg';
         }
-        // 2. Update Price
         if (displayElement) {
-            displayElement.innerText = "₹ " + price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            displayElement.innerText = '₹ ' + est.priceInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
-        
-        // 3. Update Details text
         if (detailsElement) {
-            const usedType = (volWt > adjustedActualWt) ? "Volumetric" : "Actual Weight";
-            detailsElement.innerText = `Chargeable: ${chargeableWt.toFixed(3)} kg (${usedType})`;
+            detailsElement.textContent = est.detail;
         }
     }
     // Attach Listeners
-    const inputs = [heightInput, widthInput, depthInput, weightInput, dimUnitSelect];
+    const inputs = [heightInput, widthInput, depthInput, weightInput];
     inputs.forEach(input => {
         if(input) {
             input.addEventListener('input', calculateCourierPrice);
@@ -3898,28 +3893,15 @@ document.addEventListener('DOMContentLoaded', function() {
              priceDisplay = card.querySelector('.calc-price-display');
         }
         if (!hInput || !wInput || !dInput || !wtInput) return;
-        // Get Values
-        let h = parseFloat(hInput.value) || 0;
-        let w = parseFloat(wInput.value) || 0;
-        let d = parseFloat(dInput.value) || 0;
-        let actualWt = parseFloat(wtInput.value) || 0;
-        // Logic: Add 4 inches buffer + Volumetric Divisor 5000
-         h = h + 4;
-         w = w + 4;
-         d = d + 4;
-        let h_in = h / 2.54;
-        let w_in = w / 2.54;
-        let d_in = d / 2.54;
-        // Volumetric Weight
-        const volWt = (h_in * w_in * d_in) / 5000;
-        // Chargeable Weight = Max(Volumetric, Actual * 1.5)
-        const adjustedActualWt = actualWt * 1.5;
-        const chargeableWt = Math.max(volWt, adjustedActualWt);
-        // Price = Chargeable * 700
-        const price = chargeableWt * 700;
-        // Update UI
-        if (volDisplay) volDisplay.innerText = volWt.toFixed(3) + " kg";
-        if (priceDisplay) priceDisplay.innerText = "₹ " + price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const est = window.inboundCourierEstimate(hInput.value, wInput.value, dInput.value, wtInput.value);
+        if (volDisplay) volDisplay.innerText = est.volKg.toFixed(3) + ' kg';
+        if (priceDisplay) {
+            priceDisplay.innerText = '₹ ' + est.priceInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        const detailsEl = document.getElementById('courier_calc_details');
+        if (detailsEl && (!card || !card.classList.contains('calculation-card'))) {
+            detailsEl.textContent = est.detail;
+        }
     }
     document.body.addEventListener('input', function(e) {
         if (e.target.matches('.calc-h, .calc-w, .calc-d, .calc-wt') || 
