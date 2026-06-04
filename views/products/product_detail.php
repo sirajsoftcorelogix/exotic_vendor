@@ -631,49 +631,52 @@
           }
           echo '<div class="flex flex-wrap gap-1.5 mt-1">';
           foreach ($items as $item) {
-              echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-gray-100 border border-gray-200 text-gray-800 text-xs font-medium">'
+              echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-900 text-xs font-medium">'
                   . htmlspecialchars($item, ENT_QUOTES, 'UTF-8')
                   . '</span>';
           }
           echo '</div>';
       };
+      $bookFieldBoxClass = 'rounded-lg border border-amber-100 bg-amber-50/60 p-3';
     ?>
     <div class="bg-white rounded-lg p-4 mb-4">
-      <h3 class="font-semibold mb-3">Book Details</h3>
+      <h3 class="font-semibold mb-3 text-gray-800 flex items-center gap-2">
+        <i class="fas fa-book text-amber-600"></i>Book Details
+      </h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <div class="border rounded p-3">
+        <div class="<?php echo $bookFieldBoxClass; ?>">
           <span class="text-gray-500 block text-xs mb-0.5">Author</span>
           <?php $bookDetailLabels('authors'); ?>
         </div>
-        <div class="border rounded p-3">
+        <div class="<?php echo $bookFieldBoxClass; ?>">
           <span class="text-gray-500 block text-xs mb-0.5">Edited By</span>
           <?php $bookDetailLabels('edited_by_names'); ?>
         </div>
-        <div class="border rounded p-3">
+        <div class="<?php echo $bookFieldBoxClass; ?>">
           <span class="text-gray-500 block text-xs mb-0.5">Publisher</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('publisher'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="border rounded p-3">
+        <div class="<?php echo $bookFieldBoxClass; ?>">
           <span class="text-gray-500 block text-xs mb-0.5">ISBN</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('isbn'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="border rounded p-3">
+        <div class="<?php echo $bookFieldBoxClass; ?>">
           <span class="text-gray-500 block text-xs mb-0.5">Cover Type</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('cover_type'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="border rounded p-3">
+        <div class="<?php echo $bookFieldBoxClass; ?>">
           <span class="text-gray-500 block text-xs mb-0.5">Edition</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('edition'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="border rounded p-3">
+        <div class="<?php echo $bookFieldBoxClass; ?>">
           <span class="text-gray-500 block text-xs mb-0.5">Published Date</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('publication_date'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="border rounded p-3">
+        <div class="<?php echo $bookFieldBoxClass; ?>">
           <span class="text-gray-500 block text-xs mb-0.5">Language</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('language'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="border rounded p-3">
+        <div class="<?php echo $bookFieldBoxClass; ?>">
           <span class="text-gray-500 block text-xs mb-0.5">Pages</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('pages'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
