@@ -50,6 +50,8 @@ $src = $showPreview ? base_url($invoiceImg) : '#';
 $placeholderClass = $showPreview ? 'hidden' : '';
 $imgPreviewClass  = ($showPreview && !$isPdf) ? '' : 'hidden';
 $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
+$pdfPreviewLayoutClass = ($showPreview && $isPdf) ? ' form1-preview--pdf' : '';
+$pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' : '';
 ?>
 
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
@@ -91,6 +93,29 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
     @media (min-width: 1024px) {
         .form1-preview {
             min-height: 20rem;
+        }
+    }
+    /* PDF: tall scrollable iframe (full document height inside viewer) */
+    .form1-preview--pdf {
+        aspect-ratio: auto;
+        min-height: auto;
+        align-items: stretch;
+        justify-content: flex-start;
+    }
+    .form1-preview--pdf .form1-pdf-frame {
+        display: block;
+        width: 100%;
+        min-height: min(85vh, 56rem);
+        height: min(85vh, 56rem);
+        max-height: none;
+    }
+    @media (min-width: 1024px) {
+        .form1-preview-panel--pdf {
+            min-height: auto;
+        }
+        .form1-preview--pdf .form1-pdf-frame {
+            min-height: calc(100dvh - 11rem);
+            height: calc(100dvh - 11rem);
         }
     }
     .form1-page .ts-wrapper { width: 100%; }
@@ -179,18 +204,18 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
                             <div id="photo-error" class="text-red-600 text-xs mt-2 font-semibold min-h-[1.25rem]"></div>
                         </section>
 
-                        <section class="order-2 lg:hidden bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden" aria-labelledby="form1-preview-heading-mobile">
+                        <section class="order-2 lg:hidden bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden<?php echo $pdfPreviewPanelClass; ?>" aria-labelledby="form1-preview-heading-mobile">
                             <div class="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
                                 <h2 id="form1-preview-heading-mobile" class="text-sm font-bold text-gray-800">Preview</h2>
                                 <button type="button" id="delete-preview-btn-mobile" class="<?php echo ($showPreview) ? '' : 'hidden'; ?> text-red-600 text-xs font-bold px-2.5 py-1.5 rounded-lg bg-red-50 border border-red-100">Remove</button>
                             </div>
-                            <div class="form1-preview relative flex items-center justify-center bg-gray-50">
+                            <div id="form1-preview-box-mobile" class="form1-preview relative flex items-center justify-center bg-gray-50<?php echo $pdfPreviewLayoutClass; ?>">
                                 <div id="placeholder-box-mobile" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 px-4 text-center <?php echo $placeholderClass; ?>">
                                     <svg class="w-12 h-12 mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                     <span class="text-xs font-medium">Preview appears after upload</span>
                                 </div>
                                 <img id="preview-mobile" src="<?php echo (!$isPdf) ? htmlspecialchars($src, ENT_QUOTES, 'UTF-8') : '#'; ?>" alt="" class="<?php echo $imgPreviewClass; ?> w-full h-full object-contain p-2 max-h-[40vh]">
-                                <iframe id="pdf-preview-mobile" src="<?php echo ($isPdf) ? htmlspecialchars($src, ENT_QUOTES, 'UTF-8') : ''; ?>" class="<?php echo $pdfPreviewClass; ?> w-full h-full min-h-[11rem] border-0" title="PDF preview"></iframe>
+                                <iframe id="pdf-preview-mobile" src="<?php echo ($isPdf) ? htmlspecialchars($src, ENT_QUOTES, 'UTF-8') : ''; ?>" class="<?php echo $pdfPreviewClass; ?> form1-pdf-frame border-0" title="PDF preview"></iframe>
                             </div>
                         </section>
 
@@ -262,7 +287,7 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
                     </div>
 
                     <aside class="hidden lg:flex flex-col gap-4 order-2 lg:sticky lg:top-4">
-                        <section class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex-1 flex flex-col min-h-[20rem]" aria-labelledby="form1-preview-heading-desktop">
+                        <section id="form1-preview-panel-desktop" class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex-1 flex flex-col min-h-[20rem]<?php echo $pdfPreviewPanelClass; ?>" aria-labelledby="form1-preview-heading-desktop">
                             <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                                 <h2 id="form1-preview-heading-desktop" class="text-sm font-bold text-gray-800">Preview</h2>
                                 <button type="button" id="delete-preview-btn" class="<?php echo ($showPreview) ? '' : 'hidden'; ?> text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg bg-red-50 border border-red-100 hover:bg-red-100 flex items-center gap-1">
@@ -270,13 +295,13 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
                                     Remove
                                 </button>
                             </div>
-                            <div class="form1-preview flex-1 relative flex items-center justify-center bg-gray-50 min-h-[20rem]">
+                            <div id="form1-preview-box-desktop" class="form1-preview flex-1 relative flex items-center justify-center bg-gray-50 min-h-[20rem]<?php echo $pdfPreviewLayoutClass; ?>">
                                 <div id="placeholder-box" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 <?php echo $placeholderClass; ?>">
                                     <svg class="w-16 h-16 mb-2 opacity-35" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                     <span class="text-sm font-medium">Preview appears after upload</span>
                                 </div>
                                 <img id="preview" src="<?php echo (!$isPdf) ? htmlspecialchars($src, ENT_QUOTES, 'UTF-8') : '#'; ?>" alt="Invoice preview" class="<?php echo $imgPreviewClass; ?> w-full h-full object-contain p-3">
-                                <iframe id="pdf-preview" src="<?php echo ($isPdf) ? htmlspecialchars($src, ENT_QUOTES, 'UTF-8') : ''; ?>" class="<?php echo $pdfPreviewClass; ?> w-full h-full min-h-[18rem] border-0 p-2" title="PDF preview"></iframe>
+                                <iframe id="pdf-preview" src="<?php echo ($isPdf) ? htmlspecialchars($src, ENT_QUOTES, 'UTF-8') : ''; ?>" class="<?php echo $pdfPreviewClass; ?> form1-pdf-frame border-0" title="PDF preview"></iframe>
                             </div>
                         </section>
                     </aside>
@@ -399,14 +424,29 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
             pdf: document.getElementById('pdf-preview'),
             placeholder: document.getElementById('placeholder-box'),
             deleteBtn: document.getElementById('delete-preview-btn'),
+            box: document.getElementById('form1-preview-box-desktop'),
+            panel: document.getElementById('form1-preview-panel-desktop'),
         },
         {
             img: document.getElementById('preview-mobile'),
             pdf: document.getElementById('pdf-preview-mobile'),
             placeholder: document.getElementById('placeholder-box-mobile'),
             deleteBtn: document.getElementById('delete-preview-btn-mobile'),
+            box: document.getElementById('form1-preview-box-mobile'),
+            panel: document.querySelector('[aria-labelledby="form1-preview-heading-mobile"]'),
         },
     ].filter(function (p) { return p.img && p.pdf; });
+
+    function form1SetPdfPreviewLayout(isPdf) {
+        previewPairs.forEach(function (p) {
+            if (p.box) {
+                p.box.classList.toggle('form1-preview--pdf', !!isPdf);
+            }
+            if (p.panel) {
+                p.panel.classList.toggle('form1-preview-panel--pdf', !!isPdf);
+            }
+        });
+    }
 
     function form1SetPreviewVisible(show) {
         previewPairs.forEach(function (p) {
@@ -432,6 +472,7 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
                 p.img.classList.remove('hidden');
             }
         });
+        form1SetPdfPreviewLayout(isPdf);
         form1SetPreviewVisible(true);
         if (errorBox) {
             errorBox.textContent = '';
@@ -445,6 +486,7 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
             p.pdf.src = '';
             p.pdf.classList.add('hidden');
         });
+        form1SetPdfPreviewLayout(false);
         form1SetPreviewVisible(false);
     }
 
