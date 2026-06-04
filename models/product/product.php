@@ -3922,9 +3922,10 @@ class product
 
         if (strpos($raw, '|') !== false) {
             $parts = explode('|', $raw);
-            // Inbound/API order: SubSub | Sub | Cat | Group (API may omit empty Sub → 3 segments)
+            // Full inbound string: SubSub | Sub | Cat | Group (four segments, empty slots kept as "")
+            // Vendor related_search API often returns three segments: Sub | Cat | Group (no SubSub)
             if (count($parts) === 3) {
-                $parts = [$parts[0], '', $parts[1], $parts[2]];
+                $parts = ['', $parts[0], $parts[1], $parts[2]];
             }
             $sections = [
                 'sub_sub_category' => $joinLabels($this->resolveCategoryLabelList($parts[0] ?? '')),
