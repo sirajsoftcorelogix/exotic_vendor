@@ -4229,6 +4229,7 @@ class ProductsController
         is_login();
         global $productModel;
         global $commanModel;
+        global $conn;
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
@@ -4258,6 +4259,39 @@ class ProductsController
             $catalogDisplay = $productModel->buildProductCatalogDisplayFields($order);
             $order['item_identification'] = $catalogDisplay['item_identification'];
             $order['search_category_display'] = $catalogDisplay['search_category'];
+
+            $groupLower = strtolower(trim((string) ($order['groupname'] ?? '')));
+            $order['book_details'] = [];
+            if (strpos($groupLower, 'book') !== false && $itemCode !== '') {
+                require_once dirname(__DIR__) . '/models/inbounding/Inbounding.php';
+                $inboundingModel = new Inbounding($conn);
+                $order['book_details'] = $inboundingModel->getBookDetailsForProductDisplay(
+                    $itemCode,
+                    (string) ($order['size'] ?? ''),
+                    (string) ($order['color'] ?? '')
+                );
+                if ($order['book_details'] === []) {
+                    $order['book_details'] = [
+                        'author' => trim((string) ($order['author'] ?? '')),
+                        'edited_by' => '',
+                        'publisher' => trim((string) ($order['publisher'] ?? '')),
+                        'isbn' => '',
+                        'cover_type' => '',
+                        'edition' => '',
+                        'publication_date' => '',
+                        'language' => '',
+                        'pages' => '',
+                    ];
+                } else {
+                    if ($order['book_details']['author'] === '') {
+                        $order['book_details']['author'] = trim((string) ($order['author'] ?? ''));
+                    }
+                    if ($order['book_details']['publisher'] === '') {
+                        $order['book_details']['publisher'] = trim((string) ($order['publisher'] ?? ''));
+                    }
+                }
+            }
+
             if (!headers_sent()) {
                 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
                 header('Pragma: no-cache');

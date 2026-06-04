@@ -826,6 +826,90 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
                     
                 </div>
+                <div id="book-meta-fields" class="hidden mt-6">
+                    <div class="border border-[#ffd6b3] rounded-[5px] px-[15px] py-4 ">
+                        <div class="text-[13px] font-bold text-[#333] mb-3">Book Details</div>
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <div>
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <label class="text-xs font-bold text-[#555]">Author</label>
+                                    <?php
+                                    $btnId = 'author-cache-sync-btn';
+                                    $title = 'Refresh authors from catalog';
+                                    $srLabel = 'Refresh authors';
+                                    $iconType = 'author';
+                                    require __DIR__ . '/partials/catalog_refresh_btn.php';
+                                    ?>
+                                </div>
+                                <input type="hidden" name="author" id="author_pipe_value" value="<?php echo htmlspecialchars($author_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
+                                <select id="author_select" multiple autocomplete="off">
+                                    <?php foreach ($selected_author_options as $authorOpt): ?>
+                                        <option value="<?php echo htmlspecialchars((string) $authorOpt['id']); ?>" selected><?php echo htmlspecialchars($authorOpt['name'] ?? ''); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Edited By</label>
+                                <input type="hidden" name="edited_by" id="edited_by_pipe_value" value="<?php echo htmlspecialchars($edited_by_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
+                                <select id="edited_by_select" multiple autocomplete="off">
+                                    <?php foreach ($selected_edited_by_options as $editorOpt): ?>
+                                        <option value="<?php echo htmlspecialchars((string) $editorOpt['id']); ?>" selected><?php echo htmlspecialchars($editorOpt['name'] ?? ''); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <label class="text-xs font-bold text-[#555]">Publisher</label>
+                                    <?php
+                                    $btnId = 'publisher-cache-sync-btn';
+                                    $title = 'Refresh publishers from catalog';
+                                    $srLabel = 'Refresh publishers';
+                                    $iconType = 'publisher';
+                                    require __DIR__ . '/partials/catalog_refresh_btn.php';
+                                    ?>
+                                </div>
+                                <select id="publisher_select" name="publisher" placeholder="Type publisher name..." autocomplete="off">
+                                    <option value=""></option>
+                                    <?php if (!empty($selected_publisher_id) && !empty($selected_publisher_name)): ?>
+                                        <option value="<?php echo htmlspecialchars($selected_publisher_id); ?>" selected><?php echo htmlspecialchars($selected_publisher_name); ?></option>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">ISBN</label>
+                                <input type="text" name="isbn" value="<?php echo htmlspecialchars($data['form2']['isbn'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Cover Type</label>
+                                <select name="cover_type" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                                    <option value="">Select cover type</option>
+                                    <?php foreach ($bookCoverTypeOptions as $coverOption): ?>
+                                        <option value="<?php echo htmlspecialchars($coverOption); ?>" <?php echo $saved_cover_type === $coverOption ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($coverOption); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Edition</label>
+                                <input type="text" name="edition" value="<?php echo htmlspecialchars($saved_edition); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Publication Date</label>
+                                <input type="date" name="publication_date" value="<?php echo htmlspecialchars($saved_publication_date); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Language</label>
+                                <input type="text" name="language" value="<?php echo htmlspecialchars($data['form2']['language'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Pages</label>
+                                <input type="number" min="0" name="pages" value="<?php echo htmlspecialchars($data['form2']['pages'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div id="book-meta-color-size-slot" class="contents"></div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="border-t border-dashed border-gray-300 pt-4 mt-6">
                     <div class="flex flex-wrap justify-end items-center gap-6">
@@ -1238,10 +1322,68 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </button>
                         </div>
                     </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Group:</label>
+                        <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off">
+                            <option value="">Select Group...</option>
+                            <?php foreach($rootCategories as $group): 
+                                $isGroupSelected = ($selected_group_val == $group['store_value']) ? 'selected' : '';
+                            ?>
+                                <option value="<?php echo $group['store_value']; ?>" <?php echo $isGroupSelected; ?>>
+                                    <?php echo $group['name']; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
 
+                <div class="flex flex-col md:flex-row gap-5 items-stretch">
+                    
+                    <div class="w-full md:w-1/3 flex flex-col">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Category:</label>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="main_cat_search" placeholder="Search..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
+                            <div id="category_container" class="checkbox-list-container overflow-y-auto p-1 h-full">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group to view options</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full md:w-1/3 flex flex-col">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Sub Category:</label>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="sub_cat_search" placeholder="Search..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
+                            <div id="sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category to view options</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full md:w-1/3 flex flex-col">
+                        <label class="block text-xs font-bold text-[#222] mb-1">SubSubCategory:</label>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="sub_sub_cat_search" placeholder="Search..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
+                            <div id="sub_sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category to view options</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
             </fieldset>
         </div>
+
+        <!-- Book Details moved to Item Photos & Details section (below) -->
         <?php 
             // 1. PARSE SAVED DATA (If exists)
             // Assuming you store this string in a column named 'search_category_string'
@@ -1337,87 +1479,74 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div id="book-meta-fields" class="mt-[15px] md:mx-5<?php echo $is_book_initial ? '' : ' hidden'; ?>">
-            <fieldset class="border border-[#ffd6b3] rounded-[5px] px-5 py-[15px] bg-[#fffbf7]">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Book Details</legend>
-                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    <div>
-                        <div class="flex items-center gap-1.5 mb-1">
-                            <label class="text-xs font-bold text-[#555]">Author</label>
-                            <?php
-                            $btnId = 'author-cache-sync-btn';
-                            $title = 'Refresh authors from catalog';
-                            $srLabel = 'Refresh authors';
-                            $iconType = 'author';
-                            require __DIR__ . '/partials/catalog_refresh_btn.php';
+        <div class="mt-[15px] md:mx-5">
+            <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
+                
+                <div class="mb-[15px]">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Title:</label>
+                    <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="product_title" value="<?= htmlspecialchars($data['form2']['product_title'] ?? '') ?>">
+                </div>
+                <div class="mb-[15px]">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:</label>
+                    <textarea 
+                        id="keywords_input" 
+                        name="key_words"
+                        placeholder="Type keyword and press Enter or Comma..."
+                        class="w-full min-h-[60px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
+                    ><?= htmlspecialchars($data['form2']['key_words'] ?? '') ?></textarea>
+                    
+                    <div class="text-[10px] text-gray-500 mt-1">
+                        Type text and press <strong>Enter</strong> or <strong>Comma (,)</strong> to add a tag.
+                    </div>
+                </div>
+                <div class="mb-[15px]">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Snippet Description:</label>
+                    <textarea 
+                        class="w-full min-h-[80px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y" 
+                        name="snippet_description"><?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?></textarea>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
+                    <div class="border border-[#ccc] rounded-[4px] bg-white h-[200px] flex flex-col">
+                        <div class="checkbox-list-container overflow-y-auto p-1 h-full">
+                            <?php 
+                                $source_data = $data['form2']['optionals_data'] ?? [];
+                                if (isset($source_data['optionals']) && is_array($source_data['optionals'])) {
+                                    $available_options = $source_data['optionals'];
+                                } else {
+                                    $available_options = $source_data;
+                                }
+                                $saved_raw = $data['form2']['optionals'] ?? []; 
+                                $saved_values = [];
+                                if (is_array($saved_raw)) {
+                                    $saved_values = $saved_raw;
+                                } elseif (is_string($saved_raw)) {
+                                    $saved_values = array_map('trim', explode(',', $saved_raw));
+                                }
+                                if (!empty($available_options) && is_array($available_options)) {
+                                    foreach ($available_options as $key => $val_str) {
+                                        if (is_array($val_str)) continue; 
+                                        $val_str = (string)$val_str; 
+                                        $label = str_replace(['OPTIONALS_', '_'], ['', ' '], $val_str); 
+                                        $label = ucwords(strtolower($label));                
+                                        $isChecked = in_array($val_str, $saved_values) ? 'checked' : '';
+                                        $uniqueId = 'opt_' . md5($val_str); 
+                            ?>
+                                        <div class="checkbox-item flex items-center p-2 hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                                            <input type="checkbox" id="<?= $uniqueId ?>" name="optionals[]" value="<?= htmlspecialchars($val_str) ?>" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer mr-2" <?= $isChecked ?>>
+                                            <label for="<?= $uniqueId ?>" class="w-full text-sm font-medium text-gray-900 cursor-pointer select-none">
+                                                <?= $label ?>
+                                            </label>
+                                        </div>
+                            <?php 
+                                    }
+                                } else {
+                                    echo '<div class="text-xs text-gray-400 p-4 text-center">No options available</div>';
+                                }
                             ?>
                         </div>
-                        <input type="hidden" name="author" id="author_pipe_value" value="<?php echo htmlspecialchars($author_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
-                        <select id="author_select" multiple autocomplete="off">
-                            <?php foreach ($selected_author_options as $authorOpt): ?>
-                                <option value="<?php echo htmlspecialchars((string) $authorOpt['id']); ?>" selected><?php echo htmlspecialchars($authorOpt['name'] ?? ''); ?></option>
-                            <?php endforeach; ?>
-                        </select>
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[#555] mb-1">Edited By</label>
-                        <input type="hidden" name="edited_by" id="edited_by_pipe_value" value="<?php echo htmlspecialchars($edited_by_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
-                        <select id="edited_by_select" multiple autocomplete="off">
-                            <?php foreach ($selected_edited_by_options as $editorOpt): ?>
-                                <option value="<?php echo htmlspecialchars((string) $editorOpt['id']); ?>" selected><?php echo htmlspecialchars($editorOpt['name'] ?? ''); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div>
-                        <div class="flex items-center gap-1.5 mb-1">
-                            <label class="text-xs font-bold text-[#555]">Publisher</label>
-                            <?php
-                            $btnId = 'publisher-cache-sync-btn';
-                            $title = 'Refresh publishers from catalog';
-                            $srLabel = 'Refresh publishers';
-                            $iconType = 'publisher';
-                            require __DIR__ . '/partials/catalog_refresh_btn.php';
-                            ?>
-                        </div>
-                        <select id="publisher_select" name="publisher" placeholder="Type publisher name..." autocomplete="off">
-                            <option value=""></option>
-                            <?php if (!empty($selected_publisher_id) && !empty($selected_publisher_name)): ?>
-                                <option value="<?php echo htmlspecialchars($selected_publisher_id); ?>" selected><?php echo htmlspecialchars($selected_publisher_name); ?></option>
-                            <?php endif; ?>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[#555] mb-1">ISBN</label>
-                        <input type="text" name="isbn" value="<?php echo htmlspecialchars($data['form2']['isbn'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[#555] mb-1">Cover Type</label>
-                        <select name="cover_type" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
-                            <option value="">Select cover type</option>
-                            <?php foreach ($bookCoverTypeOptions as $coverOption): ?>
-                                <option value="<?php echo htmlspecialchars($coverOption); ?>" <?php echo $saved_cover_type === $coverOption ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($coverOption); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[#555] mb-1">Edition</label>
-                        <input type="text" name="edition" value="<?php echo htmlspecialchars($saved_edition); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[#555] mb-1">Published Date</label>
-                        <input type="date" name="publication_date" value="<?php echo htmlspecialchars($saved_publication_date); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[#555] mb-1">Language</label>
-                        <input type="text" name="language" value="<?php echo htmlspecialchars($data['form2']['language'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[#555] mb-1">Pages</label>
-                        <input type="number" min="0" name="pages" value="<?php echo htmlspecialchars($data['form2']['pages'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
-                    </div>
-                    <div id="book-meta-color-size-slot" class="contents"></div>
                 </div>
             </fieldset>
         </div>
@@ -1509,132 +1638,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     </option>
                                 <?php } ?>
                             </select>
-                        </div>
-                    </div>
-                </div>
-            </fieldset>
-        </div>
-        <div class="mt-[15px] md:mx-5">
-            <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
-
-                <div class="mb-[15px]">
-                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Title:</label>
-                    <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="product_title" value="<?= htmlspecialchars($data['form2']['product_title'] ?? '') ?>">
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                    <div class="w-full">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Group:</label>
-                        <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off">
-                            <option value="">Select Group...</option>
-                            <?php foreach($rootCategories as $group):
-                                $isGroupSelected = ($selected_group_val == $group['store_value']) ? 'selected' : '';
-                            ?>
-                                <option value="<?php echo $group['store_value']; ?>" <?php echo $isGroupSelected; ?>>
-                                    <?php echo $group['name']; ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="flex flex-col md:flex-row gap-5 items-stretch mb-[15px]">
-                    <div class="w-full md:w-1/3 flex flex-col">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Category:</label>
-                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
-                            <div class="p-1 border-b border-gray-200 bg-gray-50">
-                                <input type="text" id="main_cat_search" placeholder="Search..."
-                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
-                            </div>
-                            <div id="category_container" class="checkbox-list-container overflow-y-auto p-1 h-full">
-                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group to view options</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="w-full md:w-1/3 flex flex-col">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Sub Category:</label>
-                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
-                            <div class="p-1 border-b border-gray-200 bg-gray-50">
-                                <input type="text" id="sub_cat_search" placeholder="Search..."
-                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
-                            </div>
-                            <div id="sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
-                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category to view options</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="w-full md:w-1/3 flex flex-col">
-                        <label class="block text-xs font-bold text-[#222] mb-1">SubSubCategory:</label>
-                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
-                            <div class="p-1 border-b border-gray-200 bg-gray-50">
-                                <input type="text" id="sub_sub_cat_search" placeholder="Search..."
-                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
-                            </div>
-                            <div id="sub_sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
-                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category to view options</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mb-[15px]">
-                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:</label>
-                    <textarea
-                        id="keywords_input"
-                        name="key_words"
-                        placeholder="Type keyword and press Enter or Comma..."
-                        class="w-full min-h-[60px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
-                    ><?= htmlspecialchars($data['form2']['key_words'] ?? '') ?></textarea>
-                    <div class="text-[10px] text-gray-500 mt-1">
-                        Type text and press <strong>Enter</strong> or <strong>Comma (,)</strong> to add a tag.
-                    </div>
-                </div>
-                <div class="mb-[15px]">
-                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Snippet Description:</label>
-                    <textarea
-                        class="w-full min-h-[80px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
-                        name="snippet_description"><?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?></textarea>
-                </div>
-                <div class="mb-4">
-                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
-                    <div class="border border-[#ccc] rounded-[4px] bg-white h-[200px] flex flex-col">
-                        <div class="checkbox-list-container overflow-y-auto p-1 h-full">
-                            <?php
-                                $source_data = $data['form2']['optionals_data'] ?? [];
-                                if (isset($source_data['optionals']) && is_array($source_data['optionals'])) {
-                                    $available_options = $source_data['optionals'];
-                                } else {
-                                    $available_options = $source_data;
-                                }
-                                $saved_raw = $data['form2']['optionals'] ?? [];
-                                $saved_values = [];
-                                if (is_array($saved_raw)) {
-                                    $saved_values = $saved_raw;
-                                } elseif (is_string($saved_raw)) {
-                                    $saved_values = array_map('trim', explode(',', $saved_raw));
-                                }
-                                if (!empty($available_options) && is_array($available_options)) {
-                                    foreach ($available_options as $key => $val_str) {
-                                        if (is_array($val_str)) continue;
-                                        $val_str = (string)$val_str;
-                                        $label = str_replace(['OPTIONALS_', '_'], ['', ' '], $val_str);
-                                        $label = ucwords(strtolower($label));
-                                        $isChecked = in_array($val_str, $saved_values) ? 'checked' : '';
-                                        $uniqueId = 'opt_' . md5($val_str);
-                            ?>
-                                        <div class="checkbox-item flex items-center p-2 hover:bg-gray-50 border-b border-gray-100 last:border-0">
-                                            <input type="checkbox" id="<?= $uniqueId ?>" name="optionals[]" value="<?= htmlspecialchars($val_str) ?>" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer mr-2" <?= $isChecked ?>>
-                                            <label for="<?= $uniqueId ?>" class="w-full text-sm font-medium text-gray-900 cursor-pointer select-none">
-                                                <?= $label ?>
-                                            </label>
-                                        </div>
-                            <?php
-                                    }
-                                } else {
-                                    echo '<div class="text-xs text-gray-400 p-4 text-center">No options available</div>';
-                                }
-                            ?>
                         </div>
                     </div>
                 </div>

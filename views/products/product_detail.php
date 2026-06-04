@@ -343,15 +343,7 @@
             <i class="fas fa-code text-[11px]" aria-hidden="true"></i>
           </button>
         </div>
-        <?php if ($isBookProduct): ?>
-          <?php if ($authorRaw !== ''): ?>
-            <p class="text-sm text-gray-600 mt-1">Author: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
-          <?php endif; ?>
-          <?php $publisherRaw = trim((string)($products['publisher'] ?? '')); ?>
-          <?php if ($publisherRaw !== ''): ?>
-            <p class="text-sm text-gray-600">Publisher: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($publisherRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
-          <?php endif; ?>
-        <?php elseif ($authorRaw !== ''): ?>
+        <?php if (!$isBookProduct && $authorRaw !== ''): ?>
           <p class="text-sm text-gray-600 mt-1">Artist: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
         <?php endif; ?>
         <div class="flex flex-wrap gap-2 mt-2">
@@ -617,6 +609,60 @@
       </div>
     </div>
    </div>
+
+  <?php if ($isBookProduct): ?>
+    <?php
+      $bookDetails = $products['book_details'] ?? [];
+      $bookDetailVal = static function ($key) use ($bookDetails): string {
+          $v = trim((string) ($bookDetails[$key] ?? ''));
+          return $v !== '' ? $v : '—';
+      };
+    ?>
+    <div class="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-4 mb-4">
+      <h3 class="font-semibold mb-3 text-gray-800 flex items-center gap-2">
+        <i class="fas fa-book text-orange-600"></i>Book Details
+      </h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+          <span class="text-gray-500 block text-xs mb-0.5">Author</span>
+          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('author'), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+          <span class="text-gray-500 block text-xs mb-0.5">Edited By</span>
+          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('edited_by'), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+          <span class="text-gray-500 block text-xs mb-0.5">Publisher</span>
+          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('publisher'), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+          <span class="text-gray-500 block text-xs mb-0.5">ISBN</span>
+          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('isbn'), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+          <span class="text-gray-500 block text-xs mb-0.5">Cover Type</span>
+          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('cover_type'), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+          <span class="text-gray-500 block text-xs mb-0.5">Edition</span>
+          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('edition'), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+          <span class="text-gray-500 block text-xs mb-0.5">Published Date</span>
+          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('publication_date'), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+          <span class="text-gray-500 block text-xs mb-0.5">Language</span>
+          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('language'), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+          <span class="text-gray-500 block text-xs mb-0.5">Pages</span>
+          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('pages'), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+      </div>
+    </div>
+  <?php endif; ?>
+
   <!-- VENDORS + NOTES -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
     <!-- Vendors -->
@@ -664,81 +710,6 @@
       <textarea id="product-notes" class="w-full border rounded p-2 text-sm resize-none" rows="8"
         placeholder="Add notes here..."><?php echo htmlspecialchars($products['notes'] ?? ''); ?></textarea>
       <button class="mt-2 px-4 py-2 bg-blue-600 text-white rounded text-sm" onclick="saveProductNotes(<?php echo htmlspecialchars($products['id'] ?? 0); ?>)">Save Notes</button>
-    </div>
-  </div>
-  <?php
-    $itemId = $products['item_identification'] ?? [];
-    $searchCat = $products['search_category_display'] ?? [];
-    $pdReadonlyBox = static function (string $value): string {
-        return htmlspecialchars($value !== '' ? $value : '—', ENT_QUOTES, 'UTF-8');
-    };
-  ?>
-  <!-- Item Identification (read-only) -->
-  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
-    <h3 class="font-semibold mb-4 text-gray-800 flex items-center gap-2">
-      <i class="fas fa-fingerprint text-amber-600" aria-hidden="true"></i>Item Identification
-    </h3>
-    <div class="space-y-4 text-sm">
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Group</label>
-        <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-gray-800"><?php echo $pdReadonlyBox((string)($itemId['group'] ?? '—')); ?></div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Category</label>
-          <div class="rounded-lg border border-gray-200 bg-white h-[160px] overflow-y-auto p-2 text-gray-800 leading-relaxed"><?php echo $pdReadonlyBox((string)($itemId['category'] ?? '—')); ?></div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Sub Category</label>
-          <div class="rounded-lg border border-gray-200 bg-white h-[160px] overflow-y-auto p-2 text-gray-800 leading-relaxed"><?php echo $pdReadonlyBox((string)($itemId['sub_category'] ?? '—')); ?></div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">SubSubCategory</label>
-          <div class="rounded-lg border border-gray-200 bg-white h-[160px] overflow-y-auto p-2 text-gray-800 leading-relaxed"><?php echo $pdReadonlyBox((string)($itemId['sub_sub_category'] ?? '—')); ?></div>
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Keywords</label>
-        <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-gray-800 whitespace-pre-wrap"><?php echo $pdReadonlyBox((string)($itemId['keywords'] ?? '—')); ?></div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Snippet Description</label>
-        <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-gray-800 whitespace-pre-wrap min-h-[80px]"><?php echo $pdReadonlyBox((string)($itemId['snippet_description'] ?? '—')); ?></div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Select Optionals</label>
-        <div class="rounded-lg border border-gray-200 bg-white h-[160px] overflow-y-auto p-2 text-gray-800 leading-relaxed"><?php echo $pdReadonlyBox((string)($itemId['optionals'] ?? '—')); ?></div>
-      </div>
-    </div>
-  </div>
-  <!-- Search Category (Related Items) — read-only -->
-  <div class="bg-gray-50 rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
-    <h3 class="font-semibold mb-4 text-gray-800 flex items-center gap-2">
-      <i class="fas fa-sitemap text-amber-600" aria-hidden="true"></i>Search Category (Related Items)
-    </h3>
-    <div class="space-y-4 text-sm">
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Search Group</label>
-        <div class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-800"><?php echo $pdReadonlyBox((string)($searchCat['search_group'] ?? '—')); ?></div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Search Category</label>
-          <div class="rounded-lg border border-gray-200 bg-white h-[160px] overflow-y-auto p-2 text-gray-800 leading-relaxed"><?php echo $pdReadonlyBox((string)($searchCat['search_category'] ?? '—')); ?></div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Search Sub Category</label>
-          <div class="rounded-lg border border-gray-200 bg-white h-[160px] overflow-y-auto p-2 text-gray-800 leading-relaxed"><?php echo $pdReadonlyBox((string)($searchCat['search_sub_category'] ?? '—')); ?></div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Search SubSubCategory</label>
-          <div class="rounded-lg border border-gray-200 bg-white h-[160px] overflow-y-auto p-2 text-gray-800 leading-relaxed"><?php echo $pdReadonlyBox((string)($searchCat['search_sub_sub_category'] ?? '—')); ?></div>
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Search Terms</label>
-        <div class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-800"><?php echo $pdReadonlyBox((string)($searchCat['search_term'] ?? '—')); ?></div>
-      </div>
     </div>
   </div>
   <!-- STOCK TRANSACTIONS -->
