@@ -207,6 +207,10 @@ $saved_publication_date = ($publication_date_raw !== '' && $publication_date_raw
     : '';
 
 $formAction = base_url('?page=inbounding&action=submitStep3');
+$form3BackUrl = ($record_id !== '' && $record_id !== '0')
+    ? base_url('?page=inbounding&action=form1&id=' . $record_id)
+    : base_url('?page=inbounding&action=list');
+$form3ListUrl = base_url('?page=inbounding&action=list');
 ?>
 
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
@@ -1297,13 +1301,14 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         updateAllFields();
     });
 
-    // Navigation & Popups
-    var id = <?php echo json_encode($record_id); ?>;
+    // Navigation & Popups (step 3 follows form1 invoice upload; form2 route is not registered)
+    const form3BackUrl = <?php echo json_encode($form3BackUrl); ?>;
+    const form3ListUrl = <?php echo json_encode($form3ListUrl); ?>;
     document.getElementById("back-btn").addEventListener("click", function () {
-        window.location.href = window.location.origin + "/index.php?page=inbounding&action=form2&id=" + id;
+        window.location.href = form3BackUrl;
     });
     document.getElementById("cancel-btn").addEventListener("click", function () {
-        window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
+        window.location.href = form3ListUrl;
     });
     
     function openInvoicePreview(fileUrl, isPdf) {
