@@ -1423,8 +1423,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Invoice Details:</legend>
                 
                 <?php 
-                    $hasImage = !empty($data['form2']['invoice_image']);
-                    $imageSrc = $hasImage ? base_url($data['form2']['invoice_image']) : '';
+                    $invoicePath = trim((string)($data['form2']['invoice_image'] ?? ''));
+                    $hasImage = ($invoicePath !== '');
+                    $imageSrc = $hasImage ? base_url($invoicePath) : '';
+                    $invoiceExt = $hasImage ? strtolower(pathinfo($invoicePath, PATHINFO_EXTENSION)) : '';
+                    $isInvoicePdf = ($invoiceExt === 'pdf');
                 ?>
                 <div class="flex flex-col md:flex-row gap-5 items-stretch">
                     
@@ -1433,7 +1436,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="border-2 border-dashed border-gray-300 rounded-[5px] bg-[#f9f9f9] hover:bg-[#f0f0f0] transition-colors cursor-pointer h-[100px] flex flex-col items-center justify-center gap-1 group"
                              onclick="document.getElementById('invoice_input').click()">
                             
-                            <input type="file" id="invoice_input" name="invoice_image" class="hidden" accept="image/*" onchange="previewInvoice(this)">
+                            <input type="file" id="invoice_input" name="invoice_image" class="hidden" accept="image/*,application/pdf" onchange="previewInvoice(this)">
                             
                             <div class="p-2 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
@@ -1446,10 +1449,19 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         
                         <div class="border border-[#ccc] rounded-[5px] p-3 flex gap-4 items-center bg-white h-[100px]">
                             
-                            <div class="relative w-[70px] h-[80px] bg-gray-100 border border-gray-200 rounded-[4px] shrink-0 cursor-zoom-in group overflow-hidden"
-                                 onclick="openInvoicePopup()">
-                                <img id="invoice_img_tag" src="<?php echo $imageSrc; ?>" class="w-full h-full object-cover">
-                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 flex items-center justify-center transition-all">
+                            <div id="invoiceThumbWrap"
+                                 class="relative w-[70px] h-[80px] bg-gray-100 border border-gray-200 rounded-[4px] shrink-0 cursor-zoom-in group overflow-hidden"
+                                 data-invoice-url="<?php echo htmlspecialchars($imageSrc, ENT_QUOTES, 'UTF-8'); ?>"
+                                 data-invoice-pdf="<?php echo $isInvoicePdf ? '1' : '0'; ?>"
+                                 onclick="openInvoicePopup()"
+                                 title="Click to view invoice">
+                                <?php if ($isInvoicePdf): ?>
+                                    <iframe id="invoice_pdf_thumb" src="<?php echo htmlspecialchars($imageSrc, ENT_QUOTES, 'UTF-8'); ?>#toolbar=0&navpanes=0" class="w-full h-full border-0 pointer-events-none" title="Invoice PDF preview"></iframe>
+                                    <span class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[9px] font-semibold text-center py-0.5">PDF</span>
+                                <?php else: ?>
+                                    <img id="invoice_img_tag" src="<?php echo htmlspecialchars($imageSrc, ENT_QUOTES, 'UTF-8'); ?>" alt="Invoice preview" class="w-full h-full object-cover pointer-events-none">
+                                <?php endif; ?>
+                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 flex items-center justify-center transition-all pointer-events-none">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-0 group-hover:opacity-100"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
                                 </div>
                             </div>
@@ -1764,7 +1776,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         
         <button onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-600 hover:bg-red-700 text-white w-8 h-8 flex items-center justify-center rounded-full text-sm shadow-md border-2 border-white">✕</button>
         
-        <img id="popupImage" class="max-w-full max-h-[90vh] rounded object-contain" src="" alt="Image Preview">
+        <img id="popupImage" class="max-w-full max-h-[90vh] rounded object-contain hidden" src="" alt="Invoice preview">
+        <iframe id="popupPdf" class="hidden w-full max-w-[95vw] h-[90vh] rounded border-0 bg-white" src="" title="Invoice PDF preview"></iframe>
         
     </div>
 </div>
@@ -2243,31 +2256,78 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
     // 1. Preview Function (Updates Image & Download Link)
     function previewInvoice(input) {
-        if (input.files && input.files[0]) {
-            var reader = new FileReader();            
-            reader.onload = function(e) {
-                // Update Image Source
-                const img = document.getElementById('invoice_img_tag');
-                img.src = e.target.result;
-                
-                // Show the Preview Container
-                document.getElementById('invoice_preview_container').classList.remove('hidden');
-                
-                // Update Download Link (Use the Base64 data for immediate download)
-                const dlBtn = document.getElementById('invoice_download_btn');
-                dlBtn.href = e.target.result;
-                dlBtn.download = "New_Invoice_Upload.jpg"; // Temporary name
+        if (!input.files || !input.files[0]) return;
+
+        const file = input.files[0];
+        const isPdf = file.type === 'application/pdf' || String(file.name || '').toLowerCase().endsWith('.pdf');
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const previewUrl = e.target.result;
+            const wrap = document.getElementById('invoiceThumbWrap');
+            const container = document.getElementById('invoice_preview_container');
+            const dlBtn = document.getElementById('invoice_download_btn');
+
+            if (wrap) {
+                wrap.dataset.invoiceUrl = previewUrl;
+                wrap.dataset.invoicePdf = isPdf ? '1' : '0';
             }
-            reader.readAsDataURL(input.files[0]);
-        }
+
+            if (isPdf) {
+                let pdfThumb = document.getElementById('invoice_pdf_thumb');
+                if (!pdfThumb) {
+                    const img = document.getElementById('invoice_img_tag');
+                    if (img) {
+                        pdfThumb = document.createElement('iframe');
+                        pdfThumb.id = 'invoice_pdf_thumb';
+                        pdfThumb.className = 'w-full h-full border-0 pointer-events-none';
+                        pdfThumb.title = 'Invoice PDF preview';
+                        img.replaceWith(pdfThumb);
+                    }
+                }
+                if (pdfThumb) {
+                    pdfThumb.src = previewUrl + '#toolbar=0&navpanes=0';
+                }
+            } else {
+                let img = document.getElementById('invoice_img_tag');
+                if (!img) {
+                    const pdfThumb = document.getElementById('invoice_pdf_thumb');
+                    if (pdfThumb) {
+                        img = document.createElement('img');
+                        img.id = 'invoice_img_tag';
+                        img.className = 'w-full h-full object-cover pointer-events-none';
+                        img.alt = 'Invoice preview';
+                        pdfThumb.replaceWith(img);
+                    }
+                }
+                if (img) {
+                    img.src = previewUrl;
+                }
+            }
+
+            if (container) container.classList.remove('hidden');
+            if (dlBtn) {
+                dlBtn.href = previewUrl;
+                dlBtn.download = isPdf ? 'New_Invoice_Upload.pdf' : 'New_Invoice_Upload.jpg';
+            }
+        };
+        reader.readAsDataURL(file);
     }
     
     // 2. Open Invoice in the Global Popup
     function openInvoicePopup() {
-        const imgSrc = document.getElementById('invoice_img_tag').src;
-        if(imgSrc && imgSrc !== window.location.href) { // Basic check it's not empty
-            openImagePopup(imgSrc); // Reuse your global function
+        const wrap = document.getElementById('invoiceThumbWrap');
+        const fileUrl = wrap && wrap.dataset.invoiceUrl ? wrap.dataset.invoiceUrl : '';
+        const isPdf = wrap && wrap.dataset.invoicePdf === '1';
+
+        if (!fileUrl) {
+            const img = document.getElementById('invoice_img_tag');
+            if (img && img.src && img.src !== window.location.href) {
+                openImagePopup(img.src, false);
+            }
+            return;
         }
+
+        openImagePopup(fileUrl, isPdf);
     }
     // 3. Trigger Delete Popup
     function openDeletePopup(event) {
@@ -2284,8 +2344,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // Clear File Input
             document.getElementById('invoice_input').value = ""; 
             
-            // Clear Image Source
-            document.getElementById('invoice_img_tag').src = ""; 
+            const wrap = document.getElementById('invoiceThumbWrap');
+            if (wrap) {
+                wrap.dataset.invoiceUrl = '';
+                wrap.dataset.invoicePdf = '0';
+            }
+            const img = document.getElementById('invoice_img_tag');
+            if (img) img.src = '';
+            const pdfThumb = document.getElementById('invoice_pdf_thumb');
+            if (pdfThumb) pdfThumb.src = '';
             
             // Hide Container
             document.getElementById('invoice_preview_container').classList.add('hidden');
@@ -2802,14 +2869,40 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('load', clearStuckPageOverlays);
     setTimeout(clearStuckPageOverlays, 0);
     setTimeout(clearStuckPageOverlays, 300);
-    function openImagePopup(imageUrl) {
+    function openImagePopup(imageUrl, isPdf) {
         if (!imageUrl) return;
-        popupImage.src = imageUrl;
-        showDesktopOverlay(document.getElementById('imagePopup'));
+        const popup = document.getElementById('imagePopup');
+        const img = document.getElementById('popupImage');
+        const pdf = document.getElementById('popupPdf');
+        if (!popup || !img || !pdf) return;
+
+        if (isPdf) {
+            img.classList.add('hidden');
+            img.removeAttribute('src');
+            pdf.src = imageUrl;
+            pdf.classList.remove('hidden');
+        } else {
+            pdf.classList.add('hidden');
+            pdf.removeAttribute('src');
+            img.src = imageUrl;
+            img.classList.remove('hidden');
+        }
+
+        showDesktopOverlay(popup);
     }
     function closeImagePopup(event) {
-        hideDesktopOverlay(document.getElementById('imagePopup'));
-        document.getElementById('popupImage').src = '';
+        const popup = document.getElementById('imagePopup');
+        const img = document.getElementById('popupImage');
+        const pdf = document.getElementById('popupPdf');
+        hideDesktopOverlay(popup);
+        if (img) {
+            img.classList.add('hidden');
+            img.removeAttribute('src');
+        }
+        if (pdf) {
+            pdf.classList.add('hidden');
+            pdf.removeAttribute('src');
+        }
     }
 </script>
 <script>

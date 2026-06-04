@@ -243,17 +243,23 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             
             <div class="flex flex-col lg:flex-row gap-6 items-start">
                 <div class="flex flex-row bg-gray-100 border border-gray-300 rounded p-2 gap-3 min-w-[350px] lg:w-1/3">
-                    <div class="relative w-24 h-28 bg-white border border-gray-300 flex-shrink-0 cursor-pointer overflow-hidden"
+                    <div id="invoiceThumb"
+                         class="relative w-24 h-28 bg-white border border-gray-300 flex-shrink-0 cursor-zoom-in overflow-hidden group"
                          <?php if ($invoiceUrl !== ''): ?>
-                         onclick="openInvoicePreview(<?php echo json_encode($invoiceUrl); ?>, <?php echo $isInvoicePdf ? 'true' : 'false'; ?>)"
+                         data-invoice-url="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                         data-invoice-pdf="<?php echo $isInvoicePdf ? '1' : '0'; ?>"
+                         title="Click to view invoice"
                          <?php endif; ?>>
                         <?php if ($invoiceUrl !== ''): ?>
                             <?php if ($isInvoicePdf): ?>
-                                <iframe src="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>" class="w-full h-full border-0 pointer-events-none" title="Invoice PDF preview"></iframe>
+                                <iframe src="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>#toolbar=0&navpanes=0" class="w-full h-full border-0 pointer-events-none" title="Invoice PDF preview"></iframe>
                                 <span class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] font-semibold text-center py-0.5">PDF</span>
                             <?php else: ?>
-                                <img src="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Invoice preview" class="w-full h-full object-cover hover:opacity-90">
+                                <img src="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Invoice preview" class="w-full h-full object-cover group-hover:opacity-90 transition-opacity pointer-events-none">
                             <?php endif; ?>
+                            <span class="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors pointer-events-none">
+                                <span class="opacity-0 group-hover:opacity-100 bg-white/90 text-gray-800 text-[10px] font-bold px-2 py-1 rounded shadow">View</span>
+                            </span>
                         <?php else: ?>
                             <div class="w-full h-full flex items-center justify-center text-gray-400 text-xs text-center">No Inv</div>
                         <?php endif; ?>
@@ -541,11 +547,11 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
     </div>
 </div>
 
-<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
-    <div class="bg-white p-2 rounded-md max-w-4xl max-h-[90vh] w-full relative flex flex-col items-center" onclick="event.stopPropagation();">
-        <button type="button" onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold">✕</button>
-        <img id="popupImage" class="max-w-full max-h-[85vh] rounded hidden" src="" alt="Invoice preview">
-        <iframe id="popupPdf" class="hidden w-full max-w-4xl h-[85vh] rounded border-0 bg-white" src="" title="Invoice PDF preview"></iframe>
+<div id="imagePopup" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-black/80 p-3 sm:p-6" onclick="closeImagePopup(event)" role="dialog" aria-modal="true" aria-label="Invoice preview">
+    <div class="relative flex h-full w-full max-h-[96vh] max-w-[96vw] flex-col items-center justify-center rounded-lg bg-white p-3 shadow-2xl" onclick="event.stopPropagation();">
+        <button type="button" onclick="closeImagePopup()" class="absolute -right-2 -top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-lg font-bold text-white shadow-lg hover:bg-red-600" aria-label="Close preview">&times;</button>
+        <img id="popupImage" class="hidden max-h-[92vh] max-w-full object-contain" src="" alt="Invoice preview">
+        <iframe id="popupPdf" class="hidden h-[92vh] w-full max-w-[96vw] rounded border-0 bg-white" src="" title="Invoice PDF preview"></iframe>
     </div>
 </div>
 
@@ -1318,7 +1324,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             img.src = fileUrl;
             img.classList.remove('hidden');
         }
+
         popup.classList.remove('hidden');
+        popup.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
     }
 
     function openImagePopup(imageUrl) {
@@ -1329,7 +1338,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         const popup = document.getElementById('imagePopup');
         const img = document.getElementById('popupImage');
         const pdf = document.getElementById('popupPdf');
-        if (popup) popup.classList.add('hidden');
+        if (popup) {
+            popup.classList.add('hidden');
+            popup.classList.remove('flex');
+        }
         if (img) {
             img.classList.add('hidden');
             img.removeAttribute('src');
@@ -1338,5 +1350,29 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             pdf.classList.add('hidden');
             pdf.removeAttribute('src');
         }
+        document.body.classList.remove('overflow-hidden');
     }
+
+    const invoiceThumb = document.getElementById('invoiceThumb');
+    if (invoiceThumb && invoiceThumb.dataset.invoiceUrl) {
+        invoiceThumb.addEventListener('click', function () {
+            openInvoicePreview(
+                invoiceThumb.dataset.invoiceUrl,
+                invoiceThumb.dataset.invoicePdf === '1'
+            );
+        });
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            const popup = document.getElementById('imagePopup');
+            if (popup && !popup.classList.contains('hidden')) {
+                closeImagePopup();
+            }
+        }
+    });
+
+    window.openInvoicePreview = openInvoicePreview;
+    window.openImagePopup = openImagePopup;
+    window.closeImagePopup = closeImagePopup;
 </script>
