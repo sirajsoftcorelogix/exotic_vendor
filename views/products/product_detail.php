@@ -617,17 +617,37 @@
           $v = trim((string) ($bookDetails[$key] ?? ''));
           return $v !== '' ? $v : '—';
       };
+      $bookDetailLabels = static function ($key) use ($bookDetails): void {
+          $items = $bookDetails[$key] ?? [];
+          if (!is_array($items)) {
+              $items = preg_split('/\s*[,|]\s*/', trim((string) $items)) ?: [];
+          }
+          $items = array_values(array_filter(array_map(static function ($v) {
+              return trim((string) $v);
+          }, $items)));
+          if ($items === []) {
+              echo '<span class="font-medium text-gray-900">—</span>';
+              return;
+          }
+          echo '<div class="flex flex-wrap gap-1.5 mt-1">';
+          foreach ($items as $item) {
+              echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-gray-100 border border-gray-200 text-gray-800 text-xs font-medium">'
+                  . htmlspecialchars($item, ENT_QUOTES, 'UTF-8')
+                  . '</span>';
+          }
+          echo '</div>';
+      };
     ?>
     <div class="bg-white rounded-lg p-4 mb-4">
       <h3 class="font-semibold mb-3">Book Details</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
         <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Author</span>
-          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('author'), ENT_QUOTES, 'UTF-8'); ?></span>
+          <?php $bookDetailLabels('authors'); ?>
         </div>
         <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Edited By</span>
-          <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('edited_by'), ENT_QUOTES, 'UTF-8'); ?></span>
+          <?php $bookDetailLabels('edited_by_names'); ?>
         </div>
         <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Publisher</span>

@@ -1176,8 +1176,8 @@ class Inbounding {
         $pages = (int) ($row['pages'] ?? 0);
 
         return [
-            'author' => $this->formatInboundAuthorDisplay($row['author'] ?? ''),
-            'edited_by' => $this->formatInboundAuthorDisplay($row['edited_by'] ?? ''),
+            'authors' => $this->resolveInboundAuthorNameList($row['author'] ?? ''),
+            'edited_by_names' => $this->resolveInboundAuthorNameList($row['edited_by'] ?? ''),
             'publisher' => $pubName,
             'isbn' => trim((string) ($row['isbn'] ?? '')),
             'cover_type' => trim((string) ($row['cover_type'] ?? '')),
@@ -1186,6 +1186,35 @@ class Inbounding {
             'language' => trim((string) ($row['language'] ?? '')),
             'pages' => $pages > 0 ? (string) $pages : '',
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function resolveInboundAuthorNameList($stored): array
+    {
+        $names = [];
+        foreach ($this->parseInboundAuthorIds($stored) as $authorId) {
+            $row = $this->getAuthorById($authorId);
+            $name = trim((string) ($row['name'] ?? $row['author'] ?? ''));
+            if ($name !== '') {
+                $names[] = $name;
+            }
+        }
+
+        if ($names === []) {
+            $raw = trim((string) $stored);
+            if ($raw !== '') {
+                foreach (preg_split('/\s*[,|]\s*/', $raw) as $part) {
+                    $part = trim($part);
+                    if ($part !== '' && !ctype_digit($part)) {
+                        $names[] = $part;
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($names));
     }
 
     private function formatInboundAuthorDisplay($stored): string

@@ -4272,8 +4272,8 @@ class ProductsController
                 );
                 if ($order['book_details'] === []) {
                     $order['book_details'] = [
-                        'author' => trim((string) ($order['author'] ?? '')),
-                        'edited_by' => '',
+                        'authors' => [],
+                        'edited_by_names' => [],
                         'publisher' => trim((string) ($order['publisher'] ?? '')),
                         'isbn' => '',
                         'cover_type' => '',
@@ -4282,13 +4282,31 @@ class ProductsController
                         'language' => '',
                         'pages' => '',
                     ];
-                } else {
-                    if ($order['book_details']['author'] === '') {
-                        $order['book_details']['author'] = trim((string) ($order['author'] ?? ''));
+                }
+                $splitBookNames = static function (string $raw): array {
+                    $raw = trim($raw);
+                    if ($raw === '') {
+                        return [];
                     }
-                    if ($order['book_details']['publisher'] === '') {
-                        $order['book_details']['publisher'] = trim((string) ($order['publisher'] ?? ''));
+                    $parts = preg_split('/\s*[,|]\s*/', $raw) ?: [];
+                    $names = [];
+                    foreach ($parts as $part) {
+                        $part = trim((string) $part);
+                        if ($part !== '' && !ctype_digit($part)) {
+                            $names[] = $part;
+                        }
                     }
+
+                    return array_values(array_unique($names));
+                };
+                if (empty($order['book_details']['authors'])) {
+                    $order['book_details']['authors'] = $splitBookNames((string) ($order['author'] ?? ''));
+                }
+                if (empty($order['book_details']['edited_by_names'])) {
+                    $order['book_details']['edited_by_names'] = [];
+                }
+                if ($order['book_details']['publisher'] === '') {
+                    $order['book_details']['publisher'] = trim((string) ($order['publisher'] ?? ''));
                 }
             }
 
