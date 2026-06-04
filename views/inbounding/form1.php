@@ -134,7 +134,7 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
 
                         <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative z-30">
                             <div class="flex items-center gap-2 mb-2 ml-1">
-                                <label class="block text-gray-700 font-bold text-sm" for="vendor_code">Select Vendor</label>
+                                <label class="block text-gray-700 font-bold text-sm" for="vendor_code">Select Vendor <span class="font-normal text-gray-500">(optional)</span></label>
                                 <button type="button"
                                         id="vendor-cache-sync-btn"
                                         class="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-[#d9822b] hover:text-[#d9822b] transition-colors"
@@ -207,10 +207,20 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
             </div>
 
             <div class="p-5 bg-white border-t border-gray-100 mt-auto z-20">
-                <button type="submit" form="invoiceForm" class="w-full bg-[#d9822b] hover:bg-[#bf7326] text-white font-bold text-lg py-3.5 rounded-xl shadow-lg transform transition active:scale-[0.99] flex justify-center items-center gap-2">
-                    <?php echo $isEdit ? "Update & Next" : "Update & Next"; ?><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </button>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button type="button" id="footer-cancel-btn" class="flex-1 min-h-[48px] bg-white hover:bg-gray-50 text-gray-700 font-bold text-base py-3 rounded-xl border border-gray-300 shadow-sm transition active:scale-[0.99]">
+                        Cancel
+                    </button>
+                    <button type="submit" id="skip-btn" class="flex-1 min-h-[48px] bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-base py-3 rounded-xl border border-gray-200 shadow-sm transition active:scale-[0.99]">
+                        Skip
+                    </button>
+                    <button type="submit" class="flex-1 min-h-[48px] bg-[#d9822b] hover:bg-[#bf7326] text-white font-bold text-base py-3 rounded-xl shadow-lg transition active:scale-[0.99] flex justify-center items-center gap-2">
+                        Next
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                    </button>
+                </div>
             </div>
         </form>
     </div>
@@ -344,54 +354,13 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
         placeholder.classList.remove('hidden');
     });
 
-    // 4. Back Button Logic
-    const recordId = <?php echo json_encode($record_id); ?>;
-    document.getElementById("back-btn").addEventListener("click", function () {
+    // 4. Back / Cancel — return to inbounding list
+    function form1GoToInboundList() {
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
-    });
-    document.getElementById("cancel-btn").addEventListener("click", function () {
-        window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
-    });
-
-    // ---------------------------------------------
-    // 5. VALIDATION LOGIC (UPDATED for Inline Errors)
-    // ---------------------------------------------
-    document.getElementById("invoiceForm").addEventListener("submit", function(e) {
-        let isValid = true;
-        
-        // --- 1. Get Inputs & Error Containers ---
-        const vendorInput = document.getElementById('vendor_code');
-        const vendorError = document.getElementById('vendor-error');
-        const vendorValue = vendorInput && vendorInput.tomselect
-            ? vendorInput.tomselect.getValue()
-            : (vendorInput ? vendorInput.value : '');
-        
-        const invoiceNoInput = document.querySelector('input[name="invoice_no"]');
-        const invoiceError = document.getElementById("invoice-no-error");
-
-        // --- 2. Reset Previous Errors ---
-        vendorError.classList.add("hidden");
-        vendorError.innerText = "";
-        invoiceError.classList.add("hidden");
-        invoiceError.innerText = "";
-        
-        // Remove red borders
-        invoiceNoInput.classList.remove("border-red-500", "ring-2", "ring-red-100");
-        const tsControl = document.querySelector('.ts-control');
-        if(tsControl) tsControl.style.borderColor = "#d1d5db"; // Reset TomSelect border
-
-        if (!vendorValue) {
-            isValid = false;
-            vendorError.classList.remove('hidden');
-            vendorError.innerText = 'Please select a vendor.';
-            if (tsControl) tsControl.style.borderColor = '#ef4444';
-        }
-
-        // --- 5. Stop Form if Invalid ---
-        if (!isValid) {
-            e.preventDefault(); 
-        }
-    });
+    }
+    document.getElementById("back-btn").addEventListener("click", form1GoToInboundList);
+    document.getElementById("cancel-btn").addEventListener("click", form1GoToInboundList);
+    document.getElementById("footer-cancel-btn").addEventListener("click", form1GoToInboundList);
 
     // Popup Logic for Images
     function openImagePopup(imageUrl) {
