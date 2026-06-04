@@ -225,17 +225,14 @@ $pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' 
                                     <span class="w-7 h-7 rounded-lg bg-orange-100 text-[#d9822b] flex items-center justify-center text-xs">2</span>
                                     Vendor <span class="font-normal text-gray-500 text-xs">(optional)</span>
                                 </h2>
-                                <button type="button"
-                                        id="vendor-cache-sync-btn"
-                                        class="form1-touch-btn shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-300 bg-white text-gray-600 active:border-[#d9822b] active:text-[#d9822b]"
-                                        title="Refresh vendors from catalog"
-                                        aria-label="Refresh vendor list">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z"></path>
-                                        <path d="M3 9l2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"></path>
-                                        <path d="M12 3v6"></path>
-                                    </svg>
-                                </button>
+                                <?php
+                                $btnId = 'vendor-cache-sync-btn';
+                                $title = 'Refresh vendors from catalog';
+                                $srLabel = 'Refresh vendor list';
+                                $iconType = 'vendor';
+                                $size = 'lg';
+                                require __DIR__ . '/partials/catalog_refresh_btn.php';
+                                ?>
                             </div>
                             <select id="vendor_code" name="vendor_code" placeholder="Search vendor..." autocomplete="off" class="w-full">
                                 <option value="">Select vendor</option>
@@ -358,9 +355,7 @@ $pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' 
         vendorSyncBtn.addEventListener('click', function (e) {
             e.preventDefault();
             const runSync = function () {
-                const origHtml = vendorSyncBtn.innerHTML;
                 vendorSyncBtn.disabled = true;
-                vendorSyncBtn.classList.add('opacity-60', 'cursor-wait');
 
                 fetch(<?php echo json_encode(base_url('index.php?page=vendors&action=fetchAllVendors')); ?>, {
                     method: 'GET',
@@ -400,8 +395,6 @@ $pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' 
                     })
                     .finally(function () {
                         vendorSyncBtn.disabled = false;
-                        vendorSyncBtn.classList.remove('opacity-60', 'cursor-wait');
-                        vendorSyncBtn.innerHTML = origHtml;
                     });
             };
 

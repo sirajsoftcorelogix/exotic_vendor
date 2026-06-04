@@ -1,15 +1,58 @@
 <script>
 (function () {
-    var SPIN = '<svg class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-
     function notify(icon, title, body, asHtml) {
         if (typeof Swal === 'undefined') {
             alert(title + (body ? ': ' + String(body).replace(/<[^>]+>/g, '') : ''));
             return;
         }
-        var opts = { icon: icon, title: title };
+        var opts = {
+            icon: icon,
+            title: title,
+            showConfirmButton: true,
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#d97824',
+            allowOutsideClick: true,
+        };
         opts[asHtml ? 'html' : 'text'] = body || '';
         Swal.fire(opts);
+    }
+
+    function showSyncProgress(cfg) {
+        if (typeof Swal === 'undefined') {
+            return false;
+        }
+        var html = cfg.progressHtml || '<p class="text-sm text-gray-600" style="margin:0.5rem 0 0;">Syncing from catalog…</p>';
+        Swal.fire({
+            title: cfg.progressTitle || 'Refreshing…',
+            html: html,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            showCancelButton: false,
+            didOpen: function () {
+                Swal.showLoading();
+            },
+        });
+        return true;
+    }
+
+    function showSyncResult(icon, title, body, asHtml) {
+        if (typeof Swal === 'undefined') {
+            alert(title + (body ? ': ' + String(body).replace(/<[^>]+>/g, '') : ''));
+            return;
+        }
+        Swal.hideLoading();
+        var opts = {
+            icon: icon,
+            title: title,
+            showConfirmButton: true,
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#d97824',
+            allowOutsideClick: true,
+            allowEscapeKey: true,
+        };
+        opts[asHtml ? 'html' : 'text'] = body || '';
+        Swal.update(opts);
     }
 
     function bindCatalogSync(btnId, cfg) {
@@ -21,10 +64,9 @@
             e.stopPropagation();
 
             var run = function () {
-                var orig = btn.innerHTML;
                 btn.disabled = true;
-                btn.classList.add('opacity-60', 'cursor-wait');
-                btn.innerHTML = SPIN;
+
+                var usedProgressModal = showSyncProgress(cfg);
 
                 var method = String(cfg.method || 'GET').toUpperCase();
                 var fetchOpts = {
@@ -47,26 +89,44 @@
                     .then(function (payload) {
                         var data = payload.data || {};
                         if (!cfg.isOk(payload, data)) {
-                            notify('error', cfg.failTitle || 'Refresh failed', typeof cfg.message === 'function' ? cfg.message(false, data) : '', !!cfg.htmlMessage);
+                            var errMsg = typeof cfg.message === 'function' ? cfg.message(false, data) : '';
+                            if (usedProgressModal) {
+                                showSyncResult('error', cfg.failTitle || 'Refresh failed', errMsg, !!cfg.htmlMessage);
+                            } else {
+                                notify('error', cfg.failTitle || 'Refresh failed', errMsg, !!cfg.htmlMessage);
+                            }
                             return;
                         }
                         var after = cfg.afterSync ? cfg.afterSync(data) : null;
                         return Promise.resolve(after).then(
                             function () {
-                                notify('success', cfg.successTitle || 'Refreshed', typeof cfg.message === 'function' ? cfg.message(true, data) : '', !!cfg.htmlMessage);
+                                var okMsg = typeof cfg.message === 'function' ? cfg.message(true, data) : '';
+                                if (usedProgressModal) {
+                                    showSyncResult('success', cfg.successTitle || 'Refreshed', okMsg, !!cfg.htmlMessage);
+                                } else {
+                                    notify('success', cfg.successTitle || 'Refreshed', okMsg, !!cfg.htmlMessage);
+                                }
                             },
                             function () {
-                                notify('warning', cfg.warnTitle || cfg.successTitle || 'Refreshed', cfg.warnMessage || 'Saved, but the form could not reload.', !!cfg.htmlMessage);
+                                var warnMsg = cfg.warnMessage || 'Saved, but the form could not reload.';
+                                if (usedProgressModal) {
+                                    showSyncResult('warning', cfg.warnTitle || cfg.successTitle || 'Refreshed', warnMsg, !!cfg.htmlMessage);
+                                } else {
+                                    notify('warning', cfg.warnTitle || cfg.successTitle || 'Refreshed', warnMsg, !!cfg.htmlMessage);
+                                }
                             }
                         );
                     })
                     .catch(function (err) {
-                        notify('error', cfg.failTitle || 'Refresh failed', (err && err.message) || 'Network error.');
+                        var netMsg = (err && err.message) || 'Network error.';
+                        if (usedProgressModal) {
+                            showSyncResult('error', cfg.failTitle || 'Refresh failed', netMsg, false);
+                        } else {
+                            notify('error', cfg.failTitle || 'Refresh failed', netMsg, false);
+                        }
                     })
                     .finally(function () {
                         btn.disabled = false;
-                        btn.classList.remove('opacity-60', 'cursor-wait');
-                        btn.innerHTML = orig;
                     });
             };
 

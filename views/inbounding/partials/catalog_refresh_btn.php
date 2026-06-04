@@ -3,16 +3,69 @@
 /** @var string $title */
 /** @var string $srLabel */
 /** @var string $iconType vendor|author|publisher|palette|refresh */
+/** @var string $size ''|'lg' */
 $btnId = $btnId ?? '';
 $title = $title ?? 'Refresh from catalog';
 $srLabel = $srLabel ?? 'Refresh';
 $iconType = $iconType ?? 'refresh';
+$size = $size ?? '';
+$iconPx = ($size === 'lg') ? 16 : 14;
+
+if (empty($GLOBALS['catalog_refresh_btn_styles'])) {
+    $GLOBALS['catalog_refresh_btn_styles'] = true;
+    ?>
+<style>
+    .catalog-refresh-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 1.875rem;
+        height: 1.875rem;
+        padding: 0;
+        border-radius: 0.375rem;
+        border: 2px solid #d97824;
+        background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+        color: #c66a1d;
+        box-shadow: 0 1px 3px rgba(217, 120, 36, 0.25);
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+    }
+    .catalog-refresh-btn:hover:not(:disabled) {
+        background: #d97824;
+        color: #fff;
+        border-color: #bf7326;
+        box-shadow: 0 2px 8px rgba(217, 120, 36, 0.45);
+        transform: translateY(-1px);
+    }
+    .catalog-refresh-btn:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: 0 1px 3px rgba(217, 120, 36, 0.3);
+    }
+    .catalog-refresh-btn:focus-visible {
+        outline: 2px solid #d97824;
+        outline-offset: 2px;
+    }
+    .catalog-refresh-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        transform: none;
+    }
+    .catalog-refresh-btn--lg {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.75rem;
+    }
+</style>
+    <?php
+}
+$sizeClass = ($size === 'lg') ? ' catalog-refresh-btn--lg' : '';
 ?>
 <button type="button"
         id="<?php echo htmlspecialchars($btnId, ENT_QUOTES, 'UTF-8'); ?>"
-        class="inline-flex items-center justify-center w-6 h-6 rounded border border-[#ccc] bg-white text-[#555] hover:border-[#d97824] hover:text-[#d97824] transition-colors"
+        class="catalog-refresh-btn<?php echo $sizeClass; ?>"
         title="<?php echo htmlspecialchars($title, ENT_QUOTES, 'UTF-8'); ?>">
-    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="<?php echo (int) $iconPx; ?>" height="<?php echo (int) $iconPx; ?>" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <?php if ($iconType === 'vendor'): ?>
             <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z"></path>
             <path d="M3 9l2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"></path>
