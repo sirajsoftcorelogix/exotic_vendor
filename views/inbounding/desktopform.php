@@ -156,8 +156,8 @@
         background: rgba(0, 0, 0, 0.5) !important;
     }
     .courier-calc-details {
-        font-size: 0.9375rem;
-        line-height: 1.5;
+        font-size: 0.703rem; /* 75% of 0.9375rem */
+        line-height: 1.45;
         color: #374151;
         font-weight: 500;
         white-space: pre-line;
@@ -168,7 +168,7 @@
     }
     @media (min-width: 640px) {
         .courier-calc-details {
-            font-size: 1rem;
+            font-size: 0.75rem; /* 75% of 1rem */
         }
     }
     .courier-calc-toggle {
