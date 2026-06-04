@@ -28,7 +28,7 @@ define('smtpPort', 587);           // 587 = STARTTLS, 465 = SSL
 define('smtpSecure', 'tls');      // tls | ssl | none  (omit to auto-pick from port)
 define('smtpUser', 'vendor-admin@exoticindia.com');
 define('smtpPass', 'yXuF9tpZjeuHM8PdEGGc');
-// define('smtpFrom', smtpUser);   // optional; must be an allowed sender on your mail host
+define('smtpFrom', 'vendor-admin@exoticindia.com');
 
 
 // Load helpers
