@@ -761,7 +761,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="text-[13px] font-bold text-[#333] mb-3">Book Details</div>
                         <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <div>
-                                <label class="block text-xs font-bold text-[#555] mb-1">Author</label>
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <label class="text-xs font-bold text-[#555]">Author</label>
+                                    <?php
+                                    $btnId = 'author-cache-sync-btn';
+                                    $title = 'Refresh authors from catalog';
+                                    $srLabel = 'Refresh authors';
+                                    require __DIR__ . '/partials/catalog_refresh_btn.php';
+                                    ?>
+                                </div>
                                 <input type="hidden" name="author" id="author_pipe_value" value="<?php echo htmlspecialchars($author_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
                                 <select id="author_select" multiple autocomplete="off">
                                     <?php foreach ($selected_author_options as $authorOpt): ?>
@@ -779,7 +787,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-[#555] mb-1">Publisher</label>
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <label class="text-xs font-bold text-[#555]">Publisher</label>
+                                    <?php
+                                    $btnId = 'publisher-cache-sync-btn';
+                                    $title = 'Refresh publishers from catalog';
+                                    $srLabel = 'Refresh publishers';
+                                    require __DIR__ . '/partials/catalog_refresh_btn.php';
+                                    ?>
+                                </div>
                                 <select id="publisher_select" name="publisher" placeholder="Type publisher name..." autocomplete="off">
                                     <option value=""></option>
                                     <?php if (!empty($selected_publisher_id) && !empty($selected_publisher_name)): ?>
@@ -2997,91 +3013,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('DOMContentLoaded', toggleBackOrderFields);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-(function () {
-    var SPIN = '<svg class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-
-    function notify(icon, title, body, asHtml) {
-        if (typeof Swal === 'undefined') {
-            alert(title + (body ? ': ' + String(body).replace(/<[^>]+>/g, '') : ''));
-            return;
-        }
-        var opts = { icon: icon, title: title };
-        opts[asHtml ? 'html' : 'text'] = body || '';
-        Swal.fire(opts);
-    }
-
-    window.bindDesktopCacheSync = function (btnId, cfg) {
-        var btn = document.getElementById(btnId);
-        if (!btn || !cfg || !cfg.url) return;
-
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            var run = function () {
-                var orig = btn.innerHTML;
-                btn.disabled = true;
-                btn.classList.add('opacity-60', 'cursor-wait');
-                btn.innerHTML = SPIN;
-
-                fetch(cfg.url, {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                })
-                    .then(function (res) {
-                        return res.json().then(function (data) {
-                            return { ok: res.ok, data: data };
-                        }).catch(function () {
-                            return { ok: false, data: {} };
-                        });
-                    })
-                    .then(function (payload) {
-                        var data = payload.data || {};
-                        if (!cfg.isOk(payload, data)) {
-                            notify('error', cfg.failTitle || 'Refresh failed', typeof cfg.message === 'function' ? cfg.message(false, data) : '', !!cfg.htmlMessage);
-                            return;
-                        }
-                        var after = cfg.afterSync ? cfg.afterSync(data) : null;
-                        return Promise.resolve(after).then(
-                            function () {
-                                notify('success', cfg.successTitle || 'Refreshed', typeof cfg.message === 'function' ? cfg.message(true, data) : '', !!cfg.htmlMessage);
-                            },
-                            function () {
-                                notify('warning', cfg.warnTitle || cfg.successTitle || 'Refreshed', cfg.warnMessage || 'Saved, but the form could not reload.', !!cfg.htmlMessage);
-                            }
-                        );
-                    })
-                    .catch(function (err) {
-                        notify('error', cfg.failTitle || 'Refresh failed', (err && err.message) || 'Network error.');
-                    })
-                    .finally(function () {
-                        btn.disabled = false;
-                        btn.classList.remove('opacity-60', 'cursor-wait');
-                        btn.innerHTML = orig;
-                    });
-            };
-
-            if (typeof Swal === 'undefined') {
-                if (window.confirm(cfg.confirmTitle || 'Refresh from catalog?')) run();
-                return;
-            }
-            Swal.fire({
-                title: cfg.confirmTitle || 'Refresh?',
-                html: cfg.confirmHtml || '',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Refresh now',
-                cancelButtonText: 'Cancel',
-                confirmButtonColor: '#d97824',
-            }).then(function (result) {
-                if (result.isConfirmed) run();
-            });
-        });
-    };
-})();
-</script>
+<?php require __DIR__ . '/partials/catalog_sync_script.php'; ?>
 <script>
     const printJsonPreviewUrl = <?php echo json_encode(base_url('?page=inbounding&action=inbound_product_publish&preview_only=1')); ?>;
 
@@ -5182,6 +5114,40 @@ document.addEventListener('DOMContentLoaded', function() {
         message: function (ok, d) {
             if (!ok) return d.message || 'Could not sync vendors from the catalog API.';
             return 'Inserted: ' + (d.inserted || 0) + ', Updated: ' + (d.updated || 0) + ', Total: ' + (d.total || 0) + '.';
+        },
+    });
+
+    bindDesktopCacheSync('author-cache-sync-btn', {
+        method: 'POST',
+        url: <?php echo json_encode(base_url('index.php?page=authors&action=syncFromAdmin')); ?>,
+        confirmTitle: 'Refresh author list?',
+        confirmHtml: 'Syncs authors from Exotic India (same as <strong>Authors → Sync from Admin</strong>).',
+        htmlMessage: true,
+        isOk: function (p, d) { return p.ok && d.success === true; },
+        successTitle: 'Authors refreshed',
+        failTitle: 'Author refresh failed',
+        message: function (ok, d) {
+            if (!ok) return d.message || 'Could not sync authors from the catalog API.';
+            var msg = 'Imported/updated: ' + (d.imported || 0) + ', Skipped: ' + (d.skipped || 0);
+            if (d.api_count != null) msg += ', API: ' + d.api_count;
+            return msg + '. Search again to pick newly synced authors.';
+        },
+    });
+
+    bindDesktopCacheSync('publisher-cache-sync-btn', {
+        method: 'POST',
+        url: <?php echo json_encode(base_url('index.php?page=publishers&action=syncFromAdmin')); ?>,
+        confirmTitle: 'Refresh publisher list?',
+        confirmHtml: 'Syncs publishers from Exotic India (same as <strong>Publishers → Sync from Admin</strong>).',
+        htmlMessage: true,
+        isOk: function (p, d) { return p.ok && d.success === true; },
+        successTitle: 'Publishers refreshed',
+        failTitle: 'Publisher refresh failed',
+        message: function (ok, d) {
+            if (!ok) return d.message || 'Could not sync publishers from the catalog API.';
+            var msg = 'Imported/updated: ' + (d.imported || 0) + ', Skipped: ' + (d.skipped || 0);
+            if (d.api_count != null) msg += ', API: ' + d.api_count;
+            return msg + '. Search again to pick newly synced publishers.';
         },
     });
 

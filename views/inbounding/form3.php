@@ -230,6 +230,17 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
     /* Hide the dropdown arrow if strictly needed to match inputs, or keep it */
     .ts-control { display: flex; align-items: center; flex-wrap: wrap; min-height: 38px; }
     .ts-wrapper.multi .ts-control > .item { margin: 2px 4px 2px 0; }
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
 </style>
 
 <div class="w-full min-h-screen bg-white p-2 md:p-6 font-sans">
@@ -378,7 +389,15 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
                 <h3 class="font-bold text-sm text-gray-700 mb-3 border-b pb-1">Book Details</h3>
                 <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div>
-                        <label class="block text-gray-800 font-bold text-xs mb-1">Author</label>
+                        <div class="flex items-center gap-1.5 mb-1">
+                            <label class="text-gray-800 font-bold text-xs">Author</label>
+                            <?php
+                            $btnId = 'author-cache-sync-btn';
+                            $title = 'Refresh authors from catalog';
+                            $srLabel = 'Refresh authors';
+                            require __DIR__ . '/partials/catalog_refresh_btn.php';
+                            ?>
+                        </div>
                         <input type="hidden" name="author" id="author_pipe_value" value="<?php echo htmlspecialchars($author_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
                         <select id="author_select" multiple class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
                             <?php foreach ($selected_author_options as $authorOpt): ?>
@@ -396,7 +415,15 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
                         </select>
                     </div>
                     <div>
-                        <label class="block text-gray-800 font-bold text-xs mb-1">Publisher</label>
+                        <div class="flex items-center gap-1.5 mb-1">
+                            <label class="text-gray-800 font-bold text-xs">Publisher</label>
+                            <?php
+                            $btnId = 'publisher-cache-sync-btn';
+                            $title = 'Refresh publishers from catalog';
+                            $srLabel = 'Refresh publishers';
+                            require __DIR__ . '/partials/catalog_refresh_btn.php';
+                            ?>
+                        </div>
                         <select id="publisher_select" name="publisher" placeholder="Type publisher name..." class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
                             <option value=""></option>
                             <?php if (!empty($selected_publisher_id) && !empty($selected_publisher_name)): ?>
@@ -1380,4 +1407,45 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
     window.openInvoicePreview = openInvoicePreview;
     window.openImagePopup = openImagePopup;
     window.closeImagePopup = closeImagePopup;
+</script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<?php require __DIR__ . '/partials/catalog_sync_script.php'; ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.bindInboundCatalogSync !== 'function') {
+        return;
+    }
+    bindInboundCatalogSync('author-cache-sync-btn', {
+        method: 'POST',
+        url: <?php echo json_encode(base_url('index.php?page=authors&action=syncFromAdmin')); ?>,
+        confirmTitle: 'Refresh author list?',
+        confirmHtml: 'Syncs authors from Exotic India (same as <strong>Authors → Sync from Admin</strong>).',
+        htmlMessage: true,
+        isOk: function (p, d) { return p.ok && d.success === true; },
+        successTitle: 'Authors refreshed',
+        failTitle: 'Author refresh failed',
+        message: function (ok, d) {
+            if (!ok) return d.message || 'Could not sync authors from the catalog API.';
+            var msg = 'Imported/updated: ' + (d.imported || 0) + ', Skipped: ' + (d.skipped || 0);
+            if (d.api_count != null) msg += ', API: ' + d.api_count;
+            return msg + '. Search again to pick newly synced authors.';
+        },
+    });
+    bindInboundCatalogSync('publisher-cache-sync-btn', {
+        method: 'POST',
+        url: <?php echo json_encode(base_url('index.php?page=publishers&action=syncFromAdmin')); ?>,
+        confirmTitle: 'Refresh publisher list?',
+        confirmHtml: 'Syncs publishers from Exotic India (same as <strong>Publishers → Sync from Admin</strong>).',
+        htmlMessage: true,
+        isOk: function (p, d) { return p.ok && d.success === true; },
+        successTitle: 'Publishers refreshed',
+        failTitle: 'Publisher refresh failed',
+        message: function (ok, d) {
+            if (!ok) return d.message || 'Could not sync publishers from the catalog API.';
+            var msg = 'Imported/updated: ' + (d.imported || 0) + ', Skipped: ' + (d.skipped || 0);
+            if (d.api_count != null) msg += ', API: ' + d.api_count;
+            return msg + '. Search again to pick newly synced publishers.';
+        },
+    });
+});
 </script>
