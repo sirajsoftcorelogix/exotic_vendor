@@ -38,12 +38,17 @@ function safe($value)
 {
     return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
 }
-$categoryName = "";
-if (!empty($label_data[0]["group_name"])) {
-    require_once "models/inbounding/Inbounding.php";
-    $inboundingModel = new Inbounding($conn);
-    $categoryData = $inboundingModel->getBycateId($label_data[0]["group_name"]);
-    $categoryName = strtolower($categoryData["name"] ?? "");
+$categoryName = '';
+if (!empty($label_data[0]['group_name'])) {
+    if (!isset($inboundingModel)) {
+        require_once 'models/inbounding/Inbounding.php';
+        if (!isset($conn)) {
+            require_once 'settings/database/database.php';
+            $conn = Database::getConnection();
+        }
+        $inboundingModel = new Inbounding($conn);
+    }
+    $categoryName = $inboundingModel->resolveInboundLabelCategorySlug($label_data[0]['group_name']);
 }
 function safeInt($value)
 {

@@ -1890,8 +1890,9 @@ class InboundingController {
         if (!$id) {
             die("Invalid ID");
         }
-        $data = $inboundingModel->getForm2Data($id);
-        include 'views/inbounding/label_inbound.php';
+        $data = $inboundingModel->getlabeldata($id);
+        $data['variation'] = $inboundingModel->getVariations($id);
+        include 'views/inbounding/label.php';
     }
     public function inbound_product_publish(){
         is_login();

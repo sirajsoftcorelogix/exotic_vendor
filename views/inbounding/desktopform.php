@@ -306,26 +306,84 @@ function renderSizeField($fieldName, $currentValue, $isClothing, $options, $cust
     return $html;
 }
 $currentSize = $data['form2']['size'] ?? '';
+
+/**
+ * Normalize DB/view paths to a web-relative uploads/... path.
+ */
+function desktopform_normalize_upload_path(string $path): string
+{
+    $path = ltrim(trim($path), '/\\');
+    if ($path === '') {
+        return '';
+    }
+    if (strpos($path, 'uploads/') === 0) {
+        return $path;
+    }
+    if (preg_match('#^itm_img/#i', $path)) {
+        return 'uploads/' . $path;
+    }
+    if (strpos($path, '/') === false && strpos($path, '\\') === false) {
+        return 'uploads/itm_img/' . $path;
+    }
+    return $path;
+}
+
+/** Preview URL — same path the image popup uses (no generated-thumb fallback). */
+function desktopform_preview_image_url(string $path): string
+{
+    $webPath = desktopform_normalize_upload_path($path);
+    return $webPath !== '' ? base_url($webPath) : '';
+}
+
+/**
+ * Resolve uploads/... path on disk (subdir deploys often break a single relative check).
+ */
+function desktopform_resolve_upload_fs_path(string $webPath): ?string
+{
+    $webPath = ltrim($webPath, '/\\');
+    if ($webPath === '') {
+        return null;
+    }
+    $rel = str_replace('/', DIRECTORY_SEPARATOR, $webPath);
+    $candidates = [
+        $rel,
+        dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . $rel,
+    ];
+    if (!empty($GLOBALS['root_path'])) {
+        $candidates[] = rtrim((string) $GLOBALS['root_path'], '/\\') . DIRECTORY_SEPARATOR . $rel;
+    }
+    if (!empty($_SERVER['DOCUMENT_ROOT'])) {
+        $candidates[] = rtrim((string) $_SERVER['DOCUMENT_ROOT'], '/\\') . DIRECTORY_SEPARATOR . $rel;
+    }
+    foreach ($candidates as $candidate) {
+        if ($candidate !== '' && is_file($candidate) && is_readable($candidate)) {
+            return $candidate;
+        }
+    }
+    return null;
+}
+
 function getThumbnail($filePath, $width = 150, $height = 150, bool $generateIfMissing = true) {
     $placeholder = 'assets/images/placeholder.png';
-    $webPath = ltrim((string) $filePath, '/');
+    $webPath = desktopform_normalize_upload_path((string) $filePath);
 
     if ($webPath === '') {
         return $placeholder;
     }
 
-    $fsPath = $webPath;
-    if (!is_file($fsPath) || !is_readable($fsPath)) {
-        $rootPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $webPath);
-        if (is_file($rootPath) && is_readable($rootPath)) {
-            $fsPath = $rootPath;
-        } else {
-            return $placeholder;
+    $fsPath = desktopform_resolve_upload_fs_path($webPath);
+    if (!$fsPath) {
+        if (strpos($webPath, 'uploads/') === 0) {
+            return $webPath;
         }
+        return $placeholder;
     }
 
     $fileSize = @filesize($fsPath);
     if ($fileSize === false || $fileSize <= 0) {
+        if (strpos($webPath, 'uploads/') === 0) {
+            return $webPath;
+        }
         return $placeholder;
     }
 
@@ -344,7 +402,8 @@ function getThumbnail($filePath, $width = 150, $height = 150, bool $generateIfMi
     }
 
     if (!$generateIfMissing) {
-        return $placeholder;
+        // Sidebar/preview: show full image when thumb cache is missing (zoom already uses this path).
+        return $webPath;
     }
 
     $thumbDir = dirname($thumbFsPath);
@@ -466,13 +525,13 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         }
                         $itemImageRelPath = desktopform_item_image_thumb_path($item_photos_for_thumb, $variations_for_thumb);
                         $displayPhotoPath = $itemImageRelPath !== '' ? $itemImageRelPath : $mainPhoto;
-                        $hasMainPhoto = !empty($displayPhotoPath);
-
-                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath, 150, 150, false)) : '';
+                        $hasMainPhoto = desktopform_normalize_upload_path((string) $displayPhotoPath) !== '';
+                        $mainPhotoUrl = $hasMainPhoto ? desktopform_preview_image_url((string) $displayPhotoPath) : '';
+                        $mainPhotoPopupJson = json_encode($mainPhotoUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
                     ?>
                     <img id="main_photo_preview" 
-                         src="<?= $mainPhotoThumb ?>" 
-                         onclick="openImagePopup('<?= $hasMainPhoto ? base_url($displayPhotoPath) : '' ?>')"
+                         src="<?= htmlspecialchars($mainPhotoUrl, ENT_QUOTES, 'UTF-8') ?>" 
+                         onclick="openImagePopup(<?= $hasMainPhoto ? $mainPhotoPopupJson : "''" ?>)"
                          class="w-full h-full object-contain cursor-zoom-in absolute inset-0 z-10"
                          style="<?= $hasMainPhoto ? '' : 'display: none;' ?>">
                     <div id="main_photo_placeholder"
@@ -898,7 +957,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     $hasPhoto = (!empty($rawPhoto) && $rawPhoto !== '0');
                                     
                                     // Pass FULL path to generator
-                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto, 150, 150, false)) : '#';
+                                    $varThumbSrc = $hasPhoto ? desktopform_preview_image_url((string) $rawPhoto) : '#';
                                 ?>
                                 <img src="<?= $varThumbSrc ?>" 
                                      class="preview-img w-full h-full object-cover absolute inset-0 z-10"
@@ -1109,13 +1168,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     // ... inside your existing renderPhotoCard function ...
 
     function renderPhotoCard($img, $varId) {
-        $fullPath = "uploads/itm_img/" . $img['file_name'];
-
-        // 2. Pass the FULL PATH to the generator (filesystem-relative)
-        $thumbSrc = getThumbnail($fullPath, 150, 150, false);
-        $thumbVersion = @filemtime(ltrim($fullPath, '/')) ?: time();
-        $thumbUrl = base_url($thumbSrc) . '?v=' . $thumbVersion;
-        $fullUrl  = base_url($fullPath);
+        $fullPath = 'uploads/itm_img/' . $img['file_name'];
+        $fullUrl = desktopform_preview_image_url($fullPath);
         $popupUrlJson = json_encode($fullUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
     ?>
         <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group shadow-sm shrink-0 w-[132px]" 
@@ -1129,10 +1183,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
 
             <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-1" 
                  onclick="openImagePopup(<?php echo $popupUrlJson; ?>)">
-                <img src="<?php echo htmlspecialchars($thumbUrl); ?>" 
+                <img src="<?php echo htmlspecialchars($fullUrl, ENT_QUOTES, 'UTF-8'); ?>" 
                      alt=""
                      draggable="false"
                      loading="lazy" 
+                     onerror="this.onerror=null;this.src=<?php echo $popupUrlJson; ?>;"
                      class="max-w-full max-h-full object-contain cursor-pointer select-none">
             </div>
 

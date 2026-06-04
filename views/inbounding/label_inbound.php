@@ -43,12 +43,15 @@ function safeInt($value)
 {
     return intval($value ?? 0);
 }
-$categoryName = "";
-if (!empty($label_data[0]["group_name"])) {
-    require_once "models/inbounding/Inbounding.php";
+$categoryName = '';
+if (!empty($label_data[0]['group_name'])) {
+    require_once 'models/inbounding/Inbounding.php';
+    if (!isset($conn)) {
+        require_once 'settings/database/database.php';
+        $conn = Database::getConnection();
+    }
     $inboundingModel = new Inbounding($conn);
-    $categoryData = $inboundingModel->getBycateId($label_data[0]["group_name"]);
-    $categoryName = strtolower($categoryData["name"] ?? "");
+    $categoryName = $inboundingModel->resolveInboundLabelCategorySlug($label_data[0]['group_name']);
 }
 // echo '<pre>' ; print_r($categoryName);exit;
 
