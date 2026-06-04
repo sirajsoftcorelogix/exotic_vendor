@@ -187,6 +187,17 @@
     $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
     $publishedVal = (int)($products['published'] ?? 0);
     $publishedText = $publishedVal === 1 ? 'Published' : 'Unpublished';
+    $addedOnRaw = trim((string)($products['date_first_added'] ?? ''));
+    if ($addedOnRaw === '' || $addedOnRaw === '0000-00-00') {
+        $addedOnRaw = trim((string)($products['created_on'] ?? ''));
+    }
+    $addedOnDisplay = '';
+    if ($addedOnRaw !== '' && $addedOnRaw !== '0000-00-00 00:00:00') {
+        $addedOnTs = strtotime($addedOnRaw);
+        if ($addedOnTs !== false) {
+            $addedOnDisplay = date('d M Y', $addedOnTs);
+        }
+    }
     $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
     $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
     $priceIndiaBase = (float)($products['price_india'] ?? 0);
@@ -256,6 +267,10 @@
         return $unit !== '' ? ($t . ' ' . $unit) : $t;
     };
     $weightDisplay = $formatWeightDim($products['product_weight'] ?? null, $weightUnitRaw);
+    $dimensionsDisplay = trim((string)($products['dimensions'] ?? ''));
+    if ($dimensionsDisplay === '') {
+        $dimensionsDisplay = '—';
+    }
   ?>
   <!-- PRODUCT HEADER -->
   <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -281,16 +296,26 @@
             <span class="text-xs ml-2 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium"><?php echo $products['item_code'] ?? ''; ?></span>
           </div>
           <?php if ($isAdminUser): ?>
-            <button type="button"
-              id="publishedStatusLink"
-              class="shrink-0 text-xs font-semibold px-3 py-1 rounded-md border <?php echo $publishedVal === 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'; ?> hover:opacity-85"
-              onclick="openPublishedStatusModal()">
-              <span id="publishedStatusDisplay"><?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?></span>
-            </button>
+            <div class="shrink-0 flex items-center gap-2">
+              <button type="button"
+                id="publishedStatusLink"
+                class="text-xs font-semibold px-3 py-1 rounded-md border <?php echo $publishedVal === 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'; ?> hover:opacity-85"
+                onclick="openPublishedStatusModal()">
+                <span id="publishedStatusDisplay"><?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?></span>
+              </button>
+              <?php if ($addedOnDisplay !== ''): ?>
+                <span class="text-[11px] text-gray-500 whitespace-nowrap">Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
+              <?php endif; ?>
+            </div>
           <?php else: ?>
-            <span id="publishedStatusDisplay" class="shrink-0 text-xs font-semibold px-3 py-1 rounded-md border <?php echo $publishedVal === 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'; ?>">
-              <?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?>
-            </span>
+            <div class="shrink-0 flex items-center gap-2">
+              <span id="publishedStatusDisplay" class="text-xs font-semibold px-3 py-1 rounded-md border <?php echo $publishedVal === 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'; ?>">
+                <?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?>
+              </span>
+              <?php if ($addedOnDisplay !== ''): ?>
+                <span class="text-[11px] text-gray-500 whitespace-nowrap">Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
+              <?php endif; ?>
+            </div>
           <?php endif; ?>
         </div>
         
@@ -345,10 +370,11 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
         <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($sizeDisplayOut, ENT_QUOTES, 'UTF-8'); ?></span></div>
         <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-palette mr-1 text-orange-600"></i>Color</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($colorDisplay, ENT_QUOTES, 'UTF-8'); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_length'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-vertical mr-1 text-orange-600"></i>Height</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_height'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
-        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-arrows-alt-h mr-1 text-orange-600"></i>Width</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_width'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-vertical mr-1 text-orange-600"></i>Height / Length</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_height'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-arrows-alt-h mr-1 text-orange-600"></i>Width/Breadth</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_width'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Depth</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($formatLinearDim($products['prod_length'] ?? null, $lengthUnitDisplay), ENT_QUOTES, 'UTF-8'); ?></span></div>
         <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-weight mr-1 text-orange-600"></i>Weight</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($weightDisplay, ENT_QUOTES, 'UTF-8'); ?></span></div>
+        <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3 sm:col-span-2"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-ruler-combined mr-1 text-orange-600"></i>Dimensions</span><span class="font-semibold text-gray-800 text-right break-words"><?php echo htmlspecialchars($dimensionsDisplay, ENT_QUOTES, 'UTF-8'); ?></span></div>
       </div>
     </div>
   </div>
