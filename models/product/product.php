@@ -3767,6 +3767,145 @@ class product
 
         return ['success' => true, 'message' => 'Product updated successfully'];
     }
+
+    /**
+     * Resolve comma-separated category store codes to display names.
+     *
+     * @return list<string>
+     */
+    public function resolveCategoryLabelList(string $codesCsv): array
+    {
+        $codesCsv = trim($codesCsv);
+        if ($codesCsv === '') {
+            return [];
+        }
+        $labels = [];
+        foreach (array_filter(array_map('trim', explode(',', $codesCsv))) as $code) {
+            if ($code === '') {
+                continue;
+            }
+            $stmt = $this->db->prepare('SELECT display_name FROM category WHERE TRIM(CAST(category AS CHAR)) = ? LIMIT 1');
+            if (!$stmt) {
+                $labels[] = $code;
+                continue;
+            }
+            $stmt->bind_param('s', $code);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            $labels[] = ($row && !empty($row['display_name'])) ? (string)$row['display_name'] : $code;
+        }
+
+        return $labels;
+    }
+
+    /**
+     * Format pipe-delimited category string (SubSub|Sub|Cat|Group) for read-only display.
+     *
+     * @return array{group:string,category:string,sub_category:string,sub_sub_category:string}
+     */
+    public function resolveCategoryPipeSections(string $raw): array
+    {
+        $empty = ['group' => '—', 'category' => '—', 'sub_category' => '—', 'sub_sub_category' => '—'];
+        $raw = trim($raw);
+        if ($raw === '') {
+            return $empty;
+        }
+
+        $joinLabels = static function (array $labels): string {
+            return $labels !== [] ? implode(', ', $labels) : '—';
+        };
+
+        if (strpos($raw, '|') !== false) {
+            $parts = explode('|', $raw);
+            return [
+                'sub_sub_category' => $joinLabels($this->resolveCategoryLabelList($parts[0] ?? '')),
+                'sub_category' => $joinLabels($this->resolveCategoryLabelList($parts[1] ?? '')),
+                'category' => $joinLabels($this->resolveCategoryLabelList($parts[2] ?? '')),
+                'group' => $joinLabels($this->resolveCategoryLabelList($parts[3] ?? '')),
+            ];
+        }
+
+        $labels = $this->resolveCategoryLabelList($raw);
+
+        return [
+            'group' => '—',
+            'category' => $joinLabels($labels),
+            'sub_category' => '—',
+            'sub_sub_category' => '—',
+        ];
+    }
+
+    /**
+     * Build read-only Item Identification and Search Category display fields for product detail.
+     *
+     * @return array{item_identification:array<string,string>,search_category:array<string,string>}
+     */
+    public function buildProductCatalogDisplayFields(array $row): array
+    {
+        $formatGroup = static function (string $raw): string {
+            $raw = trim($raw);
+            if ($raw === '') {
+                return '—';
+            }
+            if (function_exists('mb_convert_case')) {
+                return mb_convert_case($raw, MB_CASE_TITLE, 'UTF-8');
+            }
+
+            return ucwords(strtolower($raw));
+        };
+
+        $itemSections = $this->resolveCategoryPipeSections((string)($row['category'] ?? ''));
+        $groupFromName = $formatGroup((string)($row['groupname'] ?? ''));
+        if ($groupFromName !== '—') {
+            $itemSections['group'] = $groupFromName;
+        } elseif ($itemSections['group'] === '—') {
+            $itemSections['group'] = $groupFromName;
+        }
+
+        $keywordsRaw = trim((string)($row['keywords'] ?? ''));
+        $snippetRaw = trim((string)($row['snippet_description'] ?? ''));
+        $optionalsRaw = '';
+        if ($this->vpProductsHasColumn('optionals')) {
+            $optionalsRaw = trim((string)($row['optionals'] ?? ''));
+        }
+
+        $optionalLabels = [];
+        if ($optionalsRaw !== '') {
+            foreach (preg_split('/[|,]/', $optionalsRaw) as $part) {
+                $part = trim((string)$part);
+                if ($part === '') {
+                    continue;
+                }
+                $label = str_replace(['OPTIONALS_', '_'], ['', ' '], $part);
+                $optionalLabels[] = ucwords(strtolower($label));
+            }
+        }
+
+        $searchSections = $this->resolveCategoryPipeSections((string)($row['search_category'] ?? ''));
+        $searchTermRaw = trim((string)($row['search_term'] ?? ''));
+
+        return [
+            'item_identification' => [
+                'group' => $itemSections['group'],
+                'category' => $itemSections['category'],
+                'sub_category' => $itemSections['sub_category'],
+                'sub_sub_category' => $itemSections['sub_sub_category'],
+                'keywords' => $keywordsRaw !== '' ? $keywordsRaw : '—',
+                'snippet_description' => $snippetRaw !== '' ? $snippetRaw : '—',
+                'optionals' => $optionalLabels !== [] ? implode(', ', $optionalLabels) : '—',
+            ],
+            'search_category' => [
+                'search_group' => $searchSections['group'],
+                'search_category' => $searchSections['category'],
+                'search_sub_category' => $searchSections['sub_category'],
+                'search_sub_sub_category' => $searchSections['sub_sub_category'],
+                'search_term' => $searchTermRaw !== '' ? $searchTermRaw : '—',
+            ],
+        ];
+    }
+
     public function fetchProductsForUpdateScript($offset = 0, $limit = 500)
     {
         $sql = "SELECT id, item_code, sku, size, color FROM vp_products WHERE update_flag IS NULL OR update_flag = 0 LIMIT ? OFFSET ?";

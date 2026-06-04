@@ -1259,36 +1259,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             $search_sel_sub_sub = array_filter(explode(',', $search_sub_sub_raw));
             $search_sel_sub     = array_filter(explode(',', $search_sub_raw));
             $search_sel_cat     = array_filter(explode(',', $search_cat_raw));
-
-            $searchCategoryLabelMap = [];
-            foreach ($data['category'] ?? [] as $row) {
-                if (isset($row['is_active']) && $row['is_active'] != 1) { continue; }
-                $sv = !empty($row['category']) ? (string) $row['category'] : (string) $row['id'];
-                $searchCategoryLabelMap[$sv] = $row['display_name'] ?? $sv;
-            }
-            $resolveSearchLabels = static function (array $codes) use ($searchCategoryLabelMap): array {
-                $labels = [];
-                foreach ($codes as $code) {
-                    $code = trim((string) $code);
-                    if ($code === '') { continue; }
-                    $labels[] = $searchCategoryLabelMap[$code] ?? $code;
-                }
-                return $labels;
-            };
-            $searchGroupDisplayLabel = '—';
-            foreach ($rootCategories as $group) {
-                if ((string) $group['store_value'] === (string) $search_group_val) {
-                    $searchGroupDisplayLabel = $group['name'];
-                    break;
-                }
-            }
-            $displaySearchCatLabels = $resolveSearchLabels(array_values($search_sel_cat));
-            $displaySearchSubLabels = $resolveSearchLabels(array_values($search_sel_sub));
-            $displaySearchSubSubLabels = $resolveSearchLabels(array_values($search_sel_sub_sub));
-            $displaySearchTerm = trim((string) ($data['form2']['search_term'] ?? ''));
-            $displaySearchTermText = $displaySearchTerm !== '' ? $displaySearchTerm : '—';
         ?>
-        <div class="mt-[15px] md:mx-5 hidden" id="search-category-edit-fields" aria-hidden="true">
+        <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category (Related Items)</legend>
                 
@@ -1352,7 +1324,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5 hidden" id="search-terms-edit-fields" aria-hidden="true">
+        <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Terms</legend>
                 <div>
@@ -1668,68 +1640,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5" id="search-related-display-section">
-            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category (Related Items)</legend>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                    <div>
-                        <label class="block text-xs font-bold text-[#222] mb-1">Search Group:</label>
-                        <div id="search_group_display" class="w-full min-h-[34px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] bg-[#f9f9f9]"><?= htmlspecialchars($searchGroupDisplayLabel) ?></div>
-                    </div>
-                </div>
-
-                <div class="flex flex-col md:flex-row gap-5 items-stretch">
-                    <div class="w-full md:w-1/3 flex flex-col">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Search Category:</label>
-                        <div class="border border-[#ccc] rounded-[4px] bg-[#f9f9f9] flex-grow h-[200px] flex flex-col pointer-events-none">
-                            <div id="search_category_display" class="overflow-y-auto p-1 h-full">
-                                <?php if (!empty($displaySearchCatLabels)): ?>
-                                    <?php foreach ($displaySearchCatLabels as $label): ?>
-                                        <div class="text-[13px] text-[#333] py-1.5 px-2 border-b border-gray-100 last:border-0"><?= htmlspecialchars($label) ?></div>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <div class="text-xs text-gray-400 p-2 text-center mt-10">No categories selected</div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="w-full md:w-1/3 flex flex-col">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Search Sub Category:</label>
-                        <div class="border border-[#ccc] rounded-[4px] bg-[#f9f9f9] flex-grow h-[200px] flex flex-col pointer-events-none">
-                            <div id="search_sub_category_display" class="overflow-y-auto p-1 h-full">
-                                <?php if (!empty($displaySearchSubLabels)): ?>
-                                    <?php foreach ($displaySearchSubLabels as $label): ?>
-                                        <div class="text-[13px] text-[#333] py-1.5 px-2 border-b border-gray-100 last:border-0"><?= htmlspecialchars($label) ?></div>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <div class="text-xs text-gray-400 p-2 text-center mt-10">No sub categories selected</div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="w-full md:w-1/3 flex flex-col">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Search SubSubCategory:</label>
-                        <div class="border border-[#ccc] rounded-[4px] bg-[#f9f9f9] flex-grow h-[200px] flex flex-col pointer-events-none">
-                            <div id="search_sub_sub_category_display" class="overflow-y-auto p-1 h-full">
-                                <?php if (!empty($displaySearchSubSubLabels)): ?>
-                                    <?php foreach ($displaySearchSubSubLabels as $label): ?>
-                                        <div class="text-[13px] text-[#333] py-1.5 px-2 border-b border-gray-100 last:border-0"><?= htmlspecialchars($label) ?></div>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <div class="text-xs text-gray-400 p-2 text-center mt-10">No sub-sub categories selected</div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-5">
-                    <label class="block text-xs font-bold text-[#222] mb-1">Search Terms:</label>
-                    <div id="search_term_display" class="w-full min-h-[34px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] bg-[#f9f9f9]"><?= htmlspecialchars($displaySearchTermText) ?></div>
-                </div>
-            </fieldset>
-        </div>
         <div class="mt-[15px] md:mx-5" style="display:none;">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Unit:</legend>
@@ -1757,7 +1667,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Inventory:</legend>
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Stock:</legend>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start mb-[15px]">
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Permanently Available:</label>
@@ -1787,6 +1697,33 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </select>
                     </div>
                     <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Back Order:</label>
+                        <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
+                                name="back_order" id="back_order_select" onchange="toggleBackOrderFields()">
+                            <?php $backOrder = $data['form2']['back_order'] ?? '0'; ?>
+                            <option value="0" <?= ($backOrder == '0') ? 'selected' : '' ?>>No</option>
+                            <option value="1" <?= ($backOrder == '1') ? 'selected' : '' ?>>Yes</option>
+                        </select>
+                    </div>
+                    <div class="flex-1 backorder-field" style="display: none;">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Percentage:</label>
+                        <div class="relative w-full">
+                            <input type="number" name="backorder_percent" min="1" max="100" placeholder="0"
+                                   value="<?= htmlspecialchars($data['form2']['backorder_percent'] ?? '20') ?>" 
+                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[30px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">%</span>
+                        </div>
+                    </div>
+                    <div class="flex-1 backorder-field" style="display: none;">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Weeks:</label>
+                        <div class="relative w-full">
+                            <input type="number" name="backorder_day" min="0" placeholder="0"
+                                   value="<?= htmlspecialchars($data['form2']['backorder_day'] ?? '') ?>" 
+                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Weeks</span>
+                        </div>
+                    </div>
+                    <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Lead Time:</label>
                         <div class="relative w-full">
                             <input type="text" name="lead_time_days" 
@@ -1802,47 +1739,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                    value="<?= htmlspecialchars($data['form2']['in_stock_leadtime_days'] ?? '0') ?>" 
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
-                        </div>
-                    </div>
-                    <div class="flex-1 lg:col-span-2">
-                        <label class="block text-xs font-bold text-[#222] mb-[3px]">Image Directory:</label>
-                        <input type="text" 
-                               id="image_directory_input" 
-                               name="image_directory" 
-                               readonly
-                               value="<?php echo htmlspecialchars($data['form2']['image_directory'] ?? ''); ?>"
-                               class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] bg-gray-100 cursor-not-allowed focus:outline-none"
-                               placeholder="Auto-generated...">
-                    </div>
-                </div>
-
-                <div class="border-t border-dashed border-gray-200 pt-4 mt-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Back Order:</label>
-                        <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
-                                name="back_order" id="back_order_select" onchange="toggleBackOrderFields()">
-                            <?php $backOrder = $data['form2']['back_order'] ?? '0'; ?>
-                            <option value="0" <?= ($backOrder == '0') ? 'selected' : '' ?>>No</option>
-                            <option value="1" <?= ($backOrder == '1') ? 'selected' : '' ?>>Yes</option>
-                        </select>
-                    </div>
-                    <div class="flex-1 backorder-field">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Percentage:</label>
-                        <div class="relative w-full">
-                            <input type="number" name="backorder_percent" min="1" max="100" placeholder="0"
-                                   value="<?= htmlspecialchars($data['form2']['backorder_percent'] ?? '20') ?>" 
-                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[30px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
-                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">%</span>
-                        </div>
-                    </div>
-                    <div class="flex-1 backorder-field">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Weeks:</label>
-                        <div class="relative w-full">
-                            <input type="number" name="backorder_day" min="0" placeholder="0"
-                                   value="<?= htmlspecialchars($data['form2']['backorder_day'] ?? '') ?>" 
-                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
-                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Weeks</span>
                         </div>
                     </div>
                     <div class="flex-1">
@@ -1904,6 +1800,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </div>
                         </div>
                     </div>
+                    <div class="flex-1 pl-4 flex flex-col justify-center min-w-[200px]"> 
+                        <label class="block text-xs font-bold text-[#222] mb-[3px]">Image Directory:</label>
+                        <input type="text" 
+                               id="image_directory_input" 
+                               name="image_directory" 
+                               readonly
+                               value="<?php echo htmlspecialchars($data['form2']['image_directory'] ?? ''); ?>"
+                               class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] bg-gray-100 cursor-not-allowed focus:outline-none"
+                               placeholder="Auto-generated...">
                     </div>
                 </div>
             </fieldset>
@@ -2859,12 +2764,6 @@ document.addEventListener('DOMContentLoaded', function() {
     enableSearchLogic('search_cat_search', 'search_category_container');
     enableSearchLogic('search_sub_cat_search', 'search_sub_category_container');
     enableSearchLogic('search_sub_sub_cat_search', 'search_sub_sub_category_container');
-
-    setTimeout(function() {
-        if (typeof window.refreshSearchCategoryDisplay === 'function') {
-            window.refreshSearchCategoryDisplay();
-        }
-    }, 400);
 });
 </script>
 <script>
@@ -3168,16 +3067,16 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
     function toggleBackOrderFields() {
         const select = document.getElementById('back_order_select');
-        const inputs = document.querySelectorAll('.backorder-field input');
-        const isYes = select && select.value === '1';
-        inputs.forEach(function(input) {
-            input.disabled = !isYes;
-            input.classList.toggle('bg-gray-100', !isYes);
-            input.classList.toggle('cursor-not-allowed', !isYes);
-            if (!isYes) {
-                input.value = '';
-            }
-        });
+        const fields = document.querySelectorAll('.backorder-field');
+        const inputs = document.querySelectorAll('.backorder-field input'); // Select the input fields
+        if (select && select.value === '1') {
+            fields.forEach(el => el.style.display = 'block');
+        } else {
+            fields.forEach(el => el.style.display = 'none');
+            
+            // NEW: Clear values immediately when switching to "No"
+            inputs.forEach(input => input.value = ''); 
+        }
     }
     // Run on load
     document.addEventListener('DOMContentLoaded', toggleBackOrderFields);
@@ -4468,12 +4367,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     enableSearchFilter('search_sub_cat_search', 'search_sub_category_container');
     enableSearchFilter('search_sub_sub_cat_search', 'search_sub_sub_category_container');
-
-    setTimeout(function() {
-        if (typeof window.refreshSearchCategoryDisplay === 'function') {
-            window.refreshSearchCategoryDisplay();
-        }
-    }, 400);
 });
 </script>
 <script>
@@ -5093,60 +4986,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <script>
-window.refreshSearchCategoryDisplay = function() {
-    const groupEl = document.getElementById('search_group_select');
-    const groupDisplay = document.getElementById('search_group_display');
-    if (groupEl && groupDisplay) {
-        let label = '—';
-        if (groupEl.tomselect) {
-            const v = groupEl.tomselect.getValue();
-            if (v) {
-                const opt = groupEl.querySelector('option[value="' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"]');
-                label = opt ? opt.textContent.trim() : String(v);
-            }
-        } else if (groupEl.value) {
-            const sel = groupEl.options[groupEl.selectedIndex];
-            label = sel ? sel.textContent.trim() : groupEl.value;
-        }
-        groupDisplay.textContent = label;
-    }
-
-    function renderCheckedList(containerId, displayId, emptyMsg) {
-        const container = document.getElementById(containerId);
-        const display = document.getElementById(displayId);
-        if (!container || !display) return;
-
-        const labels = [];
-        container.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) {
-            const lbl = container.querySelector('label[for="' + cb.id + '"]');
-            labels.push(lbl ? lbl.textContent.trim() : cb.value);
-        });
-
-        if (!labels.length) {
-            display.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">' + emptyMsg + '</div>';
-            return;
-        }
-        display.innerHTML = labels.map(function(text) {
-            const safe = String(text)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-            return '<div class="text-[13px] text-[#333] py-1.5 px-2 border-b border-gray-100 last:border-0">' + safe + '</div>';
-        }).join('');
-    }
-
-    renderCheckedList('search_category_container', 'search_category_display', 'No categories selected');
-    renderCheckedList('search_sub_category_container', 'search_sub_category_display', 'No sub categories selected');
-    renderCheckedList('search_sub_sub_category_container', 'search_sub_sub_category_display', 'No sub-sub categories selected');
-
-    const termInput = document.querySelector('#search-terms-edit-fields input[name="search_term"]');
-    const termDisplay = document.getElementById('search_term_display');
-    if (termInput && termDisplay) {
-        termDisplay.textContent = termInput.value.trim() || '—';
-    }
-};
-</script>
-<script>
 document.addEventListener('DOMContentLoaded', function() {
     
     // --- Configuration ---
@@ -5217,9 +5056,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 syncCheckboxes('sub_category_container', 'search_sub_category_container');
                 setTimeout(() => {
                     syncCheckboxes('sub_sub_category_container', 'search_sub_sub_category_container');
-                    if (typeof window.refreshSearchCategoryDisplay === 'function') {
-                        window.refreshSearchCategoryDisplay();
-                    }
                 }, 50);
             }, 50);
         }, 50);
@@ -5254,11 +5090,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         if(config.source === 'sub_category_container') {
                              setTimeout(() => syncCheckboxes('sub_sub_category_container', 'search_sub_sub_category_container'), 50);
                         }
-                        setTimeout(() => {
-                            if (typeof window.refreshSearchCategoryDisplay === 'function') {
-                                window.refreshSearchCategoryDisplay();
-                            }
-                        }, 120);
                     }, 10);
                 }
             });
