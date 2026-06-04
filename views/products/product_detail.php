@@ -618,44 +618,42 @@
           return $v !== '' ? $v : '—';
       };
     ?>
-    <div class="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-4 mb-4">
-      <h3 class="font-semibold mb-3 text-gray-800 flex items-center gap-2">
-        <i class="fas fa-book text-orange-600"></i>Book Details
-      </h3>
+    <div class="bg-white rounded-lg p-4 mb-4">
+      <h3 class="font-semibold mb-3">Book Details</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+        <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Author</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('author'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+        <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Edited By</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('edited_by'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+        <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Publisher</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('publisher'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+        <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">ISBN</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('isbn'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+        <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Cover Type</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('cover_type'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+        <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Edition</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('edition'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+        <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Published Date</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('publication_date'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+        <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Language</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('language'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
-        <div class="bg-white/70 rounded-lg border border-orange-100 p-2.5">
+        <div class="border rounded p-3">
           <span class="text-gray-500 block text-xs mb-0.5">Pages</span>
           <span class="font-medium text-gray-900"><?php echo htmlspecialchars($bookDetailVal('pages'), ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
