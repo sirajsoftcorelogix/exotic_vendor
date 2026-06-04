@@ -786,8 +786,20 @@ class Inbounding {
         }
         return $inbounding;
     }
+    /**
+     * vp_inbound.vendor_code is INT (Exotic vendor_id). Empty POST must be NULL, not ''.
+     */
+    private function normalizeInboundVendorCode($raw) {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return null;
+        }
+        $digits = preg_replace('/\D/', '', $raw);
+        return $digits === '' ? null : (int) $digits;
+    }
+
     public function saveform1($record_id, $data) {
-        $vendor_code = $data['vendor_id'] ?? '';
+        $vendor_code = $this->normalizeInboundVendorCode($data['vendor_id'] ?? '');
         $invoice_img = $data['invoice'] ?? '';
         $invoice_no  = $data['invoice_no'] ?? '';
 
@@ -802,7 +814,6 @@ class Inbounding {
             return false;
         }
 
-        // Bind parameters (s = string)
         // We only bind 3 values; NOW() is handled by MySQL directly
         $stmt->bind_param("iss", $vendor_code, $invoice_img, $invoice_no);
 
@@ -877,10 +888,10 @@ class Inbounding {
             return false;
         }
         $id = intval($data['id']);
-        $vendor_code = $data['vendor_id'];
+        $vendor_code = $this->normalizeInboundVendorCode($data['vendor_id'] ?? '');
         $invoice_img = $data['invoice'];
         $invoice_no  = $data['invoice_no'];
-        $stmt->bind_param("sssi", $vendor_code, $invoice_img, $invoice_no, $id);
+        $stmt->bind_param("issi", $vendor_code, $invoice_img, $invoice_no, $id);
         return $stmt->execute();
     }
     public function updatedesktopform($id, $data) {

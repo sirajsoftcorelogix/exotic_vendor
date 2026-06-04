@@ -482,6 +482,11 @@ class InboundingController {
             exit;
         }
 
+        // Vendor is optional on form1; keep stored vendor when the select is left empty on update.
+        if ($vendor_id === '' && !empty($oldData['form1']['vendor_code'])) {
+            $vendor_id = (string) $oldData['form1']['vendor_code'];
+        }
+
         // Keep old image by default
         $invoicePath = $oldData['form1']['invoice_image'];
 
