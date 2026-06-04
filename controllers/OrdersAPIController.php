@@ -740,7 +740,7 @@ class OrdersAPIController
             if ($result && $result->num_rows > 0) {
                 while ($invoice = $result->fetch_assoc()) {
                     // Fetch invoice items
-                    $itemsSql = "SELECT * FROM vp_invoice_items WHERE invoice_id = ?";
+                    $itemsSql = "SELECT it.*, ag.account_group_name FROM vp_invoice_items it LEFT JOIN account_group ag ON it.groupname = ag.item_group WHERE invoice_id = ?";
                     $itemsStmt = $GLOBALS['conn']->prepare($itemsSql);
                     if (!$itemsStmt) {
                         throw new Exception('Database error: Unable to fetch invoice items');
@@ -767,7 +767,7 @@ class OrdersAPIController
                             'Amount'      => round($itemAmount, 2),
                             'GST Rate'    => floatval($item['tax_rate'] ?? 0),
                             'Discount'    => 0.0,
-                            'Item Groupname' => $item['groupname'] ?? ''
+                            'account_group' => $item['account_group_name'] ?? ''
                         ];
                     }
 
