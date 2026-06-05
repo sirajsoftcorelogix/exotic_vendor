@@ -1110,6 +1110,124 @@ class Inbounding {
     }
 
     /**
+     * Latest inbound book metadata for product detail (read-only display).
+     */
+    public function getBookDetailsForProductDisplay(string $itemCode, string $size = '', string $color = ''): array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return [];
+        }
+
+        $size = trim($size);
+        $color = trim($color);
+
+        $fetchRow = function (string $sql, string $types, array $params): ?array {
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return null;
+            }
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result ? $result->fetch_assoc() : null;
+            $stmt->close();
+
+            return $row ?: null;
+        };
+
+        $row = null;
+        if ($size !== '' || $color !== '') {
+            $row = $fetchRow(
+                "SELECT author, edited_by, publisher, isbn, cover_type, edition, publication_date, language, pages
+                 FROM vp_inbound
+                 WHERE Item_code = ? AND TRIM(COALESCE(size, '')) = ? AND TRIM(COALESCE(color, '')) = ?
+                 ORDER BY id DESC LIMIT 1",
+                'sss',
+                [$itemCode, $size, $color]
+            );
+        }
+        if (!$row) {
+            $row = $fetchRow(
+                "SELECT author, edited_by, publisher, isbn, cover_type, edition, publication_date, language, pages
+                 FROM vp_inbound WHERE Item_code = ? ORDER BY id DESC LIMIT 1",
+                's',
+                [$itemCode]
+            );
+        }
+        if (!$row) {
+            return [];
+        }
+
+        $pubName = '';
+        if (!empty($row['publisher'])) {
+            $pub = $this->getPublisherById((int) $row['publisher']);
+            $pubName = trim((string) ($pub['name'] ?? $pub['publishers'] ?? ''));
+        }
+
+        $pubDate = trim((string) ($row['publication_date'] ?? ''));
+        if ($pubDate !== '' && $pubDate !== '0000-00-00') {
+            $ts = strtotime($pubDate);
+            $pubDate = $ts !== false ? date('d M Y', $ts) : $pubDate;
+        } else {
+            $pubDate = '';
+        }
+
+        $pages = (int) ($row['pages'] ?? 0);
+
+        return [
+            'authors' => $this->resolveInboundAuthorNameList($row['author'] ?? ''),
+            'edited_by_names' => $this->resolveInboundAuthorNameList($row['edited_by'] ?? ''),
+            'publisher' => $pubName,
+            'isbn' => trim((string) ($row['isbn'] ?? '')),
+            'cover_type' => trim((string) ($row['cover_type'] ?? '')),
+            'edition' => trim((string) ($row['edition'] ?? '')),
+            'publication_date' => $pubDate,
+            'language' => trim((string) ($row['language'] ?? '')),
+            'pages' => $pages > 0 ? (string) $pages : '',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function resolveInboundAuthorNameList($stored): array
+    {
+        $names = [];
+        foreach ($this->parseInboundAuthorIds($stored) as $authorId) {
+            $row = $this->getAuthorById($authorId);
+            $name = trim((string) ($row['name'] ?? $row['author'] ?? ''));
+            if ($name !== '') {
+                $names[] = $name;
+            }
+        }
+
+        if ($names === []) {
+            $raw = trim((string) $stored);
+            if ($raw !== '') {
+                foreach (preg_split('/\s*[,|]\s*/', $raw) as $part) {
+                    $part = trim($part);
+                    if ($part !== '' && !ctype_digit($part)) {
+                        $names[] = $part;
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    private function formatInboundAuthorDisplay($stored): string
+    {
+        $resolved = $this->resolveInboundAuthorNames($stored);
+        if ($resolved !== '') {
+            return str_replace(',', ', ', $resolved);
+        }
+
+        return trim((string) $stored);
+    }
+
+    /**
      * @return list<int>
      */
     public function parseInboundAuthorIds($stored): array

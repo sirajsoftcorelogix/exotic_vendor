@@ -4229,6 +4229,7 @@ class ProductsController
         is_login();
         global $productModel;
         global $commanModel;
+        global $conn;
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
@@ -4255,6 +4256,60 @@ class ProductsController
             $order['warehouses'] = $productModel->getAllWarehouses();
             $order['stock_movements'] = $productModel->get_stock_movements($id);
             $order['warehouse_location_stock'] = $productModel->getLatestRunningStockByWarehouseLocation((int)$id);
+            $catalogDisplay = $productModel->buildProductCatalogDisplayFields($order);
+            $order['item_identification'] = $catalogDisplay['item_identification'];
+            $order['search_category_display'] = $catalogDisplay['search_category'];
+
+            $groupLower = strtolower(trim((string) ($order['groupname'] ?? '')));
+            $order['book_details'] = [];
+            if (strpos($groupLower, 'book') !== false && $itemCode !== '') {
+                require_once dirname(__DIR__) . '/models/inbounding/Inbounding.php';
+                $inboundingModel = new Inbounding($conn);
+                $order['book_details'] = $inboundingModel->getBookDetailsForProductDisplay(
+                    $itemCode,
+                    (string) ($order['size'] ?? ''),
+                    (string) ($order['color'] ?? '')
+                );
+                if ($order['book_details'] === []) {
+                    $order['book_details'] = [
+                        'authors' => [],
+                        'edited_by_names' => [],
+                        'publisher' => trim((string) ($order['publisher'] ?? '')),
+                        'isbn' => '',
+                        'cover_type' => '',
+                        'edition' => '',
+                        'publication_date' => '',
+                        'language' => '',
+                        'pages' => '',
+                    ];
+                }
+                $splitBookNames = static function (string $raw): array {
+                    $raw = trim($raw);
+                    if ($raw === '') {
+                        return [];
+                    }
+                    $parts = preg_split('/\s*[,|]\s*/', $raw) ?: [];
+                    $names = [];
+                    foreach ($parts as $part) {
+                        $part = trim((string) $part);
+                        if ($part !== '' && !ctype_digit($part)) {
+                            $names[] = $part;
+                        }
+                    }
+
+                    return array_values(array_unique($names));
+                };
+                if (empty($order['book_details']['authors'])) {
+                    $order['book_details']['authors'] = $splitBookNames((string) ($order['author'] ?? ''));
+                }
+                if (empty($order['book_details']['edited_by_names'])) {
+                    $order['book_details']['edited_by_names'] = [];
+                }
+                if ($order['book_details']['publisher'] === '') {
+                    $order['book_details']['publisher'] = trim((string) ($order['publisher'] ?? ''));
+                }
+            }
+
             if (!headers_sent()) {
                 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
                 header('Pragma: no-cache');

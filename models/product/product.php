@@ -176,6 +176,32 @@ class product
     }
 
     /**
+     * Vendor product/fetch exposes search fields under related_search, not always at top level.
+     *
+     * @return array{search_term:string,search_category:string}
+     */
+    public static function vendorApiRelatedSearchFields(array $apiItem): array
+    {
+        $term = trim((string)($apiItem['search_term'] ?? ''));
+        $cat = trim((string)($apiItem['search_category'] ?? ''));
+
+        $related = $apiItem['related_search'] ?? null;
+        if (is_array($related)) {
+            if ($term === '') {
+                $term = trim((string)($related['search_term'] ?? ''));
+            }
+            if ($cat === '') {
+                $cat = trim((string)($related['search_category'] ?? ''));
+            }
+        }
+
+        return [
+            'search_term' => $term,
+            'search_category' => $cat,
+        ];
+    }
+
+    /**
      * @return list<array{vendor_id:int,priority:int}>
      */
     public static function extractDiscreteVendorEntriesFromApiItem(array $apiItem): array
@@ -604,8 +630,9 @@ class product
                     $indiablock = isset($product['indiablock']) ? (int)$product['indiablock'] : 0;
                     $hscode = isset($product['hscode']) ? $product['hscode'] : '';
                     $date_first_added = isset($product['date_first_added']) ? $product['date_first_added'] : '';
-                    $search_term = isset($product['search_term']) ? $product['search_term'] : '';
-                    $search_category = isset($product['search_category']) ? $product['search_category'] : '';
+                    $relatedSearch = self::vendorApiRelatedSearchFields($product);
+                    $search_term = $relatedSearch['search_term'];
+                    $search_category = $relatedSearch['search_category'];
                     $long_description = isset($product['long_description']) ? $product['long_description'] : '';
                     $long_description_india = isset($product['long_description_india']) ? $product['long_description_india'] : '';
                     $aplus_content_ids = isset($product['aplus_content_ids']) ? $product['aplus_content_ids'] : '';
@@ -854,8 +881,14 @@ class product
                             $indiablock = isset($variation['indiablock']) ? (int)$variation['indiablock'] : (isset($product['indiablock']) ? (int)$product['indiablock'] : 0);
                             $hscode = isset($variation['hscode']) ? $variation['hscode'] : (isset($product['hscode']) ? $product['hscode'] : '');
                             $date_first_added = isset($variation['date_first_added']) ? $variation['date_first_added'] : (isset($product['date_first_added']) ? $product['date_first_added'] : '');
-                            $search_term = isset($variation['search_term']) ? $variation['search_term'] : (isset($product['search_term']) ? $product['search_term'] : '');
-                            $search_category = isset($variation['search_category']) ? $variation['search_category'] : (isset($product['search_category']) ? $product['search_category'] : '');
+                            $variationSearch = self::vendorApiRelatedSearchFields($variation);
+                            $parentSearch = self::vendorApiRelatedSearchFields($product);
+                            $search_term = $variationSearch['search_term'] !== ''
+                                ? $variationSearch['search_term']
+                                : $parentSearch['search_term'];
+                            $search_category = $variationSearch['search_category'] !== ''
+                                ? $variationSearch['search_category']
+                                : $parentSearch['search_category'];
                             $long_description = isset($variation['long_description']) ? $variation['long_description'] : (isset($product['long_description']) ? $product['long_description'] : '');
                             $long_description_india = isset($variation['long_description_india']) ? $variation['long_description_india'] : (isset($product['long_description_india']) ? $product['long_description_india'] : '');
                             $aplus_content_ids = isset($variation['aplus_content_ids']) ? $variation['aplus_content_ids'] : (isset($product['aplus_content_ids']) ? $product['aplus_content_ids'] : '');
@@ -3767,6 +3800,232 @@ class product
 
         return ['success' => true, 'message' => 'Product updated successfully'];
     }
+
+    /**
+     * Resolve comma-separated category store codes to display names.
+     *
+     * @return list<string>
+     */
+    public function resolveCategoryLabelList(string $codesCsv): array
+    {
+        $codesCsv = trim($codesCsv);
+        if ($codesCsv === '') {
+            return [];
+        }
+        $labels = [];
+        foreach (array_filter(array_map('trim', explode(',', $codesCsv))) as $code) {
+            if ($code === '') {
+                continue;
+            }
+            $stmt = $this->db->prepare('SELECT display_name FROM category WHERE TRIM(CAST(category AS CHAR)) = ? LIMIT 1');
+            if (!$stmt) {
+                $labels[] = $code;
+                continue;
+            }
+            $stmt->bind_param('s', $code);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            $labels[] = ($row && !empty($row['display_name'])) ? (string)$row['display_name'] : $code;
+        }
+
+        return $labels;
+    }
+
+    /**
+     * Determine catalog tree level from category.parent (matches inbound desktop form hierarchy).
+     */
+    private function categoryLevelFromParent(string $parent): int
+    {
+        $parent = trim($parent);
+        if ($parent === '0') {
+            return 0;
+        }
+        if ($parent === '' || strpos($parent, '|') === false) {
+            return 1;
+        }
+
+        return min(3, 1 + substr_count($parent, '|'));
+    }
+
+    /**
+     * Split comma-separated category store codes into Group / Category / Sub / SubSub buckets.
+     *
+     * @return array{group:string,category:string,sub_category:string,sub_sub_category:string}
+     */
+    public function resolveFlatCategoryIdsToSections(string $raw): array
+    {
+        $empty = ['group' => '—', 'category' => '—', 'sub_category' => '—', 'sub_sub_category' => '—'];
+        $raw = trim($raw);
+        if ($raw === '') {
+            return $empty;
+        }
+
+        $codes = array_values(array_unique(array_filter(array_map('trim', explode(',', $raw)))));
+        if ($codes === []) {
+            return $empty;
+        }
+
+        $buckets = [0 => [], 1 => [], 2 => [], 3 => []];
+
+        foreach ($codes as $code) {
+            $stmt = $this->db->prepare('SELECT display_name, parent FROM category WHERE TRIM(CAST(category AS CHAR)) = ? LIMIT 1');
+            if (!$stmt) {
+                $buckets[1][] = $code;
+                continue;
+            }
+            $stmt->bind_param('s', $code);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+
+            if (!$row) {
+                $buckets[1][] = $code;
+                continue;
+            }
+
+            $level = $this->categoryLevelFromParent((string)($row['parent'] ?? ''));
+            $label = trim((string)($row['display_name'] ?? ''));
+            $buckets[$level][] = $label !== '' ? $label : $code;
+        }
+
+        $joinLabels = static function (array $labels): string {
+            return $labels !== [] ? implode(', ', $labels) : '—';
+        };
+
+        return [
+            'group' => $joinLabels($buckets[0]),
+            'category' => $joinLabels($buckets[1]),
+            'sub_category' => $joinLabels($buckets[2]),
+            'sub_sub_category' => $joinLabels($buckets[3]),
+        ];
+    }
+
+    /**
+     * Format pipe-delimited category string (SubSub|Sub|Cat|Group) for read-only display.
+     *
+     * @return array{group:string,category:string,sub_category:string,sub_sub_category:string}
+     */
+    public function resolveCategoryPipeSections(string $raw): array
+    {
+        $empty = ['group' => '—', 'category' => '—', 'sub_category' => '—', 'sub_sub_category' => '—'];
+        $raw = trim($raw);
+        if ($raw === '') {
+            return $empty;
+        }
+
+        $joinLabels = static function (array $labels): string {
+            return $labels !== [] ? implode(', ', $labels) : '—';
+        };
+
+        if (strpos($raw, '|') !== false) {
+            $parts = explode('|', $raw);
+            // Full inbound string: SubSub | Sub | Cat | Group (four segments, empty slots kept as "")
+            // Vendor related_search API often returns three segments: Sub | Cat | Group (no SubSub)
+            if (count($parts) === 3) {
+                $parts = ['', $parts[0], $parts[1], $parts[2]];
+            }
+            $sections = [
+                'sub_sub_category' => $joinLabels($this->resolveCategoryLabelList($parts[0] ?? '')),
+                'sub_category' => $joinLabels($this->resolveCategoryLabelList($parts[1] ?? '')),
+                'category' => $joinLabels($this->resolveCategoryLabelList($parts[2] ?? '')),
+                'group' => $joinLabels($this->resolveCategoryLabelList($parts[3] ?? '')),
+            ];
+            $hasAny = false;
+            foreach ($sections as $val) {
+                if ($val !== '—') {
+                    $hasAny = true;
+                    break;
+                }
+            }
+            if ($hasAny) {
+                return $sections;
+            }
+        }
+
+        return $this->resolveFlatCategoryIdsToSections($raw);
+    }
+
+    /**
+     * Build read-only Item Identification and Search Category display fields for product detail.
+     *
+     * @return array{item_identification:array<string,string>,search_category:array<string,string>}
+     */
+    public function buildProductCatalogDisplayFields(array $row): array
+    {
+        $formatGroup = static function (string $raw): string {
+            $raw = trim($raw);
+            if ($raw === '') {
+                return '—';
+            }
+            if (function_exists('mb_convert_case')) {
+                return mb_convert_case($raw, MB_CASE_TITLE, 'UTF-8');
+            }
+
+            return ucwords(strtolower($raw));
+        };
+
+        $itemSections = $this->resolveCategoryPipeSections((string)($row['category'] ?? ''));
+        $groupFromName = $formatGroup((string)($row['groupname'] ?? ''));
+        if ($groupFromName !== '—') {
+            $itemSections['group'] = $groupFromName;
+        } elseif ($itemSections['group'] === '—') {
+            $itemSections['group'] = $groupFromName;
+        }
+        // Flat comma lists can mis-bucket group-level ids; never duplicate group into Category.
+        if ($groupFromName !== '—' && $itemSections['category'] !== '—') {
+            $groupLower = strtolower($groupFromName);
+            $catParts = array_map('trim', explode(',', $itemSections['category']));
+            $catParts = array_values(array_filter($catParts, static function ($part) use ($groupLower) {
+                return strtolower($part) !== $groupLower;
+            }));
+            $itemSections['category'] = $catParts !== [] ? implode(', ', $catParts) : '—';
+        }
+
+        $keywordsRaw = trim((string)($row['keywords'] ?? ''));
+        $snippetRaw = trim((string)($row['snippet_description'] ?? ''));
+        $optionalsRaw = '';
+        if ($this->vpProductsHasColumn('optionals')) {
+            $optionalsRaw = trim((string)($row['optionals'] ?? ''));
+        }
+
+        $optionalLabels = [];
+        if ($optionalsRaw !== '') {
+            foreach (preg_split('/[|,]/', $optionalsRaw) as $part) {
+                $part = trim((string)$part);
+                if ($part === '') {
+                    continue;
+                }
+                $label = str_replace(['OPTIONALS_', '_'], ['', ' '], $part);
+                $optionalLabels[] = ucwords(strtolower($label));
+            }
+        }
+
+        $searchSections = $this->resolveCategoryPipeSections((string)($row['search_category'] ?? ''));
+        $searchTermRaw = trim((string)($row['search_term'] ?? ''));
+
+        return [
+            'item_identification' => [
+                'group' => $itemSections['group'],
+                'category' => $itemSections['category'],
+                'sub_category' => $itemSections['sub_category'],
+                'sub_sub_category' => $itemSections['sub_sub_category'],
+                'keywords' => $keywordsRaw !== '' ? $keywordsRaw : '—',
+                'snippet_description' => $snippetRaw !== '' ? $snippetRaw : '—',
+                'optionals' => $optionalLabels !== [] ? implode(', ', $optionalLabels) : '—',
+            ],
+            'search_category' => [
+                'search_group' => $searchSections['group'],
+                'search_category' => $searchSections['category'],
+                'search_sub_category' => $searchSections['sub_category'],
+                'search_sub_sub_category' => $searchSections['sub_sub_category'],
+                'search_term' => $searchTermRaw !== '' ? $searchTermRaw : '—',
+            ],
+        ];
+    }
+
     public function fetchProductsForUpdateScript($offset = 0, $limit = 500)
     {
         $sql = "SELECT id, item_code, sku, size, color FROM vp_products WHERE update_flag IS NULL OR update_flag = 0 LIMIT ? OFFSET ?";
