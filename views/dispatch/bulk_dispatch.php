@@ -386,7 +386,7 @@
                         <div class="mb-3 text-sm text-gray-700">
                             <p><strong>Batch #${data.batch_no}</strong></p>
                             <p class="text-xs text-gray-600 mt-1">✓ ${data.invoices_created} invoices and ${data.dispatches_created} dispatch records created successfully.</p>
-                            <p class="text-xs text-gray-600">✗ ${data.errors.length} Shiprocket shipments failed. Click "Retry" to try creating shipments again.</p>
+                            <p class="text-xs text-gray-600">✗ ${data.errors.length} courier shipment(s) failed. Click "Retry" to try again (Delhivery or Shiprocket based on your selection).</p>
                         </div>
 
                         <div class="bg-red-50 border border-red-200 rounded p-3 max-h-64 overflow-y-auto">
@@ -1129,20 +1129,58 @@
         }
 
         function wireCourierSelection(boxElement, courierContainer) {
+            const orderSection = boxElement.closest('.px-4.pt-4.pb-2');
+            const syncTargets = () => {
+                const targets = orderSection
+                    ? orderSection.querySelectorAll('[data-order-number]')
+                    : [boxElement];
+                return targets.length ? targets : [boxElement];
+            };
             const syncCourierPick = (radio) => {
                 if (!radio || !radio.checked) return;
-                boxElement.setAttribute('data-selected-courier-id', radio.value || '');
-                boxElement.setAttribute('data-selected-courier-name', radio.getAttribute('data-courier-name') || '');
-                boxElement.setAttribute('data-partner-code', radio.getAttribute('data-partner-code') || '');
-                boxElement.setAttribute('data-product-group', radio.getAttribute('data-product-group') || '');
-                boxElement.setAttribute('data-product-type', radio.getAttribute('data-product-type') || '');
-                boxElement.setAttribute('data-partner-account-id', radio.getAttribute('data-partner-account-id') || '');
-                boxElement.setAttribute('data-rate-source', radio.getAttribute('data-rate-source') || '');
+                syncTargets().forEach((el) => {
+                    el.setAttribute('data-selected-courier-id', radio.value || '');
+                    el.setAttribute('data-selected-courier-name', radio.getAttribute('data-courier-name') || '');
+                    el.setAttribute('data-partner-code', radio.getAttribute('data-partner-code') || '');
+                    el.setAttribute('data-product-group', radio.getAttribute('data-product-group') || '');
+                    el.setAttribute('data-product-type', radio.getAttribute('data-product-type') || '');
+                    el.setAttribute('data-partner-account-id', radio.getAttribute('data-partner-account-id') || '');
+                    el.setAttribute('data-rate-source', radio.getAttribute('data-rate-source') || '');
+                });
+                if (orderSection) {
+                    orderSection.setAttribute('data-selected-courier-id', radio.value || '');
+                    orderSection.setAttribute('data-partner-code', radio.getAttribute('data-partner-code') || '');
+                    orderSection.setAttribute('data-rate-source', radio.getAttribute('data-rate-source') || '');
+                }
             };
             courierContainer.querySelectorAll('.courier-tile-radio').forEach((r) => {
                 r.addEventListener('change', () => syncCourierPick(r));
             });
             syncCourierPick(courierContainer.querySelector('.courier-tile-radio:checked'));
+        }
+
+        function readCourierFieldsForBox(boxElement, orderSection) {
+            const checked = orderSection && orderSection.querySelector('.courier-tile-radio:checked');
+            if (checked) {
+                return {
+                    courier_id: checked.value || '',
+                    courier_name: checked.getAttribute('data-courier-name') || '',
+                    partner_code: checked.getAttribute('data-partner-code') || '',
+                    rate_source: checked.getAttribute('data-rate-source') || '',
+                    product_group: checked.getAttribute('data-product-group') || '',
+                    product_type: checked.getAttribute('data-product-type') || '',
+                    partner_account_id: checked.getAttribute('data-partner-account-id') || '',
+                };
+            }
+            return {
+                courier_id: boxElement.getAttribute('data-selected-courier-id') || '',
+                courier_name: boxElement.getAttribute('data-selected-courier-name') || '',
+                partner_code: boxElement.getAttribute('data-partner-code') || '',
+                rate_source: boxElement.getAttribute('data-rate-source') || '',
+                product_group: boxElement.getAttribute('data-product-group') || '',
+                product_type: boxElement.getAttribute('data-product-type') || '',
+                partner_account_id: boxElement.getAttribute('data-partner-account-id') || '',
+            };
         }
 
         function renderUnifiedCourierPanel(boxElement, courierContainer, tm, mergedCouriers, shiprocketData, delhiveryData, delhiveryError) {
@@ -1972,21 +2010,20 @@
                         const boxSizeSelect = boxElement.querySelector('select.BoxSize') || boxElement.querySelector('select');
                         const box_size = boxSizeSelect ? boxSizeSelect.value : 'R1 - 7x4x1';
 
-                        const courierId = boxElement.getAttribute('data-selected-courier-id') || '';
-                        const courierName = boxElement.getAttribute('data-selected-courier-name') || '';
+                        const courierFields = readCourierFieldsForBox(boxElement, orderSection);
 
                         boxes.push({
                             weight: weight,
                             box_size: box_size,
                             items: items,
                             groupname: boxGroupname,
-                            courier_id: courierId,
-                            courier_name: courierName,
-                            partner_code: boxElement.getAttribute('data-partner-code') || '',
-                            rate_source: boxElement.getAttribute('data-rate-source') || '',
-                            product_group: boxElement.getAttribute('data-product-group') || '',
-                            product_type: boxElement.getAttribute('data-product-type') || '',
-                            partner_account_id: boxElement.getAttribute('data-partner-account-id') || '',
+                            courier_id: courierFields.courier_id,
+                            courier_name: courierFields.courier_name,
+                            partner_code: courierFields.partner_code,
+                            rate_source: courierFields.rate_source,
+                            product_group: courierFields.product_group,
+                            product_type: courierFields.product_type,
+                            partner_account_id: courierFields.partner_account_id,
                             pickup_location: boxElement.getAttribute('data-pickup-location') || 'Head Off'
                         });
                     }

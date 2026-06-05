@@ -100,6 +100,43 @@ class DispatchController {
         ];
     }
 
+    /**
+     * Detect whether bulk/retry shipment should use Delhivery vs Shiprocket.
+     *
+     * @param array<string, mixed> $boxData
+     * @param array<string, mixed>|null $dispatchRecord
+     */
+    private function resolveShipmentPartnerCode(array $boxData, ?array $dispatchRecord = null): string
+    {
+        foreach ([
+            strtolower(trim((string)($boxData['partner_code'] ?? ''))),
+            strtolower(trim((string)($boxData['rate_source'] ?? ''))),
+        ] as $candidate) {
+            if ($candidate === 'delhivery') {
+                return 'delhivery';
+            }
+        }
+
+        $courierId = (string)($boxData['courier_id'] ?? '');
+        if (stripos($courierId, 'delhivery_') === 0) {
+            return 'delhivery';
+        }
+
+        $courierName = strtolower(trim((string)($boxData['courier_name'] ?? '')));
+        if ($courierName !== '' && strpos($courierName, 'delhivery') !== false) {
+            return 'delhivery';
+        }
+
+        if ($dispatchRecord) {
+            $savedName = strtolower(trim((string)($dispatchRecord['courier_name'] ?? '')));
+            if ($savedName !== '' && strpos($savedName, 'delhivery') !== false) {
+                return 'delhivery';
+            }
+        }
+
+        return strtolower(trim((string)($boxData['partner_code'] ?? '')));
+    }
+
     public function create() {
         global $commanModel, $invoiceModel, $dispatchModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -1853,7 +1890,7 @@ class DispatchController {
                     if ($weight <= 0) $weight = 0.5;
                     if ($subTotal <= 0) $subTotal = 0.01;
 
-                    $partnerCode = strtolower(trim((string)($boxData['partner_code'] ?? '')));
+                    $partnerCode = $this->resolveShipmentPartnerCode($boxData);
                     if ($partnerCode === 'delhivery') {
                         if ($courierGateway === null) {
                             $courierGateway = new CourierGateway($GLOBALS['conn']);
@@ -2341,6 +2378,293 @@ class DispatchController {
         }
     }
 
+    /**
+     * Retry shipment creation for one pending/failed dispatch row.
+     *
+     * @param array<string, mixed> $dispatchRecord
+     * @return array{success:bool,skipped?:bool,provider?:string,message?:string}
+     */
+    private function retrySingleDispatchShipment(array $dispatchRecord): array
+    {
+        global $dispatchModel, $ordersModel, $invoiceModel, $commanModel;
+
+        $dispatchId = (int)($dispatchRecord['id'] ?? 0);
+        $orderNumber = (string)($dispatchRecord['order_number'] ?? '');
+        $invoiceId = (int)($dispatchRecord['invoice_id'] ?? 0);
+        $boxNo = (int)($dispatchRecord['box_no'] ?? 1);
+
+        $awb = trim((string)($dispatchRecord['awb_code'] ?? ''));
+        $status = strtolower(trim((string)($dispatchRecord['shipment_status'] ?? '')));
+        if ($awb !== '' && !in_array($status, ['', 'pending', 'failed'], true)) {
+            return ['success' => true, 'skipped' => true];
+        }
+
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            return ['success' => false, 'provider' => 'system', 'message' => 'Invoice not found'];
+        }
+
+        $address = $commanModel->getDispatchAddress($invoice['vp_order_info_id'] ?? 0) ?? [];
+        if (empty($address['address_line1'] ?? '') && empty($address['shipping_address_line1'] ?? '')) {
+            $orderInfo = $ordersModel->getRemarksByOrderNumber($orderNumber);
+            $address = is_array($orderInfo) ? $orderInfo : [];
+        }
+
+        $firm = $commanModel->getRecordById('firm_details', 1) ?? [];
+        $invoiceItems = $invoiceModel->getInvoiceItems($invoiceId);
+        $boxItemIds = array_filter(array_map('trim', explode(',', (string)($dispatchRecord['box_items'] ?? ''))));
+
+        $itemsMapById = [];
+        $itemsMapByCode = [];
+        foreach ($invoiceItems as $invItem) {
+            $itemsMapById[$invItem['id']] = $invItem;
+            $itemsMapById[(string)$invItem['id']] = $invItem;
+            $itemsMapByCode[$invItem['item_code'] ?? ''] = $invItem;
+        }
+
+        $orderItems = [];
+        $subTotal = 0.0;
+        foreach ($boxItemIds as $itemId) {
+            $invItem = $itemsMapById[$itemId] ?? $itemsMapByCode[$itemId] ?? null;
+            if (!$invItem) {
+                continue;
+            }
+            $units = (int)($invItem['quantity'] ?? 1);
+            $price = (float)($invItem['unit_price'] ?? 0);
+            $hsnVal = !empty($invItem['hsn']) ? substr(preg_replace('/\D/', '', (string)$invItem['hsn']), 0, 4) : '';
+            $orderItems[] = [
+                'name' => $invItem['groupname'] ?? $invItem['item_name'] ?? 'Item',
+                'sku' => $invItem['item_code'] ?? '',
+                'units' => $units,
+                'selling_price' => $price,
+                'discount' => 0,
+                'tax' => $invItem['tax_amount'] ?? 0,
+                'hsn' => $hsnVal,
+            ];
+            $subTotal += $units * $price;
+        }
+
+        if (empty($orderItems)) {
+            foreach ($invoiceItems as $invItem) {
+                $units = (int)($invItem['quantity'] ?? 1);
+                $price = (float)($invItem['unit_price'] ?? 0);
+                $orderItems[] = [
+                    'name' => $invItem['groupname'] ?? $invItem['item_name'] ?? 'Item',
+                    'sku' => $invItem['item_code'] ?? 'ITEM',
+                    'units' => $units,
+                    'selling_price' => $price,
+                    'discount' => 0,
+                    'tax' => $invItem['tax_amount'] ?? 0,
+                    'hsn' => substr(preg_replace('/\D/', '', (string)($invItem['hsn'] ?? '')), 0, 4),
+                ];
+                $subTotal += $units * $price;
+            }
+        }
+
+        if (empty($orderItems)) {
+            return ['success' => false, 'provider' => 'system', 'message' => 'No invoice items for this box'];
+        }
+
+        $length = (float)($dispatchRecord['length'] ?? 1);
+        $width = (float)($dispatchRecord['width'] ?? 1);
+        $height = (float)($dispatchRecord['height'] ?? 1);
+        $weight = (float)($dispatchRecord['weight'] ?? 0.5);
+        if ($weight <= 0) {
+            $weight = 0.5;
+        }
+        if ($subTotal <= 0) {
+            $subTotal = 0.01;
+        }
+
+        $billingFirstName = trim($address['first_name'] ?? $address['shipping_first_name'] ?? '');
+        $billingLastName = trim($address['last_name'] ?? $address['shipping_last_name'] ?? '');
+        $billingCustomerName = $billingFirstName ?: ($billingLastName ?: 'Customer');
+        $billingAddress1 = trim($address['address_line1'] ?? $address['shipping_address_line1'] ?? '');
+        $billingAddress2 = trim($address['address_line2'] ?? $address['shipping_address_line2'] ?? '');
+
+        $boxData = [
+            'courier_id' => '',
+            'courier_name' => (string)($dispatchRecord['courier_name'] ?? ''),
+            'partner_code' => '',
+            'rate_source' => '',
+            'product_type' => '',
+            'partner_account_id' => '',
+            'pickup_location' => (string)($dispatchRecord['pickup_location'] ?? $firm['pickup_location'] ?? 'Head Off'),
+        ];
+
+        if ($this->resolveShipmentPartnerCode($boxData, $dispatchRecord) === 'delhivery') {
+            $courierGateway = new CourierGateway($GLOBALS['conn']);
+            $courierShipmentModel = new CourierShipment($GLOBALS['conn']);
+
+            $delhiveryItems = [];
+            foreach ($orderItems as $oi) {
+                $delhiveryItems[] = [
+                    'name' => $oi['name'] ?? 'Item',
+                    'sku' => $oi['sku'] ?? '',
+                    'quantity' => (int)($oi['units'] ?? 1),
+                    'unit_price' => (float)($oi['selling_price'] ?? 0),
+                    'hsn' => $oi['hsn'] ?? '',
+                ];
+            }
+
+            $paymentMethod = strtoupper((string)($invoice['payment_method'] ?? 'PREPAID'));
+            $isCod = (strpos($paymentMethod, 'COD') !== false);
+
+            $createResult = $courierGateway->createShipment([
+                'partner_code' => 'delhivery',
+                'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                'dispatch_id' => $dispatchId,
+                'order_number' => $orderNumber,
+                'box_no' => $boxNo,
+                'courier_id' => (string)($boxData['courier_id'] ?? ''),
+                'product_type' => (string)($boxData['product_type'] ?? ''),
+                'pickup_location' => (string)($boxData['pickup_location'] ?? ''),
+                'weight' => $weight,
+                'length_cm' => $length,
+                'width_cm' => $width,
+                'height_cm' => $height,
+                'destination' => [
+                    'name' => trim(($address['shipping_first_name'] ?? $billingFirstName) . ' ' . ($address['shipping_last_name'] ?? $billingLastName)),
+                    'line1' => $address['shipping_address_line1'] ?? $billingAddress1,
+                    'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                    'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                    'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                    'phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                    'country_code' => 'IN',
+                ],
+                'address' => $address,
+                'items' => $delhiveryItems,
+                'invoice' => [
+                    'invoice_number' => $invoice['invoice_number'] ?? '',
+                    'total_amount' => (float)($invoice['total_amount'] ?? $subTotal),
+                ],
+                'description' => (string)($dispatchRecord['groupname'] ?? ''),
+                'cod' => $isCod ? 1 : 0,
+                'cod_amount' => $isCod ? round($subTotal, 2) : 0,
+                'sub_total' => round($subTotal, 2),
+            ]);
+
+            if (empty($createResult['success'])) {
+                $dispatchModel->updateDispatch($dispatchId, [
+                    'shipment_status' => 'failed',
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+                return [
+                    'success' => false,
+                    'provider' => 'delhivery',
+                    'message' => (string)($createResult['message'] ?? 'Delhivery shipment failed'),
+                ];
+            }
+
+            $awbCode = (string)($createResult['awb'] ?? $createResult['awb_code'] ?? '');
+            $labelUrl = (string)($createResult['label_url'] ?? '');
+            $trackingUrl = (string)($createResult['tracking_url'] ?? '');
+
+            $dispatchModel->updateDispatch($dispatchId, [
+                'shiprocket_order_id' => $createResult['order_id'] ?? null,
+                'shiprocket_shipment_id' => null,
+                'shiprocket_tracking_url' => $trackingUrl,
+                'awb_code' => $awbCode !== '' ? $awbCode : null,
+                'shipment_status' => 'created',
+                'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+            $ordersModel->updateOrderByOrderNumber($orderNumber, ['status' => 'Dispatched']);
+
+            $courierShipmentModel->saveShipment([
+                'invoice_id' => $invoiceId,
+                'box_no' => $boxNo,
+                'order_number' => $orderNumber,
+                'legacy_dispatch_id' => $dispatchId,
+                'partner_code' => 'delhivery',
+                'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                'partner_shipment_id' => $awbCode,
+                'awb' => $awbCode,
+                'tracking_url' => $trackingUrl,
+                'service_level' => (string)($dispatchRecord['courier_name'] ?? 'Delhivery'),
+                'payment_mode' => $isCod ? 'cod' : 'prepaid',
+                'is_international' => 0,
+                'currency' => 'INR',
+                'label_url' => $labelUrl,
+                'status' => 'created',
+                'status_text' => 'Delhivery shipment created (retry)',
+                'metadata_json' => json_encode($createResult['metadata'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+
+            return ['success' => true, 'provider' => 'delhivery'];
+        }
+
+        foreach ($orderItems as &$oi) {
+            if (empty($oi['sku'])) {
+                $oi['sku'] = 'ITEM';
+            }
+        }
+        unset($oi);
+
+        $shiprocketPayload = [
+            'order_id' => $orderNumber . '_box_' . $boxNo . '_retry_' . time(),
+            'order_date' => date('Y-m-d H:i'),
+            'pickup_location' => (string)($boxData['pickup_location'] ?? 'Head Off'),
+            'comment' => 'Retry dispatch #' . $dispatchId,
+            'billing_customer_name' => $billingCustomerName,
+            'billing_last_name' => $billingLastName,
+            'billing_address' => $billingAddress1 ?: 'Address required',
+            'billing_address_2' => $billingAddress2,
+            'billing_city' => $address['city'] ?? $address['shipping_city'] ?? '',
+            'billing_state' => $address['state'] ?? $address['shipping_state'] ?? '',
+            'billing_country' => 'IN',
+            'billing_pincode' => $address['zipcode'] ?? $address['shipping_zipcode'] ?? '',
+            'billing_email' => $address['email'] ?? $address['shipping_email'] ?? '',
+            'billing_phone' => $address['mobile'] ?? $address['shipping_mobile'] ?? '',
+            'shipping_is_billing' => true,
+            'order_items' => $orderItems,
+            'payment_method' => strtoupper($invoice['payment_method'] ?? 'Prepaid'),
+            'sub_total' => round($subTotal, 2),
+            'length' => $length,
+            'breadth' => $width,
+            'height' => $height,
+            'weight' => $weight,
+        ];
+
+        $shiprocketResponse = $dispatchModel->shiprocketCreateShipment($shiprocketPayload);
+        if (!$shiprocketResponse || !isset($shiprocketResponse['json']['order_id']) || ($shiprocketResponse['json']['status'] ?? '') !== 'NEW') {
+            $dispatchModel->updateDispatch($dispatchId, [
+                'shipment_status' => 'failed',
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+            return [
+                'success' => false,
+                'provider' => 'shiprocket',
+                'message' => (string)($shiprocketResponse['json']['message'] ?? $shiprocketResponse['error'] ?? 'Invalid Shiprocket response'),
+            ];
+        }
+
+        $shipmentId = $shiprocketResponse['json']['shipment_id'] ?? null;
+        $dispatchModel->updateDispatch($dispatchId, [
+            'shiprocket_order_id' => $shiprocketResponse['json']['order_id'] ?? null,
+            'shiprocket_shipment_id' => $shipmentId,
+            'shiprocket_tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
+            'awb_code' => $shiprocketResponse['json']['awb_code'] ?? null,
+            'shipment_status' => $shiprocketResponse['json']['status'] ?? 'NEW',
+            'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
+        $ordersModel->updateOrderByOrderNumber($orderNumber, ['status' => 'Dispatched']);
+
+        if (!empty($shipmentId)) {
+            $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shipmentId);
+            if (!empty($awbInfoResponse['awb_assign_status']) && !empty($awbInfoResponse['response']['data']['awb_code'])) {
+                $dispatchModel->updateDispatchAwbCode($shipmentId, $awbInfoResponse['response']['data']['awb_code']);
+            }
+            $labelInfoResponse = $dispatchModel->getShiprocketLabels($shipmentId);
+            if (!empty($labelInfoResponse['label_created']) && !empty($labelInfoResponse['label_url'])) {
+                $dispatchModel->updateDispatchLabelUrl($shipmentId, $labelInfoResponse['label_url']);
+            }
+        }
+
+        return ['success' => true, 'provider' => 'shiprocket'];
+    }
+
     public function retryShipments() {
         global $dispatchModel, $ordersModel , $invoiceModel;
         
@@ -2367,120 +2691,33 @@ class DispatchController {
             $successful_count = 0;
             $failed_count = 0;
 
+            $skipped_count = 0;
+
             $dispatch_records = $dispatchModel->getDispatchByBatchNo($batch_no);
             if (empty($dispatch_records)) {
                 http_response_code(404);
                 echo json_encode([
                     'success' => false,
-                    'message' => 'No dispatch records found for batch number: ' . $batch_no
+                    'message' => 'No pending dispatch records found for batch number: ' . $batch_no,
                 ]);
                 exit;
             }
 
             foreach ($dispatch_records as $dispatch_record) {
-                try {
-                    $dispatch_id = $dispatch_record['id'];
-                    $order_number = $dispatch_record['order_number'];
-                    $invoice_id = $dispatch_record['invoice_id'];
-
-                    // Get order details
-                    $order = $ordersModel->getOrderByOrderNumber($order_number);
-                    if (!$order) {
-                        throw new Exception("Order not found for order number: {$order_number}");
-                    }
-
-                    // Get invoice and items
-                    $invoice = $invoiceModel->getInvoiceById($invoice_id);
-                    if (!$invoice) {
-                        throw new Exception("Invoice not found for ID: {$invoice_id}");
-                    }
-
-                    // Get invoice items
-                    $invoiceItems = $invoiceModel->getInvoiceItems($invoice_id);
-
-                    // Prepare Shiprocket payload
-                    $shiprocketPayload = [
-                        'order_id' => $dispatch_record['order_number'],
-                        'order_date' => date('Y-m-d', strtotime($order['created_at'] ?? date('Y-m-d'))),
-                        'pickup_location_id' => $dispatch_record['pickup_location_id'] ?? 1,
-                        'channel_id' => 1,
-                        'comment' => 'Bulk dispatch - Retry #' . ($dispatch_record['shiprocket_retry_count'] ?? 1),
-                        'billing_customer_name' => $order['customer_name'] ?? '',
-                        'billing_last_name' => '',
-                        'billing_address_1' => $invoice['shipping_address'] ?? '',
-                        'billing_address_2' => '',
-                        'billing_city' => $invoice['shipping_city'] ?? '',
-                        'billing_pincode' => $invoice['shipping_pincode'] ?? '',
-                        'billing_state' => $invoice['shipping_state'] ?? '',
-                        'billing_country' => 'India',
-                        'billing_email' => $order['customer_email'] ?? '',
-                        'billing_phone' => $order['customer_phone'] ?? '',
-                        'delivery_type' => 'Home',
-                        'weight' => (float)$dispatch_record['weight'],
-                        'cod_amount' => 0,
-                        'order_items' => array_map(function($item) {
-                            return [
-                                'name' => $item['item_name'] ?? '',
-                                'sku' => $item['item_sku'] ?? '',
-                                'units' => (int)($item['item_quantity'] ?? 1),
-                                'selling_price' => (float)($item['item_price'] ?? 0),
-                                'discount' => 0,
-                                'tax' => 0,
-                                'hsn_code' => $item['hsn_code'] ?? ''
-                            ];
-                        }, $invoiceItems ?? []),
-                        'dimensions' => [
-                            'length' => (float)($dispatch_record['box_length'] ?? 0),
-                            'breadth' => (float)($dispatch_record['box_width'] ?? 0),
-                            'height' => (float)($dispatch_record['box_height'] ?? 0),
-                            'unit' => 'inch'
-                        ]
-                    ];
-//print_array($shiprocketPayload);exit;
-                    // Call Shiprocket API
-                    $shiprocketResponse = $dispatchModel->shiprocketCreateShipment($shiprocketPayload);
-                    
-                    if ($shiprocketResponse && isset($shiprocketResponse['response_data'])) {
-                        $responseData = $shiprocketResponse['response_data'];
-                        
-                        if (isset($responseData['shipment_id'])) {
-                            // Success - update dispatch record
-                            $shipment_id = $responseData['shipment_id'];
-                            $order_id = $responseData['order_id'] ?? null;
-
-                            // Get AWB info
-                            $awbInfo = $dispatchModel->getShiprocketAwbInfo($shipment_id);
-                            $awb_code = $awbInfo['awb_code'] ?? null;
-
-                            // Get labels
-                            $labelInfo = $dispatchModel->getShiprocketLabels($shipment_id);
-                            $label_url = $labelInfo['label_url'] ?? null;
-
-                            // Update dispatch record with shipment details
-                            $update_data = [
-                                'shipment_id' => $shipment_id,
-                                'order_id' => $order_id,
-                                'awb_code' => $awb_code,
-                                'label_url' => $label_url,
-                                'status' => 'dispatched',
-                                'dispatched_at' => date('Y-m-d H:i:s'),
-                                'shiprocket_response' => json_encode($responseData)
-                            ];
-
-                            $dispatchModel->updateDispatch($dispatch_id, $update_data);
-                            $successful_count++;
-                        } else {
-                            throw new Exception($responseData['message'] ?? 'Unknown Shiprocket error');
-                        }
-                    } else {
-                        throw new Exception('Invalid Shiprocket response');
-                    }
-
-                } catch (Exception $e) {
-                    $failed_count++;
-                    $errors[] = "Shiprocket error for order #{$order_number}, dispatch ID #{$dispatch_id}: " . $e->getMessage();
-                    error_log("Retry shipment error for order {$order_number}: " . $e->getMessage());
+                $result = $this->retrySingleDispatchShipment($dispatch_record);
+                if (!empty($result['skipped'])) {
+                    $skipped_count++;
+                    continue;
                 }
+                if (!empty($result['success'])) {
+                    $successful_count++;
+                    continue;
+                }
+                $failed_count++;
+                $provider = ucfirst((string)($result['provider'] ?? 'courier'));
+                $errors[] = $provider . ' error for order #' . ($dispatch_record['order_number'] ?? '')
+                    . ', dispatch ID #' . ($dispatch_record['id'] ?? '')
+                    . ': ' . ($result['message'] ?? 'Unknown error');
             }
 
             http_response_code(200);
@@ -2490,7 +2727,8 @@ class DispatchController {
                 'batch_no' => $batch_no,
                 'successful_count' => $successful_count,
                 'failed_count' => $failed_count,
-                'errors' => $errors
+                'skipped_count' => $skipped_count,
+                'errors' => $errors,
             ]);
             exit;
 
@@ -2498,7 +2736,7 @@ class DispatchController {
             http_response_code(500);
             echo json_encode([
                 'success' => false,
-                'message' => 'Error during retry: ' . $e->getMessage()
+                'message' => 'Error during retry: ' . $e->getMessage(),
             ]);
             exit;
         }
