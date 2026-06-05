@@ -78,10 +78,11 @@ return [
     ],
     'delhivery' => [
         'label' => 'Delhivery',
-        'description' => 'Domestic B2C/B2B. Set environment to production for live token. client_name (cl) is required for rate API.',
+        'description' => 'Delhivery One Calculate Shipping Cost: GET /api/kinko/v1/invoice/charges/.json with md, ss, o_pin, d_pin, cgm, pt, cod. Sandbox host: staging-express.delhivery.com. Production: track.delhivery.com.',
         'template' => [
             'client_name' => 'Saxena',
             'api_token' => '5327198a87ee782d219fead3b9040b5da8d94671',
+            'rate_api_path' => '',
             'pickup_location_name' => '',
             'registered_name' => 'Exotic India Art Pvt Ltd',
             'sandbox_api_base_url' => 'https://staging-express.delhivery.com',

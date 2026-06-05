@@ -42,18 +42,28 @@ class DelhiveryService
     }
 
     /**
-     * Estimate charges using Delhivery Invoice - Shipping Charge API.
+     * Estimate charges via Delhivery rate API.
      *
-     * Uses endpoint (prod): /api/kinko/v1/invoice/charges/.json
-     * Docs mention mandatory params: md, cgm, o_pin, d_pin, ss.
+     * Default (legacy): GET /api/kinko/v1/invoice/charges/.json
+     * Override: set credentials.rate_api_path to the URL from Delhivery One
+     * Developer Portal → "Calculate Shipping Cost" or B2B Freight Estimation.
      *
      * @param array{md:string,cgm:int,o_pin:string,d_pin:string,ss:string,cl?:string,pt?:string} $params
-     * @return array{success:bool,http_code?:int,data?:mixed,message?:string,request_url?:string,curl_error?:string}
+     * @param string $rateApiPath Optional path or full URL override
+     * @return array{success:bool,http_code?:int,data?:mixed,message?:string,request_url?:string,curl_error?:string,raw?:string}
      */
-    public function estimateFreightCharges(array $params): array
+    public function estimateFreightCharges(array $params, string $rateApiPath = ''): array
     {
-        $endpoint = '/api/kinko/v1/invoice/charges/.json';
-        $url = rtrim($this->baseUrl, '/') . $endpoint;
+        $rateApiPath = trim($rateApiPath);
+        if ($rateApiPath === '') {
+            $endpoint = '/api/kinko/v1/invoice/charges/.json';
+            $url = rtrim($this->baseUrl, '/') . $endpoint;
+        } elseif (preg_match('#^https?://#i', $rateApiPath)) {
+            $url = $rateApiPath;
+        } else {
+            $url = rtrim($this->baseUrl, '/') . '/' . ltrim($rateApiPath, '/');
+        }
+
         $query = http_build_query($params);
         if ($query !== '') {
             $url .= (str_contains($url, '?') ? '&' : '?') . $query;
