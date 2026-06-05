@@ -1020,7 +1020,232 @@
             }
         }
 
-        // Helper function to fetch couriers from Shiprocket API
+        function fetchShiprocketRates(payload) {
+            return fetch('?page=dispatch&action=getCourierServiceability', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            }).then(response => response.text().then(function (text) {
+                const cleaned = (typeof text === 'string' ? text : String(text ?? '')).replace(/^\uFEFF/, '').trim();
+                let parsed = {};
+                try {
+                    parsed = cleaned ? JSON.parse(cleaned) : {};
+                } catch (err) {
+                    throw new Error('Courier serviceability returned invalid server response (HTTP ' + response.status + '): ' + (cleaned.slice(0, 300) || 'empty response'));
+                }
+                if (!response.ok || parsed.success === false) {
+                    let details = '';
+                    if (parsed.details) {
+                        details = typeof parsed.details === 'string' ? parsed.details : JSON.stringify(parsed.details);
+                    }
+                    const msg = parsed.message || ('Courier serviceability request failed (HTTP ' + response.status + ')');
+                    const requestError = new Error(details ? (msg + ': ' + details.slice(0, 300)) : msg);
+                    requestError.courierDebugRequest = parsed?.debug?.serviceability_request || null;
+                    throw requestError;
+                }
+                return parsed;
+            }));
+        }
+
+        function fetchDelhiveryRates(payload) {
+            return fetch('?page=dispatch&action=getDirectCourierRates', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            }).then(r => r.text()).then((text) => {
+                const cleaned = (typeof text === 'string') ? text.replace(/^\uFEFF/, '').trim() : '';
+                try {
+                    return cleaned ? JSON.parse(cleaned) : {};
+                } catch (err) {
+                    return { success: false, message: 'Invalid Delhivery response' };
+                }
+            });
+        }
+
+        function mergeCourierOptions(shiprocketCouriers, delhiveryCouriers) {
+            const merged = [];
+            (shiprocketCouriers || []).forEach((courier) => {
+                merged.push(Object.assign({}, courier, {
+                    rate_source: 'shiprocket',
+                    partner_code: courier.partner_code || ''
+                }));
+            });
+            (delhiveryCouriers || []).forEach((courier) => {
+                merged.push(Object.assign({}, courier, {
+                    rate_source: 'delhivery',
+                    partner_code: courier.partner_code || 'delhivery'
+                }));
+            });
+            merged.sort((a, b) => {
+                const pa = parseFloat(a.price);
+                const pb = parseFloat(b.price);
+                if (!isNaN(pa) && !isNaN(pb) && pa !== pb) return pa - pb;
+                return String(a.name || '').localeCompare(String(b.name || ''));
+            });
+            return merged;
+        }
+
+        function renderCourierOptionTile(courier, idx, courierGroupName, tm) {
+            const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
+            const currency = (courier.currency || 'INR').toUpperCase();
+            const priceSymbol = currency === 'INR' ? '₹ ' : (currency + ' ');
+            const price = courier.price != null && courier.price !== ''
+                ? (priceSymbol + parseFloat(courier.price).toFixed(2))
+                : 'N/A';
+            const etd = courier.etd || 'N/A';
+            const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
+            const cid = courier.id != null ? String(courier.id) : '';
+            const checkedAttr = idx === 0 ? ' checked' : '';
+            const isDelhivery = courier.rate_source === 'delhivery';
+            const providerBadge = isDelhivery
+                ? '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 border border-red-200">Delhivery</span>'
+                : '<span class="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 border border-violet-200">Shiprocket</span>';
+            const priceClass = isDelhivery ? 'text-emerald-700' : tm.courierPrice;
+            return `
+                <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md ${tm.courierTileHover} ${tm.courierTileChecked}">
+                    <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 ${tm.courierRadio}" data-courier-name="${escapeHtml(String(courier.name ?? ''))}" data-partner-code="${escapeHtml(String(courier.partner_code ?? ''))}" data-product-group="${escapeHtml(String(courier.product_group ?? ''))}" data-product-type="${escapeHtml(String(courier.product_type ?? ''))}" data-partner-account-id="${escapeHtml(String(courier.partner_account_id ?? ''))}" data-rate-source="${escapeHtml(String(courier.rate_source ?? 'shiprocket'))}"${checkedAttr}/>
+                    ${idx === 0 ? '<span class="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm pointer-events-none ' + tm.courierTopPick + '">Top pick</span>' : ''}
+                    <div class="mb-1.5">${providerBadge}</div>
+                    <p class="pr-14 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name || 'Courier')}</p>
+                    <div class="mt-3">
+                        <div class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Price</div>
+                        <div class="text-lg font-bold tabular-nums ${priceClass}">${price}</div>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-1.5">
+                        <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                            <span class="text-slate-400">ETD</span> ${escapeHtml(etdShort)}
+                        </span>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-100">
+                            <i class="fas fa-star text-amber-500 text-[10px]" aria-hidden="true"></i> ${escapeHtml(rating)}
+                        </span>
+                    </div>
+                </label>`;
+        }
+
+        function wireCourierSelection(boxElement, courierContainer) {
+            const syncCourierPick = (radio) => {
+                if (!radio || !radio.checked) return;
+                boxElement.setAttribute('data-selected-courier-id', radio.value || '');
+                boxElement.setAttribute('data-selected-courier-name', radio.getAttribute('data-courier-name') || '');
+                boxElement.setAttribute('data-partner-code', radio.getAttribute('data-partner-code') || '');
+                boxElement.setAttribute('data-product-group', radio.getAttribute('data-product-group') || '');
+                boxElement.setAttribute('data-product-type', radio.getAttribute('data-product-type') || '');
+                boxElement.setAttribute('data-partner-account-id', radio.getAttribute('data-partner-account-id') || '');
+                boxElement.setAttribute('data-rate-source', radio.getAttribute('data-rate-source') || '');
+            };
+            courierContainer.querySelectorAll('.courier-tile-radio').forEach((r) => {
+                r.addEventListener('change', () => syncCourierPick(r));
+            });
+            syncCourierPick(courierContainer.querySelector('.courier-tile-radio:checked'));
+        }
+
+        function renderUnifiedCourierPanel(boxElement, courierContainer, tm, mergedCouriers, shiprocketData, delhiveryData, delhiveryError) {
+            let boxUid = boxElement.getAttribute('data-box-uid');
+            if (!boxUid) {
+                boxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+                boxElement.setAttribute('data-box-uid', boxUid);
+            }
+            const courierGroupName = 'courier_pick_' + boxUid.replace(/[^a-zA-Z0-9_-]/g, '_');
+            const n = mergedCouriers.length;
+
+            let courierHtml = `
+                <div class="courier-rates-panel rounded-xl border border-gray-200 bg-gradient-to-b from-slate-50 to-white shadow-sm overflow-hidden text-[13px]">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 py-2.5 border-b border-gray-100 bg-white/90">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tm.courierShipIcon} text-white shadow-sm" aria-hidden="true">
+                                <i class="fas fa-shipping-fast text-sm"></i>
+                            </span>
+                            <div class="min-w-0">
+                                <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">Shiprocket &amp; Delhivery — select one option</div>
+                            </div>
+                            <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.courierCountBadge}">${n}</span>
+                        </div>
+                        <p class="text-[11px] text-gray-400 sm:text-right">Scroll sideways to compare</p>
+                    </div>`;
+
+            if (shiprocketData) {
+                courierHtml += `
+                    <div class="courier-debug-section border-b border-gray-100">
+                        <button type="button" class="toggle-debug-toolbar-btn w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-50/95 hover:bg-gray-100/90 transition-colors text-left">
+                            <span class="flex items-center gap-2 min-w-0">
+                                <i class="fas fa-bug text-[10px] text-gray-400" aria-hidden="true"></i>
+                                <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Debug tools</span>
+                            </span>
+                            <span class="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-gray-500">
+                                <span class="toggle-debug-toolbar-label">Show</span>
+                                <i class="fas fa-chevron-down toggle-debug-toolbar-chevron text-[10px] transition-transform duration-200" aria-hidden="true"></i>
+                            </span>
+                        </button>
+                        <div class="courier-debug-toolbar hidden flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/95 border-t border-gray-100">
+                            <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-sync-alt text-[10px] text-gray-500" aria-hidden="true"></i> Refresh courier list
+                            </button>
+                            <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy input (pre-filter)
+                            </button>
+                            <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy request JSON
+                            </button>
+                            <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                <i class="fas fa-code text-[10px] text-gray-500" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
+                            </button>
+                        </div>
+                        <div class="filter-debug-panel hidden border-t border-gray-200 bg-slate-900 px-3 py-2">
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Serviceability request</div>
+                            <pre class="debug-request text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-yellow-100/95 border border-slate-700 font-mono"></pre>
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
+                            <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
+                            <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
+                        </div>
+                    </div>`;
+            }
+
+            courierHtml += `
+                    <div class="px-2 sm:px-3 py-3">
+                        <div class="flex flex-nowrap gap-3 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-1 scroll-smooth [scrollbar-width:thin]" style="-webkit-overflow-scrolling: touch;">`;
+
+            mergedCouriers.forEach((courier, idx) => {
+                courierHtml += renderCourierOptionTile(courier, idx, courierGroupName, tm);
+            });
+
+            courierHtml += `
+                        </div>
+                    </div>`;
+
+            if (delhiveryError) {
+                courierHtml += `
+                    <div class="px-3 pb-3">
+                        <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                            <span class="font-semibold">Delhivery direct rates:</span> ${escapeHtml(delhiveryError)}
+                        </div>
+                    </div>`;
+            }
+
+            courierHtml += `</div>`;
+
+            courierContainer.innerHTML = courierHtml;
+
+            if (shiprocketData) {
+                const requestPre = courierContainer.querySelector('.debug-request');
+                const inputPre = courierContainer.querySelector('.debug-input');
+                const outputPre = courierContainer.querySelector('.debug-output');
+                if (requestPre) requestPre.textContent = JSON.stringify(boxElement._lastCourierDebugRequest || {}, null, 2);
+                if (inputPre) inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
+                if (outputPre) outputPre.textContent = JSON.stringify(boxElement._lastCourierDebugOutput || {}, null, 2);
+            }
+
+            wireCourierSelection(boxElement, courierContainer);
+        }
+
+        // Helper function to fetch couriers from Shiprocket + Delhivery (single selectable list)
         function fetchCouriersForBox(boxElement) {
             console.log('fetchCouriersForBox called with:', boxElement);
             if (!boxElement) {
@@ -1077,7 +1302,7 @@
                             </span>
                             <div>
                                 <div class="font-semibold text-gray-900">Loading courier options</div>
-                                <div class="text-[11px] text-gray-500 mt-0.5">Checking serviceability for this box…</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">Fetching Shiprocket &amp; Delhivery rates…</div>
                             </div>
                         </div>
                     </div>`;
@@ -1098,410 +1323,103 @@
             console.log('Sending payload to PHP endpoint:', payload);
             boxElement._lastCourierRequestPayload = payload;
             
-            fetch('?page=dispatch&action=getCourierServiceability', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(payload)
-            })
-            .then(response => {
-                console.log('Response status:', response.status);
-                return response.text().then(function (text) {
-                    const rawText = (typeof text === 'string') ? text : String(text ?? '');
-                    const cleaned = rawText.replace(/^\uFEFF/, '').trim();
-                    let parsed = {};
+            Promise.allSettled([
+                fetchShiprocketRates(payload),
+                fetchDelhiveryRates(payload)
+            ]).then((results) => {
+                const shiprocketResult = results[0];
+                const delhiveryResult = results[1];
 
-                    try {
-                        parsed = cleaned ? JSON.parse(cleaned) : {};
-                    } catch (err) {
-                        throw new Error('Courier serviceability returned invalid server response (HTTP ' + response.status + '): ' + (cleaned.slice(0, 300) || 'empty response'));
+                let shiprocketData = null;
+                let shiprocketError = null;
+                if (shiprocketResult.status === 'fulfilled') {
+                    shiprocketData = shiprocketResult.value;
+                    boxElement._lastCourierDebugRequest = shiprocketData?.debug?.serviceability_request || null;
+                    const resolvedPickupLocation = shiprocketData?.debug?.serviceability_request?.pickup_resolution?.pickup_location;
+                    if (resolvedPickupLocation) {
+                        boxElement.setAttribute('data-pickup-location', resolvedPickupLocation);
                     }
-
-                    if (!response.ok || parsed.success === false) {
-                        let details = '';
-                        if (parsed.details) {
-                            details = typeof parsed.details === 'string'
-                                ? parsed.details
-                                : JSON.stringify(parsed.details);
-                        }
-                        const msg = parsed.message || ('Courier serviceability request failed (HTTP ' + response.status + ')');
-                        const requestError = new Error(details ? (msg + ': ' + details.slice(0, 300)) : msg);
-                        requestError.courierDebugRequest = parsed?.debug?.serviceability_request || null;
-                        throw requestError;
-                    }
-
-                    return parsed;
-                });
-            })
-            .then(data => {
-                console.log('Response data:', data);
-                boxElement._lastCourierDebugRequest = data?.debug?.serviceability_request || null;
-                const resolvedPickupLocation = data?.debug?.serviceability_request?.pickup_resolution?.pickup_location;
-                if (resolvedPickupLocation) {
-                    boxElement.setAttribute('data-pickup-location', resolvedPickupLocation);
-                }
-                boxElement._lastCourierDebugInput = data?.debug?.input_before_filter || null;
-                boxElement._lastCourierDebugOutput = data?.debug?.output_after_filter || null;
-                if (data.success && data.couriers && data.couriers.length > 0) {
-                    let boxUid = boxElement.getAttribute('data-box-uid');
-                    if (!boxUid) {
-                        boxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
-                        boxElement.setAttribute('data-box-uid', boxUid);
-                    }
-                    const courierGroupName = 'courier_pick_' + boxUid.replace(/[^a-zA-Z0-9_-]/g, '_');
-                    const n = data.couriers.length;
-                    let courierHtml = `
-                    <div class="courier-rates-panel rounded-xl border border-gray-200 bg-gradient-to-b from-slate-50 to-white shadow-sm overflow-hidden text-[13px]">
-                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 py-2.5 border-b border-gray-100 bg-white/90">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tm.courierShipIcon} text-white shadow-sm" aria-hidden="true">
-                                    <i class="fas fa-shipping-fast text-sm"></i>
-                                </span>
-                                <div class="min-w-0">
-                                    <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
-                                </div>
-                                <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.courierCountBadge}">${n}</span>
-                            </div>
-                            <p class="text-[11px] text-gray-400 sm:text-right">Scroll sideways to compare</p>
-                        </div>
-                        <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-violet-200 bg-gradient-to-r from-violet-50 via-indigo-50/80 to-violet-50 border-l-4 border-l-violet-600">
-                            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white shadow-sm" aria-hidden="true">
-                                <i class="fas fa-rocket text-sm"></i>
-                            </span>
-                            <div class="min-w-0">
-                                <div class="text-base font-bold tracking-tight text-violet-950">Shiprocket</div>
-                                <div class="text-[11px] font-medium text-violet-700/90">Available courier options from Shiprocket</div>
-                            </div>
-                        </div>
-                        <div class="courier-debug-section border-b border-gray-100">
-                            <button type="button" class="toggle-debug-toolbar-btn w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-50/95 hover:bg-gray-100/90 transition-colors text-left">
-                                <span class="flex items-center gap-2 min-w-0">
-                                    <i class="fas fa-bug text-[10px] text-gray-400" aria-hidden="true"></i>
-                                    <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Debug tools</span>
-                                </span>
-                                <span class="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-gray-500">
-                                    <span class="toggle-debug-toolbar-label">Show</span>
-                                    <i class="fas fa-chevron-down toggle-debug-toolbar-chevron text-[10px] transition-transform duration-200" aria-hidden="true"></i>
-                                </span>
-                            </button>
-                            <div class="courier-debug-toolbar hidden flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/95 border-t border-gray-100">
-                                <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                                    <i class="fas fa-sync-alt text-[10px] text-gray-500" aria-hidden="true"></i> Refresh courier list
-                                </button>
-                                <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                                    <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy input (pre-filter)
-                                </button>
-                                <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                                    <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy request JSON
-                                </button>
-                                <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                                    <i class="fas fa-code text-[10px] text-gray-500" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
-                                </button>
-                            </div>
-                            <div class="filter-debug-panel hidden border-t border-gray-200 bg-slate-900 px-3 py-2">
-                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Serviceability request</div>
-                            <pre class="debug-request text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-yellow-100/95 border border-slate-700 font-mono"></pre>
-                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
-                            <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
-                            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
-                            <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
-                            </div>
-                        </div>
-                        <div class="px-2 sm:px-3 py-3">
-                            <div class="flex flex-nowrap gap-3 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-1 scroll-smooth [scrollbar-width:thin]" style="-webkit-overflow-scrolling: touch;">`;
-
-                    data.couriers.forEach((courier, idx) => {
-                        const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
-                        const currency = (courier.currency || 'INR').toUpperCase();
-                        const priceSymbol = currency === 'INR' ? '₹ ' : (currency + ' ');
-                        const price = courier.price != null && courier.price !== ''
-                            ? (priceSymbol + parseFloat(courier.price).toFixed(2))
-                            : 'N/A';
-                        const etd = courier.etd || 'N/A';
-                        const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
-                        const cid = courier.id != null ? String(courier.id) : '';
-                        const checkedAttr = idx === 0 ? ' checked' : '';
-                        courierHtml += `
-                            <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md ${tm.courierTileHover} ${tm.courierTileChecked}">
-                                <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 ${tm.courierRadio}" data-courier-name="${escapeHtml(String(courier.name ?? ''))}" data-partner-code="${escapeHtml(String(courier.partner_code ?? ''))}" data-product-group="${escapeHtml(String(courier.product_group ?? ''))}" data-product-type="${escapeHtml(String(courier.product_type ?? ''))}" data-partner-account-id="${escapeHtml(String(courier.partner_account_id ?? ''))}"${checkedAttr}/>
-                                ${idx === 0 ? '<span class="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm pointer-events-none ' + tm.courierTopPick + '">Top pick</span>' : ''}
-                                <p class="pr-14 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name)}</p>
-                                <div class="mt-3">
-                                    <div class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Price</div>
-                                    <div class="text-lg font-bold tabular-nums ${tm.courierPrice}">${price}</div>
-                                </div>
-                                <div class="mt-3 flex flex-wrap gap-1.5">
-                                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                                        <span class="text-slate-400">ETD</span> ${escapeHtml(etdShort)}
-                                    </span>
-                                    <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-100">
-                                        <i class="fas fa-star text-amber-500 text-[10px]" aria-hidden="true"></i> ${escapeHtml(rating)}
-                                    </span>
-                                </div>
-                            </label>
-                        `;
-                    });
-                    
-                    courierHtml += `
-                            </div>
-                        </div>
-                    </div>`;
-                    if (courierContainer) {
-                        courierContainer.innerHTML = courierHtml;
-                        const requestPre = courierContainer.querySelector('.debug-request');
-                        const inputPre = courierContainer.querySelector('.debug-input');
-                        const outputPre = courierContainer.querySelector('.debug-output');
-                        if (requestPre) {
-                            requestPre.textContent = JSON.stringify(boxElement._lastCourierDebugRequest || {}, null, 2);
-                        }
-                        if (inputPre) {
-                            inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
-                        }
-                        if (outputPre) {
-                            outputPre.textContent = JSON.stringify(boxElement._lastCourierDebugOutput || {}, null, 2);
-                        }
-                        const syncCourierPick = (radio) => {
-                            if (!radio || !radio.checked) return;
-                            boxElement.setAttribute('data-selected-courier-id', radio.value || '');
-                            boxElement.setAttribute('data-selected-courier-name', radio.getAttribute('data-courier-name') || '');
-                            boxElement.setAttribute('data-partner-code', radio.getAttribute('data-partner-code') || '');
-                            boxElement.setAttribute('data-product-group', radio.getAttribute('data-product-group') || '');
-                            boxElement.setAttribute('data-product-type', radio.getAttribute('data-product-type') || '');
-                            boxElement.setAttribute('data-partner-account-id', radio.getAttribute('data-partner-account-id') || '');
-                        };
-                        courierContainer.querySelectorAll('.courier-tile-radio').forEach((r) => {
-                            r.addEventListener('change', () => syncCourierPick(r));
-                        });
-                        syncCourierPick(courierContainer.querySelector('.courier-tile-radio:checked'));
-
-                        // Also fetch direct (non-aggregator) courier rates for comparison.
-                        fetchDirectCourierRatesForBox(boxElement, payload);
-                    }
+                    boxElement._lastCourierDebugInput = shiprocketData?.debug?.input_before_filter || null;
+                    boxElement._lastCourierDebugOutput = shiprocketData?.debug?.output_after_filter || null;
                 } else {
-                    if (courierContainer) {
-                        let emptyHtml = `
-                        <div class="courier-rates-panel rounded-xl border ${tm.emptyPanelBorder} bg-gradient-to-b ${tm.emptyPanelGradient} to-white shadow-sm overflow-hidden text-[13px]">
-                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between px-3 py-3 border-b ${tm.emptyHeaderBorder} ${tm.emptyHeaderBg}">
-                                <div class="flex gap-3 min-w-0">
-                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tm.emptyIconBg}" aria-hidden="true">
-                                        <i class="fas fa-inbox text-lg"></i>
-                                    </span>
-                                    <div class="min-w-0">
-                                        <div class="font-semibold ${tm.emptyTitle}">No couriers for this route</div>
-                                        <p class="text-[12px] ${tm.emptyText} mt-1 leading-snug">Nothing passed the filters. Try another box size, weight, or payment type, or open debug to inspect the API payload.</p>
-                                    </div>
-                                </div>
-                                <span class="shrink-0 self-start rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.emptyBadge}">0 options</span>
-                            </div>
-                            <div class="courier-debug-section border-b">
-                                <button type="button" class="toggle-debug-toolbar-btn w-full flex items-center justify-between gap-2 px-3 py-2 ${tm.emptyToolbarBg} hover:bg-gray-100/90 transition-colors text-left">
-                                    <span class="flex items-center gap-2 min-w-0">
-                                        <i class="fas fa-bug text-[10px] text-gray-400" aria-hidden="true"></i>
-                                        <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Debug tools</span>
-                                    </span>
-                                    <span class="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-gray-500">
-                                        <span class="toggle-debug-toolbar-label">Show</span>
-                                        <i class="fas fa-chevron-down toggle-debug-toolbar-chevron text-[10px] transition-transform duration-200" aria-hidden="true"></i>
-                                    </span>
-                                </button>
-                                <div class="courier-debug-toolbar hidden flex flex-wrap items-center gap-2 px-3 py-2 ${tm.emptyToolbarBg} border-t">
-                                    <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
-                                        <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
-                                    </button>
-                                    <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
-                                        <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy input (pre-filter)
-                                    </button>
-                                    <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
-                                        <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy request JSON
-                                    </button>
-                                    <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
-                                        <i class="fas fa-code text-[10px]" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
-                                    </button>
-                                </div>
-                                <div class="filter-debug-panel hidden border-t border-gray-200 bg-slate-900 px-3 py-2">
-                                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Serviceability request</div>
-                                <pre class="debug-request text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-yellow-100/95 border border-slate-700 font-mono"></pre>
-                                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
-                                <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
-                                <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
-                                <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
-                                </div>
-                            </div>
-                        </div>`;
-                        courierContainer.innerHTML = emptyHtml;
-                        const requestPre = courierContainer.querySelector('.debug-request');
-                        const inputPre = courierContainer.querySelector('.debug-input');
-                        const outputPre = courierContainer.querySelector('.debug-output');
-                        if (requestPre) {
-                            requestPre.textContent = JSON.stringify(boxElement._lastCourierDebugRequest || {}, null, 2);
-                        }
-                        if (inputPre) {
-                            inputPre.textContent = JSON.stringify(boxElement._lastCourierDebugInput || {}, null, 2);
-                        }
-                        if (outputPre) {
-                            outputPre.textContent = JSON.stringify(boxElement._lastCourierDebugOutput || {}, null, 2);
-                        }
-                    }
-                    fetchDirectCourierRatesForBox(boxElement, payload);
+                    shiprocketError = shiprocketResult.reason;
+                    boxElement._lastCourierDebugRequest = shiprocketError?.courierDebugRequest || boxElement._lastCourierDebugRequest || null;
+                    console.error('Shiprocket rates failed:', shiprocketError);
                 }
-            })
-            .catch(error => {
-                console.error('Error fetching couriers:', error);
-                boxElement._lastCourierDebugRequest = error?.courierDebugRequest || boxElement._lastCourierDebugRequest || null;
-                if (courierContainer) {
-                    const errorMessage = error && error.message
-                        ? error.message
-                        : 'Courier serviceability request failed. Please retry or open debug.';
-                    courierContainer.innerHTML = `
-                        <div class="rounded-xl border border-red-200 bg-gradient-to-b from-red-50 to-white px-4 py-3 shadow-sm flex gap-3 items-start text-[13px]">
-                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600" aria-hidden="true">
-                                <i class="fas fa-exclamation-triangle"></i>
-                            </span>
-                            <div class="min-w-0 flex-1">
-                                <div class="font-semibold text-red-900">Could not load courier serviceability</div>
-                                <p class="text-[12px] text-red-800/90 mt-1">${escapeHtml(errorMessage)}</p>
-                                <button type="button" class="retry-couriers-btn mt-3 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
-                                    <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
-                                </button>
-                                <button type="button" class="copy-request-json-btn mt-3 ml-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
-                                    <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy request JSON
-                                </button>
-                            </div>
-                        </div>`;
-                }
-                fetchDirectCourierRatesForBox(boxElement, payload);
-            });
-        }
 
-        function renderDirectProviderHeader() {
-            return `
-                    <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-red-200 bg-gradient-to-r from-red-50 via-orange-50/80 to-red-50 border-l-4 border-l-red-600">
-                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm" aria-hidden="true">
-                            <i class="fas fa-shipping-fast text-sm"></i>
+                let delhiveryCouriers = [];
+                let delhiveryError = null;
+                if (delhiveryResult.status === 'fulfilled' && delhiveryResult.value?.success && Array.isArray(delhiveryResult.value.couriers)) {
+                    delhiveryCouriers = delhiveryResult.value.couriers;
+                } else if (delhiveryResult.status === 'fulfilled') {
+                    delhiveryError = delhiveryResult.value?.message || 'Delhivery rates unavailable';
+                } else {
+                    delhiveryError = 'Could not load Delhivery rates';
+                    console.warn('Delhivery rates failed:', delhiveryResult.reason);
+                }
+
+                const shiprocketCouriers = (shiprocketData && shiprocketData.success && Array.isArray(shiprocketData.couriers))
+                    ? shiprocketData.couriers
+                    : [];
+                const mergedCouriers = mergeCourierOptions(shiprocketCouriers, delhiveryCouriers);
+                if (delhiveryCouriers.length > 0) {
+                    delhiveryError = null;
+                }
+
+                if (!courierContainer) return;
+
+                if (mergedCouriers.length > 0) {
+                    renderUnifiedCourierPanel(
+                        boxElement,
+                        courierContainer,
+                        tm,
+                        mergedCouriers,
+                        shiprocketData,
+                        delhiveryResult.status === 'fulfilled' ? delhiveryResult.value : null,
+                        delhiveryError
+                    );
+                    return;
+                }
+
+                const errorMessage = shiprocketError && shiprocketError.message
+                    ? shiprocketError.message
+                    : (shiprocketCouriers.length === 0 && delhiveryCouriers.length === 0
+                        ? 'No courier options returned from Shiprocket or Delhivery for this box.'
+                        : 'Courier serviceability request failed. Please retry or open debug.');
+
+                courierContainer.innerHTML = `
+                    <div class="rounded-xl border border-red-200 bg-gradient-to-b from-red-50 to-white px-4 py-3 shadow-sm flex gap-3 items-start text-[13px]">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600" aria-hidden="true">
+                            <i class="fas fa-exclamation-triangle"></i>
                         </span>
-                        <div class="min-w-0">
-                            <div class="text-base font-bold tracking-tight text-red-950">Delhivery</div>
-                            <div class="text-[11px] font-medium text-red-700/90">Direct rates from Delhivery One (Calculate Shipping Cost API)</div>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-semibold text-red-900">Could not load courier options</div>
+                            <p class="text-[12px] text-red-800/90 mt-1">${escapeHtml(errorMessage)}</p>
+                            ${delhiveryError ? '<p class="text-[12px] text-amber-800/90 mt-1">' + escapeHtml('Delhivery: ' + delhiveryError) + '</p>' : ''}
+                            <button type="button" class="retry-couriers-btn mt-3 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
+                                <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
+                            </button>
+                            <button type="button" class="copy-request-json-btn mt-3 ml-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
+                                <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy request JSON
+                            </button>
                         </div>
                     </div>`;
-        }
-
-        function renderDirectProviderError(message) {
-            const errMsg = escapeHtml(message || 'Delhivery rates could not be loaded.');
-            return `
-                <div class="mt-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden text-[13px]">
-                    ${renderDirectProviderHeader()}
-                    <div class="px-3 py-3">
-                        <div class="flex gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-red-900">
-                            <span class="mt-0.5 shrink-0 text-red-600" aria-hidden="true">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </span>
-                            <div class="min-w-0 leading-snug">
-                                <div class="font-semibold text-red-950">Rates unavailable</div>
-                                <div class="mt-1">${errMsg}</div>
-                            </div>
+            }).catch((error) => {
+                console.error('Error fetching couriers:', error);
+                if (!courierContainer) return;
+                courierContainer.innerHTML = `
+                    <div class="rounded-xl border border-red-200 bg-gradient-to-b from-red-50 to-white px-4 py-3 shadow-sm flex gap-3 items-start text-[13px]">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600" aria-hidden="true">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-semibold text-red-900">Could not load courier options</div>
+                            <p class="text-[12px] text-red-800/90 mt-1">${escapeHtml(error && error.message ? error.message : 'Unexpected error loading couriers.')}</p>
+                            <button type="button" class="retry-couriers-btn mt-3 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
+                                <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
+                            </button>
                         </div>
-                    </div>
-                </div>`;
-        }
-
-        function renderDirectProviderPanel(data, boxUid) {
-            if (!data || !data.success || !Array.isArray(data.couriers) || data.couriers.length === 0) {
-                return '';
-            }
-            const groupName = 'direct_courier_pick_' + String(boxUid || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_');
-            let html = `
-                <div class="mt-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden text-[13px]">
-                    ${renderDirectProviderHeader()}
-                    <div class="px-2 sm:px-3 py-3">
-                        <div class="flex flex-nowrap gap-3 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-1 scroll-smooth [scrollbar-width:thin]" style="-webkit-overflow-scrolling: touch;">`;
-
-            data.couriers.forEach((courier, idx) => {
-                const currency = (courier.currency || 'INR').toUpperCase();
-                const priceSymbol = currency === 'INR' ? '₹ ' : (currency + ' ');
-                const price = courier.price != null && courier.price !== ''
-                    ? (priceSymbol + parseFloat(courier.price).toFixed(2))
-                    : 'N/A';
-                const etd = courier.etd || 'N/A';
-                const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
-                const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
-                const cid = courier.id != null ? String(courier.id) : '';
-                const checkedAttr = idx === 0 ? ' checked' : '';
-                html += `
-                    <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md">
-                        <input type="radio" name="${groupName}" value="${escapeHtml(cid)}" class="direct-courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300"${checkedAttr}/>
-                        <p class="pr-2 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name || 'Courier')}</p>
-                        <div class="mt-3">
-                            <div class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Price</div>
-                            <div class="text-lg font-bold tabular-nums text-emerald-700">${price}</div>
-                        </div>
-                        <div class="mt-3 flex flex-wrap gap-1.5">
-                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                                <span class="text-slate-400">ETD</span> ${escapeHtml(etdShort)}
-                            </span>
-                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-100">
-                                <i class="fas fa-star text-amber-500 text-[10px]" aria-hidden="true"></i> ${escapeHtml(rating)}
-                            </span>
-                        </div>
-                    </label>
-                `;
-            });
-
-            html += `
-                        </div>
-                    </div>
-                </div>`;
-            return html;
-        }
-
-        function fetchDirectCourierRatesForBox(boxElement, payload) {
-            const orderSectionForTheme = boxElement.closest('.px-4.pt-4.pb-2');
-            const courierContainer = orderSectionForTheme && orderSectionForTheme.querySelector('#availableCourierCompanies');
-            if (!courierContainer) return;
-
-            const boxUid = boxElement.getAttribute('data-box-uid') || '';
-            const panelId = 'direct-provider-panel-' + boxUid;
-            if (boxUid && courierContainer.querySelector('#' + panelId)) {
-                return;
-            }
-
-            fetch('?page=dispatch&action=getDirectCourierRates', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(payload)
-            })
-            .then(r => r.text())
-            .then((text) => {
-                const cleaned = (typeof text === 'string') ? text.replace(/^\uFEFF/, '').trim() : '';
-                let parsed = {};
-                try {
-                    parsed = cleaned ? JSON.parse(cleaned) : {};
-                } catch (err) {
-                    console.warn('Direct courier rates returned non-JSON response', cleaned.slice(0, 200));
-                    courierContainer.insertAdjacentHTML('beforeend', `<div id="${panelId}">${renderDirectProviderError('Invalid response from server. Try refreshing the courier list.')}</div>`);
-                    return;
-                }
-                if (!parsed.success) {
-                    console.warn('Direct courier rates unavailable:', parsed.message || 'Unknown error');
-                    courierContainer.insertAdjacentHTML('beforeend', `<div id="${panelId}">${renderDirectProviderError(parsed.message || 'Delhivery rates unavailable.')}</div>`);
-                    return;
-                }
-                const panelHtml = renderDirectProviderPanel(parsed, boxUid);
-                if (!panelHtml) {
-                    courierContainer.insertAdjacentHTML('beforeend', `<div id="${panelId}">${renderDirectProviderError(parsed.message || 'Delhivery returned no rates for this shipment.')}</div>`);
-                    return;
-                }
-                const wrapped = `<div id="${panelId}">${panelHtml}</div>`;
-                courierContainer.insertAdjacentHTML('beforeend', wrapped);
-            })
-            .catch((err) => {
-                console.warn('Direct courier rates request failed', err);
-                courierContainer.insertAdjacentHTML('beforeend', `<div id="${panelId}">${renderDirectProviderError('Network error while fetching Delhivery rates. Check your connection and try again.')}</div>`);
+                    </div>`;
             });
         }
 
