@@ -1236,18 +1236,21 @@
                                     <i class="fas fa-shipping-fast text-sm"></i>
                                 </span>
                                 <div class="min-w-0">
-                                    <div class="flex flex-wrap items-center gap-2 leading-tight">
-                                        <div class="font-semibold text-gray-900">Courier rates</div>
-                                        <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-800">Shiprocket</span>
-                                    </div>
+                                    <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
                                     <div class="text-[11px] text-gray-500 truncate">${n} option${n !== 1 ? 's' : ''} · select one · best rating, then lowest price</div>
                                 </div>
                                 <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.courierCountBadge}">${n}</span>
                             </div>
                             <p class="text-[11px] text-gray-400 sm:text-right">Scroll sideways to compare</p>
                         </div>
-                        <div class="px-3 py-2 bg-white border-b border-gray-100">
-                            <div class="text-sm font-semibold text-gray-900">Shiprocket</div>
+                        <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-violet-200 bg-gradient-to-r from-violet-50 via-indigo-50/80 to-violet-50 border-l-4 border-l-violet-600">
+                            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white shadow-sm" aria-hidden="true">
+                                <i class="fas fa-rocket text-sm"></i>
+                            </span>
+                            <div class="min-w-0">
+                                <div class="text-base font-bold tracking-tight text-violet-950">Shiprocket</div>
+                                <div class="text-[11px] font-medium text-violet-700/90">Available courier options from Shiprocket</div>
+                            </div>
                         </div>
                         <div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/95 border-b border-gray-100">
                             <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1 hidden sm:inline">Debug</span>
