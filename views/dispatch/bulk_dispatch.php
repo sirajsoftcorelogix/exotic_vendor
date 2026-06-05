@@ -1983,6 +1983,7 @@
                             courier_id: courierId,
                             courier_name: courierName,
                             partner_code: boxElement.getAttribute('data-partner-code') || '',
+                            rate_source: boxElement.getAttribute('data-rate-source') || '',
                             product_group: boxElement.getAttribute('data-product-group') || '',
                             product_type: boxElement.getAttribute('data-product-type') || '',
                             partner_account_id: boxElement.getAttribute('data-partner-account-id') || '',
