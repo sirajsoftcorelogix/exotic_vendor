@@ -1456,6 +1456,8 @@
                 return '';
             }
             const n = data.couriers.length;
+            const isDemo = !!data.is_demo;
+            const demoMessage = data.demo_message || data.message || 'Sample rates until Delhivery credentials are configured.';
             const groupName = 'direct_courier_pick_' + String(boxUid || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_');
             let html = `
                 <div class="mt-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden text-[13px]">
@@ -1471,6 +1473,20 @@
                                 </div>
                             </div>
                             <span class="shrink-0 inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[11px] font-semibold">${n}</span>
+                        </div>
+                    </div>
+                    ${isDemo ? `
+                    <div class="px-3 py-2 border-b border-amber-200 bg-amber-50 text-amber-900 text-[11px] leading-snug">
+                        <span class="inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide mr-1.5">Demo</span>
+                        ${escapeHtml(demoMessage)}
+                    </div>` : ''}
+                    <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-red-200 bg-gradient-to-r from-red-50 via-orange-50/80 to-red-50 border-l-4 border-l-red-600">
+                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm" aria-hidden="true">
+                            <i class="fas fa-shipping-fast text-sm"></i>
+                        </span>
+                        <div class="min-w-0">
+                            <div class="text-base font-bold tracking-tight text-red-950">Delhivery</div>
+                            <div class="text-[11px] font-medium text-red-700/90">Direct courier rates from Delhivery</div>
                         </div>
                     </div>
                     <div class="px-2 sm:px-3 py-3">

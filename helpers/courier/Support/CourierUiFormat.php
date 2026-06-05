@@ -67,6 +67,8 @@ class CourierUiFormat
             'success' => true,
             'provider' => $gatewayResult['provider'] ?? null,
             'international' => !empty($gatewayResult['international']),
+            'is_demo' => !empty($gatewayResult['is_demo']),
+            'demo_message' => (string) ($gatewayResult['demo_message'] ?? ''),
             'couriers' => $couriers,
             'rejected_couriers' => $gatewayResult['rejected_couriers'] ?? [],
             'selected' => $couriers[0] ?? null,
