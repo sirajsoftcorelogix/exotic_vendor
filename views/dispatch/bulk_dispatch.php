@@ -1375,20 +1375,8 @@
             });
         }
 
-        function renderDirectProviderPanel(data, boxUid) {
-            if (!data || !data.success || !Array.isArray(data.couriers) || data.couriers.length === 0) {
-                return '';
-            }
-            const isDemo = !!data.is_demo;
-            const demoMessage = data.demo_message || data.message || 'Sample rates until Delhivery credentials are configured.';
-            const groupName = 'direct_courier_pick_' + String(boxUid || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_');
-            let html = `
-                <div class="mt-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden text-[13px]">
-                    ${isDemo ? `
-                    <div class="px-3 py-2 border-b border-amber-200 bg-amber-50 text-amber-900 text-[11px] leading-snug">
-                        <span class="inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide mr-1.5">Demo</span>
-                        ${escapeHtml(demoMessage)}
-                    </div>` : ''}
+        function renderDirectProviderHeader() {
+            return `
                     <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-red-200 bg-gradient-to-r from-red-50 via-orange-50/80 to-red-50 border-l-4 border-l-red-600">
                         <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm" aria-hidden="true">
                             <i class="fas fa-shipping-fast text-sm"></i>
@@ -1397,7 +1385,36 @@
                             <div class="text-base font-bold tracking-tight text-red-950">Delhivery</div>
                             <div class="text-[11px] font-medium text-red-700/90">Direct courier rates from Delhivery</div>
                         </div>
+                    </div>`;
+        }
+
+        function renderDirectProviderError(message) {
+            const errMsg = escapeHtml(message || 'Delhivery rates could not be loaded.');
+            return `
+                <div class="mt-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden text-[13px]">
+                    ${renderDirectProviderHeader()}
+                    <div class="px-3 py-3">
+                        <div class="flex gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-red-900">
+                            <span class="mt-0.5 shrink-0 text-red-600" aria-hidden="true">
+                                <i class="fas fa-exclamation-circle"></i>
+                            </span>
+                            <div class="min-w-0 leading-snug">
+                                <div class="font-semibold text-red-950">Rates unavailable</div>
+                                <div class="mt-1">${errMsg}</div>
+                            </div>
+                        </div>
                     </div>
+                </div>`;
+        }
+
+        function renderDirectProviderPanel(data, boxUid) {
+            if (!data || !data.success || !Array.isArray(data.couriers) || data.couriers.length === 0) {
+                return '';
+            }
+            const groupName = 'direct_courier_pick_' + String(boxUid || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_');
+            let html = `
+                <div class="mt-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden text-[13px]">
+                    ${renderDirectProviderHeader()}
                     <div class="px-2 sm:px-3 py-3">
                         <div class="flex flex-nowrap gap-3 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-1 scroll-smooth [scrollbar-width:thin]" style="-webkit-overflow-scrolling: touch;">`;
 
@@ -1466,18 +1483,25 @@
                     parsed = cleaned ? JSON.parse(cleaned) : {};
                 } catch (err) {
                     console.warn('Direct courier rates returned non-JSON response', cleaned.slice(0, 200));
+                    courierContainer.insertAdjacentHTML('beforeend', `<div id="${panelId}">${renderDirectProviderError('Invalid response from server. Try refreshing the courier list.')}</div>`);
                     return;
                 }
                 if (!parsed.success) {
                     console.warn('Direct courier rates unavailable:', parsed.message || 'Unknown error');
+                    courierContainer.insertAdjacentHTML('beforeend', `<div id="${panelId}">${renderDirectProviderError(parsed.message || 'Delhivery rates unavailable.')}</div>`);
+                    return;
                 }
                 const panelHtml = renderDirectProviderPanel(parsed, boxUid);
-                if (!panelHtml) return;
+                if (!panelHtml) {
+                    courierContainer.insertAdjacentHTML('beforeend', `<div id="${panelId}">${renderDirectProviderError(parsed.message || 'Delhivery returned no rates for this shipment.')}</div>`);
+                    return;
+                }
                 const wrapped = `<div id="${panelId}">${panelHtml}</div>`;
                 courierContainer.insertAdjacentHTML('beforeend', wrapped);
             })
             .catch((err) => {
                 console.warn('Direct courier rates request failed', err);
+                courierContainer.insertAdjacentHTML('beforeend', `<div id="${panelId}">${renderDirectProviderError('Network error while fetching Delhivery rates. Check your connection and try again.')}</div>`);
             });
         }
 

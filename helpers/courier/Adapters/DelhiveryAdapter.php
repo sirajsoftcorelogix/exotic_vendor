@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../Contracts/CourierAdapterInterface.php';
 require_once __DIR__ . '/../country_codes.php';
 require_once __DIR__ . '/../Support/CourierUiFormat.php';
+require_once __DIR__ . '/../credential_urls.php';
 require_once __DIR__ . '/../../../models/courier/CourierAccount.php';
 require_once __DIR__ . '/../../../models/courier/CourierShipment.php';
 require_once __DIR__ . '/../../../delhivery_service.php';
@@ -44,11 +45,10 @@ class DelhiveryAdapter implements CourierAdapterInterface
 
         $accounts = $this->accountModel->listActiveAccountsByPartnerCode('delhivery');
         if (!$accounts) {
-            return $this->demoRatesResponse(
-                $request,
-                0,
-                'Demo rates shown until a Delhivery courier account is configured.'
-            );
+            return [
+                'success' => false,
+                'message' => 'No active Delhivery courier account configured. Add one under Courier accounts.',
+            ];
         }
 
         $accountId = (int) ($request['partner_account_id'] ?? 0);
@@ -58,11 +58,10 @@ class DelhiveryAdapter implements CourierAdapterInterface
 
         $apiKey = trim((string) ($credentials['api_key'] ?? $credentials['token'] ?? $credentials['api_token'] ?? ''));
         if ($apiKey === '') {
-            return $this->demoRatesResponse(
-                $request,
-                $accountId,
-                'Demo rates shown until Delhivery api_token is saved in Courier accounts.'
-            );
+            return [
+                'success' => false,
+                'message' => 'Delhivery api_token is missing. Save credentials in Courier accounts.',
+            ];
         }
 
         $originPin = trim((string) ($request['pickup']['postcode'] ?? $request['pickup_postcode'] ?? ''));
@@ -85,14 +84,23 @@ class DelhiveryAdapter implements CourierAdapterInterface
                 'message' => 'Chargeable weight is required for Delhivery rates.',
             ];
         }
+        // Delhivery invoice API expects weight in grams; use at least 500g for estimate calls.
+        $chargeableGrams = max(500, $chargeableGrams);
 
-        $environment = (string) ($credentials['environment'] ?? 'sandbox');
+        $urlInfo = resolveCourierCredentialUrls($credentials);
+        $environment = (string) ($urlInfo['environment'] ?? 'sandbox');
+        $baseUrlOverride = trim((string) ($urlInfo['api_base_url'] ?? ''));
         $clientName = trim((string) ($credentials['client_name'] ?? $credentials['cl'] ?? ''));
-        $baseUrlOverride = '';
-        if ($environment === 'sandbox') {
-            $baseUrlOverride = trim((string) ($credentials['sandbox_api_base_url'] ?? ''));
-        } else {
-            $baseUrlOverride = trim((string) ($credentials['production_api_base_url'] ?? ''));
+        if ($clientName === '') {
+            return [
+                'success' => false,
+                'message' => 'Delhivery client_name is required in Courier accounts (API parameter cl).',
+                'debug' => [
+                    'partner' => 'delhivery',
+                    'account_id' => $accountId,
+                    'environment' => $environment,
+                ],
+            ];
         }
         $pt = !empty($request['cod']) ? 'COD' : 'Pre-paid';
         $ss = 'Delivered';
@@ -110,10 +118,8 @@ class DelhiveryAdapter implements CourierAdapterInterface
                 'd_pin' => $destPin,
                 'ss' => $ss,
                 'pt' => $pt,
+                'cl' => $clientName,
             ];
-            if ($clientName !== '') {
-                $params['cl'] = $clientName;
-            }
 
             $resp = $service->estimateFreightCharges($params);
             $debug[$md] = $resp;
@@ -122,26 +128,7 @@ class DelhiveryAdapter implements CourierAdapterInterface
                 continue;
             }
 
-            $data = $resp['data'] ?? null;
-            $amount = null;
-            if (is_array($data)) {
-                // Different Delhivery responses exist; attempt common keys.
-                foreach (['total_amount', 'Total_amount', 'total', 'amount', 'gross_amount'] as $k) {
-                    if (isset($data[$k])) {
-                        $amount = $data[$k];
-                        break;
-                    }
-                }
-                if ($amount === null && isset($data['data']) && is_array($data['data'])) {
-                    foreach (['total_amount', 'Total_amount', 'total', 'amount', 'gross_amount'] as $k) {
-                        if (isset($data['data'][$k])) {
-                            $amount = $data['data'][$k];
-                            break;
-                        }
-                    }
-                }
-            }
-            $price = is_numeric($amount) ? (float) $amount : null;
+            $price = $this->extractChargeAmount($resp['data'] ?? null, $resp['raw'] ?? null);
             if ($price === null || $price <= 0) {
                 continue;
             }
@@ -179,18 +166,28 @@ class DelhiveryAdapter implements CourierAdapterInterface
         }
 
         if (empty($quotes)) {
-            return $this->demoRatesResponse(
-                $request,
-                $accountId,
-                'Live Delhivery API returned no rates — showing demo quotes for now.',
-                ['partner' => 'delhivery', 'account_id' => $accountId, 'environment' => $environment, 'response' => $debug]
-            );
+            $hint = $environment === 'sandbox'
+                ? 'Account environment is sandbox — switch to production if this is a live token.'
+                : 'Verify client_name (cl), token, and pincodes in Courier accounts.';
+            return [
+                'success' => false,
+                'message' => 'Delhivery API returned no rates. ' . $hint,
+                'debug' => [
+                    'partner' => 'delhivery',
+                    'account_id' => $accountId,
+                    'environment' => $environment,
+                    'client_name' => $clientName,
+                    'origin_pin' => $originPin,
+                    'dest_pin' => $destPin,
+                    'chargeable_weight_g' => $chargeableGrams,
+                    'responses' => $debug,
+                ],
+            ];
         }
 
         return [
             'success' => true,
             'provider' => 'delhivery',
-            'is_demo' => false,
             'couriers' => CourierUiFormat::formatQuotes($quotes),
             'debug' => [
                 'partner' => 'delhivery',
@@ -201,85 +198,55 @@ class DelhiveryAdapter implements CourierAdapterInterface
         ];
     }
 
-    /** @param array<string, mixed> $request */
-    private function demoRatesResponse(array $request, int $accountId, string $message, ?array $extraDebug = null): array
-    {
-        return [
-            'success' => true,
-            'provider' => 'delhivery',
-            'is_demo' => true,
-            'demo_message' => $message,
-            'message' => $message,
-            'couriers' => CourierUiFormat::formatQuotes($this->buildDemoQuotes($request, $accountId)),
-            'debug' => array_merge(['partner' => 'delhivery', 'demo' => true], $extraDebug ?? []),
-        ];
-    }
-
-    /** @param array<string, mixed> $request
-     *  @return list<array<string, mixed>>
+    /**
+     * @param mixed $data
      */
-    private function buildDemoQuotes(array $request, int $accountId): array
+    private function extractChargeAmount($data, ?string $raw = null): ?float
     {
-        $weight = (float) ($request['chargeable_weight_kg'] ?? $request['weight'] ?? 0);
-        if ($weight <= 0) {
-            $weight = 0.5;
+        $keys = ['total_amount', 'Total_amount', 'total', 'amount', 'gross_amount', 'Gross_Amount'];
+
+        $fromArray = static function ($node) use (&$fromArray, $keys): ?float {
+            if (!is_array($node)) {
+                return null;
+            }
+            foreach ($keys as $key) {
+                if (isset($node[$key]) && is_numeric($node[$key])) {
+                    return (float) $node[$key];
+                }
+            }
+            foreach ($node as $value) {
+                if (is_array($value)) {
+                    $found = $fromArray($value);
+                    if ($found !== null && $found > 0) {
+                        return $found;
+                    }
+                }
+            }
+            return null;
+        };
+
+        $amount = $fromArray($data);
+        if ($amount !== null && $amount > 0) {
+            return $amount;
         }
 
-        $quotes = [
-            [
-                'id' => 'delhivery_' . $accountId . '_SURFACE_DEMO',
-                'name' => 'Delhivery - Surface',
-                'price' => $this->calculateDemoPrice(120.0, $weight),
-                'currency' => 'INR',
-                'etd' => '3-5 days',
-                'rating' => 4.2,
-                'partner_code' => 'delhivery',
-                'partner_account_id' => $accountId,
-                'service_code' => 'SURFACE',
-                'metadata' => ['is_demo' => true],
-            ],
-        ];
-
-        if ($weight <= 25) {
-            $quotes[] = [
-                'id' => 'delhivery_' . $accountId . '_EXPRESS_DEMO',
-                'name' => 'Delhivery - Express',
-                'price' => $this->calculateDemoPrice(250.0, $weight),
-                'currency' => 'INR',
-                'etd' => '1-2 days',
-                'rating' => 4.5,
-                'partner_code' => 'delhivery',
-                'partner_account_id' => $accountId,
-                'service_code' => 'EXPRESS',
-                'metadata' => ['is_demo' => true],
-            ];
+        $raw = trim((string) ($raw ?? ''));
+        if ($raw === '') {
+            if (is_string($data)) {
+                $raw = $data;
+            } else {
+                return null;
+            }
         }
 
-        if ($weight <= 15) {
-            $quotes[] = [
-                'id' => 'delhivery_' . $accountId . '_NEXTDAY_DEMO',
-                'name' => 'Delhivery - Next Day',
-                'price' => $this->calculateDemoPrice(350.0, $weight),
-                'currency' => 'INR',
-                'etd' => '1 day',
-                'rating' => 4.6,
-                'partner_code' => 'delhivery',
-                'partner_account_id' => $accountId,
-                'service_code' => 'NEXTDAY',
-                'metadata' => ['is_demo' => true],
-            ];
+        if (preg_match('/<total_amount[^>]*>([\d.]+)/i', $raw, $m)) {
+            return (float) $m[1];
+        }
+        if (preg_match('/<gross_amount[^>]*>([\d.]+)/i', $raw, $m)) {
+            return (float) $m[1];
         }
 
-        return $quotes;
-    }
-
-    private function calculateDemoPrice(float $baseRate, float $weight): float
-    {
-        if ($weight <= 0.5) {
-            return round($baseRate, 2);
-        }
-
-        return round($baseRate + (($weight - 0.5) * 10.0), 2);
+        return null;
     }
 
     public function createShipment(array $request): array

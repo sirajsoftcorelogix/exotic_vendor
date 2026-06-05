@@ -78,7 +78,7 @@ return [
     ],
     'delhivery' => [
         'label' => 'Delhivery',
-        'description' => 'Domestic B2C/B2B. Implement API in DelhiveryAdapter. Credentials stored as JSON; use environment dropdown for sandbox vs production.',
+        'description' => 'Domestic B2C/B2B. Set environment to production for live token. client_name (cl) is required for rate API.',
         'template' => [
             'client_name' => 'Saxena',
             'api_token' => '5327198a87ee782d219fead3b9040b5da8d94671',
