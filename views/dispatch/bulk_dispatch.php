@@ -1237,7 +1237,6 @@
                                 </span>
                                 <div class="min-w-0">
                                     <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
-                                    <div class="text-[11px] text-gray-500 truncate">${n} option${n !== 1 ? 's' : ''} · select one · best rating, then lowest price</div>
                                 </div>
                                 <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.courierCountBadge}">${n}</span>
                             </div>
@@ -1353,6 +1352,9 @@
                             r.addEventListener('change', () => syncCourierPick(r));
                         });
                         syncCourierPick(courierContainer.querySelector('.courier-tile-radio:checked'));
+
+                        // Also fetch direct (non-aggregator) courier rates for comparison.
+                        fetchDirectCourierRatesForBox(boxElement, payload);
                     }
                 } else {
                     if (courierContainer) {
@@ -1447,6 +1449,100 @@
                         </div>`;
                 }
             });
+        }
+
+        function renderDirectProviderPanel(data, boxUid) {
+            if (!data || !data.success || !Array.isArray(data.couriers) || data.couriers.length === 0) {
+                return '';
+            }
+            const n = data.couriers.length;
+            const groupName = 'direct_courier_pick_' + String(boxUid || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_');
+            let html = `
+                <div class="mt-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden text-[13px]">
+                    <div class="px-3 py-2.5 border-b border-gray-100 bg-white/90">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm" aria-hidden="true">
+                                    <i class="fas fa-truck text-sm"></i>
+                                </span>
+                                <div class="min-w-0">
+                                    <div class="font-semibold text-gray-900 leading-tight">Direct service providers</div>
+                                    <div class="text-[11px] text-gray-500 truncate">Non-aggregator quotes (for comparison only)</div>
+                                </div>
+                            </div>
+                            <span class="shrink-0 inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[11px] font-semibold">${n}</span>
+                        </div>
+                    </div>
+                    <div class="px-2 sm:px-3 py-3">
+                        <div class="flex flex-nowrap gap-3 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-1 scroll-smooth [scrollbar-width:thin]" style="-webkit-overflow-scrolling: touch;">`;
+
+            data.couriers.forEach((courier, idx) => {
+                const currency = (courier.currency || 'INR').toUpperCase();
+                const priceSymbol = currency === 'INR' ? '₹ ' : (currency + ' ');
+                const price = courier.price != null && courier.price !== ''
+                    ? (priceSymbol + parseFloat(courier.price).toFixed(2))
+                    : 'N/A';
+                const etd = courier.etd || 'N/A';
+                const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
+                const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
+                const cid = courier.id != null ? String(courier.id) : '';
+                const checkedAttr = idx === 0 ? ' checked' : '';
+                html += `
+                    <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md">
+                        <input type="radio" name="${groupName}" value="${escapeHtml(cid)}" class="direct-courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300"${checkedAttr}/>
+                        <p class="pr-2 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name || 'Courier')}</p>
+                        <div class="mt-3">
+                            <div class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Price</div>
+                            <div class="text-lg font-bold tabular-nums text-emerald-700">${price}</div>
+                        </div>
+                        <div class="mt-3 flex flex-wrap gap-1.5">
+                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                                <span class="text-slate-400">ETD</span> ${escapeHtml(etdShort)}
+                            </span>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-100">
+                                <i class="fas fa-star text-amber-500 text-[10px]" aria-hidden="true"></i> ${escapeHtml(rating)}
+                            </span>
+                        </div>
+                    </label>
+                `;
+            });
+
+            html += `
+                        </div>
+                    </div>
+                </div>`;
+            return html;
+        }
+
+        function fetchDirectCourierRatesForBox(boxElement, payload) {
+            const orderSectionForTheme = boxElement.closest('.px-4.pt-4.pb-2');
+            const courierContainer = orderSectionForTheme && orderSectionForTheme.querySelector('#availableCourierCompanies');
+            if (!courierContainer) return;
+
+            const boxUid = boxElement.getAttribute('data-box-uid') || '';
+            const panelId = 'direct-provider-panel-' + boxUid;
+            if (boxUid && courierContainer.querySelector('#' + panelId)) {
+                return;
+            }
+
+            fetch('?page=dispatch&action=getDirectCourierRates', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.text())
+            .then((text) => {
+                const cleaned = (typeof text === 'string') ? text.replace(/^\uFEFF/, '').trim() : '';
+                const parsed = cleaned ? JSON.parse(cleaned) : {};
+                const panelHtml = renderDirectProviderPanel(parsed, boxUid);
+                if (!panelHtml) return;
+                const wrapped = `<div id="${panelId}">${panelHtml}</div>`;
+                courierContainer.insertAdjacentHTML('beforeend', wrapped);
+            })
+            .catch(() => {});
         }
 
         // Debug actions in courier container

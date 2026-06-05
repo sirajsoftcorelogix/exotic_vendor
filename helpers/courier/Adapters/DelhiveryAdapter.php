@@ -5,6 +5,7 @@ require_once __DIR__ . '/../country_codes.php';
 require_once __DIR__ . '/../Support/CourierUiFormat.php';
 require_once __DIR__ . '/../../../models/courier/CourierAccount.php';
 require_once __DIR__ . '/../../../models/courier/CourierShipment.php';
+require_once __DIR__ . '/../../../delhivery_service.php';
 
 /**
  * Delhivery domestic adapter (skeleton — implement API calls here).
@@ -54,19 +55,118 @@ class DelhiveryAdapter implements CourierAdapterInterface
         $accountId = (int) ($accountRow['id'] ?? 0);
         $credentials = $this->accountModel->getCredentialsJson($accountId);
 
-        // TODO (Delhivery): call Delhivery rate / serviceability API and map to $quotes[].
-        // Example quote shape (required for UI):
-        // [
-        //   'id' => 'delhivery_' . $accountId . '_SURFACE',
-        //   'name' => 'Delhivery Surface',
-        //   'price' => 120.00,
-        //   'currency' => 'INR',
-        //   'etd' => '3-5 days',
-        //   'rating' => 4.2,
-        //   'partner_code' => 'delhivery',
-        //   'partner_account_id' => $accountId,
-        //   'service_code' => 'SURFACE',
-        // ]
+        $apiKey = trim((string) ($credentials['api_key'] ?? $credentials['token'] ?? $credentials['api_token'] ?? ''));
+        if ($apiKey === '') {
+            return [
+                'success' => false,
+                'message' => 'Delhivery credentials missing api_key (Authorization token).',
+                'debug' => [
+                    'partner' => 'delhivery',
+                    'account_id' => $accountId,
+                    'credentials_keys' => array_keys($credentials),
+                ],
+            ];
+        }
+
+        $originPin = trim((string) ($request['pickup']['postcode'] ?? $request['pickup_postcode'] ?? ''));
+        if ($originPin === '') {
+            $originPin = trim((string) (($credentials['shipper']['postcode'] ?? null) ?? ($credentials['customer_pincode'] ?? '')));
+        }
+        $destPin = trim((string) ($request['destination']['postcode'] ?? $request['delivery_postcode'] ?? ''));
+        if ($originPin === '' || $destPin === '') {
+            return [
+                'success' => false,
+                'message' => 'Origin and destination pincodes are required for Delhivery rates.',
+            ];
+        }
+
+        $chargeableKg = (float) ($request['chargeable_weight_kg'] ?? $request['weight'] ?? 0);
+        $chargeableGrams = (int) round(max(0.0, $chargeableKg) * 1000);
+        if ($chargeableGrams <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Chargeable weight is required for Delhivery rates.',
+            ];
+        }
+
+        $environment = (string) ($credentials['environment'] ?? 'sandbox');
+        $clientName = trim((string) ($credentials['client_name'] ?? $credentials['cl'] ?? ''));
+        $baseUrlOverride = '';
+        if ($environment === 'sandbox') {
+            $baseUrlOverride = trim((string) ($credentials['sandbox_api_base_url'] ?? ''));
+        } else {
+            $baseUrlOverride = trim((string) ($credentials['production_api_base_url'] ?? ''));
+        }
+        $pt = !empty($request['cod']) ? 'COD' : 'Pre-paid';
+        $ss = 'Delivered';
+
+        $service = new DelhiveryService($apiKey, $environment, $baseUrlOverride);
+
+        $quotes = [];
+        $debug = [];
+
+        foreach (['S' => 'Surface', 'E' => 'Express'] as $md => $label) {
+            $params = [
+                'md' => $md,
+                'cgm' => $chargeableGrams,
+                'o_pin' => $originPin,
+                'd_pin' => $destPin,
+                'ss' => $ss,
+                'pt' => $pt,
+            ];
+            if ($clientName !== '') {
+                $params['cl'] = $clientName;
+            }
+
+            $resp = $service->estimateFreightCharges($params);
+            $debug[$md] = $resp;
+
+            if (empty($resp['success'])) {
+                continue;
+            }
+
+            $data = $resp['data'] ?? null;
+            $amount = null;
+            if (is_array($data)) {
+                // Different Delhivery responses exist; attempt common keys.
+                foreach (['total_amount', 'Total_amount', 'total', 'amount', 'gross_amount'] as $k) {
+                    if (isset($data[$k])) {
+                        $amount = $data[$k];
+                        break;
+                    }
+                }
+                if ($amount === null && isset($data['data']) && is_array($data['data'])) {
+                    foreach (['total_amount', 'Total_amount', 'total', 'amount', 'gross_amount'] as $k) {
+                        if (isset($data['data'][$k])) {
+                            $amount = $data['data'][$k];
+                            break;
+                        }
+                    }
+                }
+            }
+            $price = is_numeric($amount) ? (float) $amount : null;
+            if ($price === null || $price <= 0) {
+                continue;
+            }
+
+            $quotes[] = [
+                'id' => 'delhivery_' . $accountId . '_' . ($md === 'S' ? 'SURFACE' : 'EXPRESS'),
+                'name' => 'Delhivery - ' . $label,
+                'price' => $price,
+                'currency' => 'INR',
+                'etd' => 'N/A',
+                'rating' => 0,
+                'partner_code' => 'delhivery',
+                'partner_account_id' => $accountId,
+                'service_code' => $md === 'S' ? 'SURFACE' : 'EXPRESS',
+                'metadata' => [
+                    'chargeable_weight_g' => $chargeableGrams,
+                    'origin_pin' => $originPin,
+                    'dest_pin' => $destPin,
+                    'payment_type' => $pt,
+                ],
+            ];
+        }
 
         if ($this->shipmentModel) {
             $this->shipmentModel->logApiCall(
@@ -75,20 +175,34 @@ class DelhiveryAdapter implements CourierAdapterInterface
                 $accountId,
                 (string) ($request['order_number'] ?? ''),
                 $request,
-                ['status' => 'not_implemented'],
-                false,
-                'DelhiveryAdapter::getRates not implemented yet'
+                $debug,
+                !empty($quotes),
+                !empty($quotes) ? 'Delhivery rates fetched' : 'No rates returned from Delhivery'
             );
         }
 
+        if (empty($quotes)) {
+            return [
+                'success' => false,
+                'message' => 'No rates returned from Delhivery.',
+                'debug' => [
+                    'partner' => 'delhivery',
+                    'account_id' => $accountId,
+                    'environment' => $environment,
+                    'response' => $debug,
+                ],
+            ];
+        }
+
         return [
-            'success' => false,
-            'message' => 'Delhivery rates not implemented yet. Implement DelhiveryAdapter::getRates().',
+            'success' => true,
+            'provider' => 'delhivery',
+            'couriers' => CourierUiFormat::formatQuotes($quotes),
             'debug' => [
                 'partner' => 'delhivery',
                 'account_id' => $accountId,
-                'credentials_keys' => array_keys($credentials),
-                'request' => $request,
+                'environment' => $environment,
+                'responses' => $debug,
             ],
         ];
     }

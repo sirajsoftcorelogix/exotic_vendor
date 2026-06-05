@@ -2168,6 +2168,76 @@ class DispatchController {
         }
     }
 
+    /**
+     * Get direct courier provider rates (non-aggregator) for bulk dispatch UI.
+     * Currently: Delhivery only.
+     */
+    public function getDirectCourierRates()
+    {
+        global $commanModel, $ordersModel;
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            exit;
+        }
+
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $order_number = $input['order_number'] ?? null;
+            $length = (float)($input['length'] ?? 0);
+            $breadth = (float)($input['breadth'] ?? 0);
+            $height = (float)($input['height'] ?? 0);
+            $weight = (float)($input['weight'] ?? 0);
+            $cod = (int)($input['cod'] ?? 0);
+
+            if (empty($order_number) || $weight <= 0 || $length <= 0 || $breadth <= 0 || $height <= 0) {
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order number, weight, and dimensions are required and must be greater than 0',
+                ]);
+                exit;
+            }
+
+            $firm = $commanModel->getRecordById('firm_details', 1);
+            $requestedPickupLocation = trim((string)($input['pickup_location'] ?? $firm['pickup_location'] ?? 'Head Off'));
+            if ($requestedPickupLocation === '') {
+                $requestedPickupLocation = 'Head Off';
+            }
+
+            $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
+            if (!$orderInfo) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'message' => 'Order not found']);
+                exit;
+            }
+
+            $courierDispatch = new CourierDispatchService($GLOBALS['conn']);
+            $rateRequest = $courierDispatch->buildRateRequest($input, $orderInfo);
+            $rateRequest['pickup_location'] = $requestedPickupLocation;
+            $rateRequest['partner_code'] = 'delhivery';
+            $rateRequest['cod'] = $cod;
+
+            // Provide pickup postcode for adapters that need it.
+            $firmPin = trim((string)($firm['pincode'] ?? $firm['postcode'] ?? ''));
+            if ($firmPin !== '') {
+                $rateRequest['pickup'] = ['postcode' => $firmPin];
+            }
+
+            $gatewayResult = $courierDispatch->getRates($rateRequest);
+            $uiResponse = $courierDispatch->formatServiceabilityForUi($gatewayResult);
+
+            http_response_code(!empty($uiResponse['success']) ? 200 : 400);
+            echo json_encode($uiResponse);
+            exit;
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error fetching direct courier rates: ' . $e->getMessage()]);
+            exit;
+        }
+    }
+
     public function retryShipments() {
         global $dispatchModel, $ordersModel , $invoiceModel;
         
