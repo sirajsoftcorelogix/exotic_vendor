@@ -98,7 +98,7 @@ return [
                 'country_code' => 'IN',
             ],
         ],
-        'secret_keys' => ['5327198a87ee782d219fead3b9040b5da8d94671'],
+        'secret_keys' => ['api_token'],
     ],
     'dhl' => [
         'label' => 'DHL Express',

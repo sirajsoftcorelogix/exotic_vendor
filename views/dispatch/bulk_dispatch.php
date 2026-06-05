@@ -1022,76 +1022,6 @@
             }
         }
 
-        function renderRejectedCourierList(rejectedCouriers) {
-            const rows = Array.isArray(rejectedCouriers) ? rejectedCouriers : [];
-            if (!rows.length) return '';
-
-            const friendlyNegativeParam = function (key, value) {
-                if (key === 'pickup_availability') {
-                    return 'Pickup not available';
-                }
-                if (key === 'cod') {
-                    return 'COD not available';
-                }
-                if (key === 'blocked') {
-                    return 'Courier blocked';
-                }
-                if (key === 'blocked_reason') {
-                    return 'Reason: ' + value;
-                }
-                if (key === 'rate') {
-                    return 'Rate missing';
-                }
-                if (key === 'etd') {
-                    return 'ETD missing';
-                }
-                return key + ': ' + value;
-            };
-
-            const cards = rows.map((courier) => {
-                const negativeParams = courier.negative_parameters && typeof courier.negative_parameters === 'object'
-                    ? Object.entries(courier.negative_parameters)
-                    : [];
-                const paramHtml = negativeParams.length
-                    ? negativeParams.map(([key, value]) => `
-                        <span class="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800">
-                            ${escapeHtml(friendlyNegativeParam(key, value))}
-                        </span>
-                    `).join('')
-                    : (courier.reasons || []).map((reason) => `
-                        <span class="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800">
-                            ${escapeHtml(reason)}
-                        </span>
-                    `).join('');
-
-                return `
-                    <div class="rounded-lg border border-red-100 bg-white p-3 shadow-sm">
-                        <div class="flex items-start justify-between gap-2">
-                            <div class="min-w-0">
-                                <div class="text-sm font-semibold text-gray-900">${escapeHtml(courier.name || 'Unknown courier')}</div>
-                                <div class="mt-1 text-[11px] text-gray-500">Courier ID: ${escapeHtml(courier.id ?? '-')}</div>
-                            </div>
-                            <span class="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">Rejected</span>
-                        </div>
-                        <div class="mt-2 flex flex-wrap gap-1.5">${paramHtml || '<span class="text-[11px] text-red-700">Rejected by courier filters.</span>'}</div>
-                    </div>
-                `;
-            }).join('');
-
-            return `
-                <div class="border-t border-red-100 bg-red-50/40 px-3 py-3">
-                    <div class="mb-2 flex items-center justify-between gap-2">
-                        <div>
-                            <div class="text-sm font-semibold text-red-950">Rejected couriers</div>
-                            <div class="text-[11px] text-red-800/80">Shown for visibility. These cannot be selected until the failed parameters pass.</div>
-                        </div>
-                        <span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">${rows.length}</span>
-                    </div>
-                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">${cards}</div>
-                </div>
-            `;
-        }
-
         // Helper function to fetch couriers from Shiprocket API
         function fetchCouriersForBox(boxElement) {
             console.log('fetchCouriersForBox called with:', boxElement);
@@ -1216,10 +1146,6 @@
                 }
                 boxElement._lastCourierDebugInput = data?.debug?.input_before_filter || null;
                 boxElement._lastCourierDebugOutput = data?.debug?.output_after_filter || null;
-                const rejectedCouriers = Array.isArray(data?.rejected_couriers)
-                    ? data.rejected_couriers
-                    : (Array.isArray(data?.debug?.output_after_filter?.excludedFromFilters) ? data.debug.output_after_filter.excludedFromFilters : []);
-                const rejectedCourierHtml = renderRejectedCourierList(rejectedCouriers);
                 if (data.success && data.couriers && data.couriers.length > 0) {
                     let boxUid = boxElement.getAttribute('data-box-uid');
                     if (!boxUid) {
@@ -1323,7 +1249,6 @@
                     courierHtml += `
                             </div>
                         </div>
-                        ${rejectedCourierHtml}
                     </div>`;
                     if (courierContainer) {
                         courierContainer.innerHTML = courierHtml;
@@ -1406,7 +1331,6 @@
                                 <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
                                 </div>
                             </div>
-                            ${rejectedCourierHtml}
                         </div>`;
                         courierContainer.innerHTML = emptyHtml;
                         const requestPre = courierContainer.querySelector('.debug-request');
