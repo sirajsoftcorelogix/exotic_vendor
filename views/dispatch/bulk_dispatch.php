@@ -1236,7 +1236,10 @@
                                     <i class="fas fa-shipping-fast text-sm"></i>
                                 </span>
                                 <div class="min-w-0">
-                                    <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
+                                    <div class="flex flex-wrap items-center gap-2 leading-tight">
+                                        <div class="font-semibold text-gray-900">Courier rates</div>
+                                        <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-800">Shiprocket</span>
+                                    </div>
                                     <div class="text-[11px] text-gray-500 truncate">${n} option${n !== 1 ? 's' : ''} · select one · best rating, then lowest price</div>
                                 </div>
                                 <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.courierCountBadge}">${n}</span>
