@@ -2053,23 +2053,12 @@ class DispatchController {
             }
 
             $courierDispatch = new CourierDispatchService($GLOBALS['conn']);
-            $rateRequest = $courierDispatch->buildRateRequest($input, $orderInfo);
-            $gatewayResult = $courierDispatch->getRates($rateRequest);
-
-            if (empty($gatewayResult['use_shiprocket'])) {
-                $uiResponse = $courierDispatch->formatServiceabilityForUi($gatewayResult);
-                http_response_code(!empty($uiResponse['success']) ? 200 : 400);
-                echo json_encode($uiResponse);
-                exit;
-            }
-
             if ($courierDispatch->isInternationalOrder($orderInfo)) {
                 http_response_code(400);
                 echo json_encode([
                     'success' => false,
-                    'message' => $gatewayResult['message'] ?? 'International rates unavailable. Use single order dispatch for Aramex.',
+                    'message' => 'International rates unavailable. Use single order dispatch for Aramex.',
                     'international' => true,
-                    'debug' => $gatewayResult['debug'] ?? null,
                 ]);
                 exit;
             }
