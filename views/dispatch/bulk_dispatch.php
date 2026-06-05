@@ -1379,26 +1379,11 @@
             if (!data || !data.success || !Array.isArray(data.couriers) || data.couriers.length === 0) {
                 return '';
             }
-            const n = data.couriers.length;
             const isDemo = !!data.is_demo;
             const demoMessage = data.demo_message || data.message || 'Sample rates until Delhivery credentials are configured.';
             const groupName = 'direct_courier_pick_' + String(boxUid || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_');
             let html = `
                 <div class="mt-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden text-[13px]">
-                    <div class="px-3 py-2.5 border-b border-gray-100 bg-white/90">
-                        <div class="flex items-center justify-between gap-2">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm" aria-hidden="true">
-                                    <i class="fas fa-truck text-sm"></i>
-                                </span>
-                                <div class="min-w-0">
-                                    <div class="font-semibold text-gray-900 leading-tight">Direct service providers</div>
-                                    <div class="text-[11px] text-gray-500 truncate">Non-aggregator quotes (for comparison only)</div>
-                                </div>
-                            </div>
-                            <span class="shrink-0 inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[11px] font-semibold">${n}</span>
-                        </div>
-                    </div>
                     ${isDemo ? `
                     <div class="px-3 py-2 border-b border-amber-200 bg-amber-50 text-amber-900 text-[11px] leading-snug">
                         <span class="inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide mr-1.5">Demo</span>
