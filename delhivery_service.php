@@ -23,41 +23,43 @@ class DelhiveryService
      * @param string $apiKey Delhivery API key from credentials
      * @param string $environment 'sandbox' or 'production'
      */
-    public function __construct(string $apiKey, string $environment = 'production')
+    public function __construct(string $apiKey, string $environment = 'production', string $baseUrlOverride = '')
     {
         $this->apiKey = $apiKey;
         $this->environment = $environment;
-        
-        // TODO: Use actual Delhivery endpoints
-        $this->baseUrl = $environment === 'sandbox' 
-            ? 'https://staging-express.delhivery.com/api'
-            : 'https://express.delhivery.com/api';
+
+        $baseUrlOverride = trim($baseUrlOverride);
+        if ($baseUrlOverride !== '') {
+            $this->baseUrl = rtrim($baseUrlOverride, '/');
+            return;
+        }
+
+        // Delhivery uses different hostnames for staging vs production.
+        // Production docs commonly reference track.delhivery.com.
+        $this->baseUrl = $environment === 'sandbox'
+            ? 'https://staging-express.delhivery.com'
+            : 'https://track.delhivery.com';
     }
 
     /**
-     * Check serviceability and get rate for a route.
-     * 
-     * TODO: Implement actual Delhivery API call
-     * 
-     * @param string $pickupPostcode Sender's postcode
-     * @param string $deliveryPostcode Recipient's postcode
-     * @param float $weight Weight in kg
-     * @return array ['success' => bool, 'rates' => [], 'etd' => string, 'error' => string]
+     * Estimate charges using Delhivery Invoice - Shipping Charge API.
+     *
+     * Uses endpoint (prod): /api/kinko/v1/invoice/charges/.json
+     * Docs mention mandatory params: md, cgm, o_pin, d_pin, ss.
+     *
+     * @param array{md:string,cgm:int,o_pin:string,d_pin:string,ss:string,cl?:string,pt?:string} $params
+     * @return array{success:bool,http_code?:int,data?:mixed,message?:string,request_url?:string,curl_error?:string}
      */
-    public function getServiceability(string $pickupPostcode, string $deliveryPostcode, float $weight): array
+    public function estimateFreightCharges(array $params): array
     {
-        // TODO: Call Delhivery serviceability API
-        // Example:
-        // $response = $this->makeRequest('GET', '/backend/api_pick_expected_del_date/', [
-        //     'pickup_postcode' => $pickupPostcode,
-        //     'delivery_postcode' => $deliveryPostcode,
-        //     'weight' => $weight,
-        // ]);
-        
-        return [
-            'success' => false,
-            'message' => 'Delhivery serviceability API not implemented yet',
-        ];
+        $endpoint = '/api/kinko/v1/invoice/charges/.json';
+        $url = rtrim($this->baseUrl, '/') . $endpoint;
+        $query = http_build_query($params);
+        if ($query !== '') {
+            $url .= (str_contains($url, '?') ? '&' : '?') . $query;
+        }
+
+        return $this->makeRequest('GET', $url);
     }
 
     /**
@@ -115,17 +117,47 @@ class DelhiveryService
      * @param array $data Request parameters or body
      * @return array API response
      */
-    private function makeRequest(string $method, string $endpoint, array $data): array
+    private function makeRequest(string $method, string $url): array
     {
-        // TODO: Implement cURL request to Delhivery API with:
-        // - Authorization header with API key
-        // - Request body JSON encoding for POST
-        // - Error handling for network failures
-        // - Response parsing and validation
-        
+        $method = strtoupper(trim($method));
+        if (!in_array($method, ['GET', 'POST'], true)) {
+            return ['success' => false, 'message' => 'Unsupported HTTP method: ' . $method];
+        }
+
+        $headers = [
+            'Accept: application/json',
+            'Authorization: Token ' . $this->apiKey,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        if ($method === 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+        }
+
+        $raw = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        $decoded = null;
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if ($decoded === null) {
+                $decoded = $raw;
+            }
+        }
+
+        $ok = $httpCode >= 200 && $httpCode < 300;
         return [
-            'success' => false,
-            'message' => 'HTTP request not implemented yet',
+            'success' => $ok,
+            'http_code' => $httpCode,
+            'data' => $decoded,
+            'message' => $ok ? 'OK' : 'Request failed',
+            'request_url' => $url,
+            'curl_error' => $curlError,
         ];
     }
 }
