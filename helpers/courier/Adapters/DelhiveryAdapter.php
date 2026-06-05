@@ -31,14 +31,6 @@ class DelhiveryAdapter implements CourierAdapterInterface
 
     public function getRates(array $request): array
     {
-        $accounts = $this->accountModel->listActiveAccountsByPartnerCode('delhivery');
-        if (!$accounts) {
-            return [
-                'success' => false,
-                'message' => 'No active Delhivery account configured. Add one under Courier accounts.',
-            ];
-        }
-
         $destinationCountry = normalizeCountryIso2(
             $request['destination_country']
                 ?? ($request['destination']['country_code'] ?? 'IN')
@@ -50,6 +42,15 @@ class DelhiveryAdapter implements CourierAdapterInterface
             ];
         }
 
+        $accounts = $this->accountModel->listActiveAccountsByPartnerCode('delhivery');
+        if (!$accounts) {
+            return $this->demoRatesResponse(
+                $request,
+                0,
+                'Demo rates shown until a Delhivery courier account is configured.'
+            );
+        }
+
         $accountId = (int) ($request['partner_account_id'] ?? 0);
         $accountRow = $this->pickAccount($accounts, $accountId);
         $accountId = (int) ($accountRow['id'] ?? 0);
@@ -57,15 +58,11 @@ class DelhiveryAdapter implements CourierAdapterInterface
 
         $apiKey = trim((string) ($credentials['api_key'] ?? $credentials['token'] ?? $credentials['api_token'] ?? ''));
         if ($apiKey === '') {
-            return [
-                'success' => false,
-                'message' => 'Delhivery credentials missing api_key (Authorization token).',
-                'debug' => [
-                    'partner' => 'delhivery',
-                    'account_id' => $accountId,
-                    'credentials_keys' => array_keys($credentials),
-                ],
-            ];
+            return $this->demoRatesResponse(
+                $request,
+                $accountId,
+                'Demo rates shown until Delhivery api_token is saved in Courier accounts.'
+            );
         }
 
         $originPin = trim((string) ($request['pickup']['postcode'] ?? $request['pickup_postcode'] ?? ''));
@@ -182,21 +179,18 @@ class DelhiveryAdapter implements CourierAdapterInterface
         }
 
         if (empty($quotes)) {
-            return [
-                'success' => false,
-                'message' => 'No rates returned from Delhivery.',
-                'debug' => [
-                    'partner' => 'delhivery',
-                    'account_id' => $accountId,
-                    'environment' => $environment,
-                    'response' => $debug,
-                ],
-            ];
+            return $this->demoRatesResponse(
+                $request,
+                $accountId,
+                'Live Delhivery API returned no rates — showing demo quotes for now.',
+                ['partner' => 'delhivery', 'account_id' => $accountId, 'environment' => $environment, 'response' => $debug]
+            );
         }
 
         return [
             'success' => true,
             'provider' => 'delhivery',
+            'is_demo' => false,
             'couriers' => CourierUiFormat::formatQuotes($quotes),
             'debug' => [
                 'partner' => 'delhivery',
@@ -205,6 +199,87 @@ class DelhiveryAdapter implements CourierAdapterInterface
                 'responses' => $debug,
             ],
         ];
+    }
+
+    /** @param array<string, mixed> $request */
+    private function demoRatesResponse(array $request, int $accountId, string $message, ?array $extraDebug = null): array
+    {
+        return [
+            'success' => true,
+            'provider' => 'delhivery',
+            'is_demo' => true,
+            'demo_message' => $message,
+            'message' => $message,
+            'couriers' => CourierUiFormat::formatQuotes($this->buildDemoQuotes($request, $accountId)),
+            'debug' => array_merge(['partner' => 'delhivery', 'demo' => true], $extraDebug ?? []),
+        ];
+    }
+
+    /** @param array<string, mixed> $request
+     *  @return list<array<string, mixed>>
+     */
+    private function buildDemoQuotes(array $request, int $accountId): array
+    {
+        $weight = (float) ($request['chargeable_weight_kg'] ?? $request['weight'] ?? 0);
+        if ($weight <= 0) {
+            $weight = 0.5;
+        }
+
+        $quotes = [
+            [
+                'id' => 'delhivery_' . $accountId . '_SURFACE_DEMO',
+                'name' => 'Delhivery - Surface',
+                'price' => $this->calculateDemoPrice(120.0, $weight),
+                'currency' => 'INR',
+                'etd' => '3-5 days',
+                'rating' => 4.2,
+                'partner_code' => 'delhivery',
+                'partner_account_id' => $accountId,
+                'service_code' => 'SURFACE',
+                'metadata' => ['is_demo' => true],
+            ],
+        ];
+
+        if ($weight <= 25) {
+            $quotes[] = [
+                'id' => 'delhivery_' . $accountId . '_EXPRESS_DEMO',
+                'name' => 'Delhivery - Express',
+                'price' => $this->calculateDemoPrice(250.0, $weight),
+                'currency' => 'INR',
+                'etd' => '1-2 days',
+                'rating' => 4.5,
+                'partner_code' => 'delhivery',
+                'partner_account_id' => $accountId,
+                'service_code' => 'EXPRESS',
+                'metadata' => ['is_demo' => true],
+            ];
+        }
+
+        if ($weight <= 15) {
+            $quotes[] = [
+                'id' => 'delhivery_' . $accountId . '_NEXTDAY_DEMO',
+                'name' => 'Delhivery - Next Day',
+                'price' => $this->calculateDemoPrice(350.0, $weight),
+                'currency' => 'INR',
+                'etd' => '1 day',
+                'rating' => 4.6,
+                'partner_code' => 'delhivery',
+                'partner_account_id' => $accountId,
+                'service_code' => 'NEXTDAY',
+                'metadata' => ['is_demo' => true],
+            ];
+        }
+
+        return $quotes;
+    }
+
+    private function calculateDemoPrice(float $baseRate, float $weight): float
+    {
+        if ($weight <= 0.5) {
+            return round($baseRate, 2);
+        }
+
+        return round($baseRate + (($weight - 0.5) * 10.0), 2);
     }
 
     public function createShipment(array $request): array
