@@ -1252,28 +1252,39 @@
                                 <div class="text-[11px] font-medium text-violet-700/90">Available courier options from Shiprocket</div>
                             </div>
                         </div>
-                        <div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/95 border-b border-gray-100">
-                            <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1 hidden sm:inline">Debug</span>
-                            <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                                <i class="fas fa-sync-alt text-[10px] text-gray-500" aria-hidden="true"></i> Refresh courier list
+                        <div class="courier-debug-section border-b border-gray-100">
+                            <button type="button" class="toggle-debug-toolbar-btn w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-50/95 hover:bg-gray-100/90 transition-colors text-left">
+                                <span class="flex items-center gap-2 min-w-0">
+                                    <i class="fas fa-bug text-[10px] text-gray-400" aria-hidden="true"></i>
+                                    <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Debug tools</span>
+                                </span>
+                                <span class="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-gray-500">
+                                    <span class="toggle-debug-toolbar-label">Show</span>
+                                    <i class="fas fa-chevron-down toggle-debug-toolbar-chevron text-[10px] transition-transform duration-200" aria-hidden="true"></i>
+                                </span>
                             </button>
-                            <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                                <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy input (pre-filter)
-                            </button>
-                            <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                                <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy request JSON
-                            </button>
-                            <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                                <i class="fas fa-code text-[10px] text-gray-500" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
-                            </button>
-                        </div>
-                        <div class="filter-debug-panel hidden border-b border-gray-200 bg-slate-900 px-3 py-2">
+                            <div class="courier-debug-toolbar hidden flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/95 border-t border-gray-100">
+                                <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                    <i class="fas fa-sync-alt text-[10px] text-gray-500" aria-hidden="true"></i> Refresh courier list
+                                </button>
+                                <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                    <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy input (pre-filter)
+                                </button>
+                                <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                    <i class="fas fa-copy text-[10px] text-gray-500" aria-hidden="true"></i> Copy request JSON
+                                </button>
+                                <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                    <i class="fas fa-code text-[10px] text-gray-500" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
+                                </button>
+                            </div>
+                            <div class="filter-debug-panel hidden border-t border-gray-200 bg-slate-900 px-3 py-2">
                             <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Serviceability request</div>
                             <pre class="debug-request text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-yellow-100/95 border border-slate-700 font-mono"></pre>
                             <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
                             <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
                             <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
                             <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
+                            </div>
                         </div>
                         <div class="px-2 sm:px-3 py-3">
                             <div class="flex flex-nowrap gap-3 justify-start items-stretch overflow-x-auto overflow-y-hidden w-full pb-1 scroll-smooth [scrollbar-width:thin]" style="-webkit-overflow-scrolling: touch;">`;
@@ -1359,27 +1370,39 @@
                                 </div>
                                 <span class="shrink-0 self-start rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.emptyBadge}">0 options</span>
                             </div>
-                            <div class="flex flex-wrap items-center gap-2 px-3 py-2 ${tm.emptyToolbarBg} border-b">
-                                <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
-                                    <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
+                            <div class="courier-debug-section border-b">
+                                <button type="button" class="toggle-debug-toolbar-btn w-full flex items-center justify-between gap-2 px-3 py-2 ${tm.emptyToolbarBg} hover:bg-gray-100/90 transition-colors text-left">
+                                    <span class="flex items-center gap-2 min-w-0">
+                                        <i class="fas fa-bug text-[10px] text-gray-400" aria-hidden="true"></i>
+                                        <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Debug tools</span>
+                                    </span>
+                                    <span class="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-gray-500">
+                                        <span class="toggle-debug-toolbar-label">Show</span>
+                                        <i class="fas fa-chevron-down toggle-debug-toolbar-chevron text-[10px] transition-transform duration-200" aria-hidden="true"></i>
+                                    </span>
                                 </button>
-                                <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
-                                    <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy input (pre-filter)
-                                </button>
-                                <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
-                                    <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy request JSON
-                                </button>
-                                <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
-                                    <i class="fas fa-code text-[10px]" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
-                                </button>
-                            </div>
-                            <div class="filter-debug-panel hidden border-b border-gray-200 bg-slate-900 px-3 py-2">
+                                <div class="courier-debug-toolbar hidden flex flex-wrap items-center gap-2 px-3 py-2 ${tm.emptyToolbarBg} border-t">
+                                    <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
+                                        <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
+                                    </button>
+                                    <button type="button" class="copy-filter-input-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
+                                        <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy input (pre-filter)
+                                    </button>
+                                    <button type="button" class="copy-request-json-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
+                                        <i class="fas fa-copy text-[10px]" aria-hidden="true"></i> Copy request JSON
+                                    </button>
+                                    <button type="button" class="toggle-filter-debug-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-sm transition-colors ${tm.emptyBtn}">
+                                        <i class="fas fa-code text-[10px]" aria-hidden="true"></i> <span class="toggle-filter-debug-label">Show raw input / output</span>
+                                    </button>
+                                </div>
+                                <div class="filter-debug-panel hidden border-t border-gray-200 bg-slate-900 px-3 py-2">
                                 <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Serviceability request</div>
                                 <pre class="debug-request text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-yellow-100/95 border border-slate-700 font-mono"></pre>
                                 <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Input (before filter)</div>
                                 <pre class="debug-input text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-emerald-100/95 border border-slate-700 font-mono"></pre>
                                 <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1">Output (after filter)</div>
                                 <pre class="debug-output text-[11px] leading-relaxed whitespace-pre-wrap break-all max-h-48 overflow-auto rounded-md bg-slate-950/80 p-2 text-sky-100/95 border border-slate-700 font-mono"></pre>
+                                </div>
                             </div>
                             ${rejectedCourierHtml}
                         </div>`;
@@ -1503,10 +1526,38 @@
                 return;
             }
 
+            const toggleToolbarBtn = e.target.closest('.toggle-debug-toolbar-btn');
+            if (toggleToolbarBtn) {
+                const section = toggleToolbarBtn.closest('.courier-debug-section');
+                const toolbar = section?.querySelector('.courier-debug-toolbar');
+                if (!toolbar) return;
+                toolbar.classList.toggle('hidden');
+                const hidden = toolbar.classList.contains('hidden');
+                const label = toggleToolbarBtn.querySelector('.toggle-debug-toolbar-label');
+                const chevron = toggleToolbarBtn.querySelector('.toggle-debug-toolbar-chevron');
+                if (label) {
+                    label.textContent = hidden ? 'Show' : 'Hide';
+                }
+                if (chevron) {
+                    chevron.classList.toggle('rotate-180', !hidden);
+                }
+                if (hidden) {
+                    const panel = section?.querySelector('.filter-debug-panel');
+                    if (panel) {
+                        panel.classList.add('hidden');
+                    }
+                    const filterLabel = section?.querySelector('.toggle-filter-debug-label');
+                    if (filterLabel) {
+                        filterLabel.textContent = 'Show raw input / output';
+                    }
+                }
+                return;
+            }
+
             const toggleBtn = e.target.closest('.toggle-filter-debug-btn');
             if (toggleBtn) {
-                const container = toggleBtn.closest('#availableCourierCompanies');
-                const panel = container?.querySelector('.filter-debug-panel');
+                const section = toggleBtn.closest('.courier-debug-section');
+                const panel = section?.querySelector('.filter-debug-panel');
                 if (!panel) return;
                 panel.classList.toggle('hidden');
                 const label = toggleBtn.querySelector('.toggle-filter-debug-label');
@@ -1516,6 +1567,7 @@
                 } else {
                     toggleBtn.textContent = hidden ? 'Show raw input / output' : 'Hide raw input / output';
                 }
+                return;
             }
         });
         
