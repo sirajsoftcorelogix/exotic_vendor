@@ -142,6 +142,7 @@ class DelhiveryAdapter implements CourierAdapterInterface
                 'rating' => 0,
                 'partner_code' => 'delhivery',
                 'partner_account_id' => $accountId,
+                'product_type' => $md === 'S' ? 'SURFACE' : 'EXPRESS',
                 'service_code' => $md === 'S' ? 'SURFACE' : 'EXPRESS',
                 'metadata' => [
                     'cgm' => $chargeableGrams,
@@ -299,10 +300,339 @@ class DelhiveryAdapter implements CourierAdapterInterface
 
     public function createShipment(array $request): array
     {
-        return [
-            'success' => false,
-            'message' => 'Delhivery createShipment not implemented yet.',
+        $destinationCountry = normalizeCountryIso2(
+            $request['destination_country']
+                ?? ($request['destination']['country_code'] ?? 'IN')
+        );
+        if (isInternationalShipmentCountry($destinationCountry)) {
+            return [
+                'success' => false,
+                'message' => 'Delhivery adapter is domestic only (IN → IN).',
+            ];
+        }
+
+        $accounts = $this->accountModel->listActiveAccountsByPartnerCode('delhivery');
+        if (!$accounts) {
+            return [
+                'success' => false,
+                'message' => 'No active Delhivery courier account configured.',
+            ];
+        }
+
+        $accountId = (int) ($request['partner_account_id'] ?? 0);
+        $accountRow = $this->pickAccount($accounts, $accountId);
+        $accountId = (int) ($accountRow['id'] ?? 0);
+        $credentials = $this->accountModel->getCredentialsJson($accountId);
+
+        $apiKey = trim((string) ($credentials['api_key'] ?? $credentials['token'] ?? $credentials['api_token'] ?? ''));
+        if ($apiKey === '') {
+            return [
+                'success' => false,
+                'message' => 'Delhivery api_token is missing in Courier accounts.',
+            ];
+        }
+
+        $orderNumber = trim((string) ($request['order_number'] ?? ''));
+        $weightKg = (float) ($request['weight'] ?? 0);
+        if ($orderNumber === '' || $weightKg <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Order number and weight are required for Delhivery shipment creation.',
+            ];
+        }
+
+        $destination = is_array($request['destination'] ?? null) ? $request['destination'] : [];
+        $address = is_array($request['address'] ?? null) ? $request['address'] : [];
+        $consigneeName = trim((string) (
+            $destination['name']
+            ?? (($address['shipping_first_name'] ?? '') . ' ' . ($address['shipping_last_name'] ?? ''))
+            ?? (($address['first_name'] ?? '') . ' ' . ($address['last_name'] ?? ''))
+        ));
+        $consigneeName = preg_replace('/\s+/', ' ', $consigneeName);
+        if ($consigneeName === '') {
+            $consigneeName = 'Customer';
+        }
+
+        $consigneePhone = preg_replace('/\D/', '', (string) (
+            $destination['phone']
+            ?? $address['shipping_mobile']
+            ?? $address['mobile']
+            ?? ''
+        ));
+        if (strlen($consigneePhone) > 10) {
+            $consigneePhone = substr($consigneePhone, -10);
+        }
+        if ($consigneePhone === '') {
+            return ['success' => false, 'message' => 'Consignee phone is required for Delhivery order creation.'];
+        }
+
+        $consigneePin = trim((string) ($destination['postcode'] ?? $address['shipping_zipcode'] ?? $address['zipcode'] ?? ''));
+        $consigneeAdd = trim((string) ($destination['line1'] ?? $address['shipping_address_line1'] ?? $address['address_line1'] ?? ''));
+        if ($consigneePin === '' || $consigneeAdd === '') {
+            return ['success' => false, 'message' => 'Consignee pin and address are required for Delhivery.'];
+        }
+
+        $consigneeCity = trim((string) ($destination['city'] ?? $address['shipping_city'] ?? $address['city'] ?? ''));
+        $consigneeState = trim((string) ($destination['state'] ?? $address['shipping_state'] ?? $address['state'] ?? ''));
+
+        $shipper = is_array($credentials['shipper'] ?? null) ? $credentials['shipper'] : [];
+        $sellerName = trim((string) ($credentials['registered_name'] ?? $shipper['company_name'] ?? 'Seller'));
+        $sellerAdd = trim((string) ($shipper['line1'] ?? ''));
+        $sellerGst = trim((string) ($credentials['seller_gst_tin'] ?? $credentials['gstin'] ?? $address['gstin'] ?? ''));
+
+        $items = is_array($request['items'] ?? null) ? $request['items'] : [];
+        $productsDesc = trim((string) ($request['description'] ?? $request['products_desc'] ?? ''));
+        $hsnCode = '';
+        $totalAmount = 0.0;
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            if ($productsDesc === '') {
+                $productsDesc = trim((string) ($item['name'] ?? ''));
+            }
+            if ($hsnCode === '' && !empty($item['hsn'])) {
+                $hsnCode = substr(preg_replace('/\D/', '', (string) $item['hsn']), 0, 8);
+            }
+            $qty = (int) ($item['quantity'] ?? $item['units'] ?? 1);
+            $price = (float) ($item['unit_price'] ?? $item['selling_price'] ?? 0);
+            $totalAmount += max(0, $qty) * max(0.0, $price);
+        }
+        if ($productsDesc === '') {
+            $productsDesc = 'Goods';
+        }
+        if ($totalAmount <= 0) {
+            $totalAmount = (float) ($request['invoice']['total_amount'] ?? $request['sub_total'] ?? 0.01);
+        }
+        if ($totalAmount <= 0) {
+            $totalAmount = 0.01;
+        }
+        if ($hsnCode === '') {
+            $hsnCode = '9999';
+        }
+        if ($sellerGst === '') {
+            $sellerGst = 'NA';
+        }
+
+        $isCod = !empty($request['cod']);
+        $paymentMode = $isCod ? 'COD' : 'Pre-paid';
+        $codAmount = $isCod ? round((float) ($request['cod_amount'] ?? $totalAmount), 2) : 0;
+
+        $pickupName = trim((string) (
+            $request['pickup_location']
+            ?? $credentials['pickup_location_name']
+            ?? $credentials['client_name']
+            ?? $credentials['cl']
+            ?? ''
+        ));
+        if ($pickupName === '') {
+            return [
+                'success' => false,
+                'message' => 'Delhivery pickup_location_name is required in Courier accounts (must match registered warehouse name).',
+            ];
+        }
+
+        $serviceCode = $this->resolveServiceCode($request);
+        $shippingMode = $serviceCode === 'EXPRESS' ? 'Express' : 'Surface';
+
+        $uniqueOrderId = trim((string) ($request['delhivery_order_id'] ?? ($orderNumber . '_box_' . (int) ($request['box_no'] ?? 0) . '_' . time())));
+
+        $shipmentRow = [
+            'name' => $this->sanitizeDelhiveryText($consigneeName),
+            'add' => $this->sanitizeDelhiveryText($consigneeAdd),
+            'pin' => $consigneePin,
+            'city' => $this->sanitizeDelhiveryText($consigneeCity),
+            'state' => $this->sanitizeDelhiveryText($consigneeState),
+            'country' => 'India',
+            'phone' => $consigneePhone,
+            'order' => $uniqueOrderId,
+            'payment_mode' => $paymentMode,
+            'cod_amount' => $codAmount,
+            'weight' => round(max(0.01, $weightKg), 3),
+            'quantity' => max(1, (int) ($request['quantity'] ?? 1)),
+            'products_desc' => $this->sanitizeDelhiveryText($productsDesc),
+            'seller_name' => $this->sanitizeDelhiveryText($sellerName),
+            'seller_add' => $this->sanitizeDelhiveryText($sellerAdd !== '' ? $sellerAdd : $sellerName),
+            'seller_gst_tin' => $sellerGst,
+            'hsn_code' => $hsnCode,
+            'total_amount' => round($totalAmount, 2),
+            'shipping_mode' => $shippingMode,
         ];
+
+        $lengthCm = (float) ($request['length_cm'] ?? 0);
+        $widthCm = (float) ($request['width_cm'] ?? 0);
+        $heightCm = (float) ($request['height_cm'] ?? 0);
+        if ($lengthCm > 0) {
+            $shipmentRow['shipment_length'] = round($lengthCm, 1);
+        }
+        if ($widthCm > 0) {
+            $shipmentRow['shipment_width'] = round($widthCm, 1);
+        }
+        if ($heightCm > 0) {
+            $shipmentRow['shipment_height'] = round($heightCm, 1);
+        }
+
+        $invoiceRef = trim((string) ($request['invoice']['invoice_number'] ?? ''));
+        if ($invoiceRef !== '') {
+            $shipmentRow['invoice_reference'] = $invoiceRef;
+        }
+
+        $createPayload = [
+            'pickup_location' => [
+                'name' => $pickupName,
+            ],
+            'shipments' => [$shipmentRow],
+        ];
+
+        $urlInfo = resolveCourierCredentialUrls($credentials);
+        $environment = (string) ($urlInfo['environment'] ?? 'sandbox');
+        $baseUrlOverride = trim((string) ($urlInfo['api_base_url'] ?? ''));
+        $createApiPath = trim((string) ($credentials['order_create_api_path'] ?? $credentials['create_api_path'] ?? ''));
+        $packingSlipPath = trim((string) ($credentials['packing_slip_api_path'] ?? $credentials['label_api_path'] ?? ''));
+
+        $service = new DelhiveryService($apiKey, $environment, $baseUrlOverride);
+        $createResp = $service->createPackageOrder($createPayload, $createApiPath);
+
+        if ($this->shipmentModel) {
+            $this->shipmentModel->logApiCall(
+                'delhivery',
+                'create_shipment',
+                $accountId,
+                $orderNumber,
+                $createPayload,
+                $createResp,
+                !empty($createResp['success']),
+                !empty($createResp['success']) ? null : (string) ($createResp['message'] ?? 'Create failed'),
+                isset($createResp['http_code']) ? (int) $createResp['http_code'] : null
+            );
+        }
+
+        if (empty($createResp['success'])) {
+            return [
+                'success' => false,
+                'message' => (string) ($createResp['message'] ?? 'Delhivery order creation failed.'),
+                'debug' => [
+                    'http_code' => $createResp['http_code'] ?? null,
+                    'response' => $createResp['data'] ?? null,
+                ],
+            ];
+        }
+
+        $waybill = $this->extractWaybillFromCreateResponse($createResp['data'] ?? null);
+        if ($waybill === '') {
+            return [
+                'success' => false,
+                'message' => 'Delhivery order created but no waybill returned.',
+                'debug' => ['response' => $createResp['data'] ?? null],
+            ];
+        }
+
+        $packingResp = $service->getPackingSlip($waybill, $packingSlipPath);
+        if ($this->shipmentModel) {
+            $this->shipmentModel->logApiCall(
+                'delhivery',
+                'generate_label',
+                $accountId,
+                $orderNumber,
+                ['waybill' => $waybill],
+                $packingResp,
+                !empty($packingResp['success']),
+                !empty($packingResp['success']) ? null : (string) ($packingResp['message'] ?? 'Label fetch failed'),
+                isset($packingResp['http_code']) ? (int) $packingResp['http_code'] : null
+            );
+        }
+
+        $dispatchId = (int) ($request['dispatch_id'] ?? 0);
+        $labelUrl = $dispatchId > 0
+            ? base_url('index.php?page=dispatch&action=delhivery_label&dispatch_id=' . $dispatchId)
+            : base_url('index.php?page=dispatch&action=delhivery_label&awb=' . rawurlencode($waybill));
+
+        $trackingUrl = 'https://www.delhivery.com/track/package/' . rawurlencode($waybill);
+
+        return [
+            'success' => true,
+            'message' => 'Delhivery shipment created.',
+            'awb' => $waybill,
+            'awb_code' => $waybill,
+            'partner_shipment_id' => $waybill,
+            'shipment_id' => $waybill,
+            'order_id' => $uniqueOrderId,
+            'label_url' => $labelUrl,
+            'tracking_url' => $trackingUrl,
+            'status' => 'created',
+            'metadata' => [
+                'packing_slip' => $packingResp['data'] ?? null,
+                'create_response' => $createResp['data'] ?? null,
+                'service_code' => $serviceCode,
+                'shipping_mode' => $shippingMode,
+            ],
+            'debug' => [
+                'partner' => 'delhivery',
+                'account_id' => $accountId,
+                'environment' => $environment,
+                'waybill' => $waybill,
+            ],
+        ];
+    }
+
+    /** @param array<string, mixed> $request */
+    private function resolveServiceCode(array $request): string
+    {
+        $serviceCode = strtoupper(trim((string) ($request['service_code'] ?? $request['product_type'] ?? '')));
+        if (in_array($serviceCode, ['SURFACE', 'EXPRESS'], true)) {
+            return $serviceCode;
+        }
+
+        $courierId = (string) ($request['courier_id'] ?? $request['selected_courier_id'] ?? '');
+        if (preg_match('/_EXPRESS$/i', $courierId)) {
+            return 'EXPRESS';
+        }
+        if (preg_match('/_SURFACE$/i', $courierId)) {
+            return 'SURFACE';
+        }
+
+        return 'SURFACE';
+    }
+
+    /** @param mixed $data */
+    private function extractWaybillFromCreateResponse($data): string
+    {
+        if (!is_array($data)) {
+            return '';
+        }
+
+        if (!empty($data['packages']) && is_array($data['packages'])) {
+            foreach ($data['packages'] as $pkg) {
+                if (!is_array($pkg)) {
+                    continue;
+                }
+                foreach (['waybill', 'wbn', 'awb'] as $key) {
+                    $val = trim((string) ($pkg[$key] ?? ''));
+                    if ($val !== '') {
+                        return $val;
+                    }
+                }
+            }
+        }
+
+        foreach (['waybill', 'wbn', 'awb'] as $key) {
+            $val = trim((string) ($data[$key] ?? ''));
+            if ($val !== '') {
+                return $val;
+            }
+        }
+
+        return '';
+    }
+
+    private function sanitizeDelhiveryText(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return $value;
+        }
+        $value = str_replace(['&', '#', '%', ';', '\\'], [' and ', '', '', ',', '/'], $value);
+        return preg_replace('/\s+/', ' ', $value) ?? $value;
     }
 
     /** @param list<array<string, mixed>> $accounts */

@@ -78,12 +78,15 @@ return [
     ],
     'delhivery' => [
         'label' => 'Delhivery',
-        'description' => 'Delhivery One Calculate Shipping Cost: GET /api/kinko/v1/invoice/charges/.json with md, ss, o_pin, d_pin, cgm, pt, cod. Sandbox host: staging-express.delhivery.com. Production: track.delhivery.com.',
+        'description' => 'Delhivery One APIs. Rates: GET /api/kinko/v1/invoice/charges/.json. Order: POST /api/cmu/create.json (format=json&data=). Label: GET /api/p/packing_slip?wbns=WAYBILL. pickup_location_name must match registered warehouse exactly.',
         'template' => [
             'client_name' => 'Saxena',
             'api_token' => '5327198a87ee782d219fead3b9040b5da8d94671',
-            'rate_api_path' => '',
             'pickup_location_name' => '',
+            'rate_api_path' => '',
+            'order_create_api_path' => '',
+            'packing_slip_api_path' => '',
+            'seller_gst_tin' => '',
             'registered_name' => 'Exotic India Art Pvt Ltd',
             'sandbox_api_base_url' => 'https://staging-express.delhivery.com',
             'production_api_base_url' => 'https://track.delhivery.com',

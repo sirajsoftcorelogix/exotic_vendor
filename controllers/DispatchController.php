@@ -1666,9 +1666,11 @@ class DispatchController {
                 }
             }
 
-            // After all invoices and dispatch records are created, create Shiprocket shipments separately
+            // After all invoices and dispatch records are created, create courier shipments (Shiprocket or Delhivery)
             if (!empty($batch_no) && !empty($created_dispatches)) {
-                
+                $courierGateway = null;
+                $courierShipmentModel = null;
+
                 foreach ($created_dispatches as $index => $dispatchInfo) {
                     $dispatchId = $dispatchInfo['dispatch_id'];
                     $invoiceId = $dispatchInfo['invoice_id'];
@@ -1850,6 +1852,112 @@ class DispatchController {
                     }
                     if ($weight <= 0) $weight = 0.5;
                     if ($subTotal <= 0) $subTotal = 0.01;
+
+                    $partnerCode = strtolower(trim((string)($boxData['partner_code'] ?? '')));
+                    if ($partnerCode === 'delhivery') {
+                        if ($courierGateway === null) {
+                            $courierGateway = new CourierGateway($GLOBALS['conn']);
+                            $courierShipmentModel = new CourierShipment($GLOBALS['conn']);
+                        }
+
+                        $delhiveryItems = [];
+                        foreach ($orderItems as $oi) {
+                            $delhiveryItems[] = [
+                                'name' => $oi['name'] ?? 'Item',
+                                'sku' => $oi['sku'] ?? '',
+                                'quantity' => (int)($oi['units'] ?? 1),
+                                'unit_price' => (float)($oi['selling_price'] ?? 0),
+                                'hsn' => $oi['hsn'] ?? '',
+                            ];
+                        }
+
+                        $paymentMethod = strtoupper((string)($invoice['payment_method'] ?? 'PREPAID'));
+                        $isCod = (strpos($paymentMethod, 'COD') !== false);
+
+                        $createRequest = [
+                            'partner_code' => 'delhivery',
+                            'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                            'dispatch_id' => $dispatchId,
+                            'order_number' => $order_number,
+                            'box_no' => $box_no,
+                            'courier_id' => (string)($boxData['courier_id'] ?? ''),
+                            'product_type' => (string)($boxData['product_type'] ?? ''),
+                            'pickup_location' => (string)($boxData['pickup_location'] ?? $firm['pickup_location'] ?? ''),
+                            'weight' => $weight,
+                            'length_cm' => $length,
+                            'width_cm' => $width,
+                            'height_cm' => $height,
+                            'destination' => [
+                                'name' => trim(($address['shipping_first_name'] ?? $billingFirstName) . ' ' . ($address['shipping_last_name'] ?? $billingLastName)),
+                                'line1' => $address['shipping_address_line1'] ?? $billingAddress1,
+                                'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                                'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                                'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                                'phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                                'country_code' => 'IN',
+                            ],
+                            'address' => $address,
+                            'items' => $delhiveryItems,
+                            'invoice' => [
+                                'invoice_number' => $invoice['invoice_number'] ?? '',
+                                'total_amount' => (float)($invoice['total_amount'] ?? $subTotal),
+                            ],
+                            'description' => (string)($groupname ?? ''),
+                            'cod' => $isCod ? 1 : 0,
+                            'cod_amount' => $isCod ? round($subTotal, 2) : 0,
+                            'sub_total' => round($subTotal, 2),
+                        ];
+
+                        $createResult = $courierGateway->createShipment($createRequest);
+                        if (!empty($createResult['success'])) {
+                            $awbCode = (string)($createResult['awb'] ?? $createResult['awb_code'] ?? '');
+                            $labelUrl = (string)($createResult['label_url'] ?? '');
+                            $trackingUrl = (string)($createResult['tracking_url'] ?? '');
+
+                            $dispatchModel->updateDispatch($dispatchId, [
+                                'shiprocket_order_id' => $createResult['order_id'] ?? null,
+                                'shiprocket_shipment_id' => null,
+                                'shiprocket_tracking_url' => $trackingUrl,
+                                'awb_code' => $awbCode !== '' ? $awbCode : null,
+                                'shipment_status' => 'created',
+                                'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                                'updated_at' => date('Y-m-d H:i:s'),
+                            ]);
+                            $ordersModel->updateOrderByOrderNumber($order_number, ['status' => 'Dispatched']);
+
+                            $courierShipmentModel->saveShipment([
+                                'invoice_id' => $invoiceId,
+                                'box_no' => $box_no,
+                                'order_number' => $order_number,
+                                'legacy_dispatch_id' => $dispatchId,
+                                'partner_code' => 'delhivery',
+                                'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                                'partner_shipment_id' => $awbCode,
+                                'awb' => $awbCode,
+                                'tracking_url' => $trackingUrl,
+                                'product_group' => (string)($createResult['metadata']['shipping_mode'] ?? ''),
+                                'service_level' => (string)($boxData['courier_name'] ?? 'Delhivery'),
+                                'payment_mode' => $isCod ? 'cod' : 'prepaid',
+                                'is_international' => 0,
+                                'currency' => 'INR',
+                                'label_url' => $labelUrl,
+                                'status' => 'created',
+                                'status_text' => 'Delhivery shipment created',
+                                'metadata_json' => json_encode($createResult['metadata'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            ]);
+
+                            $created_dispatches[$index]['awb_code'] = $awbCode;
+                            $created_dispatches[$index]['label_url'] = $labelUrl;
+                            $created_dispatches[$index]['partner_code'] = 'delhivery';
+                        } else {
+                            $errors[] = 'Delhivery error for order #' . $order_number . ', box #' . $box_no . ': ' . ($createResult['message'] ?? 'Unknown error');
+                            $dispatchModel->updateDispatch($dispatchId, [
+                                'shipment_status' => 'failed',
+                                'updated_at' => date('Y-m-d H:i:s'),
+                            ]);
+                        }
+                        continue;
+                    }
 
                     $shiprocketPayload = [
                         'order_id' => $shiprocketOrderId,
@@ -2394,6 +2502,131 @@ class DispatchController {
             ]);
             exit;
         }
+    }
+
+    /**
+     * Render printable Delhivery shipping label from packing slip API data.
+     * URL: ?page=dispatch&action=delhivery_label&dispatch_id=123  or  &awb=WAYBILL
+     */
+    public function delhiveryLabel()
+    {
+        global $dispatchModel;
+        is_login();
+
+        $dispatchId = (int)($_GET['dispatch_id'] ?? 0);
+        $awb = trim((string)($_GET['awb'] ?? ''));
+        $dispatch = null;
+
+        if ($dispatchId > 0) {
+            $dispatch = $dispatchModel->getDispatchById($dispatchId);
+            if ($dispatch && $awb === '' && !empty($dispatch['awb_code'])) {
+                $awb = trim((string)$dispatch['awb_code']);
+            }
+        }
+
+        if ($awb === '') {
+            http_response_code(400);
+            echo 'Missing or invalid dispatch / AWB for Delhivery label.';
+            exit;
+        }
+
+        $packingData = null;
+        $courierShipmentModel = new CourierShipment($GLOBALS['conn']);
+
+        if ($dispatchId > 0) {
+            $stmt = $GLOBALS['conn']->prepare(
+                'SELECT metadata_json FROM courier_shipments WHERE legacy_dispatch_id = ? AND partner_code = ? ORDER BY id DESC LIMIT 1'
+            );
+            if ($stmt) {
+                $partner = 'delhivery';
+                $stmt->bind_param('is', $dispatchId, $partner);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($row && !empty($row['metadata_json'])) {
+                    $meta = json_decode($row['metadata_json'], true);
+                    if (is_array($meta) && !empty($meta['packing_slip'])) {
+                        $packingData = $meta['packing_slip'];
+                    }
+                }
+            }
+        }
+
+        if ($packingData === null) {
+            $packingData = $this->fetchDelhiveryPackingSlipLive($awb);
+        }
+
+        $labelPackage = $this->extractDelhiveryLabelPackage($packingData, $awb);
+        if ($labelPackage === null) {
+            http_response_code(502);
+            echo 'Could not load Delhivery packing slip for AWB ' . htmlspecialchars($awb);
+            exit;
+        }
+
+        require __DIR__ . '/../views/dispatch/delhivery_label.php';
+        exit;
+    }
+
+    /** @return mixed */
+    private function fetchDelhiveryPackingSlipLive(string $awb)
+    {
+        require_once __DIR__ . '/../models/courier/CourierAccount.php';
+        require_once __DIR__ . '/../delhivery_service.php';
+        require_once __DIR__ . '/../helpers/courier/credential_urls.php';
+
+        $accountModel = new CourierAccount($GLOBALS['conn']);
+        $accounts = $accountModel->listActiveAccountsByPartnerCode('delhivery');
+        if (!$accounts) {
+            return null;
+        }
+
+        $credentials = $accountModel->getCredentialsJson((int)($accounts[0]['id'] ?? 0));
+        $apiKey = trim((string)($credentials['api_key'] ?? $credentials['api_token'] ?? ''));
+        if ($apiKey === '') {
+            return null;
+        }
+
+        $urlInfo = resolveCourierCredentialUrls($credentials);
+        $environment = (string)($urlInfo['environment'] ?? 'sandbox');
+        $baseUrlOverride = trim((string)($urlInfo['api_base_url'] ?? ''));
+        $packingSlipPath = trim((string)($credentials['packing_slip_api_path'] ?? $credentials['label_api_path'] ?? ''));
+
+        $service = new DelhiveryService($apiKey, $environment, $baseUrlOverride);
+        $resp = $service->getPackingSlip($awb, $packingSlipPath);
+        return !empty($resp['success']) ? ($resp['data'] ?? null) : null;
+    }
+
+    /**
+     * @param mixed $packingData
+     * @return array<string, mixed>|null
+     */
+    private function extractDelhiveryLabelPackage($packingData, string $awb): ?array
+    {
+        if (!is_array($packingData)) {
+            return null;
+        }
+
+        $packages = $packingData['packages'] ?? $packingData['Packages'] ?? null;
+        if (is_array($packages)) {
+            foreach ($packages as $pkg) {
+                if (!is_array($pkg)) {
+                    continue;
+                }
+                $wbn = trim((string)($pkg['wbn'] ?? $pkg['waybill'] ?? $pkg['awb'] ?? ''));
+                if ($wbn === '' || $wbn === $awb) {
+                    return $pkg;
+                }
+            }
+            if (!empty($packages[0]) && is_array($packages[0])) {
+                return $packages[0];
+            }
+        }
+
+        if (!empty($packingData['wbn']) || !empty($packingData['waybill'])) {
+            return $packingData;
+        }
+
+        return null;
     }
 }
 ?>

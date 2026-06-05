@@ -1,16 +1,11 @@
 <?php
 /**
  * Delhivery HTTP Client
- * 
- * Thin wrapper for Delhivery REST API calls.
- * Called by DelhiveryAdapter::getRates() and createShipment().
- * 
- * TODO: Implement actual Delhivery API integration
- * - Serviceability API: /api/backend/api_pick_expected_del_date/
- * - Create Shipment: /api/cmu/create/revision/1/
- * - Get Tracking: /api/track/shipment/
- * 
- * Reference: https://www.delhivery.com/api/
+ *
+ * Used by DelhiveryAdapter for rates, order creation, and packing slip (label data).
+ *
+ * @see https://delhivery-express-api-doc.readme.io/reference/order-creation-api
+ * @see https://delhivery-express-api-doc.readme.io/reference/packing-slip-api
  */
 
 class DelhiveryService
@@ -19,10 +14,6 @@ class DelhiveryService
     private string $baseUrl;
     private string $environment;
 
-    /**
-     * @param string $apiKey Delhivery API key from credentials
-     * @param string $environment 'sandbox' or 'production'
-     */
     public function __construct(string $apiKey, string $environment = 'production', string $baseUrlOverride = '')
     {
         $this->apiKey = $apiKey;
@@ -34,36 +25,17 @@ class DelhiveryService
             return;
         }
 
-        // Delhivery uses different hostnames for staging vs production.
-        // Production docs commonly reference track.delhivery.com.
         $this->baseUrl = $environment === 'sandbox'
             ? 'https://staging-express.delhivery.com'
             : 'https://track.delhivery.com';
     }
 
     /**
-     * Estimate charges via Delhivery rate API.
-     *
-     * Default (legacy): GET /api/kinko/v1/invoice/charges/.json
-     * Override: set credentials.rate_api_path to the URL from Delhivery One
-     * Developer Portal → "Calculate Shipping Cost" or B2B Freight Estimation.
-     *
-     * @param array{md:string,cgm:int,o_pin:string,d_pin:string,ss:string,cl?:string,pt?:string} $params
-     * @param string $rateApiPath Optional path or full URL override
-     * @return array{success:bool,http_code?:int,data?:mixed,message?:string,request_url?:string,curl_error?:string,raw?:string}
+     * @param array{md:string,cgm:int,o_pin:string,d_pin:string,ss:string,cl?:string,pt?:string,cod?:int} $params
      */
     public function estimateFreightCharges(array $params, string $rateApiPath = ''): array
     {
-        $rateApiPath = trim($rateApiPath);
-        if ($rateApiPath === '') {
-            $endpoint = '/api/kinko/v1/invoice/charges/.json';
-            $url = rtrim($this->baseUrl, '/') . $endpoint;
-        } elseif (preg_match('#^https?://#i', $rateApiPath)) {
-            $url = $rateApiPath;
-        } else {
-            $url = rtrim($this->baseUrl, '/') . '/' . ltrim($rateApiPath, '/');
-        }
-
+        $url = $this->resolveApiUrl($rateApiPath, '/api/kinko/v1/invoice/charges/.json');
         $query = http_build_query($params);
         if ($query !== '') {
             $url .= (str_contains($url, '?') ? '&' : '?') . $query;
@@ -73,61 +45,73 @@ class DelhiveryService
     }
 
     /**
-     * Create a shipment via Delhivery.
-     * 
-     * TODO: Implement actual Delhivery API call
-     * 
-     * @param array $shipmentData Shipment details (customer, items, dimensions, etc.)
-     * @return array ['success' => bool, 'awb' => string, 'label_url' => string, 'error' => string]
+     * Create a B2C package order (manifestation).
+     *
+     * POST body must be format=json&data={JSON} per Delhivery docs.
+     *
+     * @param array{pickup_location:array<string,mixed>,shipments:list<array<string,mixed>>} $payload
+     */
+    public function createPackageOrder(array $payload, string $createApiPath = ''): array
+    {
+        $url = $this->resolveApiUrl($createApiPath, '/api/cmu/create.json');
+        $body = 'format=json&data=' . rawurlencode(json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        return $this->makeRequest('POST', $url, [
+            'body' => $body,
+            'content_type' => 'application/x-www-form-urlencoded',
+        ]);
+    }
+
+    /**
+     * Fetch packing slip / label data for one or more waybills (comma-separated).
+     *
+     * @see https://delhivery-express-api-doc.readme.io/reference/packing-slip-api
+     */
+    public function getPackingSlip(string $waybills, string $packingSlipPath = ''): array
+    {
+        $waybills = trim($waybills);
+        if ($waybills === '') {
+            return ['success' => false, 'message' => 'Waybill is required for packing slip.'];
+        }
+
+        $basePath = $packingSlipPath !== '' ? $packingSlipPath : '/api/p/packing_slip';
+        $url = $this->resolveApiUrl($basePath, '/api/p/packing_slip');
+        $url .= (str_contains($url, '?') ? '&' : '?') . 'wbns=' . rawurlencode($waybills);
+
+        return $this->makeRequest('GET', $url);
+    }
+
+    /**
+     * @deprecated Use createPackageOrder()
      */
     public function createShipment(array $shipmentData): array
     {
-        // TODO: Call Delhivery create shipment API
-        // Example:
-        // $response = $this->makeRequest('POST', '/cmu/create/revision/1/', [
-        //     'waybills' => $shipmentData['waybills'],
-        //     'pickup' => $shipmentData['pickup'],
-        // ]);
-        
-        return [
-            'success' => false,
-            'message' => 'Delhivery create shipment API not implemented yet',
-        ];
+        return $this->createPackageOrder($shipmentData);
     }
 
-    /**
-     * Get tracking status for a shipment.
-     * 
-     * TODO: Implement actual Delhivery API call
-     * 
-     * @param string $awb Air Waybill number
-     * @return array ['success' => bool, 'status' => string, 'tracking' => [], 'error' => string]
-     */
     public function getTracking(string $awb): array
     {
-        // TODO: Call Delhivery tracking API
-        // Example:
-        // $response = $this->makeRequest('GET', '/track/shipment/', [
-        //     'waybills' => $awb,
-        // ]);
-        
-        return [
-            'success' => false,
-            'message' => 'Delhivery tracking API not implemented yet',
-        ];
+        $url = rtrim($this->baseUrl, '/') . '/api/v1/packages/json/?waybill=' . rawurlencode($awb);
+        return $this->makeRequest('GET', $url);
+    }
+
+    private function resolveApiUrl(string $override, string $defaultPath): string
+    {
+        $override = trim($override);
+        if ($override === '') {
+            return rtrim($this->baseUrl, '/') . $defaultPath;
+        }
+        if (preg_match('#^https?://#i', $override)) {
+            return $override;
+        }
+        return rtrim($this->baseUrl, '/') . '/' . ltrim($override, '/');
     }
 
     /**
-     * Make HTTP request to Delhivery API.
-     * 
-     * TODO: Implement actual HTTP request logic with error handling
-     * 
-     * @param string $method HTTP method (GET, POST, etc.)
-     * @param string $endpoint API endpoint path
-     * @param array $data Request parameters or body
-     * @return array API response
+     * @param array{body?:string,content_type?:string} $options
+     * @return array{success:bool,http_code?:int,data?:mixed,message?:string,request_url?:string,curl_error?:string,raw?:string}
      */
-    private function makeRequest(string $method, string $url): array
+    private function makeRequest(string $method, string $url, array $options = []): array
     {
         $method = strtoupper(trim($method));
         if (!in_array($method, ['GET', 'POST'], true)) {
@@ -138,14 +122,21 @@ class DelhiveryService
             'Accept: application/json, text/plain, */*',
             'Authorization: Token ' . $this->apiKey,
         ];
+        if (!empty($options['content_type'])) {
+            $headers[] = 'Content-Type: ' . $options['content_type'];
+        }
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 45);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
+            if (isset($options['body'])) {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $options['body']);
+            }
         }
 
         $raw = curl_exec($ch);
@@ -163,18 +154,52 @@ class DelhiveryService
         }
 
         $ok = $httpCode >= 200 && $httpCode < 300;
+        if ($ok && is_array($decoded)) {
+            if (isset($decoded['success']) && $decoded['success'] === false) {
+                $ok = false;
+            }
+            if (isset($decoded['error']) && $decoded['error'] === true) {
+                $ok = false;
+            }
+        }
+
+        $message = $ok ? 'OK' : ('HTTP ' . $httpCode);
+        if (!$ok && is_array($decoded)) {
+            $message = $this->extractErrorMessage($decoded) ?: $message;
+        }
+
         return [
             'success' => $ok,
             'http_code' => $httpCode,
             'data' => $decoded,
             'raw' => $rawStr,
-            'message' => $ok ? 'OK' : ('HTTP ' . $httpCode),
+            'message' => $message,
             'request_url' => preg_replace('/Token\s+\S+/', 'Token ***', $url),
             'curl_error' => $curlError,
         ];
     }
-}
 
-// Example usage (when implemented):
-// $service = new DelhiveryService($credentials['api_key'], $credentials['environment']);
-// $result = $service->getServiceability('110001', '400001', 2.5);
+    /** @param array<string, mixed> $decoded */
+    private function extractErrorMessage(array $decoded): ?string
+    {
+        foreach (['rmk', 'remark', 'message', 'error'] as $key) {
+            if (!empty($decoded[$key]) && is_string($decoded[$key])) {
+                return $decoded[$key];
+            }
+        }
+        if (!empty($decoded['packages']) && is_array($decoded['packages'])) {
+            foreach ($decoded['packages'] as $pkg) {
+                if (!is_array($pkg)) {
+                    continue;
+                }
+                if (!empty($pkg['remarks']) && is_array($pkg['remarks'])) {
+                    return implode('; ', array_map('strval', $pkg['remarks']));
+                }
+                if (!empty($pkg['status']) && strtolower((string) $pkg['status']) !== 'success') {
+                    return (string) $pkg['status'];
+                }
+            }
+        }
+        return null;
+    }
+}

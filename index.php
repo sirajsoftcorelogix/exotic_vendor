@@ -1357,6 +1357,9 @@ switch ($page) {
             case 'getDirectCourierRates':
                 $controller->getDirectCourierRates();
                 break;
+            case 'delhivery_label':
+                $controller->delhiveryLabel();
+                break;
             default:
                 $controller->create();
                 break;
