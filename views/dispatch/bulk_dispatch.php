@@ -1246,6 +1246,9 @@
                             </div>
                             <p class="text-[11px] text-gray-400 sm:text-right">Scroll sideways to compare</p>
                         </div>
+                        <div class="px-3 py-2 bg-white border-b border-gray-100">
+                            <div class="text-sm font-semibold text-gray-900">Shiprocket</div>
+                        </div>
                         <div class="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/95 border-b border-gray-100">
                             <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mr-1 hidden sm:inline">Debug</span>
                             <button type="button" class="retry-couriers-btn inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors">
