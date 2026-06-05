@@ -2163,7 +2163,7 @@ class DispatchController {
      */
     public function getDirectCourierRates()
     {
-        global $commanModel, $ordersModel;
+        global $commanModel, $ordersModel, $dispatchModel;
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
@@ -2208,10 +2208,16 @@ class DispatchController {
             $rateRequest['partner_code'] = 'delhivery';
             $rateRequest['cod'] = $cod;
 
-            // Provide pickup postcode for adapters that need it.
-            $firmPin = trim((string)($firm['pincode'] ?? $firm['postcode'] ?? ''));
-            if ($firmPin !== '') {
-                $rateRequest['pickup'] = ['postcode' => $firmPin];
+            // Use the same pickup postcode resolution as Shiprocket serviceability.
+            $pickupResolution = $this->resolveShiprocketPickupPostcode(
+                $dispatchModel,
+                is_array($firm) ? $firm : [],
+                $requestedPickupLocation
+            );
+            $pickupPostcode = trim((string)($pickupResolution['postcode'] ?? ''));
+            if ($pickupPostcode !== '') {
+                $rateRequest['pickup'] = ['postcode' => $pickupPostcode];
+                $rateRequest['pickup_postcode'] = $pickupPostcode;
             }
 
             $gatewayResult = $courierDispatch->getRates($rateRequest);

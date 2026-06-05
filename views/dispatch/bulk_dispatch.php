@@ -1383,7 +1383,7 @@
                         </span>
                         <div class="min-w-0">
                             <div class="text-base font-bold tracking-tight text-red-950">Delhivery</div>
-                            <div class="text-[11px] font-medium text-red-700/90">Direct courier rates from Delhivery</div>
+                            <div class="text-[11px] font-medium text-red-700/90">Direct rates from Delhivery One (Calculate Shipping Cost API)</div>
                         </div>
                     </div>`;
         }
