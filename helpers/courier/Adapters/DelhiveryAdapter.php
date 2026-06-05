@@ -418,20 +418,17 @@ class DelhiveryAdapter implements CourierAdapterInterface
         $paymentMode = $isCod ? 'COD' : 'Pre-paid';
         $codAmount = $isCod ? round((float) ($request['cod_amount'] ?? $totalAmount), 2) : 0;
 
-        $pickupName = trim((string) (
-            $request['pickup_location']
-            ?? $credentials['pickup_location_name']
-            ?? $credentials['client_name']
-            ?? $credentials['cl']
-            ?? ''
-        ));
+        $pickupName = $this->resolveDelhiveryPickupName($request, $credentials);
         if ($pickupName === '') {
             return [
                 'success' => false,
-                'message' => 'Delhivery pickup_location_name is required in Courier accounts (must match registered warehouse name).',
+                'message' => 'Delhivery pickup_location_name is missing in Courier accounts. '
+                    . 'Set it to the exact facility name from Delhivery One → Settings → Pickup Locations (case-sensitive). '
+                    . 'Do not use Shiprocket pickup names like "Head Off".',
             ];
         }
 
+        $requestedPickup = trim((string)($request['pickup_location'] ?? ''));
         $serviceCode = $this->resolveServiceCode($request);
         $shippingMode = $serviceCode === 'EXPRESS' ? 'Express' : 'Surface';
 
@@ -508,12 +505,21 @@ class DelhiveryAdapter implements CourierAdapterInterface
         }
 
         if (empty($createResp['success'])) {
+            $message = (string) ($createResp['message'] ?? 'Delhivery order creation failed.');
+            if (stripos($message, 'ClientWarehouse') !== false || stripos($message, 'warehouse') !== false) {
+                $message .= ' Pickup name sent: "' . $pickupName . '".'
+                    . ' Update Courier accounts → Delhivery → pickup_location_name to match Delhivery One pickup location exactly'
+                    . ($requestedPickup !== '' && strcasecmp($requestedPickup, $pickupName) !== 0
+                        ? ' (UI had Shiprocket pickup "' . $requestedPickup . '", which Delhivery does not recognize).'
+                        : '.');
+            }
             return [
                 'success' => false,
-                'message' => (string) ($createResp['message'] ?? 'Delhivery order creation failed.'),
+                'message' => $message,
                 'debug' => [
                     'http_code' => $createResp['http_code'] ?? null,
                     'response' => $createResp['data'] ?? null,
+                    'pickup_location_name' => $pickupName,
                 ],
             ];
         }
@@ -592,6 +598,34 @@ class DelhiveryAdapter implements CourierAdapterInterface
         }
 
         return 'SURFACE';
+    }
+
+    /**
+     * Delhivery warehouse name — never use Shiprocket pickup labels (e.g. "Head Off") directly.
+     *
+     * @param array<string, mixed> $request
+     * @param array<string, mixed> $credentials
+     */
+    private function resolveDelhiveryPickupName(array $request, array $credentials): string
+    {
+        $fromCredentials = trim((string)(
+            $credentials['pickup_location_name']
+            ?? $credentials['warehouse_name']
+            ?? ''
+        ));
+        if ($fromCredentials !== '') {
+            return $fromCredentials;
+        }
+
+        $aliases = is_array($credentials['pickup_location_aliases'] ?? null)
+            ? $credentials['pickup_location_aliases']
+            : [];
+        $requested = trim((string)($request['pickup_location'] ?? ''));
+        if ($requested !== '' && !empty($aliases[$requested])) {
+            return trim((string)$aliases[$requested]);
+        }
+
+        return '';
     }
 
     /** @param mixed $data */

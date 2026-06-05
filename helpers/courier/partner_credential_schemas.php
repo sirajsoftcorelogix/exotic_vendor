@@ -78,11 +78,14 @@ return [
     ],
     'delhivery' => [
         'label' => 'Delhivery',
-        'description' => 'Delhivery One APIs. Rates: GET /api/kinko/v1/invoice/charges/.json. Order: POST /api/cmu/create.json (format=json&data=). Label: GET /api/p/packing_slip?wbns=WAYBILL. pickup_location_name must match registered warehouse exactly.',
+        'description' => 'Delhivery One APIs. Order create requires pickup_location_name = exact facility name from Delhivery One → Settings → Pickup Locations (case-sensitive). Shiprocket pickup names are NOT valid for Delhivery.',
         'template' => [
-            'client_name' => 'Saxena',
+            'client_name' => 'Exotic India Art Pvt Ltd',
             'api_token' => '5327198a87ee782d219fead3b9040b5da8d94671',
-            'pickup_location_name' => '',
+            'pickup_location_name' => 'Exotic India',
+            'pickup_location_aliases' => [
+                'Head Office' => 'Exotic India',
+            ],
             'rate_api_path' => '',
             'order_create_api_path' => '',
             'packing_slip_api_path' => '',
@@ -92,7 +95,7 @@ return [
             'production_api_base_url' => 'https://track.delhivery.com',
             'shipper' => [
                 'company_name' => 'Exotic India Art Pvt Ltd',
-                'full_name' => '',
+                'full_name' => 'Vipin Goel',
                 'phone' => '',
                 'email' => '',
                 'line1' => 'A-16/1, Wazirpur Industrial Area',
