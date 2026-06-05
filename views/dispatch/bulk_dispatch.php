@@ -1346,6 +1346,7 @@
                             outputPre.textContent = JSON.stringify(boxElement._lastCourierDebugOutput || {}, null, 2);
                         }
                     }
+                    fetchDirectCourierRatesForBox(boxElement, payload);
                 }
             })
             .catch(error => {
@@ -1372,6 +1373,7 @@
                             </div>
                         </div>`;
                 }
+                fetchDirectCourierRatesForBox(boxElement, payload);
             });
         }
 
