@@ -34,6 +34,11 @@ class CourierDispatchService
         $height = (float) ($input['height'] ?? 0);
         $weight = (float) ($input['weight'] ?? 0);
 
+        // Bulk dispatch box sizes are in inches; volumetric formula expects cm (L×W×H÷5000).
+        $lengthCm = $length * 2.54;
+        $breadthCm = $breadth * 2.54;
+        $heightCm = $height * 2.54;
+
         $destinationCountry = normalizeCountryIso2(
             $orderInfo['shipping_country'] ?? $orderInfo['country'] ?? 'IN',
             $this->conn
@@ -44,10 +49,14 @@ class CourierDispatchService
             'partner_code' => (string) ($input['partner_code'] ?? ''),
             'partner_account_id' => (int) ($input['partner_account_id'] ?? 0),
             'weight' => $weight,
-            'chargeable_weight_kg' => CourierGateway::chargeableWeightKg($weight, $length, $breadth, $height),
+            'chargeable_weight_kg' => CourierGateway::chargeableWeightKg($weight, $lengthCm, $breadthCm, $heightCm),
             'length' => $length,
             'breadth' => $breadth,
             'height' => $height,
+            'length_cm' => $lengthCm,
+            'breadth_cm' => $breadthCm,
+            'height_cm' => $heightCm,
+            'actual_weight_kg' => $weight,
             'cod' => (int) ($input['cod'] ?? 0),
             'destination_country' => $destinationCountry,
             'destination' => [

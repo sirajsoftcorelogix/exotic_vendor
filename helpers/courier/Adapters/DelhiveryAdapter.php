@@ -76,12 +76,15 @@ class DelhiveryAdapter implements CourierAdapterInterface
             ];
         }
 
-        $chargeableKg = (float) ($request['chargeable_weight_kg'] ?? $request['weight'] ?? 0);
-        $chargeableGrams = (int) round(max(0.0, $chargeableKg) * 1000);
+        // Delhivery cgm is grams, weight-only (API has no dimensions). Use the same actual
+        // box weight (kg) sent to Shiprocket serviceability, not volumetric chargeable weight.
+        $actualKg = (float) ($request['weight'] ?? 0);
+        $billableKg = (float) ($request['chargeable_weight_kg'] ?? $actualKg);
+        $chargeableGrams = (int) ceil(max(0.0, $actualKg) * 1000);
         if ($chargeableGrams <= 0) {
             return [
                 'success' => false,
-                'message' => 'Chargeable weight is required for Delhivery rates.',
+                'message' => 'Box weight is required for Delhivery rates.',
             ];
         }
 
@@ -106,22 +109,6 @@ class DelhiveryAdapter implements CourierAdapterInterface
         ];
         if ($clientName !== '') {
             $baseParams['cl'] = $clientName;
-        }
-
-        // Legacy kinko invoice API often returns a flat tariff that does not match Delhivery One dashboard.
-        if ($rateApiPath === '') {
-            $validation = $this->validateLegacyInvoiceApi($service, array_merge($baseParams, ['md' => 'S']), $chargeableGrams);
-            if ($validation !== null) {
-                return $validation + [
-                    'debug' => [
-                        'partner' => 'delhivery',
-                        'account_id' => $accountId,
-                        'environment' => $environment,
-                        'rate_api' => 'kinko/v1/invoice/charges (legacy)',
-                        'validation' => $validation['debug_validation'] ?? null,
-                    ],
-                ];
-            }
         }
 
         $quotes = [];
@@ -157,7 +144,9 @@ class DelhiveryAdapter implements CourierAdapterInterface
                 'partner_account_id' => $accountId,
                 'service_code' => $md === 'S' ? 'SURFACE' : 'EXPRESS',
                 'metadata' => [
-                    'chargeable_weight_g' => $breakdown['charged_weight_g'] ?? $chargeableGrams,
+                    'cgm' => $chargeableGrams,
+                    'actual_weight_kg' => $actualKg,
+                    'billable_weight_kg' => $billableKg,
                     'gross_amount' => $breakdown['gross_amount'],
                     'total_amount' => $breakdown['total_amount'],
                     'origin_pin' => $originPin,
@@ -195,7 +184,8 @@ class DelhiveryAdapter implements CourierAdapterInterface
                     'client_name' => $clientName,
                     'origin_pin' => $originPin,
                     'dest_pin' => $destPin,
-                    'chargeable_weight_g' => $chargeableGrams,
+                    'cgm' => $chargeableGrams,
+                    'actual_weight_kg' => $actualKg,
                     'responses' => $debug,
                 ],
             ];
@@ -212,7 +202,9 @@ class DelhiveryAdapter implements CourierAdapterInterface
                 'rate_request' => [
                     'origin_pin' => $originPin,
                     'dest_pin' => $destPin,
-                    'chargeable_weight_g' => $chargeableGrams,
+                    'cgm' => $chargeableGrams,
+                    'actual_weight_kg' => $actualKg,
+                    'billable_weight_kg' => $billableKg,
                     'client_name' => $clientName !== '' ? $clientName : null,
                     'payment_type' => $pt,
                     'cod' => $isCod ? 1 : 0,
@@ -303,55 +295,6 @@ class DelhiveryAdapter implements CourierAdapterInterface
             }
         }
         return null;
-    }
-
-    /**
-     * Detect misconfigured legacy invoice API (same gross for very different weights).
-     *
-     * @param array<string, mixed> $baseParams
-     * @return array<string, mixed>|null Error payload when invalid
-     */
-    private function validateLegacyInvoiceApi(DelhiveryService $service, array $baseParams, int $chargeableGrams): ?array
-    {
-        $lowG = max(500, min($chargeableGrams, 500));
-        $highG = max($lowG + 2000, 3000);
-
-        $lowResp = $service->estimateFreightCharges(array_merge($baseParams, ['cgm' => $lowG]));
-        $highResp = $service->estimateFreightCharges(array_merge($baseParams, ['cgm' => $highG]));
-
-        $lowAmount = $this->resolveDisplayAmount($this->parseChargeBreakdown($lowResp['data'] ?? null, $lowResp['raw'] ?? null));
-        $highAmount = $this->resolveDisplayAmount($this->parseChargeBreakdown($highResp['data'] ?? null, $highResp['raw'] ?? null));
-
-        if ($lowAmount === null || $highAmount === null || $lowAmount <= 0) {
-            return null;
-        }
-
-        $sameRate = abs($lowAmount - $highAmount) < 0.01;
-        $tooHigh = $lowAmount > 300.0;
-
-        if (!$sameRate || !$tooHigh) {
-            return null;
-        }
-
-        return [
-            'success' => false,
-            'message' => sprintf(
-                'Delhivery rate API returns a flat ₹%.2f for %dg and %dg. Delhivery One portal (staging) may show ~₹129 for the same lane — '
-                . 'check Courier account environment matches your token (sandbox → staging-express.delhivery.com, production → track.delhivery.com). '
-                . 'If production still shows inflated rates, contact Delhivery support to fix the production rate card.',
-                $lowAmount,
-                $lowG,
-                $highG
-            ),
-            'debug_validation' => [
-                'low_weight_g' => $lowG,
-                'high_weight_g' => $highG,
-                'low_amount' => $lowAmount,
-                'high_amount' => $highAmount,
-                'low_response' => $lowResp,
-                'high_response' => $highResp,
-            ],
-        ];
     }
 
     public function createShipment(array $request): array
