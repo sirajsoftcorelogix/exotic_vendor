@@ -125,7 +125,7 @@ class DelhiveryService
         }
 
         $headers = [
-            'Accept: application/json',
+            'Accept: application/json, text/plain, */*',
             'Authorization: Token ' . $this->apiKey,
         ];
 
@@ -133,6 +133,7 @@ class DelhiveryService
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
         }
@@ -142,11 +143,12 @@ class DelhiveryService
         $curlError = curl_error($ch);
         curl_close($ch);
 
+        $rawStr = is_string($raw) ? trim($raw) : '';
         $decoded = null;
-        if (is_string($raw) && $raw !== '') {
-            $decoded = json_decode($raw, true);
-            if ($decoded === null) {
-                $decoded = $raw;
+        if ($rawStr !== '') {
+            $decoded = json_decode($rawStr, true);
+            if (!is_array($decoded)) {
+                $decoded = $rawStr;
             }
         }
 
@@ -155,8 +157,9 @@ class DelhiveryService
             'success' => $ok,
             'http_code' => $httpCode,
             'data' => $decoded,
-            'message' => $ok ? 'OK' : 'Request failed',
-            'request_url' => $url,
+            'raw' => $rawStr,
+            'message' => $ok ? 'OK' : ('HTTP ' . $httpCode),
+            'request_url' => preg_replace('/Token\s+\S+/', 'Token ***', $url),
             'curl_error' => $curlError,
         ];
     }
