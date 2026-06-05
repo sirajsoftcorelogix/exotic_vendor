@@ -80,8 +80,8 @@ return [
         'label' => 'Delhivery',
         'description' => 'Domestic B2C/B2B. Implement API in DelhiveryAdapter. Credentials stored as JSON; use environment dropdown for sandbox vs production.',
         'template' => [
-            'client_name' => '',
-            'api_token' => '',
+            'client_name' => 'Saxena',
+            'api_token' => '5327198a87ee782d219fead3b9040b5da8d94671',
             'pickup_location_name' => '',
             'registered_name' => 'Exotic India Art Pvt Ltd',
             'sandbox_api_base_url' => 'https://staging-express.delhivery.com',
@@ -98,7 +98,7 @@ return [
                 'country_code' => 'IN',
             ],
         ],
-        'secret_keys' => ['api_token'],
+        'secret_keys' => ['5327198a87ee782d219fead3b9040b5da8d94671'],
     ],
     'dhl' => [
         'label' => 'DHL Express',
