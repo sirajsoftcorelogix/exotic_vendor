@@ -1354,6 +1354,9 @@ switch ($page) {
             case 'getCourierServiceability':
                 $controller->getCourierServiceability();
                 break;
+            case 'getDirectCourierRates':
+                $controller->getDirectCourierRates();
+                break;
             default:
                 $controller->create();
                 break;

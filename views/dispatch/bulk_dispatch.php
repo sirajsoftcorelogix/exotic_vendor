@@ -821,8 +821,6 @@
                                 🗑 Remove Order
                             </button>
                         </div>
-                        <div id="availableCourierCompanies" class="px-4 py-2 text-xs text-gray-700 border-t border-gray-200">
-                        </div>
                     `;
                     container.appendChild(newOrderDiv);
                     currentBox = newOrderDiv.querySelector('[data-order-number]');
@@ -1478,13 +1476,24 @@
             .then(r => r.text())
             .then((text) => {
                 const cleaned = (typeof text === 'string') ? text.replace(/^\uFEFF/, '').trim() : '';
-                const parsed = cleaned ? JSON.parse(cleaned) : {};
+                let parsed = {};
+                try {
+                    parsed = cleaned ? JSON.parse(cleaned) : {};
+                } catch (err) {
+                    console.warn('Direct courier rates returned non-JSON response', cleaned.slice(0, 200));
+                    return;
+                }
+                if (!parsed.success) {
+                    console.warn('Direct courier rates unavailable:', parsed.message || 'Unknown error');
+                }
                 const panelHtml = renderDirectProviderPanel(parsed, boxUid);
                 if (!panelHtml) return;
                 const wrapped = `<div id="${panelId}">${panelHtml}</div>`;
                 courierContainer.insertAdjacentHTML('beforeend', wrapped);
             })
-            .catch(() => {});
+            .catch((err) => {
+                console.warn('Direct courier rates request failed', err);
+            });
         }
 
         // Debug actions in courier container
