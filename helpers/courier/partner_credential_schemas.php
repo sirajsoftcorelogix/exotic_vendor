@@ -82,7 +82,7 @@ return [
         'template' => [
             'client_name' => 'Exotic India Art Pvt Ltd',
             'api_token' => '5327198a87ee782d219fead3b9040b5da8d94671',
-            'pickup_location_name' => 'Exotic India',
+            'pickup_location_name' => 'EXOTIC1 SURFACE',
             'pickup_location_aliases' => [
                 'Head Office' => 'Exotic India',
             ],
