@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../helpers/courier/credential_urls.php';
+require_once __DIR__ . '/../../helpers/courier/credential_defaults.php';
 
 class CourierAccount
 {
@@ -158,7 +159,10 @@ class CourierAccount
             return [];
         }
         $stmt = $this->conn->prepare(
-            'SELECT environment, credentials_json FROM courier_partner_accounts WHERE id = ? LIMIT 1'
+            'SELECT a.environment, a.credentials_json, p.partner_code
+             FROM courier_partner_accounts a
+             JOIN courier_partners p ON p.id = a.partner_id
+             WHERE a.id = ? LIMIT 1'
         );
         if (!$stmt) {
             return [];
@@ -169,13 +173,23 @@ class CourierAccount
         $row = $res ? $res->fetch_assoc() : null;
         $stmt->close();
 
+        if (!$row) {
+            return [];
+        }
+
         $accountEnv = normalizeCourierEnvironment($row['environment'] ?? 'sandbox');
+        $partnerCode = strtolower(trim((string) ($row['partner_code'] ?? '')));
+        $legacy = $this->legacyCredentialsToMap($accountId);
         $raw = trim((string) ($row['credentials_json'] ?? ''));
         if ($raw === '') {
-            $creds = $this->legacyCredentialsToMap($accountId);
+            $creds = $legacy;
         } else {
             $decoded = json_decode($raw, true);
-            $creds = is_array($decoded) ? $decoded : [];
+            $creds = is_array($decoded) ? array_merge($legacy, $decoded) : $legacy;
+        }
+
+        if ($partnerCode !== '') {
+            $creds = mergePartnerCredentialDefaults($partnerCode, $creds);
         }
 
         $creds['environment'] = $accountEnv;

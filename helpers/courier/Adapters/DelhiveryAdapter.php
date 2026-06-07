@@ -420,11 +420,21 @@ class DelhiveryAdapter implements CourierAdapterInterface
 
         $pickupName = $this->resolveDelhiveryPickupName($request, $credentials);
         if ($pickupName === '') {
+            $accountLabel = trim((string) ($accountRow['account_code'] ?? ''));
+            if ($accountLabel === '') {
+                $accountLabel = 'id ' . $accountId;
+            } else {
+                $accountLabel = $accountLabel . ' (id ' . $accountId . ')';
+            }
+            $requestedPickup = trim((string) ($request['pickup_location'] ?? ''));
+            $hint = ' Edit Courier accounts → Delhivery account "' . $accountLabel . '" → Credentials JSON'
+                . ' and set "pickup_location_name" to the exact facility name from Delhivery One → Settings → Pickup Locations (case-sensitive).';
+            if ($requestedPickup !== '') {
+                $hint .= ' Shiprocket pickup "' . $requestedPickup . '" cannot be used directly; add pickup_location_aliases or set pickup_location_name.';
+            }
             return [
                 'success' => false,
-                'message' => 'Delhivery pickup_location_name is missing in Courier accounts. '
-                    . 'Set it to the exact facility name from Delhivery One → Settings → Pickup Locations (case-sensitive). '
-                    . 'Do not use Shiprocket pickup names like "Head Off".',
+                'message' => 'Delhivery pickup_location_name is missing in Courier accounts.' . $hint,
             ];
         }
 
@@ -608,21 +618,31 @@ class DelhiveryAdapter implements CourierAdapterInterface
      */
     private function resolveDelhiveryPickupName(array $request, array $credentials): string
     {
-        $fromCredentials = trim((string)(
-            $credentials['pickup_location_name']
-            ?? $credentials['warehouse_name']
-            ?? ''
-        ));
-        if ($fromCredentials !== '') {
-            return $fromCredentials;
+        foreach ([
+            'pickup_location_name',
+            'warehouse_name',
+            'facility_name',
+            'registered_pickup_name',
+        ] as $key) {
+            $value = trim((string) ($credentials[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
         }
 
         $aliases = is_array($credentials['pickup_location_aliases'] ?? null)
             ? $credentials['pickup_location_aliases']
             : [];
-        $requested = trim((string)($request['pickup_location'] ?? ''));
-        if ($requested !== '' && !empty($aliases[$requested])) {
-            return trim((string)$aliases[$requested]);
+        $requested = trim((string) ($request['pickup_location'] ?? ''));
+        if ($requested !== '') {
+            if (!empty($aliases[$requested])) {
+                return trim((string) $aliases[$requested]);
+            }
+            foreach ($aliases as $alias => $facilityName) {
+                if (strcasecmp(trim((string) $alias), $requested) === 0) {
+                    return trim((string) $facilityName);
+                }
+            }
         }
 
         return '';
