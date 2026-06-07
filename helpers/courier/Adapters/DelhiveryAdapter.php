@@ -589,20 +589,36 @@ class DelhiveryAdapter implements CourierAdapterInterface
             'label_url' => $labelUrl,
             'tracking_url' => $trackingUrl,
             'status' => 'created',
-            'metadata' => [
-                'packing_slip' => $packingResp['data'] ?? null,
-                'pdf_download_link' => $delhiveryPdfUrl !== '' ? $delhiveryPdfUrl : null,
-                'label_pdf_size' => $labelPdfSize,
-                'create_response' => $createResp['data'] ?? null,
-                'service_code' => $serviceCode,
-                'shipping_mode' => $shippingMode,
-            ],
+            'metadata' => $this->buildDelhiveryShipmentMetadata(
+                $waybill,
+                $delhiveryPdfUrl,
+                $labelPdfSize,
+                $serviceCode,
+                $shippingMode
+            ),
             'debug' => [
                 'partner' => 'delhivery',
                 'account_id' => $accountId,
                 'environment' => $environment,
                 'waybill' => $waybill,
             ],
+        ];
+    }
+
+    /** @return array<string, mixed> Small metadata safe for courier_shipments.metadata_json (TEXT). */
+    private function buildDelhiveryShipmentMetadata(
+        string $waybill,
+        string $pdfDownloadLink,
+        string $labelPdfSize,
+        string $serviceCode,
+        string $shippingMode
+    ): array {
+        return [
+            'waybill' => $waybill,
+            'pdf_download_link' => $pdfDownloadLink !== '' ? $pdfDownloadLink : null,
+            'label_pdf_size' => $labelPdfSize,
+            'service_code' => $serviceCode,
+            'shipping_mode' => $shippingMode,
         ];
     }
 
