@@ -114,48 +114,45 @@ class DelhiveryAdapter implements CourierAdapterInterface
         $quotes = [];
         $debug = [];
 
-        foreach (['S' => 'Surface', 'E' => 'Express'] as $md => $label) {
-            $params = array_merge($baseParams, [
-                'md' => $md,
-                'cgm' => $chargeableGrams,
-            ]);
+        // Domestic bulk dispatch: Surface only (md=S). Express rates are omitted — they are
+        // typically much higher and not used for this account's shipments.
+        $params = array_merge($baseParams, [
+            'md' => 'S',
+            'cgm' => $chargeableGrams,
+        ]);
 
-            $resp = $service->estimateFreightCharges($params, $rateApiPath);
-            $debug[$md] = $resp;
+        $resp = $service->estimateFreightCharges($params, $rateApiPath);
+        $debug['S'] = $resp;
 
-            if (empty($resp['success'])) {
-                continue;
-            }
-
+        if (!empty($resp['success'])) {
             $breakdown = $this->parseChargeBreakdown($resp['data'] ?? null, $resp['raw'] ?? null);
             $price = $this->resolveDisplayAmount($breakdown);
-            if ($price === null || $price <= 0) {
-                continue;
+            if ($price !== null && $price > 0) {
+                $quotes[] = [
+                    'id' => 'delhivery_' . $accountId . '_SURFACE',
+                    'name' => 'Delhivery - Surface',
+                    'price' => $price,
+                    'currency' => 'INR',
+                    'etd' => 'N/A',
+                    'rating' => 0,
+                    'partner_code' => 'delhivery',
+                    'partner_account_id' => $accountId,
+                    'product_type' => 'SURFACE',
+                    'service_code' => 'SURFACE',
+                    'metadata' => [
+                        'cgm' => $chargeableGrams,
+                        'actual_weight_kg' => $actualKg,
+                        'billable_weight_kg' => $billableKg,
+                        'gross_amount' => $breakdown['gross_amount'],
+                        'total_amount' => $breakdown['total_amount'],
+                        'origin_pin' => $originPin,
+                        'dest_pin' => $destPin,
+                        'payment_type' => $pt,
+                        'cod' => $isCod ? 1 : 0,
+                        'billing_mode' => 'S',
+                    ],
+                ];
             }
-
-            $quotes[] = [
-                'id' => 'delhivery_' . $accountId . '_' . ($md === 'S' ? 'SURFACE' : 'EXPRESS'),
-                'name' => 'Delhivery - ' . $label,
-                'price' => $price,
-                'currency' => 'INR',
-                'etd' => 'N/A',
-                'rating' => 0,
-                'partner_code' => 'delhivery',
-                'partner_account_id' => $accountId,
-                'product_type' => $md === 'S' ? 'SURFACE' : 'EXPRESS',
-                'service_code' => $md === 'S' ? 'SURFACE' : 'EXPRESS',
-                'metadata' => [
-                    'cgm' => $chargeableGrams,
-                    'actual_weight_kg' => $actualKg,
-                    'billable_weight_kg' => $billableKg,
-                    'gross_amount' => $breakdown['gross_amount'],
-                    'total_amount' => $breakdown['total_amount'],
-                    'origin_pin' => $originPin,
-                    'dest_pin' => $destPin,
-                    'payment_type' => $pt,
-                    'cod' => $isCod ? 1 : 0,
-                ],
-            ];
         }
 
         if ($this->shipmentModel) {
@@ -625,19 +622,7 @@ class DelhiveryAdapter implements CourierAdapterInterface
     /** @param array<string, mixed> $request */
     private function resolveServiceCode(array $request): string
     {
-        $serviceCode = strtoupper(trim((string) ($request['service_code'] ?? $request['product_type'] ?? '')));
-        if (in_array($serviceCode, ['SURFACE', 'EXPRESS'], true)) {
-            return $serviceCode;
-        }
-
-        $courierId = (string) ($request['courier_id'] ?? $request['selected_courier_id'] ?? '');
-        if (preg_match('/_EXPRESS$/i', $courierId)) {
-            return 'EXPRESS';
-        }
-        if (preg_match('/_SURFACE$/i', $courierId)) {
-            return 'SURFACE';
-        }
-
+        // Delhivery domestic dispatch uses Surface (md=S) only.
         return 'SURFACE';
     }
 
