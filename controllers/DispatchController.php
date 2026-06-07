@@ -2743,7 +2743,7 @@ class DispatchController {
     }
 
     /**
-     * Render printable Delhivery shipping label from packing slip API data.
+     * Serve Delhivery shipping label PDF (official label from Delhivery packing slip API).
      * URL: ?page=dispatch&action=delhivery_label&dispatch_id=123  or  &awb=WAYBILL
      */
     public function delhiveryLabel()
@@ -2768,48 +2768,165 @@ class DispatchController {
             exit;
         }
 
-        $packingData = null;
-        $courierShipmentModel = new CourierShipment($GLOBALS['conn']);
+        $forceRefresh = !empty($_GET['retry']);
+        $pdfUrl = '';
+        $labelError = '';
 
-        if ($dispatchId > 0) {
-            $stmt = $GLOBALS['conn']->prepare(
-                'SELECT metadata_json FROM courier_shipments WHERE legacy_dispatch_id = ? AND partner_code = ? ORDER BY id DESC LIMIT 1'
-            );
-            if ($stmt) {
-                $partner = 'delhivery';
-                $stmt->bind_param('is', $dispatchId, $partner);
-                $stmt->execute();
-                $row = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
-                if ($row && !empty($row['metadata_json'])) {
-                    $meta = json_decode($row['metadata_json'], true);
-                    if (is_array($meta) && !empty($meta['packing_slip'])) {
-                        $packingData = $meta['packing_slip'];
-                    }
-                }
+        if (!$forceRefresh) {
+            if (!empty($dispatch['label_url']) && $this->isDelhiveryPdfLabelUrl((string)$dispatch['label_url'])) {
+                $pdfUrl = trim((string)$dispatch['label_url']);
+            }
+            if ($pdfUrl === '' && $dispatchId > 0) {
+                $pdfUrl = $this->loadDelhiveryPdfUrlFromShipmentMeta($dispatchId);
             }
         }
 
-        if ($packingData === null) {
-            $packingData = $this->fetchDelhiveryPackingSlipLive($awb);
+        $fetchResult = null;
+        if ($pdfUrl === '') {
+            $fetchResult = $this->fetchDelhiveryLabelPdfResult($awb);
+            $pdfUrl = trim((string)($fetchResult['url'] ?? ''));
+            if ($pdfUrl === '') {
+                $labelError = trim((string)($fetchResult['message'] ?? ''));
+            }
         }
 
-        $labelPackage = $this->extractDelhiveryLabelPackage($packingData, $awb);
-        if ($labelPackage === null) {
-            http_response_code(502);
-            echo 'Could not load Delhivery packing slip for AWB ' . htmlspecialchars($awb);
-            exit;
+        if ($pdfUrl !== '') {
+            $streamError = '';
+            if ($this->streamDelhiveryPdf($pdfUrl, $awb, $streamError)) {
+                exit;
+            }
+            $labelError = $streamError !== ''
+                ? $streamError
+                : 'Delhivery PDF could not be downloaded. The link may have expired.';
         }
 
-        require __DIR__ . '/../views/dispatch/delhivery_label.php';
+        if ($labelError === '') {
+            $labelError = 'Delhivery did not return a PDF label for this AWB.';
+        }
+
+        $this->renderDelhiveryLabelFailure($dispatchId, $awb, $labelError, $fetchResult);
         exit;
     }
 
-    /** @return mixed */
-    private function fetchDelhiveryPackingSlipLive(string $awb)
+    /**
+     * @param array{message?:string,http_code?:int,api_message?:string}|null $fetchResult
+     */
+    private function renderDelhiveryLabelFailure(int $dispatchId, string $awb, string $errorMessage, ?array $fetchResult = null): void
+    {
+        $retryParams = [
+            'page' => 'dispatch',
+            'action' => 'delhivery_label',
+            'retry' => '1',
+        ];
+        if ($dispatchId > 0) {
+            $retryParams['dispatch_id'] = (string) $dispatchId;
+        } else {
+            $retryParams['awb'] = $awb;
+        }
+        $retryUrl = base_url('index.php?' . http_build_query($retryParams));
+
+        $downloadParams = $retryParams;
+        $downloadParams['download'] = '1';
+        $downloadUrl = base_url('index.php?' . http_build_query($downloadParams));
+
+        http_response_code(502);
+        require __DIR__ . '/../views/dispatch/delhivery_label_failed.php';
+    }
+
+    private function isDelhiveryPdfLabelUrl(string $url): bool
+    {
+        $url = trim($url);
+        if ($url === '' || !preg_match('#^https?://#i', $url)) {
+            return false;
+        }
+        if (stripos($url, 'index.php?page=dispatch&action=delhivery_label') !== false) {
+            return false;
+        }
+        return stripos($url, '.pdf') !== false
+            || stripos($url, 'amazonaws.com') !== false
+            || stripos($url, 'delhivery.com') !== false;
+    }
+
+    private function loadDelhiveryPdfUrlFromShipmentMeta(int $dispatchId): string
+    {
+        $stmt = $GLOBALS['conn']->prepare(
+            'SELECT metadata_json FROM courier_shipments WHERE legacy_dispatch_id = ? AND partner_code = ? ORDER BY id DESC LIMIT 1'
+        );
+        if (!$stmt) {
+            return '';
+        }
+        $partner = 'delhivery';
+        $stmt->bind_param('is', $dispatchId, $partner);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row || empty($row['metadata_json'])) {
+            return '';
+        }
+        $meta = json_decode((string)$row['metadata_json'], true);
+        if (!is_array($meta)) {
+            return '';
+        }
+        $pdfUrl = trim((string)($meta['pdf_download_link'] ?? ''));
+        return $this->isDelhiveryPdfLabelUrl($pdfUrl) ? $pdfUrl : '';
+    }
+
+    /** @return array{url:string,message:string,http_code:?int,api_message:string} */
+    private function fetchDelhiveryLabelPdfResult(string $awb): array
+    {
+        require_once __DIR__ . '/../delhivery_service.php';
+
+        $empty = [
+            'url' => '',
+            'message' => '',
+            'http_code' => null,
+            'api_message' => '',
+        ];
+
+        $context = $this->resolveDelhiveryLabelContext();
+        if ($context === null) {
+            return array_merge($empty, [
+                'message' => 'No active Delhivery courier account or API token configured.',
+            ]);
+        }
+
+        $service = new DelhiveryService(
+            $context['api_key'],
+            $context['environment'],
+            $context['base_url_override']
+        );
+        $resp = $service->getPackingSlip($awb, $context['packing_slip_path'], true, $context['label_pdf_size']);
+        $httpCode = isset($resp['http_code']) ? (int) $resp['http_code'] : null;
+        $apiMessage = trim((string) ($resp['message'] ?? ''));
+
+        if (empty($resp['success'])) {
+            return array_merge($empty, [
+                'message' => $apiMessage !== '' ? $apiMessage : 'Delhivery packing slip API request failed.',
+                'http_code' => $httpCode,
+                'api_message' => $apiMessage,
+            ]);
+        }
+
+        $pdfUrl = trim((string) ($resp['pdf_url'] ?? ''));
+        if ($pdfUrl === '' && is_array($resp['data'] ?? null)) {
+            $pdfUrl = $service->extractPackingSlipPdfUrl($resp['data'], $awb);
+        }
+
+        if ($this->isDelhiveryPdfLabelUrl($pdfUrl)) {
+            return array_merge($empty, ['url' => $pdfUrl]);
+        }
+
+        return array_merge($empty, [
+            'message' => 'Delhivery accepted the request but did not return a PDF download link for this AWB.',
+            'http_code' => $httpCode,
+            'api_message' => $apiMessage,
+        ]);
+    }
+
+    /** @return array{api_key:string,environment:string,base_url_override:string,packing_slip_path:string,label_pdf_size:string}|null */
+    private function resolveDelhiveryLabelContext(): ?array
     {
         require_once __DIR__ . '/../models/courier/CourierAccount.php';
-        require_once __DIR__ . '/../delhivery_service.php';
         require_once __DIR__ . '/../helpers/courier/credential_urls.php';
 
         $accountModel = new CourierAccount($GLOBALS['conn']);
@@ -2825,12 +2942,75 @@ class DispatchController {
         }
 
         $urlInfo = resolveCourierCredentialUrls($credentials);
-        $environment = (string)($urlInfo['environment'] ?? 'sandbox');
-        $baseUrlOverride = trim((string)($urlInfo['api_base_url'] ?? ''));
-        $packingSlipPath = trim((string)($credentials['packing_slip_api_path'] ?? $credentials['label_api_path'] ?? ''));
+        $labelPdfSize = strtoupper(trim((string)($credentials['label_pdf_size'] ?? '4R')));
+        if (!in_array($labelPdfSize, ['A4', '4R'], true)) {
+            $labelPdfSize = '4R';
+        }
 
-        $service = new DelhiveryService($apiKey, $environment, $baseUrlOverride);
-        $resp = $service->getPackingSlip($awb, $packingSlipPath);
+        return [
+            'api_key' => $apiKey,
+            'environment' => (string)($urlInfo['environment'] ?? 'sandbox'),
+            'base_url_override' => trim((string)($urlInfo['api_base_url'] ?? '')),
+            'packing_slip_path' => trim((string)($credentials['packing_slip_api_path'] ?? $credentials['label_api_path'] ?? '')),
+            'label_pdf_size' => $labelPdfSize,
+        ];
+    }
+
+    private function streamDelhiveryPdf(string $pdfUrl, string $awb, ?string &$errorMessage = null): bool
+    {
+        $errorMessage = '';
+        $download = !empty($_GET['download']);
+        $filename = 'delhivery_' . preg_replace('/[^A-Za-z0-9_-]/', '', $awb) . '.pdf';
+
+        $ch = curl_init($pdfUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT => 45,
+            CURLOPT_HTTPHEADER => ['Accept: application/pdf,*/*'],
+        ]);
+        $body = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $contentType = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+        $curlError = trim((string) curl_error($ch));
+        curl_close($ch);
+
+        if (!is_string($body) || $body === '' || $httpCode < 200 || $httpCode >= 300) {
+            $errorMessage = $curlError !== ''
+                ? ('PDF download failed: ' . $curlError)
+                : ('PDF download failed (HTTP ' . ($httpCode > 0 ? $httpCode : 'unknown') . ').');
+            return false;
+        }
+
+        $isPdf = stripos($contentType, 'pdf') !== false
+            || strncmp($body, '%PDF', 4) === 0;
+        if (!$isPdf) {
+            $errorMessage = 'Delhivery returned a response that is not a PDF file.';
+            return false;
+        }
+
+        header('Content-Type: ' . ($contentType !== '' ? $contentType : 'application/pdf'));
+        header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($body));
+        echo $body;
+        return true;
+    }
+
+    /** @return mixed */
+    private function fetchDelhiveryPackingSlipLive(string $awb)
+    {
+        $context = $this->resolveDelhiveryLabelContext();
+        if ($context === null) {
+            return null;
+        }
+
+        require_once __DIR__ . '/../delhivery_service.php';
+        $service = new DelhiveryService(
+            $context['api_key'],
+            $context['environment'],
+            $context['base_url_override']
+        );
+        $resp = $service->getPackingSlip($awb, $context['packing_slip_path'], true, $context['label_pdf_size']);
         return !empty($resp['success']) ? ($resp['data'] ?? null) : null;
     }
 

@@ -543,14 +543,19 @@ class DelhiveryAdapter implements CourierAdapterInterface
             ];
         }
 
-        $packingResp = $service->getPackingSlip($waybill, $packingSlipPath);
+        $labelPdfSize = strtoupper(trim((string) ($credentials['label_pdf_size'] ?? '4R')));
+        if (!in_array($labelPdfSize, ['A4', '4R'], true)) {
+            $labelPdfSize = '4R';
+        }
+
+        $packingResp = $service->getPackingSlip($waybill, $packingSlipPath, true, $labelPdfSize);
         if ($this->shipmentModel) {
             $this->shipmentModel->logApiCall(
                 'delhivery',
                 'generate_label',
                 $accountId,
                 $orderNumber,
-                ['waybill' => $waybill],
+                ['waybill' => $waybill, 'pdf' => true, 'pdf_size' => $labelPdfSize],
                 $packingResp,
                 !empty($packingResp['success']),
                 !empty($packingResp['success']) ? null : (string) ($packingResp['message'] ?? 'Label fetch failed'),
@@ -559,9 +564,17 @@ class DelhiveryAdapter implements CourierAdapterInterface
         }
 
         $dispatchId = (int) ($request['dispatch_id'] ?? 0);
-        $labelUrl = $dispatchId > 0
-            ? base_url('index.php?page=dispatch&action=delhivery_label&dispatch_id=' . $dispatchId)
-            : base_url('index.php?page=dispatch&action=delhivery_label&awb=' . rawurlencode($waybill));
+        $delhiveryPdfUrl = trim((string) ($packingResp['pdf_url'] ?? ''));
+        if ($delhiveryPdfUrl === '' && is_array($packingResp['data'] ?? null)) {
+            $delhiveryPdfUrl = $service->extractPackingSlipPdfUrl($packingResp['data'], $waybill);
+        }
+
+        // Portal route streams the official Delhivery PDF (S3 links in metadata may expire).
+        if ($dispatchId > 0) {
+            $labelUrl = base_url('index.php?page=dispatch&action=delhivery_label&dispatch_id=' . $dispatchId);
+        } else {
+            $labelUrl = base_url('index.php?page=dispatch&action=delhivery_label&awb=' . rawurlencode($waybill));
+        }
 
         $trackingUrl = 'https://www.delhivery.com/track/package/' . rawurlencode($waybill);
 
@@ -578,6 +591,8 @@ class DelhiveryAdapter implements CourierAdapterInterface
             'status' => 'created',
             'metadata' => [
                 'packing_slip' => $packingResp['data'] ?? null,
+                'pdf_download_link' => $delhiveryPdfUrl !== '' ? $delhiveryPdfUrl : null,
+                'label_pdf_size' => $labelPdfSize,
                 'create_response' => $createResp['data'] ?? null,
                 'service_code' => $serviceCode,
                 'shipping_mode' => $shippingMode,

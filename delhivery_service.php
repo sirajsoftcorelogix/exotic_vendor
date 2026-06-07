@@ -63,12 +63,18 @@ class DelhiveryService
     }
 
     /**
-     * Fetch packing slip / label data for one or more waybills (comma-separated).
+     * Fetch packing slip / label for one or more waybills (comma-separated).
+     *
+     * With $pdf=true Delhivery returns pdf_download_link (S3 URL) per package — the official label PDF.
      *
      * @see https://delhivery-express-api-doc.readme.io/reference/packing-slip-api
      */
-    public function getPackingSlip(string $waybills, string $packingSlipPath = ''): array
-    {
+    public function getPackingSlip(
+        string $waybills,
+        string $packingSlipPath = '',
+        bool $pdf = false,
+        string $pdfSize = '4R'
+    ): array {
         $waybills = trim($waybills);
         if ($waybills === '') {
             return ['success' => false, 'message' => 'Waybill is required for packing slip.'];
@@ -76,9 +82,61 @@ class DelhiveryService
 
         $basePath = $packingSlipPath !== '' ? $packingSlipPath : '/api/p/packing_slip';
         $url = $this->resolveApiUrl($basePath, '/api/p/packing_slip');
-        $url .= (str_contains($url, '?') ? '&' : '?') . 'wbns=' . rawurlencode($waybills);
+        $query = ['wbns' => $waybills];
+        if ($pdf) {
+            $query['pdf'] = 'true';
+            $size = strtoupper(trim($pdfSize));
+            if (in_array($size, ['A4', '4R'], true)) {
+                $query['pdf_size'] = $size;
+            }
+        }
+        $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($query);
 
-        return $this->makeRequest('GET', $url);
+        $resp = $this->makeRequest('GET', $url);
+        if (!empty($resp['success']) && is_array($resp['data'] ?? null)) {
+            $resp['pdf_url'] = $this->extractPackingSlipPdfUrl($resp['data'], $waybills);
+        }
+
+        return $resp;
+    }
+
+    /**
+     * @param mixed $data
+     */
+    public function extractPackingSlipPdfUrl($data, string $preferredWaybill = ''): string
+    {
+        if (!is_array($data)) {
+            return '';
+        }
+
+        $packages = $data['packages'] ?? $data['Packages'] ?? [];
+        if (!is_array($packages)) {
+            return '';
+        }
+
+        $preferredWaybill = trim($preferredWaybill);
+        $fallback = '';
+
+        foreach ($packages as $pkg) {
+            if (!is_array($pkg)) {
+                continue;
+            }
+            foreach (['pdf_download_link', 'pdf_link', 'label_url', 'url'] as $key) {
+                $url = trim((string) ($pkg[$key] ?? ''));
+                if ($url === '' || !preg_match('#^https?://#i', $url)) {
+                    continue;
+                }
+                $wbn = trim((string) ($pkg['wbn'] ?? $pkg['waybill'] ?? $pkg['awb'] ?? ''));
+                if ($preferredWaybill !== '' && $wbn !== '' && $wbn === $preferredWaybill) {
+                    return $url;
+                }
+                if ($fallback === '') {
+                    $fallback = $url;
+                }
+            }
+        }
+
+        return $fallback;
     }
 
     /**

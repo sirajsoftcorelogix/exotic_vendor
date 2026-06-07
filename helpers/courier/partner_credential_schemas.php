@@ -90,6 +90,7 @@ return [
             'rate_api_path' => '',
             'order_create_api_path' => '',
             'packing_slip_api_path' => '',
+            'label_pdf_size' => '4R',
             'seller_gst_tin' => '07AADCE1400C1ZJ',
             'registered_name' => 'Exotic India Art Pvt Ltd',
             'sandbox_api_base_url' => 'https://staging-express.delhivery.com',
