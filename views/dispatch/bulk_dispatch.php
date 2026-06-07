@@ -705,6 +705,10 @@
                         showAlert('This order is already added. Use "+ Item" to add more items.', 'warning');
                         return;
                     }
+                    if (!currentShippingAddress || !String(currentShippingAddress).trim()) {
+                        showAlert('Shipping address with pincode is required before adding this order to dispatch.', 'error');
+                        return;
+                    }
                 }
 
                 if (!currentBox) {

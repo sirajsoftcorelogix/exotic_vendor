@@ -34,7 +34,7 @@ class CourierShipment
             label_url TEXT NULL,
             status VARCHAR(40) NOT NULL DEFAULT 'draft',
             status_text VARCHAR(255) NULL,
-            metadata_json TEXT NULL,
+            metadata_json MEDIUMTEXT NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_partner (partner_code),
@@ -45,6 +45,7 @@ class CourierShipment
             INDEX idx_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
         $this->conn->query($sql1);
+        $this->ensureColumn('courier_shipments', 'metadata_json', 'MEDIUMTEXT NULL');
 
         $sql2 = "CREATE TABLE IF NOT EXISTS courier_api_logs (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -63,6 +64,59 @@ class CourierShipment
             INDEX idx_created (created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
         $this->conn->query($sql2);
+    }
+
+    private function ensureColumn(string $table, string $column, string $definition): void
+    {
+        $safeTable = preg_replace('/[^a-z0-9_]/i', '', $table);
+        $safeColumn = preg_replace('/[^a-z0-9_]/i', '', $column);
+        if ($safeTable === '' || $safeColumn === '') {
+            return;
+        }
+        $res = $this->conn->query("SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeColumn}'");
+        if ($res && $res->num_rows === 0) {
+            $this->conn->query("ALTER TABLE `{$safeTable}` ADD COLUMN `{$safeColumn}` {$definition}");
+            return;
+        }
+        if ($safeTable === 'courier_shipments' && $safeColumn === 'metadata_json') {
+            $row = $res ? $res->fetch_assoc() : null;
+            $type = strtolower((string) ($row['Type'] ?? ''));
+            if ($type === 'text') {
+                $this->conn->query("ALTER TABLE `{$safeTable}` MODIFY COLUMN `{$safeColumn}` MEDIUMTEXT NULL");
+            }
+        }
+    }
+
+    /** @param mixed $metadata */
+    private function normalizeMetadataJson($metadata): ?string
+    {
+        if ($metadata === null || $metadata === '') {
+            return null;
+        }
+        $json = is_string($metadata)
+            ? $metadata
+            : json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false || $json === '') {
+            return null;
+        }
+
+        // Guard against oversized blobs (full API responses belong in courier_api_logs).
+        $maxBytes = 60000;
+        if (strlen($json) > $maxBytes) {
+            $decoded = json_decode($json, true);
+            if (is_array($decoded)) {
+                unset($decoded['packing_slip'], $decoded['create_response'], $decoded['debug']);
+                $json = json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: $json;
+            }
+            if (strlen($json) > $maxBytes) {
+                $json = json_encode([
+                    'truncated' => true,
+                    'note' => 'Metadata trimmed — see courier_api_logs for full Delhivery responses.',
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+        }
+
+        return $json;
     }
 
     public function logApiCall(
@@ -124,12 +178,7 @@ class CourierShipment
         $codAmount = (float) ($row['cod_amount'] ?? 0);
         $isInternational = !empty($row['is_international']) ? 1 : 0;
         $chargesTotal = isset($row['charges_total']) ? (float) $row['charges_total'] : 0.0;
-        $metadataJson = null;
-        if (!empty($row['metadata_json'])) {
-            $metadataJson = is_string($row['metadata_json'])
-                ? $row['metadata_json']
-                : json_encode($row['metadata_json'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        }
+        $metadataJson = $this->normalizeMetadataJson($row['metadata_json'] ?? null);
 
         $orderNumber = (string) ($row['order_number'] ?? '');
         $partnerCode = (string) ($row['partner_code'] ?? '');

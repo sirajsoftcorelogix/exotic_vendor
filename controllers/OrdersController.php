@@ -1998,6 +1998,8 @@ class OrdersController
         // }
 
         try {
+            require_once __DIR__ . '/../helpers/dispatch/shipping_address_validation.php';
+
             $orders = $ordersModel->getOrderByOrderNumber($order_number);
             $order_info = $ordersModel->getRemarksByOrderNumber($order_number);
             if (empty($orders)) {
@@ -2008,32 +2010,25 @@ class OrdersController
                 exit;
             }
 
+            $addressCheck = validateShippingAddressForDispatch(is_array($order_info) ? $order_info : []);
+            if (empty($addressCheck['valid'])) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => (string) ($addressCheck['message'] ?? 'Shipping address with pincode is required for dispatch.'),
+                ]);
+                exit;
+            }
+
             // Build shipping address
             $firstOrder = $order_info;
             $ship_country_raw = strtoupper(trim((string)($firstOrder['shipping_country'] ?? '')));
             $domestic_codes = ['', 'IN', 'IND'];
             $is_international = $ship_country_raw !== '' && !in_array($ship_country_raw, $domestic_codes, true);
 
-            $shipping_address = '';
-            if (!empty($firstOrder['shipping_address_line1'])) {
-                $shipping_address = htmlspecialchars($firstOrder['shipping_address_line1']);
-                if (!empty($firstOrder['shipping_address_line2'])) {
-                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['shipping_address_line2']);
-                }
-                if (!empty($firstOrder['shipping_city'])) {
-                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['shipping_city']);
-                }
-                if (!empty($firstOrder['shipping_state'])) {
-                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['shipping_state']);
-                }
-                if (!empty($firstOrder['shipping_zipcode'])) {
-                    $shipping_address .= ' - ' . htmlspecialchars($firstOrder['shipping_zipcode']);
-                }
-            }
+            $shipping_address = (string) ($addressCheck['address'] ?? '');
 
             $items_html = '';
             foreach ($orders as $order) {
-                //skip item if order status is cancelled or returned or invoice already exists for the order number
                 if (in_array(strtolower($order['order_status'] ?? ''), ['cancelled', 'returned']) || $order['invoice_id'] > 0 || $order['invoice_id'] !== null) {
                     continue;
                 }
@@ -2058,6 +2053,14 @@ class OrdersController
                     <td class="p-2 text-right">₹ ' . number_format($item_total, 0) . '</td>
                     <td class="p-2 text-right">' . $payment_type . '</td>
                 </tr>';
+            }
+
+            if (trim($items_html) === '') {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'No dispatchable items found for order #' . $order_number . '.',
+                ]);
+                exit;
             }
 
             echo json_encode([

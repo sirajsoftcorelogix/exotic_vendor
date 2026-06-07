@@ -1466,6 +1466,8 @@ class DispatchController {
         $errors = [];
         
         try {
+            require_once __DIR__ . '/../helpers/dispatch/shipping_address_validation.php';
+
             // Process each order
             foreach ($input['orders'] as $orderData) {
                 $order_number = $orderData['order_number'] ?? null;
@@ -1500,6 +1502,11 @@ class DispatchController {
 
                 // Get vp_order_info for address (getDispatchAddress uses vp_order_info id, not vp_orders id)
                 $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
+                $addressCheck = validateShippingAddressForDispatch(is_array($orderInfo) ? $orderInfo : []);
+                if (empty($addressCheck['valid'])) {
+                    $errors[] = (string) ($addressCheck['message'] ?? "Order #$order_number: shipping address with pincode is required.");
+                    continue;
+                }
                 $vp_order_info_id = ($orderInfo && isset($orderInfo['id'])) ? (int)$orderInfo['id'] : 0;
 
                 // Calculate totals
