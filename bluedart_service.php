@@ -15,6 +15,8 @@ class BlueDartService
     {
         $defaults = [
             'login_id' => '',
+            'shipment_licence_key' => '',
+            'tracking_licence_key' => '',
             'licence_key' => '',
             'customer_code' => '',
             'origin_area' => '',
@@ -29,10 +31,23 @@ class BlueDartService
             return;
         }
 
-        $urls = resolveCourierCredentialUrls($config);
+        $urls = resolveCourierCredentialUrls($config, 'bluedart');
+        $shipmentLicence = trim((string) (
+            $config['shipment_licence_key']
+            ?? $config['licence_key']
+            ?? ''
+        ));
+        $trackingLicence = trim((string) (
+            $config['tracking_licence_key']
+            ?? $config['tracking_token']
+            ?? $shipmentLicence
+        ));
+
         $this->config = array_merge($defaults, [
             'login_id' => (string) ($config['login_id'] ?? ''),
-            'licence_key' => (string) ($config['licence_key'] ?? ''),
+            'shipment_licence_key' => $shipmentLicence,
+            'tracking_licence_key' => $trackingLicence,
+            'licence_key' => $shipmentLicence,
             'customer_code' => (string) ($config['customer_code'] ?? ''),
             'origin_area' => (string) ($config['origin_area'] ?? ''),
             'customer_pincode' => (string) ($config['customer_pincode'] ?? $defaults['customer_pincode']),
@@ -87,9 +102,9 @@ class BlueDartService
     private function request(string $method, string $path, ?array $payload = null): array
     {
         $loginId = trim((string) ($this->config['login_id'] ?? ''));
-        $licenceKey = trim((string) ($this->config['licence_key'] ?? ''));
+        $licenceKey = $this->resolveLicenceKeyForPath($path);
         if ($loginId === '' || $licenceKey === '') {
-            return ['success' => false, 'error' => 'Blue Dart login_id and licence_key are required.'];
+            return ['success' => false, 'error' => 'Blue Dart login_id and licence key are required for this API.'];
         }
 
         $url = rtrim((string) $this->config['api_base_url'], '/') . $path;
@@ -143,5 +158,14 @@ class BlueDartService
             'data' => $decoded,
             'raw' => $raw,
         ];
+    }
+
+    private function resolveLicenceKeyForPath(string $path): string
+    {
+        $path = strtolower($path);
+        if (str_contains($path, 'track')) {
+            return trim((string) ($this->config['tracking_licence_key'] ?? ''));
+        }
+        return trim((string) ($this->config['shipment_licence_key'] ?? $this->config['licence_key'] ?? ''));
     }
 }

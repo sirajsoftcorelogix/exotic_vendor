@@ -1,7 +1,6 @@
 <?php
 
 require_once __DIR__ . '/../../helpers/courier/credential_urls.php';
-require_once __DIR__ . '/../../helpers/courier/credential_defaults.php';
 
 class CourierAccount
 {
@@ -177,8 +176,8 @@ class CourierAccount
             return [];
         }
 
-        $accountEnv = normalizeCourierEnvironment($row['environment'] ?? 'sandbox');
         $partnerCode = strtolower(trim((string) ($row['partner_code'] ?? '')));
+        $accountEnv = enforceCourierPartnerEnvironment($partnerCode, $row['environment'] ?? 'sandbox');
         $legacy = $this->legacyCredentialsToMap($accountId);
         $raw = trim((string) ($row['credentials_json'] ?? ''));
         if ($raw === '') {
@@ -186,10 +185,6 @@ class CourierAccount
         } else {
             $decoded = json_decode($raw, true);
             $creds = is_array($decoded) ? array_merge($legacy, $decoded) : $legacy;
-        }
-
-        if ($partnerCode !== '') {
-            $creds = mergePartnerCredentialDefaults($partnerCode, $creds);
         }
 
         $creds['environment'] = $accountEnv;
@@ -223,9 +218,11 @@ class CourierAccount
             return ['success' => false, 'message' => 'Credentials must be valid JSON object.'];
         }
 
-        if ($environment !== null && $environment !== '') {
-            $decoded['environment'] = normalizeCourierEnvironment($environment);
-        }
+        $partnerCode = $this->getPartnerCodeByAccountId($accountId);
+        $effectiveEnv = $environment !== null && $environment !== ''
+            ? enforceCourierPartnerEnvironment($partnerCode, $environment)
+            : enforceCourierPartnerEnvironment($partnerCode, $decoded['environment'] ?? 'sandbox');
+        $decoded['environment'] = $effectiveEnv;
 
         $normalized = json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($normalized === false) {
@@ -246,6 +243,47 @@ class CourierAccount
         return $ok
             ? ['success' => true, 'message' => 'Credentials saved.']
             : ['success' => false, 'message' => 'Save failed: ' . $err];
+    }
+
+    private function getPartnerCodeById(int $partnerId): string
+    {
+        if ($partnerId <= 0) {
+            return '';
+        }
+        $stmt = $this->conn->prepare('SELECT partner_code FROM courier_partners WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('i', $partnerId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return strtolower(trim((string) ($row['partner_code'] ?? '')));
+    }
+
+    private function getPartnerCodeByAccountId(int $accountId): string
+    {
+        if ($accountId <= 0) {
+            return '';
+        }
+        $stmt = $this->conn->prepare(
+            'SELECT p.partner_code
+             FROM courier_partner_accounts a
+             JOIN courier_partners p ON p.id = a.partner_id
+             WHERE a.id = ? LIMIT 1'
+        );
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('i', $accountId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return strtolower(trim((string) ($row['partner_code'] ?? '')));
     }
 
     /** @return array<string, mixed> */
@@ -275,7 +313,8 @@ class CourierAccount
         $priority = isset($data['priority']) ? (int)$data['priority'] : 100;
         $tagsJson = trim((string)($data['tags_json'] ?? ''));
         $notes = trim((string)($data['notes'] ?? ''));
-        $environment = normalizeCourierEnvironment($data['environment'] ?? 'sandbox');
+        $partnerCode = $this->getPartnerCodeById($partnerId);
+        $environment = enforceCourierPartnerEnvironment($partnerCode, $data['environment'] ?? 'sandbox');
 
         if ($id > 0) {
             $stmt = $this->conn->prepare(

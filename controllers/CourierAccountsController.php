@@ -5,7 +5,8 @@ require_once 'models/courier/CourierAccount.php';
 
 $courierPartnerModel = new CourierPartner($conn);
 $courierAccountModel = new CourierAccount($conn);
-$courierCredentialSchemas = require __DIR__ . '/../helpers/courier/partner_credential_schemas.php';
+require_once __DIR__ . '/../helpers/courier/partner_credential_schema.php';
+$courierCredentialSchemas = getPartnerCredentialSchemasForUi();
 
 class CourierAccountsController
 {

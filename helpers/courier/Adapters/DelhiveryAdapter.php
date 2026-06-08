@@ -88,8 +88,8 @@ class DelhiveryAdapter implements CourierAdapterInterface
             ];
         }
 
-        $urlInfo = resolveCourierCredentialUrls($credentials);
-        $environment = (string) ($urlInfo['environment'] ?? 'sandbox');
+        $urlInfo = resolveCourierCredentialUrls($credentials, 'delhivery');
+        $environment = (string) ($urlInfo['environment'] ?? 'production');
         $baseUrlOverride = trim((string) ($urlInfo['api_base_url'] ?? ''));
         $clientName = trim((string) ($credentials['client_name'] ?? $credentials['cl'] ?? ''));
         $isCod = !empty($request['cod']);
@@ -488,8 +488,8 @@ class DelhiveryAdapter implements CourierAdapterInterface
             'shipments' => [$shipmentRow],
         ];
 
-        $urlInfo = resolveCourierCredentialUrls($credentials);
-        $environment = (string) ($urlInfo['environment'] ?? 'sandbox');
+        $urlInfo = resolveCourierCredentialUrls($credentials, 'delhivery');
+        $environment = (string) ($urlInfo['environment'] ?? 'production');
         $baseUrlOverride = trim((string) ($urlInfo['api_base_url'] ?? ''));
         $createApiPath = trim((string) ($credentials['order_create_api_path'] ?? $credentials['create_api_path'] ?? ''));
         $packingSlipPath = trim((string) ($credentials['packing_slip_api_path'] ?? $credentials['label_api_path'] ?? ''));

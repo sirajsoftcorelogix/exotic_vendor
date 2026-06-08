@@ -1,9 +1,32 @@
-<?php 
+<?php
+
+require_once __DIR__ . '/../../shiprocket_service.php';
+
 class Dispatch {
     private $db;
+    private ?ShiprocketService $shiprocketService = null;
 
     public function __construct($conn) {
         $this->db = $conn;
+    }
+
+    private function shiprocket(): ShiprocketService
+    {
+        if ($this->shiprocketService === null) {
+            $this->shiprocketService = new ShiprocketService($this->db);
+        }
+
+        return $this->shiprocketService;
+    }
+
+    public function getShiprocketDefaultPickupLocation(): string
+    {
+        return $this->shiprocket()->getDefaultPickupLocation();
+    }
+
+    private function shiprocketUrl(string $path): string
+    {
+        return $this->shiprocket()->apiUrl($path);
     }
     public function checkDispatchExists($invoiceId, $boxNo) {
         $sql = "SELECT id FROM vp_dispatch_details WHERE invoice_id = ? AND box_no = ?";
@@ -121,8 +144,7 @@ class Dispatch {
     //shiprocket api call
    
     public function shiprocketCreateShipment(array $payload) {
-        // Replace these with your actual values or config
-        $apiUrl = 'https://apiv2.shiprocket.in/v1/external/orders/create/adhoc';        
+        $apiUrl = $this->shiprocketUrl('/v1/external/orders/create/adhoc');
         $authToken = $this->getShiprocketToken();
         $ch = curl_init($apiUrl);
         $json = json_encode($payload);
@@ -157,65 +179,13 @@ class Dispatch {
         ];
     }
 
-    private function getShiprocketToken() {
-        //shiprocket_api_tokens fetch token and check if valid else generate new token and save to db
-        $sql = "SELECT token, expires_at FROM shiprocket_api_tokens ORDER BY id DESC LIMIT 1";
-        $result = $this->db->query($sql);
-        if ($result && $result->num_rows > 0) {
-            $row = $result->fetch_assoc();
-            if (strtotime($row['expires_at']) > time()) {
-                return $row['token'];
-            }else{
-
-                $url = "https://www.exoticindia.com/vendor-api/order/shiprocket-token";
-                $headers = [
-                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-                'x-adminapitest: 1',
-                'Content-Type: application/x-www-form-urlencoded'
-                ];
-                $postData = [
-                'makeRequestOf' => 'vendors-orderjson'
-                ];
-                $ch = curl_init($url);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-                $response = curl_exec($ch); 
-                curl_close($ch);
-                $data = json_decode($response, true);
-                $token = $data['shiprocket_token'] ?? '';
-                $expire_at = $data['shiprocket_expiry'] ? date('Y-m-d H:i:s', $data['shiprocket_expiry']) : date('Y-m-d H:i:s', time() + 3600); // default 1 hour expiry
-                if($token) {
-                    $sql = "UPDATE shiprocket_api_tokens SET token = '$token', expires_at = '$expire_at', updated_at = NOW() ORDER BY id DESC LIMIT 1";
-                    $this->db->query($sql);
-                }
-                return $token;
-            }
-        }
-
-        //return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjI1NjAxMjUsInNvdXJjZSI6InNyLWF1dGgtaW50IiwiZXhwIjoxNzcyNDQxODU3LCJqdGkiOiJ0MHQ5OGVra0hVcDkxQWxuIiwiaWF0IjoxNzcxNTc3ODU3LCJpc3MiOiJodHRwczovL3NyLWF1dGguc2hpcHJvY2tldC5pbi9hdXRob3JpemUvdXNlciIsIm5iZiI6MTc3MTU3Nzg1NywiY2lkIjoyOTg1MDcsInRjIjozNjAsInZlcmJvc2UiOmZhbHNlLCJ2ZW5kb3JfaWQiOjAsInZlbmRvcl9jb2RlIjoiIn0.DcsXO_szP7se17CuZE1nHMNIfvjOxLotI7zqSNHYLZM";
-        // $url = "https://www.exoticindia.com/vendor-api/order/shiprocket-token";
-        // $headers = [
-        // 'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-        // 'x-adminapitest: 1',
-        // 'Content-Type: application/x-www-form-urlencoded'
-        // ];
-        // $postData = [
-        // 'makeRequestOf' => 'vendors-orderjson'
-        // ];
-        // $ch = curl_init($url);
-        // curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        // curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        // curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        // $response = curl_exec($ch); 
-        // curl_close($ch);
-        // $data = json_decode($response, true);
-        // return $data['shiprocket_token'] ?? '';
-
+    private function getShiprocketToken(): string
+    {
+        return $this->shiprocket()->getToken();
     }
+
     public function pickupLocations() {
-        $url = "https://apiv2.shiprocket.in/v1/external/settings/company/pickup";
+        $url = $this->shiprocketUrl('/v1/external/settings/company/pickup');
         $headers = [
             "Content-Type: application/json",
             "Authorization: Bearer " . $this->getShiprocketToken()
@@ -247,7 +217,7 @@ class Dispatch {
         }
         
         // Build URL with query string
-        $url = "https://apiv2.shiprocket.in/v1/external/courier/serviceability/?" . http_build_query($params);
+        $url = $this->shiprocketUrl('/v1/external/courier/serviceability/?' . http_build_query($params));
         
         $headers = [
             "Content-Type: application/json",
@@ -277,7 +247,7 @@ class Dispatch {
     //get labels from shiprocket
     public function getShiprocketLabels($shipmentId) {
         //$url = "https://apiv2.shiprocket.in/v1/external/shipments/{$shipmentId}/label";
-        $url = "https://apiv2.shiprocket.in/v1/external/courier/generate/label";
+        $url = $this->shiprocketUrl('/v1/external/courier/generate/label');
         $headers = [
             "Content-Type: application/json",
             "Authorization: Bearer " . $this->getShiprocketToken()
@@ -297,7 +267,7 @@ class Dispatch {
     }
     //get tracking info from shiprocket
     public function getShiprocketTrackingInfo($shipment_id) {
-        $url = "https://apiv2.shiprocket.in/v1/external/courier/track/shipment/$shipment_id";
+        $url = $this->shiprocketUrl('/v1/external/courier/track/shipment/' . rawurlencode((string) $shipment_id));
         $headers = [
             "Content-Type: application/json",
             "Authorization: Bearer " . $this->getShiprocketToken()
@@ -312,7 +282,7 @@ class Dispatch {
     }
     //get tracking info from shiprocket by AWB code
     public function getShiprocketTrackingByAWB($awb_code) {
-        $url = "https://apiv2.shiprocket.in/v1/external/courier/track/awb/$awb_code";
+        $url = $this->shiprocketUrl('/v1/external/courier/track/awb/' . rawurlencode((string) $awb_code));
         $headers = [
             "Content-Type: application/json",
             "Authorization: Bearer " . $this->getShiprocketToken()
@@ -327,7 +297,7 @@ class Dispatch {
     }
     //get awb info from shiprocket (optional courier_id = user-selected courier from serviceability)
     public function getShiprocketAwbInfo($shipment_id, $courier_id = null) {
-        $url = "https://apiv2.shiprocket.in/v1/external/courier/assign/awb";
+        $url = $this->shiprocketUrl('/v1/external/courier/assign/awb');
         $headers = [
             "Content-Type: application/json",
             "Authorization: Bearer " . $this->getShiprocketToken()
@@ -454,7 +424,7 @@ class Dispatch {
             return ['success' => false, 'message' => 'No Shiprocket order ID associated with this dispatch record'];
         }
         //call shiprocket cancel shipment API
-        $url = "https://apiv2.shiprocket.in/v1/external/orders/cancel";
+        $url = $this->shiprocketUrl('/v1/external/orders/cancel');
         $headers = [
             "Content-Type: application/json",
             "Authorization: Bearer " . $this->getShiprocketToken()
