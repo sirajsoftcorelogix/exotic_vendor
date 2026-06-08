@@ -15,6 +15,21 @@ $dispatchModel = new Dispatch($conn);
 $ordersModel = new Order($conn);
 
 class DispatchController {
+    private function resolveDefaultShiprocketPickupLocation(array $firm = [], ?string $override = null): string
+    {
+        global $dispatchModel;
+
+        $pickup = trim((string) ($override ?? ''));
+        if ($pickup === '') {
+            $pickup = trim((string) ($firm['pickup_location'] ?? ''));
+        }
+        if ($pickup === '') {
+            $pickup = trim((string) $dispatchModel->getShiprocketDefaultPickupLocation());
+        }
+
+        return $pickup !== '' ? $pickup : 'Head Off';
+    }
+
     private function resolveShiprocketPickupPostcode($dispatchModel, array $firm, string $pickupLocation): array
     {
         $fallbackPin = trim((string)($firm['pin'] ?? ''));
@@ -1677,7 +1692,7 @@ class DispatchController {
                         'groupname' => $boxData['groupname'] ?? null,
                         'created_by' => $_SESSION['user']['id'] ?? $_SESSION['user_id'] ?? 0,
                         'created_at' => date('Y-m-d H:i:s'),
-                        'pickup_location' => $boxData['pickup_location'] ?? 'Head Off',
+                        'pickup_location' => $this->resolveDefaultShiprocketPickupLocation([], $boxData['pickup_location'] ?? null),
                         'batch_no' => $batch_no,
                         'box_size' => $box_size
                     ];
@@ -2006,7 +2021,7 @@ class DispatchController {
                     $shiprocketPayload = [
                         'order_id' => $shiprocketOrderId,
                         'order_date' => date('Y-m-d H:i'),
-                        'pickup_location' => (string)($boxData['pickup_location'] ?? $firm['pickup_location'] ?? 'Head Off'),
+                        'pickup_location' => $this->resolveDefaultShiprocketPickupLocation($firm, $boxData['pickup_location'] ?? null),
                         'comment' => 'Box ' . $box_no . ' | Batch: ' . $batch_no,
                         'billing_customer_name' => $billingCustomerName,
                         'billing_last_name' => $billingLastName,
@@ -2166,10 +2181,7 @@ class DispatchController {
             
             // Get pickup postcode from the actual Shiprocket pickup location when possible.
             $firm = $commanModel->getRecordById('firm_details', 1);
-            $requestedPickupLocation = trim((string)($input['pickup_location'] ?? $firm['pickup_location'] ?? 'Head Off'));
-            if ($requestedPickupLocation === '') {
-                $requestedPickupLocation = 'Head Off';
-            }
+            $requestedPickupLocation = $this->resolveDefaultShiprocketPickupLocation($firm, $input['pickup_location'] ?? null);
             $pickupResolution = $this->resolveShiprocketPickupPostcode($dispatchModel, is_array($firm) ? $firm : [], $requestedPickupLocation);
             $pickup_postcode = $pickupResolution['postcode'] ?? null;
             
@@ -2342,10 +2354,7 @@ class DispatchController {
             }
 
             $firm = $commanModel->getRecordById('firm_details', 1);
-            $requestedPickupLocation = trim((string)($input['pickup_location'] ?? $firm['pickup_location'] ?? 'Head Off'));
-            if ($requestedPickupLocation === '') {
-                $requestedPickupLocation = 'Head Off';
-            }
+            $requestedPickupLocation = $this->resolveDefaultShiprocketPickupLocation($firm, $input['pickup_location'] ?? null);
 
             $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
             if (!$orderInfo) {
@@ -2496,7 +2505,7 @@ class DispatchController {
             'rate_source' => '',
             'product_type' => '',
             'partner_account_id' => '',
-            'pickup_location' => (string)($dispatchRecord['pickup_location'] ?? $firm['pickup_location'] ?? 'Head Off'),
+            'pickup_location' => $this->resolveDefaultShiprocketPickupLocation($firm, $dispatchRecord['pickup_location'] ?? null),
         ];
 
         if ($this->resolveShipmentPartnerCode($boxData, $dispatchRecord) === 'delhivery') {
@@ -2611,7 +2620,7 @@ class DispatchController {
         $shiprocketPayload = [
             'order_id' => $orderNumber . '_box_' . $boxNo . '_retry_' . time(),
             'order_date' => date('Y-m-d H:i'),
-            'pickup_location' => (string)($boxData['pickup_location'] ?? 'Head Off'),
+            'pickup_location' => $this->resolveDefaultShiprocketPickupLocation([], $boxData['pickup_location'] ?? null),
             'comment' => 'Retry dispatch #' . $dispatchId,
             'billing_customer_name' => $billingCustomerName,
             'billing_last_name' => $billingLastName,
@@ -2948,7 +2957,7 @@ class DispatchController {
             return null;
         }
 
-        $urlInfo = resolveCourierCredentialUrls($credentials);
+        $urlInfo = resolveCourierCredentialUrls($credentials, 'delhivery');
         $labelPdfSize = strtoupper(trim((string)($credentials['label_pdf_size'] ?? '4R')));
         if (!in_array($labelPdfSize, ['A4', '4R'], true)) {
             $labelPdfSize = '4R';
@@ -2956,7 +2965,7 @@ class DispatchController {
 
         return [
             'api_key' => $apiKey,
-            'environment' => (string)($urlInfo['environment'] ?? 'sandbox'),
+            'environment' => (string)($urlInfo['environment'] ?? 'production'),
             'base_url_override' => trim((string)($urlInfo['api_base_url'] ?? '')),
             'packing_slip_path' => trim((string)($credentials['packing_slip_api_path'] ?? $credentials['label_api_path'] ?? '')),
             'label_pdf_size' => $labelPdfSize,

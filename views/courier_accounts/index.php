@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../helpers/courier/credential_urls.php';
+require_once __DIR__ . '/../../helpers/courier/partner_credential_schema.php';
 
 $flash = $_SESSION['courier_account_flash'] ?? null;
 if ($flash) {
@@ -159,7 +160,11 @@ function h($v)
                                 if (!is_array($credJson)) {
                                     $credJson = [];
                                 }
-                                $accountEnv = normalizeCourierEnvironment($a['environment'] ?? ($credJson['environment'] ?? 'sandbox'));
+                                $partnerCodeForEnv = strtolower((string) ($a['partner_code'] ?? ''));
+                                $accountEnv = enforceCourierPartnerEnvironment(
+                                    $partnerCodeForEnv,
+                                    $a['environment'] ?? ($credJson['environment'] ?? 'sandbox')
+                                );
                                 $payload = [
                                     'id' => (int) $a['id'],
                                     'partner_id' => (int) $a['partner_id'],
@@ -317,7 +322,7 @@ function h($v)
                                 <option value="sandbox">Sandbox (test / UAT)</option>
                                 <option value="production">Production (live)</option>
                             </select>
-                            <p class="mt-1 text-[11px] text-gray-500">Controls which URL set and credentials profile is used at runtime.</p>
+                            <p id="ca_env_hint" class="mt-1 text-[11px] text-gray-500">Controls which URL set and credentials profile is used at runtime.</p>
                         </div>
                         <div>
                             <label for="ca_field_priority" class="block text-xs font-semibold text-gray-600 mb-1.5">Priority</label>
@@ -350,7 +355,7 @@ function h($v)
                                 </button>
                             </div>
                         </div>
-                        <p id="caCredSchemaHint" class="text-[11px] text-gray-500 mb-2">Select a partner to see the expected JSON shape. Secrets (password, PIN) are stored as plain text today—encrypt at rest for production.</p>
+                        <p id="caCredSchemaHint" class="text-[11px] text-gray-500 mb-2">Credentials are stored in the database only. Use “Load partner template” for an empty field skeleton — fill in all values here before saving.</p>
                         <textarea name="credentials_json" id="ca_field_credentials_json" rows="14" spellcheck="false" placeholder='{"environment":"sandbox","sandbox_api_base_url":"...","production_api_base_url":"..."}'
                             class="w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-xs sm:text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition resize-y min-h-[12rem] font-mono leading-relaxed"></textarea>
                         <p id="caCredJsonError" class="hidden mt-2 text-xs font-medium text-red-600"></p>
@@ -383,6 +388,7 @@ function h($v)
     var credError = document.getElementById('caCredJsonError');
     var partnerSelect = document.getElementById('ca_field_partner');
     var envSelect = document.getElementById('ca_field_environment');
+    var envHint = document.getElementById('ca_env_hint');
     var defaultPartnerId = <?php echo (int) $partnerId; ?>;
     var SCHEMAS = <?php echo $schemasJson ?: '{}'; ?>;
     var PARTNER_CODES = <?php echo $partnerCodesJson ?: '{}'; ?>;
@@ -447,6 +453,31 @@ function h($v)
         envSelect.value = normalizeEnvironment(value);
     }
 
+    function isProductionOnlyPartner(partnerId) {
+        var schema = schemaForPartnerId(partnerId);
+        return !!(schema && schema.production_only);
+    }
+
+    function updateEnvironmentUi() {
+        if (!envSelect || !partnerSelect) return;
+        var productionOnly = isProductionOnlyPartner(partnerSelect.value);
+        var sandboxOpt = envSelect.querySelector('option[value="sandbox"]');
+        if (sandboxOpt) {
+            sandboxOpt.disabled = productionOnly;
+            sandboxOpt.hidden = productionOnly;
+        }
+        envSelect.disabled = productionOnly;
+        if (productionOnly) {
+            setEnvironment('production');
+            syncEnvironmentToJson();
+        }
+        if (envHint) {
+            envHint.textContent = productionOnly
+                ? 'This partner uses production APIs only. Sandbox is disabled.'
+                : 'Controls which URL set and credentials profile is used at runtime.';
+        }
+    }
+
     function prettyJson(obj) {
         return JSON.stringify(obj, null, 2);
     }
@@ -480,9 +511,10 @@ function h($v)
     function loadTemplate(mergeExisting) {
         if (!partnerSelect || !credField) return;
         var schema = schemaForPartnerId(partnerSelect.value);
-        if (!schema || !schema.template) return;
+        var skeleton = schema && (schema.fields || schema.template);
+        if (!skeleton) return;
 
-        var next = JSON.parse(JSON.stringify(schema.template));
+        var next = JSON.parse(JSON.stringify(skeleton));
         if (mergeExisting && credField.value.trim() !== '') {
             try {
                 var existing = JSON.parse(credField.value);
@@ -567,6 +599,7 @@ function h($v)
         if (defaultPartnerId > 0) {
             loadTemplate(false);
         }
+        updateEnvironmentUi();
     }
 
     function fillFormEdit(p) {
@@ -584,6 +617,7 @@ function h($v)
         submitBtn.textContent = 'Update account';
         setCredentialsJson(credentialsFromAccount(p.credentials_json));
         updateSchemaHint();
+        updateEnvironmentUi();
     }
 
     var btnAdd = document.getElementById('caBtnOpenAdd');
@@ -632,7 +666,10 @@ function h($v)
     }
 
     if (partnerSelect) {
-        partnerSelect.addEventListener('change', updateSchemaHint);
+        partnerSelect.addEventListener('change', function () {
+            updateSchemaHint();
+            updateEnvironmentUi();
+        });
     }
 
     var btnTemplate = document.getElementById('caBtnLoadTemplate');

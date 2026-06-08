@@ -1,5 +1,16 @@
 <?php
 
+/** @return list<string> */
+function courierProductionOnlyPartnerCodes(): array
+{
+    return ['delhivery', 'bluedart'];
+}
+
+function isCourierProductionOnlyPartner(string $partnerCode): bool
+{
+    return in_array(strtolower(trim($partnerCode)), courierProductionOnlyPartnerCodes(), true);
+}
+
 /**
  * Normalize environment flag to sandbox or production.
  */
@@ -16,13 +27,26 @@ function normalizeCourierEnvironment($value): string
 }
 
 /**
+ * Force production for partners that do not support sandbox in this app.
+ */
+function enforceCourierPartnerEnvironment(string $partnerCode, $environment): string
+{
+    if (isCourierProductionOnlyPartner($partnerCode)) {
+        return 'production';
+    }
+
+    return normalizeCourierEnvironment($environment);
+}
+
+/**
  * Resolve API / WSDL URLs from credentials JSON using environment + sandbox/production URL fields.
  *
  * @return array{api_base_url:string,shipping_wsdl:string,tracking_wsdl:string,environment:string,is_production:bool}
  */
-function resolveCourierCredentialUrls(array $credentials): array
+function resolveCourierCredentialUrls(array $credentials, ?string $partnerCode = null): array
 {
-    $env = normalizeCourierEnvironment($credentials['environment'] ?? 'sandbox');
+    $code = strtolower(trim((string) ($partnerCode ?? $credentials['partner_code'] ?? '')));
+    $env = enforceCourierPartnerEnvironment($code, $credentials['environment'] ?? 'sandbox');
     $isProduction = $env === 'production';
     $bucket = $isProduction ? 'production' : 'sandbox';
 
