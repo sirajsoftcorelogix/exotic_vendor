@@ -582,15 +582,34 @@ class BlueDartAdapter implements CourierAdapterInterface
                 $error .= ' ' . bluedartDhlPortalSetupHint();
             }
 
+            $debug = [
+                'http_code' => $httpCode > 0 ? $httpCode : null,
+                'endpoint' => $createResp['endpoint'] ?? null,
+                'soap_variant' => $createResp['soap_variant'] ?? null,
+                'product_code' => $productCodes['product_code'],
+                'sub_product_code' => $productCodes['sub_product_code'],
+            ];
+            if (!empty($createResp['request_xml'])) {
+                $debug['request'] = (string) $createResp['request_xml'];
+            }
+            if (array_key_exists('response_raw', $createResp)) {
+                $debug['response'] = (string) $createResp['response_raw'];
+            }
+
             return [
                 'success' => false,
                 'message' => $error,
-                'debug' => [
-                    'http_code' => $httpCode > 0 ? $httpCode : null,
-                    'response' => $createResp['data'] ?? null,
-                    'product_code' => $productCodes['product_code'],
-                    'sub_product_code' => $productCodes['sub_product_code'],
-                ],
+                'debug' => array_filter(
+                    $debug,
+                    static function ($value, $key) {
+                        if ($key === 'response') {
+                            return true;
+                        }
+
+                        return $value !== null && $value !== '';
+                    },
+                    ARRAY_FILTER_USE_BOTH
+                ),
             ];
         }
 

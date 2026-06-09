@@ -383,6 +383,57 @@ function bluedartRedactSensitiveData($data)
 }
 
 /**
+ * Redact licence/login fields and truncate large binary nodes in SOAP XML for UI display.
+ */
+function bluedartRedactSoapXml(string $xml): string
+{
+    if ($xml === '') {
+        return '';
+    }
+
+    foreach (['LoginID', 'LicenceKey', 'ApiLicenceKey', 'ShipmentLicenceKey', 'TrackingLicenceKey'] as $tag) {
+        $xml = (string) preg_replace(
+            '/(<' . preg_quote($tag, '/') . '(?:\s[^>]*)?>)([^<]*)(<\/' . preg_quote($tag, '/') . '>)/i',
+            '$1[redacted]$3',
+            $xml
+        );
+    }
+
+    return bluedartTruncateSoapForDisplay($xml);
+}
+
+/**
+ * Shorten AWBPrintContent and overall payload for error popups.
+ */
+function bluedartTruncateSoapForDisplay(string $xml, int $maxLen = 12000): string
+{
+    if ($xml === '') {
+        return '';
+    }
+
+    $xml = (string) preg_replace_callback(
+        '/<(AWBPrintContent)(\s[^>]*)?>([\s\S]*?)<\/\1>/i',
+        static function (array $matches): string {
+            $content = (string) ($matches[3] ?? '');
+            if (strlen($content) <= 500) {
+                return $matches[0];
+            }
+
+            return '<' . $matches[1] . ($matches[2] ?? '') . '>[truncated label content, '
+                . strlen($content) . ' chars]</' . $matches[1] . '>';
+        },
+        $xml
+    );
+
+    if (strlen($xml) <= $maxLen) {
+        return $xml;
+    }
+
+    return substr($xml, 0, $maxLen)
+        . "\n...[truncated, total " . strlen($xml) . ' chars]';
+}
+
+/**
  * @param array<string, mixed> $credentials
  * @param list<string> $keys
  */
