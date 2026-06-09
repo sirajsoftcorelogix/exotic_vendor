@@ -103,6 +103,15 @@ return [
             'consumer_key' => '',
             'consumer_secret' => '',
             'api_gateway_base_url' => '',
+            'token_api_path' => '',
+            'rate_per_kg_inr' => '',
+            'rate_minimum_inr' => '',
+            'rate_products' => [],
+            'rate_estimate' => [
+                'default_per_kg_inr' => '',
+                'default_minimum_inr' => '',
+                'products' => [],
+            ],
             'production_api_base_url' => '',
             'shipper' => [
                 'company_name' => '',
