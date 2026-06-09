@@ -756,4 +756,388 @@ class BlueDartService
         }
         return strlen($value) > 40;
     }
+
+    /**
+     * Create a domestic waybill (AWB) via Blue Dart GenerateWayBill API.
+     *
+     * @param array<string, mixed> $shipment Pre-built Request subtree (Consignee, Shipper, Services, Returnadds)
+     * @return array{success:bool,awb?:string,pdf_binary?:string,destination_area?:string,error?:string,data?:mixed,http_code?:int}
+     */
+    public function generateWaybill(array $shipment): array
+    {
+        $body = [
+            'Request' => $shipment,
+            'Profile' => $this->buildProfile(),
+        ];
+
+        $configuredPath = trim((string) ($this->config['waybill_api_path'] ?? ''));
+        $paths = array_values(array_unique(array_filter([
+            $configuredPath !== '' ? $configuredPath : null,
+            '/in/transportation/waybill/v1/GenerateWayBill',
+            '/waybill/GenerateWayBill',
+        ])));
+
+        $last = ['success' => false, 'error' => 'Blue Dart waybill generation failed.'];
+        foreach ($paths as $path) {
+            $resp = $this->gatewayPost($path, $body);
+            $last = $resp;
+            if (empty($resp['success'])) {
+                continue;
+            }
+
+            $parsed = $this->parseGenerateWaybillResponse($resp['data'] ?? null);
+            if (!empty($parsed['success'])) {
+                return array_merge($parsed, [
+                    'data' => $resp['data'] ?? null,
+                    'http_code' => $resp['http_code'] ?? null,
+                ]);
+            }
+
+            $last['error'] = (string) ($parsed['error'] ?? 'Blue Dart waybill response did not contain an AWB.');
+            $last['data'] = $resp['data'] ?? null;
+        }
+
+        return [
+            'success' => false,
+            'error' => (string) ($last['error'] ?? 'Blue Dart waybill generation failed.'),
+            'data' => $last['data'] ?? null,
+            'http_code' => $last['http_code'] ?? null,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    public function buildWaybillShipmentPayload(array $params): array
+    {
+        $isCod = !empty($params['cod']);
+        $subProduct = strtoupper(trim((string) ($params['sub_product_code'] ?? ($isCod ? 'C' : 'P'))));
+        if (!in_array($subProduct, ['P', 'C'], true)) {
+            $subProduct = $isCod ? 'C' : 'P';
+        }
+
+        $productCode = strtoupper(trim((string) ($params['product_code'] ?? 'A')));
+        if ($productCode === '') {
+            $productCode = 'A';
+        }
+
+        $packType = strtoupper(trim((string) ($params['pack_type'] ?? 'L')));
+        if ($packType === '') {
+            $packType = 'L';
+        }
+
+        $weightKg = max(0.01, (float) ($params['weight_kg'] ?? 0.5));
+        $lengthCm = max(1.0, (float) ($params['length_cm'] ?? 1));
+        $widthCm = max(1.0, (float) ($params['width_cm'] ?? 1));
+        $heightCm = max(1.0, (float) ($params['height_cm'] ?? 1));
+        $collectable = $isCod ? round((float) ($params['cod_amount'] ?? $params['declared_value'] ?? 0), 2) : 0.0;
+        if ($isCod && $collectable <= 0) {
+            $collectable = round((float) ($params['declared_value'] ?? 0.01), 2);
+        }
+
+        $creditRef = $this->sanitizeCreditReference((string) ($params['credit_reference'] ?? ''));
+        $pickupTime = preg_replace('/\D/', '', (string) ($params['pickup_time'] ?? date('Hi')));
+        if (strlen($pickupTime) < 4) {
+            $pickupTime = str_pad($pickupTime, 4, '0', STR_PAD_LEFT);
+        }
+        $pickupTime = substr($pickupTime, 0, 4);
+
+        $services = [
+            'AWBNo' => '',
+            'ActualWeight' => number_format($weightKg, 2, '.', ''),
+            'CollactableAmount' => $isCod ? $collectable : 0,
+            'CreditReferenceNo' => $creditRef,
+            'Dimensions' => [[
+                'Length' => round($lengthCm, 2),
+                'Breadth' => round($widthCm, 2),
+                'Height' => round($heightCm, 2),
+                'Count' => max(1, (int) ($params['piece_count'] ?? 1)),
+            ]],
+            'PDFOutputNotRequired' => false,
+            'PackType' => $packType,
+            'PickupDate' => '/Date(' . (time() * 1000) . ')/',
+            'PickupTime' => $pickupTime,
+            'PieceCount' => (string) max(1, (int) ($params['piece_count'] ?? 1)),
+            'ProductCode' => $productCode,
+            'SubProductCode' => $subProduct,
+            'RegisterPickup' => !empty($params['register_pickup']),
+            'Commodity' => [],
+            'itemdtl' => [],
+        ];
+
+        $invoiceNumber = trim((string) ($params['invoice_number'] ?? ''));
+        if ($invoiceNumber !== '') {
+            $services['InvoiceNo'] = substr($invoiceNumber, 0, 20);
+        }
+
+        $declaredValue = round((float) ($params['declared_value'] ?? $collectable), 2);
+        if ($declaredValue > 0) {
+            $services['DeclaredValue'] = $declaredValue;
+        }
+
+        $consigneeLines = $this->splitAddressLines((string) ($params['consignee_address'] ?? ''), 3, 50);
+        $shipperLines = $this->splitAddressLines((string) ($params['shipper_address'] ?? ''), 3, 50);
+        $returnLines = $this->splitAddressLines((string) ($params['return_address'] ?? $params['shipper_address'] ?? ''), 3, 50);
+
+        return [
+            'Consignee' => [
+                'ConsigneeAddress1' => $consigneeLines[0] ?? '',
+                'ConsigneeAddress2' => $consigneeLines[1] ?? '',
+                'ConsigneeAddress3' => $consigneeLines[2] ?? '',
+                'ConsigneeAddressType' => 'R',
+                'ConsigneeEmailID' => trim((string) ($params['consignee_email'] ?? '')),
+                'ConsigneeMobile' => preg_replace('/\D/', '', (string) ($params['consignee_mobile'] ?? '')),
+                'ConsigneeName' => substr(trim((string) ($params['consignee_name'] ?? 'Customer')), 0, 50),
+                'ConsigneePincode' => preg_replace('/\D/', '', (string) ($params['consignee_pincode'] ?? '')),
+                'ConsigneeTelephone' => '',
+            ],
+            'Returnadds' => [
+                'ReturnAddress1' => $returnLines[0] ?? '',
+                'ReturnAddress2' => $returnLines[1] ?? '',
+                'ReturnAddress3' => $returnLines[2] ?? '',
+                'ReturnContact' => substr(trim((string) ($params['return_contact'] ?? $params['shipper_name'] ?? 'Seller')), 0, 50),
+                'ReturnMobile' => preg_replace('/\D/', '', (string) ($params['return_mobile'] ?? $params['shipper_mobile'] ?? '')),
+                'ReturnPincode' => preg_replace('/\D/', '', (string) ($params['return_pincode'] ?? $params['shipper_pincode'] ?? '')),
+                'ReturnTelephone' => '',
+            ],
+            'Services' => $services,
+            'Shipper' => [
+                'CustomerAddress1' => $shipperLines[0] ?? '',
+                'CustomerAddress2' => $shipperLines[1] ?? '',
+                'CustomerAddress3' => $shipperLines[2] ?? '',
+                'CustomerCode' => trim((string) ($params['customer_code'] ?? $this->config['customer_code'] ?? '')),
+                'CustomerEmailID' => trim((string) ($params['shipper_email'] ?? '')),
+                'CustomerMobile' => preg_replace('/\D/', '', (string) ($params['shipper_mobile'] ?? '')),
+                'CustomerName' => substr(trim((string) ($params['shipper_name'] ?? 'Seller')), 0, 50),
+                'CustomerPincode' => preg_replace('/\D/', '', (string) ($params['shipper_pincode'] ?? '')),
+                'CustomerTelephone' => '',
+                'IsToPayCustomer' => false,
+                'OriginArea' => trim((string) ($params['origin_area'] ?? $this->config['origin_area'] ?? '')),
+                'Sender' => substr(trim((string) ($params['sender'] ?? $this->config['registered_name'] ?? $params['shipper_name'] ?? 'Seller')), 0, 50),
+                'VendorCode' => '',
+            ],
+        ];
+    }
+
+    public function saveWaybillLabelPdf(string $awb, string $pdfBinary): ?string
+    {
+        $awb = preg_replace('/[^A-Za-z0-9_-]/', '', $awb);
+        if ($awb === '' || $pdfBinary === '') {
+            return null;
+        }
+
+        $dir = dirname(__DIR__) . '/tmp/bluedart_labels';
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            return null;
+        }
+
+        $path = $dir . '/bluedart_' . $awb . '.pdf';
+        if (file_put_contents($path, $pdfBinary) === false) {
+            return null;
+        }
+
+        return $path;
+    }
+
+    public function resolveStoredLabelPath(string $awb): ?string
+    {
+        $awb = preg_replace('/[^A-Za-z0-9_-]/', '', $awb);
+        if ($awb === '') {
+            return null;
+        }
+
+        $path = dirname(__DIR__) . '/tmp/bluedart_labels/bluedart_' . $awb . '.pdf';
+        return is_file($path) ? $path : null;
+    }
+
+    /** @param mixed $data @return array{success:bool,awb?:string,pdf_binary?:string,destination_area?:string,error?:string} */
+    public function parseGenerateWaybillResponse($data): array
+    {
+        if (!is_array($data)) {
+            return ['success' => false, 'error' => 'Invalid Blue Dart waybill response.'];
+        }
+
+        $statusNode = $this->findWaybillStatusNode($data);
+        if ($statusNode !== null && $this->isTruthy($statusNode['IsError'] ?? $statusNode['isError'] ?? null)) {
+            $msg = trim((string) (
+                $statusNode['Status'][0]['StatusInformation']
+                ?? $statusNode['status'][0]['StatusInformation']
+                ?? $statusNode['ErrorMessage']
+                ?? $statusNode['error']
+                ?? 'Blue Dart waybill generation failed.'
+            ));
+            return ['success' => false, 'error' => $msg !== '' ? $msg : 'Blue Dart waybill generation failed.'];
+        }
+
+        $awb = $this->findScalarInTree($data, ['AWBNo', 'awbNo', 'AWBNumber', 'WaybillNo']);
+        if ($awb === '') {
+            return ['success' => false, 'error' => 'Blue Dart did not return an AWB number.'];
+        }
+
+        $pdfBinary = $this->extractWaybillPdfBinary($data);
+        if ($pdfBinary === '') {
+            return [
+                'success' => false,
+                'error' => 'Blue Dart returned AWB ' . $awb . ' but no label PDF (AWBPrintContent).',
+                'awb' => $awb,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'awb' => $awb,
+            'pdf_binary' => $pdfBinary,
+            'destination_area' => $this->findScalarInTree($data, ['DestinationArea', 'destinationArea']),
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    private function findWaybillStatusNode(array $data): ?array
+    {
+        foreach ([
+            'GenerateWayBillResult',
+            'WayBillGenerationStatus',
+            'WaybillGenerationStatus',
+            'Status',
+        ] as $key) {
+            if (!empty($data[$key]) && is_array($data[$key])) {
+                return $data[$key];
+            }
+        }
+
+        foreach ($data as $value) {
+            if (is_array($value)) {
+                $nested = $this->findWaybillStatusNode($value);
+                if ($nested !== null) {
+                    return $nested;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /** @param array<string, mixed> $data @param list<string> $keys */
+    private function findScalarInTree(array $data, array $keys): string
+    {
+        foreach ($keys as $key) {
+            if (!empty($data[$key]) && (is_string($data[$key]) || is_numeric($data[$key]))) {
+                return trim((string) $data[$key]);
+            }
+        }
+
+        foreach ($data as $value) {
+            if (!is_array($value)) {
+                continue;
+            }
+            $found = $this->findScalarInTree($value, $keys);
+            if ($found !== '') {
+                return $found;
+            }
+        }
+
+        return '';
+    }
+
+    /** @param array<string, mixed> $data */
+    private function extractWaybillPdfBinary(array $data): string
+    {
+        foreach (['AWBPrintContent', 'awbPrintContent', 'PDFPrintContent', 'pdfPrintContent'] as $key) {
+            $binary = $this->decodePdfContent($data[$key] ?? null);
+            if ($binary !== '') {
+                return $binary;
+            }
+        }
+
+        foreach ($data as $value) {
+            if (!is_array($value)) {
+                continue;
+            }
+            $binary = $this->extractWaybillPdfBinary($value);
+            if ($binary !== '') {
+                return $binary;
+            }
+        }
+
+        return '';
+    }
+
+    /** @param mixed $content */
+    private function decodePdfContent($content): string
+    {
+        if ($content === null || $content === '') {
+            return '';
+        }
+
+        if (is_string($content)) {
+            $trimmed = trim($content);
+            if ($trimmed === '') {
+                return '';
+            }
+            if (strncmp($trimmed, '%PDF', 4) === 0) {
+                return $trimmed;
+            }
+            $decoded = base64_decode($trimmed, true);
+            if (is_string($decoded) && $decoded !== '' && strncmp($decoded, '%PDF', 4) === 0) {
+                return $decoded;
+            }
+        }
+
+        if (is_array($content)) {
+            $bytes = [];
+            foreach ($content as $byte) {
+                if (!is_numeric($byte)) {
+                    continue;
+                }
+                $bytes[] = chr((int) $byte);
+            }
+            $binary = implode('', $bytes);
+            if ($binary !== '' && strncmp($binary, '%PDF', 4) === 0) {
+                return $binary;
+            }
+        }
+
+        return '';
+    }
+
+    private function sanitizeCreditReference(string $value): string
+    {
+        $value = strtoupper(preg_replace('/[^A-Z0-9]/', '', $value));
+        if ($value === '') {
+            $value = 'EX' . date('ymdHis');
+        }
+        return substr($value, 0, 20);
+    }
+
+    /** @return list<string> */
+    private function splitAddressLines(string $address, int $maxLines, int $maxLen): array
+    {
+        $address = trim(preg_replace('/\s+/', ' ', $address));
+        if ($address === '') {
+            return [''];
+        }
+
+        $lines = [];
+        $remaining = $address;
+        while ($remaining !== '' && count($lines) < $maxLines) {
+            if (strlen($remaining) <= $maxLen) {
+                $lines[] = $remaining;
+                break;
+            }
+            $chunk = substr($remaining, 0, $maxLen);
+            $breakAt = strrpos($chunk, ' ');
+            if ($breakAt !== false && $breakAt > 10) {
+                $chunk = substr($chunk, 0, $breakAt);
+            }
+            $lines[] = trim($chunk);
+            $remaining = trim(substr($remaining, strlen($chunk)));
+        }
+
+        while (count($lines) < $maxLines) {
+            $lines[] = '';
+        }
+
+        return $lines;
+    }
 }

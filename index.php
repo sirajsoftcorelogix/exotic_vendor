@@ -1360,6 +1360,9 @@ switch ($page) {
             case 'delhivery_label':
                 $controller->delhiveryLabel();
                 break;
+            case 'bluedart_label':
+                $controller->bluedartLabel();
+                break;
             default:
                 $controller->create();
                 break;

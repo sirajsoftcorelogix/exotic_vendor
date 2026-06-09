@@ -86,10 +86,12 @@ return [
     'bluedart' => [
         'label' => 'Blue Dart',
         'production_only' => true,
-        'description' => 'Blue Dart (DHL eCommerce India APIs). Production only. Serviceability + ETD from Blue Dart REST APIs; freight price shown from Shiprocket when available. Needs login_id, shipment_licence_key, consumer_key/secret (or jwt_token).',
+        'description' => 'Blue Dart (DHL eCommerce India APIs). Production only. Serviceability + ETD from Blue Dart REST APIs; freight price from Shiprocket when available. Waybill creation uses GenerateWayBill (needs customer_code, origin_area, shipper address).',
         'fields' => [
             'login_id' => '',
             'shipment_licence_key' => '',
+            'waybill_api_path' => '',
+            'register_pickup_on_waybill' => '',
             'tracking_licence_key' => '',
             'licence_key' => '',
             'customer_code' => '',
