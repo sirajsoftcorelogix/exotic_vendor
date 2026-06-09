@@ -1238,6 +1238,10 @@ class BlueDartService
                 'error' => bluedartSanitizeErrorMessage((string) ($resp['error'] ?? 'Blue Dart legacy waybill failed.')),
                 'data' => $resp['data'] ?? null,
                 'http_code' => $resp['http_code'] ?? null,
+                'endpoint' => $resp['endpoint'] ?? null,
+                'soap_variant' => $resp['soap_variant'] ?? null,
+                'request_xml' => $resp['request_xml'] ?? null,
+                'response_raw' => $resp['response_raw'] ?? '',
             ];
         }
 
@@ -1249,6 +1253,10 @@ class BlueDartService
                 'error' => bluedartSanitizeErrorMessage((string) ($parsed['error'] ?? 'Blue Dart legacy waybill failed.')),
                 'data' => $values,
                 'http_code' => $resp['http_code'] ?? null,
+                'endpoint' => $resp['endpoint'] ?? null,
+                'soap_variant' => $resp['soap_variant'] ?? null,
+                'request_xml' => $resp['request_xml'] ?? null,
+                'response_raw' => $resp['response_raw'] ?? '',
             ];
         }
 

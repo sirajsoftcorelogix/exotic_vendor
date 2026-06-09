@@ -31,6 +31,23 @@ class DispatchController {
         return $pickup !== '' ? $pickup : 'Head Off';
     }
 
+    /**
+     * @param array<string, mixed> $result
+     * @return string|array{message:string,debug:array<string,mixed>}
+     */
+    private function buildShipmentErrorEntry(string $message, array $result = [])
+    {
+        $debug = is_array($result['debug'] ?? null) ? $result['debug'] : [];
+        if ($debug === []) {
+            return $message;
+        }
+
+        return [
+            'message' => $message,
+            'debug' => $debug,
+        ];
+    }
+
     private function resolveShiprocketPickupPostcode($dispatchModel, array $firm, string $pickupLocation): array
     {
         $fallbackPin = trim((string)($firm['pin'] ?? ''));
@@ -2127,7 +2144,11 @@ class DispatchController {
                             $created_dispatches[$index]['label_url'] = $labelUrl;
                             $created_dispatches[$index]['partner_code'] = 'bluedart';
                         } else {
-                            $errors[] = 'Blue Dart error for order #' . $order_number . ', box #' . $box_no . ': ' . ($createResult['message'] ?? 'Unknown error');
+                            $errors[] = $this->buildShipmentErrorEntry(
+                                'Blue Dart error for order #' . $order_number . ', box #' . $box_no . ': '
+                                    . ($createResult['message'] ?? 'Unknown error'),
+                                $createResult
+                            );
                             $dispatchModel->updateDispatch($dispatchId, [
                                 'shipment_status' => 'failed',
                                 'updated_at' => date('Y-m-d H:i:s'),
@@ -2856,6 +2877,7 @@ class DispatchController {
                     'success' => false,
                     'provider' => 'bluedart',
                     'message' => (string)($createResult['message'] ?? 'Blue Dart shipment failed'),
+                    'debug' => is_array($createResult['debug'] ?? null) ? $createResult['debug'] : [],
                 ];
             }
 
@@ -3018,9 +3040,12 @@ class DispatchController {
                 }
                 $failed_count++;
                 $provider = ucfirst((string)($result['provider'] ?? 'courier'));
-                $errors[] = $provider . ' error for order #' . ($dispatch_record['order_number'] ?? '')
-                    . ', dispatch ID #' . ($dispatch_record['id'] ?? '')
-                    . ': ' . ($result['message'] ?? 'Unknown error');
+                $errors[] = $this->buildShipmentErrorEntry(
+                    $provider . ' error for order #' . ($dispatch_record['order_number'] ?? '')
+                        . ', dispatch ID #' . ($dispatch_record['id'] ?? '')
+                        . ': ' . ($result['message'] ?? 'Unknown error'),
+                    $result
+                );
             }
 
             http_response_code(200);

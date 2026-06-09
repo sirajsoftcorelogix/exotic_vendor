@@ -376,7 +376,7 @@
             errorModal.className = 'fixed inset-0 z-50 flex items-center justify-center';
             errorModal.innerHTML = `
                 <div class="absolute inset-0 bg-black/40"></div>
-                <div class="relative z-10 w-full max-w-2xl bg-white shadow-lg border border-gray-300 mx-3 rounded">
+                <div class="relative z-10 w-full max-w-4xl bg-white shadow-lg border border-gray-300 mx-3 rounded">
                     <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-red-500 text-white rounded-t">
                         <h2 class="font-semibold text-sm">⚠️ Shipment Creation Errors</h2>
                         <button type="button" class="text-white text-xl leading-none px-2 hover:text-white/90 close-error-modal">&times;</button>
@@ -389,9 +389,9 @@
                             <p class="text-xs text-gray-600">✗ ${data.errors.length} courier shipment(s) failed. Click "Retry" to try again (Shiprocket, Delhivery, or Blue Dart based on your selection).</p>
                         </div>
 
-                        <div class="bg-red-50 border border-red-200 rounded p-3 max-h-64 overflow-y-auto">
+                        <div class="bg-red-50 border border-red-200 rounded p-3 max-h-96 overflow-y-auto">
                             <div class="text-xs text-red-800">
-                                ${data.errors.map(err => `<div class="mb-2 pb-2 border-b border-red-200 last:border-b-0">• ${escapeHtml(err)}</div>`).join('')}
+                                ${data.errors.map(err => renderShipmentErrorHtml(err)).join('')}
                             </div>
                         </div>
                     </div>
@@ -538,7 +538,7 @@
                             // Update the error list and keep modal open
                             const errorList = errorModal.querySelector('.bg-red-50 .text-red-800');
                             if (errorList) {
-                                errorList.innerHTML = data.errors.map(err => `<div class="mb-2 pb-2 border-b border-red-200 last:border-b-0">• ${escapeHtml(err)}</div>`).join('');
+                                errorList.innerHTML = data.errors.map(err => renderShipmentErrorHtml(err)).join('');
                             }
                             
                             // Update status message
@@ -576,6 +576,52 @@
                 "'": '&#039;'
             };
             return safeText.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function renderShipmentErrorHtml(err) {
+            const msg = (typeof err === 'string') ? err : (err.message || 'Unknown error');
+            let html = '<div class="mb-3 pb-3 border-b border-red-200 last:border-b-0">';
+            html += '<div class="font-medium">• ' + escapeHtml(msg) + '</div>';
+
+            const debug = (typeof err === 'object' && err && err.debug) ? err.debug : null;
+            if (debug && (debug.request || debug.response !== undefined || debug.endpoint)) {
+                html += '<details class="mt-2 text-[11px]">';
+                html += '<summary class="cursor-pointer text-red-700 hover:underline select-none">Show API request / response</summary>';
+                html += '<div class="mt-2 space-y-2">';
+
+                if (debug.endpoint) {
+                    let meta = escapeHtml(debug.endpoint);
+                    if (debug.soap_variant) {
+                        meta += ' (' + escapeHtml(debug.soap_variant) + ')';
+                    }
+                    if (debug.http_code) {
+                        meta += ' — HTTP ' + escapeHtml(String(debug.http_code));
+                    }
+                    html += '<p class="text-gray-600"><strong>Endpoint:</strong> ' + meta + '</p>';
+                } else if (debug.http_code) {
+                    html += '<p class="text-gray-600"><strong>HTTP:</strong> ' + escapeHtml(String(debug.http_code)) + '</p>';
+                }
+
+                if (debug.request) {
+                    html += '<div><p class="font-semibold text-gray-700 mb-1">Request</p>';
+                    html += '<pre class="bg-gray-900 text-green-100 p-2 rounded overflow-x-auto max-h-56 text-[10px] whitespace-pre-wrap break-all">';
+                    html += escapeHtml(debug.request);
+                    html += '</pre></div>';
+                }
+
+                const responseText = (debug.response !== undefined && debug.response !== null)
+                    ? String(debug.response)
+                    : '';
+                html += '<div><p class="font-semibold text-gray-700 mb-1">Response</p>';
+                html += '<pre class="bg-gray-900 text-amber-100 p-2 rounded overflow-x-auto max-h-56 text-[10px] whitespace-pre-wrap break-all">';
+                html += escapeHtml(responseText === '' ? '(empty body)' : responseText);
+                html += '</pre></div>';
+
+                html += '</div></details>';
+            }
+
+            html += '</div>';
+            return html;
         }
 
         const closeButtons = modal.querySelectorAll('[data-close-select-items]');
