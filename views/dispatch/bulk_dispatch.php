@@ -1054,25 +1054,26 @@
             }));
         }
 
-        function fetchDelhiveryRates(payload) {
+        function fetchDirectCourierRates(payload, partnerCode) {
+            const body = Object.assign({}, payload, { partner_code: partnerCode });
             return fetch('?page=dispatch&action=getDirectCourierRates', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(body)
             }).then(r => r.text()).then((text) => {
                 const cleaned = (typeof text === 'string') ? text.replace(/^\uFEFF/, '').trim() : '';
                 try {
                     return cleaned ? JSON.parse(cleaned) : {};
                 } catch (err) {
-                    return { success: false, message: 'Invalid Delhivery response' };
+                    return { success: false, message: 'Invalid ' + partnerCode + ' response' };
                 }
             });
         }
 
-        function mergeCourierOptions(shiprocketCouriers, delhiveryCouriers) {
+        function mergeCourierOptions(shiprocketCouriers, delhiveryCouriers, bluedartCouriers) {
             const merged = [];
             (shiprocketCouriers || []).forEach((courier) => {
                 merged.push(Object.assign({}, courier, {
@@ -1084,6 +1085,12 @@
                 merged.push(Object.assign({}, courier, {
                     rate_source: 'delhivery',
                     partner_code: courier.partner_code || 'delhivery'
+                }));
+            });
+            (bluedartCouriers || []).forEach((courier) => {
+                merged.push(Object.assign({}, courier, {
+                    rate_source: 'bluedart',
+                    partner_code: courier.partner_code || 'bluedart'
                 }));
             });
             merged.sort((a, b) => {
@@ -1107,10 +1114,14 @@
             const cid = courier.id != null ? String(courier.id) : '';
             const checkedAttr = idx === 0 ? ' checked' : '';
             const isDelhivery = courier.rate_source === 'delhivery';
-            const providerBadge = isDelhivery
-                ? '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 border border-red-200">Delhivery</span>'
-                : '<span class="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 border border-violet-200">Shiprocket</span>';
-            const priceClass = isDelhivery ? 'text-emerald-700' : tm.courierPrice;
+            const isBlueDart = courier.rate_source === 'bluedart';
+            let providerBadge = '<span class="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 border border-violet-200">Shiprocket</span>';
+            if (isDelhivery) {
+                providerBadge = '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 border border-red-200">Delhivery</span>';
+            } else if (isBlueDart) {
+                providerBadge = '<span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-900 border border-sky-200">Blue Dart</span>';
+            }
+            const priceClass = (isDelhivery || isBlueDart) ? 'text-emerald-700' : tm.courierPrice;
             return `
                 <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md ${tm.courierTileHover} ${tm.courierTileChecked}">
                     <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 ${tm.courierRadio}" data-courier-name="${escapeHtml(String(courier.name ?? ''))}" data-partner-code="${escapeHtml(String(courier.partner_code ?? ''))}" data-product-group="${escapeHtml(String(courier.product_group ?? ''))}" data-product-type="${escapeHtml(String(courier.product_type ?? ''))}" data-partner-account-id="${escapeHtml(String(courier.partner_account_id ?? ''))}" data-rate-source="${escapeHtml(String(courier.rate_source ?? 'shiprocket'))}"${checkedAttr}/>
@@ -1205,7 +1216,7 @@
                             </span>
                             <div class="min-w-0">
                                 <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
-                                <div class="text-[11px] text-gray-500 mt-0.5">Shiprocket &amp; Delhivery — select one option</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">Shiprocket, Delhivery &amp; Blue Dart — select one option</div>
                             </div>
                             <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.courierCountBadge}">${n}</span>
                         </div>
@@ -1367,10 +1378,12 @@
             
             Promise.allSettled([
                 fetchShiprocketRates(payload),
-                fetchDelhiveryRates(payload)
+                fetchDirectCourierRates(payload, 'delhivery'),
+                fetchDirectCourierRates(payload, 'bluedart')
             ]).then((results) => {
                 const shiprocketResult = results[0];
                 const delhiveryResult = results[1];
+                const bluedartResult = results[2];
 
                 let shiprocketData = null;
                 let shiprocketError = null;
@@ -1400,12 +1413,26 @@
                     console.warn('Delhivery rates failed:', delhiveryResult.reason);
                 }
 
+                let bluedartCouriers = [];
+                let bluedartError = null;
+                if (bluedartResult.status === 'fulfilled' && bluedartResult.value?.success && Array.isArray(bluedartResult.value.couriers)) {
+                    bluedartCouriers = bluedartResult.value.couriers;
+                } else if (bluedartResult.status === 'fulfilled') {
+                    bluedartError = bluedartResult.value?.message || 'Blue Dart rates unavailable';
+                } else {
+                    bluedartError = 'Could not load Blue Dart rates';
+                    console.warn('Blue Dart rates failed:', bluedartResult.reason);
+                }
+
                 const shiprocketCouriers = (shiprocketData && shiprocketData.success && Array.isArray(shiprocketData.couriers))
                     ? shiprocketData.couriers
                     : [];
-                const mergedCouriers = mergeCourierOptions(shiprocketCouriers, delhiveryCouriers);
+                const mergedCouriers = mergeCourierOptions(shiprocketCouriers, delhiveryCouriers, bluedartCouriers);
                 if (delhiveryCouriers.length > 0) {
                     delhiveryError = null;
+                }
+                if (bluedartCouriers.length > 0) {
+                    bluedartError = null;
                 }
 
                 if (!courierContainer) return;
@@ -1425,8 +1452,8 @@
 
                 const errorMessage = shiprocketError && shiprocketError.message
                     ? shiprocketError.message
-                    : (shiprocketCouriers.length === 0 && delhiveryCouriers.length === 0
-                        ? 'No courier options returned from Shiprocket or Delhivery for this box.'
+                    : (shiprocketCouriers.length === 0 && delhiveryCouriers.length === 0 && bluedartCouriers.length === 0
+                        ? 'No courier options returned from Shiprocket, Delhivery, or Blue Dart for this box.'
                         : 'Courier serviceability request failed. Please retry or open debug.');
 
                 courierContainer.innerHTML = `
@@ -1438,6 +1465,7 @@
                             <div class="font-semibold text-red-900">Could not load courier options</div>
                             <p class="text-[12px] text-red-800/90 mt-1">${escapeHtml(errorMessage)}</p>
                             ${delhiveryError ? '<p class="text-[12px] text-amber-800/90 mt-1">' + escapeHtml('Delhivery: ' + delhiveryError) + '</p>' : ''}
+                            ${bluedartError ? '<p class="text-[12px] text-amber-800/90 mt-1">' + escapeHtml('Blue Dart: ' + bluedartError) + '</p>' : ''}
                             <button type="button" class="retry-couriers-btn mt-3 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
                                 <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
                             </button>

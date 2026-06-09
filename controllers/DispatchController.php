@@ -2327,7 +2327,7 @@ class DispatchController {
 
     /**
      * Get direct courier provider rates (non-aggregator) for bulk dispatch UI.
-     * Currently: Delhivery only.
+     * Supports partner_code: delhivery | bluedart (default: delhivery).
      */
     public function getDirectCourierRates()
     {
@@ -2370,7 +2370,13 @@ class DispatchController {
             $courierDispatch = new CourierDispatchService($GLOBALS['conn']);
             $rateRequest = $courierDispatch->buildRateRequest($input, $orderInfo);
             $rateRequest['pickup_location'] = $requestedPickupLocation;
-            $rateRequest['partner_code'] = 'delhivery';
+            $partnerCode = strtolower(trim((string) ($input['partner_code'] ?? 'delhivery')));
+            if (!in_array($partnerCode, ['delhivery', 'bluedart'], true)) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Unsupported partner_code. Use delhivery or bluedart.']);
+                exit;
+            }
+            $rateRequest['partner_code'] = $partnerCode;
             $rateRequest['cod'] = $cod;
 
             // Use the same pickup postcode resolution as Shiprocket serviceability.

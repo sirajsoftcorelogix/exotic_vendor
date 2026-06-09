@@ -21,7 +21,9 @@ class CourierUiFormat
             $rows[] = [
                 'id' => (string) ($quote['id'] ?? ''),
                 'name' => (string) ($quote['name'] ?? 'Courier'),
-                'price' => (float) ($quote['price'] ?? 0),
+                'price' => array_key_exists('price', $quote) && $quote['price'] === null
+                    ? null
+                    : (float) ($quote['price'] ?? 0),
                 'currency' => strtoupper((string) ($quote['currency'] ?? 'INR')),
                 'etd' => (string) ($quote['etd'] ?? 'N/A'),
                 'rating' => (float) ($quote['rating'] ?? 0),
