@@ -435,15 +435,6 @@ class BlueDartAdapter implements CourierAdapterInterface
             return ['success' => false, 'message' => 'Consignee pin and address are required for Blue Dart.'];
         }
 
-        $customerCode = trim((string) ($credentials['customer_code'] ?? ''));
-        $originArea = trim((string) ($credentials['origin_area'] ?? ''));
-        if ($customerCode === '' || $originArea === '') {
-            return [
-                'success' => false,
-                'message' => 'Blue Dart customer_code and origin_area are required in Courier accounts.',
-            ];
-        }
-
         $shipperPin = preg_replace('/\D/', '', (string) (
             $shipper['postcode']
             ?? $credentials['customer_pincode']
@@ -455,9 +446,50 @@ class BlueDartAdapter implements CourierAdapterInterface
         if ($shipperPin === '' || $shipperAddress === '') {
             return [
                 'success' => false,
-                'message' => 'Shipper address and pincode are required in Blue Dart Courier account credentials.',
+                'message' => 'Shipper address and pincode are required in Blue Dart Courier account credentials (shipper.postcode, shipper.line1).',
             ];
         }
+
+        $isCod = !empty($request['cod']);
+        $authStatus = bluedartDescribeGatewayAuthStatus($credentials);
+        if (empty($authStatus['ready'])) {
+            $accountLabel = trim((string) ($accountRow['account_code'] ?? ''));
+            if ($accountLabel === '') {
+                $accountLabel = 'id ' . $accountId;
+            }
+            $message = (string) ($authStatus['message'] ?? 'Blue Dart API authentication is not configured.');
+            if (!empty($authStatus['hints'])) {
+                $message .= ' ' . implode(' ', $authStatus['hints']);
+            }
+            return [
+                'success' => false,
+                'message' => 'Blue Dart account "' . $accountLabel . '": ' . $message,
+                'debug' => ['auth_hints' => $authStatus['hints'] ?? []],
+            ];
+        }
+
+        $service = new BlueDartService($credentials);
+        $shipperCodes = bluedartResolveWaybillCredentials($service, $credentials, $shipperPin, $isCod);
+        if (!empty($shipperCodes['errors'])) {
+            $accountLabel = trim((string) ($accountRow['account_code'] ?? ''));
+            if ($accountLabel === '') {
+                $accountLabel = 'id ' . $accountId;
+            }
+            return [
+                'success' => false,
+                'message' => 'Blue Dart Courier account "' . $accountLabel . '" is missing: '
+                    . implode('; ', $shipperCodes['errors'])
+                    . '. Edit Courier accounts → Blue Dart → Credentials JSON and add these fields (see partner template reference).',
+                'debug' => [
+                    'missing' => $shipperCodes['errors'],
+                    'shipper_pincode' => $shipperPin,
+                    'origin_area_source' => $shipperCodes['origin_area_source'] ?? '',
+                ],
+            ];
+        }
+
+        $customerCode = (string) $shipperCodes['customer_code'];
+        $originArea = (string) $shipperCodes['origin_area'];
 
         $items = is_array($request['items'] ?? null) ? $request['items'] : [];
         $declaredValue = 0.0;
@@ -476,7 +508,6 @@ class BlueDartAdapter implements CourierAdapterInterface
             $declaredValue = 0.01;
         }
 
-        $isCod = !empty($request['cod']);
         $codAmount = $isCod ? round((float) ($request['cod_amount'] ?? $declaredValue), 2) : 0.0;
         $productCodes = $this->resolveProductCodes($request, $isCod);
 
@@ -487,7 +518,6 @@ class BlueDartAdapter implements CourierAdapterInterface
         }
         $creditReference .= substr((string) time(), -4);
 
-        $service = new BlueDartService($credentials);
         $shipmentPayload = $service->buildWaybillShipmentPayload([
             'product_code' => $productCodes['product_code'],
             'sub_product_code' => $productCodes['sub_product_code'],
@@ -588,6 +618,9 @@ class BlueDartAdapter implements CourierAdapterInterface
                 'sub_product_code' => $productCodes['sub_product_code'],
                 'service_code' => $productCodes['product_code'] . '_' . $productCodes['sub_product_code'],
                 'destination_area' => (string) ($createResp['destination_area'] ?? ''),
+                'customer_code' => $customerCode,
+                'origin_area' => $originArea,
+                'origin_area_source' => (string) ($shipperCodes['origin_area_source'] ?? ''),
             ],
             'debug' => [
                 'partner' => 'bluedart',
