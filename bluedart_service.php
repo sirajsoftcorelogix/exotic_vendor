@@ -2,14 +2,15 @@
 
 require_once __DIR__ . '/helpers/courier/credential_urls.php';
 require_once __DIR__ . '/helpers/courier/bluedart_rate_helpers.php';
+require_once __DIR__ . '/helpers/courier/bluedart_legacy_soap.php';
 
 /**
- * Blue Dart Express API gateway client (DHL eCommerce India REST APIs).
+ * Blue Dart domestic client.
  *
- * Rates: Location Finder (serviceability) + Transit Time (ETD). Price is supplied separately via Shiprocket.
+ * Default api_mode=legacy uses netconnect SOAP (eShipz-style login_id + licence_key).
+ * api_mode=rest uses DHL apigateway.bluedart.com (needs developer.dhl.com consumer_key/secret).
  *
- * @see https://developer.dhl.com/api-reference/blue-dart-location-finder
- * @see https://developer.dhl.com/api-reference/blue-dart-transit-time
+ * Price on rate tiles is supplied separately via Shiprocket when available.
  */
 class BlueDartService
 {
@@ -38,6 +39,9 @@ class BlueDartService
             'rate_estimate' => [],
             'rate_per_kg_inr' => 0,
             'rate_minimum_inr' => 0,
+            'api_mode' => 'legacy',
+            'legacy_waybill_endpoint' => '',
+            'legacy_finder_endpoint' => '',
         ];
 
         if (!is_array($config)) {
@@ -58,7 +62,13 @@ class BlueDartService
             $gatewayBase = $defaults['api_gateway_base_url'];
         }
 
+        $legacyEndpoints = bluedartResolveLegacyEndpoints($config);
+        $apiMode = strtolower(trim((string) ($config['api_mode'] ?? $defaults['api_mode'])));
+
         $this->config = array_merge($defaults, [
+            'api_mode' => $apiMode !== '' ? $apiMode : $defaults['api_mode'],
+            'legacy_waybill_endpoint' => $legacyEndpoints['waybill'],
+            'legacy_finder_endpoint' => $legacyEndpoints['finder'],
             'login_id' => (string) ($config['login_id'] ?? ''),
             'shipment_licence_key' => $shipmentLicence,
             'tracking_licence_key' => trim((string) (
@@ -124,6 +134,10 @@ class BlueDartService
                 'success' => false,
                 'error' => 'Box weight is required for Blue Dart rates.',
             ];
+        }
+
+        if ($this->usesLegacyApi()) {
+            return $this->estimateRatesLegacy($params, $originPin, $destPin, $weightKg);
         }
 
         $auth = $this->authenticate();
@@ -254,7 +268,7 @@ class BlueDartService
             foreach ($payloads as $body) {
                 $resp = $this->rawRequest('POST', $url, $body, []);
                 if (!$resp['success']) {
-                    $lastError = (string) ($resp['error'] ?? $lastError);
+                    $lastError = bluedartSanitizeErrorMessage((string) ($resp['error'] ?? $lastError));
                     if ($label !== '') {
                         $lastError .= ' (auth: ' . $label . ')';
                     }
@@ -264,11 +278,10 @@ class BlueDartService
                 $rawBody = (string) ($resp['raw'] ?? '');
                 $token = $this->extractJwtToken($resp['data'] ?? null, $rawBody);
                 if ($token === '') {
-                    $hint = $this->summarizeRawResponse($rawBody);
-                    $lastError = 'Blue Dart token API did not return a valid JWT'
+                    $lastError = 'Blue Dart rejected the API credentials for JWT generation'
                         . ($label !== '' ? ' (auth: ' . $label . ')' : '')
-                        . ($hint !== '' ? ': ' . $hint : '')
-                        . '. login_id+licence_key may not work — use DHL Developer Portal consumer_key/secret.';
+                        . '. ' . $this->describeTokenRejection($rawBody)
+                        . ' ' . bluedartDhlPortalSetupHint();
                     continue;
                 }
 
@@ -290,12 +303,64 @@ class BlueDartService
             }
         }
 
-        return ['success' => false, 'error' => $lastError];
+        return ['success' => false, 'error' => bluedartSanitizeErrorMessage($lastError)];
+    }
+
+    private function describeTokenRejection(string $raw): string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return 'Empty response from token endpoint.';
+        }
+
+        if ($this->isCredentialEchoResponse($raw)) {
+            return 'Token endpoint echoed credentials instead of issuing a JWT.';
+        }
+
+        $snippet = bluedartSanitizeErrorMessage($this->summarizeRawResponse($raw));
+        if ($snippet !== '' && !str_contains(strtolower($snippet), 'redacted')) {
+            return $snippet;
+        }
+
+        return 'Invalid token response from Blue Dart gateway.';
+    }
+
+    private function isCredentialEchoResponse(string $raw): bool
+    {
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return preg_match('/clientSecret|clientID|LicenceKey/i', $raw) === 1
+                && !str_contains($raw, 'eyJ');
+        }
+
+        if (isset($decoded['JWTToken']) || isset($decoded['jwtToken']) || isset($decoded['token'])) {
+            return false;
+        }
+
+        $keys = array_map(static fn ($k) => strtolower((string) $k), array_keys($decoded));
+        $credentialKeys = ['clientid', 'clientsecret', 'loginid', 'licencekey'];
+        $matched = 0;
+        foreach ($credentialKeys as $ck) {
+            if (in_array($ck, $keys, true)) {
+                $matched++;
+            }
+        }
+
+        return $matched >= 2 && count($decoded) <= 5;
+    }
+
+    public function usesLegacyApi(): bool
+    {
+        return bluedartUsesLegacyApi($this->config);
     }
 
     /** @return array{success:bool,data?:mixed,error?:string,http_code?:int,raw?:string} */
     public function getServicesForPincode(string $pinCode): array
     {
+        if ($this->usesLegacyApi()) {
+            return $this->legacyGetServicesForPincode($pinCode);
+        }
+
         return $this->gatewayPost('/in/transportation/finder/v1/GetServicesforPincode', [
             'pinCode' => $pinCode,
             'profile' => $this->buildProfile(),
@@ -413,8 +478,135 @@ class BlueDartService
             'Api_type' => 'S',
             'LicenceKey' => (string) ($this->config['shipment_licence_key'] ?? ''),
             'LoginID' => (string) ($this->config['login_id'] ?? ''),
-            'Version' => '1.0',
+            'Version' => $this->usesLegacyApi() ? '1.3' : '1.0',
         ];
+    }
+
+    /** @return array<string, string> */
+    private function buildLegacyProfile(): array
+    {
+        return [
+            'Api_type' => 'S',
+            'LicenceKey' => (string) ($this->config['shipment_licence_key'] ?? ''),
+            'LoginID' => (string) ($this->config['login_id'] ?? ''),
+            'Version' => '1.3',
+        ];
+    }
+
+    /** @return array{success:bool,data?:mixed,error?:string,http_code?:int,raw?:string} */
+    private function legacyGetServicesForPincode(string $pinCode): array
+    {
+        $pinCode = preg_replace('/\D/', '', $pinCode);
+        $resp = bluedartLegacySoapRequest(
+            (string) ($this->config['legacy_finder_endpoint'] ?? ''),
+            'http://tempuri.org/IServiceFinderQuery/GetServicesforPincode',
+            'GetServicesforPincode',
+            [
+                'pinCode' => $pinCode,
+                'Profile' => $this->buildLegacyProfile(),
+            ]
+        );
+
+        if (empty($resp['success'])) {
+            return $resp;
+        }
+
+        $values = is_array($resp['data']['values'] ?? null) ? $resp['data']['values'] : [];
+        return [
+            'success' => true,
+            'http_code' => $resp['http_code'] ?? null,
+            'raw' => $resp['raw'] ?? null,
+            'data' => $values,
+        ];
+    }
+
+    /**
+     * @return array{success:bool,quotes?:list<array<string,mixed>>,error?:string,debug?:array<string,mixed>}
+     */
+    private function estimateRatesLegacy(array $params, string $originPin, string $destPin, float $weightKg): array
+    {
+        $products = $this->resolveRateProducts();
+        if ($products === []) {
+            return [
+                'success' => false,
+                'error' => 'No Blue Dart rate_products configured. Add rate_products[] or default_service_type in Courier accounts.',
+            ];
+        }
+
+        $quotes = [];
+        $debug = ['api_mode' => 'legacy', 'products' => []];
+
+        foreach ($products as $product) {
+            $productCode = strtoupper(trim((string) ($product['product_code'] ?? '')));
+            $subProductCode = strtoupper(trim((string) ($product['sub_product_code'] ?? 'P')));
+            if ($productCode === '') {
+                continue;
+            }
+
+            $packType = strtoupper(trim((string) ($product['pack_type'] ?? 'L')));
+            $feature = strtoupper(trim((string) ($product['feature'] ?? 'R')));
+            $label = trim((string) ($product['label'] ?? $product['name'] ?? ('Blue Dart ' . $productCode . '/' . $subProductCode)));
+
+            $serviceResp = $this->legacyGetServicesForPincode($destPin);
+            $debug['products'][$productCode . '_' . $subProductCode] = ['serviceability' => $serviceResp];
+
+            if (empty($serviceResp['success']) || !$this->isLegacyServiceabilityOk($serviceResp['data'] ?? null)) {
+                continue;
+            }
+
+            $quotes[] = [
+                'product_code' => $productCode,
+                'sub_product_code' => $subProductCode,
+                'pack_type' => $packType,
+                'feature' => $feature,
+                'label' => $label,
+                'price' => null,
+                'currency' => (string) ($this->config['rating_currency'] ?? 'INR'),
+                'etd' => 'N/A',
+                'origin_pin' => $originPin,
+                'dest_pin' => $destPin,
+                'billable_weight_kg' => $weightKg,
+                'etd_source' => '',
+                'serviceable' => true,
+                'serviceability' => $serviceResp['data'] ?? null,
+            ];
+        }
+
+        if ($quotes === []) {
+            return [
+                'success' => false,
+                'error' => 'Blue Dart legacy API returned no serviceable products for this pincode pair.',
+                'debug' => $debug,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'quotes' => $quotes,
+            'debug' => $debug,
+        ];
+    }
+
+    /** @param mixed $data */
+    private function isLegacyServiceabilityOk($data): bool
+    {
+        if (!is_array($data) || $data === []) {
+            return false;
+        }
+
+        foreach (['IsError', 'iserror', 'Error', 'error'] as $key) {
+            if (array_key_exists($key, $data) && $this->isTruthy($data[$key])) {
+                return false;
+            }
+        }
+
+        foreach (['AreaCode', 'areacode', 'CityDescription', 'citydescription', 'PinCode', 'pincode'] as $key) {
+            if (!empty($data[$key])) {
+                return true;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -659,7 +851,10 @@ class BlueDartService
     {
         $auth = $this->authenticate();
         if (!$auth['success']) {
-            return ['success' => false, 'error' => (string) ($auth['error'] ?? 'Authentication failed.')];
+            return [
+                'success' => false,
+                'error' => bluedartSanitizeErrorMessage((string) ($auth['error'] ?? 'Authentication failed.')),
+            ];
         }
 
         $url = rtrim((string) $this->config['api_gateway_base_url'], '/') . $path;
@@ -673,7 +868,10 @@ class BlueDartService
             $this->jwtToken = null;
             $auth = $this->authenticate(true);
             if (!$auth['success']) {
-                return ['success' => false, 'error' => (string) ($auth['error'] ?? 'Authentication failed.')];
+                return [
+                    'success' => false,
+                    'error' => bluedartSanitizeErrorMessage((string) ($auth['error'] ?? 'Authentication failed.')),
+                ];
             }
             $resp = $this->rawRequest('POST', $url, $body, [
                 'JWTToken: ' . (string) $this->jwtToken,
@@ -732,7 +930,9 @@ class BlueDartService
         $decoded = json_decode($raw, true);
         $ok = $httpCode >= 200 && $httpCode < 300;
         if (!$ok) {
-            $message = $this->formatApiError($this->extractErrorMessage($decoded, $raw), $httpCode, $raw);
+            $message = bluedartSanitizeErrorMessage(
+                $this->formatApiError($this->extractErrorMessage($decoded, $raw), $httpCode, $raw)
+            );
             return [
                 'success' => false,
                 'error' => $message,
@@ -745,7 +945,9 @@ class BlueDartService
         if (is_array($decoded) && $this->responseIndicatesError($decoded)) {
             return [
                 'success' => false,
-                'error' => $this->formatApiError($this->extractErrorMessage($decoded, $raw), $httpCode, $raw),
+                'error' => bluedartSanitizeErrorMessage(
+                    $this->formatApiError($this->extractErrorMessage($decoded, $raw), $httpCode, $raw)
+                ),
                 'http_code' => $httpCode,
                 'data' => $decoded,
                 'raw' => $raw,
@@ -841,7 +1043,9 @@ class BlueDartService
             return '';
         }
 
-        return strlen($plain) > 240 ? (substr($plain, 0, 237) . '...') : $plain;
+        $plain = strlen($plain) > 240 ? (substr($plain, 0, 237) . '...') : $plain;
+
+        return bluedartSanitizeErrorMessage($plain);
     }
 
     /** @param array<string, mixed> $decoded */
@@ -946,6 +1150,18 @@ class BlueDartService
      */
     public function generateWaybill(array $shipment): array
     {
+        if ($this->usesLegacyApi()) {
+            return $this->generateWaybillLegacy($shipment);
+        }
+
+        $auth = $this->authenticate();
+        if (!$auth['success']) {
+            return [
+                'success' => false,
+                'error' => bluedartSanitizeErrorMessage((string) ($auth['error'] ?? 'Blue Dart authentication failed.')),
+            ];
+        }
+
         $body = [
             'Request' => $shipment,
             'Profile' => $this->buildProfile(),
@@ -984,10 +1200,62 @@ class BlueDartService
 
         return [
             'success' => false,
-            'error' => (string) ($last['error'] ?? 'Blue Dart waybill generation failed.'),
+            'error' => bluedartSanitizeErrorMessage((string) ($last['error'] ?? 'Blue Dart waybill generation failed.')),
             'data' => $last['data'] ?? null,
             'http_code' => $last['http_code'] ?? null,
         ];
+    }
+
+    /**
+     * Legacy netconnect SOAP waybill (eShipz-style credentials).
+     *
+     * @param array<string, mixed> $shipment
+     * @return array{success:bool,awb?:string,pdf_binary?:string,destination_area?:string,error?:string,data?:mixed,http_code?:int}
+     */
+    private function generateWaybillLegacy(array $shipment): array
+    {
+        if (!bluedartHasProfileCredentials($this->config)) {
+            return [
+                'success' => false,
+                'error' => 'Blue Dart legacy waybill requires login_id and licence_key in Courier accounts.',
+            ];
+        }
+
+        $request = bluedartAdaptShipmentForLegacySoap($shipment);
+        $resp = bluedartLegacySoapRequest(
+            (string) ($this->config['legacy_waybill_endpoint'] ?? ''),
+            'http://tempuri.org/IWayBillGeneration/GenerateWayBill',
+            'GenerateWayBill',
+            [
+                'Request' => $request,
+                'Profile' => $this->buildLegacyProfile(),
+            ]
+        );
+
+        if (empty($resp['success'])) {
+            return [
+                'success' => false,
+                'error' => bluedartSanitizeErrorMessage((string) ($resp['error'] ?? 'Blue Dart legacy waybill failed.')),
+                'data' => $resp['data'] ?? null,
+                'http_code' => $resp['http_code'] ?? null,
+            ];
+        }
+
+        $values = is_array($resp['data']['values'] ?? null) ? $resp['data']['values'] : [];
+        $parsed = bluedartParseLegacyWaybillValues($values);
+        if (empty($parsed['success'])) {
+            return [
+                'success' => false,
+                'error' => bluedartSanitizeErrorMessage((string) ($parsed['error'] ?? 'Blue Dart legacy waybill failed.')),
+                'data' => $values,
+                'http_code' => $resp['http_code'] ?? null,
+            ];
+        }
+
+        return array_merge($parsed, [
+            'data' => $values,
+            'http_code' => $resp['http_code'] ?? null,
+        ]);
     }
 
     /**
