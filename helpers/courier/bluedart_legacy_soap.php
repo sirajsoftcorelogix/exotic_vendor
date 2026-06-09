@@ -78,67 +78,115 @@ function bluedartLegacySoapRequest(
     }
 
     $payloadXml = bluedartBuildLegacySoapBodyXml($operationName, $body);
-    $envelope = '<?xml version="1.0" encoding="utf-8"?>'
-        . '<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:tem="http://tempuri.org/">'
-        . '<soap:Header>'
-        . '<a:Action xmlns:a="http://www.w3.org/2005/08/addressing">' . htmlspecialchars($soapAction, ENT_XML1) . '</a:Action>'
-        . '<a:To xmlns:a="http://www.w3.org/2005/08/addressing">' . htmlspecialchars($endpoint, ENT_XML1) . '</a:To>'
-        . '</soap:Header>'
-        . '<soap:Body>' . $payloadXml . '</soap:Body>'
-        . '</soap:Envelope>';
-
-    $ch = curl_init($endpoint);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $envelope,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/soap+xml; charset=utf-8; action="' . $soapAction . '"',
-            'Accept: application/soap+xml, application/xml, text/xml, */*',
+    $attempts = [
+        [
+            'label' => 'soap12',
+            'envelope' => '<?xml version="1.0" encoding="utf-8"?>'
+                . '<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:tem="http://tempuri.org/">'
+                . '<soap:Header>'
+                . '<a:Action xmlns:a="http://www.w3.org/2005/08/addressing">' . htmlspecialchars($soapAction, ENT_XML1) . '</a:Action>'
+                . '<a:To xmlns:a="http://www.w3.org/2005/08/addressing">' . htmlspecialchars($endpoint, ENT_XML1) . '</a:To>'
+                . '</soap:Header>'
+                . '<soap:Body>' . $payloadXml . '</soap:Body>'
+                . '</soap:Envelope>',
+            'headers' => [
+                'Content-Type: application/soap+xml; charset=utf-8; action="' . $soapAction . '"',
+                'Accept: application/soap+xml, application/xml, text/xml, */*',
+            ],
         ],
-        CURLOPT_TIMEOUT => 90,
-    ]);
-
-    $raw = curl_exec($ch);
-    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
-
-    if ($raw === false) {
-        return [
-            'success' => false,
-            'error' => $curlError !== '' ? $curlError : 'Blue Dart legacy SOAP request failed.',
-            'http_code' => $httpCode,
-        ];
-    }
-
-    $parsed = bluedartParseLegacySoapResponse((string) $raw);
-    if (!empty($parsed['fault'])) {
-        return [
-            'success' => false,
-            'error' => bluedartSanitizeErrorMessage((string) ($parsed['fault'] ?? 'Blue Dart SOAP fault.')),
-            'http_code' => $httpCode,
-            'raw' => (string) $raw,
-            'data' => $parsed,
-        ];
-    }
-
-    if ($httpCode < 200 || $httpCode >= 300) {
-        return [
-            'success' => false,
-            'error' => 'Blue Dart legacy SOAP HTTP ' . $httpCode,
-            'http_code' => $httpCode,
-            'raw' => (string) $raw,
-            'data' => $parsed,
-        ];
-    }
-
-    return [
-        'success' => true,
-        'http_code' => $httpCode,
-        'raw' => (string) $raw,
-        'data' => $parsed,
+        [
+            'label' => 'soap11',
+            'envelope' => '<?xml version="1.0" encoding="utf-8"?>'
+                . '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/">'
+                . '<soapenv:Header/>'
+                . '<soapenv:Body>' . $payloadXml . '</soapenv:Body>'
+                . '</soapenv:Envelope>',
+            'headers' => [
+                'Content-Type: text/xml; charset=utf-8',
+                'SOAPAction: "' . $soapAction . '"',
+                'Accept: text/xml, application/xml, */*',
+            ],
+        ],
     ];
+
+    $last = ['success' => false, 'error' => 'Blue Dart legacy SOAP request failed.', 'http_code' => 0];
+    foreach ($attempts as $attempt) {
+        $ch = curl_init($endpoint);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $attempt['envelope'],
+            CURLOPT_HTTPHEADER => $attempt['headers'],
+            CURLOPT_TIMEOUT => 90,
+        ]);
+
+        $raw = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($raw === false) {
+            $last = [
+                'success' => false,
+                'error' => $curlError !== '' ? $curlError : 'Blue Dart legacy SOAP request failed.',
+                'http_code' => $httpCode,
+            ];
+            continue;
+        }
+
+        $parsed = bluedartParseLegacySoapResponse((string) $raw, $httpCode);
+        if (!empty($parsed['fault']) && bluedartLegacyResponseLooksLikeHtml((string) $raw)) {
+            $last = [
+                'success' => false,
+                'error' => (string) $parsed['fault'],
+                'http_code' => $httpCode,
+                'raw' => (string) $raw,
+                'data' => $parsed,
+            ];
+            continue;
+        }
+
+        if (!empty($parsed['fault'])) {
+            return [
+                'success' => false,
+                'error' => bluedartSanitizeErrorMessage((string) $parsed['fault']),
+                'http_code' => $httpCode,
+                'raw' => (string) $raw,
+                'data' => $parsed,
+            ];
+        }
+
+        if ($httpCode >= 200 && $httpCode < 300) {
+            $businessError = bluedartLegacyFormatBusinessError($parsed['values'] ?? []);
+            if ($businessError !== null) {
+                return [
+                    'success' => false,
+                    'error' => bluedartSanitizeErrorMessage($businessError),
+                    'http_code' => $httpCode,
+                    'raw' => (string) $raw,
+                    'data' => $parsed,
+                ];
+            }
+
+            return [
+                'success' => true,
+                'http_code' => $httpCode,
+                'raw' => (string) $raw,
+                'data' => $parsed,
+            ];
+        }
+
+        $last = [
+            'success' => false,
+            'error' => bluedartLegacyFormatBusinessError($parsed['values'] ?? [])
+                ?? ('Blue Dart legacy SOAP HTTP ' . $httpCode . ' (' . $attempt['label'] . ')'),
+            'http_code' => $httpCode,
+            'raw' => (string) $raw,
+            'data' => $parsed,
+        ];
+    }
+
+    return $last;
 }
 
 /** @param array<string, mixed> $body */
@@ -223,79 +271,148 @@ function bluedartLegacyIsNumericList(array $value): bool
     return array_keys($value) === range(0, count($value) - 1);
 }
 
-/** @return array{fault?:string,values:array<string,string>} */
-function bluedartParseLegacySoapResponse(string $raw): array
+/**
+ * @return array{fault?:?string,values:array<string,string>}
+ */
+function bluedartParseLegacySoapResponse(string $raw, int $httpCode = 0): array
 {
     $raw = trim($raw);
     if ($raw === '') {
         return ['values' => [], 'fault' => 'Empty SOAP response from Blue Dart.'];
     }
 
-    $prev = libxml_use_internal_errors(true);
-    $xml = simplexml_load_string($raw);
-    libxml_clear_errors();
-    libxml_use_internal_errors($prev);
-
-    if ($xml === false) {
-        return ['values' => [], 'fault' => 'Could not parse Blue Dart SOAP response.'];
+    if (bluedartLegacyResponseLooksLikeHtml($raw)) {
+        $title = bluedartLegacyExtractHtmlErrorTitle($raw);
+        $msg = 'Blue Dart netconnect server returned an HTML error page'
+            . ($httpCode > 0 ? ' (HTTP ' . $httpCode . ')' : '')
+            . ($title !== '' ? ': ' . $title : '')
+            . '. Verify legacy_waybill_endpoint or contact Blue Dart support.';
+        return ['values' => [], 'fault' => $msg];
     }
 
-    $namespaces = $xml->getNamespaces(true);
-    $soapNs = $namespaces['s'] ?? $namespaces['soap'] ?? 'http://www.w3.org/2003/05/soap-envelope';
-    $body = $xml->children($soapNs)->Body ?? null;
-    if ($body === null) {
-        return ['values' => [], 'fault' => 'Blue Dart SOAP response missing Body.'];
+    $values = bluedartExtractLegacySoapValuesFromRaw($raw);
+    if (!empty($values['_fault'])) {
+        return ['values' => $values, 'fault' => $values['_fault']];
     }
 
-    foreach ($body->children() as $child) {
-        $childNs = $child->getNamespaces(true);
-        $faultNs = $childNs['s'] ?? $soapNs;
-        if ($child->getName() === 'Fault' || stripos($child->getName(), 'fault') !== false) {
-            $reason = trim((string) ($child->children($faultNs)->Reason->Text ?? $child->faultstring ?? ''));
-            return ['values' => [], 'fault' => $reason !== '' ? $reason : 'Blue Dart SOAP fault.'];
-        }
+    if ($values === []) {
+        return [
+            'values' => [],
+            'fault' => 'Could not parse Blue Dart SOAP response'
+                . ($httpCode > 0 ? ' (HTTP ' . $httpCode . ')' : '')
+                . '. Response was not valid SOAP XML.',
+        ];
     }
 
-    $values = bluedartFlattenLegacySoapXml($body);
-    $fault = '';
-    if (bluedartLegacyTruthy($values['IsError'] ?? $values['iserror'] ?? '')) {
-        $fault = trim((string) (
-            $values['StatusInformation']
-            ?? $values['statusinformation']
-            ?? $values['ErrorMessage']
-            ?? $values['errormessage']
-            ?? 'Blue Dart legacy API returned an error.'
-        ));
+    unset($values['_fault'], $values['_html_error']);
+
+    $fault = bluedartLegacyFormatBusinessError($values);
+    return ['values' => $values, 'fault' => $fault];
+}
+
+function bluedartLegacyResponseLooksLikeHtml(string $raw): bool
+{
+    $head = strtolower(substr($raw, 0, 512));
+    return str_contains($head, '<!doctype html')
+        || str_contains($head, '<html')
+        || str_contains($head, '<h1>server error');
+}
+
+function bluedartLegacyExtractHtmlErrorTitle(string $raw): string
+{
+    if (preg_match('/<title[^>]*>(.*?)<\/title>/is', $raw, $m)) {
+        return trim(html_entity_decode(strip_tags($m[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    }
+    if (preg_match('/<h1[^>]*>(.*?)<\/h1>/is', $raw, $m)) {
+        return trim(html_entity_decode(strip_tags($m[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
     }
 
-    return ['values' => $values, 'fault' => $fault !== '' ? $fault : null];
+    return '';
 }
 
 /** @return array<string, string> */
-function bluedartFlattenLegacySoapXml(SimpleXMLElement $node): array
+function bluedartExtractLegacySoapValuesFromRaw(string $raw): array
 {
-    $out = [];
-    bluedartCollectLegacySoapValues($node, $out);
-    return $out;
-}
+    $values = [];
+    $parseXml = preg_replace(
+        '/<((?:[\\w-]+:)?AWBPrintContent)\\b[^>]*>.*?<\\/\\1>/is',
+        '<$1></$1>',
+        $raw
+    );
 
-/** @param array<string, string> $out */
-function bluedartCollectLegacySoapValues(SimpleXMLElement $node, array &$out): void
-{
-    $name = $node->getName();
-    $children = $node->children();
-    $hasElementChildren = false;
-    foreach ($children as $child) {
-        $hasElementChildren = true;
-        bluedartCollectLegacySoapValues($child, $out);
-    }
+    $prev = libxml_use_internal_errors(true);
+    $dom = new DOMDocument();
+    $loaded = @$dom->loadXML($parseXml, LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_PARSEHUGE);
+    libxml_clear_errors();
+    libxml_use_internal_errors($prev);
 
-    if (!$hasElementChildren) {
-        $value = trim((string) $node);
-        if ($value !== '') {
-            $out[$name] = $value;
+    if ($loaded) {
+        $xpath = new DOMXPath($dom);
+        foreach ([
+            'AWBNo', 'IsError', 'StatusInformation', 'ErrorMessage', 'DestinationArea',
+            'DestinationLocation', 'AreaCode', 'TokenNumber',
+        ] as $tag) {
+            $nodes = $xpath->query('//*[local-name()="' . $tag . '"]');
+            if ($nodes instanceof DOMNodeList && $nodes->length > 0) {
+                $values[$tag] = trim((string) $nodes->item(0)->textContent);
+            }
+        }
+
+        $faultNodes = $xpath->query('//*[local-name()="Fault"]//*[local-name()="Text"]');
+        if ($faultNodes instanceof DOMNodeList && $faultNodes->length > 0) {
+            $values['_fault'] = trim((string) $faultNodes->item(0)->textContent);
+        }
+        if (empty($values['_fault'])) {
+            $faultString = $xpath->query('//*[local-name()="faultstring"]');
+            if ($faultString instanceof DOMNodeList && $faultString->length > 0) {
+                $values['_fault'] = trim((string) $faultString->item(0)->textContent);
+            }
         }
     }
+
+    bluedartLegacyRegexExtractValues($raw, $values);
+
+    return $values;
+}
+
+/**
+ * @param array<string, string> $values
+ */
+function bluedartLegacyRegexExtractValues(string $raw, array &$values): void
+{
+    $patterns = [
+        'AWBNo' => '/<(?:[\\w-]+:)?AWBNo\\b[^>]*>([^<]+)</i',
+        'IsError' => '/<(?:[\\w-]+:)?IsError\\b[^>]*>([^<]+)</i',
+        'StatusInformation' => '/<(?:[\\w-]+:)?StatusInformation\\b[^>]*>([^<]+)</i',
+        'DestinationArea' => '/<(?:[\\w-]+:)?DestinationArea\\b[^>]*>([^<]+)</i',
+        'AWBPrintContent' => '/<(?:[\\w-]+:)?AWBPrintContent\\b[^>]*>([^<]+)</is',
+    ];
+
+    foreach ($patterns as $key => $pattern) {
+        if (!empty($values[$key])) {
+            continue;
+        }
+        if (preg_match($pattern, $raw, $m)) {
+            $values[$key] = trim($m[1]);
+        }
+    }
+}
+
+/**
+ * @param array<string, string> $values
+ */
+function bluedartLegacyFormatBusinessError(array $values): ?string
+{
+    if (bluedartLegacyTruthy($values['IsError'] ?? '')) {
+        $msg = trim((string) (
+            $values['StatusInformation']
+            ?? $values['ErrorMessage']
+            ?? ''
+        ));
+        return $msg !== '' ? $msg : 'Blue Dart legacy API returned an error.';
+    }
+
+    return null;
 }
 
 /** @param mixed $value */
@@ -314,12 +431,31 @@ function bluedartLegacyTruthy($value): bool
  */
 function bluedartAdaptShipmentForLegacySoap(array $shipment): array
 {
-    $adapted = $shipment;
+    $adapted = bluedartLegacyNormalizeScalars($shipment);
+    unset($adapted['Returnadds']);
+
+    if (isset($adapted['Consignee']) && is_array($adapted['Consignee'])) {
+        $consignee = bluedartLegacyNormalizeScalars($adapted['Consignee']);
+        if (empty($consignee['ConsigneeTelephone']) && !empty($consignee['ConsigneeMobile'])) {
+            $consignee['ConsigneeTelephone'] = $consignee['ConsigneeMobile'];
+        }
+        unset($consignee['ConsigneeAddressType'], $consignee['ConsigneeEmailID']);
+        $adapted['Consignee'] = $consignee;
+    }
+
+    if (isset($adapted['Shipper']) && is_array($adapted['Shipper'])) {
+        $shipper = bluedartLegacyNormalizeScalars($adapted['Shipper']);
+        if (empty($shipper['CustomerTelephone']) && !empty($shipper['CustomerMobile'])) {
+            $shipper['CustomerTelephone'] = $shipper['CustomerMobile'];
+        }
+        $adapted['Shipper'] = $shipper;
+    }
+
     if (!isset($adapted['Services']) || !is_array($adapted['Services'])) {
         return $adapted;
     }
 
-    $services = $adapted['Services'];
+    $services = bluedartLegacyNormalizeScalars($adapted['Services']);
 
     if (isset($services['CollactableAmount']) && !isset($services['CollectableAmount'])) {
         $services['CollectableAmount'] = $services['CollactableAmount'];
@@ -328,6 +464,10 @@ function bluedartAdaptShipmentForLegacySoap(array $shipment): array
 
     if (isset($services['PickupDate']) && is_string($services['PickupDate'])) {
         $services['PickupDate'] = bluedartFormatLegacyPickupDate($services['PickupDate']);
+    }
+
+    if (empty($services['ProductType'])) {
+        $services['ProductType'] = 'Dutiables';
     }
 
     if (isset($services['Dimensions']) && is_array($services['Dimensions'])) {
@@ -350,10 +490,40 @@ function bluedartAdaptShipmentForLegacySoap(array $shipment): array
         }
     }
 
-    unset($services['PDFOutputNotRequired'], $services['AWBNo']);
+    unset(
+        $services['PDFOutputNotRequired'],
+        $services['AWBNo'],
+        $services['itemdtl'],
+        $services['Commodity']
+    );
 
     $adapted['Services'] = $services;
     return $adapted;
+}
+
+/**
+ * Blue Dart legacy SOAP rejects strict booleans; use empty string for false.
+ *
+ * @param mixed $data
+ * @return mixed
+ */
+function bluedartLegacyNormalizeScalars($data)
+{
+    if (!is_array($data)) {
+        if (is_bool($data)) {
+            return $data ? 'true' : '';
+        }
+        return $data;
+    }
+
+    $normalized = [];
+    foreach ($data as $key => $value) {
+        $normalized[$key] = is_array($value)
+            ? bluedartLegacyNormalizeScalars($value)
+            : bluedartLegacyNormalizeScalars($value);
+    }
+
+    return $normalized;
 }
 
 function bluedartFormatLegacyPickupDate(string $value): string

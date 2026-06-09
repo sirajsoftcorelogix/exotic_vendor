@@ -503,7 +503,7 @@ class BlueDartService
             'GetServicesforPincode',
             [
                 'pinCode' => $pinCode,
-                'Profile' => $this->buildLegacyProfile(),
+                'profile' => $this->buildLegacyProfile(),
             ]
         );
 

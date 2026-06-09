@@ -1742,7 +1742,7 @@ class DispatchController {
             if (!empty($batch_no) && !empty($created_dispatches)) {
                 $courierGateway = null;
                 $courierShipmentModel = null;
-
+                
                 foreach ($created_dispatches as $index => $dispatchInfo) {
                     $dispatchId = $dispatchInfo['dispatch_id'];
                     $invoiceId = $dispatchInfo['invoice_id'];
@@ -2450,7 +2450,7 @@ class DispatchController {
     public function getDirectCourierRates()
     {
         global $commanModel, $ordersModel, $dispatchModel;
-
+        
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
             echo json_encode(['success' => false, 'message' => 'Method not allowed']);
@@ -2601,7 +2601,7 @@ class DispatchController {
         }
 
         $invoice = $invoiceModel->getInvoiceById($invoiceId);
-        if (!$invoice) {
+                    if (!$invoice) {
             return ['success' => false, 'provider' => 'system', 'message' => 'Invoice not found'];
         }
 
@@ -2638,7 +2638,7 @@ class DispatchController {
                 'sku' => $invItem['item_code'] ?? '',
                 'units' => $units,
                 'selling_price' => $price,
-                'discount' => 0,
+                                'discount' => 0,
                 'tax' => $invItem['tax_amount'] ?? 0,
                 'hsn' => $hsnVal,
             ];
