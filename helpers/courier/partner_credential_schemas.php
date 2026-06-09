@@ -86,7 +86,7 @@ return [
     'bluedart' => [
         'label' => 'Blue Dart',
         'production_only' => true,
-        'description' => 'Blue Dart (DHL eCommerce India APIs). Production only. shipment_licence_key = waybill licence; tracking_licence_key = tracking token. Also need login_id, customer_code, origin_area.',
+        'description' => 'Blue Dart (DHL eCommerce India APIs). Production only. Serviceability + ETD from Blue Dart REST APIs; freight price shown from Shiprocket when available. Needs login_id, shipment_licence_key, consumer_key/secret (or jwt_token).',
         'fields' => [
             'login_id' => '',
             'shipment_licence_key' => '',
@@ -102,6 +102,8 @@ return [
             'default_service_type' => '',
             'consumer_key' => '',
             'consumer_secret' => '',
+            'jwt_token' => '',
+            'allowed_service_types' => [],
             'api_gateway_base_url' => '',
             'token_api_path' => '',
             'rate_per_kg_inr' => '',

@@ -1073,9 +1073,64 @@
             });
         }
 
+        function isBlueDartShiprocketQuote(courier) {
+            const name = String(courier?.name || '');
+            return /blue\s*dart|bluedart/i.test(name);
+        }
+
+        function matchShiprocketBlueDartQuote(courier, srBlueDart) {
+            const haystack = String(courier.name || '') + ' ' + String(courier.product_type || '');
+            if (srBlueDart.length === 1) {
+                return srBlueDart[0];
+            }
+            let match = null;
+            let bestScore = -1;
+            srBlueDart.forEach((sr) => {
+                const srName = String(sr.name || '').toLowerCase();
+                let score = 0;
+                if (/air/i.test(haystack) && /air/i.test(srName)) score += 3;
+                if ((/surface|ground|_e_/i.test(haystack)) && (/surface|ground/i.test(srName))) score += 3;
+                if (score > bestScore) {
+                    bestScore = score;
+                    match = sr;
+                }
+            });
+            return match || srBlueDart[0];
+        }
+
+        function applyShiprocketPriceToBlueDart(bluedartCouriers, shiprocketCouriers) {
+            const srBlueDart = (shiprocketCouriers || []).filter(isBlueDartShiprocketQuote);
+            if (!srBlueDart.length) {
+                return bluedartCouriers || [];
+            }
+            return (bluedartCouriers || []).map((courier) => {
+                const match = matchShiprocketBlueDartQuote(courier, srBlueDart);
+                if (!match || match.price == null || parseFloat(match.price) <= 0) {
+                    return courier;
+                }
+                const metadata = Object.assign({}, courier.metadata || {}, {
+                    price_source: 'shiprocket',
+                    price_label: 'Price via Shiprocket',
+                    shiprocket_courier_name: match.name || ''
+                });
+                return Object.assign({}, courier, {
+                    price: parseFloat(match.price),
+                    price_source: 'shiprocket',
+                    price_label: 'Price via Shiprocket',
+                    rating: match.rating != null ? match.rating : courier.rating,
+                    metadata: metadata
+                });
+            });
+        }
+
         function mergeCourierOptions(shiprocketCouriers, delhiveryCouriers, bluedartCouriers) {
+            const enrichedBlueDart = applyShiprocketPriceToBlueDart(bluedartCouriers, shiprocketCouriers);
+            const hasDirectBlueDart = enrichedBlueDart.length > 0;
             const merged = [];
             (shiprocketCouriers || []).forEach((courier) => {
+                if (hasDirectBlueDart && isBlueDartShiprocketQuote(courier)) {
+                    return;
+                }
                 merged.push(Object.assign({}, courier, {
                     rate_source: 'shiprocket',
                     partner_code: courier.partner_code || ''
@@ -1087,7 +1142,7 @@
                     partner_code: courier.partner_code || 'delhivery'
                 }));
             });
-            (bluedartCouriers || []).forEach((courier) => {
+            (enrichedBlueDart || []).forEach((courier) => {
                 merged.push(Object.assign({}, courier, {
                     rate_source: 'bluedart',
                     partner_code: courier.partner_code || 'bluedart'
@@ -1106,8 +1161,10 @@
             const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
             const currency = (courier.currency || 'INR').toUpperCase();
             const priceSymbol = currency === 'INR' ? '₹ ' : (currency + ' ');
-            const price = courier.price != null && courier.price !== ''
-                ? (priceSymbol + parseFloat(courier.price).toFixed(2))
+            const parsedPrice = parseFloat(courier.price);
+            const hasPrice = courier.price != null && courier.price !== '' && !isNaN(parsedPrice) && parsedPrice > 0;
+            const price = hasPrice
+                ? (priceSymbol + parsedPrice.toFixed(2))
                 : 'N/A';
             const etd = courier.etd || 'N/A';
             const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
@@ -1122,6 +1179,15 @@
                 providerBadge = '<span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-900 border border-sky-200">Blue Dart</span>';
             }
             const priceClass = (isDelhivery || isBlueDart) ? 'text-emerald-700' : tm.courierPrice;
+            const priceSource = String(courier.price_source || courier.metadata?.price_source || '');
+            const priceViaShiprocket = isBlueDart && priceSource === 'shiprocket' && hasPrice;
+            const priceNote = priceViaShiprocket
+                ? '<div class="text-[10px] font-medium text-violet-600 mt-0.5">Price via Shiprocket</div>'
+                : (isBlueDart && !hasPrice ? '<div class="text-[10px] text-gray-400 mt-0.5">No Shiprocket price</div>' : '');
+            const etdSource = String(courier.metadata?.etd_source || '');
+            const etdLabel = (isBlueDart && etdShort !== '—' && etdSource === 'bluedart')
+                ? 'ETD (Blue Dart)'
+                : 'ETD';
             return `
                 <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md ${tm.courierTileHover} ${tm.courierTileChecked}">
                     <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 ${tm.courierRadio}" data-courier-name="${escapeHtml(String(courier.name ?? ''))}" data-partner-code="${escapeHtml(String(courier.partner_code ?? ''))}" data-product-group="${escapeHtml(String(courier.product_group ?? ''))}" data-product-type="${escapeHtml(String(courier.product_type ?? ''))}" data-partner-account-id="${escapeHtml(String(courier.partner_account_id ?? ''))}" data-rate-source="${escapeHtml(String(courier.rate_source ?? 'shiprocket'))}"${checkedAttr}/>
@@ -1131,10 +1197,11 @@
                     <div class="mt-3">
                         <div class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Price</div>
                         <div class="text-lg font-bold tabular-nums ${priceClass}">${price}</div>
+                        ${priceNote}
                     </div>
                     <div class="mt-3 flex flex-wrap gap-1.5">
                         <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                            <span class="text-slate-400">ETD</span> ${escapeHtml(etdShort)}
+                            <span class="text-slate-400">${escapeHtml(etdLabel)}</span> ${escapeHtml(etdShort)}
                         </span>
                         <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-100">
                             <i class="fas fa-star text-amber-500 text-[10px]" aria-hidden="true"></i> ${escapeHtml(rating)}

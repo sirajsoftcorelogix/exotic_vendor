@@ -7,6 +7,7 @@ require_once 'courier_selector.php';
 require_once __DIR__ . '/../helpers/courier/country_codes.php';
 require_once __DIR__ . '/../helpers/courier/Gateway/CourierGateway.php';
 require_once __DIR__ . '/../helpers/courier/CourierDispatchService.php';
+require_once __DIR__ . '/../helpers/courier/bluedart_rate_helpers.php';
 require_once __DIR__ . '/../models/courier/CourierShipment.php';
 require_once __DIR__ . '/../models/order/stock.php';
 $commanModel = new Tables($conn);
@@ -2392,6 +2393,24 @@ class DispatchController {
             }
 
             $gatewayResult = $courierDispatch->getRates($rateRequest);
+
+            if ($partnerCode === 'bluedart') {
+                $shiprocketQuotes = $this->resolveShiprocketBlueDartQuotes(
+                    $dispatchModel,
+                    is_array($firm) ? $firm : [],
+                    $requestedPickupLocation,
+                    $orderInfo,
+                    $weight,
+                    $length,
+                    $breadth,
+                    $height,
+                    $cod
+                );
+                if ($shiprocketQuotes !== []) {
+                    $gatewayResult = bluedartEnrichGatewayResultWithShiprocketPrices($gatewayResult, $shiprocketQuotes);
+                }
+            }
+
             $uiResponse = $courierDispatch->formatServiceabilityForUi($gatewayResult);
 
             http_response_code(!empty($uiResponse['success']) ? 200 : 400);
@@ -2402,6 +2421,45 @@ class DispatchController {
             echo json_encode(['success' => false, 'message' => 'Error fetching direct courier rates: ' . $e->getMessage()]);
             exit;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $firm
+     * @param array<string, mixed> $orderInfo
+     * @return list<array{name:string,price:float,etd?:string,rating?:float,id?:mixed}>
+     */
+    private function resolveShiprocketBlueDartQuotes(
+        $dispatchModel,
+        array $firm,
+        string $pickupLocation,
+        array $orderInfo,
+        float $weight,
+        float $length,
+        float $breadth,
+        float $height,
+        int $cod
+    ): array {
+        $pickupResolution = $this->resolveShiprocketPickupPostcode($dispatchModel, $firm, $pickupLocation);
+        $pickupPostcode = trim((string) ($pickupResolution['postcode'] ?? ''));
+        $deliveryPostcode = trim((string) ($orderInfo['shipping_zipcode'] ?? ''));
+        if ($pickupPostcode === '' || $deliveryPostcode === '') {
+            return [];
+        }
+
+        $serviceability = $dispatchModel->getCourierServiceability(
+            $pickupPostcode,
+            $deliveryPostcode,
+            $weight,
+            $length,
+            $breadth,
+            $height,
+            $cod
+        );
+        if (empty($serviceability['success']) || !is_array($serviceability['data'] ?? null)) {
+            return [];
+        }
+
+        return bluedartExtractShiprocketQuotes($serviceability['data']);
     }
 
     /**
