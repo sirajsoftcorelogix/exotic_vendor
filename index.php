@@ -976,6 +976,9 @@ switch ($page) {
             case 'deleteAccount':
                 $controller->deleteAccount();
                 break;
+            case 'testShiprocket':
+                $controller->testShiprocket();
+                break;
             default:
                 $controller->index();
                 break;

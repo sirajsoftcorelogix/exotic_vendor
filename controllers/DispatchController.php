@@ -2253,9 +2253,12 @@ class DispatchController {
             
             if (!$serviceability['success']) {
                 http_response_code($serviceability['http_code'] ?? 400);
+                $authError = trim((string) ($serviceability['auth_error'] ?? ''));
                 echo json_encode([
                     'success' => false,
-                    'message' => 'Failed to fetch courier serviceability',
+                    'message' => $authError !== ''
+                        ? $authError
+                        : 'Failed to fetch courier serviceability',
                     'details' => $serviceability['data'],
                     'debug' => [
                         'serviceability_request' => [
@@ -2263,6 +2266,7 @@ class DispatchController {
                             'pickup_resolution' => $pickupResolution,
                             'request_url' => $serviceability['request_url'] ?? '',
                             'curl_error' => $serviceability['curl_error'] ?? '',
+                            'auth_error' => $authError,
                         ],
                     ],
                 ]);
