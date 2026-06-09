@@ -357,17 +357,284 @@ class BlueDartAdapter implements CourierAdapterInterface
 
 
     public function createShipment(array $request): array
-
     {
+        $destinationCountry = normalizeCountryIso2(
+            $request['destination_country']
+                ?? ($request['destination']['country_code'] ?? 'IN'),
+            $GLOBALS['conn'] ?? null
+        );
+        if (isInternationalShipmentCountry($destinationCountry, $GLOBALS['conn'] ?? null)) {
+            return [
+                'success' => false,
+                'message' => 'Blue Dart adapter is domestic only (IN → IN).',
+            ];
+        }
+
+        $accounts = $this->accountModel->listActiveAccountsByPartnerCode('bluedart');
+        if (!$accounts) {
+            return [
+                'success' => false,
+                'message' => 'No active Blue Dart courier account configured.',
+            ];
+        }
+
+        $accountId = (int) ($request['partner_account_id'] ?? 0);
+        $accountRow = $this->pickAccount($accounts, $accountId);
+        $accountId = (int) ($accountRow['id'] ?? 0);
+        $credentials = $this->accountModel->getCredentialsJson($accountId);
+
+        $orderNumber = trim((string) ($request['order_number'] ?? ''));
+        $weightKg = (float) ($request['weight'] ?? 0);
+        if ($orderNumber === '' || $weightKg <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Order number and weight are required for Blue Dart shipment creation.',
+            ];
+        }
+
+        $destination = is_array($request['destination'] ?? null) ? $request['destination'] : [];
+        $address = is_array($request['address'] ?? null) ? $request['address'] : [];
+        $shipper = is_array($credentials['shipper'] ?? null) ? $credentials['shipper'] : [];
+
+        $consigneeName = trim((string) (
+            $destination['name']
+            ?? (($address['shipping_first_name'] ?? '') . ' ' . ($address['shipping_last_name'] ?? ''))
+            ?? (($address['first_name'] ?? '') . ' ' . ($address['last_name'] ?? ''))
+        ));
+        $consigneeName = preg_replace('/\s+/', ' ', $consigneeName);
+        if ($consigneeName === '') {
+            $consigneeName = 'Customer';
+        }
+
+        $consigneeMobile = preg_replace('/\D/', '', (string) (
+            $destination['phone']
+            ?? $address['shipping_mobile']
+            ?? $address['mobile']
+            ?? ''
+        ));
+        if (strlen($consigneeMobile) > 10) {
+            $consigneeMobile = substr($consigneeMobile, -10);
+        }
+        if ($consigneeMobile === '') {
+            return ['success' => false, 'message' => 'Consignee mobile is required for Blue Dart waybill.'];
+        }
+
+        $consigneePin = preg_replace('/\D/', '', (string) (
+            $destination['postcode']
+            ?? $address['shipping_zipcode']
+            ?? $address['zipcode']
+            ?? ''
+        ));
+        $consigneeAddress = trim((string) (
+            $destination['line1']
+            ?? $address['shipping_address_line1']
+            ?? $address['address_line1']
+            ?? ''
+        ));
+        if ($consigneePin === '' || $consigneeAddress === '') {
+            return ['success' => false, 'message' => 'Consignee pin and address are required for Blue Dart.'];
+        }
+
+        $customerCode = trim((string) ($credentials['customer_code'] ?? ''));
+        $originArea = trim((string) ($credentials['origin_area'] ?? ''));
+        if ($customerCode === '' || $originArea === '') {
+            return [
+                'success' => false,
+                'message' => 'Blue Dart customer_code and origin_area are required in Courier accounts.',
+            ];
+        }
+
+        $shipperPin = preg_replace('/\D/', '', (string) (
+            $shipper['postcode']
+            ?? $credentials['customer_pincode']
+            ?? ''
+        ));
+        $shipperAddress = trim((string) ($shipper['line1'] ?? ''));
+        $shipperName = trim((string) ($credentials['registered_name'] ?? $shipper['company_name'] ?? $shipper['full_name'] ?? 'Seller'));
+        $shipperMobile = preg_replace('/\D/', '', (string) ($shipper['phone'] ?? ''));
+        if ($shipperPin === '' || $shipperAddress === '') {
+            return [
+                'success' => false,
+                'message' => 'Shipper address and pincode are required in Blue Dart Courier account credentials.',
+            ];
+        }
+
+        $items = is_array($request['items'] ?? null) ? $request['items'] : [];
+        $declaredValue = 0.0;
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $qty = (int) ($item['quantity'] ?? $item['units'] ?? 1);
+            $price = (float) ($item['unit_price'] ?? $item['selling_price'] ?? 0);
+            $declaredValue += max(0, $qty) * max(0.0, $price);
+        }
+        if ($declaredValue <= 0) {
+            $declaredValue = (float) ($request['invoice']['total_amount'] ?? $request['sub_total'] ?? 0.01);
+        }
+        if ($declaredValue <= 0) {
+            $declaredValue = 0.01;
+        }
+
+        $isCod = !empty($request['cod']);
+        $codAmount = $isCod ? round((float) ($request['cod_amount'] ?? $declaredValue), 2) : 0.0;
+        $productCodes = $this->resolveProductCodes($request, $isCod);
+
+        $boxNo = (int) ($request['box_no'] ?? 0);
+        $creditReference = strtoupper(preg_replace('/[^A-Z0-9]/', '', $orderNumber));
+        if ($boxNo > 0) {
+            $creditReference .= 'B' . $boxNo;
+        }
+        $creditReference .= substr((string) time(), -4);
+
+        $service = new BlueDartService($credentials);
+        $shipmentPayload = $service->buildWaybillShipmentPayload([
+            'product_code' => $productCodes['product_code'],
+            'sub_product_code' => $productCodes['sub_product_code'],
+            'pack_type' => $productCodes['pack_type'],
+            'weight_kg' => $weightKg,
+            'length_cm' => (float) ($request['length_cm'] ?? 1),
+            'width_cm' => (float) ($request['width_cm'] ?? 1),
+            'height_cm' => (float) ($request['height_cm'] ?? 1),
+            'cod' => $isCod,
+            'cod_amount' => $codAmount,
+            'declared_value' => $declaredValue,
+            'credit_reference' => $creditReference,
+            'invoice_number' => (string) ($request['invoice']['invoice_number'] ?? ''),
+            'consignee_name' => $consigneeName,
+            'consignee_address' => $consigneeAddress,
+            'consignee_pincode' => $consigneePin,
+            'consignee_email' => (string) ($address['shipping_email'] ?? $address['email'] ?? ''),
+            'consignee_mobile' => $consigneeMobile,
+            'shipper_name' => $shipperName,
+            'shipper_address' => $shipperAddress,
+            'shipper_pincode' => $shipperPin,
+            'shipper_mobile' => $shipperMobile,
+            'shipper_email' => (string) ($shipper['email'] ?? ''),
+            'return_address' => $shipperAddress,
+            'return_contact' => $shipperName,
+            'return_mobile' => $shipperMobile,
+            'return_pincode' => $shipperPin,
+            'customer_code' => $customerCode,
+            'origin_area' => $originArea,
+            'sender' => $shipperName,
+            'register_pickup' => !empty($credentials['register_pickup_on_waybill']),
+        ]);
+
+        $createResp = $service->generateWaybill($shipmentPayload);
+
+        if ($this->shipmentModel) {
+            $this->shipmentModel->logApiCall(
+                'bluedart',
+                'create_shipment',
+                $accountId,
+                $orderNumber,
+                $shipmentPayload,
+                $createResp,
+                !empty($createResp['success']),
+                !empty($createResp['success']) ? null : (string) ($createResp['error'] ?? 'Create failed'),
+                isset($createResp['http_code']) ? (int) $createResp['http_code'] : null
+            );
+        }
+
+        if (empty($createResp['success'])) {
+            return [
+                'success' => false,
+                'message' => (string) ($createResp['error'] ?? 'Blue Dart waybill generation failed.'),
+                'debug' => [
+                    'http_code' => $createResp['http_code'] ?? null,
+                    'response' => $createResp['data'] ?? null,
+                    'product_code' => $productCodes['product_code'],
+                    'sub_product_code' => $productCodes['sub_product_code'],
+                ],
+            ];
+        }
+
+        $awb = (string) ($createResp['awb'] ?? '');
+        $pdfBinary = (string) ($createResp['pdf_binary'] ?? '');
+        $labelPath = $service->saveWaybillLabelPdf($awb, $pdfBinary);
+        if ($labelPath === null) {
+            return [
+                'success' => false,
+                'message' => 'Blue Dart AWB ' . $awb . ' created but label PDF could not be saved.',
+                'awb' => $awb,
+            ];
+        }
+
+        $dispatchId = (int) ($request['dispatch_id'] ?? 0);
+        if ($dispatchId > 0) {
+            $labelUrl = base_url('index.php?page=dispatch&action=bluedart_label&dispatch_id=' . $dispatchId);
+        } else {
+            $labelUrl = base_url('index.php?page=dispatch&action=bluedart_label&awb=' . rawurlencode($awb));
+        }
+
+        $trackingUrl = 'https://www.bluedart.com/web/guest/trackdartresult?trackFor=0&trackNo=' . rawurlencode($awb);
 
         return [
-
-            'success' => false,
-
-            'message' => 'Blue Dart createShipment not implemented yet.',
-
+            'success' => true,
+            'message' => 'Blue Dart shipment created.',
+            'awb' => $awb,
+            'awb_code' => $awb,
+            'partner_shipment_id' => $awb,
+            'shipment_id' => $awb,
+            'order_id' => $creditReference,
+            'label_url' => $labelUrl,
+            'tracking_url' => $trackingUrl,
+            'status' => 'created',
+            'metadata' => [
+                'awb' => $awb,
+                'label_file' => basename($labelPath),
+                'product_code' => $productCodes['product_code'],
+                'sub_product_code' => $productCodes['sub_product_code'],
+                'service_code' => $productCodes['product_code'] . '_' . $productCodes['sub_product_code'],
+                'destination_area' => (string) ($createResp['destination_area'] ?? ''),
+            ],
+            'debug' => [
+                'partner' => 'bluedart',
+                'account_id' => $accountId,
+                'awb' => $awb,
+            ],
         ];
+    }
 
+    /** @return array{product_code:string,sub_product_code:string,pack_type:string} */
+    private function resolveProductCodes(array $request, bool $isCod): array
+    {
+        $metadata = is_array($request['metadata'] ?? null) ? $request['metadata'] : [];
+        $productCode = strtoupper(trim((string) ($metadata['product_code'] ?? '')));
+        $subProductCode = strtoupper(trim((string) ($metadata['sub_product_code'] ?? '')));
+        $packType = strtoupper(trim((string) ($metadata['pack_type'] ?? 'L')));
+
+        $productType = trim((string) ($request['product_type'] ?? ''));
+        $courierId = trim((string) ($request['courier_id'] ?? ''));
+        if ($productType === '' && preg_match('/bluedart_\d+_(.+)$/i', $courierId, $m)) {
+            $productType = trim((string) ($m[1] ?? ''));
+        }
+        if ($productType !== '' && str_contains($productType, '_')) {
+            [$pc, $spc] = explode('_', $productType, 2);
+            if ($productCode === '') {
+                $productCode = strtoupper(trim($pc));
+            }
+            if ($subProductCode === '') {
+                $subProductCode = strtoupper(trim($spc));
+            }
+        }
+
+        if ($productCode === '') {
+            $productCode = 'A';
+        }
+        if ($subProductCode === '') {
+            $subProductCode = $isCod ? 'C' : 'P';
+        }
+        if ($packType === '') {
+            $packType = 'L';
+        }
+
+        return [
+            'product_code' => $productCode,
+            'sub_product_code' => $subProductCode,
+            'pack_type' => $packType,
+        ];
     }
 
 

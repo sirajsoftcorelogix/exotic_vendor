@@ -131,22 +131,34 @@ class DispatchController {
             if ($candidate === 'delhivery') {
                 return 'delhivery';
             }
+            if ($candidate === 'bluedart') {
+                return 'bluedart';
+            }
         }
 
         $courierId = (string)($boxData['courier_id'] ?? '');
         if (stripos($courierId, 'delhivery_') === 0) {
             return 'delhivery';
         }
+        if (stripos($courierId, 'bluedart_') === 0) {
+            return 'bluedart';
+        }
 
         $courierName = strtolower(trim((string)($boxData['courier_name'] ?? '')));
         if ($courierName !== '' && strpos($courierName, 'delhivery') !== false) {
             return 'delhivery';
+        }
+        if ($courierName !== '' && (strpos($courierName, 'blue dart') !== false || strpos($courierName, 'bluedart') !== false)) {
+            return 'bluedart';
         }
 
         if ($dispatchRecord) {
             $savedName = strtolower(trim((string)($dispatchRecord['courier_name'] ?? '')));
             if ($savedName !== '' && strpos($savedName, 'delhivery') !== false) {
                 return 'delhivery';
+            }
+            if ($savedName !== '' && (strpos($savedName, 'blue dart') !== false || strpos($savedName, 'bluedart') !== false)) {
+                return 'bluedart';
             }
         }
 
@@ -2019,6 +2031,111 @@ class DispatchController {
                         continue;
                     }
 
+                    if ($partnerCode === 'bluedart') {
+                        if ($courierGateway === null) {
+                            $courierGateway = new CourierGateway($GLOBALS['conn']);
+                            $courierShipmentModel = new CourierShipment($GLOBALS['conn']);
+                        }
+
+                        $blueDartItems = [];
+                        foreach ($orderItems as $oi) {
+                            $blueDartItems[] = [
+                                'name' => $oi['name'] ?? 'Item',
+                                'sku' => $oi['sku'] ?? '',
+                                'quantity' => (int)($oi['units'] ?? 1),
+                                'unit_price' => (float)($oi['selling_price'] ?? 0),
+                                'hsn' => $oi['hsn'] ?? '',
+                            ];
+                        }
+
+                        $paymentMethod = strtoupper((string)($invoice['payment_method'] ?? 'PREPAID'));
+                        $isCod = (strpos($paymentMethod, 'COD') !== false);
+
+                        $createRequest = [
+                            'partner_code' => 'bluedart',
+                            'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                            'dispatch_id' => $dispatchId,
+                            'order_number' => $order_number,
+                            'box_no' => $box_no,
+                            'courier_id' => (string)($boxData['courier_id'] ?? ''),
+                            'product_type' => (string)($boxData['product_type'] ?? ''),
+                            'pickup_location' => (string)($boxData['pickup_location'] ?? $firm['pickup_location'] ?? ''),
+                            'weight' => $weight,
+                            'length_cm' => $length,
+                            'width_cm' => $width,
+                            'height_cm' => $height,
+                            'destination' => [
+                                'name' => trim(($address['shipping_first_name'] ?? $billingFirstName) . ' ' . ($address['shipping_last_name'] ?? $billingLastName)),
+                                'line1' => $address['shipping_address_line1'] ?? $billingAddress1,
+                                'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                                'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                                'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                                'phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                                'country_code' => 'IN',
+                            ],
+                            'address' => $address,
+                            'items' => $blueDartItems,
+                            'invoice' => [
+                                'invoice_number' => $invoice['invoice_number'] ?? '',
+                                'total_amount' => (float)($invoice['total_amount'] ?? $subTotal),
+                            ],
+                            'description' => (string)($groupname ?? ''),
+                            'cod' => $isCod ? 1 : 0,
+                            'cod_amount' => $isCod ? round($subTotal, 2) : 0,
+                            'sub_total' => round($subTotal, 2),
+                        ];
+
+                        $createResult = $courierGateway->createShipment($createRequest);
+                        if (!empty($createResult['success'])) {
+                            $awbCode = (string)($createResult['awb'] ?? $createResult['awb_code'] ?? '');
+                            $labelUrl = (string)($createResult['label_url'] ?? '');
+                            $trackingUrl = (string)($createResult['tracking_url'] ?? '');
+
+                            $dispatchModel->updateDispatch($dispatchId, [
+                                'shiprocket_order_id' => $createResult['order_id'] ?? null,
+                                'shiprocket_shipment_id' => null,
+                                'shiprocket_tracking_url' => $trackingUrl,
+                                'awb_code' => $awbCode !== '' ? $awbCode : null,
+                                'shipment_status' => 'created',
+                                'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                                'updated_at' => date('Y-m-d H:i:s'),
+                            ]);
+                            $ordersModel->updateOrderByOrderNumber($order_number, ['status' => 'Dispatched']);
+
+                            $courierShipmentModel->saveShipment([
+                                'invoice_id' => $invoiceId,
+                                'box_no' => $box_no,
+                                'order_number' => $order_number,
+                                'legacy_dispatch_id' => $dispatchId,
+                                'partner_code' => 'bluedart',
+                                'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                                'partner_shipment_id' => $awbCode,
+                                'awb' => $awbCode,
+                                'tracking_url' => $trackingUrl,
+                                'product_group' => (string)($createResult['metadata']['service_code'] ?? ''),
+                                'service_level' => (string)($boxData['courier_name'] ?? 'Blue Dart'),
+                                'payment_mode' => $isCod ? 'cod' : 'prepaid',
+                                'is_international' => 0,
+                                'currency' => 'INR',
+                                'label_url' => $labelUrl,
+                                'status' => 'created',
+                                'status_text' => 'Blue Dart shipment created',
+                                'metadata_json' => json_encode($createResult['metadata'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            ]);
+
+                            $created_dispatches[$index]['awb_code'] = $awbCode;
+                            $created_dispatches[$index]['label_url'] = $labelUrl;
+                            $created_dispatches[$index]['partner_code'] = 'bluedart';
+                        } else {
+                            $errors[] = 'Blue Dart error for order #' . $order_number . ', box #' . $box_no . ': ' . ($createResult['message'] ?? 'Unknown error');
+                            $dispatchModel->updateDispatch($dispatchId, [
+                                'shipment_status' => 'failed',
+                                'updated_at' => date('Y-m-d H:i:s'),
+                            ]);
+                        }
+                        continue;
+                    }
+
                     $shiprocketPayload = [
                         'order_id' => $shiprocketOrderId,
                         'order_date' => date('Y-m-d H:i'),
@@ -2678,6 +2795,108 @@ class DispatchController {
             return ['success' => true, 'provider' => 'delhivery'];
         }
 
+        if ($this->resolveShipmentPartnerCode($boxData, $dispatchRecord) === 'bluedart') {
+            $courierGateway = new CourierGateway($GLOBALS['conn']);
+            $courierShipmentModel = new CourierShipment($GLOBALS['conn']);
+
+            $blueDartItems = [];
+            foreach ($orderItems as $oi) {
+                $blueDartItems[] = [
+                    'name' => $oi['name'] ?? 'Item',
+                    'sku' => $oi['sku'] ?? '',
+                    'quantity' => (int)($oi['units'] ?? 1),
+                    'unit_price' => (float)($oi['selling_price'] ?? 0),
+                    'hsn' => $oi['hsn'] ?? '',
+                ];
+            }
+
+            $paymentMethod = strtoupper((string)($invoice['payment_method'] ?? 'PREPAID'));
+            $isCod = (strpos($paymentMethod, 'COD') !== false);
+
+            $createResult = $courierGateway->createShipment([
+                'partner_code' => 'bluedart',
+                'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                'dispatch_id' => $dispatchId,
+                'order_number' => $orderNumber,
+                'box_no' => $boxNo,
+                'courier_id' => (string)($boxData['courier_id'] ?? ''),
+                'product_type' => (string)($boxData['product_type'] ?? ''),
+                'pickup_location' => (string)($boxData['pickup_location'] ?? ''),
+                'weight' => $weight,
+                'length_cm' => $length,
+                'width_cm' => $width,
+                'height_cm' => $height,
+                'destination' => [
+                    'name' => trim(($address['shipping_first_name'] ?? $billingCustomerName) . ' ' . ($address['shipping_last_name'] ?? $billingLastName)),
+                    'line1' => $address['shipping_address_line1'] ?? $billingAddress1,
+                    'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                    'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                    'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                    'phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                    'country_code' => 'IN',
+                ],
+                'address' => $address,
+                'items' => $blueDartItems,
+                'invoice' => [
+                    'invoice_number' => $invoice['invoice_number'] ?? '',
+                    'total_amount' => (float)($invoice['total_amount'] ?? $subTotal),
+                ],
+                'description' => (string)($dispatchRecord['groupname'] ?? ''),
+                'cod' => $isCod ? 1 : 0,
+                'cod_amount' => $isCod ? round($subTotal, 2) : 0,
+                'sub_total' => round($subTotal, 2),
+            ]);
+
+            if (empty($createResult['success'])) {
+                $dispatchModel->updateDispatch($dispatchId, [
+                    'shipment_status' => 'failed',
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+                return [
+                    'success' => false,
+                    'provider' => 'bluedart',
+                    'message' => (string)($createResult['message'] ?? 'Blue Dart shipment failed'),
+                ];
+            }
+
+            $awbCode = (string)($createResult['awb'] ?? $createResult['awb_code'] ?? '');
+            $labelUrl = (string)($createResult['label_url'] ?? '');
+            $trackingUrl = (string)($createResult['tracking_url'] ?? '');
+
+            $dispatchModel->updateDispatch($dispatchId, [
+                'shiprocket_order_id' => $createResult['order_id'] ?? null,
+                'shiprocket_shipment_id' => null,
+                'shiprocket_tracking_url' => $trackingUrl,
+                'awb_code' => $awbCode !== '' ? $awbCode : null,
+                'shipment_status' => 'created',
+                'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+            $ordersModel->updateOrderByOrderNumber($orderNumber, ['status' => 'Dispatched']);
+
+            $courierShipmentModel->saveShipment([
+                'invoice_id' => $invoiceId,
+                'box_no' => $boxNo,
+                'order_number' => $orderNumber,
+                'legacy_dispatch_id' => $dispatchId,
+                'partner_code' => 'bluedart',
+                'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                'partner_shipment_id' => $awbCode,
+                'awb' => $awbCode,
+                'tracking_url' => $trackingUrl,
+                'service_level' => (string)($dispatchRecord['courier_name'] ?? 'Blue Dart'),
+                'payment_mode' => $isCod ? 'cod' : 'prepaid',
+                'is_international' => 0,
+                'currency' => 'INR',
+                'label_url' => $labelUrl,
+                'status' => 'created',
+                'status_text' => 'Blue Dart shipment created (retry)',
+                'metadata_json' => json_encode($createResult['metadata'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+
+            return ['success' => true, 'provider' => 'bluedart'];
+        }
+
         foreach ($orderItems as &$oi) {
             if (empty($oi['sku'])) {
                 $oi['sku'] = 'ITEM';
@@ -2824,6 +3043,122 @@ class DispatchController {
             ]);
             exit;
         }
+    }
+
+    /**
+     * Serve Blue Dart shipping label PDF (saved from GenerateWayBill AWBPrintContent).
+     * URL: ?page=dispatch&action=bluedart_label&dispatch_id=123  or  &awb=AWB
+     */
+    public function bluedartLabel()
+    {
+        global $dispatchModel;
+        is_login();
+
+        require_once __DIR__ . '/../bluedart_service.php';
+
+        $dispatchId = (int)($_GET['dispatch_id'] ?? 0);
+        $awb = trim((string)($_GET['awb'] ?? ''));
+        $dispatch = null;
+
+        if ($dispatchId > 0) {
+            $dispatch = $dispatchModel->getDispatchById($dispatchId);
+            if ($dispatch && $awb === '' && !empty($dispatch['awb_code'])) {
+                $awb = trim((string)$dispatch['awb_code']);
+            }
+        }
+
+        if ($awb === '') {
+            http_response_code(400);
+            echo 'Missing or invalid dispatch / AWB for Blue Dart label.';
+            exit;
+        }
+
+        $service = new BlueDartService();
+        $labelPath = $service->resolveStoredLabelPath($awb);
+        if ($labelPath === null || !is_file($labelPath)) {
+            $labelPath = $this->loadBlueDartLabelPathFromShipmentMeta($dispatchId, $awb);
+        }
+
+        if ($labelPath !== null && is_file($labelPath)) {
+            $this->streamLocalPdfLabel($labelPath, 'bluedart_' . preg_replace('/[^A-Za-z0-9_-]/', '', $awb) . '.pdf');
+            exit;
+        }
+
+        $labelError = 'Blue Dart label PDF not found on server for AWB ' . $awb . '. Re-create the shipment or contact support.';
+        $this->renderBlueDartLabelFailure($dispatchId, $awb, $labelError);
+        exit;
+    }
+
+    private function loadBlueDartLabelPathFromShipmentMeta(int $dispatchId, string $awb): ?string
+    {
+        $stmtSql = $dispatchId > 0
+            ? 'SELECT metadata_json FROM courier_shipments WHERE legacy_dispatch_id = ? AND partner_code = ? ORDER BY id DESC LIMIT 1'
+            : 'SELECT metadata_json FROM courier_shipments WHERE awb = ? AND partner_code = ? ORDER BY id DESC LIMIT 1';
+
+        $stmt = $GLOBALS['conn']->prepare($stmtSql);
+        if (!$stmt) {
+            return null;
+        }
+
+        $partner = 'bluedart';
+        if ($dispatchId > 0) {
+            $stmt->bind_param('is', $dispatchId, $partner);
+        } else {
+            $stmt->bind_param('ss', $awb, $partner);
+        }
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row || empty($row['metadata_json'])) {
+            return null;
+        }
+
+        $meta = json_decode((string)$row['metadata_json'], true);
+        if (!is_array($meta)) {
+            return null;
+        }
+
+        $file = trim((string)($meta['label_file'] ?? ''));
+        if ($file === '') {
+            return null;
+        }
+
+        $path = __DIR__ . '/../tmp/bluedart_labels/' . basename($file);
+        return is_file($path) ? $path : null;
+    }
+
+    private function streamLocalPdfLabel(string $path, string $filename): void
+    {
+        $download = !empty($_GET['download']);
+        $body = @file_get_contents($path);
+        if (!is_string($body) || $body === '' || strncmp($body, '%PDF', 4) !== 0) {
+            http_response_code(404);
+            echo 'Label file is missing or invalid.';
+            return;
+        }
+
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($body));
+        echo $body;
+    }
+
+    private function renderBlueDartLabelFailure(int $dispatchId, string $awb, string $errorMessage): void
+    {
+        $retryParams = [
+            'page' => 'dispatch',
+            'action' => 'bluedart_label',
+        ];
+        if ($dispatchId > 0) {
+            $retryParams['dispatch_id'] = (string) $dispatchId;
+        } else {
+            $retryParams['awb'] = $awb;
+        }
+        $retryUrl = base_url('index.php?' . http_build_query($retryParams));
+
+        http_response_code(404);
+        $partnerLabel = 'Blue Dart';
+        require __DIR__ . '/../views/dispatch/courier_label_failed.php';
     }
 
     /**

@@ -386,7 +386,7 @@
                         <div class="mb-3 text-sm text-gray-700">
                             <p><strong>Batch #${data.batch_no}</strong></p>
                             <p class="text-xs text-gray-600 mt-1">✓ ${data.invoices_created} invoices and ${data.dispatches_created} dispatch records created successfully.</p>
-                            <p class="text-xs text-gray-600">✗ ${data.errors.length} courier shipment(s) failed. Click "Retry" to try again (Delhivery or Shiprocket based on your selection).</p>
+                            <p class="text-xs text-gray-600">✗ ${data.errors.length} courier shipment(s) failed. Click "Retry" to try again (Shiprocket, Delhivery, or Blue Dart based on your selection).</p>
                         </div>
 
                         <div class="bg-red-50 border border-red-200 rounded p-3 max-h-64 overflow-y-auto">
