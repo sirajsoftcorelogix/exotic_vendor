@@ -1180,9 +1180,13 @@
             }
             const priceClass = (isDelhivery || isBlueDart) ? 'text-emerald-700' : tm.courierPrice;
             const priceSource = String(courier.price_source || courier.metadata?.price_source || '');
+            const priceLabel = String(courier.price_label || courier.metadata?.price_label || 'Price via Shiprocket');
             const priceViaShiprocket = isBlueDart && priceSource === 'shiprocket' && hasPrice;
             const priceNote = priceViaShiprocket
-                ? '<div class="text-[10px] font-medium text-violet-600 mt-0.5">Price via Shiprocket</div>'
+                ? '<span class="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full border border-violet-300/70 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold leading-tight text-violet-800 shadow-[0_1px_2px_rgba(124,58,237,0.14)] ring-1 ring-violet-100" title="Freight estimate from Shiprocket aggregator">' +
+                    '<i class="fas fa-rocket text-[9px] text-violet-500 shrink-0" aria-hidden="true"></i>' +
+                    '<span class="truncate">' + escapeHtml(priceLabel) + '</span>' +
+                  '</span>'
                 : (isBlueDart && !hasPrice ? '<div class="text-[10px] text-gray-400 mt-0.5">No Shiprocket price</div>' : '');
             const etdSource = String(courier.metadata?.etd_source || '');
             const etdLabel = (isBlueDart && etdShort !== '—' && etdSource === 'bluedart')
