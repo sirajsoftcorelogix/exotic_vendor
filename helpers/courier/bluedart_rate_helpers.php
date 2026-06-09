@@ -36,9 +36,179 @@ function bluedartMapServiceTypeToProducts(string $serviceType): array
         'air' => [
             ['product_code' => 'A', 'sub_product_code' => 'P', 'pack_type' => 'L', 'feature' => 'R', 'label' => 'Blue Dart Air'],
         ],
+        'apex' => [
+            ['product_code' => 'A', 'sub_product_code' => 'P', 'pack_type' => 'L', 'feature' => 'R', 'label' => 'Blue Dart Apex'],
+        ],
+        'ground' => [
+            ['product_code' => 'E', 'sub_product_code' => 'P', 'pack_type' => 'L', 'feature' => 'R', 'label' => 'Blue Dart Ground'],
+        ],
+        'domesticpriority' => [
+            ['product_code' => 'D', 'sub_product_code' => 'P', 'pack_type' => 'L', 'feature' => 'R', 'label' => 'Blue Dart Domestic Priority'],
+        ],
     ];
 
     return $map[$normalized] ?? [];
+}
+
+/**
+ * @return list<string>
+ */
+function bluedartSplitServiceTypeTokens(string $value): array
+{
+    $value = trim($value);
+    if ($value === '') {
+        return [];
+    }
+
+    $tokens = [];
+    foreach (preg_split('/\s*,\s*/', $value) ?: [] as $part) {
+        $part = trim($part);
+        if ($part !== '') {
+            $tokens[] = $part;
+        }
+    }
+
+    return $tokens;
+}
+
+/**
+ * Expand eShipz-style comma-separated serviceType into Blue Dart product rows.
+ *
+ * Example: "eTailCODAir,eTailPrePaidAir,Apex,Ground,DomesticPriority"
+ *
+ * @return list<array{product_code:string,sub_product_code:string,pack_type:string,feature:string,label:string}>
+ */
+function bluedartResolveProductsFromServiceTypeCatalog(string $catalog, string $defaultSubProduct = 'P'): array
+{
+    $rows = [];
+    $seen = [];
+
+    foreach (bluedartSplitServiceTypeTokens($catalog) as $token) {
+        $mapped = bluedartMapServiceTypeToProducts($token);
+        if ($mapped === []) {
+            $parsed = bluedartParseServiceTypeCode($token, $defaultSubProduct);
+            if ($parsed !== null) {
+                $mapped = [$parsed];
+            }
+        }
+
+        foreach ($mapped as $row) {
+            $key = strtoupper((string) ($row['product_code'] ?? ''))
+                . '_' . strtoupper((string) ($row['sub_product_code'] ?? ''));
+            if ($key === '_' || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $rows[] = $row;
+        }
+    }
+
+    return $rows;
+}
+
+/**
+ * Pick one product row from serviceType catalog for waybill generation.
+ *
+ * @return array{product_code:string,sub_product_code:string,pack_type:string,feature:string,label:string}|null
+ */
+function bluedartPickProductForShipment(string $catalog, bool $isCod, string $defaultSubProduct = 'P'): ?array
+{
+    $rows = bluedartResolveProductsFromServiceTypeCatalog($catalog, $defaultSubProduct);
+    if ($rows === []) {
+        return null;
+    }
+
+    $preferredTokens = $isCod
+        ? ['etailcodair', 'apex', 'domesticpriority', 'ground', 'etailprepaidair']
+        : ['etailprepaidair', 'apex', 'domesticpriority', 'ground', 'etailcodair'];
+
+    foreach ($preferredTokens as $tokenKey) {
+        foreach (bluedartSplitServiceTypeTokens($catalog) as $token) {
+            $normalized = strtolower(preg_replace('/[^a-z0-9]/', '', $token));
+            if ($normalized !== $tokenKey) {
+                continue;
+            }
+            foreach ($rows as $row) {
+                $sub = strtoupper((string) ($row['sub_product_code'] ?? ''));
+                if ($isCod && $sub === 'C') {
+                    return $row;
+                }
+                if (!$isCod && $sub === 'P') {
+                    return $row;
+                }
+            }
+        }
+    }
+
+    foreach ($rows as $row) {
+        $sub = strtoupper((string) ($row['sub_product_code'] ?? ''));
+        if ($isCod && $sub === 'C') {
+            return $row;
+        }
+        if (!$isCod && $sub === 'P') {
+            return $row;
+        }
+    }
+
+    return $rows[0];
+}
+
+/**
+ * Parse Blue Dart / eShipz "Service Type code" into product + sub-product.
+ *
+ * Accepts: "E", "A", "E_P", "E/P", "Surface", "Air", etc.
+ *
+ * @return array{product_code:string,sub_product_code:string,pack_type:string,feature:string,label:string}|null
+ */
+function bluedartParseServiceTypeCode(string $code, string $defaultSubProduct = 'P'): ?array
+{
+    $code = strtoupper(trim($code));
+    if ($code === '') {
+        return null;
+    }
+
+    if (preg_match('/^([A-Z])[_\\/-]([PC])$/', $code, $m)) {
+        return [
+            'product_code' => $m[1],
+            'sub_product_code' => $m[2],
+            'pack_type' => 'L',
+            'feature' => 'R',
+            'label' => 'Blue Dart ' . $m[1] . '/' . $m[2],
+        ];
+    }
+
+    if (strlen($code) === 1 && ctype_alpha($code)) {
+        return [
+            'product_code' => $code,
+            'sub_product_code' => in_array($defaultSubProduct, ['P', 'C'], true) ? $defaultSubProduct : 'P',
+            'pack_type' => 'L',
+            'feature' => 'R',
+            'label' => 'Blue Dart ' . $code,
+        ];
+    }
+
+    $mapped = bluedartMapServiceTypeToProducts($code);
+    if ($mapped !== []) {
+        return $mapped[0];
+    }
+
+    return null;
+}
+
+/**
+ * eShipz / Blue Dart account JSON uses "serviceType" as the key for service type code.
+ *
+ * @param array<string, mixed> $credentials
+ */
+function bluedartPickServiceTypeFromCredentials(array $credentials): string
+{
+    return bluedartPickCredentialScalar($credentials, [
+        'serviceType',
+        'ServiceType',
+        'service_type',
+        'service_type_code',
+        'default_service_type',
+    ]);
 }
 
 /**
@@ -61,7 +231,18 @@ function bluedartResolveRateProductsFromCredentials(array $credentials): array
     }
 
     $sources = [];
-    foreach (['allowed_service_types', 'default_service_type', 'default_product_code'] as $key) {
+    $primaryServiceType = bluedartPickServiceTypeFromCredentials($credentials);
+    if ($primaryServiceType !== '') {
+        if (str_contains($primaryServiceType, ',')) {
+            $defaultSub = strtoupper(trim((string) ($credentials['default_sub_product_code'] ?? 'P')));
+            $catalogRows = bluedartResolveProductsFromServiceTypeCatalog($primaryServiceType, $defaultSub);
+            if ($catalogRows !== []) {
+                return $catalogRows;
+            }
+        }
+        $sources[] = $primaryServiceType;
+    }
+    foreach (['allowed_service_types', 'default_product_code'] as $key) {
         $value = $credentials[$key] ?? null;
         if (is_array($value)) {
             foreach ($value as $item) {
@@ -72,8 +253,14 @@ function bluedartResolveRateProductsFromCredentials(array $credentials): array
         }
     }
 
+    $defaultSub = strtoupper(trim((string) ($credentials['default_sub_product_code'] ?? 'P')));
     $rows = [];
     foreach ($sources as $serviceType) {
+        $parsed = bluedartParseServiceTypeCode($serviceType, $defaultSub);
+        if ($parsed !== null) {
+            $rows[] = $parsed;
+            continue;
+        }
         foreach (bluedartMapServiceTypeToProducts($serviceType) as $mapped) {
             $rows[] = $mapped;
         }

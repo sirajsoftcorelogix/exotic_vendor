@@ -529,7 +529,7 @@ class BlueDartService
         if ($products === []) {
             return [
                 'success' => false,
-                'error' => 'No Blue Dart rate_products configured. Add rate_products[] or default_service_type in Courier accounts.',
+                'error' => 'No Blue Dart rate_products configured. Add rate_products[] or serviceType in Courier accounts.',
             ];
         }
 
