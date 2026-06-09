@@ -452,14 +452,16 @@ class BlueDartAdapter implements CourierAdapterInterface
 
         $isCod = !empty($request['cod']);
         $authStatus = bluedartDescribeGatewayAuthStatus($credentials);
-        if (empty($authStatus['ready'])) {
+        if (!bluedartCanCreateWaybill($credentials)) {
             $accountLabel = trim((string) ($accountRow['account_code'] ?? ''));
             if ($accountLabel === '') {
                 $accountLabel = 'id ' . $accountId;
             }
-            $message = (string) ($authStatus['message'] ?? 'Blue Dart API authentication is not configured.');
+            $message = bluedartSanitizeErrorMessage(
+                (string) ($authStatus['message'] ?? 'Blue Dart API authentication is not configured.')
+            );
             if (!empty($authStatus['hints'])) {
-                $message .= ' ' . implode(' ', $authStatus['hints']);
+                $message .= ' ' . implode(' ', array_map('bluedartSanitizeErrorMessage', $authStatus['hints']));
             }
             return [
                 'success' => false,
@@ -568,10 +570,16 @@ class BlueDartAdapter implements CourierAdapterInterface
         }
 
         if (empty($createResp['success'])) {
-            $error = trim((string) ($createResp['error'] ?? 'Blue Dart waybill generation failed.'));
+            $error = bluedartSanitizeErrorMessage(
+                trim((string) ($createResp['error'] ?? 'Blue Dart waybill generation failed.'))
+            );
             $httpCode = (int) ($createResp['http_code'] ?? 0);
-            if ($httpCode === 401 && !str_contains(strtolower($error), 'unauthorized')) {
-                $error .= ' Check JWT: DHL Developer Portal consumer_key/secret may be required (login_id+licence_key alone often fails).';
+            if (
+                $httpCode === 401
+                && !bluedartUsesLegacyApi($credentials)
+                && !str_contains(strtolower($error), 'developer.dhl.com')
+            ) {
+                $error .= ' ' . bluedartDhlPortalSetupHint();
             }
 
             return [

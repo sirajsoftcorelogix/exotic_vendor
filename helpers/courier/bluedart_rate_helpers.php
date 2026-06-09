@@ -321,6 +321,71 @@ function bluedartResolveWaybillCredentials(BlueDartService $service, array $cred
  * @param array<string, mixed> $credentials
  * @param list<string> $keys
  */
+/**
+ * Strip secrets from Blue Dart errors before showing to users or in API responses.
+ */
+function bluedartSanitizeErrorMessage(string $message): string
+{
+    $message = trim($message);
+    if ($message === '') {
+        return '';
+    }
+
+    $decoded = json_decode($message, true);
+    if (is_array($decoded)) {
+        $message = json_encode(bluedartRedactSensitiveData($decoded), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $message = is_string($message) ? $message : '';
+    }
+
+    $message = (string) preg_replace(
+        '/"(clientID|ClientID|client_id|clientSecret|client_secret|consumer_key|consumer_secret|LicenceKey|licence_key|shipment_licence_key|LoginID|login_id|jwt_token|JWTToken|access_token|api_key|password|secret)"\s*:\s*"[^"]*"/i',
+        '"$1":"[redacted]"',
+        $message
+    );
+
+    $message = (string) preg_replace(
+        '/\b(eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b/',
+        '[redacted-jwt]',
+        $message
+    );
+
+    return trim($message);
+}
+
+/**
+ * @param mixed $data
+ * @return mixed
+ */
+function bluedartRedactSensitiveData($data)
+{
+    if (!is_array($data)) {
+        return $data;
+    }
+
+    $sensitive = [
+        'clientid', 'client_id', 'clientsecret', 'client_secret',
+        'consumer_key', 'consumer_secret', 'licencekey', 'licence_key',
+        'shipment_licence_key', 'tracking_licence_key', 'loginid', 'login_id',
+        'jwt_token', 'jwttoken', 'token', 'access_token', 'api_key', 'password', 'secret',
+    ];
+
+    $redacted = [];
+    foreach ($data as $key => $value) {
+        $normalized = strtolower(preg_replace('/[^a-z0-9_]/', '', (string) $key));
+        if (in_array($normalized, $sensitive, true)) {
+            $redacted[$key] = '[redacted]';
+            continue;
+        }
+        $redacted[$key] = is_array($value) ? bluedartRedactSensitiveData($value) : $value;
+    }
+
+    return $redacted;
+}
+
+/**
+ * @param array<string, mixed> $credentials
+ * @param list<string> $keys
+ */
 function bluedartPickCredentialScalar(array $credentials, array $keys): string
 {
     foreach ($keys as $key) {
@@ -410,11 +475,67 @@ function bluedartNormalizeGatewayAuthConfig(array $config): array
     return $config;
 }
 
+function bluedartIsPlaceholderCredentialValue(string $value): bool
+{
+    $value = trim($value);
+    if ($value === '') {
+        return true;
+    }
+
+    return preg_match('/^\(.*\)$/s', $value) === 1
+        || preg_match('/from dhl developer portal|keep secret|your blue dart app/i', $value) === 1;
+}
+
 /**
- * JWT token request credential pairs, in try order.
+ * DHL Developer Portal app credentials (Consumer Key + Secret). Not the same as login_id / licence_key.
  *
- * When DHL portal consumer_key/secret are absent, falls back to:
- *   consumer_key ≈ login_id (then customer_code), consumer_secret ≈ licence_key
+ * @param array<string, mixed> $credentials
+ */
+function bluedartHasDhlPortalCredentials(array $credentials): bool
+{
+    $normalized = bluedartNormalizeGatewayAuthConfig($credentials);
+    $key = bluedartPickCredentialScalar($normalized, [
+        'consumer_key',
+        'ConsumerKey',
+        'consumerKey',
+        'client_id',
+        'ClientID',
+        'dhl_client_id',
+        'dhl_consumer_key',
+    ]);
+    $secret = bluedartPickCredentialScalar($normalized, [
+        'consumer_secret',
+        'ConsumerSecret',
+        'consumerSecret',
+        'client_secret',
+        'clientSecret',
+        'dhl_client_secret',
+        'dhl_consumer_secret',
+    ]);
+
+    return !bluedartIsPlaceholderCredentialValue($key)
+        && !bluedartIsPlaceholderCredentialValue($secret);
+}
+
+function bluedartHasCachedJwtToken(array $credentials): bool
+{
+    $normalized = bluedartNormalizeGatewayAuthConfig($credentials);
+    $token = bluedartPickCredentialScalar($normalized, ['jwt_token', 'JWTToken', 'jwtToken']);
+    if ($token === '') {
+        return false;
+    }
+
+    return str_starts_with($token, 'eyJ') && substr_count($token, '.') >= 2;
+}
+
+function bluedartDhlPortalSetupHint(): string
+{
+    return 'Blue Dart REST gateway needs DHL Developer Portal consumer_key and consumer_secret (register at developer.dhl.com). '
+        . 'login_id and licence_key are only used in the API Profile — they cannot be used as JWT credentials.';
+}
+
+/**
+ * JWT token request credential pairs from DHL Developer Portal only.
  *
  * @param array<string, mixed> $config
  * @return list<array{client_id:string,client_secret:string,label:string}>
@@ -422,15 +543,6 @@ function bluedartNormalizeGatewayAuthConfig(array $config): array
 function bluedartBuildJwtAuthAttempts(array $config): array
 {
     $config = bluedartNormalizeGatewayAuthConfig($config);
-
-    $licenceKey = bluedartPickCredentialScalar($config, [
-        'shipment_licence_key',
-        'licence_key',
-        'LicenceKey',
-        'tracking_licence_key',
-    ]);
-    $loginId = bluedartPickCredentialScalar($config, ['login_id', 'LoginID']);
-    $customerCode = bluedartPickCredentialScalar($config, ['customer_code', 'CustomerCode', 'customerCode']);
 
     $explicitKey = bluedartPickCredentialScalar($config, [
         'consumer_key',
@@ -472,17 +584,48 @@ function bluedartBuildJwtAuthAttempts(array $config): array
         ];
     };
 
-    if ($explicitKey !== '' && $explicitSecret !== '') {
+    if (
+        !bluedartIsPlaceholderCredentialValue($explicitKey)
+        && !bluedartIsPlaceholderCredentialValue($explicitSecret)
+    ) {
         $push($explicitKey, $explicitSecret, 'dhl_portal');
-    }
-    if ($loginId !== '' && $licenceKey !== '') {
-        $push($loginId, $licenceKey, 'login_id_licence_key');
-    }
-    if ($customerCode !== '' && $licenceKey !== '') {
-        $push($customerCode, $licenceKey, 'customer_code_licence_key');
     }
 
     return $attempts;
+}
+
+/**
+ * Blue Dart account profile credentials (used inside every REST API payload).
+ *
+ * @param array<string, mixed> $credentials
+ */
+function bluedartHasProfileCredentials(array $credentials): bool
+{
+    $normalized = bluedartNormalizeGatewayAuthConfig($credentials);
+    $loginId = bluedartPickCredentialScalar($normalized, ['login_id', 'LoginID']);
+    $licence = bluedartPickCredentialScalar($normalized, [
+        'shipment_licence_key',
+        'licence_key',
+        'LicenceKey',
+    ]);
+
+    return $loginId !== '' && $licence !== '';
+}
+
+/**
+ * True when waybill can be created with configured API mode.
+ *
+ * @param array<string, mixed> $credentials
+ */
+function bluedartCanCreateWaybill(array $credentials): bool
+{
+    require_once __DIR__ . '/bluedart_legacy_soap.php';
+
+    if (bluedartUsesLegacyApi($credentials)) {
+        return bluedartHasProfileCredentials($credentials);
+    }
+
+    return bluedartHasCachedJwtToken($credentials) || bluedartHasDhlPortalCredentials($credentials);
 }
 
 /**
@@ -491,26 +634,41 @@ function bluedartBuildJwtAuthAttempts(array $config): array
  */
 function bluedartDescribeGatewayAuthStatus(array $credentials): array
 {
-    $normalized = bluedartNormalizeGatewayAuthConfig($credentials);
-    $hasJwt = bluedartPickCredentialScalar($normalized, ['jwt_token', 'JWTToken']) !== '';
-    $attempts = bluedartBuildJwtAuthAttempts($normalized);
-    $hasProfile = bluedartPickCredentialScalar($normalized, ['login_id', 'LoginID']) !== ''
-        && bluedartPickCredentialScalar($normalized, ['shipment_licence_key', 'licence_key']) !== '';
+    require_once __DIR__ . '/bluedart_legacy_soap.php';
 
-    if ($hasJwt || $attempts !== []) {
+    $normalized = bluedartNormalizeGatewayAuthConfig($credentials);
+    $hasProfile = bluedartHasProfileCredentials($normalized);
+
+    if (bluedartUsesLegacyApi($normalized)) {
+        if ($hasProfile) {
+            return ['ready' => true, 'message' => '', 'hints' => []];
+        }
+
+        return [
+            'ready' => false,
+            'message' => 'Blue Dart legacy API credentials are not configured.',
+            'hints' => [
+                'Add login_id and licence_key (or shipment_licence_key) from your Blue Dart / eShipz account.',
+                'Also set customer_code, origin_area, and shipper details for waybill generation.',
+            ],
+        ];
+    }
+
+    $hasJwt = bluedartHasCachedJwtToken($normalized);
+    $hasDhlPortal = bluedartHasDhlPortalCredentials($normalized);
+
+    if ($hasJwt || $hasDhlPortal) {
         return ['ready' => true, 'message' => '', 'hints' => []];
     }
 
-    $hints = [
-        'Set login_id + licence_key (mapped to JWT as consumer_key / consumer_secret), or add DHL Developer Portal consumer_key + consumer_secret, or paste jwt_token.',
-    ];
+    $hints = [bluedartDhlPortalSetupHint()];
     if (!$hasProfile) {
-        $hints[] = 'Ensure login_id and licence_key (or shipment_licence_key) are saved in Courier accounts.';
+        $hints[] = 'Also ensure login_id and licence_key are saved — they are required in the API Profile on every REST call.';
     }
 
     return [
         'ready' => false,
-        'message' => 'Blue Dart REST gateway authentication is not configured.',
+        'message' => 'Blue Dart REST gateway JWT is not configured.',
         'hints' => $hints,
     ];
 }
