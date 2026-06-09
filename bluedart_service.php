@@ -45,6 +45,7 @@ class BlueDartService
             return;
         }
 
+        $config = bluedartNormalizeGatewayAuthConfig($config);
         resolveCourierCredentialUrls($config, 'bluedart');
         $shipmentLicence = trim((string) (
             $config['shipment_licence_key']
@@ -213,12 +214,16 @@ class BlueDartService
             return ['success' => true, 'token' => $cachedToken];
         }
 
-        $clientId = trim((string) ($this->config['consumer_key'] ?? ''));
-        $clientSecret = trim((string) ($this->config['consumer_secret'] ?? ''));
-        if ($clientId === '' || $clientSecret === '') {
+        $attempts = bluedartBuildJwtAuthAttempts($this->config);
+        if ($attempts === []) {
+            $authStatus = bluedartDescribeGatewayAuthStatus($this->config);
+            $detail = (string) ($authStatus['message'] ?? 'Blue Dart API authentication is not configured.');
+            if (!empty($authStatus['hints'])) {
+                $detail .= ' ' . implode(' ', $authStatus['hints']);
+            }
             return [
                 'success' => false,
-                'error' => 'Blue Dart consumer_key and consumer_secret are required (DHL Developer Portal), or save a valid jwt_token in Courier accounts.',
+                'error' => $detail,
             ];
         }
 
@@ -231,40 +236,53 @@ class BlueDartService
         }
 
         $url = rtrim((string) $this->config['api_gateway_base_url'], '/') . $path;
-        $payloads = [
-            ['ClientID' => $clientId, 'clientSecret' => $clientSecret],
-            ['clientID' => $clientId, 'clientSecret' => $clientSecret],
-        ];
-
         $lastError = 'Could not obtain Blue Dart JWT token.';
-        foreach ($payloads as $body) {
-            $resp = $this->rawRequest('POST', $url, $body, []);
-            if (!$resp['success']) {
-                $lastError = (string) ($resp['error'] ?? $lastError);
-                continue;
+
+        foreach ($attempts as $attempt) {
+            $clientId = (string) $attempt['client_id'];
+            $clientSecret = (string) $attempt['client_secret'];
+            $label = (string) ($attempt['label'] ?? '');
+
+            $payloads = [
+                ['ClientID' => $clientId, 'clientSecret' => $clientSecret],
+                ['clientID' => $clientId, 'clientSecret' => $clientSecret],
+            ];
+            if ($label === 'login_id_licence_key') {
+                $payloads[] = ['LoginID' => $clientId, 'LicenceKey' => $clientSecret];
             }
 
-            $token = $this->extractJwtToken($resp['data'] ?? null, (string) ($resp['raw'] ?? ''));
-            if ($token === '') {
-                $lastError = 'Blue Dart token API did not return a JWT. Verify consumer_key / consumer_secret.';
-                continue;
-            }
+            foreach ($payloads as $body) {
+                $resp = $this->rawRequest('POST', $url, $body, []);
+                if (!$resp['success']) {
+                    $lastError = (string) ($resp['error'] ?? $lastError);
+                    if ($label !== '') {
+                        $lastError .= ' (auth: ' . $label . ')';
+                    }
+                    continue;
+                }
 
-            $this->jwtToken = $token;
-            return ['success' => true, 'token' => $token];
-        }
+                $token = $this->extractJwtToken($resp['data'] ?? null, (string) ($resp['raw'] ?? ''));
+                if ($token === '') {
+                    $lastError = 'Blue Dart token API did not return a JWT'
+                        . ($label !== '' ? ' (auth: ' . $label . ')' : '') . '.';
+                    continue;
+                }
 
-        // Some gateways accept credentials via headers.
-        $headerResp = $this->rawRequest('POST', $url, null, [
-            'ClientID: ' . $clientId,
-            'clientSecret: ' . $clientSecret,
-            'Accept: application/json',
-        ]);
-        if (!empty($headerResp['success'])) {
-            $token = $this->extractJwtToken($headerResp['data'] ?? null, (string) ($headerResp['raw'] ?? ''));
-            if ($token !== '') {
                 $this->jwtToken = $token;
                 return ['success' => true, 'token' => $token];
+            }
+
+            $headerResp = $this->rawRequest('POST', $url, null, [
+                'ClientID: ' . $clientId,
+                'clientSecret: ' . $clientSecret,
+                'Accept: application/json',
+            ]);
+            if (!empty($headerResp['success'])) {
+                $token = $this->extractJwtToken($headerResp['data'] ?? null, (string) ($headerResp['raw'] ?? ''));
+                if ($token !== '') {
+                    $this->jwtToken = $token;
+                    return ['success' => true, 'token' => $token];
+                }
             }
         }
 
@@ -393,6 +411,77 @@ class BlueDartService
             'LoginID' => (string) ($this->config['login_id'] ?? ''),
             'Version' => '1.0',
         ];
+    }
+
+    /**
+     * Resolve origin area (3-letter code, e.g. DEL) from shipper pincode via Location Finder.
+     */
+    public function resolveOriginAreaForPincode(string $pinCode): string
+    {
+        $pinCode = preg_replace('/\D/', '', $pinCode);
+        if (strlen($pinCode) !== 6) {
+            return '';
+        }
+
+        $resp = $this->getServicesForPincode($pinCode);
+        if (empty($resp['success'])) {
+            return '';
+        }
+
+        return $this->extractOriginAreaFromServiceability($resp['data'] ?? null);
+    }
+
+    /** @param mixed $data */
+    public function extractOriginAreaFromServiceability($data): string
+    {
+        if (!is_array($data)) {
+            return '';
+        }
+
+        foreach ([
+            'OriginArea',
+            'originArea',
+            'AreaCode',
+            'areaCode',
+            'PickupAreaCode',
+            'pickupAreaCode',
+            'Area',
+            'area',
+            'ServiceCenterCode',
+            'serviceCenterCode',
+        ] as $key) {
+            $value = $this->normalizeOriginAreaValue($data[$key] ?? null);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        foreach ($data as $value) {
+            if (!is_array($value)) {
+                continue;
+            }
+            $found = $this->extractOriginAreaFromServiceability($value);
+            if ($found !== '') {
+                return $found;
+            }
+        }
+
+        return '';
+    }
+
+    /** @param mixed $value */
+    private function normalizeOriginAreaValue($value): string
+    {
+        if (!is_string($value) && !is_numeric($value)) {
+            return '';
+        }
+
+        $value = strtoupper(trim((string) $value));
+        if ($value === '' || !preg_match('/^[A-Z]{2,4}$/', $value)) {
+            return '';
+        }
+
+        return $value;
     }
 
     /** @return list<array<string, mixed>> */

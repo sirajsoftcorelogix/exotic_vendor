@@ -262,3 +262,255 @@ function bluedartMatchShiprocketQuoteForCourier(array $courier, array $shiprocke
 
     return $best ?? $shiprocketQuotes[0];
 }
+
+/**
+ * Resolve Blue Dart waybill shipper codes from credentials (with pincode API fallback for origin_area).
+ *
+ * @param array<string, mixed> $credentials
+ * @return array{customer_code:string,origin_area:string,origin_area_source:string,errors:list<string>}
+ */
+function bluedartResolveWaybillCredentials(BlueDartService $service, array $credentials, string $shipperPincode, bool $isCod): array
+{
+    $errors = [];
+    $customerCode = bluedartPickCredentialScalar($credentials, [
+        'customer_code',
+        'CustomerCode',
+        'customerCode',
+    ]);
+
+    if ($customerCode === '' && $isCod) {
+        $customerCode = bluedartPickCredentialScalar($credentials, [
+            'cod_customer_code',
+            'codCustomerCode',
+            'CODCustomerCode',
+        ]);
+    }
+
+    $originArea = bluedartPickCredentialScalar($credentials, [
+        'origin_area',
+        'OriginArea',
+        'customer_area',
+        'pickup_area',
+        'shipper_area',
+    ]);
+    $originAreaSource = $originArea !== '' ? 'credentials' : '';
+
+    if ($originArea === '') {
+        $originArea = $service->resolveOriginAreaForPincode($shipperPincode);
+        if ($originArea !== '') {
+            $originAreaSource = 'pincode_api';
+        }
+    }
+
+    if ($customerCode === '') {
+        $errors[] = 'customer_code (6-digit Blue Dart account code, e.g. 851756)';
+    }
+    if ($originArea === '') {
+        $errors[] = 'origin_area (3-letter area code, e.g. DEL for Delhi — or ensure shipper pincode resolves via Blue Dart pincode API)';
+    }
+
+    return [
+        'customer_code' => $customerCode,
+        'origin_area' => $originArea,
+        'origin_area_source' => $originAreaSource,
+        'errors' => $errors,
+    ];
+}
+
+/**
+ * @param array<string, mixed> $credentials
+ * @param list<string> $keys
+ */
+function bluedartPickCredentialScalar(array $credentials, array $keys): string
+{
+    foreach ($keys as $key) {
+        if (!array_key_exists($key, $credentials)) {
+            continue;
+        }
+        $value = trim((string) $credentials[$key]);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Merge DHL gateway auth fields from common key names / nested JSON shapes.
+ *
+ * @param array<string, mixed> $config
+ * @return array<string, mixed>
+ */
+function bluedartNormalizeGatewayAuthConfig(array $config): array
+{
+    $sources = [$config];
+    foreach (['api', 'auth', 'dhl', 'gateway', 'credentials'] as $nestedKey) {
+        if (!empty($config[$nestedKey]) && is_array($config[$nestedKey])) {
+            $sources[] = $config[$nestedKey];
+        }
+    }
+
+    $consumerKey = '';
+    $consumerSecret = '';
+    $jwtToken = '';
+    foreach ($sources as $source) {
+        if ($consumerKey === '') {
+            $consumerKey = bluedartPickCredentialScalar($source, [
+                'consumer_key',
+                'ConsumerKey',
+                'consumerKey',
+                'client_id',
+                'clientId',
+                'ClientID',
+                'ClientId',
+                'api_key',
+                'APIKey',
+                'dhl_client_id',
+                'dhl_consumer_key',
+            ]);
+        }
+        if ($consumerSecret === '') {
+            $consumerSecret = bluedartPickCredentialScalar($source, [
+                'consumer_secret',
+                'ConsumerSecret',
+                'consumerSecret',
+                'client_secret',
+                'clientSecret',
+                'ClientSecret',
+                'api_secret',
+                'APISecret',
+                'dhl_client_secret',
+                'dhl_consumer_secret',
+            ]);
+        }
+        if ($jwtToken === '') {
+            $jwtToken = bluedartPickCredentialScalar($source, [
+                'jwt_token',
+                'JWTToken',
+                'jwtToken',
+                'jwt',
+                'access_token',
+                'accessToken',
+                'bearer_token',
+            ]);
+        }
+    }
+
+    if ($consumerKey !== '') {
+        $config['consumer_key'] = $consumerKey;
+    }
+    if ($consumerSecret !== '') {
+        $config['consumer_secret'] = $consumerSecret;
+    }
+    if ($jwtToken !== '') {
+        $config['jwt_token'] = $jwtToken;
+    }
+
+    return $config;
+}
+
+/**
+ * JWT token request credential pairs, in try order.
+ *
+ * When DHL portal consumer_key/secret are absent, falls back to:
+ *   consumer_key ≈ login_id (then customer_code), consumer_secret ≈ licence_key
+ *
+ * @param array<string, mixed> $config
+ * @return list<array{client_id:string,client_secret:string,label:string}>
+ */
+function bluedartBuildJwtAuthAttempts(array $config): array
+{
+    $config = bluedartNormalizeGatewayAuthConfig($config);
+
+    $licenceKey = bluedartPickCredentialScalar($config, [
+        'shipment_licence_key',
+        'licence_key',
+        'LicenceKey',
+        'tracking_licence_key',
+    ]);
+    $loginId = bluedartPickCredentialScalar($config, ['login_id', 'LoginID']);
+    $customerCode = bluedartPickCredentialScalar($config, ['customer_code', 'CustomerCode', 'customerCode']);
+
+    $explicitKey = bluedartPickCredentialScalar($config, [
+        'consumer_key',
+        'ConsumerKey',
+        'consumerKey',
+        'client_id',
+        'ClientID',
+        'dhl_client_id',
+        'dhl_consumer_key',
+    ]);
+    $explicitSecret = bluedartPickCredentialScalar($config, [
+        'consumer_secret',
+        'ConsumerSecret',
+        'consumerSecret',
+        'client_secret',
+        'clientSecret',
+        'dhl_client_secret',
+        'dhl_consumer_secret',
+    ]);
+
+    $attempts = [];
+    $seen = [];
+
+    $push = static function (string $clientId, string $clientSecret, string $label) use (&$attempts, &$seen): void {
+        $clientId = trim($clientId);
+        $clientSecret = trim($clientSecret);
+        if ($clientId === '' || $clientSecret === '') {
+            return;
+        }
+        $sig = strtolower($clientId) . '|' . $clientSecret;
+        if (isset($seen[$sig])) {
+            return;
+        }
+        $seen[$sig] = true;
+        $attempts[] = [
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'label' => $label,
+        ];
+    };
+
+    if ($explicitKey !== '' && $explicitSecret !== '') {
+        $push($explicitKey, $explicitSecret, 'dhl_portal');
+    }
+    if ($loginId !== '' && $licenceKey !== '') {
+        $push($loginId, $licenceKey, 'login_id_licence_key');
+    }
+    if ($customerCode !== '' && $licenceKey !== '') {
+        $push($customerCode, $licenceKey, 'customer_code_licence_key');
+    }
+
+    return $attempts;
+}
+
+/**
+ * @param array<string, mixed> $credentials
+ * @return array{ready:bool,message:string,hints:list<string>}
+ */
+function bluedartDescribeGatewayAuthStatus(array $credentials): array
+{
+    $normalized = bluedartNormalizeGatewayAuthConfig($credentials);
+    $hasJwt = bluedartPickCredentialScalar($normalized, ['jwt_token', 'JWTToken']) !== '';
+    $attempts = bluedartBuildJwtAuthAttempts($normalized);
+    $hasProfile = bluedartPickCredentialScalar($normalized, ['login_id', 'LoginID']) !== ''
+        && bluedartPickCredentialScalar($normalized, ['shipment_licence_key', 'licence_key']) !== '';
+
+    if ($hasJwt || $attempts !== []) {
+        return ['ready' => true, 'message' => '', 'hints' => []];
+    }
+
+    $hints = [
+        'Set login_id + licence_key (mapped to JWT as consumer_key / consumer_secret), or add DHL Developer Portal consumer_key + consumer_secret, or paste jwt_token.',
+    ];
+    if (!$hasProfile) {
+        $hints[] = 'Ensure login_id and licence_key (or shipment_licence_key) are saved in Courier accounts.';
+    }
+
+    return [
+        'ready' => false,
+        'message' => 'Blue Dart REST gateway authentication is not configured.',
+        'hints' => $hints,
+    ];
+}
