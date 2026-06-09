@@ -292,9 +292,9 @@ class BlueDartAdapter implements CourierAdapterInterface
 
                     'billable_weight_kg' => $billableKg,
 
-                    'price_source' => $row['price_source'] ?? '',
+                    'serviceable' => !empty($row['serviceable']),
 
-                    'price_configured' => $price !== null,
+                    'etd_source' => (string) ($row['etd_source'] ?? (($row['etd'] ?? 'N/A') !== 'N/A' ? 'bluedart' : '')),
 
                 ],
 

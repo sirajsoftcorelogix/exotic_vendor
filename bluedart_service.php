@@ -1,12 +1,12 @@
 <?php
 
 require_once __DIR__ . '/helpers/courier/credential_urls.php';
+require_once __DIR__ . '/helpers/courier/bluedart_rate_helpers.php';
 
 /**
  * Blue Dart Express API gateway client (DHL eCommerce India REST APIs).
  *
- * Rates combine Location Finder (serviceability) + optional Transit Time (ETD).
- * Blue Dart does not expose a public freight-quote API; use rate_estimate in credentials for INR amounts.
+ * Rates: Location Finder (serviceability) + Transit Time (ETD). Price is supplied separately via Shiprocket.
  *
  * @see https://developer.dhl.com/api-reference/blue-dart-location-finder
  * @see https://developer.dhl.com/api-reference/blue-dart-transit-time
@@ -31,6 +31,7 @@ class BlueDartService
             'default_sub_product_code' => 'P',
             'consumer_key' => '',
             'consumer_secret' => '',
+            'jwt_token' => '',
             'api_gateway_base_url' => 'https://apigateway.bluedart.com',
             'token_api_path' => '/in/transportation/token/v1/generate',
             'rate_products' => [],
@@ -73,6 +74,7 @@ class BlueDartService
             'default_sub_product_code' => (string) ($config['default_sub_product_code'] ?? 'P'),
             'consumer_key' => trim((string) ($config['consumer_key'] ?? $config['ClientID'] ?? '')),
             'consumer_secret' => trim((string) ($config['consumer_secret'] ?? $config['clientSecret'] ?? '')),
+            'jwt_token' => trim((string) ($config['jwt_token'] ?? $config['JWTToken'] ?? '')),
             'api_gateway_base_url' => rtrim($gatewayBase, '/'),
             'token_api_path' => trim((string) ($config['token_api_path'] ?? $defaults['token_api_path'])),
             'rate_products' => is_array($config['rate_products'] ?? null) ? $config['rate_products'] : [],
@@ -163,7 +165,6 @@ class BlueDartService
             $debug['products'][$productCode . '_' . $subProductCode]['transit'] = $transitResp;
 
             $etd = $this->parseTransitEtd($transitResp['data'] ?? null);
-            $price = $this->estimatePriceInr($weightKg, $productCode, $subProductCode);
 
             $quotes[] = [
                 'product_code' => $productCode,
@@ -171,13 +172,14 @@ class BlueDartService
                 'pack_type' => $packType,
                 'feature' => $feature,
                 'label' => $label,
-                'price' => $price,
+                'price' => null,
                 'currency' => (string) ($this->config['rating_currency'] ?? 'INR'),
                 'etd' => $etd,
                 'origin_pin' => $originPin,
                 'dest_pin' => $destPin,
                 'billable_weight_kg' => $weightKg,
-                'price_source' => $price !== null ? 'rate_estimate' : 'serviceability_only',
+                'etd_source' => $etd !== 'N/A' ? 'bluedart' : '',
+                'serviceable' => true,
                 'serviceability' => $serviceResp['data'] ?? null,
                 'transit' => $transitResp['data'] ?? null,
             ];
@@ -205,12 +207,18 @@ class BlueDartService
             return ['success' => true, 'token' => $this->jwtToken];
         }
 
+        $cachedToken = trim((string) ($this->config['jwt_token'] ?? ''));
+        if (!$forceRefresh && $cachedToken !== '' && $this->looksLikeJwt($cachedToken)) {
+            $this->jwtToken = $cachedToken;
+            return ['success' => true, 'token' => $cachedToken];
+        }
+
         $clientId = trim((string) ($this->config['consumer_key'] ?? ''));
         $clientSecret = trim((string) ($this->config['consumer_secret'] ?? ''));
         if ($clientId === '' || $clientSecret === '') {
             return [
                 'success' => false,
-                'error' => 'Blue Dart consumer_key and consumer_secret are required (DHL Developer Portal app credentials).',
+                'error' => 'Blue Dart consumer_key and consumer_secret are required (DHL Developer Portal), or save a valid jwt_token in Courier accounts.',
             ];
         }
 
@@ -280,12 +288,56 @@ class BlueDartService
         string $packType = 'L',
         string $feature = 'R'
     ): array {
-        return $this->gatewayPost('/in/transportation/finder/v1/GetServicesforPincodeAndProduct', [
-            'pinCode' => $pinCode,
-            'pProductCode' => $productCode,
-            'pSubProductCode' => $subProductCode,
-            'profile' => $this->buildProfile(),
-        ]);
+        $profile = $this->buildProfile();
+        $attempts = [
+            [
+                'path' => '/in/transportation/finder/v1/GetServicesforPincodeAndProduct',
+                'body' => [
+                    'pinCode' => $pinCode,
+                    'pProductCode' => $productCode,
+                    'pSubProductCode' => $subProductCode,
+                    'profile' => $profile,
+                ],
+            ],
+            [
+                'path' => '/in/transportation/finder/v1/GetServicesforProduct',
+                'body' => [
+                    'pinCode' => $pinCode,
+                    'ProductCode' => $productCode,
+                    'SubProductCode' => $subProductCode,
+                    'PackType' => $packType,
+                    'Feature' => $feature,
+                    'profile' => $profile,
+                ],
+            ],
+            [
+                'path' => '/in/transportation/finder/v1/GetServicesforPincodeAndProduct',
+                'body' => [
+                    'pinCode' => $pinCode,
+                    'ProductCode' => $productCode,
+                    'SubProductCode' => $subProductCode,
+                    'PackType' => $packType,
+                    'Feature' => $feature,
+                    'profile' => $profile,
+                ],
+            ],
+        ];
+
+        $last = ['success' => false, 'error' => 'Serviceability check failed.'];
+        foreach ($attempts as $attempt) {
+            $resp = $this->gatewayPost($attempt['path'], $attempt['body']);
+            $last = $resp;
+            if (!empty($resp['success']) && $this->isServiceabilityOk($resp['data'] ?? null)) {
+                return $resp;
+            }
+        }
+
+        $pinOnly = $this->getServicesForPincode($pinCode);
+        if (!empty($pinOnly['success']) && $this->isServiceabilityOk($pinOnly['data'] ?? null)) {
+            return $pinOnly;
+        }
+
+        return $last;
     }
 
     /** @return array{success:bool,data?:mixed,error?:string,http_code?:int,raw?:string} */
@@ -346,26 +398,13 @@ class BlueDartService
     /** @return list<array<string, mixed>> */
     private function resolveRateProducts(): array
     {
-        $configured = $this->config['rate_products'] ?? [];
-        if (is_array($configured) && $configured !== []) {
-            $rows = [];
-            foreach ($configured as $row) {
-                if (!is_array($row)) {
-                    continue;
-                }
-                $code = trim((string) ($row['product_code'] ?? ''));
-                if ($code === '') {
-                    continue;
-                }
-                $rows[] = $row;
-            }
-            if ($rows !== []) {
-                return $rows;
-            }
+        $mapped = bluedartResolveRateProductsFromCredentials($this->config);
+        if ($mapped !== []) {
+            return $mapped;
         }
 
         $defaultCode = trim((string) ($this->config['default_product_code'] ?? ''));
-        if ($defaultCode !== '' && !preg_match('/^eTail/i', $defaultCode)) {
+        if ($defaultCode !== '' && !preg_match('/^etail/i', $defaultCode)) {
             return [[
                 'product_code' => $defaultCode,
                 'sub_product_code' => (string) ($this->config['default_sub_product_code'] ?? 'P'),
@@ -397,18 +436,24 @@ class BlueDartService
     {
         $key = strtoupper($productCode) . '_' . strtoupper($subProductCode);
         $estimate = is_array($this->config['rate_estimate'] ?? null) ? $this->config['rate_estimate'] : [];
-        $perKg = (float) ($estimate['default_per_kg_inr'] ?? $this->config['rate_per_kg_inr'] ?? 0);
-        $minimum = (float) ($estimate['default_minimum_inr'] ?? $this->config['rate_minimum_inr'] ?? 0);
+        $perKg = bluedartParseInrAmount($estimate['default_per_kg_inr'] ?? null)
+            ?? bluedartParseInrAmount($this->config['rate_per_kg_inr'] ?? null)
+            ?? 0.0;
+        $minimum = bluedartParseInrAmount($estimate['default_minimum_inr'] ?? null)
+            ?? bluedartParseInrAmount($this->config['rate_minimum_inr'] ?? null)
+            ?? 0.0;
 
         $byProduct = $estimate['products'] ?? $estimate['by_product'] ?? null;
         if (is_array($byProduct)) {
             $row = $byProduct[$key] ?? $byProduct[strtolower($key)] ?? null;
             if (is_array($row)) {
-                if (isset($row['per_kg_inr']) && is_numeric($row['per_kg_inr'])) {
-                    $perKg = (float) $row['per_kg_inr'];
+                $rowPerKg = bluedartParseInrAmount($row['per_kg_inr'] ?? null);
+                if ($rowPerKg !== null) {
+                    $perKg = $rowPerKg;
                 }
-                if (isset($row['minimum_inr']) && is_numeric($row['minimum_inr'])) {
-                    $minimum = (float) $row['minimum_inr'];
+                $rowMinimum = bluedartParseInrAmount($row['minimum_inr'] ?? null);
+                if ($rowMinimum !== null) {
+                    $minimum = $rowMinimum;
                 }
             }
         }
