@@ -18,7 +18,6 @@ class ShiprocketService
     private bool $accountLoaded = false;
     private string $baseUrl = 'https://apiv2.shiprocket.in';
     private string $lastAuthError = '';
-    private string $tokenSource = '';
 
     public function __construct($conn)
     {
@@ -28,11 +27,6 @@ class ShiprocketService
     public function getLastAuthError(): string
     {
         return $this->lastAuthError;
-    }
-
-    public function getTokenSource(): string
-    {
-        return $this->tokenSource;
     }
 
     public function getAccountId(): int
@@ -57,98 +51,17 @@ class ShiprocketService
         return rtrim($this->baseUrl, '/') . $path;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function getDiagnostics(): array
-    {
-        $this->ensureAccount();
-        $token = extractShiprocketToken(is_array($this->credentials) ? $this->credentials : []);
-
-        return [
-            'account_id' => $this->getAccountId(),
-            'partner_code' => (string) ($this->accountRow['partner_code'] ?? ''),
-            'account_name' => (string) ($this->accountRow['account_name'] ?? ''),
-            'account_code' => (string) ($this->accountRow['account_code'] ?? ''),
-            'environment' => (string) ($this->credentials['environment'] ?? ''),
-            'api_base_url' => $this->baseUrl,
-            'pickup_location' => $this->getDefaultPickupLocation(),
-            'has_token' => $token !== '',
-            'token_length' => strlen($token),
-            'has_email' => trim((string) ($this->credentials['email'] ?? '')) !== '',
-            'token_source' => $this->tokenSource,
-            'last_auth_error' => $this->lastAuthError,
-        ];
-    }
-
-    public function testConnection(bool $allowRetry = true): array
-    {
-        $token = $this->getToken();
-        $diagnostics = $this->getDiagnostics();
-        if ($token === '') {
-            return [
-                'success' => false,
-                'message' => $this->lastAuthError !== ''
-                    ? $this->lastAuthError
-                    : 'Shiprocket token is missing.',
-                'diagnostics' => $diagnostics,
-            ];
-        }
-
-        $url = $this->apiUrl('/v1/external/settings/company/pickup');
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 25);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $token,
-        ]);
-        $body = curl_exec($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($httpCode === 401 && $allowRetry) {
-            $token = $this->handleUnauthorized();
-            if ($token !== '') {
-                return $this->testConnection(false);
-            }
-        }
-
-        $decoded = is_string($body) ? json_decode($body, true) : null;
-        $pickupCount = 0;
-        if (is_array($decoded['data']['shipping_address'] ?? null)) {
-            $pickupCount = count($decoded['data']['shipping_address']);
-        }
-
-        return [
-            'success' => $httpCode === 200,
-            'http_code' => $httpCode,
-            'message' => $httpCode === 200
-                ? 'Shiprocket connection OK.'
-                : ($this->lastAuthError !== '' ? $this->lastAuthError : 'Shiprocket API returned HTTP ' . $httpCode),
-            'pickup_location_count' => $pickupCount,
-            'curl_error' => $curlError,
-            'diagnostics' => $this->getDiagnostics(),
-            'response_preview' => is_string($body) ? substr($body, 0, 300) : '',
-        ];
-    }
-
     public function getToken(): string
     {
         $this->lastAuthError = '';
-        $this->tokenSource = '';
 
         $token = $this->resolveCourierAccountToken();
         if ($token !== '') {
-            $this->tokenSource = 'courier_accounts';
-
             return $token;
         }
 
         $token = $this->resolveLegacyToken();
         if ($token !== '') {
-            $this->tokenSource = 'legacy';
             $this->persistTokenToCourierAccount($token);
 
             return $token;
@@ -169,18 +82,14 @@ class ShiprocketService
     {
         $this->clearCachedToken();
         $this->lastAuthError = '';
-        $this->tokenSource = '';
 
         $loginToken = $this->loginViaCourierCredentials();
         if ($loginToken !== '') {
-            $this->tokenSource = 'courier_login';
-
             return $loginToken;
         }
 
         $legacyToken = $this->refreshLegacyTokenFromVendorApi();
         if ($legacyToken !== '') {
-            $this->tokenSource = 'legacy_refresh';
             $this->persistTokenToCourierAccount($legacyToken);
 
             return $legacyToken;

@@ -66,19 +66,6 @@ class CourierAccountsController
         exit;
     }
 
-    public function testShiprocket()
-    {
-        is_login();
-        header('Content-Type: application/json');
-
-        require_once __DIR__ . '/../shiprocket_service.php';
-        global $conn;
-
-        $service = new ShiprocketService($conn);
-        echo json_encode($service->testConnection(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        exit;
-    }
-
     public function deleteAccount()
     {
         is_login();
