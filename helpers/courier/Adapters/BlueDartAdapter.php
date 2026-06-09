@@ -588,6 +588,8 @@ class BlueDartAdapter implements CourierAdapterInterface
                 'soap_variant' => $createResp['soap_variant'] ?? null,
                 'product_code' => $productCodes['product_code'],
                 'sub_product_code' => $productCodes['sub_product_code'],
+                'bytes_received' => isset($createResp['bytes_received']) ? (int) $createResp['bytes_received'] : null,
+                'curl_error' => trim((string) ($createResp['curl_error'] ?? '')),
             ];
             if (!empty($createResp['request_xml'])) {
                 $debug['request'] = (string) $createResp['request_xml'];
@@ -604,6 +606,9 @@ class BlueDartAdapter implements CourierAdapterInterface
                     static function ($value, $key) {
                         if ($key === 'response') {
                             return true;
+                        }
+                        if ($key === 'curl_error' && $value === '') {
+                            return false;
                         }
 
                         return $value !== null && $value !== '';
@@ -671,25 +676,33 @@ class BlueDartAdapter implements CourierAdapterInterface
         $subProductCode = strtoupper(trim((string) ($metadata['sub_product_code'] ?? '')));
         $packType = strtoupper(trim((string) ($metadata['pack_type'] ?? 'L')));
 
-        $productType = trim((string) ($request['product_type'] ?? ''));
+        $productType = strtoupper(trim((string) ($request['product_type'] ?? '')));
         $courierId = trim((string) ($request['courier_id'] ?? ''));
-        if ($productType === '' && preg_match('/bluedart_\d+_(.+)$/i', $courierId, $m)) {
-            $productType = trim((string) ($m[1] ?? ''));
+
+        if ($productCode === '' && preg_match('/^bluedart_\d+_([A-Z])_([PC])$/i', $courierId, $m)) {
+            $productCode = strtoupper($m[1]);
+            $subProductCode = strtoupper($m[2]);
         }
-        if ($productType !== '' && str_contains($productType, '_')) {
+
+        if ($productCode === '' && preg_match('/^([A-Z])_([PC])$/', $productType, $m)) {
+            $productCode = $m[1];
+            $subProductCode = $m[2];
+        }
+
+        if ($productCode === '' && $productType !== '' && str_contains($productType, '_')) {
             [$pc, $spc] = explode('_', $productType, 2);
-            if ($productCode === '') {
-                $productCode = strtoupper(trim($pc));
-            }
-            if ($subProductCode === '') {
-                $subProductCode = strtoupper(trim($spc));
+            $pc = strtoupper(trim($pc));
+            $spc = strtoupper(trim($spc));
+            if (strlen($pc) === 1 && in_array($spc, ['P', 'C'], true)) {
+                $productCode = $pc;
+                $subProductCode = $spc;
             }
         }
 
-        if ($productCode === '') {
+        if ($productCode === '' || strlen($productCode) !== 1 || !ctype_alpha($productCode)) {
             $productCode = 'A';
         }
-        if ($subProductCode === '') {
+        if ($subProductCode === '' || !in_array($subProductCode, ['P', 'C'], true)) {
             $subProductCode = $isCod ? 'C' : 'P';
         }
         if ($packType === '') {

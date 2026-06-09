@@ -1242,6 +1242,8 @@ class BlueDartService
                 'soap_variant' => $resp['soap_variant'] ?? null,
                 'request_xml' => $resp['request_xml'] ?? null,
                 'response_raw' => $resp['response_raw'] ?? '',
+                'curl_error' => $resp['curl_error'] ?? '',
+                'bytes_received' => $resp['bytes_received'] ?? null,
             ];
         }
 

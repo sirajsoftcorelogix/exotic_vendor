@@ -127,11 +127,13 @@ function bluedartLegacySoapRequest(
             CURLOPT_POSTFIELDS => $attempt['envelope'],
             CURLOPT_HTTPHEADER => $attempt['headers'],
             CURLOPT_TIMEOUT => 90,
+            CURLOPT_CONNECTTIMEOUT => 30,
         ]);
 
         $raw = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
+        $curlErrno = curl_errno($ch);
         curl_close($ch);
 
         if ($raw === false) {
@@ -139,21 +141,44 @@ function bluedartLegacySoapRequest(
                 'success' => false,
                 'error' => $curlError !== '' ? $curlError : 'Blue Dart legacy SOAP request failed.',
                 'http_code' => $httpCode,
+                'curl_error' => $curlError,
+                'curl_errno' => $curlErrno,
+                'bytes_received' => 0,
             ], $lastMeta);
             continue;
         }
 
-        $responseRaw = bluedartRedactSoapXml((string) $raw);
+        $rawString = (string) $raw;
+        $responseRaw = bluedartRedactSoapXml($rawString);
         $lastMeta['response_raw'] = $responseRaw;
 
-        $parsed = bluedartParseLegacySoapResponse((string) $raw, $httpCode);
-        if (!empty($parsed['fault']) && bluedartLegacyResponseLooksLikeHtml((string) $raw)) {
+        $parsed = bluedartParseLegacySoapResponse($rawString, $httpCode);
+        if (trim($rawString) === '' && !empty($parsed['fault'])) {
+            $parsed['fault'] .= ' 0 bytes received from netconnect.';
+            if ($curlError !== '') {
+                $parsed['fault'] .= ' cURL: ' . $curlError;
+            }
+        }
+
+        $retryableFault = !empty($parsed['fault'])
+            && (
+                bluedartLegacyResponseLooksLikeHtml($rawString)
+                || (
+                    trim($rawString) === ''
+                    && ($attempt['label'] ?? '') === 'soap12'
+                )
+            );
+
+        if (!empty($parsed['fault']) && $retryableFault) {
             $last = array_merge([
                 'success' => false,
                 'error' => (string) $parsed['fault'],
                 'http_code' => $httpCode,
-                'raw' => (string) $raw,
+                'raw' => $rawString,
                 'data' => $parsed,
+                'curl_error' => $curlError,
+                'curl_errno' => $curlErrno,
+                'bytes_received' => strlen($rawString),
             ], $lastMeta);
             continue;
         }
@@ -163,28 +188,35 @@ function bluedartLegacySoapRequest(
                 'success' => false,
                 'error' => bluedartSanitizeErrorMessage((string) $parsed['fault']),
                 'http_code' => $httpCode,
-                'raw' => (string) $raw,
+                'raw' => $rawString,
                 'data' => $parsed,
+                'curl_error' => $curlError,
+                'curl_errno' => $curlErrno,
+                'bytes_received' => strlen($rawString),
             ], $lastMeta);
         }
 
         if ($httpCode >= 200 && $httpCode < 300) {
             $businessError = bluedartLegacyFormatBusinessError($parsed['values'] ?? []);
             if ($businessError !== null) {
-                return array_merge([
-                    'success' => false,
-                    'error' => bluedartSanitizeErrorMessage($businessError),
-                    'http_code' => $httpCode,
-                    'raw' => (string) $raw,
-                    'data' => $parsed,
-                ], $lastMeta);
+            return array_merge([
+                'success' => false,
+                'error' => bluedartSanitizeErrorMessage($businessError),
+                'http_code' => $httpCode,
+                'raw' => $rawString,
+                'data' => $parsed,
+                'curl_error' => $curlError,
+                'curl_errno' => $curlErrno,
+                'bytes_received' => strlen($rawString),
+            ], $lastMeta);
             }
 
             return array_merge([
                 'success' => true,
                 'http_code' => $httpCode,
-                'raw' => (string) $raw,
+                'raw' => $rawString,
                 'data' => $parsed,
+                'bytes_received' => strlen($rawString),
             ], $lastMeta);
         }
 
@@ -193,8 +225,11 @@ function bluedartLegacySoapRequest(
             'error' => bluedartLegacyFormatBusinessError($parsed['values'] ?? [])
                 ?? ('Blue Dart legacy SOAP HTTP ' . $httpCode . ' (' . $attempt['label'] . ')'),
             'http_code' => $httpCode,
-            'raw' => (string) $raw,
+            'raw' => $rawString,
             'data' => $parsed,
+            'curl_error' => $curlError,
+            'curl_errno' => $curlErrno,
+            'bytes_received' => strlen($rawString),
         ], $lastMeta);
     }
 
