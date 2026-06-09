@@ -261,10 +261,14 @@ class BlueDartService
                     continue;
                 }
 
-                $token = $this->extractJwtToken($resp['data'] ?? null, (string) ($resp['raw'] ?? ''));
+                $rawBody = (string) ($resp['raw'] ?? '');
+                $token = $this->extractJwtToken($resp['data'] ?? null, $rawBody);
                 if ($token === '') {
-                    $lastError = 'Blue Dart token API did not return a JWT'
-                        . ($label !== '' ? ' (auth: ' . $label . ')' : '') . '.';
+                    $hint = $this->summarizeRawResponse($rawBody);
+                    $lastError = 'Blue Dart token API did not return a valid JWT'
+                        . ($label !== '' ? ' (auth: ' . $label . ')' : '')
+                        . ($hint !== '' ? ': ' . $hint : '')
+                        . '. login_id+licence_key may not work — use DHL Developer Portal consumer_key/secret.';
                     continue;
                 }
 
@@ -728,7 +732,7 @@ class BlueDartService
         $decoded = json_decode($raw, true);
         $ok = $httpCode >= 200 && $httpCode < 300;
         if (!$ok) {
-            $message = $this->extractErrorMessage($decoded, $raw);
+            $message = $this->formatApiError($this->extractErrorMessage($decoded, $raw), $httpCode, $raw);
             return [
                 'success' => false,
                 'error' => $message,
@@ -741,7 +745,7 @@ class BlueDartService
         if (is_array($decoded) && $this->responseIndicatesError($decoded)) {
             return [
                 'success' => false,
-                'error' => $this->extractErrorMessage($decoded, $raw),
+                'error' => $this->formatApiError($this->extractErrorMessage($decoded, $raw), $httpCode, $raw),
                 'http_code' => $httpCode,
                 'data' => $decoded,
                 'raw' => $raw,
@@ -771,14 +775,108 @@ class BlueDartService
                     return implode('; ', $msgs);
                 }
             }
-            foreach (['message', 'error', 'title', 'Message', 'Error'] as $key) {
+
+            $statusMsg = $this->extractStatusInformation($decoded);
+            if ($statusMsg !== '') {
+                return $statusMsg;
+            }
+
+            foreach (['message', 'error', 'title', 'Message', 'Error', 'ErrorMessage', 'remark', 'rmk'] as $key) {
                 if (!empty($decoded[$key]) && is_string($decoded[$key])) {
                     return $decoded[$key];
                 }
             }
         }
 
-        return $raw !== '' ? $raw : 'Blue Dart API error.';
+        $snippet = $this->summarizeRawResponse($raw);
+        return $snippet !== '' ? $snippet : 'Blue Dart API error.';
+    }
+
+    private function formatApiError(string $message, int $httpCode, string $raw): string
+    {
+        $message = trim($message);
+        if ($message === '' || $message === 'Blue Dart API error.') {
+            if ($httpCode === 401) {
+                $message = 'Blue Dart API unauthorized — JWT invalid or expired';
+            } elseif ($httpCode === 403) {
+                $message = 'Blue Dart API forbidden';
+            } elseif ($httpCode > 0) {
+                $message = 'Blue Dart API HTTP ' . $httpCode;
+            } else {
+                $message = 'Blue Dart API error';
+            }
+        }
+
+        if ($httpCode > 0 && !preg_match('/\b' . preg_quote((string) $httpCode, '/') . '\b/', $message)) {
+            $message .= ' (HTTP ' . $httpCode . ')';
+        }
+
+        $snippet = $this->summarizeRawResponse($raw);
+        if ($snippet !== '' && strlen($snippet) < 280 && !str_contains($message, $snippet)) {
+            $message .= ': ' . $snippet;
+        }
+
+        return $message;
+    }
+
+    private function summarizeRawResponse(string $raw): string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return '';
+        }
+
+        if (is_array(json_decode($raw, true))) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $msg = $this->extractErrorMessage($decoded, '');
+                if ($msg !== '' && $msg !== 'Blue Dart API error.') {
+                    return $msg;
+                }
+            }
+        }
+
+        $plain = trim(preg_replace('/\s+/', ' ', strip_tags($raw)));
+        if ($plain === '') {
+            return '';
+        }
+
+        return strlen($plain) > 240 ? (substr($plain, 0, 237) . '...') : $plain;
+    }
+
+    /** @param array<string, mixed> $decoded */
+    private function extractStatusInformation(array $decoded): string
+    {
+        foreach (['Status', 'status'] as $statusKey) {
+            if (empty($decoded[$statusKey]) || !is_array($decoded[$statusKey])) {
+                continue;
+            }
+            $msgs = [];
+            foreach ($decoded[$statusKey] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $info = trim((string) ($row['StatusInformation'] ?? $row['statusInformation'] ?? $row['Message'] ?? ''));
+                if ($info !== '') {
+                    $msgs[] = $info;
+                }
+            }
+            if ($msgs !== []) {
+                return implode('; ', $msgs);
+            }
+        }
+
+        foreach ($decoded as $value) {
+            if (!is_array($value)) {
+                continue;
+            }
+            $nested = $this->extractStatusInformation($value);
+            if ($nested !== '') {
+                return $nested;
+            }
+        }
+
+        return '';
     }
 
     /** @param array<string, mixed> $decoded */
@@ -836,14 +934,8 @@ class BlueDartService
         if ($value === '') {
             return false;
         }
-        if (str_starts_with($value, 'eyJ') && substr_count($value, '.') >= 2) {
-            return true;
-        }
-        // Reject echo responses from token endpoint when credentials are wrong.
-        if (str_contains($value, 'ClientID') || str_contains($value, 'clientSecret')) {
-            return false;
-        }
-        return strlen($value) > 40;
+        // Only accept standard JWT shape (three base64url segments). Reject long error/HTML bodies.
+        return str_starts_with($value, 'eyJ') && substr_count($value, '.') >= 2;
     }
 
     /**
@@ -871,6 +963,10 @@ class BlueDartService
             $resp = $this->gatewayPost($path, $body);
             $last = $resp;
             if (empty($resp['success'])) {
+                $apiError = trim((string) ($resp['error'] ?? ''));
+                if ($apiError !== '') {
+                    $last['error'] = $apiError . ' [' . $path . ']';
+                }
                 continue;
             }
 

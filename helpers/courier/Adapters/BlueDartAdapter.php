@@ -568,11 +568,17 @@ class BlueDartAdapter implements CourierAdapterInterface
         }
 
         if (empty($createResp['success'])) {
+            $error = trim((string) ($createResp['error'] ?? 'Blue Dart waybill generation failed.'));
+            $httpCode = (int) ($createResp['http_code'] ?? 0);
+            if ($httpCode === 401 && !str_contains(strtolower($error), 'unauthorized')) {
+                $error .= ' Check JWT: DHL Developer Portal consumer_key/secret may be required (login_id+licence_key alone often fails).';
+            }
+
             return [
                 'success' => false,
-                'message' => (string) ($createResp['error'] ?? 'Blue Dart waybill generation failed.'),
+                'message' => $error,
                 'debug' => [
-                    'http_code' => $createResp['http_code'] ?? null,
+                    'http_code' => $httpCode > 0 ? $httpCode : null,
                     'response' => $createResp['data'] ?? null,
                     'product_code' => $productCodes['product_code'],
                     'sub_product_code' => $productCodes['sub_product_code'],
