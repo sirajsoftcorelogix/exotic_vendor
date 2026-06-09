@@ -1125,12 +1125,9 @@
 
         function mergeCourierOptions(shiprocketCouriers, delhiveryCouriers, bluedartCouriers) {
             const enrichedBlueDart = applyShiprocketPriceToBlueDart(bluedartCouriers, shiprocketCouriers);
-            const hasDirectBlueDart = enrichedBlueDart.length > 0;
             const merged = [];
+            // Keep all Shiprocket quotes (including Blue Dart via aggregator) alongside direct Blue Dart tiles.
             (shiprocketCouriers || []).forEach((courier) => {
-                if (hasDirectBlueDart && isBlueDartShiprocketQuote(courier)) {
-                    return;
-                }
                 merged.push(Object.assign({}, courier, {
                     rate_source: 'shiprocket',
                     partner_code: courier.partner_code || ''
