@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../shiprocket_service.php';
 require_once __DIR__ . '/../../helpers/dispatch_delivery_dates.php';
 require_once __DIR__ . '/../../helpers/dispatch_courier_identity.php';
+require_once __DIR__ . '/../../helpers/exotic_india_shipment_api.php';
 
 class Dispatch {
     private $db;
@@ -30,6 +31,27 @@ class Dispatch {
     {
         return $this->shiprocket()->apiUrl($path);
     }
+
+    /**
+     * @param array<string, mixed> $beforeDispatch row before update (empty on create)
+     */
+    private function maybeLogExoticIndiaShipment(int $dispatchId, array $beforeDispatch = []): void
+    {
+        if ($dispatchId <= 0) {
+            return;
+        }
+
+        $result = exotic_india_log_dispatch_shipment($this->db, $dispatchId, $beforeDispatch);
+        if (empty($result['success']) && empty($result['skipped'])) {
+            error_log(
+                'Exotic India shipment-add failed for dispatch '
+                . $dispatchId
+                . ': '
+                . (string) ($result['message'] ?? 'unknown error')
+            );
+        }
+    }
+
     public function checkDispatchExists($invoiceId, $boxNo) {
         $sql = "SELECT id FROM vp_dispatch_details WHERE invoice_id = ? AND box_no = ?";
         $stmt = $this->db->prepare($sql);
@@ -128,7 +150,9 @@ class Dispatch {
         );
 
         if ($stmt->execute()) {
-            return $this->db->insert_id;
+            $dispatchId = (int) $this->db->insert_id;
+            $this->maybeLogExoticIndiaShipment($dispatchId);
+            return $dispatchId;
         }
         //error return
         if ($stmt->error) {
@@ -386,6 +410,15 @@ class Dispatch {
             return false;
         }
 
+        $beforeDispatch = [];
+        $lookup = $this->db->prepare('SELECT * FROM vp_dispatch_details WHERE shiprocket_shipment_id = ? LIMIT 1');
+        if ($lookup) {
+            $lookup->bind_param('i', $shipment_id);
+            $lookup->execute();
+            $beforeDispatch = $lookup->get_result()?->fetch_assoc() ?: [];
+            $lookup->close();
+        }
+
         $types .= 'i';
         $values[] = $shipment_id;
         $sql = 'UPDATE vp_dispatch_details SET ' . implode(', ', $setParts) . ' WHERE shiprocket_shipment_id = ?';
@@ -397,6 +430,10 @@ class Dispatch {
         $stmt->bind_param($types, ...$values);
         $result = $stmt->execute();
         $stmt->close();
+
+        if ($result && !empty($beforeDispatch['id'])) {
+            $this->maybeLogExoticIndiaShipment((int) $beforeDispatch['id'], $beforeDispatch);
+        }
 
         return $result;
     }
@@ -480,6 +517,10 @@ class Dispatch {
         $stmt->bind_param($types, ...$values);
         $result = $stmt->execute();
         $stmt->close();
+        if ($result) {
+            $this->maybeLogExoticIndiaShipment($dispatchId, is_array($record) ? $record : []);
+        }
+
         return $result;
     }
       
