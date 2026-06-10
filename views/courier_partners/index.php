@@ -98,7 +98,7 @@ $partnersPayloadJson = '';
             <input type="hidden" name="action" value="list">
 
             <div class="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-end">
-                <div class="w-full sm:max-w-[11rem] xl:w-44 shrink-0">
+                <div class="w-full sm:max-w-[16.5rem] xl:w-[16.5rem] shrink-0">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Keyword</label>
                     <input type="text" name="search_text" value="<?php echo htmlspecialchars($search); ?>" placeholder="Name or code"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
