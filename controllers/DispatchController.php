@@ -425,10 +425,10 @@ class DispatchController {
                         'courier_name' => $courierName,
                         'shiprocket_order_id' => null,
                         'shiprocket_shipment_id' => null,
-                        'shiprocket_tracking_url' => null,
                         'awb_code' => $awbCode !== '' ? $awbCode : null,
                         'shipment_status' => 'created',
                         'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                        'tracking_url' => ($t = (string) ($createResult['tracking_url'] ?? '')) !== '' ? $t : null,
                         'groupname' => $box['groupname'] ?? null,
                         'created_by' => $_SESSION['user']['id'] ?? 0,
                         'created_at' => date('Y-m-d H:i:s'),
@@ -569,10 +569,10 @@ class DispatchController {
                     'courier_name' => (string) ($data['courier_name'][$boxNo] ?? $data['delivery_partner']),
                     'shiprocket_order_id' => $shiprocketResponse['json']['order_id'] ?? null,
                     'shiprocket_shipment_id' => $shiprocketResponse['json']['shipment_id'] ?? null,
-                    'shiprocket_tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,                    
                     'awb_code' => $shiprocketResponse['json']['awb_code'] ?? null,
                     'shipment_status' => $shiprocketResponse['json']['status'] ?? null,
                     'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
+                    'tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
                     'groupname' => $box['groupname'] ?? null,
                     'created_by' => $_SESSION['user']['id'] ?? 0,
                     'created_at' => date('Y-m-d H:i:s'),
@@ -1386,8 +1386,6 @@ class DispatchController {
                         'label_url' => null,
                         'etd' => null,
                         'edd' => null,
-                        'shiprocket_tracking_url' => null
-
                     ], $record['id']);
                     //create new dispatch record with same details but new shipment info
                     // $dispatchData = [
@@ -1408,7 +1406,6 @@ class DispatchController {
                     //     'courier_name' => $record['courier_name'] ?? null,
                     //     'shiprocket_order_id' => $reDispatchResult['json']['order_id'] ?? null,
                     //     'shiprocket_shipment_id' => $reDispatchResult['json']['shipment_id'] ?? null,
-                    //     'shiprocket_tracking_url' => $reDispatchResult['json']['tracking_url'] ?? null,                    
                     //     'awb_code' => $reDispatchResult['json']['awb_code'] ?? null,
                     //     'shipment_status' => $reDispatchResult['json']['status'] ?? null,
                     //     'label_url' => $reDispatchResult['json']['label_url'] ?? null,
@@ -1829,7 +1826,6 @@ class DispatchController {
                         'courier_name' => !empty($boxData['courier_name']) ? $boxData['courier_name'] : null,
                         'shiprocket_order_id' => null,
                         'shiprocket_shipment_id' => null,
-                        'shiprocket_tracking_url' => null,
                         'awb_code' => null,
                         'shipment_status' => 'pending',
                         'label_url' => null,
@@ -2126,10 +2122,10 @@ class DispatchController {
                             $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
                                 'shiprocket_order_id' => $createResult['order_id'] ?? null,
                                 'shiprocket_shipment_id' => null,
-                                'shiprocket_tracking_url' => $trackingUrl,
                                 'awb_code' => $awbCode !== '' ? $awbCode : null,
                                 'shipment_status' => 'created',
                                 'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                                'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
                                 'courier_name' => (string) ($boxData['courier_name'] ?? 'Delhivery'),
                                 'updated_at' => date('Y-m-d H:i:s'),
                             ], [$createResult, $boxData], [
@@ -2237,10 +2233,10 @@ class DispatchController {
                             $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
                                 'shiprocket_order_id' => $createResult['order_id'] ?? null,
                                 'shiprocket_shipment_id' => null,
-                                'shiprocket_tracking_url' => $trackingUrl,
                                 'awb_code' => $awbCode !== '' ? $awbCode : null,
                                 'shipment_status' => 'created',
                                 'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                                'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
                                 'courier_name' => (string) ($boxData['courier_name'] ?? 'Blue Dart'),
                                 'updated_at' => date('Y-m-d H:i:s'),
                             ], [$createResult, $boxData], [
@@ -2335,10 +2331,10 @@ class DispatchController {
                         $updateData = $this->enrichDispatchRecord([
                             'shiprocket_order_id' => $shiprocketResponse['json']['order_id'] ?? null,
                             'shiprocket_shipment_id' => $shiprocketResponse['json']['shipment_id'] ?? null,
-                            'shiprocket_tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
                             'awb_code' => $shiprocketResponse['json']['awb_code'] ?? null,
                             'shipment_status' => $shiprocketResponse['json']['status'] ?? 'NEW',
                             'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
+                            'tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
                             'courier_name' => (string) ($boxData['courier_name'] ?? ''),
                             'updated_at' => date('Y-m-d H:i:s'),
                         ], [
@@ -2931,10 +2927,10 @@ class DispatchController {
             $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
                 'shiprocket_order_id' => $createResult['order_id'] ?? null,
                 'shiprocket_shipment_id' => null,
-                'shiprocket_tracking_url' => $trackingUrl,
                 'awb_code' => $awbCode !== '' ? $awbCode : null,
                 'shipment_status' => 'created',
                 'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
                 'courier_name' => (string) ($dispatchRecord['courier_name'] ?? 'Delhivery'),
                 'updated_at' => date('Y-m-d H:i:s'),
             ], [$createResult, $boxData, $dispatchRecord], [
@@ -3039,10 +3035,10 @@ class DispatchController {
             $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
                 'shiprocket_order_id' => $createResult['order_id'] ?? null,
                 'shiprocket_shipment_id' => null,
-                'shiprocket_tracking_url' => $trackingUrl,
                 'awb_code' => $awbCode !== '' ? $awbCode : null,
                 'shipment_status' => 'created',
                 'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
                 'courier_name' => (string) ($dispatchRecord['courier_name'] ?? 'Blue Dart'),
                 'updated_at' => date('Y-m-d H:i:s'),
             ], [$createResult, $boxData, $dispatchRecord], [
@@ -3123,10 +3119,10 @@ class DispatchController {
         $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
             'shiprocket_order_id' => $shiprocketResponse['json']['order_id'] ?? null,
             'shiprocket_shipment_id' => $shipmentId,
-            'shiprocket_tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
             'awb_code' => $shiprocketResponse['json']['awb_code'] ?? null,
             'shipment_status' => $shiprocketResponse['json']['status'] ?? 'NEW',
             'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
+            'tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
             'courier_name' => (string) ($dispatchRecord['courier_name'] ?? ''),
             'updated_at' => date('Y-m-d H:i:s'),
         ], [

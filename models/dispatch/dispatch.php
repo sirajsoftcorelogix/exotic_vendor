@@ -44,7 +44,7 @@ class Dispatch {
     }   
     public function createDispatch($data) {
        
-        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, shiprocket_tracking_url, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, courier_company_id, shipper_id, courier_partner_id, awb_code, shipment_status, label_url, etd, edd, groupname, box_size, created_by, created_at, pickup_location, batch_no) 
+        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, courier_company_id, shipper_id, courier_partner_id, awb_code, shipment_status, label_url, tracking_url, etd, edd, groupname, box_size, created_by, created_at, pickup_location, batch_no) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
@@ -61,7 +61,6 @@ class Dispatch {
         $order_number = $data['order_number'] ?? null;
         $shiprocket_order_id = $data['shiprocket_order_id'] ?? null;
         $shiprocket_shipment_id = $data['shiprocket_shipment_id'] ?? null;
-        $shiprocket_tracking_url = $data['shiprocket_tracking_url'] ?? null;
         $box_items = $boxItemsJson;
         $pickup_location = $data['pickup_location'] ?? null;
         $length = (float)($data['length'] ?? 0);
@@ -85,6 +84,7 @@ class Dispatch {
         $awb_code = $data['awb_code'] ?? null;
         $shipment_status = $data['shipment_status'] ?? null;
         $label_url = $data['label_url'] ?? null;
+        $tracking_url = $data['tracking_url'] ?? null;
         $deliveryDates = extractDispatchDeliveryDates($data, $dispatch_date);
         $etd = $deliveryDates['etd'];
         $edd = $deliveryDates['edd'];
@@ -94,13 +94,12 @@ class Dispatch {
         $created_at = $data['created_at'];
 
         $stmt->bind_param(
-            'iisssssdddddddssiiisssssssisss',
+            'iissssdddddddssiiisssssssssisss',
             $invoice_id,
             $box_no,
             $order_number,
             $shiprocket_order_id,
             $shiprocket_shipment_id,
-            $shiprocket_tracking_url,
             $box_items,
             $length,
             $width,
@@ -117,6 +116,7 @@ class Dispatch {
             $awb_code,
             $shipment_status,
             $label_url,
+            $tracking_url,
             $etd,
             $edd,
             $groupname,
@@ -416,7 +416,7 @@ class Dispatch {
         $argc = func_num_args();
 
         if ($argc >= 3 && $tracking_url !== null && $tracking_url !== '') {
-            $fields['shiprocket_tracking_url'] = $tracking_url;
+            $fields['tracking_url'] = $tracking_url;
         }
         if ($argc >= 4 && $etd !== null && $etd !== '') {
             $normalizedEtd = normalizeDispatchDeliveryDatetime($etd);
