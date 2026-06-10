@@ -45,21 +45,21 @@
     </div>
     
 
-    <div class="border-t border-gray-200 px-4 py-3 flex flex-wrap justify-end items-center gap-3 bg-white">
-        <div id="bluedartExcelExportBar" class="hidden mr-auto flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            <div class="flex flex-col gap-0.5 text-left">
-                <span class="text-xs font-semibold text-sky-900">Blue Dart items</span>
-                <span class="text-[11px] text-gray-500">Export to Excel for manual booking on the Blue Dart dashboard (Air and Surface sheets).</span>
-            </div>
-            <button type="button" id="downloadBlueDartExcelBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2 shrink-0" title="Export Blue Dart boxes to Excel">
+    <div class="border-t border-gray-200 px-4 py-3 flex flex-wrap justify-between items-center gap-3 bg-white">
+        <div id="bluedartExcelExportHint" class="hidden min-w-0 flex-1 flex flex-col gap-0.5 text-left pr-3">
+            <span class="text-xs font-semibold text-sky-900">Blue Dart items</span>
+            <span class="text-[11px] text-gray-500">Export to Excel for manual booking on the Blue Dart dashboard (Air and Surface sheets).</span>
+        </div>
+        <div id="bulkDispatchPrimaryActionSlot" class="shrink-0 ml-auto">
+            <button id="bulkCreateInvoiceDispatchBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2">
+                <span>🚚</span>
+                <span>Invoice &amp; Dispatch</span>
+            </button>
+            <button type="button" id="downloadBlueDartExcelBtn" class="hidden bg-sky-600 hover:bg-sky-700 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2" title="Export Blue Dart boxes to Excel">
                 <span>📥</span>
                 <span>Export to Excel</span>
             </button>
         </div>
-        <button id="bulkCreateInvoiceDispatchBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2">
-            <span>🚚</span>
-            <span>Invoice &amp; Dispatch</span>
-        </button>
     </div>
 </div>
 
@@ -2315,24 +2315,25 @@
     }
 
     function updateBlueDartExcelExportButton() {
-        const bar = document.getElementById('bluedartExcelExportBar');
-        const btn = document.getElementById('downloadBlueDartExcelBtn');
+        const hint = document.getElementById('bluedartExcelExportHint');
+        const exportBtn = document.getElementById('downloadBlueDartExcelBtn');
         const invoiceDispatchBtn = document.getElementById('bulkCreateInvoiceDispatchBtn');
-        if (!bar || !btn) {
+        if (!exportBtn || !invoiceDispatchBtn) {
             return;
         }
 
         const ready = hasBlueDartExportSelection();
-        const exporting = btn.dataset.exporting === '1';
+        const exporting = exportBtn.dataset.exporting === '1';
         const showBlueDartExport = ready || exporting;
 
-        bar.classList.toggle('hidden', !showBlueDartExport);
-        if (invoiceDispatchBtn) {
-            invoiceDispatchBtn.classList.toggle('hidden', showBlueDartExport);
+        exportBtn.classList.toggle('hidden', !showBlueDartExport);
+        invoiceDispatchBtn.classList.toggle('hidden', showBlueDartExport);
+        if (hint) {
+            hint.classList.toggle('hidden', !showBlueDartExport);
         }
 
         if (!exporting) {
-            btn.disabled = false;
+            exportBtn.disabled = false;
         }
     }
 
