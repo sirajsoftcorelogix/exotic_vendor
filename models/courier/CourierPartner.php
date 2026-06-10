@@ -166,7 +166,7 @@ class CourierPartner
         if (!$stmt) {
             return ['success' => false, 'message' => 'Could not prepare update statement.'];
         }
-        $stmt->bind_param('sssiiiisi', $code, $name, $shipperIdBind, $supportsDomestic, $supportsInternational, $isActive, $notes, $id);
+        $stmt->bind_param('sssiiisi', $code, $name, $shipperIdBind, $supportsDomestic, $supportsInternational, $isActive, $notes, $id);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Courier partner updated successfully.'];
         }
