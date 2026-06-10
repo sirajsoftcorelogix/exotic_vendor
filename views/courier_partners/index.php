@@ -97,24 +97,24 @@ $partnersPayloadJson = '';
             <input type="hidden" name="page" value="courier_partners">
             <input type="hidden" name="action" value="list">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-5 gap-y-4">
-                <div class="sm:col-span-2">
+            <div class="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-end">
+                <div class="w-full sm:max-w-[11rem] xl:w-44 shrink-0">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Keyword</label>
-                    <input type="text" name="search_text" value="<?php echo htmlspecialchars($search); ?>" placeholder="Partner name or code"
+                    <input type="text" name="search_text" value="<?php echo htmlspecialchars($search); ?>" placeholder="Name or code"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                 </div>
-                <div>
+                <div class="w-full sm:max-w-[10.5rem] xl:w-40 shrink-0">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Shipper ID</label>
                     <select name="shipper_id_filter" id="cp_shipper_id_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                         <option value="">All</option>
                         <option value="missing" <?php echo $shipperIdFilter === 'missing' ? 'selected' : ''; ?>>No Shipper ID</option>
                         <option value="specific" <?php echo $shipperIdFilter === 'specific' ? 'selected' : ''; ?>>Specific ID</option>
                     </select>
-                    <input type="number" name="shipper_id_exact" id="cp_shipper_id_exact" min="1" step="1" placeholder="Enter shipper ID"
+                    <input type="number" name="shipper_id_exact" id="cp_shipper_id_exact" min="1" step="1" placeholder="ID"
                         value="<?php echo htmlspecialchars((string) $shipperIdExact); ?>"
-                        class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition <?php echo $shipperIdFilter === 'specific' ? '' : 'hidden'; ?>">
+                        class="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition <?php echo $shipperIdFilter === 'specific' ? '' : 'hidden'; ?>">
                 </div>
-                <div>
+                <div class="w-full sm:max-w-[9.5rem] xl:w-36 shrink-0">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Service area</label>
                     <select name="service_area_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                         <option value="">All</option>
@@ -123,7 +123,7 @@ $partnersPayloadJson = '';
                         <option value="both" <?php echo $serviceAreaFilter === 'both' ? 'selected' : ''; ?>>Both</option>
                     </select>
                 </div>
-                <div>
+                <div class="w-full sm:max-w-[7.5rem] xl:w-28 shrink-0">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
                     <select name="status_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                         <option value="">All</option>
@@ -131,10 +131,7 @@ $partnersPayloadJson = '';
                         <option value="0" <?php echo $statusFilter === '0' ? 'selected' : ''; ?>>Inactive</option>
                     </select>
                 </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4 mt-4">
-                <div>
+                <div class="w-full sm:max-w-[7.5rem] xl:w-28 shrink-0">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Configured</label>
                     <select name="accounts_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                         <option value="">All</option>
@@ -142,9 +139,7 @@ $partnersPayloadJson = '';
                         <option value="0" <?php echo $accountsFilter === '0' ? 'selected' : ''; ?>>No</option>
                     </select>
                 </div>
-            </div>
-
-            <div class="mt-5 flex flex-wrap items-center gap-3">
+                <div class="flex flex-wrap items-center gap-3 xl:ml-auto xl:pb-0.5">
                 <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
                     <i class="fas fa-search text-xs opacity-90" aria-hidden="true"></i>
                     Apply filters
@@ -152,6 +147,7 @@ $partnersPayloadJson = '';
                 <a href="?page=courier_partners&action=list" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition">
                     Reset
                 </a>
+                </div>
             </div>
         </form>
     </details>
