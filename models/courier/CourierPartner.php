@@ -26,6 +26,7 @@ class CourierPartner
             INDEX idx_active (is_active)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
         $this->conn->query($sql);
+        @$this->conn->query('ALTER TABLE courier_partners ADD COLUMN shipper_id INT UNSIGNED NULL DEFAULT NULL AFTER partner_name');
     }
 
     public function getAll(int $page = 1, int $limit = 20, string $search = '', string $status = ''): array
@@ -68,7 +69,7 @@ class CourierPartner
             $countStmt->close();
         }
 
-        $listSql = "SELECT id, partner_code, partner_name, supports_domestic, supports_international, is_active, notes, created_at, updated_at
+        $listSql = "SELECT id, partner_code, partner_name, shipper_id, supports_domestic, supports_international, is_active, notes, created_at, updated_at
                     FROM courier_partners" . $whereSql . " ORDER BY partner_name ASC LIMIT ? OFFSET ?";
         $listStmt = $this->conn->prepare($listSql);
         $rows = [];
@@ -109,15 +110,17 @@ class CourierPartner
         $isActive = isset($data['is_active']) ? (int)$data['is_active'] : 1;
         $isActive = $isActive === 1 ? 1 : 0;
         $notes = trim((string)($data['notes'] ?? ''));
+        $sid = (int) preg_replace('/\D/', '', (string) ($data['shipper_id'] ?? ''));
+        $shipperIdBind = $sid > 0 ? (string) $sid : null;
 
         $sql = "INSERT INTO courier_partners
-                (partner_code, partner_name, supports_domestic, supports_international, is_active, notes)
-                VALUES (?, ?, ?, ?, ?, ?)";
+                (partner_code, partner_name, shipper_id, supports_domestic, supports_international, is_active, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
             return ['success' => false, 'message' => 'Could not prepare insert statement.'];
         }
-        $stmt->bind_param('ssiiis', $code, $name, $supportsDomestic, $supportsInternational, $isActive, $notes);
+        $stmt->bind_param('sssiiis', $code, $name, $shipperIdBind, $supportsDomestic, $supportsInternational, $isActive, $notes);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Courier partner added successfully.'];
         }
@@ -140,15 +143,17 @@ class CourierPartner
         $isActive = isset($data['is_active']) ? (int)$data['is_active'] : 1;
         $isActive = $isActive === 1 ? 1 : 0;
         $notes = trim((string)($data['notes'] ?? ''));
+        $sid = (int) preg_replace('/\D/', '', (string) ($data['shipper_id'] ?? ''));
+        $shipperIdBind = $sid > 0 ? (string) $sid : null;
 
         $sql = "UPDATE courier_partners
-                SET partner_code = ?, partner_name = ?, supports_domestic = ?, supports_international = ?, is_active = ?, notes = ?, updated_at = NOW()
+                SET partner_code = ?, partner_name = ?, shipper_id = ?, supports_domestic = ?, supports_international = ?, is_active = ?, notes = ?, updated_at = NOW()
                 WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
             return ['success' => false, 'message' => 'Could not prepare update statement.'];
         }
-        $stmt->bind_param('ssiiisi', $code, $name, $supportsDomestic, $supportsInternational, $isActive, $notes, $id);
+        $stmt->bind_param('sssiiiisi', $code, $name, $shipperIdBind, $supportsDomestic, $supportsInternational, $isActive, $notes, $id);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Courier partner updated successfully.'];
         }
@@ -182,6 +187,77 @@ class CourierPartner
             }
         }
         return $rows;
+    }
+
+    /** @param list<array<string, mixed>> $apiRows */
+    public function syncShippers(array $apiRows): array
+    {
+        $partners = [];
+        $res = $this->conn->query('SELECT id, partner_code, partner_name, shipper_id FROM courier_partners');
+        if ($res) {
+            while ($r = $res->fetch_assoc()) {
+                $partners[] = $r;
+            }
+        }
+
+        $norm = static fn(string $s): string => preg_replace('/[^a-z0-9]/', '', strtolower($s)) ?? '';
+        $updated = $added = 0;
+
+        foreach ($apiRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sid = (int) ($row['shipper_id'] ?? $row['id'] ?? 0);
+            $name = trim((string) ($row['courier_name'] ?? $row['name'] ?? ''));
+            if ($sid <= 0 || $name === '') {
+                continue;
+            }
+
+            $match = null;
+            $key = $norm($name);
+            foreach ($partners as $p) {
+                if ((int) ($p['shipper_id'] ?? 0) === $sid
+                    || $norm((string) $p['partner_name']) === $key
+                    || $norm((string) $p['partner_code']) === $key) {
+                    $match = $p;
+                    break;
+                }
+            }
+
+            if ($match) {
+                if ((int) ($match['shipper_id'] ?? 0) !== $sid) {
+                    $pid = (int) $match['id'];
+                    $stmt = $this->conn->prepare('UPDATE courier_partners SET shipper_id = ? WHERE id = ?');
+                    $stmt->bind_param('ii', $sid, $pid);
+                    if ($stmt->execute()) {
+                        $updated++;
+                    }
+                }
+                continue;
+            }
+
+            $code = strtoupper(substr(preg_replace('/[^A-Z0-9]/', '', strtoupper($name)) ?? '', 0, 50));
+            if ($code === '') {
+                $code = 'SHIPPER' . $sid;
+            }
+            $insert = $this->addRecord([
+                'partner_code' => $code,
+                'partner_name' => $name,
+                'shipper_id' => $sid,
+                'supports_domestic' => 1,
+                'supports_international' => 1,
+                'is_active' => 1,
+                'notes' => 'From shipper-fetch API.',
+            ]);
+            if (!empty($insert['success'])) {
+                $added++;
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => "Shipper sync done: {$updated} updated, {$added} added.",
+        ];
     }
 }
 

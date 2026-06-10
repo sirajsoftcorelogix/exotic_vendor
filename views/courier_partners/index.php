@@ -36,6 +36,12 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                 </p>
             </div>
             <div class="flex flex-col sm:flex-row shrink-0 lg:pl-4 lg:self-center gap-2">
+                <form method="post" action="?page=courier_partners&amp;action=syncShippers" class="inline">
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition whitespace-nowrap">
+                        <i class="fas fa-sync-alt text-xs" aria-hidden="true"></i>
+                        Sync shippers
+                    </button>
+                </form>
                 <button type="button" id="cpBtnOpenAdd"
                     class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
                     <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
@@ -121,6 +127,7 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                     <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <th class="px-5 py-3.5 whitespace-nowrap">Code</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Partner name</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Shipper ID</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Domestic</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">International</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
@@ -129,7 +136,7 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <?php if (!$rows): ?>
-                        <tr><td colspan="6" class="px-5 py-16 text-center">
+                        <tr><td colspan="7" class="px-5 py-16 text-center">
                             <div class="mx-auto flex max-w-sm flex-col items-center">
                                 <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                     <i class="fas fa-truck" aria-hidden="true"></i>
@@ -142,10 +149,12 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                     <?php else: ?>
                         <?php foreach ($rows as $r): ?>
                             <?php
+                                $shipperId = (int) ($r['shipper_id'] ?? 0);
                                 $payload = [
                                     'id' => (int)$r['id'],
                                     'partner_code' => (string)$r['partner_code'],
                                     'partner_name' => (string)$r['partner_name'],
+                                    'shipper_id' => $shipperId > 0 ? $shipperId : '',
                                     'supports_domestic' => (int)$r['supports_domestic'],
                                     'supports_international' => (int)$r['supports_international'],
                                     'is_active' => (int)$r['is_active'],
@@ -157,6 +166,7 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                             <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors align-top">
                                 <td class="px-5 py-4 font-semibold text-gray-800"><?php echo htmlspecialchars((string)$r['partner_code']); ?></td>
                                 <td class="px-5 py-4 text-sm text-gray-800"><?php echo htmlspecialchars((string)$r['partner_name']); ?></td>
+                                <td class="px-5 py-4 text-sm tabular-nums text-gray-700"><?php echo $shipperId > 0 ? (int) $shipperId : '—'; ?></td>
                                 <td class="px-5 py-4">
                                     <?php if ((int)$r['supports_domestic'] === 1): ?>
                                         <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 shadow-sm ring-1 ring-inset ring-emerald-600/25">Yes</span>
@@ -277,6 +287,11 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                             placeholder="e.g. DHL Express India"
                             class="h-11 w-full rounded-xl border border-gray-300 px-3.5 text-sm text-gray-900 shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition">
                     </div>
+                    <div class="sm:col-span-1">
+                        <label for="cp_field_shipper_id" class="block text-xs font-semibold text-gray-600 mb-1.5">Shipper ID</label>
+                        <input type="number" name="shipper_id" id="cp_field_shipper_id" min="1" step="1"
+                            class="h-11 w-full rounded-xl border border-gray-300 px-3.5 text-sm text-gray-900 shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition">
+                    </div>
                 </div>
 
                 <div>
@@ -372,6 +387,7 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
         document.getElementById('cp_field_domestic').checked = true;
         document.getElementById('cp_field_intl').checked = true;
         document.getElementById('cp_field_status').value = '1';
+        document.getElementById('cp_field_shipper_id').value = '';
         syncMarketCardStyles();
     }
 
@@ -379,6 +395,7 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
         document.getElementById('cp_field_id').value = p.id || '';
         document.getElementById('cp_field_code').value = p.partner_code || '';
         document.getElementById('cp_field_name').value = p.partner_name || '';
+        document.getElementById('cp_field_shipper_id').value = p.shipper_id ? String(p.shipper_id) : '';
         document.getElementById('cp_field_domestic').checked = !!p.supports_domestic;
         document.getElementById('cp_field_intl').checked = !!p.supports_international;
         document.getElementById('cp_field_status').value = String(p.is_active === 1 ? 1 : 0);
