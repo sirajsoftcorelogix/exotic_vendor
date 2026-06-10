@@ -212,10 +212,16 @@ class CourierPartner
                 continue;
             }
 
+            $code = strtoupper(substr(preg_replace('/[^A-Z0-9]/', '', strtoupper($name)) ?? '', 0, 50));
+            if ($code === '') {
+                $code = 'SHIPPER' . $sid;
+            }
+
             $match = null;
             $key = $norm($name);
             foreach ($partners as $p) {
                 if ((int) ($p['shipper_id'] ?? 0) === $sid
+                    || strcasecmp((string) $p['partner_code'], $code) === 0
                     || $norm((string) $p['partner_name']) === $key
                     || $norm((string) $p['partner_code']) === $key) {
                     $match = $p;
@@ -230,26 +236,38 @@ class CourierPartner
                     $stmt->bind_param('ii', $sid, $pid);
                     if ($stmt->execute()) {
                         $updated++;
+                        $match['shipper_id'] = $sid;
                     }
                 }
                 continue;
             }
 
-            $code = strtoupper(substr(preg_replace('/[^A-Z0-9]/', '', strtoupper($name)) ?? '', 0, 50));
-            if ($code === '') {
-                $code = 'SHIPPER' . $sid;
+            try {
+                $insert = $this->addRecord([
+                    'partner_code' => $code,
+                    'partner_name' => $name,
+                    'shipper_id' => $sid,
+                    'supports_domestic' => 1,
+                    'supports_international' => 1,
+                    'is_active' => 1,
+                    'notes' => 'From shipper-fetch API.',
+                ]);
+            } catch (\mysqli_sql_exception $e) {
+                $insert = ['success' => false, 'message' => $e->getMessage()];
             }
-            $insert = $this->addRecord([
-                'partner_code' => $code,
-                'partner_name' => $name,
-                'shipper_id' => $sid,
-                'supports_domestic' => 1,
-                'supports_international' => 1,
-                'is_active' => 1,
-                'notes' => 'From shipper-fetch API.',
-            ]);
+
             if (!empty($insert['success'])) {
                 $added++;
+                $partners[] = ['id' => (int) $this->conn->insert_id, 'partner_code' => $code, 'partner_name' => $name, 'shipper_id' => $sid];
+                continue;
+            }
+
+            $stmt = $this->conn->prepare('UPDATE courier_partners SET shipper_id = ? WHERE partner_code = ?');
+            if ($stmt) {
+                $stmt->bind_param('is', $sid, $code);
+                if ($stmt->execute() && $stmt->affected_rows > 0) {
+                    $updated++;
+                }
             }
         }
 
