@@ -45,10 +45,14 @@
     </div>
     
 
-    <div class="border-t border-gray-200 px-4 py-3 flex justify-end gap-3 bg-white">
-        <button type="button" id="downloadBlueDartExcelBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2">
+    <div class="border-t border-gray-200 px-4 py-3 flex flex-wrap justify-end items-center gap-3 bg-white">
+        <div class="mr-auto flex flex-col gap-0.5 text-left">
+            <span class="text-xs font-semibold text-sky-900">Blue Dart items</span>
+            <span class="text-[11px] text-gray-500">Select Blue Dart on each box, then use Export to Excel for manual booking on the Blue Dart dashboard.</span>
+        </div>
+        <button type="button" id="downloadBlueDartExcelBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2" title="Export Blue Dart boxes to Excel (Air and Surface sheets)">
             <span>📥</span>
-            <span>Download Excel</span>
+            <span>Export to Excel</span>
         </button>
         <button id="bulkCreateInvoiceDispatchBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2">
             <span>🚚</span>
@@ -1430,6 +1434,18 @@
                     </div>`;
             }
 
+            const hasBlueDartOptions = mergedCouriers.some((c) => String(c.rate_source || '').toLowerCase() === 'bluedart'
+                || String(c.partner_code || '').toLowerCase() === 'bluedart');
+            if (hasBlueDartOptions) {
+                courierHtml += `
+                    <div class="px-3 pb-3">
+                        <div class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] text-sky-900">
+                            <span class="font-semibold">Blue Dart items:</span>
+                            After selecting Air or Surface, use <span class="font-semibold">Export to Excel</span> at the bottom of this page to download rows for the Blue Dart dashboard (separate sheets for Air and Surface).
+                        </div>
+                    </div>`;
+            }
+
             courierHtml += `</div>`;
 
             courierContainer.innerHTML = courierHtml;
@@ -2253,7 +2269,7 @@
 
             const invalidWeight = collected.boxes.find((box) => !box.weight || box.weight <= 0);
             if (invalidWeight) {
-                showAlert('Enter a valid weight for all Blue Dart boxes before downloading Excel.', 'warning');
+                showAlert('Enter a valid weight for all Blue Dart boxes before exporting to Excel.', 'warning');
                 return;
             }
 
@@ -2290,7 +2306,7 @@
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
-                showAlert('Blue Dart Excel downloaded (' + collected.boxes.length + ' box(es)).', 'success');
+                showAlert('Blue Dart items exported to Excel (' + collected.boxes.length + ' box(es)).', 'success');
             } catch (err) {
                 showAlert(err.message || 'Failed to download Excel.', 'error');
             } finally {
