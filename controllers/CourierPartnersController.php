@@ -62,5 +62,44 @@ class CourierPartnersController
         header('Location: ?page=courier_partners&action=list');
         exit;
     }
+
+    public function syncShippers()
+    {
+        is_login();
+        global $courierPartnerModel;
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ?page=courier_partners&action=list');
+            exit;
+        }
+
+        $ch = curl_init('https://www.exoticindia.com/api/order/shipper-fetch');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+                'x-adminapitest: 1',
+                'Accept: application/json',
+            ],
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false,
+        ]);
+        $raw = curl_exec($ch);
+        curl_close($ch);
+
+        $data = is_string($raw) ? json_decode($raw, true) : null;
+        $list = is_array($data['shippers'] ?? null) ? $data['shippers'] : (is_array($data) && array_is_list($data) ? $data : []);
+        if (!$list) {
+            $_SESSION['courier_partner_flash'] = [
+                'success' => false,
+                'message' => (string) ($data['error'] ?? $data['message'] ?? 'Could not fetch shippers.'),
+            ];
+            header('Location: ?page=courier_partners&action=list');
+            exit;
+        }
+
+        $_SESSION['courier_partner_flash'] = $courierPartnerModel->syncShippers($list);
+        header('Location: ?page=courier_partners&action=list');
+        exit;
+    }
 }
 

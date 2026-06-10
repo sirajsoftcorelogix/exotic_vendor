@@ -958,6 +958,9 @@ switch ($page) {
             case 'deleteRecord':
                 $controller->deleteRecord();
                 break;
+            case 'syncShippers':
+                $controller->syncShippers();
+                break;
             default:
                 $controller->index();
                 break;
