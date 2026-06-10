@@ -585,6 +585,8 @@ class DelhiveryAdapter implements CourierAdapterInterface
             'order_id' => $uniqueOrderId,
             'label_url' => $labelUrl,
             'tracking_url' => $trackingUrl,
+            'etd' => $request['courier_etd'] ?? $request['etd'] ?? null,
+            'edd' => $request['courier_edd'] ?? $request['edd'] ?? null,
             'status' => 'created',
             'metadata' => $this->buildDelhiveryShipmentMetadata(
                 $waybill,

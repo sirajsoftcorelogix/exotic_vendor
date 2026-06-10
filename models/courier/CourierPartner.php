@@ -224,6 +224,81 @@ class CourierPartner
         return $rows;
     }
 
+    /**
+     * Resolve courier_partners.id by partner_code (booking integration).
+     */
+    public function resolvePartnerIdByCode(?string $partnerCode): ?int
+    {
+        $code = strtoupper(str_replace(' ', '', trim((string) $partnerCode)));
+        if ($code === '') {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT id FROM courier_partners WHERE partner_code = ? AND is_active = 1 LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->bind_param('s', $code);
+        $stmt->execute();
+        $row = $stmt->get_result()?->fetch_assoc();
+        $stmt->close();
+
+        $id = (int) ($row['id'] ?? 0);
+
+        return $id > 0 ? $id : null;
+    }
+
+    /**
+     * Match courier_partners.shipper_id by partner code and/or carrier display name.
+     */
+    public function resolveShipperId(?string $courierName = null, ?string $partnerCode = null): ?int
+    {
+        $code = strtoupper(str_replace(' ', '', trim((string) $partnerCode)));
+        if ($code !== '') {
+            $stmt = $this->conn->prepare(
+                'SELECT shipper_id FROM courier_partners WHERE partner_code = ? AND is_active = 1 LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('s', $code);
+                $stmt->execute();
+                $row = $stmt->get_result()?->fetch_assoc();
+                $stmt->close();
+                $sid = (int) ($row['shipper_id'] ?? 0);
+                if ($sid > 0) {
+                    return $sid;
+                }
+            }
+        }
+
+        $name = trim((string) $courierName);
+        if ($name === '') {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare(
+            "SELECT shipper_id FROM courier_partners
+             WHERE is_active = 1 AND partner_code != 'SHIPROCKET' AND shipper_id > 0
+             AND INSTR(?, partner_name) > 0
+             ORDER BY LENGTH(partner_name) DESC
+             LIMIT 1"
+        );
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->bind_param('s', $name);
+        $stmt->execute();
+        $row = $stmt->get_result()?->fetch_assoc();
+        $stmt->close();
+
+        $sid = (int) ($row['shipper_id'] ?? 0);
+
+        return $sid > 0 ? $sid : null;
+    }
+
     /** @param list<array<string, mixed>> $apiRows */
     public function syncShippers(array $apiRows): array
     {

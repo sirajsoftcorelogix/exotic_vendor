@@ -1271,7 +1271,7 @@
                 : 'ETD';
             return `
                 <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md ${tm.courierTileHover} ${tm.courierTileChecked}">
-                    <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 ${tm.courierRadio}" data-courier-name="${escapeHtml(String(courier.name ?? ''))}" data-partner-code="${escapeHtml(String(courier.partner_code ?? ''))}" data-product-group="${escapeHtml(String(courier.product_group ?? ''))}" data-product-type="${escapeHtml(String(courier.product_type ?? ''))}" data-product-code="${escapeHtml(String(courier.metadata?.product_code ?? ''))}" data-sub-product-code="${escapeHtml(String(courier.metadata?.sub_product_code ?? ''))}" data-pack-type="${escapeHtml(String(courier.metadata?.pack_type ?? ''))}" data-partner-account-id="${escapeHtml(String(courier.partner_account_id ?? ''))}" data-rate-source="${escapeHtml(String(courier.rate_source ?? 'shiprocket'))}"${checkedAttr}/>
+                    <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 ${tm.courierRadio}" data-courier-name="${escapeHtml(String(courier.name ?? ''))}" data-courier-etd="${escapeHtml(etdShort !== '—' ? String(etd) : '')}" data-partner-code="${escapeHtml(String(courier.partner_code ?? ''))}" data-product-group="${escapeHtml(String(courier.product_group ?? ''))}" data-product-type="${escapeHtml(String(courier.product_type ?? ''))}" data-product-code="${escapeHtml(String(courier.metadata?.product_code ?? ''))}" data-sub-product-code="${escapeHtml(String(courier.metadata?.sub_product_code ?? ''))}" data-pack-type="${escapeHtml(String(courier.metadata?.pack_type ?? ''))}" data-partner-account-id="${escapeHtml(String(courier.partner_account_id ?? ''))}" data-rate-source="${escapeHtml(String(courier.rate_source ?? 'shiprocket'))}"${checkedAttr}/>
                     ${idx === 0 ? '<span class="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm pointer-events-none ' + tm.courierTopPick + '">Top pick</span>' : ''}
                     <div class="mb-1.5">${providerBadge}</div>
                     <p class="pr-14 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name || 'Courier')}</p>
@@ -1304,6 +1304,7 @@
                 syncTargets().forEach((el) => {
                     el.setAttribute('data-selected-courier-id', radio.value || '');
                     el.setAttribute('data-selected-courier-name', radio.getAttribute('data-courier-name') || '');
+                    el.setAttribute('data-selected-courier-etd', radio.getAttribute('data-courier-etd') || '');
                     el.setAttribute('data-partner-code', radio.getAttribute('data-partner-code') || '');
                     el.setAttribute('data-product-group', radio.getAttribute('data-product-group') || '');
                     el.setAttribute('data-product-type', radio.getAttribute('data-product-type') || '');
@@ -1329,6 +1330,7 @@
                 return {
                     courier_id: checked.value || '',
                     courier_name: checked.getAttribute('data-courier-name') || '',
+                    courier_etd: checked.getAttribute('data-courier-etd') || '',
                     partner_code: checked.getAttribute('data-partner-code') || '',
                     rate_source: checked.getAttribute('data-rate-source') || '',
                     product_group: checked.getAttribute('data-product-group') || '',
@@ -1344,6 +1346,7 @@
             return {
                 courier_id: boxElement.getAttribute('data-selected-courier-id') || '',
                 courier_name: boxElement.getAttribute('data-selected-courier-name') || '',
+                courier_etd: boxElement.getAttribute('data-selected-courier-etd') || '',
                 partner_code: boxElement.getAttribute('data-partner-code') || '',
                 rate_source: boxElement.getAttribute('data-rate-source') || '',
                 product_group: boxElement.getAttribute('data-product-group') || '',
@@ -2298,6 +2301,7 @@
                     piece_count: 1,
                     courier_id: courierFields.courier_id,
                     courier_name: courierFields.courier_name,
+                    courier_etd: courierFields.courier_etd,
                     partner_code: courierFields.partner_code,
                     rate_source: courierFields.rate_source,
                     product_group: courierFields.product_group,
@@ -2479,6 +2483,7 @@
                             groupname: boxGroupname,
                             courier_id: courierFields.courier_id,
                             courier_name: courierFields.courier_name,
+                            courier_etd: courierFields.courier_etd,
                             partner_code: courierFields.partner_code,
                             rate_source: courierFields.rate_source,
                             product_group: courierFields.product_group,

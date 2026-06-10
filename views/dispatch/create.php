@@ -193,6 +193,7 @@
           <input type="hidden" name="product_group[<?php echo $boxNo; ?>]" class="box-product-group" value="">
           <input type="hidden" name="product_type[<?php echo $boxNo; ?>]" class="box-product-type" value="">
           <input type="hidden" name="courier_name[<?php echo $boxNo; ?>]" class="box-courier-name" value="">
+          <input type="hidden" name="courier_etd[<?php echo $boxNo; ?>]" class="box-courier-etd" value="">
         </div>
         <?php endif; ?>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5">
@@ -559,6 +560,10 @@ function syncCourierSelection(boxSection, radio) {
     boxSection.querySelector('.box-product-group').value = radio.getAttribute('data-product-group') || '';
     boxSection.querySelector('.box-product-type').value = radio.getAttribute('data-product-type') || '';
     boxSection.querySelector('.box-courier-name').value = radio.getAttribute('data-courier-name') || '';
+    const etdInput = boxSection.querySelector('.box-courier-etd');
+    if (etdInput) {
+        etdInput.value = radio.getAttribute('data-courier-etd') || '';
+    }
     const dp = document.getElementById('delivery_partner_display');
     if (dp && radio.getAttribute('data-courier-name')) {
         dp.value = radio.getAttribute('data-courier-name');
@@ -610,6 +615,7 @@ function fetchCouriersForBox(boxSection) {
             html += '<label class="relative flex w-full sm:w-56 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer hover:border-indigo-300">' +
                 '<input type="radio" name="' + groupName + '" class="courier-tile-radio absolute left-2.5 top-3.5"' + checked +
                 ' data-courier-name="' + escapeHtml(courier.name) + '"' +
+                ' data-courier-etd="' + escapeHtml((courier.etd && courier.etd !== 'N/A') ? courier.etd : '') + '"' +
                 ' data-partner-code="' + escapeHtml(courier.partner_code) + '"' +
                 ' data-product-group="' + escapeHtml(courier.product_group) + '"' +
                 ' data-product-type="' + escapeHtml(courier.product_type) + '"' +
