@@ -16,6 +16,7 @@ $qsParams = $_GET ?? [];
 unset($qsParams['page_no']);
 $qs = $qsParams ? ('&' . http_build_query($qsParams)) : '';
 $pgBase = '?page=courier_partners&action=list' . $qs;
+$partnersPayloadJson = '';
 ?>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -147,22 +148,22 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                             </div>
                         </td></tr>
                     <?php else: ?>
-                        <?php foreach ($rows as $r): ?>
-                            <?php
+                        <?php
+                        $partnersPayload = [];
+                        foreach ($rows as $r):
                                 $shipperId = (int) ($r['shipper_id'] ?? 0);
                                 $payload = [
-                                    'id' => (int)$r['id'],
-                                    'partner_code' => (string)$r['partner_code'],
-                                    'partner_name' => (string)$r['partner_name'],
+                                    'id' => (int) $r['id'],
+                                    'partner_code' => (string) $r['partner_code'],
+                                    'partner_name' => (string) $r['partner_name'],
                                     'shipper_id' => $shipperId > 0 ? $shipperId : '',
-                                    'supports_domestic' => (int)$r['supports_domestic'],
-                                    'supports_international' => (int)$r['supports_international'],
-                                    'is_active' => (int)$r['is_active'],
-                                    'notes' => (string)($r['notes'] ?? ''),
+                                    'supports_domestic' => (int) $r['supports_domestic'],
+                                    'supports_international' => (int) $r['supports_international'],
+                                    'is_active' => (int) $r['is_active'],
+                                    'notes' => (string) ($r['notes'] ?? ''),
                                 ];
-                                /* HEX_* so JSON is safe inside double-quoted HTML attribute for JSON.parse */
-                                $payloadJson = json_encode($payload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
-                            ?>
+                                $partnersPayload[] = $payload;
+                        ?>
                             <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors align-top">
                                 <td class="px-5 py-4 font-semibold text-gray-800"><?php echo htmlspecialchars((string)$r['partner_code']); ?></td>
                                 <td class="px-5 py-4 text-sm text-gray-800"><?php echo htmlspecialchars((string)$r['partner_name']); ?></td>
@@ -196,7 +197,7 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                                             Accounts
                                         </a>
                                         <button type="button" class="cp-btn-edit inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50 transition"
-                                            data-partner="<?php echo $payloadJson; ?>">
+                                            data-partner-id="<?php echo (int) $r['id']; ?>">
                                             <i class="fas fa-pen text-[10px] text-indigo-600" aria-hidden="true"></i>
                                             Edit
                                         </button>
@@ -211,6 +212,15 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                        <?php
+                        $partnersPayloadJson = json_encode(
+                            $partnersPayload,
+                            JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
+                        );
+                        if ($partnersPayloadJson === false) {
+                            $partnersPayloadJson = '[]';
+                        }
+                        ?>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -244,6 +254,10 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
         </div>
     <?php endif; ?>
 </div>
+
+<?php if ($partnersPayloadJson !== ''): ?>
+<script type="application/json" id="cpPartnersData"><?php echo $partnersPayloadJson; ?></script>
+<?php endif; ?>
 
 <!-- Modal: Add / Edit Courier Partner -->
 <div id="courierPartnerModal" class="fixed inset-0 z-[100] hidden opacity-0 transition-opacity duration-200" aria-hidden="true" role="dialog" aria-labelledby="cpModalTitle">
@@ -335,6 +349,27 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
     var titleEl = document.getElementById('cpModalTitle');
     var subtitleEl = document.getElementById('cpModalSubtitle');
     var submitBtn = document.getElementById('cpSubmitBtn');
+    var partnersById = {};
+
+    (function loadPartnersData() {
+        var el = document.getElementById('cpPartnersData');
+        if (!el) return;
+        try {
+            var list = JSON.parse(el.textContent || '[]');
+            if (!Array.isArray(list)) return;
+            list.forEach(function (row) {
+                if (row && row.id != null) {
+                    partnersById[String(row.id)] = row;
+                }
+            });
+        } catch (err) {
+            console.error('Courier partners: could not parse partner data', err);
+        }
+    })();
+
+    if (!modal || !form || !titleEl || !subtitleEl || !submitBtn) {
+        return;
+    }
 
     function openModal() {
         if (!modal || !panel) return;
@@ -406,10 +441,13 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
         syncMarketCardStyles();
     }
 
-    document.getElementById('cpBtnOpenAdd').addEventListener('click', function () {
-        resetFormAdd();
-        openModal();
-    });
+    var addBtn = document.getElementById('cpBtnOpenAdd');
+    if (addBtn) {
+        addBtn.addEventListener('click', function () {
+            resetFormAdd();
+            openModal();
+        });
+    }
 
     document.querySelectorAll('.cp-open-add').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -420,26 +458,30 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
 
     document.querySelectorAll('.cp-btn-edit').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            var raw = btn.getAttribute('data-partner');
-            if (!raw) return;
-            try {
-                var p = JSON.parse(raw);
-                fillFormEdit(p);
-                openModal();
-            } catch (e) {}
+            var id = btn.getAttribute('data-partner-id');
+            if (!id) return;
+            var p = partnersById[String(id)];
+            if (!p) return;
+            fillFormEdit(p);
+            openModal();
         });
     });
 
     modal.querySelectorAll('.cp-modal-close').forEach(function (el) {
         el.addEventListener('click', closeModal);
     });
-    modal.querySelector('.cp-modal-backdrop').addEventListener('click', closeModal);
+    var backdrop = modal.querySelector('.cp-modal-backdrop');
+    if (backdrop) {
+        backdrop.addEventListener('click', closeModal);
+    }
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
     });
 
-    document.getElementById('cp_field_domestic').addEventListener('change', syncMarketCardStyles);
-    document.getElementById('cp_field_intl').addEventListener('change', syncMarketCardStyles);
+    var domesticField = document.getElementById('cp_field_domestic');
+    var intlField = document.getElementById('cp_field_intl');
+    if (domesticField) domesticField.addEventListener('change', syncMarketCardStyles);
+    if (intlField) intlField.addEventListener('change', syncMarketCardStyles);
 })();
 </script>
