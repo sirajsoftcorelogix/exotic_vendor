@@ -2317,17 +2317,18 @@
     function updateBlueDartExcelExportButton() {
         const bar = document.getElementById('bluedartExcelExportBar');
         const btn = document.getElementById('downloadBlueDartExcelBtn');
+        const invoiceDispatchBtn = document.getElementById('bulkCreateInvoiceDispatchBtn');
         if (!bar || !btn) {
             return;
         }
 
         const ready = hasBlueDartExportSelection();
         const exporting = btn.dataset.exporting === '1';
+        const showBlueDartExport = ready || exporting;
 
-        if (ready || exporting) {
-            bar.classList.remove('hidden');
-        } else {
-            bar.classList.add('hidden');
+        bar.classList.toggle('hidden', !showBlueDartExport);
+        if (invoiceDispatchBtn) {
+            invoiceDispatchBtn.classList.toggle('hidden', showBlueDartExport);
         }
 
         if (!exporting) {
