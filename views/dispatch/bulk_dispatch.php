@@ -1645,6 +1645,7 @@
                             </button>
                         </div>
                     </div>`;
+                updateBlueDartExcelExportButton();
             }).catch((error) => {
                 console.error('Error fetching couriers:', error);
                 if (!courierContainer) return;
@@ -1661,6 +1662,7 @@
                             </button>
                         </div>
                     </div>`;
+                updateBlueDartExcelExportButton();
             });
         }
 
@@ -2160,14 +2162,63 @@
         }
     });
 
-    function isBlueDartCourierSelection(courierFields) {
+    function isDirectBlueDartCourierSelection(courierFields) {
         const partnerCode = String(courierFields.partner_code || '').toLowerCase();
         const rateSource = String(courierFields.rate_source || '').toLowerCase();
-        const courierName = String(courierFields.courier_name || '');
-        if (partnerCode === 'bluedart' || rateSource === 'bluedart') {
-            return true;
+        return partnerCode === 'bluedart' || rateSource === 'bluedart';
+    }
+
+    function readActiveCourierFieldsForOrder(orderSection) {
+        if (!orderSection) {
+            return null;
         }
-        return /blue\s*dart|bluedart/i.test(courierName);
+        const checked = orderSection.querySelector('.courier-tile-radio:checked');
+        if (!checked || !checked.value) {
+            return null;
+        }
+        return {
+            courier_id: checked.value || '',
+            courier_name: checked.getAttribute('data-courier-name') || '',
+            partner_code: checked.getAttribute('data-partner-code') || '',
+            rate_source: checked.getAttribute('data-rate-source') || '',
+            product_group: checked.getAttribute('data-product-group') || '',
+            product_type: checked.getAttribute('data-product-type') || '',
+            partner_account_id: checked.getAttribute('data-partner-account-id') || '',
+            metadata: {
+                product_code: checked.getAttribute('data-product-code') || '',
+                sub_product_code: checked.getAttribute('data-sub-product-code') || '',
+                pack_type: checked.getAttribute('data-pack-type') || '',
+            },
+        };
+    }
+
+    function orderSectionHasDispatchItems(orderSection) {
+        const boxElements = orderSection.querySelectorAll('[data-order-number]');
+        for (const boxElement of boxElements) {
+            if (boxElement.querySelectorAll('.items-container > div.px-4.py-1').length > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function hasBlueDartExportSelection() {
+        const container = document.getElementById('invDispatchesContainer');
+        if (!container) {
+            return false;
+        }
+
+        const orderSections = container.querySelectorAll('.px-4.pt-4.pb-2');
+        for (const orderSection of orderSections) {
+            if (!orderSectionHasDispatchItems(orderSection)) {
+                continue;
+            }
+            const courierFields = readActiveCourierFieldsForOrder(orderSection);
+            if (courierFields && isDirectBlueDartCourierSelection(courierFields)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function parseItemTotalAmount(text) {
@@ -2205,20 +2256,18 @@
             const boxElements = orderSection.querySelectorAll('[data-order-number]');
             let boxNo = 0;
 
+            const orderCourierFields = readActiveCourierFieldsForOrder(orderSection);
+            if (!orderCourierFields || !isDirectBlueDartCourierSelection(orderCourierFields)) {
+                return;
+            }
+
             boxElements.forEach((boxElement) => {
                 const itemRows = boxElement.querySelectorAll('.items-container > div.px-4.py-1');
                 if (!itemRows.length) {
                     return;
                 }
 
-                const courierFields = readCourierFieldsForBox(boxElement, orderSection);
-                if (!isBlueDartCourierSelection(courierFields)) {
-                    return;
-                }
-                if (!courierFields.courier_id) {
-                    warnings.push('Order #' + orderNumber + ' has Blue Dart items but no courier selected. Click List Couriers first.');
-                    return;
-                }
+                const courierFields = orderCourierFields;
 
                 boxNo += 1;
                 let declaredValue = 0;
@@ -2272,7 +2321,7 @@
             return;
         }
 
-        const ready = collectBlueDartBoxesForExport().boxes.length > 0;
+        const ready = hasBlueDartExportSelection();
         const exporting = btn.dataset.exporting === '1';
 
         if (ready || exporting) {
