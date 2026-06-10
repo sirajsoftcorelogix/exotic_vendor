@@ -33,7 +33,7 @@ class User
     }
 
     /**
-     * Login OTP must match vp_users.remember_token (database only).
+     * Validate a one-time login OTP (vp_users.remember_token), valid for 10 minutes.
      */
     public function loginWithOtp($login, $otp)
     {
@@ -49,6 +49,7 @@ class User
               AND remember_token IS NOT NULL
               AND remember_token != ''
               AND is_deleted = 0
+              AND updated_at >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
             LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('sss', $login, $login, $otp);
@@ -59,6 +60,8 @@ class User
         }
 
         $user = $result->fetch_assoc();
+        $this->saveResetToken((int) ($user['id'] ?? 0), null);
+
         @session_start();
         $_SESSION['user'] = $user;
         $_SESSION['user_id'] = (int) ($user['id'] ?? 0);
@@ -134,7 +137,7 @@ class User
     }
     public function saveResetToken($id, $token)
     {
-        $sql = "UPDATE vp_users SET remember_token = ? WHERE id = ?";
+        $sql = "UPDATE vp_users SET remember_token = ?, updated_at = NOW() WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('si', $token, $id);
         $stmt->execute();

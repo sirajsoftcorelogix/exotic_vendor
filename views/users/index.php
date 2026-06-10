@@ -65,7 +65,6 @@
                             <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Teams</th>
                              <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Warehouse</th>
                             <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Status</th>
-                            <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Login OTP</th>
                             <!-- <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Last Login</th> -->
                             <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Actions</th>
                         </tr>
@@ -109,27 +108,17 @@
                                             <?php endif; ?>
                                         </div>
                                     </td>
-                                    <td class="px-2 py-3 whitespace-nowrap user-login-otp-cell">
-                                        <?php
-                                        $loginOtp = trim((string) ($item['remember_token'] ?? ''));
-                                        if ($loginOtp !== ''):
-                                        ?>
-                                            <span class="user-login-otp font-mono text-sm font-semibold text-gray-900 tracking-wider"><?= htmlspecialchars($loginOtp, ENT_QUOTES, 'UTF-8') ?></span>
-                                        <?php else: ?>
-                                            <span class="user-login-otp text-gray-400 text-sm">—</span>
-                                        <?php endif; ?>
-                                    </td>
                                     <!-- <td class="px-6 py-4 whitespace-nowrap">23-08-2025 13:10</td> ?page=users&action=updateUser&id=<?= $item['id']; ?> data-toggle="modal" data-target="#editModal" data-id="<?php echo $item['id']; ?>"-->
                                     <td class="px-2 py-3 whitespace-nowrap text-sm font-medium">
                                         <div class="flex items-center space-x-2">
                                             <button type="button"
                                                 class="generate-login-otp-btn px-2 py-1 text-xs font-semibold rounded-md text-white"
-                                                style="background: rgba(208, 103, 6, 1); min-width: 88px;"
+                                                style="background: rgba(208, 103, 6, 1); min-width: 108px;"
                                                 data-id="<?php echo (int) $item['id']; ?>"
                                                 data-name="<?php echo htmlspecialchars($item['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
                                                 data-email="<?php echo htmlspecialchars($item['email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-                                                title="Generate unique login OTP (stored in remember_token)">
-                                                Generate OTP
+                                                title="Email a fresh login OTP to the user (valid 10 minutes)">
+                                                Email login OTP
                                             </button>
                                             <a href="#" onclick="openEditModal(<?php echo $item['id']; ?>)" class="text-gray-400 hover:text-black" title="Edit User">
                                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -474,7 +463,7 @@
                 const id = btn.getAttribute('data-id');
                 const name = btn.getAttribute('data-name') || 'User';
                 const email = btn.getAttribute('data-email') || '';
-                if (!confirm('Generate a new unique login OTP for ' + name + '?\n\nAny previous OTP for this user will stop working.')) {
+                if (!confirm('Email a new login OTP to ' + name + (email ? ' (' + email + ')' : '') + '?\n\nAny previous OTP for this user will stop working.')) {
                     return;
                 }
                 btn.disabled = true;
@@ -489,26 +478,11 @@
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.success) {
-                        const loginLine = data.login ? ('Login: ' + data.login + '\n') : '';
-                        alert(
-                            'Login OTP for ' + (data.user_name || name) + '\n\n' +
-                            loginLine +
-                            'OTP: ' + data.otp + '\n\n' +
-                            'Share this OTP with the user. Email is temporarily disabled.'
-                        );
+                        alert(data.message || ('Login OTP emailed to ' + (data.user_name || name) + '.'));
                         if (usersListMsg) {
-                            usersListMsg.innerHTML = '<div style="color:green;padding:10px;background:#e0ffe0;border:1px solid #0a0;">OTP ' +
-                                data.otp + ' generated for ' + (data.user_name || name) + (email ? ' (' + email + ')' : '') + '.</div>';
-                        }
-                        var row = btn.closest('tr');
-                        if (row) {
-                            var otpCell = row.querySelector('.user-login-otp-cell');
-                            if (otpCell) {
-                                otpCell.innerHTML = '<span class="user-login-otp font-mono text-sm font-semibold text-gray-900 tracking-wider">' +
-                                    String(data.otp).replace(/[&<>"']/g, function(c) {
-                                        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
-                                    }) + '</span>';
-                            }
+                            usersListMsg.innerHTML = '<div style="color:green;padding:10px;background:#e0ffe0;border:1px solid #0a0;">' +
+                                (data.message || ('Login OTP emailed to ' + (data.user_name || name) + (email ? ' (' + email + ')' : '') + '.')) +
+                                '</div>';
                         }
                     } else if (usersListMsg) {
                         usersListMsg.innerHTML = '<div style="color:red;padding:10px;background:#ffe0e0;border:1px solid #a00;">' +

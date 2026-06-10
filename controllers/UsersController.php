@@ -13,18 +13,6 @@ global $domain;
 
 class UsersController
 {
-    /** Dev-only login while SMTP is down (no admin OTP required). */
-    private const DEV_LOGIN_EMAIL = 'siraj.php@gmail.com';
-    private const DEV_LOGIN_OTP = '1234';
-
-    /** Set true only to bypass email and use admin-generated OTP from Users list. */
-    private const SKIP_EMAIL_OTP = false;
-
-    private function isDevLoginEmail(string $login): bool
-    {
-        return strtolower(trim($login)) === strtolower(self::DEV_LOGIN_EMAIL);
-    }
-
     public function login()
     {
         // echo "This is the login page.";
@@ -44,7 +32,7 @@ class UsersController
         if ($logininfo) {
             echo json_encode(['success' => true, 'message' => 'Login successful.']);
         } else {
-            echo json_encode(['success' => false, 'message' => 'Invalid OTP or email.']);
+            echo json_encode(['success' => false, 'message' => 'Invalid or expired OTP. Request a new one from Send OTP.']);
         }
     }
 
@@ -61,45 +49,28 @@ class UsersController
             vendorJsonResponse(['success' => false, 'message' => 'User not found.']);
         }
 
-        if ($this->isDevLoginEmail($login)) {
-            $usersModel->saveResetToken($user['id'], self::DEV_LOGIN_OTP);
-            $user = $usersModel->findByLogin($login);
-            $storedOtp = trim((string) ($user['remember_token'] ?? ''));
-            vendorJsonResponse([
-                'success' => $storedOtp !== '',
-                'message' => $storedOtp !== ''
-                    ? 'OTP ready. Enter your login OTP to sign in.'
-                    : 'Could not save login OTP. Please try again.',
-            ]);
-        }
+        vendorJsonResponse($this->issueDynamicLoginOtp($user));
+    }
 
-        if (self::SKIP_EMAIL_OTP) {
-            $existing = trim((string) ($user['remember_token'] ?? ''));
-            if ($existing !== '') {
-                vendorJsonResponse([
-                    'success' => true,
-                    'message' => 'Enter the login OTP from your administrator (see Users list).',
-                ]);
-            }
-            vendorJsonResponse([
-                'success' => false,
-                'message' => 'No login OTP in the system. Ask an administrator to generate one from the Users list.',
-            ]);
-        }
+    /**
+     * Generate a fresh OTP, email it, then store it for one-time login (10 min).
+     *
+     * @param array<string, mixed> $user
+     * @return array<string, mixed>
+     */
+    private function issueDynamicLoginOtp(array $user): array
+    {
+        global $usersModel;
 
         $recipientEmail = trim((string) ($user['email'] ?? ''));
         if ($recipientEmail === '' || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
-            vendorJsonResponse([
+            return [
                 'success' => false,
                 'message' => 'No valid email is on file for this account. Contact your administrator.',
-            ]);
+            ];
         }
 
         $token = (string) random_int(100000, 999999);
-        if (!$usersModel->saveResetToken($user['id'], $token)) {
-            vendorJsonResponse(['success' => false, 'message' => 'Could not save login OTP. Please try again.']);
-        }
-
         $recipientName = trim((string) ($user['name'] ?? ''));
         if ($recipientName === '') {
             $recipientName = 'Vendor User';
@@ -113,14 +84,29 @@ class UsersController
             $recipientName
         );
 
-        $payload = [
-            'success' => $result['success'],
-            'message' => $result['message'],
-        ];
-        if (!empty($result['smtp_error'])) {
-            $payload['smtp_error'] = $result['smtp_error'];
+        if (empty($result['success'])) {
+            $payload = [
+                'success' => false,
+                'message' => $result['message'] ?? 'Could not send OTP email. Please try again.',
+            ];
+            if (!empty($result['smtp_error'])) {
+                $payload['smtp_error'] = $result['smtp_error'];
+            }
+
+            return $payload;
         }
-        vendorJsonResponse($payload);
+
+        if (!$usersModel->saveResetToken((int) ($user['id'] ?? 0), $token)) {
+            return [
+                'success' => false,
+                'message' => 'OTP email was sent but could not be saved. Please request a new OTP.',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'OTP sent to your email. It is valid for 10 minutes.',
+        ];
     }
 
     public function generateLoginOtp()
@@ -142,24 +128,14 @@ class UsersController
             exit;
         }
 
-        $otp = (string) random_int(100000, 999999);
-        if (!$usersModel->saveResetToken($userId, $otp)) {
-            echo json_encode(['success' => false, 'message' => 'Could not save OTP.']);
-            exit;
-        }
-
-        $loginHint = trim((string) ($user['email'] ?? ''));
-        if ($loginHint === '') {
-            $loginHint = trim((string) ($user['phone'] ?? ''));
-        }
-
+        $result = $this->issueDynamicLoginOtp($user);
         echo json_encode([
-            'success' => true,
-            'message' => 'Login OTP generated for ' . ($user['name'] ?? 'user') . '.',
-            'otp' => $otp,
+            'success' => !empty($result['success']),
+            'message' => ($result['message'] ?? 'Could not send login OTP.')
+                . (!empty($result['success']) ? ' User: ' . ($user['name'] ?? '') : ''),
             'user_id' => $userId,
-            'login' => $loginHint,
             'user_name' => $user['name'] ?? '',
+            'login' => trim((string) ($user['email'] ?? '')),
         ]);
         exit;
     }
@@ -198,19 +174,7 @@ class UsersController
             $resetLink = "$domain/?page=reset_password&token=$token";
             mail($login, "Password Reset", "Click here to reset your password: $resetLink");*/
 
-            if (self::SKIP_EMAIL_OTP) {
-                $token = (string) random_int(100000, 999999);
-                $usersModel->saveResetToken($user['id'], $token);
-                echo json_encode([
-                    'success' => true,
-                    'message' => 'OTP generated. Share it with the user: ' . $token,
-                    'token' => $token,
-                ]);
-                exit;
-            }
-
             $token = (string) random_int(100000, 999999);
-            $usersModel->saveResetToken($user['id'], $token);
 
             $recipientEmail = trim((string) ($user['email'] ?? ''));
             if ($recipientEmail === '' || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
@@ -235,7 +199,9 @@ class UsersController
             );
 
             $payload = ['success' => $result['success'], 'message' => $result['message']];
-            if (!$result['success'] && !empty($result['smtp_error'])) {
+            if (!empty($result['success'])) {
+                $usersModel->saveResetToken($user['id'], $token);
+            } elseif (!empty($result['smtp_error'])) {
                 $payload['smtp_error'] = $result['smtp_error'];
             }
             echo json_encode($payload);
