@@ -46,14 +46,16 @@
     
 
     <div class="border-t border-gray-200 px-4 py-3 flex flex-wrap justify-end items-center gap-3 bg-white">
-        <div class="mr-auto flex flex-col gap-0.5 text-left">
-            <span class="text-xs font-semibold text-sky-900">Blue Dart items</span>
-            <span class="text-[11px] text-gray-500">Select Blue Dart on each box, then use Export to Excel for manual booking on the Blue Dart dashboard.</span>
+        <div id="bluedartExcelExportBar" class="hidden mr-auto flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div class="flex flex-col gap-0.5 text-left">
+                <span class="text-xs font-semibold text-sky-900">Blue Dart items</span>
+                <span class="text-[11px] text-gray-500">Export to Excel for manual booking on the Blue Dart dashboard (Air and Surface sheets).</span>
+            </div>
+            <button type="button" id="downloadBlueDartExcelBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2 shrink-0" title="Export Blue Dart boxes to Excel">
+                <span>📥</span>
+                <span>Export to Excel</span>
+            </button>
         </div>
-        <button type="button" id="downloadBlueDartExcelBtn" disabled class="bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-sky-600 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2" title="Select Blue Dart on a box with items to enable export">
-            <span>📥</span>
-            <span>Export to Excel</span>
-        </button>
         <button id="bulkCreateInvoiceDispatchBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2">
             <span>🚚</span>
             <span>Invoice &amp; Dispatch</span>
@@ -2264,16 +2266,24 @@
     }
 
     function updateBlueDartExcelExportButton() {
+        const bar = document.getElementById('bluedartExcelExportBar');
         const btn = document.getElementById('downloadBlueDartExcelBtn');
-        if (!btn || btn.dataset.exporting === '1') {
+        if (!bar || !btn) {
             return;
         }
 
         const ready = collectBlueDartBoxesForExport().boxes.length > 0;
-        btn.disabled = !ready;
-        btn.title = ready
-            ? 'Export Blue Dart boxes to Excel (Air and Surface sheets)'
-            : 'Select Blue Dart on a box with items to enable export';
+        const exporting = btn.dataset.exporting === '1';
+
+        if (ready || exporting) {
+            bar.classList.remove('hidden');
+        } else {
+            bar.classList.add('hidden');
+        }
+
+        if (!exporting) {
+            btn.disabled = false;
+        }
     }
 
     const downloadBlueDartExcelBtn = document.getElementById('downloadBlueDartExcelBtn');
