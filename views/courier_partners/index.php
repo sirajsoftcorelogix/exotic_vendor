@@ -217,17 +217,7 @@ $partnersPayloadJson = '';
                                         <span class="text-xs font-medium text-gray-400 tabular-nums">No</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-5 py-4">
-                                    <?php $accountCount = (int) ($r['account_count'] ?? 0); ?>
-                                    <?php if ($accountCount > 0): ?>
-                                        <a href="?page=courier_accounts&amp;action=list&amp;partner_id=<?php echo (int) $r['id']; ?>"
-                                            class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 tabular-nums ring-1 ring-inset ring-amber-300/50 hover:bg-amber-100 transition">
-                                            <?php echo $accountCount; ?> account<?php echo $accountCount === 1 ? '' : 's'; ?>
-                                        </a>
-                                    <?php else: ?>
-                                        <span class="text-xs font-medium text-gray-400">None</span>
-                                    <?php endif; ?>
-                                </td>
+                                <td class="px-5 py-4 text-sm tabular-nums text-gray-700"><?php echo (int) ($r['account_count'] ?? 0); ?></td>
                                 <td class="px-5 py-4">
                                     <?php if ((int)$r['is_active'] === 1): ?>
                                         <span class="inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-800">Active</span>
@@ -237,11 +227,6 @@ $partnersPayloadJson = '';
                                 </td>
                                 <td class="px-5 py-4">
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <a href="?page=courier_accounts&amp;action=list&amp;partner_id=<?php echo (int) $r['id']; ?>"
-                                            class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition">
-                                            <i class="fas fa-id-card-alt text-[10px]" aria-hidden="true"></i>
-                                            Accounts
-                                        </a>
                                         <button type="button" class="cp-btn-edit inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50 transition"
                                             data-partner-id="<?php echo (int) $r['id']; ?>">
                                             <i class="fas fa-pen text-[10px] text-indigo-600" aria-hidden="true"></i>
