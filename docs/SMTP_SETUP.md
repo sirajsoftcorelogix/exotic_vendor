@@ -15,6 +15,8 @@ When `vendorMailTransport` is `api`, OTP emails use the same HTML templates (`te
 
 - `recipient_email`, `recipient_name`, `subject`, `body`
 
+Requests also send the same vendor API headers as order/product imports (`x-api-key`, `x-adminapitest`) via `helpers/vendor_external_api.php`. Missing headers cause **Incorrect Access Parameters** from the remote API.
+
 Set `vendorMailTransport` to `smtp` to fall back to PHPMailer below.
 
 ## SMTP fallback (`vendorMailTransport` = `smtp`)

@@ -151,6 +151,35 @@ function vendorEmailApiUrl(): string
     return $url !== '' ? $url : 'https://www.exoticindia.com/vendor-api/email';
 }
 
+/**
+ * Same auth headers as other www.exoticindia.com/vendor-api/* endpoints.
+ *
+ * @return list<string>
+ */
+function vendorEmailApiRequestHeaders(): array
+{
+    if (!function_exists('vendor_external_api_headers')) {
+        require_once __DIR__ . '/vendor_external_api.php';
+    }
+
+    return array_merge(vendor_external_api_headers(), [
+        'Accept: application/json, text/plain, */*',
+    ]);
+}
+
+function vendorEmailApiResponseLooksLikeError(string $responseText): bool
+{
+    $lower = strtolower(trim($responseText));
+    if ($lower === '') {
+        return false;
+    }
+
+    return str_contains($lower, 'incorrect access')
+        || str_contains($lower, 'invalid access')
+        || str_contains($lower, 'access denied')
+        || str_contains($lower, 'unauthorized');
+}
+
 function vendorBuildOtpEmailHtml(string $otp, string $templateFile): string
 {
     $htmlBody = loadVendorMailTemplate($templateFile);
@@ -204,7 +233,7 @@ function vendorSendEmailViaApi(
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => $postFields,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json, text/plain, */*'],
+        CURLOPT_HTTPHEADER => vendorEmailApiRequestHeaders(),
         CURLOPT_TIMEOUT => 30,
         CURLOPT_CONNECTTIMEOUT => 15,
     ]);
@@ -241,6 +270,14 @@ function vendorSendEmailViaApi(
                     'smtp_error' => $technical !== '' ? $technical : 'Email API returned an error.',
                 ];
             }
+        } elseif (vendorEmailApiResponseLooksLikeError($responseText)) {
+            error_log('Vendor email API rejected: ' . $responseText);
+
+            return [
+                'success' => false,
+                'message' => vendorFriendlyMailErrorMessage($responseText),
+                'smtp_error' => $responseText,
+            ];
         }
 
         return ['success' => true, 'message' => 'OTP sent to your email.'];
