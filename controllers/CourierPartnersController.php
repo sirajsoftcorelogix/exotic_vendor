@@ -13,11 +13,15 @@ class CourierPartnersController
         $search = isset($_GET['search_text']) ? trim((string)$_GET['search_text']) : '';
         $status = isset($_GET['status_filter']) ? trim((string)$_GET['status_filter']) : '';
         $shipperIdFilter = (int) preg_replace('/\D/', '', (string) ($_GET['shipper_id_filter'] ?? ''));
+        $serviceAreaFilter = isset($_GET['service_area_filter']) ? strtolower(trim((string) $_GET['service_area_filter'])) : '';
+        if (!in_array($serviceAreaFilter, ['domestic', 'international', 'both'], true)) {
+            $serviceAreaFilter = '';
+        }
         $pageNo = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
         $limit = in_array($limit, [5, 20, 50, 100], true) ? $limit : 50;
 
-        $res = $courierPartnerModel->getAll($pageNo, $limit, $search, $status, $shipperIdFilter);
+        $res = $courierPartnerModel->getAll($pageNo, $limit, $search, $status, $shipperIdFilter, $serviceAreaFilter);
 
         renderTemplate('views/courier_partners/index.php', [
             'rows' => $res['rows'],
@@ -28,6 +32,7 @@ class CourierPartnersController
             'search' => $search,
             'status_filter' => $status,
             'shipper_id_filter' => $shipperIdFilter > 0 ? (string) $shipperIdFilter : '',
+            'service_area_filter' => $serviceAreaFilter,
         ], 'Courier Partner Master');
     }
 

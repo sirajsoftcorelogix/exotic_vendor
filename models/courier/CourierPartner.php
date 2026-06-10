@@ -28,7 +28,7 @@ class CourierPartner
         $this->conn->query($sql);
     }
 
-    public function getAll(int $page = 1, int $limit = 20, string $search = '', string $status = '', int $shipperId = 0): array
+    public function getAll(int $page = 1, int $limit = 20, string $search = '', string $status = '', int $shipperId = 0, string $serviceArea = ''): array
     {
         $page = max(1, $page);
         $limit = max(1, $limit);
@@ -54,6 +54,14 @@ class CourierPartner
             $where[] = 'shipper_id = ?';
             $types .= 'i';
             $params[] = $shipperId;
+        }
+        $serviceArea = strtolower(trim($serviceArea));
+        if ($serviceArea === 'domestic') {
+            $where[] = 'supports_domestic = 1 AND supports_international = 0';
+        } elseif ($serviceArea === 'international') {
+            $where[] = 'supports_international = 1 AND supports_domestic = 0';
+        } elseif ($serviceArea === 'both') {
+            $where[] = 'supports_domestic = 1 AND supports_international = 1';
         }
 
         $whereSql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
