@@ -1370,6 +1370,7 @@ switch ($page) {
                 $controller->create();
                 break;
         }
+        break;
     case 'search':
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController($conn);

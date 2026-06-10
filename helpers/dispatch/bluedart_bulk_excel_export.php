@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../courier/bluedart_rate_helpers.php';
 
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -266,12 +267,18 @@ function bluedartBulkExcelPrepareSheets(array $boxes, callable $orderInfoResolve
  */
 function bluedartBulkExcelStreamDownload(array $sheets, string $filename): void
 {
+    if ($sheets === []) {
+        throw new RuntimeException('No Blue Dart sheets to export.');
+    }
+
     $spreadsheet = new Spreadsheet();
-    $spreadsheet->removeSheetByIndex(0);
     $headers = bluedartBulkExcelColumnHeaders();
+    $sheetIndex = 0;
 
     foreach ($sheets as $sheetName => $rows) {
-        $worksheet = $spreadsheet->createSheet();
+        $worksheet = $sheetIndex === 0
+            ? $spreadsheet->getActiveSheet()
+            : $spreadsheet->createSheet();
         $safeTitle = substr(preg_replace('/[\\\\\\/\\?\\*\\[\\]:]/', '', $sheetName) ?? 'Sheet', 0, 31);
         $worksheet->setTitle($safeTitle !== '' ? $safeTitle : 'Sheet');
 
@@ -290,6 +297,7 @@ function bluedartBulkExcelStreamDownload(array $sheets, string $filename): void
         }
 
         $worksheet->freezePane('A2');
+        $sheetIndex++;
     }
 
     $spreadsheet->setActiveSheetIndex(0);
@@ -298,9 +306,15 @@ function bluedartBulkExcelStreamDownload(array $sheets, string $filename): void
         ob_end_clean();
     }
 
+    if (headers_sent()) {
+        throw new RuntimeException('Export response headers were already sent.');
+    }
+
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
+    header('Content-Transfer-Encoding: binary');
     header('Cache-Control: max-age=0');
+    header('Pragma: public');
 
     $writer = new Xlsx($spreadsheet);
     $writer->save('php://output');

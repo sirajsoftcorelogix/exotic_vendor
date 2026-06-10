@@ -1484,6 +1484,10 @@ class DispatchController {
     {
         global $ordersModel;
 
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
         is_login();
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -1537,7 +1541,19 @@ class DispatchController {
         }
 
         $filename = 'bluedart_dispatch_' . date('Y-m-d_His') . '.xlsx';
-        bluedartBulkExcelStreamDownload($prepared['sheets'] ?? [], $filename);
+
+        try {
+            bluedartBulkExcelStreamDownload($prepared['sheets'] ?? [], $filename);
+        } catch (Throwable $e) {
+            error_log('Blue Dart Excel export failed: ' . $e->getMessage());
+            http_response_code(500);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not generate Excel file. Please try again.',
+            ]);
+            exit;
+        }
     }
 
     /**
