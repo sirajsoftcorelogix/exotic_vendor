@@ -116,7 +116,7 @@ class Dispatch {
         $created_at = $data['created_at'];
 
         $stmt->bind_param(
-            'iissssdddddddssiiisssssssssisss',
+            'iissssdddddddssiiissssssssisss',
             $invoice_id,
             $box_no,
             $order_number,
@@ -154,10 +154,8 @@ class Dispatch {
             $this->maybeLogExoticIndiaShipment($dispatchId);
             return $dispatchId;
         }
-        //error return
         if ($stmt->error) {
-            error_log("Database error in createDispatch: " . $stmt->error);
-            echo "Database error: " . $stmt->error;
+            error_log('Database error in createDispatch: ' . $stmt->error);
         }
         return false;
     }
