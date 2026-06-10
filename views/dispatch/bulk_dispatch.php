@@ -1247,7 +1247,10 @@
             if (isDelhivery) {
                 providerBadge = '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 border border-red-200">Delhivery</span>';
             } else if (isBlueDart) {
-                providerBadge = '<span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-900 border border-sky-200">Blue Dart</span>';
+                providerBadge = '<span class="flex flex-wrap items-center gap-1">' +
+                    '<span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-900 border border-sky-200">Blue Dart</span>' +
+                    '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-900 border border-emerald-200" title="Use Export to Excel at the bottom of this page">Excel Export</span>' +
+                    '</span>';
             }
             const priceClass = (isDelhivery || isBlueDart) ? 'text-emerald-700' : tm.courierPrice;
             const priceSource = String(courier.price_source || courier.metadata?.price_source || '');
