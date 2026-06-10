@@ -26,7 +26,6 @@ class CourierPartner
             INDEX idx_active (is_active)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
         $this->conn->query($sql);
-        @$this->conn->query('ALTER TABLE courier_partners ADD COLUMN shipper_id INT UNSIGNED NULL DEFAULT NULL AFTER partner_name');
     }
 
     public function getAll(int $page = 1, int $limit = 20, string $search = '', string $status = ''): array
