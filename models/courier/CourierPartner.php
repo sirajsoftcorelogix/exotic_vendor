@@ -28,7 +28,7 @@ class CourierPartner
         $this->conn->query($sql);
     }
 
-    public function getAll(int $page = 1, int $limit = 20, string $search = '', string $status = ''): array
+    public function getAll(int $page = 1, int $limit = 20, string $search = '', string $status = '', int $shipperId = 0): array
     {
         $page = max(1, $page);
         $limit = max(1, $limit);
@@ -49,6 +49,11 @@ class CourierPartner
             $where[] = "is_active = ?";
             $types .= 'i';
             $params[] = (int)$status;
+        }
+        if ($shipperId > 0) {
+            $where[] = 'shipper_id = ?';
+            $types .= 'i';
+            $params[] = $shipperId;
         }
 
         $whereSql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';

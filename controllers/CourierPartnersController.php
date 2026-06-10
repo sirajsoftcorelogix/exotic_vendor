@@ -12,11 +12,12 @@ class CourierPartnersController
 
         $search = isset($_GET['search_text']) ? trim((string)$_GET['search_text']) : '';
         $status = isset($_GET['status_filter']) ? trim((string)$_GET['status_filter']) : '';
+        $shipperIdFilter = (int) preg_replace('/\D/', '', (string) ($_GET['shipper_id_filter'] ?? ''));
         $pageNo = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
         $limit = in_array($limit, [5, 20, 50, 100], true) ? $limit : 50;
 
-        $res = $courierPartnerModel->getAll($pageNo, $limit, $search, $status);
+        $res = $courierPartnerModel->getAll($pageNo, $limit, $search, $status, $shipperIdFilter);
 
         renderTemplate('views/courier_partners/index.php', [
             'rows' => $res['rows'],
@@ -26,6 +27,7 @@ class CourierPartnersController
             'limit' => $res['limit'],
             'search' => $search,
             'status_filter' => $status,
+            'shipper_id_filter' => $shipperIdFilter > 0 ? (string) $shipperIdFilter : '',
         ], 'Courier Partner Master');
     }
 
