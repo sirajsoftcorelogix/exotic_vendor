@@ -50,7 +50,7 @@
             <span class="text-xs font-semibold text-sky-900">Blue Dart items</span>
             <span class="text-[11px] text-gray-500">Select Blue Dart on each box, then use Export to Excel for manual booking on the Blue Dart dashboard.</span>
         </div>
-        <button type="button" id="downloadBlueDartExcelBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2" title="Export Blue Dart boxes to Excel (Air and Surface sheets)">
+        <button type="button" id="downloadBlueDartExcelBtn" disabled class="bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-sky-600 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2" title="Select Blue Dart on a box with items to enable export">
             <span>📥</span>
             <span>Export to Excel</span>
         </button>
@@ -1037,6 +1037,7 @@
                         }, 100);
                         // Fetch available couriers for this box
                         fetchCouriersForBox(currentBox);
+                        updateBlueDartExcelExportButton();
                     }
                     selectAllCheckbox.checked = false;
                     closeModal();
@@ -1312,6 +1313,7 @@
                     orderSection.setAttribute('data-partner-code', radio.getAttribute('data-partner-code') || '');
                     orderSection.setAttribute('data-rate-source', radio.getAttribute('data-rate-source') || '');
                 }
+                updateBlueDartExcelExportButton();
             };
             courierContainer.querySelectorAll('.courier-tile-radio').forEach((r) => {
                 r.addEventListener('change', () => syncCourierPick(r));
@@ -1969,7 +1971,10 @@
         if (e.target.matches('.remove-order-btn') || e.target.closest('.remove-order-btn')) {
             e.preventDefault();
             const orderWrapper = e.target.closest('.px-4.pt-4.pb-2');
-            if (orderWrapper) orderWrapper.remove();
+            if (orderWrapper) {
+                orderWrapper.remove();
+                updateBlueDartExcelExportButton();
+            }
             return;
         }
 
@@ -1978,6 +1983,7 @@
             const box = e.target.closest('[data-order-number]');
             if (box) {
                 box.remove();
+                updateBlueDartExcelExportButton();
             }
         }
     });
@@ -2010,6 +2016,7 @@
                 // Update totals after removing the item
                 if (boxElement) {
                     updateBoxTotals(boxElement);
+                    updateBlueDartExcelExportButton();
                 }
             }
             return;
@@ -2256,6 +2263,19 @@
         return { boxes, warnings };
     }
 
+    function updateBlueDartExcelExportButton() {
+        const btn = document.getElementById('downloadBlueDartExcelBtn');
+        if (!btn || btn.dataset.exporting === '1') {
+            return;
+        }
+
+        const ready = collectBlueDartBoxesForExport().boxes.length > 0;
+        btn.disabled = !ready;
+        btn.title = ready
+            ? 'Export Blue Dart boxes to Excel (Air and Surface sheets)'
+            : 'Select Blue Dart on a box with items to enable export';
+    }
+
     const downloadBlueDartExcelBtn = document.getElementById('downloadBlueDartExcelBtn');
     if (downloadBlueDartExcelBtn) {
         downloadBlueDartExcelBtn.addEventListener('click', async function(e) {
@@ -2278,6 +2298,7 @@
 
             const btn = downloadBlueDartExcelBtn;
             const originalHtml = btn.innerHTML;
+            btn.dataset.exporting = '1';
             btn.disabled = true;
             btn.innerHTML = '<span>Preparing...</span>';
 
@@ -2313,11 +2334,22 @@
             } catch (err) {
                 showAlert(err.message || 'Failed to download Excel.', 'error');
             } finally {
-                btn.disabled = false;
+                btn.dataset.exporting = '0';
                 btn.innerHTML = originalHtml;
+                updateBlueDartExcelExportButton();
             }
         });
     }
+
+    const invDispatchesContainer = document.getElementById('invDispatchesContainer');
+    if (invDispatchesContainer) {
+        invDispatchesContainer.addEventListener('change', function(e) {
+            if (e.target.matches('.courier-tile-radio')) {
+                updateBlueDartExcelExportButton();
+            }
+        });
+    }
+    updateBlueDartExcelExportButton();
 
     // Handle bulk create invoices and dispatch
     const bulkCreateBtn = document.getElementById('bulkCreateInvoiceDispatchBtn');
