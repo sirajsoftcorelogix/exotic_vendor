@@ -7,13 +7,15 @@ $rows = $rows ?? [];
 $search = $search ?? '';
 $statusFilter = $status_filter ?? '';
 $shipperIdFilter = $shipper_id_filter ?? '';
+$shipperIdExact = $shipper_id_exact ?? '';
 $serviceAreaFilter = $service_area_filter ?? '';
+$accountsFilter = $accounts_filter ?? '';
 $currentPage = (int)($currentPage ?? 1);
 $totalPages = (int)($totalPages ?? 1);
 $limit = (int)($limit ?? 50);
 $totalRecords = (int)($totalRecords ?? 0);
 $rowCount = is_array($rows) ? count($rows) : 0;
-$filtersPanelOpen = trim($search) !== '' || trim((string) $shipperIdFilter) !== '' || ($serviceAreaFilter !== '' && $serviceAreaFilter !== null) || ($statusFilter !== '' && $statusFilter !== null);
+$filtersPanelOpen = trim($search) !== '' || $shipperIdFilter === 'missing' || trim((string) $shipperIdExact) !== '' || ($serviceAreaFilter !== '' && $serviceAreaFilter !== null) || ($accountsFilter !== '' && $accountsFilter !== null) || ($statusFilter !== '' && $statusFilter !== null);
 $qsParams = $_GET ?? [];
 unset($qsParams['page_no']);
 $qs = $qsParams ? ('&' . http_build_query($qsParams)) : '';
@@ -81,7 +83,7 @@ $partnersPayloadJson = '';
                 </span>
                 <div class="min-w-0">
                     <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Filter by name, code, shipper ID, service area, or status.</p>
+                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Filter by name, shipper ID, service area, courier accounts, or status.</p>
                 </div>
             </div>
             <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
@@ -103,8 +105,13 @@ $partnersPayloadJson = '';
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Shipper ID</label>
-                    <input type="number" name="shipper_id_filter" value="<?php echo htmlspecialchars((string) $shipperIdFilter); ?>" min="1" step="1" placeholder="e.g. 12"
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                    <select name="shipper_id_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="">All</option>
+                        <option value="missing" <?php echo $shipperIdFilter === 'missing' ? 'selected' : ''; ?>>Missing / blank</option>
+                    </select>
+                    <input type="number" name="shipper_id_exact" min="1" step="1" placeholder="Or exact ID"
+                        value="<?php echo htmlspecialchars((string) $shipperIdExact); ?>"
+                        class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Service area</label>
@@ -121,6 +128,17 @@ $partnersPayloadJson = '';
                         <option value="">All</option>
                         <option value="1" <?php echo $statusFilter === '1' ? 'selected' : ''; ?>>Active</option>
                         <option value="0" <?php echo $statusFilter === '0' ? 'selected' : ''; ?>>Inactive</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4 mt-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Courier accounts</label>
+                    <select name="accounts_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="">All</option>
+                        <option value="configured" <?php echo $accountsFilter === 'configured' ? 'selected' : ''; ?>>Configured</option>
+                        <option value="not_configured" <?php echo $accountsFilter === 'not_configured' ? 'selected' : ''; ?>>Not configured</option>
                     </select>
                 </div>
             </div>
@@ -147,13 +165,14 @@ $partnersPayloadJson = '';
                         <th class="px-5 py-3.5 whitespace-nowrap">Shipper ID</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Domestic</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">International</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Accounts</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <?php if (!$rows): ?>
-                        <tr><td colspan="7" class="px-5 py-16 text-center">
+                        <tr><td colspan="8" class="px-5 py-16 text-center">
                             <div class="mx-auto flex max-w-sm flex-col items-center">
                                 <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                     <i class="fas fa-truck" aria-hidden="true"></i>
@@ -196,6 +215,17 @@ $partnersPayloadJson = '';
                                         <span class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-900 shadow-sm ring-1 ring-inset ring-sky-600/25">Yes</span>
                                     <?php else: ?>
                                         <span class="text-xs font-medium text-gray-400 tabular-nums">No</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="px-5 py-4">
+                                    <?php $accountCount = (int) ($r['account_count'] ?? 0); ?>
+                                    <?php if ($accountCount > 0): ?>
+                                        <a href="?page=courier_accounts&amp;action=list&amp;partner_id=<?php echo (int) $r['id']; ?>"
+                                            class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 tabular-nums ring-1 ring-inset ring-amber-300/50 hover:bg-amber-100 transition">
+                                            <?php echo $accountCount; ?> account<?php echo $accountCount === 1 ? '' : 's'; ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="text-xs font-medium text-gray-400">None</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-5 py-4">

@@ -28,7 +28,7 @@ class CourierPartner
         $this->conn->query($sql);
     }
 
-    public function getAll(int $page = 1, int $limit = 20, string $search = '', string $status = '', int $shipperId = 0, string $serviceArea = ''): array
+    public function getAll(int $page = 1, int $limit = 20, string $search = '', string $status = '', int $shipperId = 0, string $serviceArea = '', bool $missingShipperId = false, string $accountsFilter = ''): array
     {
         $page = max(1, $page);
         $limit = max(1, $limit);
@@ -50,7 +50,9 @@ class CourierPartner
             $types .= 'i';
             $params[] = (int)$status;
         }
-        if ($shipperId > 0) {
+        if ($missingShipperId) {
+            $where[] = '(shipper_id IS NULL OR shipper_id = 0)';
+        } elseif ($shipperId > 0) {
             $where[] = 'shipper_id = ?';
             $types .= 'i';
             $params[] = $shipperId;
@@ -62,6 +64,12 @@ class CourierPartner
             $where[] = 'supports_international = 1 AND supports_domestic = 0';
         } elseif ($serviceArea === 'both') {
             $where[] = 'supports_domestic = 1 AND supports_international = 1';
+        }
+        $accountsFilter = strtolower(trim($accountsFilter));
+        if ($accountsFilter === 'configured') {
+            $where[] = 'EXISTS (SELECT 1 FROM courier_partner_accounts ca WHERE ca.partner_id = courier_partners.id)';
+        } elseif ($accountsFilter === 'not_configured') {
+            $where[] = 'NOT EXISTS (SELECT 1 FROM courier_partner_accounts ca WHERE ca.partner_id = courier_partners.id)';
         }
 
         $whereSql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
@@ -81,7 +89,8 @@ class CourierPartner
             $countStmt->close();
         }
 
-        $listSql = "SELECT id, partner_code, partner_name, shipper_id, supports_domestic, supports_international, is_active, notes, created_at, updated_at
+        $listSql = "SELECT id, partner_code, partner_name, shipper_id, supports_domestic, supports_international, is_active, notes, created_at, updated_at,
+                    (SELECT COUNT(*) FROM courier_partner_accounts ca WHERE ca.partner_id = courier_partners.id) AS account_count
                     FROM courier_partners" . $whereSql . " ORDER BY partner_name ASC LIMIT ? OFFSET ?";
         $listStmt = $this->conn->prepare($listSql);
         $rows = [];
