@@ -72,26 +72,26 @@ class CourierPartnersController
             exit;
         }
 
-        $ch = curl_init('https://www.exoticindia.com/api/order/shipper-fetch');
+        require_once dirname(__DIR__) . '/helpers/vendor_external_api.php';
+        $ch = curl_init('https://www.exoticindia.com/vendor-api/order/shipper-fetch');
         curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => '',
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-                'x-adminapitest: 1',
-                'Accept: application/json',
-            ],
+            CURLOPT_HTTPHEADER => array_merge(vendor_external_api_headers(), ['Accept: application/json']),
             CURLOPT_TIMEOUT => 30,
             CURLOPT_SSL_VERIFYPEER => false,
         ]);
         $raw = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
         $data = is_string($raw) ? json_decode($raw, true) : null;
-        $list = is_array($data['shippers'] ?? null) ? $data['shippers'] : (is_array($data) && array_is_list($data) ? $data : []);
-        if (!$list) {
+        $list = is_array($data['shippers'] ?? null) ? $data['shippers'] : [];
+        if ($httpCode < 200 || $httpCode >= 300 || !$list) {
             $_SESSION['courier_partner_flash'] = [
                 'success' => false,
-                'message' => (string) ($data['error'] ?? $data['message'] ?? 'Could not fetch shippers.'),
+                'message' => (string) ($data['error'] ?? $data['message'] ?? 'Could not fetch shippers (HTTP ' . $httpCode . ').'),
             ];
             header('Location: ?page=courier_partners&action=list');
             exit;
