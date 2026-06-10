@@ -511,7 +511,7 @@ class BlueDartAdapter implements CourierAdapterInterface
         }
 
         $codAmount = $isCod ? round((float) ($request['cod_amount'] ?? $declaredValue), 2) : 0.0;
-        $productCodes = $this->resolveProductCodes($request, $isCod);
+        $productCodes = $this->resolveProductCodes($request, $isCod, $credentials);
 
         $boxNo = (int) ($request['box_no'] ?? 0);
         $creditReference = strtoupper(preg_replace('/[^A-Z0-9]/', '', $orderNumber));
@@ -669,7 +669,7 @@ class BlueDartAdapter implements CourierAdapterInterface
     }
 
     /** @return array{product_code:string,sub_product_code:string,pack_type:string} */
-    private function resolveProductCodes(array $request, bool $isCod): array
+    private function resolveProductCodes(array $request, bool $isCod, array $credentials = []): array
     {
         $metadata = is_array($request['metadata'] ?? null) ? $request['metadata'] : [];
         $productCode = strtoupper(trim((string) ($metadata['product_code'] ?? '')));
@@ -699,8 +699,34 @@ class BlueDartAdapter implements CourierAdapterInterface
             }
         }
 
+        if ($productCode === '') {
+            $serviceTypeCatalog = trim((string) (
+                $metadata['serviceType']
+                ?? $metadata['service_type']
+                ?? $request['serviceType']
+                ?? $request['service_type']
+                ?? bluedartPickServiceTypeFromCredentials($credentials)
+            ));
+            $defaultSub = $isCod ? 'C' : 'P';
+            if (str_contains($serviceTypeCatalog, ',')) {
+                $parsed = bluedartPickProductForShipment($serviceTypeCatalog, $isCod, $defaultSub);
+            } else {
+                $parsed = bluedartParseServiceTypeCode($serviceTypeCatalog, $defaultSub);
+            }
+            if ($parsed !== null) {
+                $productCode = $parsed['product_code'];
+                $subProductCode = $parsed['sub_product_code'];
+                if ($packType === 'L' && !empty($parsed['pack_type'])) {
+                    $packType = strtoupper((string) $parsed['pack_type']);
+                }
+            }
+        }
+
         if ($productCode === '' || strlen($productCode) !== 1 || !ctype_alpha($productCode)) {
-            $productCode = 'A';
+            $productCode = strtoupper(trim((string) ($credentials['default_product_code'] ?? 'A')));
+            if ($productCode === '' || strlen($productCode) !== 1) {
+                $productCode = 'A';
+            }
         }
         if ($subProductCode === '' || !in_array($subProductCode, ['P', 'C'], true)) {
             $subProductCode = $isCod ? 'C' : 'P';

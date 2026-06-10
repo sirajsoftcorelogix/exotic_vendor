@@ -1345,6 +1345,9 @@ switch ($page) {
             case 'bulk_create_invoices_dispatch':
                 $controller->bulkCreateInvoicesDispatch();
                 break;
+            case 'export_bluedart_excel':
+                $controller->exportBlueDartExcel();
+                break;
             case 'bulk_print_labels':
                 $controller->bulkPrintLabels();
                 break;

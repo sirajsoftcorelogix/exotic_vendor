@@ -30,6 +30,9 @@ define('smtpUser', 'vendor-admin@exoticindia.com');
 define('smtpPass', 'yXuF9tpZjeuHM8PdEGGc');
 define('smtpFrom', 'vendor-admin@exoticindia.com');
 
+// Vendor email API — login OTP and password reset (preferred over SMTP)
+define('vendorEmailApiUrl', 'https://www.exoticindia.com/vendor-api/email');
+define('vendorMailTransport', 'api'); // api | smtp
 
 // Load helpers
 require_once 'helpers/html_helpers.php';

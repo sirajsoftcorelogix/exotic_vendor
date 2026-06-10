@@ -1476,7 +1476,69 @@ class DispatchController {
         unset($invoice);
         renderTemplate('views/dispatch/bulk_dispatch.php', ['invoices' => [], 'dispatchRecords' => $invoice_dispatch]);
     }
-   
+
+    /**
+     * Export Blue Dart–selected bulk dispatch boxes to Excel (one sheet per service family: Air / Surface).
+     */
+    public function exportBlueDartExcel(): void
+    {
+        global $ordersModel;
+
+        is_login();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['success' => false, 'message' => 'POST required.']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/dispatch/bluedart_bulk_excel_export.php';
+
+        $raw = file_get_contents('php://input');
+        $payload = is_string($raw) ? json_decode($raw, true) : null;
+        if (!is_array($payload)) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['success' => false, 'message' => 'Invalid request body.']);
+            exit;
+        }
+
+        $boxes = $payload['boxes'] ?? [];
+        if (!is_array($boxes) || $boxes === []) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['success' => false, 'message' => 'No boxes submitted for export.']);
+            exit;
+        }
+
+        $orderCache = [];
+        $orderInfoResolver = static function (string $orderNumber) use ($ordersModel, &$orderCache): array {
+            if (isset($orderCache[$orderNumber])) {
+                return $orderCache[$orderNumber];
+            }
+            $numeric = (int) preg_replace('/\D/', '', $orderNumber);
+            $info = $numeric > 0 ? $ordersModel->getRemarksByOrderNumber($numeric) : null;
+            $orderCache[$orderNumber] = is_array($info) ? $info : [];
+
+            return $orderCache[$orderNumber];
+        };
+
+        $prepared = bluedartBulkExcelPrepareSheets($boxes, $orderInfoResolver);
+        if (empty($prepared['success'])) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode([
+                'success' => false,
+                'message' => (string) ($prepared['message'] ?? 'Could not prepare export.'),
+                'skipped' => $prepared['skipped'] ?? [],
+            ]);
+            exit;
+        }
+
+        $filename = 'bluedart_dispatch_' . date('Y-m-d_His') . '.xlsx';
+        bluedartBulkExcelStreamDownload($prepared['sheets'] ?? [], $filename);
+    }
 
     /**
      * Bulk create invoices and dispatch records from bulk dispatch form
