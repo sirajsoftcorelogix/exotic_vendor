@@ -17,8 +17,8 @@ class UsersController
     private const DEV_LOGIN_EMAIL = 'siraj.php@gmail.com';
     private const DEV_LOGIN_OTP = '1234';
 
-    /** Set false when SMTP email OTP is restored. */
-    private const SKIP_EMAIL_OTP = true;
+    /** Set true only to bypass email and use admin-generated OTP from Users list. */
+    private const SKIP_EMAIL_OTP = false;
 
     private function isDevLoginEmail(string $login): bool
     {
@@ -87,16 +87,30 @@ class UsersController
             ]);
         }
 
+        $recipientEmail = trim((string) ($user['email'] ?? ''));
+        if ($recipientEmail === '' || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+            vendorJsonResponse([
+                'success' => false,
+                'message' => 'No valid email is on file for this account. Contact your administrator.',
+            ]);
+        }
+
         $token = (string) random_int(100000, 999999);
         if (!$usersModel->saveResetToken($user['id'], $token)) {
             vendorJsonResponse(['success' => false, 'message' => 'Could not save login OTP. Please try again.']);
         }
 
+        $recipientName = trim((string) ($user['name'] ?? ''));
+        if ($recipientName === '') {
+            $recipientName = 'Vendor User';
+        }
+
         $result = sendVendorOtpEmail(
-            $login,
+            $recipientEmail,
             $token,
             'VendorDesk - Login OTP',
-            'login_otp.html'
+            'login_otp.html',
+            $recipientName
         );
 
         $payload = [
@@ -198,17 +212,30 @@ class UsersController
             $token = (string) random_int(100000, 999999);
             $usersModel->saveResetToken($user['id'], $token);
 
+            $recipientEmail = trim((string) ($user['email'] ?? ''));
+            if ($recipientEmail === '' || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'No valid email is on file for this account. Contact your administrator.',
+                ]);
+                exit;
+            }
+
+            $recipientName = trim((string) ($user['name'] ?? ''));
+            if ($recipientName === '') {
+                $recipientName = 'Vendor User';
+            }
+
             $result = sendVendorOtpEmail(
-                $login,
+                $recipientEmail,
                 $token,
                 'VendorDesk - Password Recovery - OTP Inside',
-                'password_recovery.html'
+                'password_recovery.html',
+                $recipientName
             );
 
             $payload = ['success' => $result['success'], 'message' => $result['message']];
-            if ($result['success']) {
-                $payload['token'] = $token;
-            } elseif (!empty($result['smtp_error'])) {
+            if (!$result['success'] && !empty($result['smtp_error'])) {
                 $payload['smtp_error'] = $result['smtp_error'];
             }
             echo json_encode($payload);

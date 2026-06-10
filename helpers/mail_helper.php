@@ -132,21 +132,157 @@ function vendorFriendlyMailErrorMessage(string $technical = ''): string
     return 'We could not send your OTP email. Please try again or contact support.';
 }
 
+function vendorMailUsesApi(): bool
+{
+    if (defined('vendorMailTransport')) {
+        return strtolower(trim((string) vendorMailTransport)) === 'api';
+    }
+
+    return defined('vendorEmailApiUrl') && trim((string) vendorEmailApiUrl) !== '';
+}
+
+function vendorEmailApiUrl(): string
+{
+    if (!defined('vendorEmailApiUrl')) {
+        return 'https://www.exoticindia.com/vendor-api/email';
+    }
+
+    $url = trim((string) vendorEmailApiUrl);
+    return $url !== '' ? $url : 'https://www.exoticindia.com/vendor-api/email';
+}
+
+function vendorBuildOtpEmailHtml(string $otp, string $templateFile): string
+{
+    $htmlBody = loadVendorMailTemplate($templateFile);
+    $htmlBody = str_replace('{{OTP_CODE}}', $otp, $htmlBody);
+
+    return str_replace('{{CURRENT_YEAR}}', date('Y'), $htmlBody);
+}
+
 /**
  * @return array{success: bool, message: string, smtp_error?: string}
  */
-function sendVendorOtpEmail(string $toEmail, string $otp, string $subject, string $templateFile): array
-{
+function vendorSendEmailViaApi(
+    string $recipientEmail,
+    string $recipientName,
+    string $subject,
+    string $body
+): array {
+    $recipientEmail = trim($recipientEmail);
+    if ($recipientEmail === '' || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+        return [
+            'success' => false,
+            'message' => 'That email address could not be used. Please check it and try again.',
+            'smtp_error' => 'Invalid recipient_email.',
+        ];
+    }
+
+    $recipientName = trim($recipientName);
+    if ($recipientName === '') {
+        $recipientName = $recipientEmail;
+    }
+
+    $subject = trim($subject);
+    if ($subject === '' || trim($body) === '') {
+        return [
+            'success' => false,
+            'message' => 'Could not send OTP email. Please try again.',
+            'smtp_error' => 'Email subject/body is empty.',
+        ];
+    }
+
+    $url = vendorEmailApiUrl();
+    $postFields = http_build_query([
+        'recipient_email' => $recipientEmail,
+        'recipient_name' => $recipientName,
+        'subject' => $subject,
+        'body' => $body,
+    ]);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $postFields,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json, text/plain, */*'],
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_CONNECTTIMEOUT => 15,
+    ]);
+
+    $raw = curl_exec($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($raw === false) {
+        $technical = $curlError !== '' ? $curlError : 'Email API request failed.';
+        error_log('Vendor email API failed: ' . $technical);
+
+        return [
+            'success' => false,
+            'message' => vendorFriendlyMailErrorMessage($technical),
+            'smtp_error' => $technical,
+        ];
+    }
+
+    $responseText = trim((string) $raw);
+    $decoded = json_decode($responseText, true);
+
+    if ($httpCode >= 200 && $httpCode < 300) {
+        if (is_array($decoded)) {
+            $explicitFailure = $decoded['success'] ?? $decoded['status'] ?? null;
+            if ($explicitFailure === false || $explicitFailure === 0 || $explicitFailure === '0' || $explicitFailure === 'error') {
+                $technical = trim((string) ($decoded['message'] ?? $decoded['error'] ?? $responseText));
+                error_log('Vendor email API rejected: ' . $technical);
+
+                return [
+                    'success' => false,
+                    'message' => vendorFriendlyMailErrorMessage($technical),
+                    'smtp_error' => $technical !== '' ? $technical : 'Email API returned an error.',
+                ];
+            }
+        }
+
+        return ['success' => true, 'message' => 'OTP sent to your email.'];
+    }
+
+    $technical = is_array($decoded)
+        ? trim((string) ($decoded['message'] ?? $decoded['error'] ?? $responseText))
+        : $responseText;
+    if ($technical === '') {
+        $technical = 'Email API HTTP ' . $httpCode;
+    }
+    error_log('Vendor email API HTTP ' . $httpCode . ': ' . $technical);
+
+    return [
+        'success' => false,
+        'message' => vendorFriendlyMailErrorMessage($technical),
+        'smtp_error' => $technical,
+    ];
+}
+
+/**
+ * @return array{success: bool, message: string, smtp_error?: string}
+ */
+function sendVendorOtpEmail(
+    string $toEmail,
+    string $otp,
+    string $subject,
+    string $templateFile,
+    string $recipientName = ''
+): array {
     try {
+        $htmlBody = vendorBuildOtpEmailHtml($otp, $templateFile);
+
+        if (vendorMailUsesApi()) {
+            return vendorSendEmailViaApi($toEmail, $recipientName, $subject, $htmlBody);
+        }
+
         $mail = createVendorMailer(20);
         $mail->setFrom(vendorSmtpFromEmail(), 'Exotic India Vendor Portal');
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
         $mail->Subject = $subject;
-
-        $htmlBody = loadVendorMailTemplate($templateFile);
-        $htmlBody = str_replace('{{OTP_CODE}}', $otp, $htmlBody);
-        $htmlBody = str_replace('{{CURRENT_YEAR}}', date('Y'), $htmlBody);
         $mail->Body = $htmlBody;
         $mail->AltBody = 'Your OTP is: ' . $otp;
 
