@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../../shiprocket_service.php';
+require_once __DIR__ . '/../../helpers/dispatch_delivery_dates.php';
+require_once __DIR__ . '/../../helpers/dispatch_courier_identity.php';
 
 class Dispatch {
     private $db;
@@ -42,8 +44,8 @@ class Dispatch {
     }   
     public function createDispatch($data) {
        
-        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, shiprocket_tracking_url, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, awb_code, shipment_status, label_url, groupname, box_size, created_by, created_at, pickup_location, batch_no) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, shiprocket_tracking_url, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, courier_company_id, shipper_id, courier_partner_id, awb_code, shipment_status, label_url, etd, edd, groupname, box_size, created_by, created_at, pickup_location, batch_no) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
@@ -71,16 +73,28 @@ class Dispatch {
         $shipping_charges = (float)($data['shipping_charges'] ?? 0);
         $dispatch_date = $data['dispatch_date'] ?? date('Y-m-d H:i:s');
         $courier_name = $data['courier_name'] ?? null;
+        $courier_company_id = isset($data['courier_company_id']) && (int) $data['courier_company_id'] > 0
+            ? (int) $data['courier_company_id']
+            : null;
+        $shipper_id = isset($data['shipper_id']) && (int) $data['shipper_id'] > 0
+            ? (int) $data['shipper_id']
+            : null;
+        $courier_partner_id = isset($data['courier_partner_id']) && (int) $data['courier_partner_id'] > 0
+            ? (int) $data['courier_partner_id']
+            : null;
         $awb_code = $data['awb_code'] ?? null;
         $shipment_status = $data['shipment_status'] ?? null;
         $label_url = $data['label_url'] ?? null;
+        $deliveryDates = extractDispatchDeliveryDates($data, $dispatch_date);
+        $etd = $deliveryDates['etd'];
+        $edd = $deliveryDates['edd'];
         $groupname = $data['groupname'] ?? null;
         $box_size = $data['box_size'] ?? null;
         $created_by = (int)$data['created_by'];
         $created_at = $data['created_at'];
 
         $stmt->bind_param(
-            'iisssssdddddddsssssssisss',
+            'iisssssdddddddssiiisssssssisss',
             $invoice_id,
             $box_no,
             $order_number,
@@ -97,9 +111,14 @@ class Dispatch {
             $shipping_charges,
             $dispatch_date,
             $courier_name,
+            $courier_company_id,
+            $shipper_id,
+            $courier_partner_id,
             $awb_code,
             $shipment_status,
             $label_url,
+            $etd,
+            $edd,
             $groupname,
             $box_size,
             $created_by,
@@ -334,14 +353,51 @@ class Dispatch {
 
         return $response['json'] ?? null;
     }
-    public function updateDispatchAwbCode($shipment_id, $awb_code) {
-        $sql = "UPDATE vp_dispatch_details SET awb_code = ? WHERE shiprocket_shipment_id = ?";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) return false;
+    public function updateDispatchAwbCode($shipment_id, $awb_code, array $extra = []) {
+        $fields = array_merge(['awb_code' => $awb_code], $extra);
+        return $this->updateDispatchByShiprocketShipmentId((int) $shipment_id, $fields);
+    }
 
-        $stmt->bind_param('si', $awb_code, $shipment_id);
+    public function updateDispatchByShiprocketShipmentId(int $shipment_id, array $data): bool
+    {
+        if ($shipment_id <= 0 || empty($data)) {
+            return false;
+        }
+
+        $setParts = [];
+        $types = '';
+        $values = [];
+
+        foreach ($data as $field => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+            $setParts[] = "$field = ?";
+            if (in_array($field, ['courier_company_id', 'shipper_id', 'courier_partner_id'], true)) {
+                $types .= 'i';
+                $values[] = (int) $value;
+            } else {
+                $types .= 's';
+                $values[] = $value;
+            }
+        }
+
+        if (empty($setParts)) {
+            return false;
+        }
+
+        $types .= 'i';
+        $values[] = $shipment_id;
+        $sql = 'UPDATE vp_dispatch_details SET ' . implode(', ', $setParts) . ' WHERE shiprocket_shipment_id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param($types, ...$values);
         $result = $stmt->execute();
         $stmt->close();
+
         return $result;
     }
     public function updateDispatchLabelUrl($shipment_id, $label_url) {
@@ -356,18 +412,48 @@ class Dispatch {
     }
     
     public function updateDispatchStatus($dispatchId, $status, $tracking_url = null, $etd = null, $edd = null) {
-        $sql = "UPDATE vp_dispatch_details SET shipment_status = ?, shiprocket_tracking_url = ?, etd = ?, edd = ? WHERE id = ?";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) return false;
+        $fields = ['shipment_status' => $status];
+        $argc = func_num_args();
 
-        $stmt->bind_param('ssssi', $status, $tracking_url, $etd, $edd, $dispatchId);
-        $result = $stmt->execute();
-        $stmt->close();
-        return $result;
+        if ($argc >= 3 && $tracking_url !== null && $tracking_url !== '') {
+            $fields['shiprocket_tracking_url'] = $tracking_url;
+        }
+        if ($argc >= 4 && $etd !== null && $etd !== '') {
+            $normalizedEtd = normalizeDispatchDeliveryDatetime($etd);
+            if ($normalizedEtd !== null) {
+                $fields['etd'] = $normalizedEtd;
+            }
+        }
+        if ($argc >= 5 && $edd !== null && $edd !== '') {
+            $normalizedEdd = normalizeDispatchDeliveryDatetime($edd);
+            if ($normalizedEdd !== null) {
+                $fields['edd'] = $normalizedEdd;
+            }
+        }
+
+        return $this->updateDispatch($dispatchId, $fields);
     }
 
     public function updateDispatch($dispatchId, $data) {
         if (empty($data)) return false;
+
+        $record = $this->getDispatchById($dispatchId);
+        $baseDate = is_array($record) ? (string) ($record['dispatch_date'] ?? date('Y-m-d H:i:s')) : date('Y-m-d H:i:s');
+        if (array_key_exists('etd', $data) && $data['etd'] !== null && $data['etd'] !== '') {
+            $data['etd'] = normalizeDispatchDeliveryDatetime($data['etd'], $baseDate);
+        }
+        if (array_key_exists('edd', $data) && $data['edd'] !== null && $data['edd'] !== '') {
+            $data['edd'] = normalizeDispatchDeliveryDatetime($data['edd'], $baseDate);
+        }
+        if (array_key_exists('etd', $data) && $data['etd'] === null) {
+            unset($data['etd']);
+        }
+        if (array_key_exists('edd', $data) && $data['edd'] === null) {
+            unset($data['edd']);
+        }
+        if (empty($data)) {
+            return false;
+        }
         
         $setParts = [];
         $types = '';
@@ -375,8 +461,13 @@ class Dispatch {
         
         foreach ($data as $field => $value) {
             $setParts[] = "$field = ?";
-            $types .= 's';
-            $values[] = $value;
+            if (in_array($field, ['courier_company_id', 'shipper_id', 'courier_partner_id', 'invoice_id', 'box_no', 'created_by'], true)) {
+                $types .= 'i';
+                $values[] = (int) $value;
+            } else {
+                $types .= 's';
+                $values[] = $value;
+            }
         }
         
         $types .= 'i'; // for dispatchId
@@ -419,13 +510,15 @@ class Dispatch {
         $labelInfoResponse = $this->getShiprocketLabels($shipmentId);
         //update dispatch record with new AWB code and label URL if available
         if($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
-            $awbCode = $awbInfoResponse['awb_code'] ?? null;
-            if($awbCode == null) {
-                $awbCode = $awbInfoResponse['response']['data']['awb_code'] ?? null;
+            $assignment = buildShiprocketAssignmentUpdate($this->db, $awbInfoResponse, [
+                'courier_name' => (string) ($dispatchRecord['courier_name'] ?? ''),
+                'courier_id' => (string) ($dispatchRecord['courier_company_id'] ?? ''),
+                'partner_code' => 'shiprocket',
+            ]);
+            if (!empty($assignment)) {
+                $this->updateDispatchByShiprocketShipmentId((int) $shipmentId, $assignment);
             }
-            if($awbCode) {
-                $this->updateDispatchAwbCode($shipmentId, $awbCode);
-            }
+            $awbCode = $assignment['awb_code'] ?? null;
         }
         if($labelInfoResponse && isset($labelInfoResponse['label_created']) && $labelInfoResponse['label_created'] == 1) {
             $labelUrl = $labelInfoResponse['label_url'] ?? null;
