@@ -104,6 +104,11 @@ class CourierPartner
             return ['success' => false, 'message' => 'Partner code and partner name are required.'];
         }
 
+        $dup = $this->duplicatePartnerError($code, (int) preg_replace('/\D/', '', (string) ($data['shipper_id'] ?? '')));
+        if ($dup !== null) {
+            return ['success' => false, 'message' => $dup];
+        }
+
         $supportsDomestic = !empty($data['supports_domestic']) ? 1 : 0;
         $supportsInternational = !empty($data['supports_international']) ? 1 : 0;
         $isActive = isset($data['is_active']) ? (int)$data['is_active'] : 1;
@@ -135,6 +140,15 @@ class CourierPartner
         $name = trim((string)($data['partner_name'] ?? ''));
         if ($code === '' || $name === '') {
             return ['success' => false, 'message' => 'Partner code and partner name are required.'];
+        }
+
+        $dup = $this->duplicatePartnerError(
+            $code,
+            (int) preg_replace('/\D/', '', (string) ($data['shipper_id'] ?? '')),
+            $id
+        );
+        if ($dup !== null) {
+            return ['success' => false, 'message' => $dup];
         }
 
         $supportsDomestic = !empty($data['supports_domestic']) ? 1 : 0;
@@ -200,7 +214,7 @@ class CourierPartner
         }
 
         $norm = static fn(string $s): string => preg_replace('/[^a-z0-9]/', '', strtolower($s)) ?? '';
-        $updated = $added = 0;
+        $updated = $skipped = 0;
 
         foreach ($apiRows as $row) {
             if (!is_array($row)) {
@@ -213,15 +227,12 @@ class CourierPartner
             }
 
             $code = strtoupper(substr(preg_replace('/[^A-Z0-9]/', '', strtoupper($name)) ?? '', 0, 50));
-            if ($code === '') {
-                $code = 'SHIPPER' . $sid;
-            }
+            $key = $norm($name);
 
             $match = null;
-            $key = $norm($name);
             foreach ($partners as $p) {
                 if ((int) ($p['shipper_id'] ?? 0) === $sid
-                    || strcasecmp((string) $p['partner_code'], $code) === 0
+                    || ($code !== '' && strcasecmp((string) $p['partner_code'], $code) === 0)
                     || $norm((string) $p['partner_name']) === $key
                     || $norm((string) $p['partner_code']) === $key) {
                     $match = $p;
@@ -229,52 +240,64 @@ class CourierPartner
                 }
             }
 
-            if ($match) {
-                if ((int) ($match['shipper_id'] ?? 0) !== $sid) {
-                    $pid = (int) $match['id'];
-                    $stmt = $this->conn->prepare('UPDATE courier_partners SET shipper_id = ? WHERE id = ?');
-                    $stmt->bind_param('ii', $sid, $pid);
-                    if ($stmt->execute()) {
-                        $updated++;
-                        $match['shipper_id'] = $sid;
-                    }
-                }
+            if (!$match) {
+                $skipped++;
                 continue;
             }
 
-            try {
-                $insert = $this->addRecord([
-                    'partner_code' => $code,
-                    'partner_name' => $name,
-                    'shipper_id' => $sid,
-                    'supports_domestic' => 1,
-                    'supports_international' => 1,
-                    'is_active' => 1,
-                    'notes' => 'From shipper-fetch API.',
-                ]);
-            } catch (\mysqli_sql_exception $e) {
-                $insert = ['success' => false, 'message' => $e->getMessage()];
+            $pid = (int) $match['id'];
+            foreach ($partners as $p) {
+                if ((int) ($p['shipper_id'] ?? 0) === $sid && (int) $p['id'] !== $pid) {
+                    $skipped++;
+                    continue 2;
+                }
             }
 
-            if (!empty($insert['success'])) {
-                $added++;
-                $partners[] = ['id' => (int) $this->conn->insert_id, 'partner_code' => $code, 'partner_name' => $name, 'shipper_id' => $sid];
+            if ((int) ($match['shipper_id'] ?? 0) === $sid) {
                 continue;
             }
 
-            $stmt = $this->conn->prepare('UPDATE courier_partners SET shipper_id = ? WHERE partner_code = ?');
-            if ($stmt) {
-                $stmt->bind_param('is', $sid, $code);
-                if ($stmt->execute() && $stmt->affected_rows > 0) {
-                    $updated++;
-                }
+            $stmt = $this->conn->prepare('UPDATE courier_partners SET shipper_id = ? WHERE id = ?');
+            $stmt->bind_param('ii', $sid, $pid);
+            if ($stmt->execute()) {
+                $updated++;
+                $match['shipper_id'] = $sid;
             }
         }
 
         return [
             'success' => true,
-            'message' => "Shipper sync done: {$updated} updated, {$added} added.",
+            'message' => "Shipper sync done: {$updated} updated, {$skipped} skipped (no local match or shipper ID already used).",
         ];
+    }
+
+    private function duplicatePartnerError(string $code, int $shipperId, int $excludeId = 0): ?string
+    {
+        $stmt = $this->conn->prepare('SELECT id FROM courier_partners WHERE partner_code = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $code);
+            $stmt->execute();
+            $row = $stmt->get_result()?->fetch_assoc();
+            $stmt->close();
+            if ($row && (int) $row['id'] !== $excludeId) {
+                return 'Partner code already exists.';
+            }
+        }
+
+        if ($shipperId > 0) {
+            $stmt = $this->conn->prepare('SELECT id FROM courier_partners WHERE shipper_id = ? LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $shipperId);
+                $stmt->execute();
+                $row = $stmt->get_result()?->fetch_assoc();
+                $stmt->close();
+                if ($row && (int) $row['id'] !== $excludeId) {
+                    return 'Shipper ID is already assigned to another partner.';
+                }
+            }
+        }
+
+        return null;
     }
 }
 

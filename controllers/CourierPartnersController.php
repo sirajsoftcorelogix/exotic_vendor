@@ -13,8 +13,8 @@ class CourierPartnersController
         $search = isset($_GET['search_text']) ? trim((string)$_GET['search_text']) : '';
         $status = isset($_GET['status_filter']) ? trim((string)$_GET['status_filter']) : '';
         $pageNo = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
-        $limit = in_array($limit, [5, 20, 50, 100], true) ? $limit : 20;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+        $limit = in_array($limit, [5, 20, 50, 100], true) ? $limit : 50;
 
         $res = $courierPartnerModel->getAll($pageNo, $limit, $search, $status);
 

@@ -8,7 +8,7 @@ $search = $search ?? '';
 $statusFilter = $status_filter ?? '';
 $currentPage = (int)($currentPage ?? 1);
 $totalPages = (int)($totalPages ?? 1);
-$limit = (int)($limit ?? 20);
+$limit = (int)($limit ?? 50);
 $totalRecords = (int)($totalRecords ?? 0);
 $rowCount = is_array($rows) ? count($rows) : 0;
 $filtersPanelOpen = trim($search) !== '' || ($statusFilter !== '' && $statusFilter !== null);
