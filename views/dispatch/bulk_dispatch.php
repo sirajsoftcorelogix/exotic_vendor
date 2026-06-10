@@ -45,7 +45,11 @@
     </div>
     
 
-    <div class="border-t border-gray-200 px-4 py-3 flex justify-end bg-white">
+    <div class="border-t border-gray-200 px-4 py-3 flex justify-end gap-3 bg-white">
+        <button type="button" id="downloadBlueDartExcelBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2">
+            <span>📥</span>
+            <span>Download Excel</span>
+        </button>
         <button id="bulkCreateInvoiceDispatchBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2">
             <span>🚚</span>
             <span>Invoice &amp; Dispatch</span>
@@ -2127,6 +2131,174 @@
             fetchCouriersForBox(boxElement);
         }
     });
+
+    function isBlueDartCourierSelection(courierFields) {
+        const partnerCode = String(courierFields.partner_code || '').toLowerCase();
+        const rateSource = String(courierFields.rate_source || '').toLowerCase();
+        const courierName = String(courierFields.courier_name || '');
+        if (partnerCode === 'bluedart' || rateSource === 'bluedart') {
+            return true;
+        }
+        return /blue\s*dart|bluedart/i.test(courierName);
+    }
+
+    function parseItemTotalAmount(text) {
+        return parseFloat(String(text || '').replace(/[^0-9.]/g, '')) || 0;
+    }
+
+    function readBoxDimensionsCm(boxElement) {
+        const boxSizeSelect = boxElement.querySelector('select.BoxSize') || boxElement.querySelector('select');
+        const selectedOption = boxSizeSelect ? boxSizeSelect.options[boxSizeSelect.selectedIndex] : null;
+        const inchToCm = 2.54;
+        const lengthIn = selectedOption ? parseFloat(selectedOption.getAttribute('data-length')) || 0 : 0;
+        const widthIn = selectedOption ? parseFloat(selectedOption.getAttribute('data-width')) || 0 : 0;
+        const heightIn = selectedOption ? parseFloat(selectedOption.getAttribute('data-height')) || 0 : 0;
+        return {
+            length_cm: lengthIn > 0 ? Math.round(lengthIn * inchToCm * 100) / 100 : 10,
+            width_cm: widthIn > 0 ? Math.round(widthIn * inchToCm * 100) / 100 : 10,
+            height_cm: heightIn > 0 ? Math.round(heightIn * inchToCm * 100) / 100 : 10,
+        };
+    }
+
+    function collectBlueDartBoxesForExport() {
+        const container = document.getElementById('invDispatchesContainer');
+        const orderSections = container.querySelectorAll('.px-4.pt-4.pb-2');
+        const boxes = [];
+        const warnings = [];
+
+        orderSections.forEach((orderSection) => {
+            const orderBox = orderSection.querySelector('[data-order-number]');
+            if (!orderBox) {
+                return;
+            }
+
+            const orderNumber = orderBox.getAttribute('data-order-number') || '';
+            const customerName = orderBox.getAttribute('data-customer-name') || '';
+            const boxElements = orderSection.querySelectorAll('[data-order-number]');
+            let boxNo = 0;
+
+            boxElements.forEach((boxElement) => {
+                const itemRows = boxElement.querySelectorAll('.items-container > div.px-4.py-1');
+                if (!itemRows.length) {
+                    return;
+                }
+
+                const courierFields = readCourierFieldsForBox(boxElement, orderSection);
+                if (!isBlueDartCourierSelection(courierFields)) {
+                    return;
+                }
+                if (!courierFields.courier_id) {
+                    warnings.push('Order #' + orderNumber + ' has Blue Dart items but no courier selected. Click List Couriers first.');
+                    return;
+                }
+
+                boxNo += 1;
+                let declaredValue = 0;
+                let isCod = boxElement.getAttribute('data-is-cod') === '1';
+                itemRows.forEach((row) => {
+                    const cols = row.querySelectorAll('[class*="col-span"]');
+                    declaredValue += parseItemTotalAmount(cols[7]?.textContent);
+                    const paymentType = (cols[8]?.textContent || '').toLowerCase();
+                    if (paymentType.includes('cod')) {
+                        isCod = true;
+                    }
+                });
+
+                const weightInput = boxElement.querySelector('.weight-input');
+                const weight = weightInput ? parseFloat(weightInput.value) || 0 : 0;
+                const dims = readBoxDimensionsCm(boxElement);
+                const boxSizeSelect = boxElement.querySelector('select.BoxSize') || boxElement.querySelector('select');
+                const boxSize = boxSizeSelect ? boxSizeSelect.value : '';
+
+                boxes.push({
+                    order_number: orderNumber,
+                    customer_name: customerName,
+                    box_no: boxNo,
+                    box_size: boxSize,
+                    weight: weight,
+                    declared_value: declaredValue > 0 ? declaredValue : 0.01,
+                    is_cod: isCod,
+                    piece_count: 1,
+                    courier_id: courierFields.courier_id,
+                    courier_name: courierFields.courier_name,
+                    partner_code: courierFields.partner_code,
+                    rate_source: courierFields.rate_source,
+                    product_group: courierFields.product_group,
+                    product_type: courierFields.product_type,
+                    partner_account_id: courierFields.partner_account_id,
+                    metadata: courierFields.metadata || {},
+                    length_cm: dims.length_cm,
+                    width_cm: dims.width_cm,
+                    height_cm: dims.height_cm,
+                });
+            });
+        });
+
+        return { boxes, warnings };
+    }
+
+    const downloadBlueDartExcelBtn = document.getElementById('downloadBlueDartExcelBtn');
+    if (downloadBlueDartExcelBtn) {
+        downloadBlueDartExcelBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+
+            const collected = collectBlueDartBoxesForExport();
+            if (collected.warnings.length) {
+                showAlert(collected.warnings[0], 'warning');
+            }
+            if (!collected.boxes.length) {
+                showAlert('No Blue Dart boxes to export. Select Blue Dart as courier on at least one box with items.', 'warning');
+                return;
+            }
+
+            const invalidWeight = collected.boxes.find((box) => !box.weight || box.weight <= 0);
+            if (invalidWeight) {
+                showAlert('Enter a valid weight for all Blue Dart boxes before downloading Excel.', 'warning');
+                return;
+            }
+
+            const btn = downloadBlueDartExcelBtn;
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span>Preparing...</span>';
+
+            try {
+                const response = await fetch('?page=dispatch&action=export_bluedart_excel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ boxes: collected.boxes }),
+                });
+
+                const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
+                if (!response.ok || contentType.includes('application/json')) {
+                    let message = 'Could not generate Excel.';
+                    try {
+                        const data = await response.json();
+                        message = data.message || message;
+                    } catch (err) {
+                        // ignore parse errors
+                    }
+                    throw new Error(message);
+                }
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'bluedart_dispatch_' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.xlsx';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                showAlert('Blue Dart Excel downloaded (' + collected.boxes.length + ' box(es)).', 'success');
+            } catch (err) {
+                showAlert(err.message || 'Failed to download Excel.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        });
+    }
 
     // Handle bulk create invoices and dispatch
     const bulkCreateBtn = document.getElementById('bulkCreateInvoiceDispatchBtn');
