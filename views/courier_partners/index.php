@@ -177,7 +177,7 @@ $partnersPayloadJson = '';
                         <th class="px-5 py-3.5 whitespace-nowrap">International</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Accounts</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap">Actions</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap min-w-[11rem]">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -235,14 +235,14 @@ $partnersPayloadJson = '';
                                         <span class="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">Inactive</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-5 py-4">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <button type="button" class="cp-btn-edit inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50 transition"
+                                <td class="px-5 py-4 min-w-[11rem] whitespace-nowrap">
+                                    <div class="flex flex-nowrap items-center gap-2">
+                                        <button type="button" class="cp-btn-edit inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50 transition"
                                             data-partner-id="<?php echo (int) $r['id']; ?>">
                                             <i class="fas fa-pen text-[10px] text-indigo-600" aria-hidden="true"></i>
                                             Edit
                                         </button>
-                                        <form method="post" action="?page=courier_partners&action=deleteRecord" class="inline" onsubmit="return confirm('Delete this courier partner?');">
+                                        <form method="post" action="?page=courier_partners&action=deleteRecord" class="inline-flex shrink-0" onsubmit="return confirm('Delete this courier partner?');">
                                             <input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>">
                                             <button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 transition">
                                                 <i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
