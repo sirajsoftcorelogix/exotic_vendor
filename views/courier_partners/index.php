@@ -15,7 +15,7 @@ $totalPages = (int)($totalPages ?? 1);
 $limit = (int)($limit ?? 50);
 $totalRecords = (int)($totalRecords ?? 0);
 $rowCount = is_array($rows) ? count($rows) : 0;
-$filtersPanelOpen = trim($search) !== '' || $shipperIdFilter === 'missing' || trim((string) $shipperIdExact) !== '' || ($serviceAreaFilter !== '' && $serviceAreaFilter !== null) || ($accountsFilter !== '' && $accountsFilter !== null) || ($statusFilter !== '' && $statusFilter !== null);
+$filtersPanelOpen = trim($search) !== '' || in_array($shipperIdFilter, ['missing', 'specific'], true) || ($serviceAreaFilter !== '' && $serviceAreaFilter !== null) || ($accountsFilter !== '' && $accountsFilter !== null) || ($statusFilter !== '' && $statusFilter !== null);
 $qsParams = $_GET ?? [];
 unset($qsParams['page_no']);
 $qs = $qsParams ? ('&' . http_build_query($qsParams)) : '';
@@ -105,13 +105,14 @@ $partnersPayloadJson = '';
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Shipper ID</label>
-                    <select name="shipper_id_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                    <select name="shipper_id_filter" id="cp_shipper_id_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                         <option value="">All</option>
-                        <option value="missing" <?php echo $shipperIdFilter === 'missing' ? 'selected' : ''; ?>>Missing / blank</option>
+                        <option value="missing" <?php echo $shipperIdFilter === 'missing' ? 'selected' : ''; ?>>No Shipper ID</option>
+                        <option value="specific" <?php echo $shipperIdFilter === 'specific' ? 'selected' : ''; ?>>Specific ID</option>
                     </select>
-                    <input type="number" name="shipper_id_exact" min="1" step="1" placeholder="Or exact ID"
+                    <input type="number" name="shipper_id_exact" id="cp_shipper_id_exact" min="1" step="1" placeholder="Enter shipper ID"
                         value="<?php echo htmlspecialchars((string) $shipperIdExact); ?>"
-                        class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition <?php echo $shipperIdFilter === 'specific' ? '' : 'hidden'; ?>">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Service area</label>
@@ -134,11 +135,11 @@ $partnersPayloadJson = '';
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4 mt-4">
                 <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Courier accounts</label>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Configured</label>
                     <select name="accounts_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                         <option value="">All</option>
-                        <option value="configured" <?php echo $accountsFilter === 'configured' ? 'selected' : ''; ?>>Configured</option>
-                        <option value="not_configured" <?php echo $accountsFilter === 'not_configured' ? 'selected' : ''; ?>>Not configured</option>
+                        <option value="1" <?php echo $accountsFilter === '1' ? 'selected' : ''; ?>>Yes</option>
+                        <option value="0" <?php echo $accountsFilter === '0' ? 'selected' : ''; ?>>No</option>
                     </select>
                 </div>
             </div>
@@ -154,6 +155,19 @@ $partnersPayloadJson = '';
             </div>
         </form>
     </details>
+
+    <script>
+    (function () {
+        var sel = document.getElementById('cp_shipper_id_filter');
+        var exact = document.getElementById('cp_shipper_id_exact');
+        if (!sel || !exact) return;
+        function syncShipperIdExact() {
+            exact.classList.toggle('hidden', sel.value !== 'specific');
+        }
+        sel.addEventListener('change', syncShipperIdExact);
+        syncShipperIdExact();
+    })();
+    </script>
 
     <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
         <div class="overflow-x-auto">

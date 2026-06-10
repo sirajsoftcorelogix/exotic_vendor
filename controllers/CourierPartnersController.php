@@ -13,17 +13,25 @@ class CourierPartnersController
         $search = isset($_GET['search_text']) ? trim((string)$_GET['search_text']) : '';
         $status = isset($_GET['status_filter']) ? trim((string)$_GET['status_filter']) : '';
         $shipperIdRaw = trim((string) ($_GET['shipper_id_filter'] ?? ''));
+        if (!in_array($shipperIdRaw, ['missing', 'specific'], true)) {
+            $shipperIdRaw = '';
+        }
         $shipperIdExact = (int) preg_replace('/\D/', '', (string) ($_GET['shipper_id_exact'] ?? ''));
-        $missingShipperId = strtolower($shipperIdRaw) === 'missing';
-        $shipperIdFilter = $missingShipperId ? 0 : $shipperIdExact;
+        $missingShipperId = $shipperIdRaw === 'missing';
+        $shipperIdFilter = ($shipperIdRaw === 'specific' && $shipperIdExact > 0) ? $shipperIdExact : 0;
+        $shipperIdFilterUi = $shipperIdRaw;
+        if ($shipperIdFilterUi === '' && $shipperIdExact > 0) {
+            $shipperIdFilterUi = 'specific';
+        }
         $serviceAreaFilter = isset($_GET['service_area_filter']) ? strtolower(trim((string) $_GET['service_area_filter'])) : '';
         if (!in_array($serviceAreaFilter, ['domestic', 'international', 'both'], true)) {
             $serviceAreaFilter = '';
         }
-        $accountsFilter = isset($_GET['accounts_filter']) ? strtolower(trim((string) $_GET['accounts_filter'])) : '';
-        if (!in_array($accountsFilter, ['configured', 'not_configured'], true)) {
-            $accountsFilter = '';
+        $accountsFilterUi = isset($_GET['accounts_filter']) ? trim((string) $_GET['accounts_filter']) : '';
+        if (!in_array($accountsFilterUi, ['0', '1'], true)) {
+            $accountsFilterUi = '';
         }
+        $accountsFilter = $accountsFilterUi === '1' ? 'configured' : ($accountsFilterUi === '0' ? 'not_configured' : '');
         $pageNo = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
         $limit = in_array($limit, [5, 20, 50, 100], true) ? $limit : 50;
@@ -38,10 +46,10 @@ class CourierPartnersController
             'limit' => $res['limit'],
             'search' => $search,
             'status_filter' => $status,
-            'shipper_id_filter' => $missingShipperId ? 'missing' : '',
-            'shipper_id_exact' => (!$missingShipperId && $shipperIdFilter > 0) ? (string) $shipperIdFilter : '',
+            'shipper_id_filter' => $shipperIdFilterUi,
+            'shipper_id_exact' => ($shipperIdFilterUi === 'specific' && $shipperIdExact > 0) ? (string) $shipperIdExact : '',
             'service_area_filter' => $serviceAreaFilter,
-            'accounts_filter' => $accountsFilter,
+            'accounts_filter' => $accountsFilterUi,
         ], 'Courier Partner Master');
     }
 
