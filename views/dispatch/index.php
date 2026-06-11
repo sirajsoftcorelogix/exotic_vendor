@@ -413,7 +413,7 @@
                   <button class="text-gray-600 hover:bg-gray-100 rounded-full px-2 text-lg" onclick="toggleMenu(this)">
                     ⋮
                   </button>
-                  <div class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                  <div class="dropdown-menu hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
                     <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
                     <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download invoice</a>
                     <?php endif; ?>
@@ -514,9 +514,9 @@
     </div>
 </div>
 
-<div id="shipment-add-modal" class="fixed inset-0 z-[60] hidden items-center justify-center p-4">
-  <div class="absolute inset-0 bg-black/40" data-shipment-add-close></div>
-  <div class="relative w-full max-w-3xl max-h-[92vh] overflow-hidden bg-white rounded-lg shadow-xl flex flex-col">
+<div id="shipment-add-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black bg-opacity-40 z-0" data-shipment-add-close></div>
+  <div class="shipment-add-panel relative z-10 w-full max-w-3xl max-h-[92vh] overflow-hidden bg-white rounded-lg shadow-xl flex flex-col">
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
       <div>
         <h2 class="text-lg font-semibold text-gray-900">Exotic India Shipment API</h2>
@@ -791,7 +791,7 @@ if (bulkPrintBtn) {
       const modal = document.getElementById('shipment-add-modal');
       if (modal) {
         modal.classList.add('hidden');
-        modal.classList.remove('flex');
+        modal.querySelectorAll('.shipment-add-panel > div').forEach(el => el.classList.remove('hidden'));
       }
       shipmentAddCurrentDispatchId = 0;
     }
@@ -855,11 +855,11 @@ if (bulkPrintBtn) {
         return;
       }
 
-      document.querySelectorAll('.relative > div').forEach(menu => menu.classList.add('hidden'));
+      document.querySelectorAll('.dropdown-menu').forEach(menu => menu.classList.add('hidden'));
 
       const modal = document.getElementById('shipment-add-modal');
       modal.classList.remove('hidden');
-      modal.classList.add('flex');
+      modal.querySelectorAll('.shipment-add-panel > div').forEach(el => el.classList.remove('hidden'));
 
       loadShipmentAddPreview(shipmentAddCurrentDispatchId).catch(err => {
         const msg = 'Could not load shipment request: ' + err.message;
@@ -967,7 +967,7 @@ if (bulkPrintBtn) {
 
     document.addEventListener('click', function(event) {
       if (!event.target.closest('.relative')) {
-        document.querySelectorAll('.relative > div').forEach(menu => {
+        document.querySelectorAll('.dropdown-menu').forEach(menu => {
           menu.classList.add('hidden');
         });
       }
