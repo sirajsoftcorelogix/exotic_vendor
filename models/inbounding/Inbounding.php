@@ -1829,6 +1829,27 @@ class Inbounding {
         }
         return $blocked;
     }
+
+    public function isInboundPublished(int $id): bool
+    {
+        if ($id <= 0) {
+            return false;
+        }
+
+        $stmt = $this->conn->prepare(
+            "SELECT id FROM inbound_logs WHERE i_id = ? AND LOWER(TRIM(stat)) = 'published' LIMIT 1"
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $row = $stmt->get_result()?->fetch_assoc();
+        $stmt->close();
+
+        return !empty($row['id']);
+    }
+
     public function getProductBysku($sku) {
         $sql = "SELECT id FROM vp_products WHERE sku = ? LIMIT 1";
         $stmt = $this->conn->prepare($sql);
