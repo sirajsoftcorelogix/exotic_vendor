@@ -1274,6 +1274,8 @@ class DispatchController {
         $result = exotic_india_post_shipment_add($preview['payload']);
         $result = exotic_india_persist_shipment_add_result($conn, $dispatchId, $result);
 
+        $responseRaw = (string) ($result['raw'] ?? '');
+        $responseHeaders = (string) ($result['response_headers'] ?? '');
         echo json_encode([
             'success' => !empty($result['success']),
             'message' => (string) ($result['message'] ?? ''),
@@ -1282,7 +1284,13 @@ class DispatchController {
             'api_url' => $preview['api_url'],
             'request' => $preview['payload'],
             'response' => $result['data'] ?? null,
-            'response_raw' => $result['raw'] ?? null,
+            'response_raw' => $responseRaw,
+            'response_headers' => $responseHeaders,
+            'response_body_empty' => $responseRaw === '',
+            'response_body_length' => strlen($responseRaw),
+            'request_url' => (string) ($result['request_url'] ?? $preview['api_url']),
+            'request_headers' => $result['request_headers'] ?? [],
+            'curl_error' => (string) ($result['curl_error'] ?? ''),
             'issues' => $preview['issues'],
         ]);
     }

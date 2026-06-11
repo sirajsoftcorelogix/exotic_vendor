@@ -283,6 +283,10 @@ function exotic_india_post_shipment_add(array $payload): array
             'http_code' => (int) ($result['http_code'] ?? 0),
             'data' => $result['data'] ?? [],
             'raw' => (string) ($result['raw'] ?? ''),
+            'request_url' => (string) ($result['request_url'] ?? ''),
+            'request_headers' => $result['request_headers'] ?? [],
+            'response_headers' => (string) ($result['response_headers'] ?? ''),
+            'curl_error' => (string) ($result['curl_error'] ?? ''),
         ];
     }
 
@@ -294,6 +298,9 @@ function exotic_india_post_shipment_add(array $payload): array
         'http_code' => (int) ($result['http_code'] ?? 0),
         'data' => $data,
         'raw' => (string) ($result['raw'] ?? ''),
+        'request_url' => (string) ($result['request_url'] ?? ''),
+        'request_headers' => $result['request_headers'] ?? [],
+        'response_headers' => (string) ($result['response_headers'] ?? ''),
     ];
     if ($shipmentId !== '') {
         $response['shipment_id'] = $shipmentId;

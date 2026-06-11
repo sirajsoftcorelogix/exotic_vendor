@@ -43,8 +43,41 @@ function exotic_india_api_auth_headers(bool $includeAdminApiTest = true): array
 }
 
 /**
+ * @return array{body:string,response_headers:string,curl_error:string,http_code:int,ok:bool}
+ */
+function exotic_india_curl_exec_capture(string $url, array $curlOptions): array
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, array_merge([
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_SSL_VERIFYPEER => false,
+    ], $curlOptions));
+
+    $raw = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
+
+    $rawStr = is_string($raw) ? $raw : '';
+    $responseHeaders = $headerSize > 0 ? substr($rawStr, 0, $headerSize) : '';
+    $body = $headerSize > 0 ? substr($rawStr, $headerSize) : $rawStr;
+
+    return [
+        'body' => $body,
+        'response_headers' => trim($responseHeaders),
+        'curl_error' => $curlError,
+        'http_code' => $httpCode,
+        'ok' => $raw !== false,
+    ];
+}
+
+/**
  * @param list<string> $extraHeaders e.g. Content-Type, Accept
- * @return array{success:bool,message:string,http_code:int,data:array,raw:string,curl_error?:string,request_url:string,request_headers:list<string>}
+ * @return array{success:bool,message:string,http_code:int,data:array,raw:string,curl_error?:string,request_url:string,request_headers:list<string>,response_headers?:string}
  */
 function exotic_india_api_post(string $endpoint, string $postBody, array $extraHeaders = [], bool $includeAdminApiTest = true): array
 {
@@ -52,27 +85,20 @@ function exotic_india_api_post(string $endpoint, string $postBody, array $extraH
     $url = exotic_india_api_base_url() . $endpoint;
     $headers = array_merge(exotic_india_api_auth_headers($includeAdminApiTest), $extraHeaders);
 
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
+    $transport = exotic_india_curl_exec_capture($url, [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => $postBody,
-        CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => $headers,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_SSL_VERIFYPEER => false,
     ]);
 
-    $raw = curl_exec($ch);
-    $curlError = curl_error($ch);
-    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    $rawStr = is_string($raw) ? $raw : '';
+    $curlError = $transport['curl_error'];
+    $httpCode = $transport['http_code'];
+    $responseHeaders = $transport['response_headers'];
+    $rawStr = $transport['body'];
     $decoded = json_decode($rawStr, true);
     $data = is_array($decoded) ? $decoded : [];
 
-    if ($raw === false) {
+    if (!$transport['ok']) {
         return [
             'success' => false,
             'message' => 'API call failed: ' . $curlError,
@@ -82,6 +108,7 @@ function exotic_india_api_post(string $endpoint, string $postBody, array $extraH
             'curl_error' => $curlError,
             'request_url' => $url,
             'request_headers' => $headers,
+            'response_headers' => $responseHeaders,
         ];
     }
 
@@ -93,7 +120,10 @@ function exotic_india_api_post(string $endpoint, string $postBody, array $extraH
         if ($message === '' && $rawStr !== '') {
             $message = trim($rawStr);
         }
-        if ($message === '') {
+        if ($message === '' && $rawStr === '') {
+            $message = 'HTTP ' . $httpCode . ' with empty response body from Exotic India API'
+                . ' (their server did not return JSON — often invalid order/sale/AWB data or a duplicate shipment).';
+        } elseif ($message === '') {
             $message = 'HTTP ' . $httpCode;
         }
 
@@ -105,6 +135,7 @@ function exotic_india_api_post(string $endpoint, string $postBody, array $extraH
             'raw' => $rawStr,
             'request_url' => $url,
             'request_headers' => $headers,
+            'response_headers' => $responseHeaders,
         ];
     }
 
@@ -127,6 +158,7 @@ function exotic_india_api_post(string $endpoint, string $postBody, array $extraH
             'raw' => $rawStr,
             'request_url' => $url,
             'request_headers' => $headers,
+            'response_headers' => $responseHeaders,
         ];
     }
 
@@ -146,6 +178,7 @@ function exotic_india_api_post(string $endpoint, string $postBody, array $extraH
         'raw' => $rawStr,
         'request_url' => $url,
         'request_headers' => $headers,
+        'response_headers' => $responseHeaders,
     ];
 }
 
