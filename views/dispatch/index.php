@@ -538,9 +538,22 @@
         <button type="button" id="shipment-add-execute-btn" class="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded text-sm">Execute API</button>
         <span id="shipment-add-status" class="text-xs text-gray-500 self-center"></span>
       </div>
-      <div id="shipment-add-response-wrap" class="hidden">
-        <label class="text-sm font-semibold text-gray-700 block mb-1">API Response</label>
-        <pre id="shipment-add-response" class="w-full max-h-56 overflow-auto font-mono text-xs border border-gray-300 rounded p-3 bg-gray-50 whitespace-pre-wrap"></pre>
+      <div id="shipment-add-response-wrap" class="hidden space-y-3">
+        <div>
+          <label class="text-sm font-semibold text-gray-700 block mb-1">Summary</label>
+          <pre id="shipment-add-response-summary" class="w-full max-h-40 overflow-auto font-mono text-xs border border-gray-300 rounded p-3 bg-gray-50 whitespace-pre-wrap"></pre>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-sm font-semibold text-gray-700">Actual response body (from Exotic India)</label>
+            <button type="button" id="shipment-add-copy-raw-btn" class="text-xs text-orange-600 hover:text-orange-700 font-semibold">Copy</button>
+          </div>
+          <pre id="shipment-add-response-raw" class="w-full max-h-64 overflow-auto font-mono text-xs border border-slate-300 rounded p-3 bg-slate-950 text-emerald-100 whitespace-pre-wrap"></pre>
+        </div>
+        <div id="shipment-add-response-headers-wrap" class="hidden">
+          <label class="text-sm font-semibold text-gray-700 block mb-1">Response HTTP headers</label>
+          <pre id="shipment-add-response-headers" class="w-full max-h-40 overflow-auto font-mono text-xs border border-gray-300 rounded p-3 bg-gray-50 whitespace-pre-wrap"></pre>
+        </div>
       </div>
     </div>
     <div class="px-4 py-3 border-t border-gray-200 flex justify-end gap-2 bg-gray-50 shrink-0">
@@ -803,7 +816,10 @@ if (bulkPrintBtn) {
       const executeBtn = document.getElementById('shipment-add-execute-btn');
       const statusEl = document.getElementById('shipment-add-status');
       const responseWrap = document.getElementById('shipment-add-response-wrap');
-      const responseEl = document.getElementById('shipment-add-response');
+      const responseSummaryEl = document.getElementById('shipment-add-response-summary');
+      const responseRawEl = document.getElementById('shipment-add-response-raw');
+      const responseHeadersWrap = document.getElementById('shipment-add-response-headers-wrap');
+      const responseHeadersEl = document.getElementById('shipment-add-response-headers');
 
       const d = data.dispatch || {};
       meta.innerHTML = [
@@ -828,7 +844,13 @@ if (bulkPrintBtn) {
       executeBtn.disabled = !data.ready;
       statusEl.textContent = data.ready ? 'Ready to execute.' : 'Fix issues before executing.';
       responseWrap.classList.add('hidden');
-      responseEl.textContent = '';
+      if (responseSummaryEl) responseSummaryEl.textContent = '';
+      if (responseRawEl) {
+        responseRawEl.textContent = '';
+        responseRawEl.dataset.copyText = '';
+      }
+      if (responseHeadersWrap) responseHeadersWrap.classList.add('hidden');
+      if (responseHeadersEl) responseHeadersEl.textContent = '';
     }
 
     function loadShipmentAddPreview(dispatchId) {
@@ -877,13 +899,42 @@ if (bulkPrintBtn) {
       });
     });
 
+    document.getElementById('shipment-add-copy-raw-btn')?.addEventListener('click', async function() {
+      const rawEl = document.getElementById('shipment-add-response-raw');
+      const text = rawEl?.dataset?.copyText != null && rawEl.dataset.copyText !== ''
+        ? rawEl.dataset.copyText
+        : (rawEl?.textContent || '');
+      if (!text) {
+        if (typeof showAlert === 'function') showAlert('No response body to copy', 'warning');
+        return;
+      }
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const temp = document.createElement('textarea');
+          temp.value = text;
+          document.body.appendChild(temp);
+          temp.select();
+          document.execCommand('copy');
+          document.body.removeChild(temp);
+        }
+        if (typeof showAlert === 'function') showAlert('Response body copied', 'success');
+      } catch (err) {
+        if (typeof showAlert === 'function') showAlert('Copy failed', 'error');
+      }
+    });
+
     document.getElementById('shipment-add-execute-btn')?.addEventListener('click', function() {
       if (!shipmentAddCurrentDispatchId) return;
 
       const btn = this;
       const statusEl = document.getElementById('shipment-add-status');
       const responseWrap = document.getElementById('shipment-add-response-wrap');
-      const responseEl = document.getElementById('shipment-add-response');
+      const responseSummaryEl = document.getElementById('shipment-add-response-summary');
+      const responseRawEl = document.getElementById('shipment-add-response-raw');
+      const responseHeadersWrap = document.getElementById('shipment-add-response-headers-wrap');
+      const responseHeadersEl = document.getElementById('shipment-add-response-headers');
 
       btn.disabled = true;
       statusEl.textContent = 'Calling API…';
@@ -899,14 +950,39 @@ if (bulkPrintBtn) {
       .then(res => res.json().then(data => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
         responseWrap.classList.remove('hidden');
+        const rawBody = (data.response_raw != null && String(data.response_raw) !== '')
+          ? String(data.response_raw)
+          : '';
         const summary = {
           success: data.success,
           message: data.message,
           http_code: data.http_code,
           shipment_id: data.shipment_id || '',
-          response: data.response,
+          response_body_empty: data.response_body_empty === true,
+          response_body_length: data.response_body_length != null ? data.response_body_length : rawBody.length,
+          response_parsed: data.response,
+          request_url: data.request_url || data.api_url || '',
+          curl_error: data.curl_error || '',
         };
-        responseEl.textContent = JSON.stringify(summary, null, 2);
+        responseSummaryEl.textContent = JSON.stringify(summary, null, 2);
+        if (rawBody !== '') {
+          try {
+            const parsed = JSON.parse(rawBody);
+            responseRawEl.textContent = JSON.stringify(parsed, null, 2);
+          } catch (e) {
+            responseRawEl.textContent = rawBody;
+          }
+        } else {
+          responseRawEl.textContent = '(empty — Exotic India returned HTTP ' + (data.http_code || '?') + ' with no response body)';
+        }
+        responseRawEl.dataset.copyText = rawBody;
+        const respHeaders = String(data.response_headers || '').trim();
+        if (respHeaders !== '' && responseHeadersWrap && responseHeadersEl) {
+          responseHeadersWrap.classList.remove('hidden');
+          responseHeadersEl.textContent = respHeaders;
+        } else if (responseHeadersWrap) {
+          responseHeadersWrap.classList.add('hidden');
+        }
         statusEl.textContent = data.success
           ? 'API succeeded (HTTP ' + (data.http_code || '') + ')' + (data.shipment_id ? '. Shipment ID: ' + data.shipment_id : '') + '.'
           : 'API failed: ' + (data.message || 'Unknown error');
