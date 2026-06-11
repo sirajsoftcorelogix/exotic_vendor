@@ -925,34 +925,13 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
                 return ['success' => false, 'message' => 'All items must have the same currency'];
             }
         }
+        require_once __DIR__ . '/../helpers/invoice_number_resolver.php';
         $customInvoiceNumber = trim((string)($_POST['custom_invoice_number'] ?? ''));
-        if ($customInvoiceNumber !== '') {
-            if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9._\/-]{0,49}$/', $customInvoiceNumber)) {
-                return ['success' => false, 'message' => 'Custom invoice number can contain letters, numbers, dot, slash, underscore, and hyphen only.'];
-            }
-            $stmtInvNo = $conn->prepare('SELECT id FROM vp_invoices WHERE invoice_number = ? LIMIT 1');
-            if ($stmtInvNo) {
-                $stmtInvNo->bind_param('s', $customInvoiceNumber);
-                $stmtInvNo->execute();
-                $existingInvoiceNo = $stmtInvNo->get_result()->fetch_assoc();
-                $stmtInvNo->close();
-                if (!empty($existingInvoiceNo['id'])) {
-                    return ['success' => false, 'message' => 'Custom invoice number already exists.'];
-                }
-            }
-            $invoice_number = $customInvoiceNumber;
-        } else {
-            // Generate invoice number from global_settings
-            $globalSettings = $commanModel->getRecordById('global_settings', 1);
-            $invoice_prefix = is_array($globalSettings) ? (string)($globalSettings['invoice_prefix'] ?? 'INV') : 'INV';
-            $invoice_series = is_array($globalSettings) ? (int)($globalSettings['invoice_series'] ?? 0) : 0;
-            $invoice_series++;
-
-            // Update global_settings with new invoice_series
-            $commanModel->updateRecord('global_settings', ['invoice_series' => $invoice_series], ['id' => 1]);
-
-            $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
+        $invoiceNumberResult = resolve_invoice_number($conn, $customInvoiceNumber);
+        if (empty($invoiceNumberResult['success'])) {
+            return ['success' => false, 'message' => $invoiceNumberResult['message'] ?? 'Invalid invoice number.'];
         }
+        $invoice_number = (string) $invoiceNumberResult['invoice_number'];
 
         // Create invoice header
         $isInternational = ($firstCurrency && $firstCurrency !== 'INR') ? 1 : 0;

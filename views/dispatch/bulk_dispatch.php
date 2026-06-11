@@ -237,6 +237,68 @@
         let currentShippingAddress = ''; // Store shipping address from API response
         if (!modal) return;
 
+        const CUSTOM_INVOICE_NUMBER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,49}$/;
+
+        function clearCustomInvoiceFieldError(orderSection) {
+            const input = orderSection.querySelector('.custom-invoice-number-input');
+            const errorEl = orderSection.querySelector('.custom-invoice-error');
+            if (input) {
+                input.classList.remove('border-red-500', 'ring-1', 'ring-red-300');
+            }
+            if (errorEl) {
+                errorEl.textContent = '';
+                errorEl.classList.add('hidden');
+            }
+        }
+
+        function setCustomInvoiceFieldError(orderSection, message) {
+            const input = orderSection.querySelector('.custom-invoice-number-input');
+            const errorEl = orderSection.querySelector('.custom-invoice-error');
+            if (input) {
+                input.classList.add('border-red-500', 'ring-1', 'ring-red-300');
+            }
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        function validateCustomInvoiceFields(orderSections) {
+            const seen = new Map();
+
+            for (const orderSection of orderSections) {
+                clearCustomInvoiceFieldError(orderSection);
+                const input = orderSection.querySelector('.custom-invoice-number-input');
+                if (!input) {
+                    continue;
+                }
+
+                const value = input.value.trim();
+                if (value === '') {
+                    continue;
+                }
+
+                const orderBox = orderSection.querySelector('[data-order-number]');
+                const orderLabel = orderBox ? orderBox.getAttribute('data-order-number') : 'order';
+
+                if (!CUSTOM_INVOICE_NUMBER_PATTERN.test(value)) {
+                    const msg = 'Use letters, numbers, dot, slash, underscore, and hyphen only.';
+                    setCustomInvoiceFieldError(orderSection, msg);
+                    return { valid: false, message: 'Order ' + orderLabel + ': ' + msg };
+                }
+
+                const key = value.toLowerCase();
+                if (seen.has(key)) {
+                    const msg = 'Invoice number already entered for order ' + seen.get(key) + '.';
+                    setCustomInvoiceFieldError(orderSection, msg);
+                    return { valid: false, message: 'Order ' + orderLabel + ': ' + msg };
+                }
+                seen.set(key, orderLabel);
+            }
+
+            return { valid: true, message: '' };
+        }
+
         function bulkDispatchOrderTheme(isInternational) {
             if (isInternational) {
                 return {
@@ -809,6 +871,17 @@
                                 <span class="font-semibold">Shipping to:</span>
                                 ${currentShippingAddress || 'Address not available'}
                             </div>
+                        </div>
+
+                        <div class="custom-invoice-strip px-4 py-2 bg-amber-50 border border-amber-200 border-t-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm">
+                            <label class="font-semibold text-amber-900 shrink-0">Invoice No (optional)</label>
+                            <input type="text"
+                                   class="custom-invoice-number-input border border-amber-300 rounded px-2 py-1 w-full sm:w-52 text-sm bg-white"
+                                   maxlength="50"
+                                   placeholder="Auto-generated if blank"
+                                   autocomplete="off" />
+                            <span class="custom-invoice-hint text-[11px] text-amber-800/80 hidden sm:inline">Letters, numbers, dot, slash, underscore, hyphen</span>
+                            <span class="custom-invoice-error text-[11px] text-red-600 hidden w-full sm:w-auto"></span>
                         </div>
 
                         <div class="bulk-dispatch-box border ${tm.boxBorder} border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
@@ -2413,6 +2486,14 @@
                 updateBlueDartExcelExportButton();
             }
         });
+        invDispatchesContainer.addEventListener('input', function(e) {
+            if (e.target.matches('.custom-invoice-number-input')) {
+                const orderSection = e.target.closest('.px-4.pt-4.pb-2');
+                if (orderSection) {
+                    clearCustomInvoiceFieldError(orderSection);
+                }
+            }
+        });
     }
     updateBlueDartExcelExportButton();
 
@@ -2506,11 +2587,14 @@
                     });
                     
                     const order_ids = Array.from(allOrderIds);
-                    
+                    const customInvoiceInput = orderSection.querySelector('.custom-invoice-number-input');
+                    const custom_invoice_number = customInvoiceInput ? customInvoiceInput.value.trim() : '';
+
                     orders.push({
                         order_number: order_number,
                         customer_id: customer_id,
                         customer_name: customer_name,
+                        custom_invoice_number: custom_invoice_number,
                         order_ids: order_ids,  // Include order IDs from all boxes
                         boxes: boxes
                     });
@@ -2519,6 +2603,12 @@
 
             if (orders.length === 0) {
                 showAlert('Please add items to at least one box', 'warning');
+                return;
+            }
+
+            const invoiceValidation = validateCustomInvoiceFields(orderSections);
+            if (!invoiceValidation.valid) {
+                showAlert(invoiceValidation.message, 'warning');
                 return;
             }
 
