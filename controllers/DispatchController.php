@@ -1739,6 +1739,10 @@ class DispatchController {
         
         try {
             require_once __DIR__ . '/../helpers/dispatch/shipping_address_validation.php';
+            require_once __DIR__ . '/../helpers/invoice_number_resolver.php';
+
+            global $conn;
+            $batchCustomInvoiceNumbers = [];
 
             // Process each order
             foreach ($input['orders'] as $orderData) {
@@ -1795,18 +1799,17 @@ class DispatchController {
                     $total_amount += ($item_total + $item_tax);
                 }
 
-                // Create invoice
-                // Generate invoice number from global_settings
-                $globalSettings = $commanModel->getRecordById('global_settings', 1);
-                $invoice_prefix = $globalSettings['invoice_prefix'] ?? 'INV';
-                $invoice_series = $globalSettings['invoice_series'] ?? 0;
-                $invoice_series++;
-                
-                // Update global_settings with new invoice_series
-                $commanModel->updateRecord('global_settings', ['invoice_series' => $invoice_series], ['id' => 1]);
-                
-                $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
-                
+                $customInvoiceNumber = trim((string) ($orderData['custom_invoice_number'] ?? ''));
+                $invoiceNumberResult = resolve_invoice_number($conn, $customInvoiceNumber, $batchCustomInvoiceNumbers);
+                if (empty($invoiceNumberResult['success'])) {
+                    $errors[] = 'Order #' . $order_number . ': ' . ($invoiceNumberResult['message'] ?? 'Invalid invoice number.');
+                    continue;
+                }
+                $invoice_number = (string) $invoiceNumberResult['invoice_number'];
+                if ($customInvoiceNumber !== '') {
+                    $batchCustomInvoiceNumbers[] = $customInvoiceNumber;
+                }
+
                 $invoiceData = [
                     'invoice_number' => $invoice_number,
                     'invoice_date' => date('Y-m-d'),
