@@ -48,12 +48,13 @@ function exotic_india_api_auth_headers(bool $includeAdminApiTest = true): array
 function exotic_india_curl_exec_capture(string $url, array $curlOptions): array
 {
     $ch = curl_init($url);
-    curl_setopt_array($ch, array_merge([
+    // array_merge() reindexes integer keys — never use it for CURLOPT_* arrays.
+    curl_setopt_array($ch, array_replace([
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HEADER => true,
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_TIMEOUT => 30,
-        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYPEER => 0,
     ], $curlOptions));
 
     $raw = curl_exec($ch);
