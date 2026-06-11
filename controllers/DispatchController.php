@@ -2808,17 +2808,22 @@ class DispatchController {
             $gatewayResult = $courierDispatch->getRates($rateRequest);
 
             if ($partnerCode === 'bluedart') {
-                $shiprocketQuotes = $this->resolveShiprocketBlueDartQuotes(
-                    $dispatchModel,
-                    is_array($firm) ? $firm : [],
-                    $requestedPickupLocation,
-                    $orderInfo,
-                    $weight,
-                    $length,
-                    $breadth,
-                    $height,
-                    $cod
-                );
+                $preloadedServiceability = $input['shiprocket_serviceability'] ?? null;
+                if (is_array($preloadedServiceability)) {
+                    $shiprocketQuotes = bluedartExtractShiprocketQuotes($preloadedServiceability);
+                } else {
+                    $shiprocketQuotes = $this->resolveShiprocketBlueDartQuotes(
+                        $dispatchModel,
+                        is_array($firm) ? $firm : [],
+                        $requestedPickupLocation,
+                        $orderInfo,
+                        $weight,
+                        $length,
+                        $breadth,
+                        $height,
+                        $cod
+                    );
+                }
                 if ($shiprocketQuotes !== []) {
                     $gatewayResult = bluedartEnrichGatewayResultWithShiprocketPrices($gatewayResult, $shiprocketQuotes);
                 }

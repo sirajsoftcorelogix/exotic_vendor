@@ -51,7 +51,9 @@
             <span class="text-[11px] text-gray-500">Export to Excel for manual booking on the Blue Dart dashboard (Air and Surface sheets).</span>
         </div>
         <div id="bulkDispatchPrimaryActionSlot" class="shrink-0 ml-auto">
-            <button id="bulkCreateInvoiceDispatchBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2">
+            <button id="bulkCreateInvoiceDispatchBtn" type="button" disabled
+                    class="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2"
+                    title="Add orders, load courier rates, and select a courier for each order">
                 <span>🚚</span>
                 <span>Invoice &amp; Dispatch</span>
             </button>
@@ -1174,14 +1176,15 @@
             }
         }
 
-        function fetchShiprocketRates(payload) {
+        function fetchShiprocketRates(payload, signal) {
             return fetch('?page=dispatch&action=getCourierServiceability', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal: signal
             }).then(response => response.text().then(function (text) {
                 const cleaned = (typeof text === 'string' ? text : String(text ?? '')).replace(/^\uFEFF/, '').trim();
                 let parsed = {};
@@ -1204,7 +1207,7 @@
             }));
         }
 
-        function fetchDirectCourierRates(payload, partnerCode) {
+        function fetchDirectCourierRates(payload, partnerCode, signal) {
             const body = Object.assign({}, payload, { partner_code: partnerCode });
             return fetch('?page=dispatch&action=getDirectCourierRates', {
                 method: 'POST',
@@ -1212,7 +1215,8 @@
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
-                body: JSON.stringify(body)
+                body: JSON.stringify(body),
+                signal: signal
             }).then(r => r.text()).then((text) => {
                 const cleaned = (typeof text === 'string') ? text.replace(/^\uFEFF/, '').trim() : '';
                 try {
@@ -1433,7 +1437,7 @@
             };
         }
 
-        function renderUnifiedCourierPanel(boxElement, courierContainer, tm, mergedCouriers, shiprocketData, delhiveryData, delhiveryError) {
+        function renderUnifiedCourierPanel(boxElement, courierContainer, tm, mergedCouriers, shiprocketData, delhiveryData, delhiveryError, pendingBlueDartNote, bluedartError) {
             let boxUid = boxElement.getAttribute('data-box-uid');
             if (!boxUid) {
                 boxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
@@ -1517,6 +1521,25 @@
                     </div>`;
             }
 
+            if (pendingBlueDartNote) {
+                courierHtml += `
+                    <div class="px-3 pb-3">
+                        <div class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] text-sky-900 flex items-center gap-2">
+                            <i class="fas fa-spinner fa-spin text-sky-600" aria-hidden="true"></i>
+                            <span>${escapeHtml(pendingBlueDartNote)}</span>
+                        </div>
+                    </div>`;
+            }
+
+            if (bluedartError) {
+                courierHtml += `
+                    <div class="px-3 pb-3">
+                        <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                            <span class="font-semibold">Blue Dart direct rates:</span> ${escapeHtml(bluedartError)}
+                        </div>
+                    </div>`;
+            }
+
             const hasBlueDartOptions = mergedCouriers.some((c) => String(c.rate_source || '').toLowerCase() === 'bluedart'
                 || String(c.partner_code || '').toLowerCase() === 'bluedart');
             if (hasBlueDartOptions) {
@@ -1589,7 +1612,12 @@
 
             const orderSectionForTheme = boxElement.closest('.px-4.pt-4.pb-2');
             const tm = bulkDispatchThemeFromSection(orderSectionForTheme);
-            
+            if (orderSectionForTheme) {
+                orderSectionForTheme.setAttribute('data-courier-loading', '1');
+                orderSectionForTheme.removeAttribute('data-courier-loaded');
+                updateBlueDartExcelExportButton();
+            }
+
             // Show loading state in courier container
             const courierContainer = orderSectionForTheme && orderSectionForTheme.querySelector('#availableCourierCompanies');
             console.log('Courier container found:', !!courierContainer);
@@ -1602,7 +1630,7 @@
                             </span>
                             <div>
                                 <div class="font-semibold text-gray-900">Loading courier options</div>
-                                <div class="text-[11px] text-gray-500 mt-0.5">Fetching Shiprocket &amp; Delhivery rates…</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">Fetching Shiprocket, Delhivery &amp; Blue Dart rates…</div>
                             </div>
                         </div>
                     </div>`;
@@ -1622,20 +1650,21 @@
             
             console.log('Sending payload to PHP endpoint:', payload);
             boxElement._lastCourierRequestPayload = payload;
-            
-            Promise.allSettled([
-                fetchShiprocketRates(payload),
-                fetchDirectCourierRates(payload, 'delhivery'),
-                fetchDirectCourierRates(payload, 'bluedart')
-            ]).then((results) => {
-                const shiprocketResult = results[0];
-                const delhiveryResult = results[1];
-                const bluedartResult = results[2];
 
-                let shiprocketData = null;
-                let shiprocketError = null;
-                if (shiprocketResult.status === 'fulfilled') {
-                    shiprocketData = shiprocketResult.value;
+            if (boxElement._courierFetchAbort) {
+                boxElement._courierFetchAbort.abort();
+            }
+            const abortController = new AbortController();
+            boxElement._courierFetchAbort = abortController;
+            const fetchSignal = abortController.signal;
+            const fetchId = (boxElement._courierFetchId = (boxElement._courierFetchId || 0) + 1);
+
+            function isStaleFetch() {
+                return fetchId !== boxElement._courierFetchId;
+            }
+
+            function applyShiprocketDebug(shiprocketData, shiprocketError) {
+                if (shiprocketData) {
                     boxElement._lastCourierDebugRequest = shiprocketData?.debug?.serviceability_request || null;
                     const resolvedPickupLocation = shiprocketData?.debug?.serviceability_request?.pickup_resolution?.pickup_location;
                     if (resolvedPickupLocation) {
@@ -1643,46 +1672,61 @@
                     }
                     boxElement._lastCourierDebugInput = shiprocketData?.debug?.input_before_filter || null;
                     boxElement._lastCourierDebugOutput = shiprocketData?.debug?.output_after_filter || null;
-                } else {
-                    shiprocketError = shiprocketResult.reason;
+                } else if (shiprocketError) {
                     boxElement._lastCourierDebugRequest = shiprocketError?.courierDebugRequest || boxElement._lastCourierDebugRequest || null;
-                    console.error('Shiprocket rates failed:', shiprocketError);
                 }
+            }
 
+            function parseDelhiveryResult(delhiveryResult) {
                 let delhiveryCouriers = [];
                 let delhiveryError = null;
                 if (delhiveryResult.status === 'fulfilled' && delhiveryResult.value?.success && Array.isArray(delhiveryResult.value.couriers)) {
                     delhiveryCouriers = delhiveryResult.value.couriers;
                 } else if (delhiveryResult.status === 'fulfilled') {
                     delhiveryError = delhiveryResult.value?.message || 'Delhivery rates unavailable';
-                } else {
+                } else if (delhiveryResult.reason && delhiveryResult.reason.name !== 'AbortError') {
                     delhiveryError = 'Could not load Delhivery rates';
                     console.warn('Delhivery rates failed:', delhiveryResult.reason);
+                }
+                if (delhiveryCouriers.length > 0) {
+                    delhiveryError = null;
+                }
+                return { delhiveryCouriers, delhiveryError };
+            }
+
+            function finishCourierLoad(shiprocketData, shiprocketError, delhiveryResult, bluedartResult) {
+                if (isStaleFetch() || !courierContainer) {
+                    return;
+                }
+
+                let delhiveryCouriers = [];
+                let delhiveryError = null;
+                if (delhiveryResult) {
+                    const parsedDel = parseDelhiveryResult(delhiveryResult);
+                    delhiveryCouriers = parsedDel.delhiveryCouriers;
+                    delhiveryError = parsedDel.delhiveryError;
                 }
 
                 let bluedartCouriers = [];
                 let bluedartError = null;
-                if (bluedartResult.status === 'fulfilled' && bluedartResult.value?.success && Array.isArray(bluedartResult.value.couriers)) {
-                    bluedartCouriers = bluedartResult.value.couriers;
-                } else if (bluedartResult.status === 'fulfilled') {
-                    bluedartError = bluedartResult.value?.message || 'Blue Dart rates unavailable';
-                } else {
-                    bluedartError = 'Could not load Blue Dart rates';
-                    console.warn('Blue Dart rates failed:', bluedartResult.reason);
+                if (bluedartResult) {
+                    if (bluedartResult.status === 'fulfilled' && bluedartResult.value?.success && Array.isArray(bluedartResult.value.couriers)) {
+                        bluedartCouriers = bluedartResult.value.couriers;
+                    } else if (bluedartResult.status === 'fulfilled') {
+                        bluedartError = bluedartResult.value?.message || 'Blue Dart rates unavailable';
+                    } else if (bluedartResult.reason && bluedartResult.reason.name !== 'AbortError') {
+                        bluedartError = 'Could not load Blue Dart rates';
+                        console.warn('Blue Dart rates failed:', bluedartResult.reason);
+                    }
+                    if (bluedartCouriers.length > 0) {
+                        bluedartError = null;
+                    }
                 }
 
                 const shiprocketCouriers = (shiprocketData && shiprocketData.success && Array.isArray(shiprocketData.couriers))
                     ? shiprocketData.couriers
                     : [];
                 const mergedCouriers = mergeCourierOptions(shiprocketCouriers, delhiveryCouriers, bluedartCouriers);
-                if (delhiveryCouriers.length > 0) {
-                    delhiveryError = null;
-                }
-                if (bluedartCouriers.length > 0) {
-                    bluedartError = null;
-                }
-
-                if (!courierContainer) return;
 
                 if (mergedCouriers.length > 0) {
                     renderUnifiedCourierPanel(
@@ -1691,9 +1735,16 @@
                         tm,
                         mergedCouriers,
                         shiprocketData,
-                        delhiveryResult.status === 'fulfilled' ? delhiveryResult.value : null,
-                        delhiveryError
+                        delhiveryResult && delhiveryResult.status === 'fulfilled' ? delhiveryResult.value : null,
+                        delhiveryError,
+                        null,
+                        bluedartError
                     );
+                    if (orderSectionForTheme) {
+                        orderSectionForTheme.setAttribute('data-courier-loading', '0');
+                        orderSectionForTheme.setAttribute('data-courier-loaded', '1');
+                    }
+                    updateBlueDartExcelExportButton();
                     return;
                 }
 
@@ -1721,10 +1772,94 @@
                             </button>
                         </div>
                     </div>`;
+                if (orderSectionForTheme) {
+                    orderSectionForTheme.setAttribute('data-courier-loading', '0');
+                    orderSectionForTheme.setAttribute('data-courier-loaded', '0');
+                }
                 updateBlueDartExcelExportButton();
+            }
+
+            // Phase 1: Shiprocket + Delhivery in parallel (saves a duplicate Shiprocket call for Blue Dart).
+            Promise.allSettled([
+                fetchShiprocketRates(payload, fetchSignal),
+                fetchDirectCourierRates(payload, 'delhivery', fetchSignal)
+            ]).then((phase1Results) => {
+                if (isStaleFetch()) {
+                    return null;
+                }
+
+                const shiprocketResult = phase1Results[0];
+                const delhiveryResult = phase1Results[1];
+
+                let shiprocketData = null;
+                let shiprocketError = null;
+                if (shiprocketResult.status === 'fulfilled') {
+                    shiprocketData = shiprocketResult.value;
+                } else if (shiprocketResult.reason && shiprocketResult.reason.name !== 'AbortError') {
+                    shiprocketError = shiprocketResult.reason;
+                    console.error('Shiprocket rates failed:', shiprocketError);
+                }
+                applyShiprocketDebug(shiprocketData, shiprocketError);
+
+                const phase1Del = parseDelhiveryResult(delhiveryResult);
+                const shiprocketCouriers = (shiprocketData && shiprocketData.success && Array.isArray(shiprocketData.couriers))
+                    ? shiprocketData.couriers
+                    : [];
+                const interimCouriers = mergeCourierOptions(shiprocketCouriers, phase1Del.delhiveryCouriers, []);
+                if (interimCouriers.length > 0 && courierContainer) {
+                    renderUnifiedCourierPanel(
+                        boxElement,
+                        courierContainer,
+                        tm,
+                        interimCouriers,
+                        shiprocketData,
+                        delhiveryResult.status === 'fulfilled' ? delhiveryResult.value : null,
+                        phase1Del.delhiveryError,
+                        'Loading Blue Dart options…',
+                        null
+                    );
+                }
+
+                const bluedartPayload = Object.assign({}, payload);
+                const preloadedServiceability = shiprocketData?.debug?.input_before_filter;
+                if (preloadedServiceability) {
+                    bluedartPayload.shiprocket_serviceability = preloadedServiceability;
+                }
+
+                return fetchDirectCourierRates(bluedartPayload, 'bluedart', fetchSignal)
+                    .then((bluedartValue) => ({
+                        shiprocketData,
+                        shiprocketError,
+                        delhiveryResult,
+                        bluedartResult: { status: 'fulfilled', value: bluedartValue }
+                    }))
+                    .catch((err) => {
+                        if (err && err.name === 'AbortError') {
+                            return null;
+                        }
+                        return {
+                            shiprocketData,
+                            shiprocketError,
+                            delhiveryResult,
+                            bluedartResult: { status: 'rejected', reason: err }
+                        };
+                    });
+            }).then((finalBundle) => {
+                if (!finalBundle || isStaleFetch()) {
+                    return;
+                }
+                finishCourierLoad(
+                    finalBundle.shiprocketData,
+                    finalBundle.shiprocketError,
+                    finalBundle.delhiveryResult,
+                    finalBundle.bluedartResult
+                );
             }).catch((error) => {
+                if (error && error.name === 'AbortError') {
+                    return;
+                }
                 console.error('Error fetching couriers:', error);
-                if (!courierContainer) return;
+                if (isStaleFetch() || !courierContainer) return;
                 courierContainer.innerHTML = `
                     <div class="rounded-xl border border-red-200 bg-gradient-to-b from-red-50 to-white px-4 py-3 shadow-sm flex gap-3 items-start text-[13px]">
                         <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600" aria-hidden="true">
@@ -1738,6 +1873,10 @@
                             </button>
                         </div>
                     </div>`;
+                if (orderSectionForTheme) {
+                    orderSectionForTheme.setAttribute('data-courier-loading', '0');
+                    orderSectionForTheme.setAttribute('data-courier-loaded', '0');
+                }
                 updateBlueDartExcelExportButton();
             });
         }
@@ -2391,6 +2530,54 @@
         return { boxes, warnings };
     }
 
+    function getBulkDispatchCourierReadiness() {
+        const container = document.getElementById('invDispatchesContainer');
+        if (!container) {
+            return { ready: false, reason: 'Add at least one order with items.' };
+        }
+
+        const orderSections = container.querySelectorAll('.px-4.pt-4.pb-2');
+        let activeOrders = 0;
+
+        for (const orderSection of orderSections) {
+            if (!orderSectionHasDispatchItems(orderSection)) {
+                continue;
+            }
+            activeOrders++;
+
+            const orderBox = orderSection.querySelector('[data-order-number]');
+            const orderLabel = orderBox ? (orderBox.getAttribute('data-order-number') || 'this order') : 'this order';
+
+            if (orderSection.getAttribute('data-courier-loading') === '1') {
+                return {
+                    ready: false,
+                    reason: 'Courier rates are still loading for order ' + orderLabel + '.',
+                };
+            }
+
+            if (!orderSection.querySelector('.courier-tile-radio')) {
+                return {
+                    ready: false,
+                    reason: 'Wait for courier rates to load for order ' + orderLabel + ' (check weight and box size).',
+                };
+            }
+
+            const courier = readActiveCourierFieldsForOrder(orderSection);
+            if (!courier || !courier.courier_id) {
+                return {
+                    ready: false,
+                    reason: 'Select a courier for order ' + orderLabel + '.',
+                };
+            }
+        }
+
+        if (activeOrders === 0) {
+            return { ready: false, reason: 'Add at least one order with items before invoicing.' };
+        }
+
+        return { ready: true, reason: '' };
+    }
+
     function updateBlueDartExcelExportButton() {
         const hint = document.getElementById('bluedartExcelExportHint');
         const exportBtn = document.getElementById('downloadBlueDartExcelBtn');
@@ -2402,6 +2589,7 @@
         const ready = hasBlueDartExportSelection();
         const exporting = exportBtn.dataset.exporting === '1';
         const showBlueDartExport = ready || exporting;
+        const courierReadiness = getBulkDispatchCourierReadiness();
 
         exportBtn.classList.toggle('hidden', !showBlueDartExport);
         invoiceDispatchBtn.classList.toggle('hidden', showBlueDartExport);
@@ -2411,6 +2599,13 @@
 
         if (!exporting) {
             exportBtn.disabled = false;
+        }
+
+        if (!showBlueDartExport) {
+            invoiceDispatchBtn.disabled = !courierReadiness.ready;
+            invoiceDispatchBtn.title = courierReadiness.ready
+                ? 'Create invoice and dispatch for all orders'
+                : courierReadiness.reason;
         }
     }
 
@@ -2502,6 +2697,12 @@
     if (bulkCreateBtn) {
         bulkCreateBtn.addEventListener('click', function(e) {
             e.preventDefault();
+
+            const courierReadiness = getBulkDispatchCourierReadiness();
+            if (!courierReadiness.ready) {
+                showAlert(courierReadiness.reason, 'warning');
+                return;
+            }
 
             const container = document.getElementById('invDispatchesContainer');
             const orderSections = container.querySelectorAll('.px-4.pt-4.pb-2');
@@ -3064,7 +3265,7 @@
                 }
                 boxElement._courierDebounce = setTimeout(() => {
                     fetchCouriersForBox(boxElement);
-                }, 1000);
+                }, 500);
             }
         }
     });
