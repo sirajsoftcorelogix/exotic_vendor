@@ -41,15 +41,35 @@ class Dispatch {
             return;
         }
 
-        $result = exotic_india_log_dispatch_shipment($this->db, $dispatchId, $beforeDispatch);
-        if (empty($result['success']) && empty($result['skipped'])) {
+        try {
+            $result = exotic_india_log_dispatch_shipment($this->db, $dispatchId, $beforeDispatch);
+            if (empty($result['success']) && empty($result['skipped'])) {
+                error_log(
+                    'Exotic India shipment-add failed for dispatch '
+                    . $dispatchId
+                    . ': '
+                    . (string) ($result['message'] ?? 'unknown error')
+                );
+            }
+        } catch (Throwable $e) {
             error_log(
-                'Exotic India shipment-add failed for dispatch '
+                'Exotic India shipment-add exception for dispatch '
                 . $dispatchId
                 . ': '
-                . (string) ($result['message'] ?? 'unknown error')
+                . $e->getMessage()
             );
         }
+    }
+
+    /** @param mixed $value mysqli bind_param rejects null for type "i" on PHP 8.1+ */
+    private function nullableIntBindValue($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $intVal = (int) $value;
+
+        return $intVal > 0 ? (string) $intVal : null;
     }
 
     public function checkDispatchExists($invoiceId, $boxNo) {
@@ -69,7 +89,10 @@ class Dispatch {
         $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, courier_company_id, shipper_id, courier_partner_id, awb_code, shipment_status, label_url, tracking_url, etd, edd, groupname, box_size, created_by, created_at, pickup_location, batch_no) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return false;
+        if (!$stmt) {
+            error_log('createDispatch prepare failed: ' . $this->db->error);
+            return false;
+        }
 
         $data['created_by'] = isset($data['created_by']) ? (int)$data['created_by'] : 0;
         $data['created_at'] = $data['created_at'] ?? date('Y-m-d H:i:s');
@@ -94,15 +117,9 @@ class Dispatch {
         $shipping_charges = (float)($data['shipping_charges'] ?? 0);
         $dispatch_date = $data['dispatch_date'] ?? date('Y-m-d H:i:s');
         $courier_name = $data['courier_name'] ?? null;
-        $courier_company_id = isset($data['courier_company_id']) && (int) $data['courier_company_id'] > 0
-            ? (int) $data['courier_company_id']
-            : null;
-        $shipper_id = isset($data['shipper_id']) && (int) $data['shipper_id'] > 0
-            ? (int) $data['shipper_id']
-            : null;
-        $courier_partner_id = isset($data['courier_partner_id']) && (int) $data['courier_partner_id'] > 0
-            ? (int) $data['courier_partner_id']
-            : null;
+        $courier_company_id = $this->nullableIntBindValue($data['courier_company_id'] ?? null);
+        $shipper_id = $this->nullableIntBindValue($data['shipper_id'] ?? null);
+        $courier_partner_id = $this->nullableIntBindValue($data['courier_partner_id'] ?? null);
         $awb_code = $data['awb_code'] ?? null;
         $shipment_status = $data['shipment_status'] ?? null;
         $label_url = $data['label_url'] ?? null;
@@ -116,7 +133,7 @@ class Dispatch {
         $created_at = $data['created_at'];
 
         $stmt->bind_param(
-            'iissssdddddddssiiissssssssisss',
+            'iissssdddddddsssssssssssssisss',
             $invoice_id,
             $box_no,
             $order_number,

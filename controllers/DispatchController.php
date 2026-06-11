@@ -1722,7 +1722,9 @@ class DispatchController {
     public function bulkCreateInvoicesDispatch() {
         global $invoiceModel, $dispatchModel, $ordersModel, $commanModel;
         is_login();
-        
+
+        ob_start();
+
         header('Content-Type: application/json');
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -2543,6 +2545,11 @@ class DispatchController {
                 }
             }
 
+            $spuriousOutput = trim((string) ob_get_clean());
+            if ($spuriousOutput !== '') {
+                error_log('bulkCreateInvoicesDispatch stray output: ' . substr($spuriousOutput, 0, 2000));
+            }
+
             // Return success response
             http_response_code(200);
             echo json_encode([
@@ -2553,16 +2560,22 @@ class DispatchController {
                 'dispatches_created' => count($created_dispatches),
                 'invoices' => $created_invoices,
                 'dispatches' => $created_dispatches,
-                'errors' => $errors
+                'errors' => $errors,
+                'debug_php_output' => $spuriousOutput !== '' ? $spuriousOutput : null,
             ]);
             exit;
 
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
+            $spuriousOutput = trim((string) ob_get_clean());
+            if ($spuriousOutput !== '') {
+                error_log('bulkCreateInvoicesDispatch stray output: ' . substr($spuriousOutput, 0, 2000));
+            }
             http_response_code(500);
             echo json_encode([
                 'success' => false,
                 'message' => 'Error creating invoices: ' . $e->getMessage(),
-                'errors' => $errors
+                'errors' => $errors,
+                'debug_php_output' => $spuriousOutput !== '' ? $spuriousOutput : null,
             ]);
             exit;
         }

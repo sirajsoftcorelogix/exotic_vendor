@@ -2874,13 +2874,31 @@
                 },
                 body: JSON.stringify({ orders: orders })
             })
-            .then(response => response.json())
-            .then(data => {
+            .then(async (response) => {
+                const rawText = await response.text();
+                let data;
+                try {
+                    data = rawText ? JSON.parse(rawText) : {};
+                } catch (parseErr) {
+                    const snippet = rawText.replace(/^\uFEFF/, '').trim().slice(0, 1200);
+                    throw new Error(
+                        snippet
+                            ? ('Server returned non-JSON response (HTTP ' + response.status + '): ' + snippet)
+                            : ('Empty server response (HTTP ' + response.status + ')')
+                    );
+                }
+                return { response, data };
+            })
+            .then(({ response, data }) => {
                 // Hide overlay
                 overlay.style.display = 'none';
                 
                 bulkCreateBtn.disabled = false;
                 bulkCreateBtn.innerHTML = '<span>🚚</span><span>Invoice &amp; Dispatch</span>';
+
+                if (data.debug_php_output) {
+                    console.error('PHP debug output from bulk dispatch:', data.debug_php_output);
+                }
 
                 if (data.success) {
                     if (data.errors && data.errors.length > 0) {
@@ -2935,7 +2953,11 @@
                         console.log('Created Dispatches:', data.dispatches);
                     }
                 } else {
-                    showAlert('Error: ' + (data.message || 'Failed to create invoices'), 'error');
+                    let errMsg = data.message || 'Failed to create invoices';
+                    if (data.debug_php_output) {
+                        errMsg += '\n\nPHP output:\n' + String(data.debug_php_output).slice(0, 500);
+                    }
+                    showAlert('Error: ' + errMsg, 'error');
                     if (data.errors) {
                         console.error('Errors:', data.errors);
                     }
