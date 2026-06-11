@@ -28,6 +28,29 @@ function exotic_india_shipment_api_headers(): array
     ];
 }
 
+/**
+ * Map vp_invoices.invoice_number to Exotic India sale_no (numeric series, not internal id).
+ */
+function exotic_india_resolve_sale_no(string $invoiceNumber): int
+{
+    $invoiceNumber = trim($invoiceNumber);
+    if ($invoiceNumber === '') {
+        return 0;
+    }
+
+    $parts = explode('-', $invoiceNumber);
+    $seriesPart = trim((string) end($parts));
+    if ($seriesPart !== '' && ctype_digit($seriesPart)) {
+        return (int) $seriesPart;
+    }
+
+    if (ctype_digit($invoiceNumber)) {
+        return (int) $invoiceNumber;
+    }
+
+    return 0;
+}
+
 function exotic_india_format_api_date($value): string
 {
     if ($value === null || $value === '') {
@@ -99,7 +122,7 @@ function exotic_india_build_shipment_payload($conn, array $dispatch): ?array
         return null;
     }
 
-    $saleNo = (int) ($invoice['id'] ?? 0);
+    $saleNo = exotic_india_resolve_sale_no((string) ($invoice['invoice_number'] ?? ''));
     $saleDate = exotic_india_format_api_date($invoice['invoice_date'] ?? '');
 
     $invoiceItems = [];
@@ -126,13 +149,7 @@ function exotic_india_build_shipment_payload($conn, array $dispatch): ?array
     $dispatchOrderId = trim((string) ($dispatch['order_number'] ?? ''));
     $orderedItems = [];
 
-    $appendItem = static function (array $invItem) use (
-        &$orderedItems,
-        $conn,
-        $dispatchOrderId,
-        $saleNo,
-        $saleDate
-    ): void {
+    $appendItem = static function (array $invItem) use (&$orderedItems, $dispatchOrderId): void {
         $itemCode = trim((string) ($invItem['item_code'] ?? ''));
         if ($itemCode === '') {
             return;
@@ -143,39 +160,11 @@ function exotic_india_build_shipment_payload($conn, array $dispatch): ?array
             return;
         }
 
-        $entry = [
+        $orderedItems[] = [
             'itemcode' => $itemCode,
             'orderid' => $orderId,
             'qty' => max(1, (int) round((float) ($invItem['quantity'] ?? 1))),
         ];
-        if ($saleNo > 0) {
-            $entry['sale_no'] = $saleNo;
-        }
-        if ($saleDate !== '') {
-            $entry['sale_date'] = $saleDate;
-        }
-
-        $size = '';
-        $color = '';
-        $orderStmt = $conn->prepare(
-            'SELECT size, color FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1'
-        );
-        if ($orderStmt) {
-            $orderStmt->bind_param('ss', $orderId, $itemCode);
-            $orderStmt->execute();
-            $orderRow = $orderStmt->get_result()?->fetch_assoc();
-            $orderStmt->close();
-            $size = trim((string) ($orderRow['size'] ?? ''));
-            $color = trim((string) ($orderRow['color'] ?? ''));
-        }
-        if ($size !== '') {
-            $entry['size'] = $size;
-        }
-        if ($color !== '') {
-            $entry['color'] = $color;
-        }
-
-        $orderedItems[] = $entry;
     };
 
     if ($boxItemIds !== []) {
@@ -203,7 +192,7 @@ function exotic_india_build_shipment_payload($conn, array $dispatch): ?array
         }
     }
 
-    if ($orderedItems === []) {
+    if ($orderedItems === [] || $saleNo <= 0 || $saleDate === '') {
         return null;
     }
 
@@ -211,6 +200,8 @@ function exotic_india_build_shipment_payload($conn, array $dispatch): ?array
         'shipper_id' => (string) $shipperId,
         'tracking_number' => $trackingNumber,
         'date_shipped' => $dateShipped,
+        'sale_no' => $saleNo,
+        'sale_date' => $saleDate,
         'ordered_items' => $orderedItems,
     ];
 }
@@ -379,7 +370,7 @@ function exotic_india_shipment_add_preview($conn, array $dispatch): array
 
     $payload = $conn instanceof mysqli ? exotic_india_build_shipment_payload($conn, $dispatch) : null;
     if ($payload === null && $issues === []) {
-        $issues[] = 'Could not build ordered_items from box_items / invoice lines.';
+        $issues[] = 'Could not build shipment payload (check invoice sale_no/sale_date, box_items, or line items).';
     }
 
     return [
