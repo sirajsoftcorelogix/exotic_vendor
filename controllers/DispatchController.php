@@ -1212,6 +1212,7 @@ class DispatchController {
                 'shipper_id' => (int) ($dispatch['shipper_id'] ?? 0),
                 'courier_name' => (string) ($dispatch['courier_name'] ?? ''),
                 'shipment_status' => (string) ($dispatch['shipment_status'] ?? ''),
+                'exotic_shipment_id' => (string) ($dispatch['exotic_shipment_id'] ?? ''),
             ],
             'api_url' => $preview['api_url'],
             'ready' => (bool) $preview['ready'],
@@ -1271,11 +1272,13 @@ class DispatchController {
         }
 
         $result = exotic_india_post_shipment_add($preview['payload']);
+        $result = exotic_india_persist_shipment_add_result($conn, $dispatchId, $result);
 
         echo json_encode([
             'success' => !empty($result['success']),
             'message' => (string) ($result['message'] ?? ''),
             'http_code' => (int) ($result['http_code'] ?? 0),
+            'shipment_id' => (string) ($result['shipment_id'] ?? ''),
             'api_url' => $preview['api_url'],
             'request' => $preview['payload'],
             'response' => $result['data'] ?? null,
@@ -2518,6 +2521,17 @@ class DispatchController {
                             'updated_at' => date('Y-m-d H:i:s')
                         ]);
                     }
+                }
+            }
+
+            foreach ($created_dispatches as $idx => $dispatchInfo) {
+                $dispatchId = (int) ($dispatchInfo['dispatch_id'] ?? 0);
+                if ($dispatchId <= 0) {
+                    continue;
+                }
+                $row = $dispatchModel->getDispatchById($dispatchId);
+                if (is_array($row)) {
+                    $created_dispatches[$idx]['exotic_shipment_id'] = (string) ($row['exotic_shipment_id'] ?? '');
                 }
             }
 

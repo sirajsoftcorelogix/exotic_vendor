@@ -1,0 +1,219 @@
+<?php
+
+/**
+ * Shared cURL client for https://www.exoticindia.com/api/* endpoints.
+ * Matches helpers/vendor_external_api.php request structure (auth headers + curl options).
+ */
+
+function exotic_india_api_base_url(): string
+{
+    $base = getenv('EXOTIC_INDIA_API_BASE');
+    if ($base !== false && trim((string) $base) !== '') {
+        return rtrim((string) $base, '/');
+    }
+
+    return 'https://www.exoticindia.com/api';
+}
+
+function exotic_india_api_key(): string
+{
+    $apiKey = getenv('EXOTIC_INDIA_API_KEY');
+    if ($apiKey === false || trim((string) $apiKey) === '') {
+        return 'K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9';
+    }
+
+    return trim((string) $apiKey);
+}
+
+/**
+ * Same auth headers as vendor-api/order import calls.
+ *
+ * @return list<string>
+ */
+function exotic_india_api_auth_headers(): array
+{
+    return [
+        'x-api-key: ' . exotic_india_api_key(),
+        'x-adminapitest: 1',
+    ];
+}
+
+/**
+ * @param list<string> $extraHeaders e.g. Content-Type, Accept
+ * @return array{success:bool,message:string,http_code:int,data:array,raw:string,curl_error?:string,request_url:string,request_headers:list<string>}
+ */
+function exotic_india_api_post(string $endpoint, string $postBody, array $extraHeaders = []): array
+{
+    $endpoint = '/' . ltrim($endpoint, '/');
+    $url = exotic_india_api_base_url() . $endpoint;
+    $headers = array_merge(exotic_india_api_auth_headers(), $extraHeaders);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $postBody,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+
+    $raw = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $rawStr = is_string($raw) ? $raw : '';
+    $decoded = json_decode($rawStr, true);
+    $data = is_array($decoded) ? $decoded : [];
+
+    if ($raw === false) {
+        return [
+            'success' => false,
+            'message' => 'API call failed: ' . $curlError,
+            'http_code' => $httpCode,
+            'data' => $data,
+            'raw' => $rawStr,
+            'curl_error' => $curlError,
+            'request_url' => $url,
+            'request_headers' => $headers,
+        ];
+    }
+
+    if ($httpCode >= 400) {
+        $message = trim((string) ($data['message'] ?? ''));
+        if ($message === '' && isset($data['error'])) {
+            $message = is_string($data['error']) ? trim($data['error']) : json_encode($data['error']);
+        }
+        if ($message === '' && $rawStr !== '') {
+            $message = trim($rawStr);
+        }
+        if ($message === '') {
+            $message = 'HTTP ' . $httpCode;
+        }
+
+        return [
+            'success' => false,
+            'message' => $message,
+            'http_code' => $httpCode,
+            'data' => $data,
+            'raw' => $rawStr,
+            'request_url' => $url,
+            'request_headers' => $headers,
+        ];
+    }
+
+    $status = strtolower(trim((string) ($data['status'] ?? '')));
+    if ((isset($data['success']) && $data['success'] === false)
+        || in_array($status, ['error', 'failed'], true)) {
+        $message = trim((string) ($data['message'] ?? ''));
+        if ($message === '' && isset($data['error'])) {
+            $message = is_string($data['error']) ? trim($data['error']) : json_encode($data['error']);
+        }
+        if ($message === '') {
+            $message = 'Remote API returned failure.';
+        }
+
+        return [
+            'success' => false,
+            'message' => $message,
+            'http_code' => $httpCode,
+            'data' => $data,
+            'raw' => $rawStr,
+            'request_url' => $url,
+            'request_headers' => $headers,
+        ];
+    }
+
+    $message = trim((string) ($data['message'] ?? ''));
+    if ($message === '' && in_array($status, ['success', 'sucess'], true)) {
+        $message = 'API call succeeded.';
+    }
+    if ($message === '') {
+        $message = 'API call succeeded.';
+    }
+
+    return [
+        'success' => true,
+        'message' => $message,
+        'http_code' => $httpCode,
+        'data' => $data,
+        'raw' => $rawStr,
+        'request_url' => $url,
+        'request_headers' => $headers,
+    ];
+}
+
+/**
+ * @param list<string> $extraHeaders
+ * @return array{success:bool,message:string,http_code:int,data:array,raw:string,curl_error?:string,request_url:string,request_headers:list<string>}
+ */
+function exotic_india_api_get(string $endpoint, array $extraHeaders = []): array
+{
+    $endpoint = '/' . ltrim($endpoint, '/');
+    $url = exotic_india_api_base_url() . $endpoint;
+    $headers = array_merge(exotic_india_api_auth_headers(), $extraHeaders);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPGET => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+
+    $raw = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $rawStr = is_string($raw) ? $raw : '';
+    $decoded = json_decode($rawStr, true);
+    $data = is_array($decoded) ? $decoded : [];
+
+    if ($raw === false) {
+        return [
+            'success' => false,
+            'message' => 'API call failed: ' . $curlError,
+            'http_code' => $httpCode,
+            'data' => $data,
+            'raw' => $rawStr,
+            'curl_error' => $curlError,
+            'request_url' => $url,
+            'request_headers' => $headers,
+        ];
+    }
+
+    if ($httpCode >= 400) {
+        $message = trim((string) ($data['message'] ?? ''));
+        if ($message === '' && isset($data['error'])) {
+            $message = is_string($data['error']) ? trim($data['error']) : json_encode($data['error']);
+        }
+        if ($message === '') {
+            $message = 'HTTP ' . $httpCode;
+        }
+
+        return [
+            'success' => false,
+            'message' => $message,
+            'http_code' => $httpCode,
+            'data' => $data,
+            'raw' => $rawStr,
+            'request_url' => $url,
+            'request_headers' => $headers,
+        ];
+    }
+
+    return [
+        'success' => true,
+        'message' => trim((string) ($data['message'] ?? 'API call succeeded.')),
+        'http_code' => $httpCode,
+        'data' => $data,
+        'raw' => $rawStr,
+        'request_url' => $url,
+        'request_headers' => $headers,
+    ];
+}
