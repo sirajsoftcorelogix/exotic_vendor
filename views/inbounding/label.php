@@ -292,35 +292,35 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 
 
                 <?php  } elseif ($usePostPublishLabel) { ?>
-                    <div class="flex flex-row w-full h-[500px] border-b-[3px] border-black shrink-0">
-                        <div class="w-[280px] h-full flex items-center justify-center p-4 shrink-0">
-                            <div class="qrcode-highres" data-qr-size="220" style="width: 220px; height: 220px;"></div>
+                    <div class="flex flex-row w-full h-[450px] border-b-[3px] border-black">
+                        <div class="w-[350px] h-full flex flex-col items-center justify-center p-6">
+                            <div class="qrcode-highres" style="width: 300px; height: 300px;"></div>
                         </div>
-                        <div class="flex-1 h-full flex items-center justify-center p-4 border-l-[3px] border-black min-w-0">
-                            <img src="<?php echo $thisPhotoUrl; ?>" crossorigin="anonymous" class="object-contain max-w-full max-h-[92%] grayscale hover:grayscale-0 transition-all">
+                        <div class="w-[400px] h-full flex items-center justify-center p-4 border-l-[3px] border-black">
+                            <img src="<?php echo $thisPhotoUrl; ?>" crossorigin="anonymous" class="object-contain max-w-full max-h-[95%] grayscale hover:grayscale-0 transition-all">
                         </div>
-                        <div class="w-[320px] h-full flex flex-col justify-center px-5 py-4 border-l-[3px] border-black shrink-0">
-                            <div class="flex flex-col leading-none pb-[10px]">
-                                <span class="text-[22px] font-bold uppercase leading-none mb-1 text-black">Item code</span>
-                                <span class="text-[44px] font-black tracking-tight leading-none"><?php echo safe($current_label['Item_code']); ?></span>
+                        <div class="flex-1 h-full flex flex-col justify-center pl-10 pr-6 pt-6 space-y-5 border-l-[3px] border-black">
+                            <div class="flex flex-col leading-none">
+                                <span class="text-[30px] font-bold uppercase leading-none mb-2 text-black">Item code</span>
+                                <span class="text-[50px] font-black tracking-tight leading-none"><?php echo safe($current_label['Item_code']); ?></span>
                             </div>
-                            <div class="flex flex-col leading-none pt-[10px] border-t-2 border-gray-200">
-                                <span class="text-[20px] font-bold uppercase leading-none mb-1 text-black">Color</span>
-                                <span class="text-[30px] font-black leading-tight"><?php echo safe(labelInboundText($current_label['color'] ?? '')); ?></span>
+                            <div class="flex flex-col leading-none">
+                                <span class="text-[30px] font-bold uppercase leading-none mb-2 text-black">Color</span>
+                                <span class="text-[42px] font-black leading-tight"><?php echo safe(labelInboundText($current_label['color'] ?? '')); ?></span>
                             </div>
-                            <div class="flex flex-col leading-none pt-[10px] border-t-2 border-gray-200">
-                                <span class="text-[20px] font-bold uppercase leading-none mb-1 text-black">Size</span>
-                                <span class="text-[30px] font-black leading-none"><?php echo safe(labelInboundText($current_label['size'] ?? '')); ?></span>
+                            <div class="flex flex-col leading-none">
+                                <span class="text-[30px] font-bold uppercase leading-none mb-2 text-black">Size</span>
+                                <span class="text-[42px] font-black leading-none"><?php echo safe(labelInboundText($current_label['size'] ?? '')); ?></span>
                             </div>
                         </div>
                     </div>
-                    <div class="w-full h-[150px] flex flex-col justify-center px-8 border-b-[3px] border-black shrink-0">
-                        <span class="text-[26px] font-bold uppercase leading-none mb-1 text-black">Dimensions</span>
+                    <div class="w-full h-[160px] flex flex-col justify-center pl-8 border-b-[3px] border-black">
+                        <span class="text-[30px] font-bold uppercase leading-none mb-1 text-black">Dimensions</span>
                         <span class="text-[42px] font-black leading-tight"><?php echo safe(labelDimensionsText($current_label)); ?></span>
                     </div>
-                    <div class="flex-1 w-full flex flex-col justify-center px-8 min-h-[150px]">
-                        <span class="text-[26px] font-bold uppercase leading-none mb-1 text-black">Location</span>
-                        <span class="text-[42px] font-black leading-tight"><?php echo safe(labelLocationText($current_label, $label_data[0] ?? [])); ?></span>
+                    <div class="flex-1 w-full flex flex-col justify-center pl-8">
+                        <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">Location</span>
+                        <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2"><?php echo safe(labelLocationText($current_label, $label_data[0] ?? [])); ?></span>
                     </div>
 
                 <?php  } elseif ($categoryName == 'sculptures' || $categoryName == 'homeandliving' || $categoryName == 'paintings') { ?>
