@@ -259,7 +259,7 @@ function exotic_india_post_shipment_add(array $payload): array
     $result = exotic_india_api_post('/order/shipment-add', $json, [
         'Content-Type: application/json',
         'Accept: application/json',
-    ]);
+    ], false);
 
     if (defined('API_CALL_LOG_ENABLED') && API_CALL_LOG_ENABLED) {
         api_call_log_write([

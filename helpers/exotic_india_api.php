@@ -30,23 +30,27 @@ function exotic_india_api_key(): string
  *
  * @return list<string>
  */
-function exotic_india_api_auth_headers(): array
+function exotic_india_api_auth_headers(bool $includeAdminApiTest = true): array
 {
-    return [
+    $headers = [
         'x-api-key: ' . exotic_india_api_key(),
-        'x-adminapitest: 1',
     ];
+    if ($includeAdminApiTest) {
+        $headers[] = 'x-adminapitest: 1';
+    }
+
+    return $headers;
 }
 
 /**
  * @param list<string> $extraHeaders e.g. Content-Type, Accept
  * @return array{success:bool,message:string,http_code:int,data:array,raw:string,curl_error?:string,request_url:string,request_headers:list<string>}
  */
-function exotic_india_api_post(string $endpoint, string $postBody, array $extraHeaders = []): array
+function exotic_india_api_post(string $endpoint, string $postBody, array $extraHeaders = [], bool $includeAdminApiTest = true): array
 {
     $endpoint = '/' . ltrim($endpoint, '/');
     $url = exotic_india_api_base_url() . $endpoint;
-    $headers = array_merge(exotic_india_api_auth_headers(), $extraHeaders);
+    $headers = array_merge(exotic_india_api_auth_headers($includeAdminApiTest), $extraHeaders);
 
     $ch = curl_init($url);
     curl_setopt_array($ch, [
@@ -149,11 +153,11 @@ function exotic_india_api_post(string $endpoint, string $postBody, array $extraH
  * @param list<string> $extraHeaders
  * @return array{success:bool,message:string,http_code:int,data:array,raw:string,curl_error?:string,request_url:string,request_headers:list<string>}
  */
-function exotic_india_api_get(string $endpoint, array $extraHeaders = []): array
+function exotic_india_api_get(string $endpoint, array $extraHeaders = [], bool $includeAdminApiTest = true): array
 {
     $endpoint = '/' . ltrim($endpoint, '/');
     $url = exotic_india_api_base_url() . $endpoint;
-    $headers = array_merge(exotic_india_api_auth_headers(), $extraHeaders);
+    $headers = array_merge(exotic_india_api_auth_headers($includeAdminApiTest), $extraHeaders);
 
     $ch = curl_init($url);
     curl_setopt_array($ch, [
