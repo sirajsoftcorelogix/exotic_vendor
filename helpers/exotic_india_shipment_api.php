@@ -24,7 +24,7 @@ function exotic_india_shipment_api_headers(): array
         'Content-Type: application/json',
         'Accept: application/json',
         'x-api-key: ' . trim((string) $apiKey),
-        'x-adminapitest: 1',
+        //'x-adminapitest: 1',
     ];
 }
 
