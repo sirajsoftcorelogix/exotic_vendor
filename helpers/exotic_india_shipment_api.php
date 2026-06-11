@@ -344,3 +344,48 @@ function exotic_india_log_dispatch_shipment($conn, int $dispatchId, array $befor
 
     return exotic_india_post_shipment_add($payload);
 }
+
+/**
+ * @param array<string, mixed> $dispatch
+ * @return array{ready:bool,issues:list<string>,payload:?array,api_url:string}
+ */
+function exotic_india_shipment_add_preview($conn, array $dispatch): array
+{
+    $issues = [];
+
+    if (trim((string) ($dispatch['awb_code'] ?? '')) === '') {
+        $issues[] = 'AWB / tracking number (awb_code) is missing on this dispatch.';
+    }
+
+    $shipperId = (int) ($dispatch['shipper_id'] ?? 0);
+    if ($shipperId <= 0 && $conn instanceof mysqli) {
+        $partnerModel = new CourierPartner($conn);
+        $shipperId = (int) ($partnerModel->resolveShipperId(
+            (string) ($dispatch['courier_name'] ?? ''),
+            null
+        ) ?? 0);
+    }
+    if ($shipperId <= 0) {
+        $issues[] = 'shipper_id is missing. Sync courier_partners or complete dispatch courier identity.';
+    }
+
+    if (exotic_india_format_api_date($dispatch['dispatch_date'] ?? '') === '') {
+        $issues[] = 'dispatch_date is missing or invalid.';
+    }
+
+    if ((int) ($dispatch['invoice_id'] ?? 0) <= 0) {
+        $issues[] = 'invoice_id is missing on dispatch.';
+    }
+
+    $payload = $conn instanceof mysqli ? exotic_india_build_shipment_payload($conn, $dispatch) : null;
+    if ($payload === null && $issues === []) {
+        $issues[] = 'Could not build ordered_items from box_items / invoice lines.';
+    }
+
+    return [
+        'ready' => $payload !== null && $issues === [],
+        'issues' => $issues,
+        'payload' => $payload,
+        'api_url' => exotic_india_shipment_api_base_url() . '/order/shipment-add',
+    ];
+}

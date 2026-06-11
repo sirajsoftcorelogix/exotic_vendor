@@ -444,6 +444,20 @@
                     <?php if ($reDispatch): ?>
                       <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="reDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Re-Dispatch</button>
                     <?php endif; ?>
+                    <?php
+                      $eiDispatches = $invoice_dispatch[$invoice['id']] ?? [];
+                      $eiDispatchCount = count($eiDispatches);
+                      foreach ($eiDispatches as $eiDispatch):
+                        $eiDispatchId = (int) ($eiDispatch['id'] ?? 0);
+                        if ($eiDispatchId <= 0) {
+                            continue;
+                        }
+                        $eiLabel = $eiDispatchCount > 1
+                          ? 'Exotic Shipment API (Box ' . (int) ($eiDispatch['box_no'] ?? 0) . ')'
+                          : 'Exotic Shipment API';
+                    ?>
+                      <button type="button" class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="openShipmentAddModal(<?php echo $eiDispatchId; ?>)" style="padding: 0.5rem 1rem;"><?php echo htmlspecialchars($eiLabel); ?></button>
+                    <?php endforeach; ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
@@ -498,6 +512,41 @@
       </select>
     </div>
     </div>
+</div>
+
+<div id="shipment-add-modal" class="fixed inset-0 z-[60] hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/40" data-shipment-add-close></div>
+  <div class="relative w-full max-w-3xl max-h-[92vh] overflow-hidden bg-white rounded-lg shadow-xl flex flex-col">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">Exotic India Shipment API</h2>
+        <p class="text-xs text-gray-500 mt-0.5">POST /order/shipment-add</p>
+      </div>
+      <button type="button" class="text-gray-600 hover:text-gray-900 text-2xl leading-none" data-shipment-add-close aria-label="Close">&times;</button>
+    </div>
+    <div class="p-4 overflow-y-auto space-y-4 text-sm">
+      <div id="shipment-add-meta" class="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded p-3"></div>
+      <div id="shipment-add-issues" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-3"></div>
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-sm font-semibold text-gray-700">Request JSON</label>
+          <button type="button" id="shipment-add-regenerate-btn" class="text-xs text-orange-600 hover:text-orange-700 font-semibold">Regenerate</button>
+        </div>
+        <textarea id="shipment-add-request" class="w-full h-52 font-mono text-xs border border-gray-300 rounded p-3 bg-gray-50" readonly spellcheck="false"></textarea>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" id="shipment-add-execute-btn" class="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded text-sm">Execute API</button>
+        <span id="shipment-add-status" class="text-xs text-gray-500 self-center"></span>
+      </div>
+      <div id="shipment-add-response-wrap" class="hidden">
+        <label class="text-sm font-semibold text-gray-700 block mb-1">API Response</label>
+        <pre id="shipment-add-response" class="w-full max-h-56 overflow-auto font-mono text-xs border border-gray-300 rounded p-3 bg-gray-50 whitespace-pre-wrap"></pre>
+      </div>
+    </div>
+    <div class="px-4 py-3 border-t border-gray-200 flex justify-end gap-2 bg-gray-50 shrink-0">
+      <button type="button" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded text-sm" data-shipment-add-close>Close</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -735,6 +784,147 @@ if (bulkPrintBtn) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
     }
+
+    let shipmentAddCurrentDispatchId = 0;
+
+    function closeShipmentAddModal() {
+      const modal = document.getElementById('shipment-add-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+      shipmentAddCurrentDispatchId = 0;
+    }
+
+    function renderShipmentAddPreview(data) {
+      const meta = document.getElementById('shipment-add-meta');
+      const issuesEl = document.getElementById('shipment-add-issues');
+      const requestEl = document.getElementById('shipment-add-request');
+      const executeBtn = document.getElementById('shipment-add-execute-btn');
+      const statusEl = document.getElementById('shipment-add-status');
+      const responseWrap = document.getElementById('shipment-add-response-wrap');
+      const responseEl = document.getElementById('shipment-add-response');
+
+      const d = data.dispatch || {};
+      meta.innerHTML = [
+        '<div><strong>Dispatch #</strong> ' + escapeHtml(String(d.id || '')) + '</div>',
+        '<div><strong>Box</strong> ' + escapeHtml(String(d.box_no || '')) + ' &nbsp;|&nbsp; <strong>Order</strong> ' + escapeHtml(String(d.order_number || '')) + '</div>',
+        '<div><strong>AWB</strong> ' + escapeHtml(String(d.awb_code || '—')) + ' &nbsp;|&nbsp; <strong>Shipper ID</strong> ' + escapeHtml(String(d.shipper_id || '—')) + '</div>',
+        '<div><strong>URL</strong> ' + escapeHtml(String(data.api_url || '')) + '</div>',
+      ].join('');
+
+      const issues = Array.isArray(data.issues) ? data.issues : [];
+      if (issues.length) {
+        issuesEl.classList.remove('hidden');
+        issuesEl.innerHTML = '<strong>Issues:</strong><ul class="list-disc ml-4 mt-1">' +
+          issues.map(i => '<li>' + escapeHtml(String(i)) + '</li>').join('') + '</ul>';
+      } else {
+        issuesEl.classList.add('hidden');
+        issuesEl.innerHTML = '';
+      }
+
+      requestEl.value = data.payload_json || '';
+      executeBtn.disabled = !data.ready;
+      statusEl.textContent = data.ready ? 'Ready to execute.' : 'Fix issues before executing.';
+      responseWrap.classList.add('hidden');
+      responseEl.textContent = '';
+    }
+
+    function loadShipmentAddPreview(dispatchId) {
+      const statusEl = document.getElementById('shipment-add-status');
+      const executeBtn = document.getElementById('shipment-add-execute-btn');
+      statusEl.textContent = 'Generating request…';
+      executeBtn.disabled = true;
+
+      return fetch('?page=dispatch&action=shipment_add_preview&dispatch_id=' + encodeURIComponent(dispatchId), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) {
+          throw new Error(data.message || 'Preview failed');
+        }
+        renderShipmentAddPreview(data);
+        return data;
+      });
+    }
+
+    function openShipmentAddModal(dispatchId) {
+      shipmentAddCurrentDispatchId = parseInt(dispatchId, 10) || 0;
+      if (!shipmentAddCurrentDispatchId) {
+        return;
+      }
+
+      document.querySelectorAll('.relative > div').forEach(menu => menu.classList.add('hidden'));
+
+      const modal = document.getElementById('shipment-add-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      loadShipmentAddPreview(shipmentAddCurrentDispatchId).catch(err => {
+        const msg = 'Could not load shipment request: ' + err.message;
+        if (typeof showAlert === 'function') showAlert(msg, 'error'); else alert(msg);
+        closeShipmentAddModal();
+      });
+    }
+
+    document.getElementById('shipment-add-regenerate-btn')?.addEventListener('click', function() {
+      if (!shipmentAddCurrentDispatchId) return;
+      loadShipmentAddPreview(shipmentAddCurrentDispatchId).catch(err => {
+        const msg = 'Regenerate failed: ' + err.message;
+        if (typeof showAlert === 'function') showAlert(msg, 'error'); else alert(msg);
+      });
+    });
+
+    document.getElementById('shipment-add-execute-btn')?.addEventListener('click', function() {
+      if (!shipmentAddCurrentDispatchId) return;
+
+      const btn = this;
+      const statusEl = document.getElementById('shipment-add-status');
+      const responseWrap = document.getElementById('shipment-add-response-wrap');
+      const responseEl = document.getElementById('shipment-add-response');
+
+      btn.disabled = true;
+      statusEl.textContent = 'Calling API…';
+
+      fetch('?page=dispatch&action=shipment_add_execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ dispatch_id: shipmentAddCurrentDispatchId })
+      })
+      .then(res => res.json().then(data => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        responseWrap.classList.remove('hidden');
+        const summary = {
+          success: data.success,
+          message: data.message,
+          http_code: data.http_code,
+          response: data.response,
+        };
+        responseEl.textContent = JSON.stringify(summary, null, 2);
+        statusEl.textContent = data.success
+          ? 'API succeeded (HTTP ' + (data.http_code || '') + ').'
+          : 'API failed: ' + (data.message || 'Unknown error');
+        if (!ok && data.issues && data.issues.length) {
+          renderShipmentAddPreview({ dispatch: data.request ? {} : {}, issues: data.issues, payload_json: document.getElementById('shipment-add-request').value, ready: false, api_url: data.api_url });
+        }
+      })
+      .catch(err => {
+        statusEl.textContent = 'Request error.';
+        const msg = 'Execute failed: ' + err.message;
+        if (typeof showAlert === 'function') showAlert(msg, 'error'); else alert(msg);
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });
+    });
+
+    document.querySelectorAll('[data-shipment-add-close]').forEach(el => {
+      el.addEventListener('click', closeShipmentAddModal);
+    });
 
     function showModal(title, contentHtml) {
       const existing = document.getElementById('retry-response-modal');

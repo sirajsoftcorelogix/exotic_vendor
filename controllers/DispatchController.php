@@ -10,6 +10,7 @@ require_once __DIR__ . '/../helpers/courier/CourierDispatchService.php';
 require_once __DIR__ . '/../helpers/courier/bluedart_rate_helpers.php';
 require_once __DIR__ . '/../helpers/dispatch_delivery_dates.php';
 require_once __DIR__ . '/../helpers/dispatch_courier_identity.php';
+require_once __DIR__ . '/../helpers/exotic_india_shipment_api.php';
 require_once __DIR__ . '/../models/courier/CourierShipment.php';
 require_once __DIR__ . '/../models/order/stock.php';
 $commanModel = new Tables($conn);
@@ -1165,6 +1166,121 @@ class DispatchController {
             'staffList' => $commanModel->get_staff_list(),
             'country_list' => $commanModel->get_counry_list(),
             'warehouseList' => $commanModel->get_exotic_address()
+        ]);
+    }
+
+    /**
+     * Preview JSON body for Exotic India POST /order/shipment-add.
+     */
+    public function shipmentAddPreview(): void
+    {
+        global $conn, $dispatchModel;
+        is_login();
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $dispatchId = (int) ($_GET['dispatch_id'] ?? $_POST['dispatch_id'] ?? 0);
+        if ($dispatchId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'dispatch_id is required']);
+            return;
+        }
+
+        $dispatch = $dispatchModel->getDispatchById($dispatchId);
+        if (!$dispatch) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Dispatch not found']);
+            return;
+        }
+
+        $preview = exotic_india_shipment_add_preview($conn, $dispatch);
+        $payload = $preview['payload'];
+
+        echo json_encode([
+            'success' => true,
+            'dispatch' => [
+                'id' => (int) $dispatch['id'],
+                'invoice_id' => (int) ($dispatch['invoice_id'] ?? 0),
+                'box_no' => (int) ($dispatch['box_no'] ?? 0),
+                'order_number' => (string) ($dispatch['order_number'] ?? ''),
+                'awb_code' => (string) ($dispatch['awb_code'] ?? ''),
+                'shipper_id' => (int) ($dispatch['shipper_id'] ?? 0),
+                'courier_name' => (string) ($dispatch['courier_name'] ?? ''),
+                'shipment_status' => (string) ($dispatch['shipment_status'] ?? ''),
+            ],
+            'api_url' => $preview['api_url'],
+            'ready' => (bool) $preview['ready'],
+            'issues' => $preview['issues'],
+            'payload' => $payload,
+            'payload_json' => $payload !== null
+                ? json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+                : null,
+        ]);
+    }
+
+    /**
+     * Execute Exotic India POST /order/shipment-add for a dispatch (manual / verify).
+     */
+    public function shipmentAddExecute(): void
+    {
+        global $conn, $dispatchModel;
+        is_login();
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Invalid JSON body']);
+            return;
+        }
+
+        $dispatchId = (int) ($input['dispatch_id'] ?? 0);
+        if ($dispatchId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'dispatch_id is required']);
+            return;
+        }
+
+        $dispatch = $dispatchModel->getDispatchById($dispatchId);
+        if (!$dispatch) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Dispatch not found']);
+            return;
+        }
+
+        $preview = exotic_india_shipment_add_preview($conn, $dispatch);
+        if (empty($preview['payload'])) {
+            http_response_code(422);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Cannot execute: payload could not be built.',
+                'issues' => $preview['issues'],
+            ]);
+            return;
+        }
+
+        $result = exotic_india_post_shipment_add($preview['payload']);
+
+        echo json_encode([
+            'success' => !empty($result['success']),
+            'message' => (string) ($result['message'] ?? ''),
+            'http_code' => (int) ($result['http_code'] ?? 0),
+            'api_url' => $preview['api_url'],
+            'request' => $preview['payload'],
+            'response' => $result['data'] ?? null,
+            'response_raw' => $result['raw'] ?? null,
+            'issues' => $preview['issues'],
         ]);
     }
     

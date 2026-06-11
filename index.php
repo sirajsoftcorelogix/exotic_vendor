@@ -1369,6 +1369,12 @@ switch ($page) {
             case 'bluedart_label':
                 $controller->bluedartLabel();
                 break;
+            case 'shipment_add_preview':
+                $controller->shipmentAddPreview();
+                break;
+            case 'shipment_add_execute':
+                $controller->shipmentAddExecute();
+                break;
             default:
                 $controller->create();
                 break;
