@@ -2,31 +2,7 @@
 
 require_once __DIR__ . '/api_call_logger.php';
 require_once __DIR__ . '/dispatch_courier_identity.php';
-
-function exotic_india_shipment_api_base_url(): string
-{
-    $base = getenv('EXOTIC_INDIA_API_BASE');
-    if ($base !== false && trim((string) $base) !== '') {
-        return rtrim((string) $base, '/');
-    }
-
-    return 'https://www.exoticindia.com/api';
-}
-
-function exotic_india_shipment_api_headers(): array
-{
-    $apiKey = getenv('EXOTIC_INDIA_API_KEY');
-    if ($apiKey === false || trim((string) $apiKey) === '') {
-        $apiKey = 'K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9';
-    }
-
-    return [
-        'Content-Type: application/json',
-        'Accept: application/json',
-        'x-api-key: ' . trim((string) $apiKey),
-        //'x-adminapitest: 1',
-    ];
-}
+require_once __DIR__ . '/exotic_india_api.php';
 
 /**
  * Map vp_invoices.invoice_number to Exotic India sale_no (numeric series, not internal id).
@@ -212,92 +188,47 @@ function exotic_india_build_shipment_payload($conn, array $dispatch): ?array
  */
 function exotic_india_post_shipment_add(array $payload): array
 {
-    $url = exotic_india_shipment_api_base_url() . '/order/shipment-add';
     $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false) {
         return ['success' => false, 'message' => 'Could not encode shipment payload.', 'http_code' => 0];
     }
 
-    $headers = exotic_india_shipment_api_headers();
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $json,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => $headers,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_SSL_VERIFYPEER => false,
+    $result = exotic_india_api_post('/order/shipment-add', $json, [
+        'Content-Type: application/json',
+        'Accept: application/json',
     ]);
-
-    $raw = curl_exec($ch);
-    $curlError = curl_error($ch);
-    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($raw === false) {
-        if (defined('API_CALL_LOG_ENABLED') && API_CALL_LOG_ENABLED) {
-            api_call_log_write([
-                'kind' => 'exotic_shipment_add',
-                'endpoint' => '/order/shipment-add',
-                'method' => 'POST',
-                'request_url' => $url,
-                'request_headers' => api_call_log_sanitize_header_lines($headers),
-                'request_post_body' => $json,
-                'curl_error' => $curlError,
-                'response_http_code' => $httpCode,
-            ]);
-        }
-
-        return [
-            'success' => false,
-            'message' => 'Shipment API call failed: ' . $curlError,
-            'http_code' => $httpCode,
-        ];
-    }
-
-    $decoded = json_decode((string) $raw, true);
-    $data = is_array($decoded) ? $decoded : [];
 
     if (defined('API_CALL_LOG_ENABLED') && API_CALL_LOG_ENABLED) {
         api_call_log_write([
             'kind' => 'exotic_shipment_add',
             'endpoint' => '/order/shipment-add',
             'method' => 'POST',
-            'request_url' => $url,
-            'request_headers' => api_call_log_sanitize_header_lines($headers),
+            'request_url' => $result['request_url'] ?? '',
+            'request_headers' => api_call_log_sanitize_header_lines($result['request_headers'] ?? []),
             'request_post_body' => $json,
-            'response_http_code' => $httpCode,
-            'response_raw' => (string) $raw,
-            'response_decoded' => $data,
+            'curl_error' => $result['curl_error'] ?? null,
+            'response_http_code' => (int) ($result['http_code'] ?? 0),
+            'response_raw' => (string) ($result['raw'] ?? ''),
+            'response_decoded' => $result['data'] ?? [],
         ]);
     }
 
-    $failed = $httpCode >= 400
-        || (isset($data['success']) && $data['success'] === false)
-        || (isset($data['status']) && in_array(strtolower((string) $data['status']), ['error', 'failed'], true));
-
-    if ($failed) {
-        $message = trim((string) ($data['message'] ?? $data['error'] ?? ''));
-        if ($message === '') {
-            $message = 'HTTP ' . $httpCode;
-        }
-
+    if (empty($result['success'])) {
         return [
             'success' => false,
-            'message' => $message,
-            'http_code' => $httpCode,
-            'data' => $data,
-            'raw' => (string) $raw,
+            'message' => (string) ($result['message'] ?? 'Shipment API call failed.'),
+            'http_code' => (int) ($result['http_code'] ?? 0),
+            'data' => $result['data'] ?? [],
+            'raw' => (string) ($result['raw'] ?? ''),
         ];
     }
 
     return [
         'success' => true,
-        'message' => trim((string) ($data['message'] ?? 'Shipment logged successfully.')),
-        'http_code' => $httpCode,
-        'data' => $data,
-        'raw' => (string) $raw,
+        'message' => trim((string) ($result['message'] ?? 'Shipment logged successfully.')),
+        'http_code' => (int) ($result['http_code'] ?? 0),
+        'data' => $result['data'] ?? [],
+        'raw' => (string) ($result['raw'] ?? ''),
     ];
 }
 
@@ -377,6 +308,6 @@ function exotic_india_shipment_add_preview($conn, array $dispatch): array
         'ready' => $payload !== null && $issues === [],
         'issues' => $issues,
         'payload' => $payload,
-        'api_url' => exotic_india_shipment_api_base_url() . '/order/shipment-add',
+        'api_url' => exotic_india_api_base_url() . '/order/shipment-add',
     ];
 }
