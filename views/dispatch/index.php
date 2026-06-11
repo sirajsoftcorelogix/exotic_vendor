@@ -810,6 +810,7 @@ if (bulkPrintBtn) {
         '<div><strong>Dispatch #</strong> ' + escapeHtml(String(d.id || '')) + '</div>',
         '<div><strong>Box</strong> ' + escapeHtml(String(d.box_no || '')) + ' &nbsp;|&nbsp; <strong>Order</strong> ' + escapeHtml(String(d.order_number || '')) + '</div>',
         '<div><strong>AWB</strong> ' + escapeHtml(String(d.awb_code || '—')) + ' &nbsp;|&nbsp; <strong>Shipper ID</strong> ' + escapeHtml(String(d.shipper_id || '—')) + '</div>',
+        '<div><strong>Exotic Shipment ID</strong> ' + escapeHtml(String(d.exotic_shipment_id || '—')) + '</div>',
         '<div><strong>URL</strong> ' + escapeHtml(String(data.api_url || '')) + '</div>',
       ].join('');
 
@@ -902,12 +903,16 @@ if (bulkPrintBtn) {
           success: data.success,
           message: data.message,
           http_code: data.http_code,
+          shipment_id: data.shipment_id || '',
           response: data.response,
         };
         responseEl.textContent = JSON.stringify(summary, null, 2);
         statusEl.textContent = data.success
-          ? 'API succeeded (HTTP ' + (data.http_code || '') + ').'
+          ? 'API succeeded (HTTP ' + (data.http_code || '') + ')' + (data.shipment_id ? '. Shipment ID: ' + data.shipment_id : '') + '.'
           : 'API failed: ' + (data.message || 'Unknown error');
+        if (data.success && data.shipment_id) {
+          loadShipmentAddPreview(shipmentAddCurrentDispatchId).catch(function() {});
+        }
         if (!ok && data.issues && data.issues.length) {
           renderShipmentAddPreview({ dispatch: data.request ? {} : {}, issues: data.issues, payload_json: document.getElementById('shipment-add-request').value, ready: false, api_url: data.api_url });
         }

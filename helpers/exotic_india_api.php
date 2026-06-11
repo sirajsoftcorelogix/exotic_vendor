@@ -104,8 +104,9 @@ function exotic_india_api_post(string $endpoint, string $postBody, array $extraH
         ];
     }
 
+    $status = strtolower(trim((string) ($data['status'] ?? '')));
     if ((isset($data['success']) && $data['success'] === false)
-        || (isset($data['status']) && in_array(strtolower((string) $data['status']), ['error', 'failed'], true))) {
+        || in_array($status, ['error', 'failed'], true)) {
         $message = trim((string) ($data['message'] ?? ''));
         if ($message === '' && isset($data['error'])) {
             $message = is_string($data['error']) ? trim($data['error']) : json_encode($data['error']);
@@ -125,9 +126,17 @@ function exotic_india_api_post(string $endpoint, string $postBody, array $extraH
         ];
     }
 
+    $message = trim((string) ($data['message'] ?? ''));
+    if ($message === '' && in_array($status, ['success', 'sucess'], true)) {
+        $message = 'API call succeeded.';
+    }
+    if ($message === '') {
+        $message = 'API call succeeded.';
+    }
+
     return [
         'success' => true,
-        'message' => trim((string) ($data['message'] ?? 'API call succeeded.')),
+        'message' => $message,
         'http_code' => $httpCode,
         'data' => $data,
         'raw' => $rawStr,

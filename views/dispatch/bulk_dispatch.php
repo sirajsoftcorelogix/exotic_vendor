@@ -543,7 +543,7 @@
                                             ${dispatch.invoice.invoice_number || '-'}
                                         </a>
                                     </td>
-                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.shiprocket_shipment_id || '-'}</td>
+                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.exotic_shipment_id || '-'}</td>
                                     <td class="p-2 border-b border-gray-200 text-right">
                                         ${dispatch.awb_code ? `<a href="${dispatch.label_url || '#'}" target="_blank" class="text-blue-600 hover:underline">${dispatch.awb_code}</a>` : '-'}
                                     </td>
@@ -2714,7 +2714,7 @@
                                             ${dispatch.invoice.invoice_number || '-'}
                                         </a>
                                     </td>
-                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.shiprocket_shipment_id || '-'}</td>
+                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.exotic_shipment_id || '-'}</td>
                                     <td class="p-2 border-b border-gray-200 text-right">
                                         ${dispatch.awb_code ? `<a href="${dispatch.label_url || '#'}" target="_blank" class="text-blue-600 hover:underline">${dispatch.awb_code}</a>` : '-'}
                                     </td>

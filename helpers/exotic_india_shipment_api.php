@@ -46,6 +46,10 @@ function exotic_india_format_api_date($value): string
  */
 function exotic_india_dispatch_should_log_shipment(array $before, array $after): bool
 {
+    if (trim((string) ($after['exotic_shipment_id'] ?? '')) !== '') {
+        return false;
+    }
+
     $awb = trim((string) ($after['awb_code'] ?? ''));
     if ($awb === '') {
         return false;
@@ -54,6 +58,65 @@ function exotic_india_dispatch_should_log_shipment(array $before, array $after):
     $prev = trim((string) ($before['awb_code'] ?? ''));
 
     return $prev === '' || $prev !== $awb;
+}
+
+/**
+ * @param array<string, mixed> $data Decoded API response body
+ */
+function exotic_india_extract_shipment_id(array $data): string
+{
+    foreach (['shipment_id', 'shipmentId'] as $key) {
+        $value = trim((string) ($data[$key] ?? ''));
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+function exotic_india_save_dispatch_shipment_id($conn, int $dispatchId, string $shipmentId): bool
+{
+    $shipmentId = trim($shipmentId);
+    if ($dispatchId <= 0 || $shipmentId === '' || !($conn instanceof mysqli)) {
+        return false;
+    }
+
+    $stmt = $conn->prepare(
+        'UPDATE vp_dispatch_details SET exotic_shipment_id = ? WHERE id = ? LIMIT 1'
+    );
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('si', $shipmentId, $dispatchId);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return (bool) $ok;
+}
+
+/**
+ * @param array<string, mixed> $apiResult Result from exotic_india_post_shipment_add()
+ * @return array<string, mixed>
+ */
+function exotic_india_persist_shipment_add_result($conn, int $dispatchId, array $apiResult): array
+{
+    if ($dispatchId <= 0 || empty($apiResult['success'])) {
+        return $apiResult;
+    }
+
+    $data = is_array($apiResult['data'] ?? null) ? $apiResult['data'] : [];
+    $shipmentId = exotic_india_extract_shipment_id($data);
+    if ($shipmentId === '') {
+        return $apiResult;
+    }
+
+    if (exotic_india_save_dispatch_shipment_id($conn, $dispatchId, $shipmentId)) {
+        $apiResult['shipment_id'] = $shipmentId;
+    }
+
+    return $apiResult;
 }
 
 /**
@@ -184,7 +247,7 @@ function exotic_india_build_shipment_payload($conn, array $dispatch): ?array
 
 /**
  * @param array<string, mixed> $payload
- * @return array{success:bool,message:string,http_code:int,data?:array,raw?:string}
+ * @return array{success:bool,message:string,http_code:int,data?:array,raw?:string,shipment_id?:string}
  */
 function exotic_india_post_shipment_add(array $payload): array
 {
@@ -223,18 +286,25 @@ function exotic_india_post_shipment_add(array $payload): array
         ];
     }
 
-    return [
+    $data = is_array($result['data'] ?? null) ? $result['data'] : [];
+    $shipmentId = exotic_india_extract_shipment_id($data);
+    $response = [
         'success' => true,
         'message' => trim((string) ($result['message'] ?? 'Shipment logged successfully.')),
         'http_code' => (int) ($result['http_code'] ?? 0),
-        'data' => $result['data'] ?? [],
+        'data' => $data,
         'raw' => (string) ($result['raw'] ?? ''),
     ];
+    if ($shipmentId !== '') {
+        $response['shipment_id'] = $shipmentId;
+    }
+
+    return $response;
 }
 
 /**
  * @param array<string, mixed> $before prior dispatch row (empty on create)
- * @return array{success:bool,message:string,skipped?:bool,http_code?:int,data?:array}
+ * @return array{success:bool,message:string,skipped?:bool,http_code?:int,data?:array,shipment_id?:string}
  */
 function exotic_india_log_dispatch_shipment($conn, int $dispatchId, array $before = []): array
 {
@@ -264,7 +334,9 @@ function exotic_india_log_dispatch_shipment($conn, int $dispatchId, array $befor
         return ['success' => false, 'message' => 'Missing shipper, AWB, invoice, or line items for shipment-add.'];
     }
 
-    return exotic_india_post_shipment_add($payload);
+    $result = exotic_india_post_shipment_add($payload);
+
+    return exotic_india_persist_shipment_add_result($conn, $dispatchId, $result);
 }
 
 /**
