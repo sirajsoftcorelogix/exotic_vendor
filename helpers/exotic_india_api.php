@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Shared cURL client for https://www.exoticindia.com/api/* endpoints.
+ * Shared cURL client for https://www.exoticindia.com/vendor-api/* endpoints.
  * Matches helpers/vendor_external_api.php request structure (auth headers + curl options).
  */
 
@@ -12,7 +12,7 @@ function exotic_india_api_base_url(): string
         return rtrim((string) $base, '/');
     }
 
-    return 'https://www.exoticindia.com/api';
+    return 'https://www.exoticindia.com/vendor-api';
 }
 
 function exotic_india_api_key(): string
