@@ -809,7 +809,7 @@ if (bulkPrintBtn) {
       shipmentAddCurrentDispatchId = 0;
     }
 
-    function renderShipmentAddPreview(data) {
+    function renderShipmentAddPreview(data, keepResponse) {
       const meta = document.getElementById('shipment-add-meta');
       const issuesEl = document.getElementById('shipment-add-issues');
       const requestEl = document.getElementById('shipment-add-request');
@@ -842,22 +842,26 @@ if (bulkPrintBtn) {
 
       requestEl.value = data.payload_json || '';
       executeBtn.disabled = !data.ready;
-      statusEl.textContent = data.ready ? 'Ready to execute.' : 'Fix issues before executing.';
-      responseWrap.classList.add('hidden');
-      if (responseSummaryEl) responseSummaryEl.textContent = '';
-      if (responseRawEl) {
-        responseRawEl.textContent = '';
-        responseRawEl.dataset.copyText = '';
+      if (!keepResponse) {
+        statusEl.textContent = data.ready ? 'Ready to execute.' : 'Fix issues before executing.';
+        responseWrap.classList.add('hidden');
+        if (responseSummaryEl) responseSummaryEl.textContent = '';
+        if (responseRawEl) {
+          responseRawEl.textContent = '';
+          responseRawEl.dataset.copyText = '';
+        }
+        if (responseHeadersWrap) responseHeadersWrap.classList.add('hidden');
+        if (responseHeadersEl) responseHeadersEl.textContent = '';
       }
-      if (responseHeadersWrap) responseHeadersWrap.classList.add('hidden');
-      if (responseHeadersEl) responseHeadersEl.textContent = '';
     }
 
-    function loadShipmentAddPreview(dispatchId) {
+    function loadShipmentAddPreview(dispatchId, keepResponse) {
       const statusEl = document.getElementById('shipment-add-status');
       const executeBtn = document.getElementById('shipment-add-execute-btn');
-      statusEl.textContent = 'Generating request…';
-      executeBtn.disabled = true;
+      if (!keepResponse) {
+        statusEl.textContent = 'Generating request…';
+        executeBtn.disabled = true;
+      }
 
       return fetch('?page=dispatch&action=shipment_add_preview&dispatch_id=' + encodeURIComponent(dispatchId), {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -867,7 +871,7 @@ if (bulkPrintBtn) {
         if (!data.success) {
           throw new Error(data.message || 'Preview failed');
         }
-        renderShipmentAddPreview(data);
+        renderShipmentAddPreview(data, keepResponse);
         return data;
       });
     }
@@ -987,10 +991,16 @@ if (bulkPrintBtn) {
           ? 'API succeeded (HTTP ' + (data.http_code || '') + ')' + (data.shipment_id ? '. Shipment ID: ' + data.shipment_id : '') + '.'
           : 'API failed: ' + (data.message || 'Unknown error');
         if (data.success && data.shipment_id) {
-          loadShipmentAddPreview(shipmentAddCurrentDispatchId).catch(function() {});
+          loadShipmentAddPreview(shipmentAddCurrentDispatchId, true).catch(function() {});
         }
         if (!ok && data.issues && data.issues.length) {
-          renderShipmentAddPreview({ dispatch: data.request ? {} : {}, issues: data.issues, payload_json: document.getElementById('shipment-add-request').value, ready: false, api_url: data.api_url });
+          renderShipmentAddPreview({
+            dispatch: data.dispatch || {},
+            issues: data.issues,
+            payload_json: document.getElementById('shipment-add-request').value,
+            ready: false,
+            api_url: data.api_url
+          }, true);
         }
       })
       .catch(err => {
