@@ -390,7 +390,14 @@
                               : '';
                             if ($sid !== '') {
                               $shipperIdParts[] = $boxPrefix . htmlspecialchars($sid);
-                            } else {
+                            } elseif (
+                              trim((string) ($shipperDispatch['awb_code'] ?? '')) !== ''
+                              && !in_array(
+                                strtolower(trim((string) ($shipperDispatch['shipment_status'] ?? ''))),
+                                ['cancelled', 'cancellation requested'],
+                                true
+                              )
+                            ) {
                               $genTitle = $shipperBoxCount > 1 && $boxNo > 0
                                 ? 'Generate Shipper ID (Box ' . $boxNo . ')'
                                 : 'Generate Shipper ID';
@@ -398,6 +405,8 @@
                                 . '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">'
                                 . '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>'
                                 . '</svg></button>';
+                            } else {
+                              $shipperIdParts[] = $boxPrefix . '<span class="text-gray-400 font-normal">-</span>';
                             }
                           }
                         }
@@ -876,6 +885,7 @@ if (bulkPrintBtn) {
 
       const existingId = String(d.exotic_shipment_id || data.shipment_id || '').trim();
       const alreadyGenerated = !!data.already_generated || existingId !== '';
+      const canGenerate = data.can_generate !== false;
 
       if (alreadyGenerated && shipperIdBox && shipperIdValue) {
         shipperIdBox.classList.remove('hidden');
@@ -890,7 +900,7 @@ if (bulkPrintBtn) {
       } else {
         if (shipperIdBox) shipperIdBox.classList.add('hidden');
         if (shipperIdValue) shipperIdValue.textContent = '';
-        if (actionRow) actionRow.classList.remove('hidden');
+        if (actionRow) actionRow.classList.toggle('hidden', !canGenerate);
         if (resultEl) {
           resultEl.classList.add('hidden');
           resultEl.textContent = '';
@@ -912,12 +922,14 @@ if (bulkPrintBtn) {
 
       if (requestEl) requestEl.value = data.payload_json || '';
       if (technicalEl) technicalEl.classList.toggle('hidden', !(data.payload_json || keepResponse));
-      if (executeBtn) executeBtn.disabled = !data.ready || alreadyGenerated;
+      if (executeBtn) executeBtn.disabled = !data.ready || alreadyGenerated || !canGenerate;
 
       if (!keepResponse) {
         statusEl.textContent = alreadyGenerated
           ? ''
-          : (data.ready ? 'Ready to generate Shipper ID.' : 'Complete the steps above, then try again.');
+          : (!canGenerate
+            ? 'Shipper ID can only be generated when AWB is present and shipment is not cancelled.'
+            : (data.ready ? 'Ready to generate Shipper ID.' : 'Complete the steps above, then try again.'));
         if (responseWrap) responseWrap.classList.add('hidden');
         if (responseSummaryEl) responseSummaryEl.textContent = '';
         if (responseRawEl) {

@@ -1201,6 +1201,7 @@ class DispatchController {
         $preview = exotic_india_shipment_add_preview($conn, $dispatch);
         $payload = $preview['payload'];
         $alreadyGenerated = trim((string) ($dispatch['exotic_shipment_id'] ?? '')) !== '';
+        $canGenerate = exotic_india_dispatch_can_generate_shipper_id($dispatch);
 
         echo json_encode([
             'success' => true,
@@ -1216,8 +1217,9 @@ class DispatchController {
                 'exotic_shipment_id' => (string) ($dispatch['exotic_shipment_id'] ?? ''),
             ],
             'already_generated' => $alreadyGenerated,
+            'can_generate' => $canGenerate,
             'api_url' => $preview['api_url'],
-            'ready' => !$alreadyGenerated && (bool) $preview['ready'],
+            'ready' => !$alreadyGenerated && $canGenerate && (bool) $preview['ready'],
             'issues' => $preview['issues'],
             'user_issues' => exotic_india_shipment_add_friendly_issues($preview['issues']),
             'payload' => $payload,
@@ -1270,6 +1272,20 @@ class DispatchController {
                 'already_generated' => true,
                 'shipment_id' => $existingShipperId,
                 'message' => 'Shipper ID is already generated for this package.',
+            ]);
+            return;
+        }
+
+        if (!exotic_india_dispatch_can_generate_shipper_id($dispatch)) {
+            $preview = exotic_india_shipment_add_preview($conn, $dispatch);
+            http_response_code(422);
+            echo json_encode([
+                'success' => false,
+                'message' => exotic_india_dispatch_shipment_is_cancelled($dispatch)
+                    ? 'This shipment is cancelled. Shipper ID cannot be generated.'
+                    : 'Tracking number (AWB) is required before generating Shipper ID.',
+                'issues' => $preview['issues'],
+                'user_issues' => exotic_india_shipment_add_friendly_issues($preview['issues']),
             ]);
             return;
         }

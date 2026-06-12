@@ -39,6 +39,30 @@ function exotic_india_format_api_date($value): string
 }
 
 /**
+ * @param array<string, mixed> $dispatch
+ */
+function exotic_india_dispatch_shipment_is_cancelled(array $dispatch): bool
+{
+    $status = strtolower(trim((string) ($dispatch['shipment_status'] ?? '')));
+
+    return $status === 'cancelled' || $status === 'cancellation requested';
+}
+
+/**
+ * Shipper ID may be generated only when AWB exists and shipment is active.
+ *
+ * @param array<string, mixed> $dispatch
+ */
+function exotic_india_dispatch_can_generate_shipper_id(array $dispatch): bool
+{
+    if (trim((string) ($dispatch['awb_code'] ?? '')) === '') {
+        return false;
+    }
+
+    return !exotic_india_dispatch_shipment_is_cancelled($dispatch);
+}
+
+/**
  * Log only when AWB is newly available (avoid duplicate posts on status-only updates).
  *
  * @param array<string, mixed> $before
@@ -50,11 +74,11 @@ function exotic_india_dispatch_should_log_shipment(array $before, array $after):
         return false;
     }
 
-    $awb = trim((string) ($after['awb_code'] ?? ''));
-    if ($awb === '') {
+    if (!exotic_india_dispatch_can_generate_shipper_id($after)) {
         return false;
     }
 
+    $awb = trim((string) ($after['awb_code'] ?? ''));
     $prev = trim((string) ($before['awb_code'] ?? ''));
 
     return $prev === '' || $prev !== $awb;
@@ -358,6 +382,10 @@ function exotic_india_shipment_add_preview($conn, array $dispatch): array
         $issues[] = 'AWB / tracking number (awb_code) is missing on this dispatch.';
     }
 
+    if (exotic_india_dispatch_shipment_is_cancelled($dispatch)) {
+        $issues[] = 'Shipment is cancelled; Shipper ID cannot be generated.';
+    }
+
     $shipperId = (int) ($dispatch['shipper_id'] ?? 0);
     if ($shipperId <= 0 && $conn instanceof mysqli) {
         $partnerModel = new CourierPartner($conn);
@@ -402,6 +430,8 @@ function exotic_india_shipment_add_friendly_issues(array $issues): array
     $map = [
         'AWB / tracking number (awb_code) is missing on this dispatch.' =>
             'Tracking number (AWB) is missing. Use “AWB Generate” first, then try again.',
+        'Shipment is cancelled; Shipper ID cannot be generated.' =>
+            'This shipment is cancelled. Shipper ID cannot be generated.',
         'shipper_id is missing. Sync courier_partners or complete dispatch courier identity.' =>
             'Courier is not linked yet. Complete dispatch or contact support.',
         'dispatch_date is missing or invalid.' =>
