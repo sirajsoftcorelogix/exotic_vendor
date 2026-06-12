@@ -371,8 +371,21 @@
                 </div>
                 <div class="flex flex-col gap-3">
                   <div>
-                    <p class="text-xs text-gray-500">RTO Risk</p>
-                    <p class="font-semibold text-gray-800">-</p>
+                    <p class="text-xs text-gray-500">Shipper ID</p>
+                    <p class="font-semibold text-gray-800">
+                      <?php
+                        $shipmentIds = [];
+                        if (!empty($invoice_dispatch[$invoice['id']])) {
+                          foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                            $sid = trim((string) ($dispatch['exotic_shipment_id'] ?? ''));
+                            if ($sid !== '') {
+                              $shipmentIds[] = htmlspecialchars($sid);
+                            }
+                          }
+                        }
+                        echo !empty($shipmentIds) ? implode(' | ', $shipmentIds) : '-';
+                      ?>
+                    </p>
                   </div>
                   <div>
                     <p class="text-xs text-gray-500">Applied wt.</p>
