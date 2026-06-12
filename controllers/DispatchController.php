@@ -1200,6 +1200,7 @@ class DispatchController {
 
         $preview = exotic_india_shipment_add_preview($conn, $dispatch);
         $payload = $preview['payload'];
+        $alreadyGenerated = trim((string) ($dispatch['exotic_shipment_id'] ?? '')) !== '';
 
         echo json_encode([
             'success' => true,
@@ -1214,9 +1215,11 @@ class DispatchController {
                 'shipment_status' => (string) ($dispatch['shipment_status'] ?? ''),
                 'exotic_shipment_id' => (string) ($dispatch['exotic_shipment_id'] ?? ''),
             ],
+            'already_generated' => $alreadyGenerated,
             'api_url' => $preview['api_url'],
-            'ready' => (bool) $preview['ready'],
+            'ready' => !$alreadyGenerated && (bool) $preview['ready'],
             'issues' => $preview['issues'],
+            'user_issues' => exotic_india_shipment_add_friendly_issues($preview['issues']),
             'payload' => $payload,
             'payload_json' => $payload !== null
                 ? json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
@@ -1260,13 +1263,25 @@ class DispatchController {
             return;
         }
 
+        $existingShipperId = trim((string) ($dispatch['exotic_shipment_id'] ?? ''));
+        if ($existingShipperId !== '') {
+            echo json_encode([
+                'success' => true,
+                'already_generated' => true,
+                'shipment_id' => $existingShipperId,
+                'message' => 'Shipper ID is already generated for this package.',
+            ]);
+            return;
+        }
+
         $preview = exotic_india_shipment_add_preview($conn, $dispatch);
         if (empty($preview['payload'])) {
             http_response_code(422);
             echo json_encode([
                 'success' => false,
-                'message' => 'Cannot execute: payload could not be built.',
+                'message' => 'Cannot generate Shipper ID yet. Please fix the items listed and try again.',
                 'issues' => $preview['issues'],
+                'user_issues' => exotic_india_shipment_add_friendly_issues($preview['issues']),
             ]);
             return;
         }
@@ -1276,9 +1291,14 @@ class DispatchController {
 
         $responseRaw = (string) ($result['raw'] ?? '');
         $responseHeaders = (string) ($result['response_headers'] ?? '');
+        $friendlyMessage = !empty($result['success'])
+            ? ((string) ($result['shipment_id'] ?? '') !== ''
+                ? 'Shipper ID generated successfully.'
+                : (string) ($result['message'] ?? 'Shipper ID request completed.'))
+            : ('Could not generate Shipper ID. ' . (string) ($result['message'] ?? 'Please try again or contact support.'));
         echo json_encode([
             'success' => !empty($result['success']),
-            'message' => (string) ($result['message'] ?? ''),
+            'message' => $friendlyMessage,
             'http_code' => (int) ($result['http_code'] ?? 0),
             'shipment_id' => (string) ($result['shipment_id'] ?? ''),
             'api_url' => $preview['api_url'],
@@ -1292,6 +1312,7 @@ class DispatchController {
             'request_headers' => $result['request_headers'] ?? [],
             'curl_error' => (string) ($result['curl_error'] ?? ''),
             'issues' => $preview['issues'],
+            'user_issues' => exotic_india_shipment_add_friendly_issues($preview['issues']),
         ]);
     }
     

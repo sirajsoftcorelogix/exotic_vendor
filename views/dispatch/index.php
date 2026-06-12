@@ -465,9 +465,12 @@
                         if ($eiDispatchId <= 0) {
                             continue;
                         }
+                        if (trim((string) ($eiDispatch['exotic_shipment_id'] ?? '')) !== '') {
+                            continue;
+                        }
                         $eiLabel = $eiDispatchCount > 1
-                          ? 'Exotic Shipment API (Box ' . (int) ($eiDispatch['box_no'] ?? 0) . ')'
-                          : 'Exotic Shipment API';
+                          ? 'Generate Shipper ID (Box ' . (int) ($eiDispatch['box_no'] ?? 0) . ')'
+                          : 'Generate Shipper ID';
                     ?>
                       <button type="button" class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="openShipmentAddModal(<?php echo $eiDispatchId; ?>)" style="padding: 0.5rem 1rem;"><?php echo htmlspecialchars($eiLabel); ?></button>
                     <?php endforeach; ?>
@@ -529,47 +532,55 @@
 
 <div id="shipment-add-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
   <div class="absolute inset-0 bg-black bg-opacity-40 z-0" data-shipment-add-close></div>
-  <div class="shipment-add-panel relative z-10 w-full max-w-3xl max-h-[92vh] overflow-hidden bg-white rounded-lg shadow-xl flex flex-col">
+  <div class="shipment-add-panel relative z-10 w-full max-w-lg max-h-[92vh] overflow-hidden bg-white rounded-lg shadow-xl flex flex-col">
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">Exotic India Shipment API</h2>
-        <p class="text-xs text-gray-500 mt-0.5">POST /order/shipment-add</p>
+        <h2 class="text-lg font-semibold text-gray-900">Generate Shipper ID</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Register this package on Exotic India (one time per box)</p>
       </div>
       <button type="button" class="text-gray-600 hover:text-gray-900 text-2xl leading-none" data-shipment-add-close aria-label="Close">&times;</button>
     </div>
     <div class="p-4 overflow-y-auto space-y-4 text-sm">
-      <div id="shipment-add-meta" class="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded p-3"></div>
-      <div id="shipment-add-issues" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-3"></div>
-      <div>
-        <div class="flex items-center justify-between mb-1">
-          <label class="text-sm font-semibold text-gray-700">Request JSON</label>
-          <button type="button" id="shipment-add-regenerate-btn" class="text-xs text-orange-600 hover:text-orange-700 font-semibold">Regenerate</button>
-        </div>
-        <textarea id="shipment-add-request" class="w-full h-52 font-mono text-xs border border-gray-300 rounded p-3 bg-gray-50" readonly spellcheck="false"></textarea>
+      <div id="shipment-add-meta" class="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2"></div>
+      <div id="shipment-add-shipper-id-box" class="hidden rounded-lg border border-green-200 bg-green-50 p-4 text-center">
+        <p class="text-xs font-semibold uppercase tracking-wide text-green-800 mb-1">Shipper ID</p>
+        <p id="shipment-add-shipper-id-value" class="text-2xl font-black text-green-900 break-all"></p>
       </div>
-      <div class="flex flex-wrap gap-2">
-        <button type="button" id="shipment-add-execute-btn" class="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded text-sm">Execute API</button>
-        <span id="shipment-add-status" class="text-xs text-gray-500 self-center"></span>
+      <div id="shipment-add-issues" class="hidden text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-4"></div>
+      <div id="shipment-add-action-row" class="flex flex-wrap gap-2 items-center">
+        <button type="button" id="shipment-add-execute-btn" class="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-lg text-sm">Generate Shipper ID</button>
+        <span id="shipment-add-status" class="text-xs text-gray-500"></span>
       </div>
-      <div id="shipment-add-response-wrap" class="hidden space-y-3">
-        <div>
-          <label class="text-sm font-semibold text-gray-700 block mb-1">Summary</label>
-          <pre id="shipment-add-response-summary" class="w-full max-h-40 overflow-auto font-mono text-xs border border-gray-300 rounded p-3 bg-gray-50 whitespace-pre-wrap"></pre>
-        </div>
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="text-sm font-semibold text-gray-700">Actual response body (from Exotic India)</label>
-            <button type="button" id="shipment-add-copy-raw-btn" class="text-xs text-orange-600 hover:text-orange-700 font-semibold">Copy</button>
+      <div id="shipment-add-result" class="hidden rounded-lg border p-4 text-sm"></div>
+      <details id="shipment-add-technical" class="hidden text-xs border border-gray-200 rounded-lg p-3 bg-gray-50">
+        <summary class="cursor-pointer font-semibold text-gray-600 select-none">Technical details (for support)</summary>
+        <div class="mt-3 space-y-3">
+          <div>
+            <label class="font-semibold text-gray-700 block mb-1">Request sent</label>
+            <textarea id="shipment-add-request" class="w-full h-36 font-mono text-xs border border-gray-300 rounded p-2 bg-white" readonly spellcheck="false"></textarea>
           </div>
-          <pre id="shipment-add-response-raw" class="w-full max-h-64 overflow-auto font-mono text-xs border border-slate-300 rounded p-3 bg-slate-950 text-emerald-100 whitespace-pre-wrap"></pre>
+          <div id="shipment-add-response-wrap" class="hidden space-y-3">
+            <div>
+              <label class="font-semibold text-gray-700 block mb-1">Response summary</label>
+              <pre id="shipment-add-response-summary" class="w-full max-h-32 overflow-auto font-mono text-xs border border-gray-300 rounded p-2 bg-white whitespace-pre-wrap"></pre>
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="font-semibold text-gray-700">Response body</label>
+                <button type="button" id="shipment-add-copy-raw-btn" class="text-orange-600 hover:text-orange-700 font-semibold">Copy</button>
+              </div>
+              <pre id="shipment-add-response-raw" class="w-full max-h-40 overflow-auto font-mono text-xs border border-gray-300 rounded p-2 bg-white whitespace-pre-wrap"></pre>
+            </div>
+            <div id="shipment-add-response-headers-wrap" class="hidden">
+              <label class="font-semibold text-gray-700 block mb-1">Response headers</label>
+              <pre id="shipment-add-response-headers" class="w-full max-h-32 overflow-auto font-mono text-xs border border-gray-300 rounded p-2 bg-white whitespace-pre-wrap"></pre>
+            </div>
+          </div>
         </div>
-        <div id="shipment-add-response-headers-wrap" class="hidden">
-          <label class="text-sm font-semibold text-gray-700 block mb-1">Response HTTP headers</label>
-          <pre id="shipment-add-response-headers" class="w-full max-h-40 overflow-auto font-mono text-xs border border-gray-300 rounded p-3 bg-gray-50 whitespace-pre-wrap"></pre>
-        </div>
-      </div>
+      </details>
     </div>
     <div class="px-4 py-3 border-t border-gray-200 flex justify-end gap-2 bg-gray-50 shrink-0">
+      <button type="button" id="shipment-add-done-btn" class="hidden bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm">Done</button>
       <button type="button" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded text-sm" data-shipment-add-close>Close</button>
     </div>
   </div>
@@ -822,12 +833,31 @@ if (bulkPrintBtn) {
       shipmentAddCurrentDispatchId = 0;
     }
 
+    function resetShipmentAddModalState() {
+      ['shipment-add-result', 'shipment-add-shipper-id-box'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
+      const doneBtn = document.getElementById('shipment-add-done-btn');
+      if (doneBtn) doneBtn.classList.add('hidden');
+      const actionRow = document.getElementById('shipment-add-action-row');
+      if (actionRow) actionRow.classList.remove('hidden');
+      const technicalEl = document.getElementById('shipment-add-technical');
+      if (technicalEl) technicalEl.classList.add('hidden');
+    }
+
     function renderShipmentAddPreview(data, keepResponse) {
       const meta = document.getElementById('shipment-add-meta');
       const issuesEl = document.getElementById('shipment-add-issues');
       const requestEl = document.getElementById('shipment-add-request');
       const executeBtn = document.getElementById('shipment-add-execute-btn');
+      const actionRow = document.getElementById('shipment-add-action-row');
       const statusEl = document.getElementById('shipment-add-status');
+      const resultEl = document.getElementById('shipment-add-result');
+      const shipperIdBox = document.getElementById('shipment-add-shipper-id-box');
+      const shipperIdValue = document.getElementById('shipment-add-shipper-id-value');
+      const doneBtn = document.getElementById('shipment-add-done-btn');
+      const technicalEl = document.getElementById('shipment-add-technical');
       const responseWrap = document.getElementById('shipment-add-response-wrap');
       const responseSummaryEl = document.getElementById('shipment-add-response-summary');
       const responseRawEl = document.getElementById('shipment-add-response-raw');
@@ -835,29 +865,59 @@ if (bulkPrintBtn) {
       const responseHeadersEl = document.getElementById('shipment-add-response-headers');
 
       const d = data.dispatch || {};
+      const boxLabel = d.box_no ? ('Box ' + d.box_no) : 'This package';
       meta.innerHTML = [
-        '<div><strong>Dispatch #</strong> ' + escapeHtml(String(d.id || '')) + '</div>',
-        '<div><strong>Box</strong> ' + escapeHtml(String(d.box_no || '')) + ' &nbsp;|&nbsp; <strong>Order</strong> ' + escapeHtml(String(d.order_number || '')) + '</div>',
-        '<div><strong>AWB</strong> ' + escapeHtml(String(d.awb_code || '—')) + ' &nbsp;|&nbsp; <strong>Shipper ID</strong> ' + escapeHtml(String(d.shipper_id || '—')) + '</div>',
-        '<div><strong>Exotic Shipment ID</strong> ' + escapeHtml(String(d.exotic_shipment_id || '—')) + '</div>',
-        '<div><strong>URL</strong> ' + escapeHtml(String(data.api_url || '')) + '</div>',
+        '<div><span class="text-gray-500">Order</span> <strong>' + escapeHtml(String(d.order_number || '—')) + '</strong></div>',
+        '<div><span class="text-gray-500">Tracking (AWB)</span> <strong>' + escapeHtml(String(d.awb_code || '—')) + '</strong></div>',
+        '<div><span class="text-gray-500">Courier</span> <strong>' + escapeHtml(String(d.courier_name || '—')) + '</strong></div>',
+        '<div><span class="text-gray-500">Package</span> <strong>' + escapeHtml(boxLabel) + '</strong></div>',
       ].join('');
 
-      const issues = Array.isArray(data.issues) ? data.issues : [];
-      if (issues.length) {
+      const existingId = String(d.exotic_shipment_id || data.shipment_id || '').trim();
+      const alreadyGenerated = !!data.already_generated || existingId !== '';
+
+      if (alreadyGenerated && shipperIdBox && shipperIdValue) {
+        shipperIdBox.classList.remove('hidden');
+        shipperIdValue.textContent = existingId;
+        if (actionRow) actionRow.classList.add('hidden');
+        if (resultEl) {
+          resultEl.classList.remove('hidden');
+          resultEl.className = 'rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900';
+          resultEl.textContent = 'Shipper ID is already generated for this package.';
+        }
+        if (doneBtn) doneBtn.classList.remove('hidden');
+      } else {
+        if (shipperIdBox) shipperIdBox.classList.add('hidden');
+        if (shipperIdValue) shipperIdValue.textContent = '';
+        if (actionRow) actionRow.classList.remove('hidden');
+        if (resultEl) {
+          resultEl.classList.add('hidden');
+          resultEl.textContent = '';
+        }
+        if (doneBtn) doneBtn.classList.add('hidden');
+      }
+
+      const issues = Array.isArray(data.user_issues) && data.user_issues.length
+        ? data.user_issues
+        : (Array.isArray(data.issues) ? data.issues : []);
+      if (issues.length && !alreadyGenerated) {
         issuesEl.classList.remove('hidden');
-        issuesEl.innerHTML = '<strong>Issues:</strong><ul class="list-disc ml-4 mt-1">' +
+        issuesEl.innerHTML = '<p class="font-semibold mb-2">Please fix the following first:</p><ul class="list-disc ml-4 space-y-1">' +
           issues.map(i => '<li>' + escapeHtml(String(i)) + '</li>').join('') + '</ul>';
       } else {
         issuesEl.classList.add('hidden');
         issuesEl.innerHTML = '';
       }
 
-      requestEl.value = data.payload_json || '';
-      executeBtn.disabled = !data.ready;
+      if (requestEl) requestEl.value = data.payload_json || '';
+      if (technicalEl) technicalEl.classList.toggle('hidden', !(data.payload_json || keepResponse));
+      if (executeBtn) executeBtn.disabled = !data.ready || alreadyGenerated;
+
       if (!keepResponse) {
-        statusEl.textContent = data.ready ? 'Ready to execute.' : 'Fix issues before executing.';
-        responseWrap.classList.add('hidden');
+        statusEl.textContent = alreadyGenerated
+          ? ''
+          : (data.ready ? 'Ready to generate Shipper ID.' : 'Complete the steps above, then try again.');
+        if (responseWrap) responseWrap.classList.add('hidden');
         if (responseSummaryEl) responseSummaryEl.textContent = '';
         if (responseRawEl) {
           responseRawEl.textContent = '';
@@ -868,12 +928,43 @@ if (bulkPrintBtn) {
       }
     }
 
+    function showShipmentAddResult(data) {
+      const resultEl = document.getElementById('shipment-add-result');
+      const shipperIdBox = document.getElementById('shipment-add-shipper-id-box');
+      const shipperIdValue = document.getElementById('shipment-add-shipper-id-value');
+      const actionRow = document.getElementById('shipment-add-action-row');
+      const doneBtn = document.getElementById('shipment-add-done-btn');
+      const statusEl = document.getElementById('shipment-add-status');
+      const technicalEl = document.getElementById('shipment-add-technical');
+
+      if (!resultEl) return;
+
+      resultEl.classList.remove('hidden');
+      if (data.success) {
+        resultEl.className = 'rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900';
+        resultEl.textContent = data.message || 'Shipper ID generated successfully.';
+        const sid = String(data.shipment_id || '').trim();
+        if (sid && shipperIdBox && shipperIdValue) {
+          shipperIdBox.classList.remove('hidden');
+          shipperIdValue.textContent = sid;
+        }
+        if (actionRow) actionRow.classList.add('hidden');
+        if (doneBtn) doneBtn.classList.remove('hidden');
+        if (statusEl) statusEl.textContent = '';
+      } else {
+        resultEl.className = 'rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900';
+        resultEl.textContent = data.message || 'Could not generate Shipper ID. Please try again.';
+        if (statusEl) statusEl.textContent = '';
+      }
+      if (technicalEl) technicalEl.classList.remove('hidden');
+    }
+
     function loadShipmentAddPreview(dispatchId, keepResponse) {
       const statusEl = document.getElementById('shipment-add-status');
       const executeBtn = document.getElementById('shipment-add-execute-btn');
       if (!keepResponse) {
-        statusEl.textContent = 'Generating request…';
-        executeBtn.disabled = true;
+        statusEl.textContent = 'Loading…';
+        if (executeBtn) executeBtn.disabled = true;
       }
 
       return fetch('?page=dispatch&action=shipment_add_preview&dispatch_id=' + encodeURIComponent(dispatchId), {
@@ -882,7 +973,7 @@ if (bulkPrintBtn) {
       .then(res => res.json())
       .then(data => {
         if (!data.success) {
-          throw new Error(data.message || 'Preview failed');
+          throw new Error(data.message || 'Could not load package details');
         }
         renderShipmentAddPreview(data, keepResponse);
         return data;
@@ -900,20 +991,18 @@ if (bulkPrintBtn) {
       const modal = document.getElementById('shipment-add-modal');
       modal.classList.remove('hidden');
       modal.querySelectorAll('.shipment-add-panel > div').forEach(el => el.classList.remove('hidden'));
+      resetShipmentAddModalState();
 
       loadShipmentAddPreview(shipmentAddCurrentDispatchId).catch(err => {
-        const msg = 'Could not load shipment request: ' + err.message;
+        const msg = 'Could not open Generate Shipper ID: ' + err.message;
         if (typeof showAlert === 'function') showAlert(msg, 'error'); else alert(msg);
         closeShipmentAddModal();
       });
     }
 
-    document.getElementById('shipment-add-regenerate-btn')?.addEventListener('click', function() {
-      if (!shipmentAddCurrentDispatchId) return;
-      loadShipmentAddPreview(shipmentAddCurrentDispatchId).catch(err => {
-        const msg = 'Regenerate failed: ' + err.message;
-        if (typeof showAlert === 'function') showAlert(msg, 'error'); else alert(msg);
-      });
+    document.getElementById('shipment-add-done-btn')?.addEventListener('click', function() {
+      closeShipmentAddModal();
+      location.reload();
     });
 
     document.getElementById('shipment-add-copy-raw-btn')?.addEventListener('click', async function() {
@@ -947,14 +1036,9 @@ if (bulkPrintBtn) {
 
       const btn = this;
       const statusEl = document.getElementById('shipment-add-status');
-      const responseWrap = document.getElementById('shipment-add-response-wrap');
-      const responseSummaryEl = document.getElementById('shipment-add-response-summary');
-      const responseRawEl = document.getElementById('shipment-add-response-raw');
-      const responseHeadersWrap = document.getElementById('shipment-add-response-headers-wrap');
-      const responseHeadersEl = document.getElementById('shipment-add-response-headers');
 
       btn.disabled = true;
-      statusEl.textContent = 'Calling API…';
+      statusEl.textContent = 'Generating Shipper ID…';
 
       fetch('?page=dispatch&action=shipment_add_execute', {
         method: 'POST',
@@ -966,7 +1050,23 @@ if (bulkPrintBtn) {
       })
       .then(res => res.json().then(data => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
-        responseWrap.classList.remove('hidden');
+        if (data.already_generated) {
+          showShipmentAddResult({
+            success: true,
+            message: data.message || 'Shipper ID is already generated.',
+            shipment_id: data.shipment_id || '',
+          });
+          loadShipmentAddPreview(shipmentAddCurrentDispatchId, true).catch(function() {});
+          return;
+        }
+
+        const responseWrap = document.getElementById('shipment-add-response-wrap');
+        const responseSummaryEl = document.getElementById('shipment-add-response-summary');
+        const responseRawEl = document.getElementById('shipment-add-response-raw');
+        const responseHeadersWrap = document.getElementById('shipment-add-response-headers-wrap');
+        const responseHeadersEl = document.getElementById('shipment-add-response-headers');
+
+        if (responseWrap) responseWrap.classList.remove('hidden');
         const rawBody = (data.response_raw != null && String(data.response_raw) !== '')
           ? String(data.response_raw)
           : '';
@@ -975,24 +1075,20 @@ if (bulkPrintBtn) {
           message: data.message,
           http_code: data.http_code,
           shipment_id: data.shipment_id || '',
-          response_body_empty: data.response_body_empty === true,
-          response_body_length: data.response_body_length != null ? data.response_body_length : rawBody.length,
-          response_parsed: data.response,
-          request_url: data.request_url || data.api_url || '',
-          curl_error: data.curl_error || '',
         };
-        responseSummaryEl.textContent = JSON.stringify(summary, null, 2);
-        if (rawBody !== '') {
-          try {
-            const parsed = JSON.parse(rawBody);
-            responseRawEl.textContent = JSON.stringify(parsed, null, 2);
-          } catch (e) {
-            responseRawEl.textContent = rawBody;
+        if (responseSummaryEl) responseSummaryEl.textContent = JSON.stringify(summary, null, 2);
+        if (responseRawEl) {
+          if (rawBody !== '') {
+            try {
+              responseRawEl.textContent = JSON.stringify(JSON.parse(rawBody), null, 2);
+            } catch (e) {
+              responseRawEl.textContent = rawBody;
+            }
+          } else {
+            responseRawEl.textContent = '(empty response from server)';
           }
-        } else {
-          responseRawEl.textContent = '(empty — Exotic India returned HTTP ' + (data.http_code || '?') + ' with no response body)';
+          responseRawEl.dataset.copyText = rawBody;
         }
-        responseRawEl.dataset.copyText = rawBody;
         const respHeaders = String(data.response_headers || '').trim();
         if (respHeaders !== '' && responseHeadersWrap && responseHeadersEl) {
           responseHeadersWrap.classList.remove('hidden');
@@ -1000,26 +1096,25 @@ if (bulkPrintBtn) {
         } else if (responseHeadersWrap) {
           responseHeadersWrap.classList.add('hidden');
         }
-        statusEl.textContent = data.success
-          ? 'API succeeded (HTTP ' + (data.http_code || '') + ')' + (data.shipment_id ? '. Shipment ID: ' + data.shipment_id : '') + '.'
-          : 'API failed: ' + (data.message || 'Unknown error');
+
+        showShipmentAddResult(data);
+
         if (data.success && data.shipment_id) {
           loadShipmentAddPreview(shipmentAddCurrentDispatchId, true).catch(function() {});
-        }
-        if (!ok && data.issues && data.issues.length) {
+        } else if (!ok && data.user_issues && data.user_issues.length) {
           renderShipmentAddPreview({
             dispatch: data.dispatch || {},
-            issues: data.issues,
-            payload_json: document.getElementById('shipment-add-request').value,
+            user_issues: data.user_issues,
+            issues: data.issues || [],
+            payload_json: document.getElementById('shipment-add-request')?.value || '',
             ready: false,
             api_url: data.api_url
           }, true);
         }
       })
       .catch(err => {
-        statusEl.textContent = 'Request error.';
-        const msg = 'Execute failed: ' + err.message;
-        if (typeof showAlert === 'function') showAlert(msg, 'error'); else alert(msg);
+        statusEl.textContent = '';
+        showShipmentAddResult({ success: false, message: 'Something went wrong. ' + err.message });
       })
       .finally(() => {
         btn.disabled = false;
