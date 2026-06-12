@@ -372,20 +372,38 @@
                 <div class="flex flex-col gap-3">
                   <div>
                     <p class="text-xs text-gray-500">Shipper ID</p>
-                    <p class="font-semibold text-gray-800">
+                    <div class="font-semibold text-gray-800 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <?php
-                        $shipmentIds = [];
-                        if (!empty($invoice_dispatch[$invoice['id']])) {
-                          foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                            $sid = trim((string) ($dispatch['exotic_shipment_id'] ?? ''));
+                        $shipperIdParts = [];
+                        $eiDispatchesForShipper = $invoice_dispatch[$invoice['id']] ?? [];
+                        $shipperBoxCount = count($eiDispatchesForShipper);
+                        if ($shipperBoxCount > 0) {
+                          foreach ($eiDispatchesForShipper as $shipperDispatch) {
+                            $shipperDispatchId = (int) ($shipperDispatch['id'] ?? 0);
+                            if ($shipperDispatchId <= 0) {
+                              continue;
+                            }
+                            $sid = trim((string) ($shipperDispatch['exotic_shipment_id'] ?? ''));
+                            $boxNo = (int) ($shipperDispatch['box_no'] ?? 0);
+                            $boxPrefix = $shipperBoxCount > 1 && $boxNo > 0
+                              ? '<span class="text-xs font-normal text-gray-500 mr-0.5">Box ' . $boxNo . ':</span> '
+                              : '';
                             if ($sid !== '') {
-                              $shipmentIds[] = htmlspecialchars($sid);
+                              $shipperIdParts[] = $boxPrefix . htmlspecialchars($sid);
+                            } else {
+                              $genTitle = $shipperBoxCount > 1 && $boxNo > 0
+                                ? 'Generate Shipper ID (Box ' . $boxNo . ')'
+                                : 'Generate Shipper ID';
+                              $shipperIdParts[] = $boxPrefix . '<button type="button" class="inline-flex items-center justify-center text-orange-500 hover:text-orange-600 hover:bg-orange-50 rounded-full p-1 align-middle border-0 bg-transparent cursor-pointer" onclick="openShipmentAddModal(' . $shipperDispatchId . ')" title="' . htmlspecialchars($genTitle, ENT_QUOTES, 'UTF-8') . '" aria-label="' . htmlspecialchars($genTitle, ENT_QUOTES, 'UTF-8') . '">'
+                                . '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">'
+                                . '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>'
+                                . '</svg></button>';
                             }
                           }
                         }
-                        echo !empty($shipmentIds) ? implode(' | ', $shipmentIds) : '-';
+                        echo !empty($shipperIdParts) ? implode('<span class="text-gray-300 font-normal">|</span>', $shipperIdParts) : '-';
                       ?>
-                    </p>
+                    </div>
                   </div>
                   <div>
                     <p class="text-xs text-gray-500">Applied wt.</p>
@@ -457,23 +475,6 @@
                     <?php if ($reDispatch): ?>
                       <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="reDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Re-Dispatch</button>
                     <?php endif; ?>
-                    <?php
-                      $eiDispatches = $invoice_dispatch[$invoice['id']] ?? [];
-                      $eiDispatchCount = count($eiDispatches);
-                      foreach ($eiDispatches as $eiDispatch):
-                        $eiDispatchId = (int) ($eiDispatch['id'] ?? 0);
-                        if ($eiDispatchId <= 0) {
-                            continue;
-                        }
-                        if (trim((string) ($eiDispatch['exotic_shipment_id'] ?? '')) !== '') {
-                            continue;
-                        }
-                        $eiLabel = $eiDispatchCount > 1
-                          ? 'Generate Shipper ID (Box ' . (int) ($eiDispatch['box_no'] ?? 0) . ')'
-                          : 'Generate Shipper ID';
-                    ?>
-                      <button type="button" class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="openShipmentAddModal(<?php echo $eiDispatchId; ?>)" style="padding: 0.5rem 1rem;"><?php echo htmlspecialchars($eiLabel); ?></button>
-                    <?php endforeach; ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
