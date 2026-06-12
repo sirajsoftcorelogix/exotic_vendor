@@ -390,3 +390,29 @@ function exotic_india_shipment_add_preview($conn, array $dispatch): array
         'api_url' => exotic_india_api_base_url() . '/order/shipment-add',
     ];
 }
+
+/**
+ * Plain-language messages for the dispatch list “Generate Shipper ID” dialog.
+ *
+ * @param list<string> $issues
+ * @return list<string>
+ */
+function exotic_india_shipment_add_friendly_issues(array $issues): array
+{
+    $map = [
+        'AWB / tracking number (awb_code) is missing on this dispatch.' =>
+            'Tracking number (AWB) is missing. Use “AWB Generate” first, then try again.',
+        'shipper_id is missing. Sync courier_partners or complete dispatch courier identity.' =>
+            'Courier is not linked yet. Complete dispatch or contact support.',
+        'dispatch_date is missing or invalid.' =>
+            'Dispatch date is missing. Update the dispatch record and try again.',
+        'invoice_id is missing on dispatch.' =>
+            'Invoice link is missing for this package. Contact support.',
+        'Could not build shipment payload (check invoice sale_no/sale_date, box_items, or line items).' =>
+            'Invoice or item details are incomplete. Check the invoice and box items, then try again.',
+    ];
+
+    return array_map(static function (string $issue) use ($map): string {
+        return $map[$issue] ?? $issue;
+    }, $issues);
+}
