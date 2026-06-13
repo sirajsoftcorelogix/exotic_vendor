@@ -494,7 +494,12 @@ class ProductsController
 
         $externalApi['normalized_rows'] = $productRows;
         $updateLocalStock = isset($_GET['update_local_stock']) && (string)$_GET['update_local_stock'] === '1';
-        $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
+        $bulkConnection = $productModel->beginBulkProductUpdateConnection();
+        try {
+            $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
+        } finally {
+            $productModel->endBulkProductUpdateConnection($bulkConnection);
+        }
         if (!is_array($updateResult)) {
             $updateResult = ['success' => false, 'message' => 'Product update failed.'];
         }
@@ -924,7 +929,12 @@ class ProductsController
             }
             // Same stock sync as product detail "Refresh from API → Yes"
             if ($items !== []) {
-                $productModel->updateProductFromApi($items, ['preserve_local_stock' => false]);
+                $bulkConnection = $productModel->beginBulkProductUpdateConnection();
+                try {
+                    $productModel->updateProductFromApi($items, ['preserve_local_stock' => false]);
+                } finally {
+                    $productModel->endBulkProductUpdateConnection($bulkConnection);
+                }
             }
         }
         $failed = array_values(array_unique(array_map('strval', $failed)));
