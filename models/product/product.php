@@ -45,39 +45,72 @@ class product
         return ($ts !== false) ? date('Y-m-d', $ts) : '';
     }
 
-    /**
-     * vp_products may still use utf8mb3 while the connection uses utf8mb4; MySQL 8+ can reject
-     * bound parameters when an implicit collation conversion is not allowed.
-     */
+    /** Cast API payload scalars the same way as modal form POST (trim strings, int/float numbers). */
+    private function apiFormString($value): string
+    {
+        if ($value === null || is_array($value) || is_object($value)) {
+            return '';
+        }
+        return trim((string) $value);
+    }
+
+    private function apiFormFloat($value, float $default = 0.0): float
+    {
+        if ($value === null || $value === '' || is_array($value) || is_object($value)) {
+            return $default;
+        }
+        return (float) $value;
+    }
+
+    /** @return array<string, mixed> */
+    private function castApiProductLikeForm(array $row): array
+    {
+        foreach ([
+            'asin', 'upc', 'location', 'vendor', 'category', 'itemtype', 'snippet_description',
+            'keywords', 'hscode', 'hsn', 'long_description', 'long_description_india', 'aplus_content_ids',
+            'item_level', 'marketplace_vendor', 'colormap', 'flex_status', 'vendor_us',
+            'today_global', 'today_india', 'amazon_itemcode_alias', 'youtube_links', 'sketchfab_links',
+            'dimensions', 'size', 'color', 'sku', 'search_term', 'search_category',
+        ] as $key) {
+            if (array_key_exists($key, $row)) {
+                $row[$key] = $this->apiFormString($row[$key]);
+            }
+        }
+        foreach ([
+            'local_stock', 'fba_in', 'fba_us', 'permanently_available', 'numsold', 'numsold_india',
+            'numsold_global', 'india_net_qty', 'usblock', 'indiablock', 'topurchase', 'backorder_percent',
+            'backorder_weeks', 'amazon_sold', 'amazon_leadtime',
+        ] as $key) {
+            if (array_key_exists($key, $row)) {
+                $row[$key] = $this->normalizeIntValue($row[$key], 0);
+            }
+        }
+        foreach ([
+            'shippingfee', 'sourcingfee', 'price', 'price_india', 'price_india_suggested', 'mrp_india',
+            'permanent_discount', 'discount_global', 'discount_india', 'cp', 'usd',
+        ] as $key) {
+            if (array_key_exists($key, $row)) {
+                $row[$key] = $this->apiFormFloat($row[$key]);
+            }
+        }
+        if (array_key_exists('leadtime', $row)) {
+            $row['leadtime'] = $this->normalizeIntValue($row['leadtime'], 0);
+        }
+        if (array_key_exists('instock_leadtime', $row)) {
+            $row['instock_leadtime'] = $this->normalizeIntValue($row['instock_leadtime'], 0);
+        }
+        if (array_key_exists('lastsold', $row)) {
+            $row['lastsold'] = $this->normalizeIntValue($row['lastsold'], 0);
+        }
+        if (array_key_exists('date_first_added', $row)) {
+            $row['date_first_added'] = $this->normalizeApiDateValue($row['date_first_added']);
+        }
+        return $row;
+    }
+
     private function executeVpProductsStmt(\mysqli_stmt $stmt): bool
     {
-        $prev = mysqli_character_set_name($this->db);
-        $needCompat = $prev !== false && stripos((string) $prev, 'utf8mb4') !== false;
-        if ($needCompat) {
-            try {
-                $ok = $this->db->set_charset('utf8mb3');
-            } catch (\mysqli_sql_exception $e) {
-                $ok = false;
-            }
-            if (!$ok) {
-                try {
-                    $this->db->set_charset('utf8');
-                } catch (\mysqli_sql_exception $e) {
-                    // keep existing charset if neither is supported
-                }
-            }
-        }
-        try {
-            return $stmt->execute();
-        } finally {
-            if ($needCompat && $prev !== false && $prev !== '') {
-                try {
-                    $this->db->set_charset($prev);
-                } catch (\mysqli_sql_exception $e) {
-                    // ignore restore failure; statement execution already completed
-                }
-            }
-        }
+        return $stmt->execute();
     }
 
     /**
@@ -592,6 +625,7 @@ class product
                     continue;
                 }
                 $product['itemcode'] = $itemcode;
+                $product = $this->castApiProductLikeForm($product);
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($product['size'] ?? ''), (string)($product['color'] ?? ''));
@@ -844,6 +878,10 @@ class product
                 }
                 if (isset($product['variations'])) {
                     foreach ($product['variations'] as $variation) {
+                        if (!is_array($variation)) {
+                            continue;
+                        }
+                        $variation = $this->castApiProductLikeForm($variation);
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
                         $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($variation['size'] ?? ''), (string)($variation['color'] ?? ''));
                         $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
@@ -1731,10 +1769,8 @@ class product
 
     public function createProduct($data)
     {
-        $data['leadtime'] = $this->normalizeIntValue($data['leadtime'] ?? null, 0);
-        $data['instock_leadtime'] = $this->normalizeIntValue($data['instock_leadtime'] ?? null, 0);
-        $data['date_first_added'] = $this->normalizeApiDateValue($data['date_first_added'] ?? '');
-        if ($data['date_first_added'] === '') {
+        $data = $this->castApiProductLikeForm($data);
+        if (($data['date_first_added'] ?? '') === '') {
             $data['date_first_added'] = null;
         }
         $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at, category, itemtype, snippet_description, india_net_qty, keywords, usblock, indiablock, hscode, date_first_added, search_term, search_category, long_description, long_description_india, aplus_content_ids, item_level, marketplace_vendor, colormap, flex_status, vendor_us, today_global, today_india, topurchase, backorder_percent, backorder_weeks, cp, usd, amazon_sold, amazon_leadtime, amazon_itemcode_alias, youtube_links, sketchfab_links, dimensions)
