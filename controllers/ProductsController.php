@@ -5771,7 +5771,8 @@ class ProductsController
             }
             $this->exitTransferRequestResponse([
                 'success' => false,
-                'message' => 'Insufficient stock in source warehouse for SKU(s): ' . implode(', ', array_unique($skuLabels)) . '. Please reduce transfer quantity and try again.',
+                'error_type' => 'insufficient_stock',
+                'message' => $this->insufficientStockSummaryMessage($insufficient),
                 'insufficient_items' => $insufficient,
                 'details' => $parts,
             ], $wantsJson);
@@ -6240,6 +6241,22 @@ class ProductsController
     }
 
     /**
+     * @param list<array<string,mixed>> $insufficient
+     */
+    private function insufficientStockSummaryMessage(array $insufficient): string
+    {
+        $count = count($insufficient);
+        if ($count === 1) {
+            return '1 product does not have enough stock at the source warehouse.';
+        }
+        if ($count > 1) {
+            return $count . ' products do not have enough stock at the source warehouse.';
+        }
+
+        return 'One or more items do not have enough stock at the source warehouse.';
+    }
+
+    /**
      * @param array<string, mixed> $payload
      */
     private function exitTransferRequestResponse(array $payload, bool $wantsJson): void
@@ -6488,7 +6505,8 @@ class ProductsController
             }
             $this->finishJsonApiResponse([
                 'success' => false,
-                'message' => 'Insufficient stock in source warehouse for SKU(s): ' . implode(', ', array_unique($skuLabels)) . '. Please reduce transfer quantity and try again.',
+                'error_type' => 'insufficient_stock',
+                'message' => $this->insufficientStockSummaryMessage($insufficient),
                 'insufficient_items' => $insufficient,
                 'details' => $parts,
             ]);

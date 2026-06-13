@@ -388,6 +388,27 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                     </ul>
                 </div>
             </div>
+            <div id="stockTransferNoticeStockWrap" class="mt-4 hidden">
+                <div class="rounded-xl border border-amber-200/80 bg-amber-50/25 overflow-hidden">
+                    <div class="overflow-x-auto max-h-[min(42vh,22rem)] overflow-y-auto">
+                        <table class="min-w-full divide-y divide-amber-200/60 text-sm">
+                            <thead class="bg-amber-100/70 sticky top-0 z-10">
+                                <tr>
+                                    <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-amber-900/80 w-10">#</th>
+                                    <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-amber-900/80 min-w-[8rem]">SKU</th>
+                                    <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-amber-900/80 min-w-[5rem]">Item code</th>
+                                    <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-amber-900/80 w-20">Requested</th>
+                                    <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-amber-900/80 w-20">Available</th>
+                                    <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-amber-900/80 w-20">Short</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stockTransferNoticeStockBody" class="divide-y divide-amber-100/80 bg-white"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <p id="stockTransferNoticeStockMore" class="hidden mt-2 text-xs font-medium text-amber-900/90"></p>
+                <p class="mt-3 text-xs text-amber-900/80 leading-relaxed">Reduce transfer quantity for these lines, or add stock at the <strong>source warehouse</strong> before retrying.</p>
+            </div>
             <div id="stockTransferNoticeListWrap" class="mt-3 hidden">
                 <div id="stockTransferNoticeListBox" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                     <p id="stockTransferNoticeListHeading" class="text-xs font-semibold text-slate-800 mb-1.5">Technical details</p>
@@ -443,6 +464,9 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     const stockTransferNoticeTableWrap = document.getElementById('stockTransferNoticeTableWrap');
     const stockTransferNoticeTableBody = document.getElementById('stockTransferNoticeTableBody');
     const stockTransferNoticeTableMore = document.getElementById('stockTransferNoticeTableMore');
+    const stockTransferNoticeStockWrap = document.getElementById('stockTransferNoticeStockWrap');
+    const stockTransferNoticeStockBody = document.getElementById('stockTransferNoticeStockBody');
+    const stockTransferNoticeStockMore = document.getElementById('stockTransferNoticeStockMore');
     const stockTransferNoticeIconWrap = document.getElementById('stockTransferNoticeIconWrap');
     const stockTransferNoticeIcon = document.getElementById('stockTransferNoticeIcon');
     const stockTransferNoticeRefreshApi = document.getElementById('stockTransferNoticeRefreshApi');
@@ -537,6 +561,56 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         }
     }
 
+    function renderInsufficientStockTable(items, maxRows) {
+        if (!stockTransferNoticeStockBody) return;
+        const limit = Number.isFinite(maxRows) ? maxRows : 50;
+        const visible = items.slice(0, limit);
+        stockTransferNoticeStockBody.innerHTML = '';
+
+        visible.forEach(function (row, idx) {
+            const sku = String(row.sku || '').trim();
+            const itemCode = String(row.item_code || '').trim();
+            const requested = parseInt(row.requested_qty || 0, 10);
+            const available = parseInt(row.available_qty || 0, 10);
+            const shortfall = Math.max(0, requested - available);
+            const tr = document.createElement('tr');
+            tr.className = idx % 2 === 0 ? 'bg-white' : 'bg-amber-50/30';
+            tr.innerHTML =
+                '<td class="px-3 py-2.5 text-xs font-semibold text-gray-500 tabular-nums align-middle">' + (idx + 1) + '</td>' +
+                '<td class="px-3 py-2.5 align-middle"><span class="font-mono text-xs text-gray-900 break-all">' + escapeHtml(sku || '—') + '</span></td>' +
+                '<td class="px-3 py-2.5 align-middle">' +
+                    (itemCode
+                        ? '<span class="inline-flex rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs font-semibold text-gray-800">' + escapeHtml(itemCode) + '</span>'
+                        : '<span class="text-gray-400 text-xs">—</span>') +
+                '</td>' +
+                '<td class="px-3 py-2.5 align-middle text-right tabular-nums text-sm font-semibold text-gray-900">' + requested + '</td>' +
+                '<td class="px-3 py-2.5 align-middle text-right tabular-nums text-sm text-amber-800">' + available + '</td>' +
+                '<td class="px-3 py-2.5 align-middle text-right tabular-nums text-sm font-bold text-red-700">' + shortfall + '</td>';
+            stockTransferNoticeStockBody.appendChild(tr);
+        });
+
+        if (stockTransferNoticeStockMore) {
+            if (items.length > limit) {
+                stockTransferNoticeStockMore.textContent = 'Showing first ' + limit + ' of ' + items.length + ' SKU(s) with insufficient stock.';
+                stockTransferNoticeStockMore.classList.remove('hidden');
+            } else {
+                stockTransferNoticeStockMore.textContent = '';
+                stockTransferNoticeStockMore.classList.add('hidden');
+            }
+        }
+    }
+
+    function summarizeInsufficientStockMessage(items) {
+        const count = Array.isArray(items) ? items.length : 0;
+        if (count === 0) {
+            return 'One or more items do not have enough stock at the source warehouse.';
+        }
+        if (count === 1) {
+            return '1 product does not have enough stock at the source warehouse.';
+        }
+        return count + ' products do not have enough stock at the source warehouse.';
+    }
+
     function showTransferNotice(message, opts) {
         opts = opts || {};
         if (!stockTransferNoticeModal || !stockTransferNoticeMessage) {
@@ -545,9 +619,11 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         }
         const isProductNotFound = String(opts.errorType || '') === 'product_not_found'
             || (Array.isArray(opts.notFoundItems) && opts.notFoundItems.length > 0);
+        const insufficientItems = Array.isArray(opts.insufficientItems) ? opts.insufficientItems : [];
+        const isInsufficientStock = insufficientItems.length > 0 && !isProductNotFound;
 
         if (stockTransferNoticePanel) {
-            if (isProductNotFound) {
+            if (isProductNotFound || isInsufficientStock) {
                 stockTransferNoticePanel.classList.remove('max-w-2xl');
                 stockTransferNoticePanel.classList.add('max-w-5xl');
             } else {
@@ -557,16 +633,23 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         }
 
         if (stockTransferNoticeTitle) {
-            stockTransferNoticeTitle.textContent = String(opts.title || (isProductNotFound ? 'Products Not Found' : 'Stock Transfer Validation'));
+            stockTransferNoticeTitle.textContent = String(opts.title || (isProductNotFound ? 'Products Not Found' : (isInsufficientStock ? 'Insufficient Warehouse Stock' : 'Stock Transfer Validation')));
         }
         if (stockTransferNoticeSubtitle) {
             stockTransferNoticeSubtitle.textContent = String(opts.subtitle || (isProductNotFound
                 ? 'These rows do not match any product variant in your catalog.'
-                : 'Please review and fix the issue below.'));
+                : (isInsufficientStock
+                    ? 'Compare requested vs available quantities below, then adjust your transfer.'
+                    : 'Please review and fix the issue below.')));
         }
         if (stockTransferNoticeCount) {
             const notFoundCount = Array.isArray(opts.notFoundItems) ? opts.notFoundItems.length : 0;
-            if (isProductNotFound && notFoundCount > 0) {
+            if (isInsufficientStock) {
+                stockTransferNoticeCount.className = 'mt-1.5 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900';
+                stockTransferNoticeCount.textContent = insufficientItems.length + ' SKU' + (insufficientItems.length === 1 ? '' : 's') + ' short';
+                stockTransferNoticeCount.classList.remove('hidden');
+            } else if (isProductNotFound && notFoundCount > 0) {
+                stockTransferNoticeCount.className = 'mt-1.5 inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800';
                 stockTransferNoticeCount.textContent = notFoundCount + ' unmatched row' + (notFoundCount === 1 ? '' : 's');
                 stockTransferNoticeCount.classList.remove('hidden');
             } else {
@@ -577,6 +660,18 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         stockTransferNoticeMessage.textContent = String(message || 'Something went wrong.');
 
         const notFoundItems = Array.isArray(opts.notFoundItems) ? opts.notFoundItems : [];
+        if (stockTransferNoticeStockWrap && stockTransferNoticeStockBody) {
+            if (isInsufficientStock) {
+                renderInsufficientStockTable(insufficientItems, opts.maxInsufficientRows || 50);
+                stockTransferNoticeStockWrap.classList.remove('hidden');
+            } else {
+                stockTransferNoticeStockBody.innerHTML = '';
+                stockTransferNoticeStockWrap.classList.add('hidden');
+                if (stockTransferNoticeStockMore) {
+                    stockTransferNoticeStockMore.classList.add('hidden');
+                }
+            }
+        }
         if (stockTransferNoticeTableWrap && stockTransferNoticeTableBody) {
             if (notFoundItems.length > 0) {
                 renderNotFoundProductsTable(notFoundItems, opts.maxNotFoundRows || 50);
@@ -593,7 +688,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         if (stockTransferNoticeList && stockTransferNoticeListWrap) {
             stockTransferNoticeList.innerHTML = '';
             const listItems = Array.isArray(opts.listItems) ? opts.listItems : [];
-            if (listItems.length > 0 && notFoundItems.length === 0) {
+            if (listItems.length > 0 && notFoundItems.length === 0 && !isInsufficientStock) {
                 listItems.forEach(function (text) {
                     const li = document.createElement('li');
                     li.textContent = String(text);
@@ -636,20 +731,6 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         if (stockTransferNoticeOk) stockTransferNoticeOk.focus();
     }
 
-    function formatInsufficientItems(insufficientItems) {
-        if (!Array.isArray(insufficientItems) || insufficientItems.length === 0) {
-            return [];
-        }
-        return insufficientItems.map(function (row) {
-            const sku = String(row.sku || '').trim();
-            const itemCode = String(row.item_code || '').trim();
-            const requested = parseInt(row.requested_qty || 0, 10);
-            const available = parseInt(row.available_qty || 0, 10);
-            const label = itemCode && itemCode !== sku ? (sku + ' (' + itemCode + ')') : sku;
-            return label + ': requested ' + requested + ', available ' + available;
-        });
-    }
-
     function clampNoticeList(listItems, maxItems) {
         if (!Array.isArray(listItems)) return [];
         const limit = Number.isFinite(maxItems) ? maxItems : 20;
@@ -661,55 +742,54 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
 
     function showBulkTransferValidationError(preview) {
         const notFoundItems = Array.isArray(preview && preview.not_found_items) ? preview.not_found_items : [];
+        const insufficientItems = Array.isArray(preview && preview.insufficient_items) ? preview.insufficient_items : [];
         const isProductNotFound = String((preview && preview.error_type) || '') === 'product_not_found' || notFoundItems.length > 0;
+        const isInsufficientStock = insufficientItems.length > 0 && !isProductNotFound;
         const isEmptyResponse = String((preview && preview.error_type) || '') === 'empty_response';
         const phpErrors = Array.isArray(preview && preview.php_errors) ? preview.php_errors.filter(Boolean) : [];
-        let extraList = isProductNotFound ? [] : clampNoticeList(
-            formatInsufficientItems(preview && preview.insufficient_items).length
-                ? formatInsufficientItems(preview && preview.insufficient_items)
-                : (Array.isArray(preview && preview.details) ? preview.details : []),
-            20
-        );
+        let extraList = [];
         if (phpErrors.length > 0) {
-            extraList = clampNoticeList(phpErrors.concat(extraList), 30);
+            extraList = clampNoticeList(phpErrors, 30);
         }
         if (isEmptyResponse && preview && preview.action) {
             extraList.unshift('Action: ' + preview.action);
         }
 
-        let title = 'Insufficient Warehouse Stock';
-        let subtitle = 'One or more items do not have enough source stock.';
+        let title = 'Stock Transfer Validation';
+        let subtitle = 'Please review and fix the issue below.';
         let tone = 'warning';
+        let message = (preview && preview.message) ? preview.message : 'Something went wrong.';
+
         if (isProductNotFound) {
             title = 'Products Not Found';
             subtitle = 'Compare your upload with catalog variants below, then fix the file or grid and retry.';
             tone = 'error';
+            message = (preview && preview.message) || 'Some rows could not be matched to products in your catalog.';
+        } else if (isInsufficientStock) {
+            title = 'Insufficient Warehouse Stock';
+            subtitle = 'Compare requested vs available quantities below, then adjust your transfer.';
+            tone = 'warning';
+            message = summarizeInsufficientStockMessage(insufficientItems);
         } else if (isEmptyResponse || phpErrors.length > 0) {
             title = 'Server Error';
             subtitle = isEmptyResponse
                 ? 'The server did not finish the request. PHP error details (if captured):'
                 : 'The server reported PHP errors while processing this request.';
             tone = 'error';
+        } else if (insufficientItems.length === 0 && Array.isArray(preview && preview.details) && preview.details.length) {
+            extraList = clampNoticeList(preview.details, 20);
         }
 
-        showTransferNotice(
-            (preview && preview.message)
-                ? preview.message
-                : (isProductNotFound
-                    ? 'Some rows could not be matched to products in your catalog.'
-                    : (isEmptyResponse
-                        ? 'The server returned an empty or incomplete response.'
-                        : 'Stock validation failed. Please review line quantities.')),
-            {
-                title: title,
-                subtitle: subtitle,
-                tone: tone,
-                errorType: isProductNotFound ? 'product_not_found' : '',
-                notFoundItems: notFoundItems,
-                listItems: extraList,
-                refreshableCodes: Array.isArray(preview && preview.refreshable_item_codes) ? preview.refreshable_item_codes : [],
-            }
-        );
+        showTransferNotice(message, {
+            title: title,
+            subtitle: subtitle,
+            tone: tone,
+            errorType: isProductNotFound ? 'product_not_found' : '',
+            notFoundItems: notFoundItems,
+            insufficientItems: isInsufficientStock ? insufficientItems : [],
+            listItems: extraList,
+            refreshableCodes: Array.isArray(preview && preview.refreshable_item_codes) ? preview.refreshable_item_codes : [],
+        });
     }
 
     function closeTransferNotice() {
