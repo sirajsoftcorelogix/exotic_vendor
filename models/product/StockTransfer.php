@@ -98,7 +98,7 @@ class StockTransfer
      * Merge bulk rows (item_code, size, color, quantity) into transfer items; resolves products and sums duplicate variants.
      *
      * @param list<array<string,mixed>> $rows
-     * @return array{items: list<array<string,mixed>>, errors: list<string>}
+     * @return array{items: list<array<string,mixed>>, errors: list<string>, not_found: list<array{item_code:string,size:string,color:string,quantity:int}>}
      */
     public function aggregateBulkVariantRows(array $rows): array
     {
@@ -127,6 +127,7 @@ class StockTransfer
 
         $items = [];
         $errors = [];
+        $notFound = [];
         foreach ($merged as $m) {
             $resolved = $this->resolveProductForTransferItem([
                 'product_id' => 0,
@@ -136,9 +137,12 @@ class StockTransfer
                 'color' => $m['color'],
             ]);
             if (!$resolved) {
-                $errors[] = 'No product for ItemCode ' . $m['item_code']
-                    . ', Size ' . ($m['size'] !== '' ? $m['size'] : '(blank)')
-                    . ', Color ' . ($m['color'] !== '' ? $m['color'] : '(blank)');
+                $notFound[] = [
+                    'item_code' => $m['item_code'],
+                    'size' => $m['size'],
+                    'color' => $m['color'],
+                    'quantity' => $m['qty'],
+                ];
                 continue;
             }
             $pid = (int)$resolved['id'];
@@ -156,7 +160,7 @@ class StockTransfer
             }
         }
 
-        return ['items' => array_values($items), 'errors' => $errors];
+        return ['items' => array_values($items), 'errors' => $errors, 'not_found' => $notFound];
     }
 
     /**
