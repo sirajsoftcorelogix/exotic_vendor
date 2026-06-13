@@ -1,0 +1,3 @@
+
+Warning: require_once(settings/database/database.php): Failed to open stream: No such file or directory in D:\xampp\htdocs\exotic_vendor\bootstrap\init\init.php on line 9
+{"success":false,"message":"CLI caught: Failed opening required 'settings\/database\/database.php' (include_path='C:\\xampp\\php\\PEAR')"}

@@ -5631,6 +5631,7 @@ class ProductsController
         $normalizedItems = [];
         $unresolvedItems = [];
         $itemCodesForRefresh = [];
+        $isBulkTransfer = !empty($data['is_bulk_transfer']) || array_key_exists('bulk_mode', $data);
         foreach ($data['items'] as $idx => $item) {
             $transfer_qty = (int)$item['transfer_qty'];
             if ($transfer_qty <= 0) {
@@ -5715,7 +5716,7 @@ class ProductsController
             ], $wantsJson);
         }
 
-        if (!empty($itemCodesForRefresh)) {
+        if (!$isBulkTransfer && !empty($itemCodesForRefresh)) {
             $codes = array_values($itemCodesForRefresh);
             $apiSync = $this->refreshTransferItemsFromApi($codes, $productModel);
             if (!$apiSync['success']) {
@@ -6153,113 +6154,128 @@ class ProductsController
 
     public function processTransferStockBulk()
     {
-        is_login();
-        global $conn;
-
+        @set_time_limit(300);
         $this->prepareJsonAjaxResponse();
         $this->startJsonApiErrorCapture();
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid request method'], 405);
-        }
+        try {
+            is_login();
+            global $conn;
 
-        require_once 'models/product/StockTransfer.php';
-        $stockTransferModel = new StockTransfer($conn);
-
-        $mode = isset($_POST['bulk_mode']) ? trim((string)$_POST['bulk_mode']) : 'upload';
-        $rows = [];
-
-        if ($mode === 'grid') {
-            $raw = $_POST['bulk_rows_json'] ?? '[]';
-            $decoded = json_decode($raw, true);
-            if (!is_array($decoded)) {
-                $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid spreadsheet grid data']);
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid request method'], 405);
             }
-            foreach ($decoded as $r) {
-                if (!is_array($r)) {
-                    continue;
+
+            require_once 'models/product/StockTransfer.php';
+            $stockTransferModel = new StockTransfer($conn);
+
+            $mode = isset($_POST['bulk_mode']) ? trim((string)$_POST['bulk_mode']) : 'upload';
+            $rows = [];
+
+            if ($mode === 'grid') {
+                $raw = $_POST['bulk_rows_json'] ?? '[]';
+                $decoded = json_decode($raw, true);
+                if (!is_array($decoded)) {
+                    $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid spreadsheet grid data']);
                 }
-                $rows[] = [
-                    'item_code' => trim((string)($r['item_code'] ?? '')),
-                    'size' => trim((string)($r['size'] ?? '')),
-                    'color' => trim((string)($r['color'] ?? '')),
-                    'quantity' => isset($r['quantity']) ? (int)$r['quantity'] : 0,
-                ];
+                foreach ($decoded as $r) {
+                    if (!is_array($r)) {
+                        continue;
+                    }
+                    $rows[] = [
+                        'item_code' => trim((string)($r['item_code'] ?? '')),
+                        'size' => trim((string)($r['size'] ?? '')),
+                        'color' => trim((string)($r['color'] ?? '')),
+                        'quantity' => isset($r['quantity']) ? (int)$r['quantity'] : 0,
+                    ];
+                }
+            } else {
+                if (empty($_FILES['bulk_file']['tmp_name']) || !is_uploaded_file($_FILES['bulk_file']['tmp_name'])) {
+                    $this->finishJsonApiResponse(['success' => false, 'message' => 'Please choose a file (.csv, .xlsx, or .xls) with columns ItemCode, Size, Color, Quantity']);
+                }
+                $parsed = $this->parseBulkTransferUpload($_FILES['bulk_file']);
+                if (!empty($parsed['error'])) {
+                    $this->finishJsonApiResponse(['success' => false, 'message' => $parsed['error']]);
+                }
+                $rows = $parsed['rows'];
             }
-        } else {
-            if (empty($_FILES['bulk_file']['tmp_name']) || !is_uploaded_file($_FILES['bulk_file']['tmp_name'])) {
-                $this->finishJsonApiResponse(['success' => false, 'message' => 'Please choose a file (.csv, .xlsx, or .xls) with columns ItemCode, Size, Color, Quantity']);
+
+            $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
+            if (!empty($aggregated['not_found'])) {
+                $this->respondBulkTransferProductNotFound($aggregated['not_found']);
             }
-            $parsed = $this->parseBulkTransferUpload($_FILES['bulk_file']);
-            if (!empty($parsed['error'])) {
-                $this->finishJsonApiResponse(['success' => false, 'message' => $parsed['error']]);
+            if (!empty($aggregated['errors'])) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => $aggregated['errors'][0] ?? 'Validation failed']);
             }
-            $rows = $parsed['rows'];
+            if (empty($aggregated['items'])) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'No valid lines to transfer']);
+            }
+
+            $data = $_POST;
+            $data['is_bulk_transfer'] = true;
+            $data['items'] = $aggregated['items'];
+            $ids = [];
+            foreach ($aggregated['items'] as $it) {
+                if (!empty($it['product_id'])) {
+                    $ids[] = (int)$it['product_id'];
+                }
+            }
+            $data['product_ids'] = implode(',', array_unique($ids));
+
+            $this->validateAndSaveTransferRequest($data, $stockTransferModel, true);
+        } catch (Throwable $e) {
+            $this->finishJsonApiResponse([
+                'success' => false,
+                'message' => 'Bulk transfer failed: ' . $e->getMessage(),
+            ], 500);
         }
 
-        $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
-        if (!empty($aggregated['not_found'])) {
-            $this->respondBulkTransferProductNotFound($aggregated['not_found']);
-        }
-        if (!empty($aggregated['errors'])) {
-            $this->finishJsonApiResponse(['success' => false, 'message' => $aggregated['errors'][0] ?? 'Validation failed']);
-        }
-        if (empty($aggregated['items'])) {
-            $this->finishJsonApiResponse(['success' => false, 'message' => 'No valid lines to transfer']);
-        }
-
-        $data = $_POST;
-        $data['items'] = $aggregated['items'];
-        $ids = [];
-        foreach ($aggregated['items'] as $it) {
-            if (!empty($it['product_id'])) {
-                $ids[] = (int)$it['product_id'];
-            }
-        }
-        $data['product_ids'] = implode(',', array_unique($ids));
-
-        $this->validateAndSaveTransferRequest($data, $stockTransferModel, true);
+        $this->finishJsonApiResponse([
+            'success' => false,
+            'message' => 'Server did not return a transfer result. Please retry or contact support.',
+        ], 500);
     }
 
     public function validateTransferStockBulkPreview()
     {
-        is_login();
-        global $conn;
-
         $this->prepareJsonAjaxResponse();
         $this->startJsonApiErrorCapture();
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid request method'], 405);
-        }
+        try {
+            is_login();
+            global $conn;
 
-        require_once 'models/product/StockTransfer.php';
-        $stockTransferModel = new StockTransfer($conn);
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid request method'], 405);
+            }
 
-        $fromWarehouse = isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0;
-        if ($fromWarehouse <= 0) {
-            $this->finishJsonApiResponse(['success' => false, 'message' => 'Please select source warehouse']);
-        }
+            require_once 'models/product/StockTransfer.php';
+            $stockTransferModel = new StockTransfer($conn);
 
-        $rowsRaw = $_POST['rows_json'] ?? '[]';
-        $rows = json_decode((string)$rowsRaw, true);
-        if (!is_array($rows)) {
-            $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid grid data']);
-        }
+            $fromWarehouse = isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0;
+            if ($fromWarehouse <= 0) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'Please select source warehouse']);
+            }
 
-        $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
-        if (!empty($aggregated['not_found'])) {
-            $this->respondBulkTransferProductNotFound($aggregated['not_found']);
-        }
-        if (!empty($aggregated['errors'])) {
-            $this->finishJsonApiResponse(['success' => false, 'message' => $aggregated['errors'][0] ?? 'Validation failed']);
-        }
-        $items = $aggregated['items'] ?? [];
-        if (empty($items)) {
-            $this->finishJsonApiResponse(['success' => false, 'message' => 'No valid lines to validate']);
-        }
+            $rowsRaw = $_POST['rows_json'] ?? '[]';
+            $rows = json_decode((string)$rowsRaw, true);
+            if (!is_array($rows)) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid grid data']);
+            }
 
-        $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
+            $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
+            if (!empty($aggregated['not_found'])) {
+                $this->respondBulkTransferProductNotFound($aggregated['not_found']);
+            }
+            if (!empty($aggregated['errors'])) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => $aggregated['errors'][0] ?? 'Validation failed']);
+            }
+            $items = $aggregated['items'] ?? [];
+            if (empty($items)) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'No valid lines to validate']);
+            }
+
+            $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
         $existingQtyBySku = [];
         if ($transferId > 0) {
             $existingTransfer = $stockTransferModel->getTransferById($transferId);
@@ -6369,6 +6385,17 @@ class ProductsController
         }
 
         $this->finishJsonApiResponse(['success' => true, 'message' => 'Stock is available for all grid lines.']);
+        } catch (Throwable $e) {
+            $this->finishJsonApiResponse([
+                'success' => false,
+                'message' => 'Stock preview failed: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        $this->finishJsonApiResponse([
+            'success' => false,
+            'message' => 'Server did not return a preview result.',
+        ], 500);
     }
 
     public function refreshTransferItemsFromApiAjax()
