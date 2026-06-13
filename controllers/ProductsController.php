@@ -686,6 +686,9 @@ class ProductsController
             $items = [$apiResult];
         }*/
         $items = product::normalizeVendorProductFetchItems($apiResult);
+        if (count($codes) > 1) {
+            $items = $this->backfillVendorApiLocalStockFromSingleFetch($items, $headers);
+        }
         //print_array($items);
         if (count($items) === 0) {
             if ($internalCall) {
@@ -941,6 +944,64 @@ class ProductsController
             $payload['local_stock_by_variant'] = $localStockByVariant;
         }
         return $respond($payload);
+    }
+
+    /**
+     * Vendor batch fetch sometimes omits local_stock on some items (e.g. DDN329 when fetched with HBG309).
+     * Re-fetch those codes one at a time and merge stock fields only.
+     *
+     * @param list<array<string,mixed>> $items
+     * @param list<string> $headers
+     * @return list<array<string,mixed>>
+     */
+    private function backfillVendorApiLocalStockFromSingleFetch(array $items, array $headers): array
+    {
+        foreach ($items as $idx => $apiItem) {
+            if (!is_array($apiItem)) {
+                continue;
+            }
+            $code = trim((string)($apiItem['itemcode'] ?? $apiItem['item_code'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $ls = $apiItem['local_stock'] ?? null;
+            $st = $apiItem['stock'] ?? null;
+            $hasStock = ($ls !== null && $ls !== '') || ($st !== null && $st !== '');
+            if ($hasStock) {
+                continue;
+            }
+            $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($code);
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            $response = curl_exec($ch);
+            curl_close($ch);
+            if ($response === false) {
+                continue;
+            }
+            $one = json_decode($response, true);
+            if (!is_array($one)) {
+                continue;
+            }
+            $oneRows = product::normalizeVendorProductFetchItems($one);
+            $oneItem = $oneRows[0] ?? null;
+            if (!is_array($oneItem)) {
+                continue;
+            }
+            if (array_key_exists('local_stock', $oneItem) && $oneItem['local_stock'] !== null && $oneItem['local_stock'] !== '') {
+                $items[$idx]['local_stock'] = $oneItem['local_stock'];
+            }
+            if (array_key_exists('stock', $oneItem) && $oneItem['stock'] !== null && $oneItem['stock'] !== '') {
+                $items[$idx]['stock'] = $oneItem['stock'];
+            }
+            if (isset($oneItem['variations']) && is_array($oneItem['variations'])) {
+                $items[$idx]['variations'] = $oneItem['variations'];
+            }
+        }
+
+        return $items;
     }
 
     public function bulkImportScreen()
