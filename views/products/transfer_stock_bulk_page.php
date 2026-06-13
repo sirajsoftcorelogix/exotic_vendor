@@ -661,6 +661,16 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     function showBulkTransferValidationError(preview) {
         const notFoundItems = Array.isArray(preview && preview.not_found_items) ? preview.not_found_items : [];
         const isProductNotFound = String((preview && preview.error_type) || '') === 'product_not_found' || notFoundItems.length > 0;
+        const phpErrors = Array.isArray(preview && preview.php_errors) ? preview.php_errors.filter(Boolean) : [];
+        let extraList = isProductNotFound ? [] : clampNoticeList(
+            formatInsufficientItems(preview && preview.insufficient_items).length
+                ? formatInsufficientItems(preview && preview.insufficient_items)
+                : (Array.isArray(preview && preview.details) ? preview.details : []),
+            20
+        );
+        if (phpErrors.length > 0) {
+            extraList = clampNoticeList(phpErrors.concat(extraList), 20);
+        }
 
         showTransferNotice(
             (preview && preview.message)
@@ -669,19 +679,16 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                     ? 'Some rows could not be matched to products in your catalog.'
                     : 'Stock validation failed. Please review line quantities.'),
             {
-                title: isProductNotFound ? 'Products Not Found' : 'Insufficient Warehouse Stock',
+                title: isProductNotFound ? 'Products Not Found' : (phpErrors.length ? 'Server Error' : 'Insufficient Warehouse Stock'),
                 subtitle: isProductNotFound
                     ? 'Compare your upload with catalog variants below, then fix the file or grid and retry.'
-                    : 'One or more items do not have enough source stock.',
-                tone: isProductNotFound ? 'error' : 'warning',
+                    : (phpErrors.length
+                        ? 'The server reported PHP errors while processing this request.'
+                        : 'One or more items do not have enough source stock.'),
+                tone: isProductNotFound ? 'error' : (phpErrors.length ? 'error' : 'warning'),
                 errorType: isProductNotFound ? 'product_not_found' : '',
                 notFoundItems: notFoundItems,
-                listItems: isProductNotFound ? [] : clampNoticeList(
-                    formatInsufficientItems(preview && preview.insufficient_items).length
-                        ? formatInsufficientItems(preview && preview.insufficient_items)
-                        : (Array.isArray(preview && preview.details) ? preview.details : []),
-                    20
-                ),
+                listItems: extraList,
                 refreshableCodes: Array.isArray(preview && preview.refreshable_item_codes) ? preview.refreshable_item_codes : [],
             }
         );

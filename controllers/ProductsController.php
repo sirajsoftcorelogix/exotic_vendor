@@ -6000,6 +6000,7 @@ class ProductsController
     /** @var list<string> */
     private array $jsonApiCapturedErrors = [];
     private bool $jsonApiResponseSent = false;
+    private bool $jsonApiBodySent = false;
 
     /**
      * Clears nested output buffers (see index.php ob_start) and avoids printing PHP notices as HTML,
@@ -6015,9 +6016,49 @@ class ProductsController
         }
     }
 
+    private function markJsonApiBodySent(): void
+    {
+        $this->jsonApiBodySent = true;
+        $this->jsonApiResponseSent = true;
+        $GLOBALS['__vendor_json_api_body_sent'] = true;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function writeJsonApiPayload(array $payload, int $httpCode = 200): void
+    {
+        $this->prepareJsonAjaxResponse();
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=UTF-8');
+            if ($httpCode !== 200) {
+                http_response_code($httpCode);
+            }
+        }
+        $encoded = json_encode(
+            $this->attachJsonApiDiagnostics($payload),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        if ($encoded === false) {
+            $encoded = json_encode([
+                'success' => false,
+                'message' => 'Could not encode server response.',
+                'json_error' => json_last_error_msg(),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+        echo $encoded !== false ? $encoded : '{"success":false,"message":"Could not encode server response."}';
+        if (function_exists('flush')) {
+            @flush();
+        }
+        $this->markJsonApiBodySent();
+    }
+
     private function startJsonApiErrorCapture(): void
     {
         $this->jsonApiCapturedErrors = [];
+        $this->jsonApiBodySent = false;
+        $this->jsonApiResponseSent = false;
+        $GLOBALS['__vendor_json_api_body_sent'] = false;
         set_error_handler(function (int $severity, string $message, string $file, int $line): bool {
             if (!(error_reporting() & $severity)) {
                 return false;
@@ -6030,23 +6071,33 @@ class ProductsController
 
     public function handleJsonApiFatalShutdown(): void
     {
-        if ($this->jsonApiResponseSent) {
+        if ($this->jsonApiBodySent || !empty($GLOBALS['__vendor_json_api_body_sent'])) {
             return;
         }
+
         $last = error_get_last();
-        if (!$last) {
-            return;
-        }
         $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
-        if (!in_array($last['type'], $fatalTypes, true)) {
+        if ($last && in_array($last['type'], $fatalTypes, true)) {
+            $this->jsonApiCapturedErrors[] = $this->formatJsonApiError(
+                (string) $last['message'],
+                (string) $last['file'],
+                (int) $last['line']
+            );
+            $this->forceEmitJsonApiErrorResponse('Fatal PHP error during request.');
             return;
         }
-        $this->jsonApiCapturedErrors[] = $this->formatJsonApiError(
-            (string) $last['message'],
-            (string) $last['file'],
-            (int) $last['line']
-        );
-        $this->emitJsonApiErrorResponse('Fatal PHP error during request.');
+
+        $action = isset($_GET['action']) ? (string)$_GET['action'] : '';
+        $jsonActions = [
+            'process_transfer_stock_bulk',
+            'validate_transfer_stock_bulk_preview',
+            'refresh_transfer_items_from_api',
+        ];
+        if (in_array($action, $jsonActions, true)) {
+            error_log('[vendor JSON API] empty response for action=' . $action
+                . ($last ? (' last_error=' . $last['message'] . ' in ' . $last['file'] . ':' . $last['line']) : ''));
+            $this->forceEmitJsonApiErrorResponse('Request ended without a JSON response. Check PHP error logs or retry with fewer lines.');
+        }
     }
 
     private function stopJsonApiErrorCapture(): void
@@ -6066,21 +6117,25 @@ class ProductsController
      */
     private function emitJsonApiErrorResponse(string $summary, array $extra = []): void
     {
-        if ($this->jsonApiResponseSent) {
-            return;
+        if ($this->jsonApiBodySent) {
+            exit;
         }
-        $this->jsonApiResponseSent = true;
-        $this->prepareJsonAjaxResponse();
-        header('Content-Type: application/json; charset=UTF-8');
-        http_response_code(500);
         $payload = array_merge([
             'success' => false,
             'message' => $summary,
             'php_errors' => array_values(array_unique($this->jsonApiCapturedErrors)),
             'completed' => true,
         ], $extra);
-        echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        $this->writeJsonApiPayload($payload, 500);
         exit;
+    }
+
+    private function forceEmitJsonApiErrorResponse(string $summary, array $extra = []): void
+    {
+        $this->jsonApiResponseSent = false;
+        $this->jsonApiBodySent = false;
+        $GLOBALS['__vendor_json_api_body_sent'] = false;
+        $this->emitJsonApiErrorResponse($summary, $extra);
     }
 
     /**
@@ -6103,28 +6158,11 @@ class ProductsController
      */
     private function finishJsonApiResponse(array $payload, int $httpCode = 200): void
     {
-        if ($this->jsonApiResponseSent) {
-            return;
+        if ($this->jsonApiBodySent) {
+            exit;
         }
-        $this->jsonApiResponseSent = true;
         $this->stopJsonApiErrorCapture();
-        $this->prepareJsonApiResponse();
-        header('Content-Type: application/json; charset=UTF-8');
-        if ($httpCode !== 200) {
-            http_response_code($httpCode);
-        }
-        $encoded = json_encode(
-            $this->attachJsonApiDiagnostics($payload),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
-        );
-        if ($encoded === false) {
-            $encoded = json_encode([
-                'success' => false,
-                'message' => 'Could not encode server response.',
-                'json_error' => json_last_error_msg(),
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        }
-        echo $encoded;
+        $this->writeJsonApiPayload($payload, $httpCode);
         exit;
     }
 
@@ -6136,9 +6174,7 @@ class ProductsController
         if ($wantsJson) {
             $this->finishJsonApiResponse($payload);
         }
-        header('Content-Type: application/json; charset=UTF-8');
-        $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        echo $encoded !== false ? $encoded : '{"success":false,"message":"Could not encode server response."}';
+        $this->writeJsonApiPayload($payload);
         exit;
     }
 
@@ -6155,6 +6191,7 @@ class ProductsController
     public function processTransferStockBulk()
     {
         @set_time_limit(300);
+        @ini_set('memory_limit', '512M');
         $this->prepareJsonAjaxResponse();
         $this->startJsonApiErrorCapture();
 
