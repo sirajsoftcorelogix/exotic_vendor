@@ -4177,6 +4177,67 @@ class product
         ];
     }
 
+    public function getBulkProductUpdateCatalogStats(): array
+    {
+        $hasFlag = $this->vpProductsHasColumn('update_flag');
+
+        $totalRows = 0;
+        $res = $this->db->query('SELECT COUNT(*) AS c FROM vp_products');
+        if ($res && ($row = $res->fetch_assoc())) {
+            $totalRows = (int) $row['c'];
+        }
+
+        $pendingRows = $totalRows;
+        $updatedRows = 0;
+        if ($hasFlag) {
+            $res = $this->db->query(
+                'SELECT COUNT(*) AS c FROM vp_products WHERE update_flag IS NULL OR update_flag = 0'
+            );
+            if ($res && ($row = $res->fetch_assoc())) {
+                $pendingRows = (int) $row['c'];
+            }
+            $updatedRows = max(0, $totalRows - $pendingRows);
+        }
+
+        $distinctTotalCodes = 0;
+        $res = $this->db->query(
+            'SELECT COUNT(DISTINCT item_code) AS c FROM vp_products WHERE TRIM(IFNULL(item_code, \'\')) <> \'\''
+        );
+        if ($res && ($row = $res->fetch_assoc())) {
+            $distinctTotalCodes = (int) $row['c'];
+        }
+
+        $distinctPendingCodes = $distinctTotalCodes;
+        if ($hasFlag) {
+            $res = $this->db->query(
+                'SELECT COUNT(DISTINCT item_code) AS c FROM vp_products
+                 WHERE (update_flag IS NULL OR update_flag = 0) AND TRIM(IFNULL(item_code, \'\')) <> \'\''
+            );
+            if ($res && ($row = $res->fetch_assoc())) {
+                $distinctPendingCodes = (int) $row['c'];
+            }
+        }
+
+        return [
+            'has_update_flag' => $hasFlag,
+            'total_db_rows' => $totalRows,
+            'pending_db_rows' => $pendingRows,
+            'updated_db_rows' => $updatedRows,
+            'distinct_item_codes_total' => $distinctTotalCodes,
+            'distinct_item_codes_pending' => $distinctPendingCodes,
+        ];
+    }
+
+    /** Mark every product row pending again for bulk API sync. */
+    public function requeueAllProductsForBulkUpdate(): int
+    {
+        if (!$this->vpProductsHasColumn('update_flag')) {
+            return 0;
+        }
+        $this->db->query('UPDATE vp_products SET update_flag = 0');
+        return (int) $this->db->affected_rows;
+    }
+
     public function fetchProductsForUpdateScript($offset = 0, $limit = 500)
     {
         $offset = max(0, (int) $offset);

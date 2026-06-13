@@ -7069,8 +7069,97 @@ class ProductsController
     public function updateAllProduct()
     {
         is_login();
-        renderTemplateClean('views/products/update_all_product.php', [], 'Bulk Order Update all products');
+        global $productModel;
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $session = $_SESSION['bulk_import'] ?? ['count' => 0, 'offset' => 0];
+        $data = [
+            'bulk_max_limit' => $this->bulkProductUpdateMaxRecords(),
+            'bulk_catalog' => $productModel->getBulkProductUpdateCatalogStats(),
+            'bulk_session' => [
+                'api_products_this_run' => (int) ($session['count'] ?? 0),
+                'db_row_offset' => (int) ($session['offset'] ?? 0),
+                'db_rows_updated_this_run' => (int) ($session['affected_rows'] ?? 0),
+            ],
+        ];
+        renderTemplateClean('views/products/update_all_product.php', $data, 'Bulk product update from API');
     }
+
+    private function bulkProductUpdateMaxRecords(): int
+    {
+        return 5000;
+    }
+
+    /** @return array{api_products_this_run: int, db_row_offset: int} */
+    private function bulkProductUpdateSessionState(): array
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $session = $_SESSION['bulk_import'] ?? ['count' => 0, 'offset' => 0];
+        return [
+            'api_products_this_run' => (int) ($session['count'] ?? 0),
+            'db_row_offset' => (int) ($session['offset'] ?? 0),
+            'db_rows_updated_this_run' => (int) ($session['affected_rows'] ?? 0),
+        ];
+    }
+
+    /** @param array<string, mixed> $extra */
+    private function bulkProductUpdateInfoPayload(array $extra = []): array
+    {
+        global $productModel;
+        return array_merge([
+            'success' => true,
+            'max_limit' => $this->bulkProductUpdateMaxRecords(),
+            'session' => $this->bulkProductUpdateSessionState(),
+            'catalog' => $productModel->getBulkProductUpdateCatalogStats(),
+        ], $extra);
+    }
+
+    public function bulkProductUpdateStats()
+    {
+        is_login();
+        $this->prepareJsonAjaxResponse();
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($this->bulkProductUpdateInfoPayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    public function bulkProductUpdateReset()
+    {
+        is_login();
+        $this->prepareJsonAjaxResponse();
+        header('Content-Type: application/json; charset=UTF-8');
+        global $productModel;
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'POST required.']);
+            exit;
+        }
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        unset($_SESSION['bulk_import']);
+
+        $requeueAll = !empty($_POST['requeue_all']);
+        $requeuedRows = 0;
+        if ($requeueAll) {
+            $requeuedRows = $productModel->requeueAllProductsForBulkUpdate();
+        }
+
+        echo json_encode($this->bulkProductUpdateInfoPayload([
+            'message' => $requeueAll
+                ? "Started fresh: progress reset and {$requeuedRows} product rows marked pending for sync."
+                : 'Run progress reset. Next start will begin a new batch from the current pending queue.',
+            'requeued_rows' => $requeuedRows,
+            'requeue_all' => $requeueAll,
+        ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function updateAllProductScript()
     {
         $this->prepareJsonAjaxResponse();
@@ -7097,12 +7186,13 @@ class ProductsController
         if (!isset($_SESSION['bulk_import'])) {
             $_SESSION['bulk_import'] = [
                 'count' => 0,
-                'offset' => 0
+                'offset' => 0,
+                'affected_rows' => 0,
             ];
         }
         
         // Configuration
-        $MAX_RECORDS = 5000;
+        $MAX_RECORDS = $this->bulkProductUpdateMaxRecords();
         $BATCH_SIZE = 50; // API batch size
         $DB_LIMIT = 500;  // Database fetch limit per execution
         $SLEEP_SECONDS = 5; // Recommended sleep between calls
@@ -7249,6 +7339,7 @@ class ProductsController
         // Update total count and offset in session
         $totalImported += $imported;
         $_SESSION['bulk_import']['count'] = $totalImported;
+        $_SESSION['bulk_import']['affected_rows'] = (int) ($_SESSION['bulk_import']['affected_rows'] ?? 0) + $affected_rows;
         
         // Update offset for next batch (increase by 500)
         $nextOffset = $currentOffset + $DB_LIMIT;
@@ -7273,15 +7364,15 @@ class ProductsController
         }
         
         // Prepare response
-        $response = [
-            'success' => true,
+        $response = $this->bulkProductUpdateInfoPayload([
             'message' => $message,
             'batch_imported' => $imported,
             'batch_total_items' => $totalorder,
             'batch_skipped' => $skipped,
             'batches_processed' => $batchesProcessed,
             'total_imported' => $totalImported,
-            'max_limit' => $MAX_RECORDS,
+            'batch_affected_rows' => $affected_rows,
+            'session_affected_rows' => (int) $_SESSION['bulk_import']['affected_rows'],
             'completed' => $completed,
             'should_continue' => $shouldContinue,
             'progress_percent' => round(($totalImported / $MAX_RECORDS) * 100, 2),
@@ -7289,8 +7380,8 @@ class ProductsController
             'result' => $result,
             'affected_rows' => $affected_rows,
             'current_offset' => $currentOffset,
-            'next_offset' => $nextOffset
-        ];
+            'next_offset' => $nextOffset,
+        ]);
         
         // Add next action if should continue
         if ($shouldContinue) {
