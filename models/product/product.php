@@ -108,6 +108,101 @@ class product
         return $row;
     }
 
+    /** @var string|null Cached vp_products TABLE_COLLATION (e.g. utf8mb4_unicode_ci). */
+    private $vpProductsTableCollation = null;
+
+    private function vpProductsTableCollation(): string
+    {
+        if ($this->vpProductsTableCollation !== null) {
+            return $this->vpProductsTableCollation;
+        }
+        $this->vpProductsTableCollation = 'utf8mb4_unicode_ci';
+        $res = $this->db->query(
+            "SELECT TABLE_COLLATION FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vp_products' LIMIT 1"
+        );
+        if ($res && ($row = $res->fetch_assoc()) && !empty($row['TABLE_COLLATION'])) {
+            $this->vpProductsTableCollation = (string) $row['TABLE_COLLATION'];
+        }
+        return $this->vpProductsTableCollation;
+    }
+
+    private function connectionCharsetUsesUtf8mb4(string $charset): bool
+    {
+        return stripos($charset, 'utf8mb4') !== false;
+    }
+
+    /** @return array{charset: string, collation: string} */
+    private function alignConnectionForVpProducts(): array
+    {
+        $prevCharset = mysqli_character_set_name($this->db);
+        if ($prevCharset === false) {
+            $prevCharset = '';
+        }
+        $prevCollation = '';
+        $colRes = $this->db->query('SELECT @@collation_connection AS collation_connection');
+        if ($colRes && ($row = $colRes->fetch_assoc()) && !empty($row['collation_connection'])) {
+            $prevCollation = (string) $row['collation_connection'];
+        }
+
+        $tableCollation = $this->vpProductsTableCollation();
+        $tableUsesUtf8mb4 = stripos($tableCollation, 'utf8mb4') !== false;
+
+        if ($tableUsesUtf8mb4 && !$this->connectionCharsetUsesUtf8mb4($prevCharset)) {
+            $this->db->set_charset('utf8mb4');
+        } elseif (!$tableUsesUtf8mb4 && $this->connectionCharsetUsesUtf8mb4($prevCharset)) {
+            try {
+                $this->db->set_charset('utf8mb3');
+            } catch (\mysqli_sql_exception $e) {
+                $this->db->set_charset('utf8');
+            }
+        }
+
+        $safeCollation = preg_replace('/[^a-zA-Z0-9_]/', '', $tableCollation);
+        if ($safeCollation !== '' && $prevCollation !== $safeCollation) {
+            $this->db->query("SET collation_connection = '{$safeCollation}'");
+        }
+
+        return ['charset' => $prevCharset, 'collation' => $prevCollation];
+    }
+
+    /** @param array{charset: string, collation: string} $previous */
+    private function restoreConnectionAfterVpProducts(array $previous): void
+    {
+        if ($previous['charset'] !== '') {
+            $current = mysqli_character_set_name($this->db);
+            if ($current !== false && $current !== $previous['charset']) {
+                try {
+                    $this->db->set_charset($previous['charset']);
+                } catch (\Throwable $e) {
+                    // ignore restore failure
+                }
+            }
+        }
+        if ($previous['collation'] !== '') {
+            $safe = preg_replace('/[^a-zA-Z0-9_]/', '', $previous['collation']);
+            if ($safe !== '') {
+                $this->db->query("SET collation_connection = '{$safe}'");
+            }
+        }
+    }
+
+    /**
+     * Bulk product update only (updateAllProductScript): align connection to vp_products charset.
+     *
+     * @return array{charset: string, collation: string}
+     */
+    public function beginBulkProductUpdateConnection(): array
+    {
+        return $this->alignConnectionForVpProducts();
+    }
+
+    /** @param array{charset: string, collation: string} $previous */
+    public function endBulkProductUpdateConnection(array $previous): void
+    {
+        $this->restoreConnectionAfterVpProducts($previous);
+    }
+
     private function executeVpProductsStmt(\mysqli_stmt $stmt): bool
     {
         return $stmt->execute();
