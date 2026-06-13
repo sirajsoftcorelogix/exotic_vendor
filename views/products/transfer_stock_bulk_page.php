@@ -359,7 +359,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             </div>
         </div>
         <div class="px-5 py-4 overflow-y-auto min-h-0">
-            <p id="stockTransferNoticeMessage" class="text-sm text-gray-700 leading-relaxed"></p>
+            <p id="stockTransferNoticeMessage" class="text-sm text-gray-700 leading-relaxed whitespace-pre-line"></p>
             <div id="stockTransferNoticeTableWrap" class="mt-4 hidden">
                 <div class="rounded-xl border border-red-200/70 bg-red-50/30 overflow-hidden">
                     <div class="overflow-x-auto max-h-[min(42vh,22rem)] overflow-y-auto">
@@ -389,8 +389,9 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                 </div>
             </div>
             <div id="stockTransferNoticeListWrap" class="mt-3 hidden">
-                <div class="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
-                    <ul id="stockTransferNoticeList" class="list-disc pl-5 space-y-1 text-sm text-amber-900 max-h-[42vh] overflow-y-auto pr-2"></ul>
+                <div id="stockTransferNoticeListBox" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <p id="stockTransferNoticeListHeading" class="text-xs font-semibold text-slate-800 mb-1.5">Technical details</p>
+                    <ul id="stockTransferNoticeList" class="list-disc pl-5 space-y-1.5 text-xs text-slate-800 font-mono break-all max-h-[42vh] overflow-y-auto pr-2"></ul>
                 </div>
             </div>
         </div>
@@ -661,6 +662,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     function showBulkTransferValidationError(preview) {
         const notFoundItems = Array.isArray(preview && preview.not_found_items) ? preview.not_found_items : [];
         const isProductNotFound = String((preview && preview.error_type) || '') === 'product_not_found' || notFoundItems.length > 0;
+        const isEmptyResponse = String((preview && preview.error_type) || '') === 'empty_response';
         const phpErrors = Array.isArray(preview && preview.php_errors) ? preview.php_errors.filter(Boolean) : [];
         let extraList = isProductNotFound ? [] : clampNoticeList(
             formatInsufficientItems(preview && preview.insufficient_items).length
@@ -669,7 +671,25 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             20
         );
         if (phpErrors.length > 0) {
-            extraList = clampNoticeList(phpErrors.concat(extraList), 20);
+            extraList = clampNoticeList(phpErrors.concat(extraList), 30);
+        }
+        if (isEmptyResponse && preview && preview.action) {
+            extraList.unshift('Action: ' + preview.action);
+        }
+
+        let title = 'Insufficient Warehouse Stock';
+        let subtitle = 'One or more items do not have enough source stock.';
+        let tone = 'warning';
+        if (isProductNotFound) {
+            title = 'Products Not Found';
+            subtitle = 'Compare your upload with catalog variants below, then fix the file or grid and retry.';
+            tone = 'error';
+        } else if (isEmptyResponse || phpErrors.length > 0) {
+            title = 'Server Error';
+            subtitle = isEmptyResponse
+                ? 'The server did not finish the request. PHP error details (if captured):'
+                : 'The server reported PHP errors while processing this request.';
+            tone = 'error';
         }
 
         showTransferNotice(
@@ -677,15 +697,13 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                 ? preview.message
                 : (isProductNotFound
                     ? 'Some rows could not be matched to products in your catalog.'
-                    : 'Stock validation failed. Please review line quantities.'),
+                    : (isEmptyResponse
+                        ? 'The server returned an empty or incomplete response.'
+                        : 'Stock validation failed. Please review line quantities.')),
             {
-                title: isProductNotFound ? 'Products Not Found' : (phpErrors.length ? 'Server Error' : 'Insufficient Warehouse Stock'),
-                subtitle: isProductNotFound
-                    ? 'Compare your upload with catalog variants below, then fix the file or grid and retry.'
-                    : (phpErrors.length
-                        ? 'The server reported PHP errors while processing this request.'
-                        : 'One or more items do not have enough source stock.'),
-                tone: isProductNotFound ? 'error' : (phpErrors.length ? 'error' : 'warning'),
+                title: title,
+                subtitle: subtitle,
+                tone: tone,
                 errorType: isProductNotFound ? 'product_not_found' : '',
                 notFoundItems: notFoundItems,
                 listItems: extraList,
@@ -776,18 +794,108 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         return basePath + '?page=products&action=' + encodeURIComponent(action) + query;
     }
 
+    function buildFetchDiagnostics(response, rawText) {
+        const lines = [];
+        const status = response && response.status ? response.status : 0;
+        const statusText = response && response.statusText ? response.statusText : '';
+        lines.push('HTTP status: ' + status + (statusText ? (' ' + statusText) : ''));
+        if (response && response.url) {
+            lines.push('Request URL: ' + response.url);
+        }
+        const raw = rawText == null ? '' : String(rawText);
+        lines.push('Response body size: ' + raw.length + ' bytes');
+        if (response && response.headers && typeof response.headers.get === 'function') {
+            const ct = response.headers.get('content-type');
+            const cl = response.headers.get('content-length');
+            if (ct) lines.push('Content-Type: ' + ct);
+            if (cl) lines.push('Content-Length: ' + cl);
+        }
+        if (raw.trim()) {
+            const preview = raw.trim().length > 800 ? raw.trim().substring(0, 800) + '…' : raw.trim();
+            lines.push('Response body preview: ' + preview);
+        } else {
+            lines.push('Response body: (empty — PHP may have crashed, timed out, or the web server closed the connection before output)');
+            lines.push('Tip: deploy latest ProductsController.php and check PHP-FPM / Nginx error logs on the server');
+        }
+        return lines;
+    }
+
+    function extractServerErrorFromText(text) {
+        const trimmed = String(text || '').trim();
+        if (!trimmed) return null;
+        try {
+            return JSON.parse(trimmed);
+        } catch (e1) {
+            const match = trimmed.match(/\{[\s\S]*\}/);
+            if (match) {
+                try {
+                    return JSON.parse(match[0]);
+                } catch (e2) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    function showFetchErrorNotice(err, title) {
+        title = title || 'Request Failed';
+        const baseMsg = (err && err.message) ? String(err.message) : 'Request failed.';
+        let listItems = [];
+        let detailMessage = '';
+
+        if (err && err.serverPayload && typeof err.serverPayload === 'object') {
+            if (err.serverPayload.message) {
+                detailMessage = String(err.serverPayload.message);
+            }
+            if (Array.isArray(err.serverPayload.php_errors) && err.serverPayload.php_errors.length) {
+                listItems = listItems.concat(err.serverPayload.php_errors);
+            }
+        }
+
+        if (err && Array.isArray(err.fetchDiagnostics)) {
+            listItems = listItems.concat(err.fetchDiagnostics);
+        }
+        if (err && err.parseError) {
+            listItems.push('JSON parse error: ' + err.parseError);
+        }
+
+        const fullMessage = detailMessage
+            ? (baseMsg + '\n\nServer error: ' + detailMessage)
+            : baseMsg;
+
+        showTransferNotice(fullMessage, {
+            title: title,
+            subtitle: listItems.length ? 'Technical details:' : 'No additional details were returned by the server.',
+            tone: 'error',
+            listItems: listItems,
+        });
+    }
+
     function parseFetchJsonResponse(response) {
         return response.text().then(function (text) {
-            const trimmed = (text || '').trim();
+            const raw = text || '';
+            const trimmed = raw.trim();
+            const diagnostics = buildFetchDiagnostics(response, raw);
+
             if (!trimmed) {
-                const statusHint = response.status ? ('HTTP ' + response.status) : 'unknown status';
-                throw new Error('Server returned an empty response (' + statusHint + '). The request may have timed out or hit a PHP error — check PHP error logs and try again.');
+                const err = new Error('Server returned an empty response (HTTP ' + (response.status || 0) + '). The request may have timed out or hit a PHP error — check PHP error logs and try again.');
+                err.fetchDiagnostics = diagnostics;
+                throw err;
             }
+
             try {
                 return JSON.parse(trimmed);
             } catch (parseErr) {
-                const preview = trimmed.length > 180 ? trimmed.slice(0, 180) + '…' : trimmed;
-                throw new Error('Server returned invalid JSON (HTTP ' + (response.status || 0) + '): ' + preview);
+                const embedded = extractServerErrorFromText(trimmed);
+                if (embedded && typeof embedded === 'object' && embedded.success === false) {
+                    return embedded;
+                }
+                const err = new Error('Server returned invalid JSON (HTTP ' + (response.status || 0) + ').');
+                err.fetchDiagnostics = diagnostics;
+                err.parseError = parseErr.message;
+                err.serverPayload = embedded;
+                throw err;
             }
         });
     }
@@ -1248,11 +1356,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                     return;
                 }
             } catch (err) {
-                showTransferNotice('Could not validate stock before submit: ' + err.message, {
-                    title: 'Validation Error',
-                    subtitle: 'Please try again.',
-                    tone: 'error',
-                });
+                showFetchErrorNotice(err, 'Validation Error');
                 return;
             }
 
@@ -1295,11 +1399,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             })
             .catch(function (err) {
                 hideBulkTransferProcessingOverlay();
-                showTransferNotice('Request failed: ' + err.message, {
-                    title: 'Stock Transfer Validation',
-                    subtitle: 'The server did not return a valid JSON response.',
-                    tone: 'error',
-                });
+                showFetchErrorNotice(err, 'Stock Transfer Validation');
             });
     });
 })();

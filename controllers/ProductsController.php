@@ -6059,14 +6059,87 @@ class ProductsController
         $this->jsonApiBodySent = false;
         $this->jsonApiResponseSent = false;
         $GLOBALS['__vendor_json_api_body_sent'] = false;
+        $this->registerVendorJsonShutdownGuard();
         set_error_handler(function (int $severity, string $message, string $file, int $line): bool {
             if (!(error_reporting() & $severity)) {
                 return false;
             }
             $this->jsonApiCapturedErrors[] = $this->formatJsonApiError($message, $file, $line);
+            if (!isset($GLOBALS['__vendor_json_api_php_errors']) || !is_array($GLOBALS['__vendor_json_api_php_errors'])) {
+                $GLOBALS['__vendor_json_api_php_errors'] = [];
+            }
+            $GLOBALS['__vendor_json_api_php_errors'][] = $this->formatJsonApiError($message, $file, $line);
             return true;
         });
         register_shutdown_function([$this, 'handleJsonApiFatalShutdown']);
+    }
+
+    /**
+     * Global shutdown guard — runs even if instance handlers fail; ensures JSON body is never empty.
+     */
+    private function registerVendorJsonShutdownGuard(): void
+    {
+        if (!empty($GLOBALS['__vendor_json_shutdown_guard_registered'])) {
+            return;
+        }
+        $GLOBALS['__vendor_json_shutdown_guard_registered'] = true;
+        $GLOBALS['__vendor_json_api_php_errors'] = [];
+
+        register_shutdown_function(static function (): void {
+            if (!empty($GLOBALS['__vendor_json_api_body_sent'])) {
+                return;
+            }
+
+            $action = isset($_GET['action']) ? (string)$_GET['action'] : '';
+            $jsonActions = [
+                'process_transfer_stock_bulk',
+                'validate_transfer_stock_bulk_preview',
+                'refresh_transfer_items_from_api',
+            ];
+            if (!in_array($action, $jsonActions, true)) {
+                return;
+            }
+
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            $last = error_get_last();
+            $phpErrors = [];
+            if (!empty($GLOBALS['__vendor_json_api_php_errors']) && is_array($GLOBALS['__vendor_json_api_php_errors'])) {
+                $phpErrors = array_values(array_unique($GLOBALS['__vendor_json_api_php_errors']));
+            }
+            if ($last) {
+                $lastLine = $last['message'] . ' [' . basename(str_replace('\\', '/', (string)$last['file'])) . ':' . (int)$last['line'] . ']';
+                $phpErrors[] = $lastLine;
+                $phpErrors = array_values(array_unique($phpErrors));
+            }
+
+            $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+            $isFatal = $last && in_array($last['type'], $fatalTypes, true);
+            $message = $isFatal && $last
+                ? ('Fatal PHP error: ' . (string)$last['message'])
+                : 'Request ended without JSON output. The server may have timed out, run out of memory, or hit an uncaught error.';
+
+            if (!headers_sent()) {
+                header('Content-Type: application/json; charset=UTF-8');
+                http_response_code(500);
+            }
+
+            $payload = json_encode([
+                'success' => false,
+                'error_type' => 'empty_response',
+                'message' => $message,
+                'php_errors' => $phpErrors,
+                'action' => $action,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+            echo $payload !== false ? $payload : '{"success":false,"message":"Fatal error","error_type":"empty_response"}';
+            if (function_exists('flush')) {
+                @flush();
+            }
+            $GLOBALS['__vendor_json_api_body_sent'] = true;
+        });
     }
 
     public function handleJsonApiFatalShutdown(): void
