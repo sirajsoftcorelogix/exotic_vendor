@@ -31,6 +31,18 @@
         .log-info {
             color: #2563eb;
         }
+        .log-detail {
+            font-size: 0.8125rem;
+            margin: 0.25rem 0 0.75rem 1rem;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            background: #fff7ed;
+            border: 1px solid #fdba74;
+            color: #9a3412;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -138,6 +150,85 @@
             statusLog.scrollTop = statusLog.scrollHeight;
         }
 
+        function addLogDetail(title, body) {
+            if (!body) return;
+            const statusLog = document.getElementById('statusLog');
+            const detail = document.createElement('div');
+            detail.className = 'log-detail';
+            detail.textContent = (title ? title + '\n\n' : '') + body;
+            statusLog.appendChild(detail);
+            statusLog.scrollTop = statusLog.scrollHeight;
+        }
+
+        function stripHtml(html) {
+            const el = document.createElement('div');
+            el.innerHTML = html;
+            return (el.textContent || el.innerText || '').replace(/\s+/g, ' ').trim();
+        }
+
+        function extractPhpErrorsFromHtml(rawBody) {
+            const errors = [];
+            const patterns = [
+                /<b>(Fatal error|Parse error|Warning|Notice|Deprecated)<\/b>:\s*([^<]+)(?:\s*in\s*<b>([^<]+)<\/b>\s*on\s*line\s*<b>(\d+)<\/b>)?/gi,
+                /(Fatal error|Parse error|Warning|Notice|Deprecated):\s*([^\n<]+)(?:\s*in\s*([^\n]+?)\s*on\s*line\s*(\d+))?/gi
+            ];
+            patterns.forEach((pattern) => {
+                let match;
+                while ((match = pattern.exec(rawBody)) !== null) {
+                    const kind = match[1] || 'Error';
+                    const message = (match[2] || '').trim();
+                    const file = (match[3] || '').trim();
+                    const line = (match[4] || '').trim();
+                    let formatted = kind + ': ' + message;
+                    if (file) {
+                        formatted += ' [' + file.split(/[\\/]/).pop() + (line ? ':' + line : '') + ']';
+                    }
+                    errors.push(formatted);
+                }
+            });
+            return [...new Set(errors)];
+        }
+
+        function buildServerErrorMessage(data, rawBody, httpStatus) {
+            const parts = [];
+            if (data && data.message) {
+                parts.push(data.message);
+            }
+            if (data && Array.isArray(data.php_errors) && data.php_errors.length) {
+                parts.push(...data.php_errors);
+            }
+            if (data && Array.isArray(data.errors) && data.errors.length) {
+                parts.push(...data.errors);
+            }
+            if (parts.length === 0) {
+                const phpErrors = extractPhpErrorsFromHtml(rawBody || '');
+                if (phpErrors.length) {
+                    parts.push(...phpErrors);
+                }
+            }
+            if (parts.length === 0 && rawBody) {
+                const plain = stripHtml(rawBody);
+                if (plain) {
+                    parts.push(plain.slice(0, 2000));
+                }
+            }
+            if (parts.length === 0) {
+                parts.push('HTTP ' + (httpStatus || 'unknown'));
+            }
+            return parts.join('\n');
+        }
+
+        function logServerFailure(data, rawBody, httpStatus) {
+            const message = buildServerErrorMessage(data, rawBody, httpStatus);
+            addLog('✗ ' + message.split('\n')[0], 'error');
+            if (message.includes('\n')) {
+                addLogDetail('Full server error', message);
+            } else if (rawBody && stripHtml(rawBody) !== message) {
+                addLogDetail('Raw server response', stripHtml(rawBody).slice(0, 4000));
+            }
+            return message;
+        }
+
         // Update UI
         function updateUI() {
             document.getElementById('progressPercent').textContent = state.progressPercent;
@@ -196,18 +287,28 @@
                 const response = await fetch(url, {
                     method: 'GET',
                     headers: {
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
                     }
                 });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
+
+                const rawBody = await response.text();
+                let data = null;
+                try {
+                    data = JSON.parse(rawBody);
+                } catch (parseError) {
+                    logServerFailure(null, rawBody, response.status);
+                    state.errorCount++;
+                    state.completed = true;
+                    finishProcess();
+                    return;
                 }
 
-                const data = await response.json();
-
-                if (!data.success) {
-                    addLog(`Error: ${data.message || 'Unknown error'}`, 'error');
+                if (!response.ok || !data.success) {
+                    logServerFailure(data, rawBody, response.status);
+                    if (data && Array.isArray(data.php_errors) && data.php_errors.length > 1) {
+                        addLogDetail('PHP errors', data.php_errors.join('\n'));
+                    }
                     state.errorCount++;
                     state.completed = true;
                     finishProcess();
@@ -234,9 +335,12 @@
                 // Log errors if any
                 if (data.errors && data.errors.length > 0) {
                     data.errors.forEach(error => {
-                        addLog(`⚠ API: ${error}`, 'error');
+                        addLog(`⚠ ${error}`, 'error');
                     });
                     state.errorCount += data.error_count || 0;
+                }
+                if (data.php_errors && data.php_errors.length > 0) {
+                    addLogDetail('PHP warnings during batch', data.php_errors.join('\n'));
                 }
 
                 updateUI();
@@ -267,12 +371,10 @@
                 }
 
             } catch (error) {
-                addLog(`✗ Error: ${error.message}`, 'error');
+                addLog(`✗ ${error.message}`, 'error');
                 state.errorCount++;
-                
-                // Retry after 5 seconds
-                addLog('Retrying in 5 seconds...', 'info');
-                setTimeout(processBatch, 5000);
+                state.completed = true;
+                finishProcess();
             }
         }
 

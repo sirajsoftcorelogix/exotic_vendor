@@ -407,6 +407,8 @@ class ProductsController
     }
     public function updateApiCall()
     {
+        $this->prepareJsonAjaxResponse();
+        $this->startJsonApiErrorCapture();
         is_login();
         header('Content-Type: application/json; charset=UTF-8');
         global $productModel;
@@ -498,7 +500,11 @@ class ProductsController
         }
         $updateResult['local_stock_updated'] = $updateLocalStock;
         $updateResult['external_api'] = $externalApi;
-        echo json_encode($updateResult, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $this->stopJsonApiErrorCapture();
+        echo json_encode(
+            $this->attachJsonApiDiagnostics($updateResult),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+        );
         exit;
         // if ($updatedCount['success']) {
         //     renderTemplateClean('views/success/success.php', ['message' => 'Product updated successfully. Total products updated: ' . $updatedCount['updated_count']], 'Update Successful');
@@ -5969,6 +5975,10 @@ class ProductsController
         ], $pageTitle);
     }
 
+    /** @var list<string> */
+    private array $jsonApiCapturedErrors = [];
+    private bool $jsonApiResponseSent = false;
+
     /**
      * Clears nested output buffers (see index.php ob_start) and avoids printing PHP notices as HTML,
      * so stock-transfer AJAX responses stay valid JSON for fetch().json().
@@ -5981,6 +5991,112 @@ class ProductsController
         if (function_exists('ini_set')) {
             ini_set('display_errors', '0');
         }
+    }
+
+    private function startJsonApiErrorCapture(): void
+    {
+        $this->jsonApiCapturedErrors = [];
+        set_error_handler(function (int $severity, string $message, string $file, int $line): bool {
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
+            $this->jsonApiCapturedErrors[] = $this->formatJsonApiError($message, $file, $line);
+            return true;
+        });
+        register_shutdown_function([$this, 'handleJsonApiFatalShutdown']);
+    }
+
+    public function handleJsonApiFatalShutdown(): void
+    {
+        if ($this->jsonApiResponseSent) {
+            return;
+        }
+        $last = error_get_last();
+        if (!$last) {
+            return;
+        }
+        $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+        if (!in_array($last['type'], $fatalTypes, true)) {
+            return;
+        }
+        if (headers_sent()) {
+            return;
+        }
+        $this->jsonApiCapturedErrors[] = $this->formatJsonApiError(
+            (string) $last['message'],
+            (string) $last['file'],
+            (int) $last['line']
+        );
+        $this->emitJsonApiErrorResponse('Fatal PHP error during request.');
+    }
+
+    private function stopJsonApiErrorCapture(): void
+    {
+        restore_error_handler();
+    }
+
+    private function formatJsonApiError(string $message, string $file, int $line): string
+    {
+        $message = trim(strip_tags($message));
+        $file = basename(str_replace('\\', '/', $file));
+        return $message . ' [' . $file . ':' . $line . ']';
+    }
+
+    /**
+     * @param array<string, mixed> $extra
+     */
+    private function emitJsonApiErrorResponse(string $summary, array $extra = []): void
+    {
+        if ($this->jsonApiResponseSent) {
+            return;
+        }
+        $this->jsonApiResponseSent = true;
+        $this->prepareJsonAjaxResponse();
+        header('Content-Type: application/json; charset=UTF-8');
+        http_response_code(500);
+        $payload = array_merge([
+            'success' => false,
+            'message' => $summary,
+            'php_errors' => array_values(array_unique($this->jsonApiCapturedErrors)),
+            'completed' => true,
+        ], $extra);
+        echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function attachJsonApiDiagnostics(array $payload): array
+    {
+        if ($this->jsonApiCapturedErrors !== []) {
+            $payload['php_errors'] = array_values(array_unique($this->jsonApiCapturedErrors));
+            if (empty($payload['message']) && isset($payload['php_errors'][0])) {
+                $payload['message'] = $payload['php_errors'][0];
+            }
+        }
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function finishJsonApiResponse(array $payload, int $httpCode = 200): void
+    {
+        if ($this->jsonApiResponseSent) {
+            return;
+        }
+        $this->jsonApiResponseSent = true;
+        $this->stopJsonApiErrorCapture();
+        if ($httpCode !== 200) {
+            http_response_code($httpCode);
+        }
+        echo json_encode(
+            $this->attachJsonApiDiagnostics($payload),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+        );
+        exit;
     }
 
     public function transferBulkTemplate()
@@ -6957,17 +7073,22 @@ class ProductsController
     }
     public function updateAllProductScript()
     {
+        $this->prepareJsonAjaxResponse();
+        $this->startJsonApiErrorCapture();
         ini_set('max_execution_time', 30000);
         set_time_limit(30000);
-        global $ordersModel, $productModel;
-        
-        // Security check
-        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
-            http_response_code(403);
-            die('Unauthorized access.');
-        }
-        
-        header('Content-Type: application/json');
+        global $productModel;
+
+        header('Content-Type: application/json; charset=UTF-8');
+
+        try {
+            if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'Unauthorized access.'], 403);
+            }
+
+            if (!isset($productModel) || !is_object($productModel)) {
+                throw new \RuntimeException('Product model is not available.');
+            }
         
         // Initialize session for bulk import tracking
         if (session_status() === PHP_SESSION_NONE) {
@@ -6992,7 +7113,8 @@ class ProductsController
         
         // Check if we've reached the limit
         if ($totalImported >= $MAX_RECORDS) {
-            echo json_encode([
+            unset($_SESSION['bulk_import']);
+            $this->finishJsonApiResponse([
                 'success' => true,
                 'message' => "✓ Maximum limit of {$MAX_RECORDS} records reached for today. Process completed successfully.",
                 'batch_imported' => 0,
@@ -7004,17 +7126,20 @@ class ProductsController
                 'should_continue' => false,
                 'next_action' => null
             ]);
-            unset($_SESSION['bulk_import']);
-            exit;
         }
         
         // Fetch up to 500 orders to update from database using offset
-        //$odr = $ordersModel->fetchOrdersForUpdateScript($currentOffset);
         $odr = $productModel->fetchProductsForUpdateScript($currentOffset, $DB_LIMIT);
-        // print_array($odr);
-        // exit;
+        if (!is_array($odr) || (array_key_exists('success', $odr) && $odr['success'] === false)) {
+            $this->finishJsonApiResponse([
+                'success' => false,
+                'message' => is_array($odr) ? ($odr['message'] ?? 'Failed to load products from database.') : 'Failed to load products from database.',
+                'completed' => true,
+            ]);
+        }
         if (empty($odr)) {
-            echo json_encode([
+            unset($_SESSION['bulk_import']);
+            $this->finishJsonApiResponse([
                 'success' => true,
                 'message' => '✓ No more products found in database. All available products have been processed.',
                 'batch_imported' => 0,
@@ -7026,8 +7151,6 @@ class ProductsController
                 'should_continue' => false,
                 'next_action' => null
             ]);
-            unset($_SESSION['bulk_import']);
-            exit;
         }
         
         // API configuration for product fetch
@@ -7098,6 +7221,10 @@ class ProductsController
             // exit;
             // Update products using updateProductFromApi
             $updateResult = $productModel->updateProductFromApi($productData, ['preserve_local_stock' => true]);
+            if (is_array($updateResult) && empty($updateResult['success'])) {
+                $errors[] = $updateResult['message'] ?? 'Product update failed.';
+                continue;
+            }
             $affected_rows += $updateResult['updated_count'] ?? 0;
             
             // Count items processed
@@ -7175,7 +7302,12 @@ class ProductsController
             $response['error_count'] = count($errors);
         }
         
-        echo json_encode($response);
-        exit;
+            $this->finishJsonApiResponse($response);
+        } catch (\Throwable $e) {
+            $this->stopJsonApiErrorCapture();
+            $this->emitJsonApiErrorResponse('Bulk update failed: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+            ]);
+        }
     }
 }

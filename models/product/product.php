@@ -4028,21 +4028,31 @@ class product
 
     public function fetchProductsForUpdateScript($offset = 0, $limit = 500)
     {
-        $sql = "SELECT id, item_code, sku, size, color FROM vp_products WHERE update_flag IS NULL OR update_flag = 0 LIMIT ? OFFSET ?";
+        $offset = max(0, (int) $offset);
+        $limit = max(1, min(500, (int) $limit));
+        $where = '';
+        if ($this->vpProductsHasColumn('update_flag')) {
+            $where = ' WHERE update_flag IS NULL OR update_flag = 0';
+        }
+        $sql = "SELECT id, item_code, sku, size, color FROM vp_products{$where} ORDER BY id ASC LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
         }
-        $stmt->bind_param("ii", $limit, $offset);
+        $stmt->bind_param('ii', $limit, $offset);
         $stmt->execute();
         $result = $stmt->get_result();
         $products = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-                $products[] = $row['item_code'];
+                $itemCode = trim((string) ($row['item_code'] ?? ''));
+                if ($itemCode !== '') {
+                    $products[] = $itemCode;
+                }
             }
         }
-        return array_unique($products);
+        $stmt->close();
+        return array_values(array_unique($products));
         // if ($result && $result->num_rows > 0) {
         //     return ['success' => true, 'data' => $result->fetch_all(MYSQLI_ASSOC)];
         // }
