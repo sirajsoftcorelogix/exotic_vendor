@@ -25,6 +25,9 @@ class product
         if (is_float($value)) return (int)$value;
         $str = trim((string)$value);
         if ($str === '') return (int)$default;
+        if (is_numeric($str)) {
+            return max(0, (int)round((float)$str));
+        }
         if (preg_match('/-?\d+/', $str, $m)) {
             return (int)$m[0];
         }

@@ -2366,6 +2366,9 @@ class ProductsController
         string $stockLocation,
         int $userId
     ): ?string {
+        if ($openingQty <= 0) {
+            return null;
+        }
         if ($warehouseId <= 0) {
             return 'Warehouse is required for opening stock.';
         }
@@ -2396,13 +2399,7 @@ class ProductsController
             $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
         }
         $qty = max(0, (int)$openingQty);
-        if ($qty <= 0) {
-            $existingStock = (int)($product['local_stock'] ?? 0);
-            if ($existingStock > 0) {
-                $qty = $existingStock;
-            }
-        }
-        $runningStock = $qty; // new opening line baseline
+        $runningStock = $qty;
         $reason = 'Migration From Egreen';
         $refType = 'Egreen';
         $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
@@ -3095,10 +3092,7 @@ class ProductsController
                 if ($impSku === '') {
                     $impSku = $this->buildBulkImportAutoSku((string)$code, $isz, $ico);
                 }
-                if ($openQty <= 0) {
-                    $stockRow = $this->findProductRowForBulkImportStock($conn, (string)$code, $impSku, $isz, $ico);
-                    $openQty = max(0, (int)($stockRow['local_stock'] ?? 0));
-                }
+                $fileQty = $openQty;
                 $codeKeyLookup = strtoupper(trim((string)$code));
                 $isFailed = $codeKeyLookup !== '' && isset($failedCodeLookup[$codeKeyLookup]);
                 if ($isFailed) {
@@ -3121,6 +3115,14 @@ class ProductsController
                             $up->execute();
                             $up->close();
                         }
+                    }
+                    // No qty in file: local_stock already synced via updateProductFromApi in importApiCall.
+                    if ($fileQty <= 0) {
+                        $stmtS = $conn->prepare("UPDATE product_import_items SET status='success', error_message=NULL, processed_at=NOW() WHERE id=?");
+                        $stmtS->bind_param('i', $id);
+                        $stmtS->execute();
+                        $stmtS->close();
+                        continue;
                     }
                     $openErr = $this->bulkImportApplyOpeningStock(
                         $conn,
@@ -3297,80 +3299,19 @@ class ProductsController
         foreach ($picked as $row) {
             $rowCode = (string)($row['item_code'] ?? '');
             $rowCodeUpper = strtoupper(trim($rowCode));
+            $rowId = (int)($row['id'] ?? 0);
             if ($rowCodeUpper !== '' && isset($failedCodeLookup[$rowCodeUpper])) {
                 $failedRows++;
-            } else {
-                $rowId = (int)($row['id'] ?? 0);
-                $impSku = trim((string)($row['import_sku'] ?? ''));
-                $isz = trim((string)($row['import_size'] ?? ''));
-                $ico = trim((string)($row['import_color'] ?? ''));
-                $stockLoc = (string)($row['stock_location'] ?? '');
-                if ($impSku === '') {
-                    $impSku = $this->buildBulkImportAutoSku($rowCode, $isz, $ico);
+                continue;
+            }
+            if ($rowId > 0) {
+                $stmtS = $conn->prepare("UPDATE product_import_items SET status='success', error_message=NULL, processed_at=NOW() WHERE id=?");
+                if ($stmtS) {
+                    $stmtS->bind_param('i', $rowId);
+                    $stmtS->execute();
+                    $stmtS->close();
                 }
-                if ($jobWarehouseId <= 0 || $rowId <= 0) {
-                    $failedRows++;
-                    if ($rowCodeUpper !== '') {
-                        $failedCodeLookup[$rowCodeUpper] = true;
-                        $failedCodes[] = $rowCode;
-                    }
-                    if ($rowId > 0) {
-                        $msg = 'ReUpdate skipped: warehouse is not configured for this job.';
-                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
-                        if ($stmtF) {
-                            $stmtF->bind_param('si', $msg, $rowId);
-                            $stmtF->execute();
-                            $stmtF->close();
-                        }
-                    }
-                    continue;
-                }
-                $stockRow = $this->findProductRowForBulkImportStock($conn, $rowCode, $impSku, $isz, $ico);
-                if (!$stockRow) {
-                    $failedRows++;
-                    $msg = 'ReUpdate skipped: product not found for this item/SKU.';
-                    $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
-                    if ($stmtF) {
-                        $stmtF->bind_param('si', $msg, $rowId);
-                        $stmtF->execute();
-                        $stmtF->close();
-                    }
-                    continue;
-                }
-                $targetQty = max(0, (int)($stockRow['local_stock'] ?? 0));
-                $stockApplied = false;
-                if ($rowId > 0 && $jobWarehouseId > 0) {
-                    $stockErr = $this->bulkImportApplyRefetchStock(
-                        $conn,
-                        $jobWarehouseId,
-                        $rowCode,
-                        $impSku,
-                        $isz,
-                        $ico,
-                        $targetQty,
-                        $stockLoc,
-                        $batchUserId,
-                        $rowId
-                    );
-                    if ($stockErr !== null) {
-                        $failedRows++;
-                        if ($rowCodeUpper !== '') {
-                            $failedCodeLookup[$rowCodeUpper] = true;
-                            $failedCodes[] = $rowCode;
-                        }
-                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
-                        if ($stmtF) {
-                            $stmtF->bind_param('si', $stockErr, $rowId);
-                            $stmtF->execute();
-                            $stmtF->close();
-                        }
-                        continue;
-                    }
-                    $stockApplied = true;
-                }
-                if ($stockApplied) {
-                    $updatedRows++;
-                }
+                $updatedRows++;
             }
         }
         $newLastId = (int)end($picked)['id'];
