@@ -787,7 +787,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
 
     function fetchNextTransferOrderNo(fromW, toW) {
         return fetch(apiUrl('get_transfer_order_no', '&from_warehouse=' + encodeURIComponent(fromW) + '&to_warehouse=' + encodeURIComponent(toW)), { credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
+            .then(function (r) { return parseFetchJsonResponse(r); })
             .then(function (data) {
                 if (data.success && data.transfer_order_no) return data.transfer_order_no;
                 return 'TO-' + fromW + '-' + toW + '-0001';
@@ -831,7 +831,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     document.addEventListener('DOMContentLoaded', function () {
         if (!isBulkEdit) {
             fetch(apiUrl('get_last_warehouse'), { credentials: 'same-origin' })
-                .then(function (r) { return r.json(); })
+                .then(function (r) { return parseFetchJsonResponse(r); })
                 .then(function (data) {
                     if (data.success && data.warehouse_id) {
                         fromSel.value = data.warehouse_id;
@@ -952,7 +952,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                 fd.append('transfer_id', String(bulkEditTransferId));
                 fd.append('line_item_id', String(lineId));
                 fetch(apiUrl('stock_transfer_delete_line'), { method: 'POST', body: fd, credentials: 'same-origin' })
-                    .then(function (r) { return r.json(); })
+                    .then(function (r) { return parseFetchJsonResponse(r); })
                     .then(function (data) {
                         if (data.success) {
                             window.location.reload();
@@ -1036,7 +1036,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         sku = (sku || '').trim();
         if (!sku) return Promise.resolve();
         return fetch(apiUrl('search_product', '&q=' + encodeURIComponent(sku) + '&exact=1'), { credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
+            .then(function (r) { return parseFetchJsonResponse(r); })
             .then(function (data) {
                 if (data.success && data.product) {
                     applyBulkSkuProduct(tr, data.product);
@@ -1119,7 +1119,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         const mySeq = inp._bulkReqSeq;
         inp._bulkTimer = setTimeout(function () {
             fetch(apiUrl('search_product', '&q=' + encodeURIComponent(q) + '&by=sku'), { credentials: 'same-origin' })
-                .then(function (r) { return r.json(); })
+                .then(function (r) { return parseFetchJsonResponse(r); })
                 .then(function (data) {
                     if (mySeq !== inp._bulkReqSeq) return;
                     if (!data.success || !data.products || data.products.length === 0) {
@@ -1274,6 +1274,11 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         })
             .then(function (r) { return parseFetchJsonResponse(r); })
             .then(function (data) {
+                if (data && data.redirect && data.success === false) {
+                    hideBulkTransferProcessingOverlay();
+                    window.location.href = data.redirect;
+                    return;
+                }
                 if (data.success) {
                     window.location.href = '?page=products&action=stock_transfer';
                     return;
