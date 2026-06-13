@@ -31,6 +31,20 @@ class product
         return (int)$default;
     }
 
+    /** DATE column values from vendor API — reject MySQL zero dates like 0000-00-00 00:00:00. */
+    private function normalizeApiDateValue($value): string
+    {
+        $str = trim((string) $value);
+        if ($str === '' || preg_match('/^0000-00-00/', $str)) {
+            return '';
+        }
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $str, $m)) {
+            return $m[1];
+        }
+        $ts = strtotime($str);
+        return ($ts !== false) ? date('Y-m-d', $ts) : '';
+    }
+
     /**
      * vp_products may still use utf8mb3 while the connection uses utf8mb4; MySQL 8+ can reject
      * bound parameters when an implicit collation conversion is not allowed.
@@ -629,7 +643,7 @@ class product
                     $usblock = isset($product['usblock']) ? (int)$product['usblock'] : 0;
                     $indiablock = isset($product['indiablock']) ? (int)$product['indiablock'] : 0;
                     $hscode = isset($product['hscode']) ? $product['hscode'] : '';
-                    $date_first_added = isset($product['date_first_added']) ? $product['date_first_added'] : '';
+                    $date_first_added = $this->normalizeApiDateValue($product['date_first_added'] ?? '');
                     $relatedSearch = self::vendorApiRelatedSearchFields($product);
                     $search_term = $relatedSearch['search_term'];
                     $search_category = $relatedSearch['search_category'];
@@ -880,7 +894,9 @@ class product
                             $usblock = isset($variation['usblock']) ? (int)$variation['usblock'] : (isset($product['usblock']) ? (int)$product['usblock'] : 0);
                             $indiablock = isset($variation['indiablock']) ? (int)$variation['indiablock'] : (isset($product['indiablock']) ? (int)$product['indiablock'] : 0);
                             $hscode = isset($variation['hscode']) ? $variation['hscode'] : (isset($product['hscode']) ? $product['hscode'] : '');
-                            $date_first_added = isset($variation['date_first_added']) ? $variation['date_first_added'] : (isset($product['date_first_added']) ? $product['date_first_added'] : '');
+                            $date_first_added = $this->normalizeApiDateValue(
+                                $variation['date_first_added'] ?? $product['date_first_added'] ?? ''
+                            );
                             $variationSearch = self::vendorApiRelatedSearchFields($variation);
                             $parentSearch = self::vendorApiRelatedSearchFields($product);
                             $search_term = $variationSearch['search_term'] !== ''
@@ -1717,6 +1733,10 @@ class product
     {
         $data['leadtime'] = $this->normalizeIntValue($data['leadtime'] ?? null, 0);
         $data['instock_leadtime'] = $this->normalizeIntValue($data['instock_leadtime'] ?? null, 0);
+        $data['date_first_added'] = $this->normalizeApiDateValue($data['date_first_added'] ?? '');
+        if ($data['date_first_added'] === '') {
+            $data['date_first_added'] = null;
+        }
         $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at, category, itemtype, snippet_description, india_net_qty, keywords, usblock, indiablock, hscode, date_first_added, search_term, search_category, long_description, long_description_india, aplus_content_ids, item_level, marketplace_vendor, colormap, flex_status, vendor_us, today_global, today_india, topurchase, backorder_percent, backorder_weeks, cp, usd, amazon_sold, amazon_leadtime, amazon_itemcode_alias, youtube_links, sketchfab_links, dimensions)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
