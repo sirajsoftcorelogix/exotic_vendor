@@ -7169,7 +7169,9 @@ class ProductsController
         $errors = [];
         $batchesProcessed = 0;
         $affected_rows = 0;
-        
+
+        $bulkConnection = $productModel->beginBulkProductUpdateConnection();
+        try {
         // Process all batches from this 500-record fetch
         foreach ($productChunks as $chunkIndex => $chunk) {
             // Check if we'll exceed limit before processing
@@ -7239,6 +7241,9 @@ class ProductsController
             if ($totalImported + $imported >= $MAX_RECORDS) {
                 break;
             }
+        }
+        } finally {
+            $productModel->endBulkProductUpdateConnection($bulkConnection);
         }
         
         // Update total count and offset in session
