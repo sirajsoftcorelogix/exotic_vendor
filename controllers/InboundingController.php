@@ -1366,6 +1366,11 @@ class InboundingController {
             'gst_rate'            => (int) ($_POST['gst_rate'] ?? 0),
             'dimensions'          => $_POST['dimensions'] ?? '',
             'upc'                 => $_POST['upc'] ?? '',
+            'amazon_sold'         => (int) ($_POST['amazon_sold'] ?? 0),
+            'amazon_leadtime'     => (int) ($_POST['amazon_leadtime'] ?? 0),
+            'permanent_discount'  => ((int) ($_POST['permanent_discount'] ?? 0) === 1) ? 1 : 0,
+            'discount_global'     => (int) ($_POST['discount_global'] ?? 0),
+            'discount_india'      => (int) ($_POST['discount_india'] ?? 0),
             'height'              => (float) ($_POST['height'] ?? 0),
             'width'               => (float) ($_POST['width'] ?? 0),
             'depth'               => (float) ($_POST['depth'] ?? 0),
@@ -2120,10 +2125,10 @@ class InboundingController {
         $stock_price_temp[0]['price_india_suggested'] = (int)($d['price_india'] ?? 0);
         $stock_price_temp[0]['mrp_india'] = (int)($d['price_india_mrp'] ?? 0);
         $stock_price_temp[0]['gst'] = $d['gst_rate'] ?? '';
-        $stock_price_temp[0]['permanent_discount'] = '1';
-        $stock_price_temp[0]['discount_global'] = '0';
+        $stock_price_temp[0]['permanent_discount'] = (string) ((int) ($d['permanent_discount'] ?? 0));
+        $stock_price_temp[0]['discount_global'] = (string) ((int) ($d['discount_global'] ?? 0));
         $stock_price_temp[0]['today_global'] = '0';
-        $stock_price_temp[0]['discount_india'] = '0';
+        $stock_price_temp[0]['discount_india'] = (string) ((int) ($d['discount_india'] ?? 0));
         $stock_price_temp[0]['today_india'] = '0';
         $stock_price_temp[0]['upc'] = '';
         $stock_price_temp[0]['asin'] = '';
@@ -2137,8 +2142,8 @@ class InboundingController {
         $stock_price_temp[0]['usd'] = $d['usd_price'] ?? 0;
         $permAvailable = ((int) ($d['permanently_available'] ?? 0) === 1) ? 1 : 0;
         $stock_price_temp[0]['permanently_available'] = $permAvailable;
-        $stock_price_temp[0]['amazon_sold'] = '0';
-        $stock_price_temp[0]['amazon_leadtime'] = '10';
+        $stock_price_temp[0]['amazon_sold'] = (string) ((int) ($d['amazon_sold'] ?? 0));
+        $stock_price_temp[0]['amazon_leadtime'] = (string) ((int) ($d['amazon_leadtime'] ?? 0));
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
         $stock_price_temp[0]['youtube_links'] = '';
         $stock_price_temp[0]['sketchfab_links'] = '';
@@ -2173,10 +2178,10 @@ class InboundingController {
                 $stock_price_temp[$i]['price_india_suggested'] = (int)($d['price_india'] ?? 0);
                 $stock_price_temp[$i]['mrp_india'] = (int)($value['price_india_mrp'] ?? 0);
                 $stock_price_temp[$i]['gst'] = $value['gst_rate'] ?? '';
-                $stock_price_temp[$i]['permanent_discount'] = '1';
-                $stock_price_temp[$i]['discount_global'] = '0';
+                $stock_price_temp[$i]['permanent_discount'] = (string) ((int) ($d['permanent_discount'] ?? 0));
+                $stock_price_temp[$i]['discount_global'] = (string) ((int) ($d['discount_global'] ?? 0));
                 $stock_price_temp[$i]['today_global'] = '0';
-                $stock_price_temp[$i]['discount_india'] = '0';
+                $stock_price_temp[$i]['discount_india'] = (string) ((int) ($d['discount_india'] ?? 0));
                 $stock_price_temp[$i]['today_india'] = '0';
                 $stock_price_temp[$i]['upc'] = '';
                 $stock_price_temp[$i]['asin'] = '';
@@ -2189,8 +2194,8 @@ class InboundingController {
                 $stock_price_temp[$i]['cp'] = $value['cp'] ?? 0;
                 $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
                 $stock_price_temp[$i]['permanently_available'] = $permAvailable;
-                $stock_price_temp[$i]['amazon_sold'] = '0';
-                $stock_price_temp[$i]['amazon_leadtime'] = '10';
+                $stock_price_temp[$i]['amazon_sold'] = (string) ((int) ($d['amazon_sold'] ?? 0));
+                $stock_price_temp[$i]['amazon_leadtime'] = (string) ((int) ($d['amazon_leadtime'] ?? 0));
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
                 $stock_price_temp[$i]['youtube_links'] = '';
                 $stock_price_temp[$i]['sketchfab_links'] = '';

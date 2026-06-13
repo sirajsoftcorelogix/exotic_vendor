@@ -817,6 +817,30 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['upc'] ?? '') ?>" name="upc" placeholder="upc">
                         </div>
                     </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Amazon Sold:</label>
+                        <input type="number" min="0" step="1" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars((string) ((int) ($data['form2']['amazon_sold'] ?? 0))) ?>" name="amazon_sold">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Amazon Leadtime:</label>
+                        <input type="number" min="0" step="1" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars((string) ((int) ($data['form2']['amazon_leadtime'] ?? 0))) ?>" name="amazon_leadtime">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Permanent Discount:</label>
+                        <?php $permDiscount = ((int) ($data['form2']['permanent_discount'] ?? 0) === 1) ? 1 : 0; ?>
+                        <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="permanent_discount">
+                            <option value="0" <?= ($permDiscount === 0) ? 'selected' : '' ?>>No</option>
+                            <option value="1" <?= ($permDiscount === 1) ? 'selected' : '' ?>>Yes</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Discount Global:</label>
+                        <input type="number" min="0" step="1" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars((string) ((int) ($data['form2']['discount_global'] ?? 0))) ?>" name="discount_global">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Discount India:</label>
+                        <input type="number" min="0" step="1" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars((string) ((int) ($data['form2']['discount_india'] ?? 0))) ?>" name="discount_india">
+                    </div>
                     <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? '', '', true); ?>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>

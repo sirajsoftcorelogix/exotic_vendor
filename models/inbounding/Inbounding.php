@@ -980,6 +980,12 @@ class Inbounding {
             if ($key === 'permanently_available') {
                 $val = ((int) $val === 1) ? 1 : 0;
             }
+            if ($key === 'permanent_discount') {
+                $val = ((int) $val === 1) ? 1 : 0;
+            }
+            if (in_array($key, ['amazon_sold', 'amazon_leadtime', 'discount_global', 'discount_india'], true)) {
+                $val = (int) $val;
+            }
             $cols[] = "$key = ?";
             $values[] = $val;
                 
