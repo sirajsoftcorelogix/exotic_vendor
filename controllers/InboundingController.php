@@ -178,7 +178,7 @@ class InboundingController {
                     $row['product_title'] ?? '',            
                     
                     $row['product_photo'] ?? '',            
-                    '',                                     
+                    $row['redirect'] ?? '',                                     
                     $row['snippet_description'] ?? '',      
                     '',                                     
                     '',                                     
@@ -1371,6 +1371,7 @@ class InboundingController {
             'permanent_discount'  => ((int) ($_POST['permanent_discount'] ?? 0) === 1) ? 1 : 0,
             'discount_global'     => (int) ($_POST['discount_global'] ?? 0),
             'discount_india'      => (int) ($_POST['discount_india'] ?? 0),
+            'redirect'            => trim((string) ($_POST['redirect'] ?? '')),
             'height'              => (float) ($_POST['height'] ?? 0),
             'width'               => (float) ($_POST['width'] ?? 0),
             'depth'               => (float) ($_POST['depth'] ?? 0),
@@ -2021,6 +2022,7 @@ class InboundingController {
             $API_data['itemtype'] ='product';
         }
         $API_data['title'] = $d['product_title'] ?? '';
+        $API_data['redirect'] = $d['redirect'] ?? '';
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
 

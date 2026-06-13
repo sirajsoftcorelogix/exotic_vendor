@@ -841,6 +841,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Discount India:</label>
                         <input type="number" min="0" step="1" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars((string) ((int) ($data['form2']['discount_india'] ?? 0))) ?>" name="discount_india">
                     </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Redirect:</label>
+                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars((string) ($data['form2']['redirect'] ?? '')) ?>" name="redirect" placeholder="redirect">
+                    </div>
                     <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? '', '', true); ?>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
