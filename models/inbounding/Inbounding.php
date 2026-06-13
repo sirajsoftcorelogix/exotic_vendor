@@ -960,6 +960,8 @@ class Inbounding {
         return $stmt->execute();
     }
     public function updatedesktopform($id, $data) {
+        $this->ensureInboundRedirectColumn();
+
         // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
         
@@ -1012,6 +1014,15 @@ class Inbounding {
         
         return ['success' => false, 'message' => "Update failed: " . $stmt->error];
     }
+
+    private function ensureInboundRedirectColumn(): void
+    {
+        $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE 'redirect'");
+        if ($res && $res->num_rows === 0) {
+            @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN redirect VARCHAR(500) NOT NULL DEFAULT '' AFTER discount_india");
+        }
+    }
+
     // --- Add these functions inside your InboundingModel class ---
 
     /**
