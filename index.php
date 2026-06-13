@@ -685,6 +685,12 @@ switch ($page) {
             case 'show_bulk_update':
                 $controller->updateAllProduct();
                 break;
+            case 'bulk_product_update_stats':
+                $controller->bulkProductUpdateStats();
+                break;
+            case 'bulk_product_update_reset':
+                $controller->bulkProductUpdateReset();
+                break;
             case 'updateAllProductScript':
                 $controller->updateAllProductScript();
                 break;
