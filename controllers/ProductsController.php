@@ -733,7 +733,7 @@ class ProductsController
                     ? ('https://cdn.exoticindia.com/images/products/original/' . $apiItem['image'])
                     : '';
                 $item['groupname'] = $apiItem['groupname'] ?? '';
-                $item['local_stock'] = isset($apiItem['local_stock']) ? (int)$apiItem['local_stock'] : (isset($apiItem['stock']) ? (int)$apiItem['stock'] : 0);
+                $item['local_stock'] = max(0, (int)round((float)($apiItem['local_stock'] ?? $apiItem['stock'] ?? 0)));
                 $localStockByCode[$codeKey] = $item['local_stock'];
                 $baseSku = strtoupper(trim((string)($item['sku'] ?? '')));
                 if ($baseSku !== '') {
@@ -831,7 +831,7 @@ class ProductsController
                         $variantItem['size'] = $variant['size'] ?? '';
                         $variantItem['color'] = $variant['color'] ?? '';
                         $variantItem['title'] = $variant['title'] ?? $item['title'];
-                        $variantItem['local_stock'] = isset($variant['local_stock']) ? (int)$variant['local_stock'] : 0;
+                        $variantItem['local_stock'] = max(0, (int)round((float)($variant['local_stock'] ?? 0)));
                         $variantSku = strtoupper(trim((string)($variantItem['sku'] ?? '')));
                         if ($variantSku !== '') {
                             $localStockBySku[$variantSku] = $variantItem['local_stock'];
@@ -918,6 +918,10 @@ class ProductsController
                     continue;
                 }
                 $failed[] = (string)$reqCode;
+            }
+            // Same stock sync as product detail "Refresh from API → Yes"
+            if ($items !== []) {
+                $productModel->updateProductFromApi($items, ['preserve_local_stock' => false]);
             }
         }
         $failed = array_values(array_unique(array_map('strval', $failed)));
@@ -1848,6 +1852,30 @@ class ProductsController
             ];
         }
 
+        // Item code only (column A) — qty comes from API during import
+        if ($nf === 1) {
+            return [
+                'code' => $code,
+                'sku_raw' => '',
+                'color' => '',
+                'size' => '',
+                'qty' => 0,
+                'location' => '',
+            ];
+        }
+
+        // Code + optional sku/color without qty column
+        if ($nf >= 2 && $nf <= 3 && !$this->bulkImportCellLooksLikeQty((string)($row[1] ?? ''))) {
+            return [
+                'code' => $code,
+                'sku_raw' => trim((string)($row[1] ?? '')),
+                'color' => trim((string)($row[2] ?? '')),
+                'size' => '',
+                'qty' => 0,
+                'location' => '',
+            ];
+        }
+
         return null;
     }
 
@@ -2091,6 +2119,18 @@ class ProductsController
             ];
         }
 
+        // Item code only (column A) or partial columns without qty — qty comes from API during import
+        if (!$hasD && !$hasE) {
+            return [
+                'code' => $code,
+                'sku_raw' => trim($b),
+                'color' => trim($c),
+                'size' => '',
+                'qty' => 0,
+                'location' => '',
+            ];
+        }
+
         return null;
     }
 
@@ -2122,7 +2162,7 @@ class ProductsController
 
     private function findProductRowForOpeningStock(mysqli $conn, string $itemCode): ?array
     {
-        $sql = "SELECT id, sku, item_code, size, color FROM vp_products
+        $sql = "SELECT id, sku, item_code, size, color, local_stock FROM vp_products
                 WHERE item_code = ?
                 ORDER BY (CASE WHEN (size IS NULL OR size = '') AND (color IS NULL OR color = '') THEN 0 ELSE 1 END), id ASC
                 LIMIT 1";
@@ -2154,7 +2194,7 @@ class ProductsController
         $co = trim($importColor);
 
         if ($importSku !== '') {
-            $sql = 'SELECT id, sku, item_code, size, color FROM vp_products WHERE item_code = ? AND sku = ? LIMIT 1';
+            $sql = 'SELECT id, sku, item_code, size, color, local_stock FROM vp_products WHERE item_code = ? AND sku = ? LIMIT 1';
             $stmt = $conn->prepare($sql);
             if ($stmt) {
                 $stmt->bind_param('ss', $itemCode, $importSku);
@@ -2168,7 +2208,7 @@ class ProductsController
             }
         }
 
-        $sql2 = "SELECT id, sku, item_code, size, color FROM vp_products
+        $sql2 = "SELECT id, sku, item_code, size, color, local_stock FROM vp_products
                  WHERE item_code = ?
                  AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
                  AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
@@ -2356,6 +2396,12 @@ class ProductsController
             $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
         }
         $qty = max(0, (int)$openingQty);
+        if ($qty <= 0) {
+            $existingStock = (int)($product['local_stock'] ?? 0);
+            if ($existingStock > 0) {
+                $qty = $existingStock;
+            }
+        }
         $runningStock = $qty; // new opening line baseline
         $reason = 'Migration From Egreen';
         $refType = 'Egreen';
@@ -3031,9 +3077,13 @@ class ProductsController
         if (!empty($result['success'])) {
             $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
             $createdIdsByCode = is_array($result['created_ids_by_code'] ?? null) ? $result['created_ids_by_code'] : [];
-            $localStockByCode = is_array($result['local_stock_by_code'] ?? null) ? $result['local_stock_by_code'] : [];
-            $localStockBySku = is_array($result['local_stock_by_sku'] ?? null) ? $result['local_stock_by_sku'] : [];
-            $localStockByVariant = is_array($result['local_stock_by_variant'] ?? null) ? $result['local_stock_by_variant'] : [];
+            $failedCodeLookup = [];
+            foreach ($failedCodes as $fc) {
+                $fk = strtoupper(trim((string)$fc));
+                if ($fk !== '') {
+                    $failedCodeLookup[$fk] = true;
+                }
+            }
             foreach ($ids as $idx => $id) {
                 $code = $codes[$idx];
                 $rowPick = $picked[$idx] ?? [];
@@ -3045,30 +3095,12 @@ class ProductsController
                 if ($impSku === '') {
                     $impSku = $this->buildBulkImportAutoSku((string)$code, $isz, $ico);
                 }
-                // If uploaded qty is missing/0, use API local stock as import qty fallback.
                 if ($openQty <= 0) {
-                    $resolvedQty = null;
-                    $skuKey = strtoupper($impSku);
-                    $variantKey = strtoupper((string)$code) . '|' . strtolower($isz) . '|' . strtolower($ico);
-                    $codeKey = strtoupper((string)$code);
-                    if ($skuKey !== '' && array_key_exists($skuKey, $localStockBySku)) {
-                        $resolvedQty = (int)$localStockBySku[$skuKey];
-                    } elseif (array_key_exists($variantKey, $localStockByVariant)) {
-                        $resolvedQty = (int)$localStockByVariant[$variantKey];
-                    } elseif (array_key_exists($codeKey, $localStockByCode)) {
-                        $resolvedQty = (int)$localStockByCode[$codeKey];
-                    }
-                    if ($resolvedQty !== null) {
-                        $openQty = max(0, $resolvedQty);
-                        $qtyUp = $conn->prepare("UPDATE product_import_items SET opening_qty = ? WHERE id = ?");
-                        if ($qtyUp) {
-                            $qtyUp->bind_param('ii', $openQty, $id);
-                            $qtyUp->execute();
-                            $qtyUp->close();
-                        }
-                    }
+                    $stockRow = $this->findProductRowForBulkImportStock($conn, (string)$code, $impSku, $isz, $ico);
+                    $openQty = max(0, (int)($stockRow['local_stock'] ?? 0));
                 }
-                $isFailed = in_array($code, $failedCodes, true);
+                $codeKeyLookup = strtoupper(trim((string)$code));
+                $isFailed = $codeKeyLookup !== '' && isset($failedCodeLookup[$codeKeyLookup]);
                 if ($isFailed) {
                     $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
                     $err = 'Failed to import from API response.';
@@ -3076,7 +3108,7 @@ class ProductsController
                     $stmtF->execute();
                     $stmtF->close();
                 } else {
-                    $createdIds = $createdIdsByCode[$code] ?? [];
+                    $createdIds = $createdIdsByCode[$code] ?? $createdIdsByCode[$codeKeyLookup] ?? [];
                     if (!is_array($createdIds)) {
                         $createdIds = [];
                     }
@@ -3259,9 +3291,6 @@ class ProductsController
                 $failedCodeLookup[$fu] = true;
             }
         }
-        $localStockByCode = is_array($result['local_stock_by_code'] ?? null) ? $result['local_stock_by_code'] : [];
-        $localStockBySku = is_array($result['local_stock_by_sku'] ?? null) ? $result['local_stock_by_sku'] : [];
-        $localStockByVariant = is_array($result['local_stock_by_variant'] ?? null) ? $result['local_stock_by_variant'] : [];
         $batchUserId = (int)($_SESSION['user']['id'] ?? 0);
         $updatedRows = 0;
         $failedRows = 0;
@@ -3296,24 +3325,10 @@ class ProductsController
                     }
                     continue;
                 }
-                $resolvedQty = null;
-                $skuKey = strtoupper($impSku);
-                $variantKey = strtoupper($rowCode) . '|' . strtolower($isz) . '|' . strtolower($ico);
-                $codeKey = strtoupper($rowCode);
-                if ($skuKey !== '' && array_key_exists($skuKey, $localStockBySku)) {
-                    $resolvedQty = (int)$localStockBySku[$skuKey];
-                } elseif (array_key_exists($variantKey, $localStockByVariant)) {
-                    $resolvedQty = (int)$localStockByVariant[$variantKey];
-                } elseif (array_key_exists($codeKey, $localStockByCode)) {
-                    $resolvedQty = (int)$localStockByCode[$codeKey];
-                }
-                if ($resolvedQty === null) {
+                $stockRow = $this->findProductRowForBulkImportStock($conn, $rowCode, $impSku, $isz, $ico);
+                if (!$stockRow) {
                     $failedRows++;
-                    if ($rowCodeUpper !== '') {
-                        $failedCodeLookup[$rowCodeUpper] = true;
-                        $failedCodes[] = $rowCode;
-                    }
-                    $msg = 'ReUpdate skipped: API local stock missing for this item/SKU.';
+                    $msg = 'ReUpdate skipped: product not found for this item/SKU.';
                     $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
                     if ($stmtF) {
                         $stmtF->bind_param('si', $msg, $rowId);
@@ -3322,8 +3337,9 @@ class ProductsController
                     }
                     continue;
                 }
+                $targetQty = max(0, (int)($stockRow['local_stock'] ?? 0));
                 $stockApplied = false;
-                if ($resolvedQty !== null && $rowId > 0 && $jobWarehouseId > 0) {
+                if ($rowId > 0 && $jobWarehouseId > 0) {
                     $stockErr = $this->bulkImportApplyRefetchStock(
                         $conn,
                         $jobWarehouseId,
@@ -3331,7 +3347,7 @@ class ProductsController
                         $impSku,
                         $isz,
                         $ico,
-                        max(0, (int)$resolvedQty),
+                        $targetQty,
                         $stockLoc,
                         $batchUserId,
                         $rowId
