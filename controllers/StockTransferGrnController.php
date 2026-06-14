@@ -289,6 +289,12 @@ class StockTransferGrnController {
             return;
         }
 
+        $batchIndex = isset($data['batch_index']) ? max(0, (int)$data['batch_index']) : 0;
+        $batchTotal = isset($data['batch_total']) ? max(1, (int)$data['batch_total']) : 1;
+        $finalizeTransfer = array_key_exists('finalize_transfer', $data)
+            ? ((string)$data['finalize_transfer'] === '1' || $data['finalize_transfer'] === true || $data['finalize_transfer'] === 1)
+            : ($batchTotal <= 1);
+
         $result = $this->stockTransferModel->createTransferGrn([
             'transfer_id' => $transferId,
             'received_by' => $receivedBy,
@@ -298,6 +304,10 @@ class StockTransferGrnController {
             'items' => $items,
             'files' => $files,
             'user_id' => $_SESSION['user']['id'] ?? 0,
+            'batch_index' => $batchIndex,
+            'batch_total' => $batchTotal,
+            'finalize_transfer' => $finalizeTransfer,
+            'save_files' => ($batchIndex === 0),
         ]);
 
         echo json_encode($result);

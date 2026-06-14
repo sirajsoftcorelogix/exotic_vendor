@@ -305,6 +305,15 @@ $warehouses = $warehouses ?? [];
             </div>
 
             <p id="grnStatus" class="text-sm min-h-[1.25rem]" role="status"></p>
+            <div id="grnSaveProgressWrap" class="hidden mt-3" aria-live="polite">
+                <div class="flex items-center justify-between text-xs text-gray-600 mb-1.5">
+                    <span id="grnSaveProgressLabel">Saving…</span>
+                    <span id="grnSaveProgressPct" class="font-semibold tabular-nums">0%</span>
+                </div>
+                <div class="h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div id="grnSaveProgressBar" class="h-full bg-gradient-to-r from-amber-500 to-amber-600 transition-all duration-300 ease-out" style="width:0%"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -319,7 +328,7 @@ $warehouses = $warehouses ?? [];
             <?php if ($mode === 'edit'): ?>
                 Check line items and receipt details, then save changes.
             <?php else: ?>
-                Check line items, quantities, and receipt details. Saving creates a GRN for every line with a received quantity greater than zero. You can add more GRNs later until the transfer is fully received.
+                Check line items, quantities, and receipt details. Saving creates a GRN for every line with a received quantity greater than zero. Large transfers are saved in batches automatically. You can add more GRNs later until the transfer is fully received.
             <?php endif; ?>
         </p>
         <?php if ($mode === 'edit'): ?>
@@ -497,6 +506,79 @@ function grnSupportingFileWithinSizeLimit(file) {
     }
 })();
 
+var GRN_SAVE_CHUNK_SIZE = 50;
+
+function grnChunkArray(arr, size) {
+    var chunks = [];
+    for (var i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+    }
+    return chunks;
+}
+
+function grnUpdateSaveProgress(batchIndex, batchTotal, linesInBatch) {
+    var wrap = document.getElementById('grnSaveProgressWrap');
+    var label = document.getElementById('grnSaveProgressLabel');
+    var pctEl = document.getElementById('grnSaveProgressPct');
+    var bar = document.getElementById('grnSaveProgressBar');
+    if (!wrap || !label || !pctEl || !bar) {
+        return;
+    }
+    wrap.classList.remove('hidden');
+    var completed = batchIndex + 1;
+    var pct = batchTotal > 0 ? Math.min(100, Math.round((completed / batchTotal) * 100)) : 100;
+    label.textContent = 'Saving batch ' + completed + ' of ' + batchTotal + (linesInBatch ? ' (' + linesInBatch + ' lines)' : '') + '…';
+    pctEl.textContent = pct + '%';
+    bar.style.width = pct + '%';
+}
+
+function grnResetSaveProgress() {
+    var wrap = document.getElementById('grnSaveProgressWrap');
+    var bar = document.getElementById('grnSaveProgressBar');
+    if (wrap) {
+        wrap.classList.add('hidden');
+    }
+    if (bar) {
+        bar.style.width = '0%';
+    }
+}
+
+function grnParseJsonResponse(response) {
+    return response.text().then(function (text) {
+        var trimmed = (text || '').trim();
+        if (!trimmed) {
+            throw new Error('Empty server response (HTTP ' + response.status + ').');
+        }
+        try {
+            return JSON.parse(trimmed);
+        } catch (e) {
+            throw new Error('Invalid server response (HTTP ' + response.status + ').');
+        }
+    });
+}
+
+function grnBuildBatchFormData(baseFields, batchItems, batchIndex, batchTotal, fileInput) {
+    var formData = new FormData();
+    formData.append('transfer_id', baseFields.transferId);
+    formData.append('received_by', baseFields.receivedBy);
+    formData.append('warehouse_id', baseFields.warehouse);
+    formData.append('received_date', baseFields.receivedDate);
+    formData.append('grn_remarks', baseFields.remarks);
+    formData.append('remarks', baseFields.remarks);
+    formData.append('items', JSON.stringify(batchItems));
+    formData.append('batch_index', batchIndex);
+    formData.append('batch_total', batchTotal);
+    formData.append('finalize_transfer', batchIndex === batchTotal - 1 ? '1' : '0');
+
+    if (batchIndex === 0 && fileInput && fileInput.files.length > 0) {
+        for (var f = 0; f < fileInput.files.length; f++) {
+            formData.append('grn_file[]', fileInput.files[f]);
+        }
+    }
+
+    return formData;
+}
+
 function saveStockTransferGrn(event) {
     event.preventDefault();
 
@@ -544,6 +626,9 @@ function saveStockTransferGrn(event) {
 
     for (var i = 0; i < itemIds.length; i++) {
         var rec = parseInt(receivedQtys[i] || 0, 10) || 0;
+        if (rec <= 0) {
+            continue;
+        }
         var ok = acceptables[i] || 0;
         items.push({
             transfer_item_id: parseInt(itemIds[i], 10) || 0,
@@ -557,14 +642,10 @@ function saveStockTransferGrn(event) {
         });
     }
 
-    var formData = new FormData();
-    formData.append('transfer_id', parseInt(transferId, 10));
-    formData.append('received_by', parseInt(receivedBy, 10));
-    formData.append('warehouse_id', parseInt(warehouse, 10));
-    formData.append('received_date', receivedDate);
-    formData.append('grn_remarks', remarks);
-    formData.append('remarks', remarks);
-    formData.append('items', JSON.stringify(items));
+    if (items.length === 0) {
+        alert('Enter a received quantity for at least one line.');
+        return;
+    }
 
     var fileInput = document.querySelector('input[name="grn_file[]"]');
     if (fileInput && fileInput.files.length > 0) {
@@ -577,39 +658,97 @@ function saveStockTransferGrn(event) {
                 alert('Each file must be 2 MB or smaller. Remove or replace: ' + fileInput.files[f].name);
                 return;
             }
-            formData.append('grn_file[]', fileInput.files[f]);
         }
     }
 
+    var chunks = grnChunkArray(items, GRN_SAVE_CHUNK_SIZE);
+    var totalBatches = chunks.length;
+    var baseFields = {
+        transferId: parseInt(transferId, 10),
+        receivedBy: parseInt(receivedBy, 10),
+        warehouse: parseInt(warehouse, 10),
+        receivedDate: receivedDate,
+        remarks: remarks
+    };
+
     var statusEl = document.getElementById('grnStatus');
-    statusEl.textContent = 'Saving…';
+    var saveBtn = document.getElementById('saveChanges');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+    }
+    statusEl.textContent = totalBatches > 1
+        ? ('Saving ' + items.length + ' lines in ' + totalBatches + ' batches…')
+        : 'Saving…';
     statusEl.classList.remove('text-red-600', 'text-green-600');
     statusEl.classList.add('text-gray-600');
+    if (totalBatches > 1) {
+        grnUpdateSaveProgress(-1, totalBatches, 0);
+        document.getElementById('grnSaveProgressLabel').textContent = 'Preparing batch 1 of ' + totalBatches + '…';
+    } else {
+        grnResetSaveProgress();
+    }
 
-    fetch('?page=stock_transfer_grns&action=create_post', {
-        method: 'POST',
-        body: formData
-    })
-        .then(function (r) { return r.json(); })
+    var batchIndex = 0;
+
+    function runNextBatch() {
+        if (batchIndex >= totalBatches) {
+            return Promise.resolve({ success: true });
+        }
+
+        var currentBatch = batchIndex;
+        var batchItems = chunks[currentBatch];
+        grnUpdateSaveProgress(currentBatch, totalBatches, batchItems.length);
+
+        var formData = grnBuildBatchFormData(baseFields, batchItems, currentBatch, totalBatches, fileInput);
+
+        return fetch('?page=stock_transfer_grns&action=create_post', {
+            method: 'POST',
+            body: formData
+        })
+            .then(function (r) { return grnParseJsonResponse(r); })
+            .then(function (res) {
+                if (!res || !res.success) {
+                    var failMsg = (res && res.message) ? res.message : 'Could not save GRN.';
+                    if (totalBatches > 1) {
+                        failMsg = 'Batch ' + (currentBatch + 1) + ' of ' + totalBatches + ' failed: ' + failMsg;
+                    }
+                    throw new Error(failMsg);
+                }
+                batchIndex++;
+                if (batchIndex < totalBatches) {
+                    return runNextBatch();
+                }
+                return res;
+            });
+    }
+
+    runNextBatch()
         .then(function (res) {
-            if (res.success) {
-                statusEl.classList.remove('text-red-600', 'text-gray-600');
-                statusEl.classList.add('text-green-600');
-                statusEl.textContent = res.message || 'Saved successfully. Redirecting…';
-                setTimeout(function () {
-                    window.location.href = '?page=stock_transfer_grns&action=list&transfer_id=' + encodeURIComponent(transferId);
-                }, 900);
-            } else {
-                statusEl.classList.remove('text-green-600', 'text-gray-600');
-                statusEl.classList.add('text-red-600');
-                statusEl.textContent = res.message || 'Could not save GRN.';
+            statusEl.classList.remove('text-red-600', 'text-gray-600');
+            statusEl.classList.add('text-green-600');
+            statusEl.textContent = (res && res.message) ? res.message : 'Saved successfully. Redirecting…';
+            if (totalBatches > 1) {
+                grnUpdateSaveProgress(totalBatches - 1, totalBatches, 0);
+                document.getElementById('grnSaveProgressLabel').textContent = 'All batches saved.';
+                document.getElementById('grnSaveProgressPct').textContent = '100%';
+                document.getElementById('grnSaveProgressBar').style.width = '100%';
             }
+            setTimeout(function () {
+                window.location.href = '?page=stock_transfer_grns&action=list&transfer_id=' + encodeURIComponent(transferId);
+            }, 900);
         })
         .catch(function (err) {
             statusEl.classList.remove('text-green-600', 'text-gray-600');
             statusEl.classList.add('text-red-600');
-            statusEl.textContent = 'Request failed. Please try again.';
+            var msg = err && err.message ? err.message : 'Request failed. Please try again.';
+            if (totalBatches > 1 && batchIndex > 0) {
+                msg += ' Earlier batches may already be saved — refresh this page and save only the remaining lines before retrying.';
+            }
+            statusEl.textContent = msg;
             console.error(err);
+            if (saveBtn) {
+                saveBtn.disabled = false;
+            }
         });
 }
 </script>

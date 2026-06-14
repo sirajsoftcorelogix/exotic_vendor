@@ -1060,6 +1060,9 @@ switch ($page) {
             case 'addMaterialAjax':
                 $controller->addMaterialAjax();
                 break;
+            case 'validateRedirectItemCode':
+                $controller->validateRedirectItemCodeAjax();
+                break;
             // --- ADD THIS NEW CASE ---
             case 'download_photos':
                 $controller->download_photos();
