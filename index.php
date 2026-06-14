@@ -1187,6 +1187,9 @@ switch ($page) {
             case 'create':
                 $controller->create();
                 break;
+            case 'create_items':
+                $controller->createItems();
+                break;
             case 'create_post':
                 $controller->createPost();
                 break;

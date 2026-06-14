@@ -20,6 +20,7 @@ if ($mode === 'edit') {
     $receivedDateValue = ($dispatchDateMin !== '' && $today < $dispatchDateMin) ? $dispatchDateMin : $today;
 }
 $transferItems = $transfer['items'] ?? [];
+$totalLineCount = (int)($total_line_count ?? count($transferItems));
 $defaultReceivedBy = (int)($default_received_by ?? ($_SESSION['user']['id'] ?? ($_SESSION['user_id'] ?? 0)));
 $defaultWarehouseId = (int)($default_warehouse_id ?? 0);
 $users = $users ?? [];
@@ -104,7 +105,32 @@ $warehouses = $warehouses ?? [];
         </div>
     </div>
 
-    <?php if ($mode === 'create' || $mode === 'edit'): ?>
+    <?php if ($mode === 'create'): ?>
+    <div class="space-y-6 mb-8">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+            <h2 class="text-lg font-semibold text-gray-900">Line items to receive</h2>
+            <span id="grnLineCountBadge" class="text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-3 py-1"><?php echo number_format($totalLineCount); ?> line<?php echo $totalLineCount === 1 ? '' : 's'; ?></span>
+        </div>
+
+        <div id="grnLinesLoading" class="rounded-2xl border border-gray-200 bg-white shadow-sm p-8 flex flex-col items-center justify-center gap-3 text-sm text-gray-600" role="status" aria-live="polite">
+            <i class="fas fa-spinner fa-spin text-amber-700 text-xl" aria-hidden="true"></i>
+            <span>Loading first batch of line items…</span>
+        </div>
+
+        <div id="grnLinesContainer" class="space-y-6 hidden"></div>
+
+        <div id="grnLoadMoreWrap" class="hidden">
+            <button type="button" id="grnLoadMoreBtn"
+                class="w-full rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50/80 via-white to-amber-50/50 px-5 py-4 text-center shadow-sm hover:border-amber-300 hover:bg-amber-50/90 transition disabled:opacity-60 disabled:cursor-not-allowed">
+                <span id="grnLoadMoreLabel" class="block text-sm font-semibold text-amber-950">Load more</span>
+                <span id="grnLoadMoreSub" class="block text-xs text-gray-500 mt-1">Showing 0 of <?php echo number_format($totalLineCount); ?> lines loaded</span>
+            </button>
+        </div>
+
+        <p id="grnLinesAllLoaded" class="hidden text-center text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3" role="status"></p>
+    </div>
+
+    <?php elseif ($mode === 'edit'): ?>
     <div class="space-y-6 mb-8">
         <div class="flex items-center justify-between gap-4 flex-wrap">
             <h2 class="text-lg font-semibold text-gray-900">Line items to receive</h2>
@@ -328,7 +354,7 @@ $warehouses = $warehouses ?? [];
             <?php if ($mode === 'edit'): ?>
                 Check line items and receipt details, then save changes.
             <?php else: ?>
-                Check line items, quantities, and receipt details. Saving creates a GRN for every line with a received quantity greater than zero. Large transfers are saved in batches automatically. You can add more GRNs later until the transfer is fully received.
+                Check receipt details below. Use <strong>Save GRN</strong> for loaded lines only, or <strong>Receive all remaining</strong> to GRN every outstanding line from the server without loading them in the browser.
             <?php endif; ?>
         </p>
         <?php if ($mode === 'edit'): ?>
@@ -337,13 +363,16 @@ $warehouses = $warehouses ?? [];
                 Save changes
             </button>
         <?php else: ?>
-            <div class="order-1 sm:order-2 flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto shrink-0">
-                <div id="grnPageLoadIndicator" class="flex items-center justify-center sm:justify-end gap-2 text-xs text-gray-600" role="status" aria-live="polite">
-                    <i class="fas fa-spinner fa-spin text-amber-700" aria-hidden="true"></i>
-                    <span>Loading <?php echo number_format(count($transferItems)); ?> line items — Save will be enabled when ready</span>
-                </div>
-                <button type="button" onclick="saveStockTransferGrn(event)" id="saveChanges" disabled
-                    class="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:pointer-events-none">
+            <input type="hidden" id="grnTotalLineCount" value="<?php echo (int) $totalLineCount; ?>">
+            <input type="hidden" id="grnTransferId" value="<?php echo (int) $transferId; ?>">
+            <div class="order-1 sm:order-2 flex flex-col sm:flex-row gap-3 w-full sm:w-auto shrink-0">
+                <button type="button" onclick="saveReceiveAllRemaining(event)" id="receiveAllRemaining"
+                    class="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 rounded-xl border-2 border-amber-600/80 bg-white text-amber-900 text-sm font-semibold hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
+                    <i class="fas fa-truck-loading text-xs opacity-90" aria-hidden="true"></i>
+                    Receive all remaining
+                </button>
+                <button type="button" onclick="saveStockTransferGrn(event)" id="saveChanges"
+                    class="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
                     <i class="fas fa-check text-xs opacity-95" aria-hidden="true"></i>
                     Save GRN
                 </button>
@@ -361,6 +390,72 @@ $warehouses = $warehouses ?? [];
 <div id="imagePopup" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 p-4 sm:p-8" role="dialog" aria-modal="true" aria-label="Product image">
     <button type="button" onclick="closeImagePopup()" class="absolute top-3 right-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl leading-none text-white hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Close">&times;</button>
     <img id="popupImage" alt="" class="max-h-[90vh] max-w-full object-contain rounded-lg shadow-2xl">
+</div>
+
+<div id="grnReceiveAllConfirmModal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-black/50 p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="grnReceiveAllConfirmTitle">
+    <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl ring-1 ring-gray-900/5 overflow-hidden">
+        <div class="px-5 py-4 sm:px-6 border-b border-gray-100 bg-emerald-50/80">
+            <h3 id="grnReceiveAllConfirmTitle" class="text-base font-semibold text-gray-900">Receive all remaining lines</h3>
+            <p class="text-xs text-gray-600 mt-1">Full transfer receipt without loading every line in the browser.</p>
+        </div>
+        <div class="px-5 py-5 sm:px-6 space-y-4">
+            <dl class="grid grid-cols-1 gap-3 text-sm">
+                <div class="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-slate-50/80 px-4 py-3">
+                    <dt class="text-gray-600">Total transfer lines</dt>
+                    <dd id="grnReceiveAllTotalCount" class="font-bold text-gray-900 tabular-nums">0</dd>
+                </div>
+                <div class="flex items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3">
+                    <dt class="text-emerald-900/90 font-medium">Server save batches</dt>
+                    <dd id="grnReceiveAllBatchCount" class="font-bold text-emerald-950 tabular-nums">0</dd>
+                </div>
+            </dl>
+            <p id="grnReceiveAllNote" class="text-xs text-gray-500 leading-relaxed">
+                Each line gets its full remaining quantity with quality marked OK. Supporting files and receipt details from the form above are included. Processing runs in batches of 50 on the server.
+            </p>
+            <p id="grnReceiveAllWarning" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed"></p>
+        </div>
+        <div class="px-5 py-4 sm:px-6 border-t border-gray-100 bg-gray-50/80 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <button type="button" id="grnReceiveAllConfirmCancel" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">
+                Cancel
+            </button>
+            <button type="button" id="grnReceiveAllConfirmProceed" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-b from-emerald-600 to-emerald-700 text-white text-sm font-semibold shadow-md hover:from-emerald-700 hover:to-emerald-800 transition">
+                <i class="fas fa-truck-loading text-xs opacity-95" aria-hidden="true"></i>
+                Receive all remaining
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="grnSaveConfirmModal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-black/50 p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="grnSaveConfirmTitle">
+    <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl ring-1 ring-gray-900/5 overflow-hidden">
+        <div class="px-5 py-4 sm:px-6 border-b border-gray-100 bg-amber-50/80">
+            <h3 id="grnSaveConfirmTitle" class="text-base font-semibold text-gray-900">Confirm GRN save</h3>
+            <p class="text-xs text-gray-600 mt-1">Review the counts below before saving.</p>
+        </div>
+        <div class="px-5 py-5 sm:px-6 space-y-4">
+            <dl class="grid grid-cols-1 gap-3 text-sm">
+                <div class="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-slate-50/80 px-4 py-3">
+                    <dt class="text-gray-600">Total GRN items</dt>
+                    <dd id="grnConfirmTotalCount" class="font-bold text-gray-900 tabular-nums">0</dd>
+                </div>
+                <div class="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+                    <dt class="text-amber-900/90 font-medium">Ready to save</dt>
+                    <dd id="grnConfirmReadyCount" class="font-bold text-amber-950 tabular-nums">0</dd>
+                </div>
+            </dl>
+            <p id="grnConfirmNote" class="text-xs text-gray-500 leading-relaxed"></p>
+            <p id="grnConfirmWarning" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed"></p>
+        </div>
+        <div class="px-5 py-4 sm:px-6 border-t border-gray-100 bg-gray-50/80 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <button type="button" id="grnSaveConfirmCancel" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">
+                Cancel
+            </button>
+            <button type="button" id="grnSaveConfirmProceed" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-md hover:from-[#c57526] hover:to-[#b86a22] transition">
+                <i class="fas fa-check text-xs opacity-95" aria-hidden="true"></i>
+                Save GRN
+            </button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -410,12 +505,16 @@ function grnSupportingFileWithinSizeLimit(file) {
         }
     });
 
-    document.querySelectorAll('.st-grn-thumb').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var src = btn.getAttribute('data-img') || '';
-            var title = btn.getAttribute('data-title') || '';
-            if (src) openImagePopup(src, title);
-        });
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.st-grn-thumb');
+        if (!btn || btn.disabled) {
+            return;
+        }
+        var src = btn.getAttribute('data-img') || '';
+        var title = btn.getAttribute('data-title') || '';
+        if (src) {
+            openImagePopup(src, title);
+        }
     });
 
     var grnFileInput = document.getElementById('grnSupportingFiles');
@@ -514,6 +613,235 @@ function grnSupportingFileWithinSizeLimit(file) {
 })();
 
 var GRN_SAVE_CHUNK_SIZE = 50;
+var GRN_LOAD_PAGE_SIZE = 50;
+
+var grnLinesState = {
+    transferId: 0,
+    offset: 0,
+    totalCount: 0,
+    loadedCount: 0,
+    pendingCount: 0,
+    hasMore: false,
+    loading: false
+};
+
+function grnEscapeHtml(value) {
+    var div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+}
+
+function grnBuildLineCardHtml(item, lineIdx) {
+    var imageUrl = item.image || '';
+    var title = item.title || item.sku || item.item_code || '—';
+    var remaining = parseInt(item.remaining, 10) || 0;
+    var defaultQty = remaining > 0 ? String(remaining) : '0';
+    var sku = item.sku || '—';
+    var itemCode = item.item_code || '';
+    var material = item.material || '';
+    var weight = item.product_weight || '';
+    var weightUnit = item.product_weight_unit || '';
+    var quantity = parseInt(item.transfer_qty, 10) || 0;
+    var already = parseInt(item.already_received, 10) || 0;
+    var metaLine = '';
+    if (material || weight) {
+        metaLine = '<p class="mt-1 text-[11px] text-gray-400">' +
+            grnEscapeHtml(material) +
+            (material && weight ? ' · ' : '') +
+            (weight ? grnEscapeHtml(String(weight) + (weightUnit ? ' ' + weightUnit : '')) : '') +
+            '</p>';
+    }
+    var itemCodeHtml = itemCode
+        ? '<span class="text-gray-300 mx-1.5">·</span><span class="text-gray-400 font-medium">Item code</span> ' + grnEscapeHtml(itemCode)
+        : '';
+    var thumbInner = imageUrl
+        ? '<img src="' + grnEscapeHtml(imageUrl) + '" alt="" loading="lazy" class="max-w-full max-h-full object-contain">'
+        : '<span class="text-gray-400 text-xs font-medium">No image</span>';
+    var thumbDisabled = imageUrl ? '' : ' disabled';
+
+    return '' +
+        '<div class="group rounded-2xl border border-gray-200/90 bg-white shadow-sm ring-1 ring-gray-900/[0.03] overflow-hidden hover:border-amber-200/60 transition-colors grn-line-card">' +
+            '<div class="p-4 sm:p-5">' +
+                '<div class="flex flex-col sm:flex-row gap-5">' +
+                    '<button type="button" class="st-grn-thumb w-full sm:w-28 h-36 shrink-0 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"' +
+                        ' data-img="' + grnEscapeHtml(imageUrl) + '" data-title="' + grnEscapeHtml(title) + '"' + thumbDisabled + '>' +
+                        thumbInner +
+                    '</button>' +
+                    '<div class="flex-1 min-w-0 space-y-3 sm:space-y-3.5">' +
+                        '<div class="min-w-0">' +
+                            '<h3 class="text-[15px] sm:text-base font-semibold text-slate-900 leading-snug pr-1">' + grnEscapeHtml(title) + '</h3>' +
+                            '<p class="mt-1.5 text-xs text-gray-500">' +
+                                '<span class="text-gray-400 font-medium">SKU</span> ' + grnEscapeHtml(sku) + itemCodeHtml +
+                            '</p>' + metaLine +
+                        '</div>' +
+                        '<div class="flex flex-wrap items-stretch gap-2 sm:gap-2.5">' +
+                            '<div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 p-2 w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex flex-col box-border">' +
+                                '<p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight shrink-0">Shipped</p>' +
+                                '<div class="flex-1 flex items-end min-h-0 pt-1"><p class="text-lg sm:text-xl font-bold text-gray-900 tabular-nums leading-none w-full">' + grnFormatCount(quantity) + '</p></div>' +
+                            '</div>' +
+                            '<div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 p-2 w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex flex-col box-border">' +
+                                '<p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight shrink-0">Prior GRN</p>' +
+                                '<div class="flex-1 flex items-end min-h-0 pt-1"><p class="text-lg sm:text-xl font-bold text-gray-900 tabular-nums leading-none w-full">' + grnFormatCount(already) + '</p></div>' +
+                            '</div>' +
+                            '<div class="st-grn-metric rounded-md bg-amber-50 border border-amber-200/90 p-2 w-28 h-28 sm:w-32 sm:h-32 shrink-0 ring-1 ring-amber-900/5 flex flex-col box-border">' +
+                                '<p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-amber-900/80 leading-tight shrink-0">To receive</p>' +
+                                '<div class="flex-1 flex items-end min-h-0 pt-1"><p class="text-lg sm:text-xl font-bold text-amber-950 tabular-nums leading-none w-full">' + grnFormatCount(remaining) + '</p></div>' +
+                            '</div>' +
+                            '<div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 p-2 w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex flex-col box-border">' +
+                                '<label for="st-grn-qty-' + lineIdx + '" class="block text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight cursor-pointer shrink-0">Qty received<span class="text-red-500 ml-px">*</span></label>' +
+                                '<div class="flex-1 flex items-end min-h-0 pt-1">' +
+                                    '<input id="st-grn-qty-' + lineIdx + '" name="qty_received[]" type="number" min="0" max="' + remaining + '" placeholder="0" value="' + grnEscapeHtml(defaultQty) + '" class="st-grn-qty w-full px-1.5 py-1.5 border border-gray-200/90 rounded bg-white text-center text-base sm:text-lg font-bold text-gray-900 tabular-nums shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 p-2 w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex flex-col box-border">' +
+                                '<p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight shrink-0">Quality OK</p>' +
+                                '<div class="flex-1 flex items-end min-h-0 pt-1 w-full">' +
+                                    '<label class="flex min-h-[2.125rem] sm:min-h-10 w-full items-center justify-center gap-2 cursor-pointer select-none rounded bg-white/90 border border-gray-200/80 px-1.5 py-1 shadow-sm">' +
+                                        '<input type="checkbox" name="qty_acceptable[]" value="1" checked class="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 shrink-0">' +
+                                        '<span class="text-xs font-bold text-gray-800">OK</span>' +
+                                    '</label>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div>' +
+                            '<label class="block text-xs font-semibold text-gray-500 mb-1">Line remarks <span class="text-gray-400 font-normal">(optional)</span></label>' +
+                            '<textarea name="item_remarks[]" rows="1" placeholder="Damage notes, batch, etc." class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-800 placeholder:text-gray-400 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 resize-y min-h-[2.75rem] max-h-32"></textarea>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '<input type="hidden" name="grn_row_id[]" value="' + (parseInt(item.id, 10) || 0) + '">' +
+            '<input type="hidden" name="item_id[]" value="' + (parseInt(item.id, 10) || 0) + '">' +
+            '<input type="hidden" name="sku[]" value="' + grnEscapeHtml(item.sku || '') + '">' +
+            '<input type="hidden" name="item_code[]" value="' + grnEscapeHtml(item.item_code || '') + '">' +
+            '<input type="hidden" name="transfer_qty[]" value="' + quantity + '">' +
+        '</div>';
+}
+
+function grnUpdateLoadMoreBar() {
+    var wrap = document.getElementById('grnLoadMoreWrap');
+    var btn = document.getElementById('grnLoadMoreBtn');
+    var label = document.getElementById('grnLoadMoreLabel');
+    var sub = document.getElementById('grnLoadMoreSub');
+    var allLoaded = document.getElementById('grnLinesAllLoaded');
+    if (!wrap || !btn || !label || !sub) {
+        return;
+    }
+
+    sub.textContent = 'Showing ' + grnFormatCount(grnLinesState.loadedCount) + ' of ' + grnFormatCount(grnLinesState.totalCount) + ' lines loaded';
+
+    if (grnLinesState.hasMore) {
+        wrap.classList.remove('hidden');
+        btn.disabled = grnLinesState.loading;
+        label.textContent = grnLinesState.loading
+            ? 'Loading next ' + GRN_LOAD_PAGE_SIZE + '…'
+            : ('Load more — ' + grnFormatCount(grnLinesState.pendingCount) + ' items remaining');
+        if (allLoaded) {
+            allLoaded.classList.add('hidden');
+        }
+    } else {
+        wrap.classList.add('hidden');
+        if (allLoaded && grnLinesState.loadedCount > 0) {
+            allLoaded.textContent = 'All ' + grnFormatCount(grnLinesState.loadedCount) + ' lines loaded.';
+            allLoaded.classList.remove('hidden');
+        }
+    }
+}
+
+function grnAppendLineItems(items) {
+    var container = document.getElementById('grnLinesContainer');
+    if (!container || !items || !items.length) {
+        return;
+    }
+    var html = '';
+    items.forEach(function (item, idx) {
+        html += grnBuildLineCardHtml(item, grnLinesState.offset + idx);
+    });
+    container.insertAdjacentHTML('beforeend', html);
+    container.classList.remove('hidden');
+}
+
+function grnLoadMoreLines(isInitial) {
+    if (grnLinesState.loading) {
+        return Promise.resolve(false);
+    }
+    if (!isInitial && !grnLinesState.hasMore) {
+        return Promise.resolve(false);
+    }
+
+    grnLinesState.loading = true;
+    grnUpdateLoadMoreBar();
+
+    var loadingEl = document.getElementById('grnLinesLoading');
+    if (isInitial && loadingEl) {
+        loadingEl.classList.remove('hidden');
+    }
+
+    var url = '?page=stock_transfer_grns&action=create_items&transfer_id=' + encodeURIComponent(grnLinesState.transferId) +
+        '&offset=' + encodeURIComponent(grnLinesState.offset) +
+        '&limit=' + encodeURIComponent(GRN_LOAD_PAGE_SIZE);
+
+    return fetch(url, { credentials: 'include' })
+        .then(function (r) { return grnParseJsonResponse(r); })
+        .then(function (data) {
+            if (!data || !data.success) {
+                throw new Error((data && data.message) ? data.message : 'Could not load line items.');
+            }
+
+            grnAppendLineItems(data.items || []);
+            grnLinesState.offset = parseInt(data.loaded_count, 10) || (grnLinesState.offset + (data.items || []).length);
+            grnLinesState.totalCount = parseInt(data.total_count, 10) || grnLinesState.totalCount;
+            grnLinesState.loadedCount = grnLinesState.offset;
+            grnLinesState.pendingCount = parseInt(data.pending_count, 10) || Math.max(0, grnLinesState.totalCount - grnLinesState.loadedCount);
+            grnLinesState.hasMore = !!data.has_more;
+
+            var totalInput = document.getElementById('grnTotalLineCount');
+            if (totalInput && grnLinesState.totalCount > 0) {
+                totalInput.value = String(grnLinesState.totalCount);
+            }
+
+            if (loadingEl) {
+                loadingEl.classList.add('hidden');
+            }
+            grnLinesState.loading = false;
+            grnUpdateLoadMoreBar();
+            return true;
+        })
+        .catch(function (err) {
+            grnLinesState.loading = false;
+            grnUpdateLoadMoreBar();
+            if (loadingEl) {
+                loadingEl.innerHTML = '<span class="text-red-600">' + grnEscapeHtml(err.message || 'Failed to load line items.') + '</span>' +
+                    ' <button type="button" class="ml-2 text-amber-800 font-semibold underline" onclick="grnRetryInitialLoad()">Retry</button>';
+            }
+            console.error(err);
+            return false;
+        });
+}
+
+function grnRetryInitialLoad() {
+    var loadingEl = document.getElementById('grnLinesLoading');
+    if (loadingEl) {
+        loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin text-amber-700 text-xl" aria-hidden="true"></i><span>Loading first batch of line items…</span>';
+        loadingEl.classList.remove('hidden');
+    }
+    grnLinesState.offset = 0;
+    grnLinesState.loadedCount = 0;
+    grnLinesState.hasMore = true;
+    var container = document.getElementById('grnLinesContainer');
+    if (container) {
+        container.innerHTML = '';
+    }
+    grnLoadMoreLines(true);
+}
+
+function grnGetLoadedLineCount() {
+    var container = document.getElementById('grnLinesContainer');
+    if (!container) {
+        return document.querySelectorAll('input[name="item_id[]"]').length;
+    }
+    return container.querySelectorAll('input[name="item_id[]"]').length;
+}
 
 function grnChunkArray(arr, size) {
     var chunks = [];
@@ -564,7 +892,8 @@ function grnParseJsonResponse(response) {
     });
 }
 
-function grnBuildBatchFormData(baseFields, batchItems, batchIndex, batchTotal, fileInput) {
+function grnBuildBatchFormData(baseFields, batchItems, batchIndex, batchTotal, fileInput, options) {
+    options = options || {};
     var formData = new FormData();
     formData.append('transfer_id', baseFields.transferId);
     formData.append('received_by', baseFields.receivedBy);
@@ -572,10 +901,16 @@ function grnBuildBatchFormData(baseFields, batchItems, batchIndex, batchTotal, f
     formData.append('received_date', baseFields.receivedDate);
     formData.append('grn_remarks', baseFields.remarks);
     formData.append('remarks', baseFields.remarks);
-    formData.append('items', JSON.stringify(batchItems));
     formData.append('batch_index', batchIndex);
     formData.append('batch_total', batchTotal);
     formData.append('finalize_transfer', batchIndex === batchTotal - 1 ? '1' : '0');
+
+    if (options.receiveAllRemaining) {
+        formData.append('receive_all_remaining', '1');
+        formData.append('batch_size', GRN_SAVE_CHUNK_SIZE);
+    } else {
+        formData.append('items', JSON.stringify(batchItems));
+    }
 
     if (batchIndex === 0 && fileInput && fileInput.files.length > 0) {
         for (var f = 0; f < fileInput.files.length; f++) {
@@ -586,55 +921,28 @@ function grnBuildBatchFormData(baseFields, batchItems, batchIndex, batchTotal, f
     return formData;
 }
 
-function saveStockTransferGrn(event) {
-    event.preventDefault();
+function grnFormatCount(n) {
+    return Number(n || 0).toLocaleString('en-IN');
+}
 
-    var saveBtnEarly = document.getElementById('saveChanges');
-    if (saveBtnEarly && saveBtnEarly.disabled) {
-        return;
+function grnGetTotalLineCount() {
+    var el = document.getElementById('grnTotalLineCount');
+    if (el) {
+        return parseInt(el.value || '0', 10) || 0;
     }
+    return document.querySelectorAll('input[name="item_id[]"]').length;
+}
 
-    var receivedBy = document.querySelector('select[name="received_by"]').value;
-    var warehouse = document.querySelector('select[name="warehouse_id"]').value;
-    var qtyInputs = Array.from(document.querySelectorAll('input[name="qty_received[]"]'));
-
-    if (!warehouse) {
-        alert('Please select a receiving warehouse.');
-        return;
-    }
-
-    if (!receivedBy) {
-        alert('Please select who received the shipment.');
-        return;
-    }
-
-    if (qtyInputs.every(function (i) { return parseInt(i.value || 0, 10) <= 0; })) {
-        alert('Enter a received quantity for at least one line.');
-        return;
-    }
-
-    var transferId = document.querySelector('input[name="transfer_id"]').value;
-    var receivedDate = document.querySelector('input[name="received_date"]').value;
-    var dispatchMinEl = document.getElementById('transferDispatchDateMin');
-    var dispatchMin = dispatchMinEl ? String(dispatchMinEl.value || '').trim() : '';
-    if (!receivedDate) {
-        alert('Please enter the received date.');
-        return;
-    }
-    if (dispatchMin && receivedDate < dispatchMin) {
-        alert('Received date cannot be before the transfer dispatch date.');
-        return;
-    }
-    var remarks = document.getElementById('grnRemarks') ? document.getElementById('grnRemarks').value : '';
-
+function grnCollectSaveItems() {
+    var root = document.getElementById('grnLinesContainer') || document;
     var items = [];
-    var itemIds = Array.from(document.querySelectorAll('input[name="item_id[]"]')).map(function (i) { return i.value; });
-    var skus = Array.from(document.querySelectorAll('input[name="sku[]"]')).map(function (i) { return i.value; });
-    var itemCodes = Array.from(document.querySelectorAll('input[name="item_code[]"]')).map(function (i) { return i.value; });
-    var transferQtys = Array.from(document.querySelectorAll('input[name="transfer_qty[]"]')).map(function (i) { return i.value; });
-    var receivedQtys = Array.from(document.querySelectorAll('input[name="qty_received[]"]')).map(function (i) { return i.value; });
-    var acceptables = Array.from(document.querySelectorAll('input[name="qty_acceptable[]"]')).map(function (i) { return i.checked ? 1 : 0; });
-    var itemRemarks = Array.from(document.querySelectorAll('textarea[name="item_remarks[]"]')).map(function (i) { return i.value; });
+    var itemIds = Array.from(root.querySelectorAll('input[name="item_id[]"]')).map(function (i) { return i.value; });
+    var skus = Array.from(root.querySelectorAll('input[name="sku[]"]')).map(function (i) { return i.value; });
+    var itemCodes = Array.from(root.querySelectorAll('input[name="item_code[]"]')).map(function (i) { return i.value; });
+    var transferQtys = Array.from(root.querySelectorAll('input[name="transfer_qty[]"]')).map(function (i) { return i.value; });
+    var receivedQtys = Array.from(root.querySelectorAll('input[name="qty_received[]"]')).map(function (i) { return i.value; });
+    var acceptables = Array.from(root.querySelectorAll('input[name="qty_acceptable[]"]')).map(function (i) { return i.checked ? 1 : 0; });
+    var itemRemarks = Array.from(root.querySelectorAll('textarea[name="item_remarks[]"]')).map(function (i) { return i.value; });
 
     for (var i = 0; i < itemIds.length; i++) {
         var rec = parseInt(receivedQtys[i] || 0, 10) || 0;
@@ -653,12 +961,147 @@ function saveStockTransferGrn(event) {
             remarks: itemRemarks[i] || ''
         });
     }
+    return items;
+}
 
-    if (items.length === 0) {
-        alert('Enter a received quantity for at least one line.');
+var grnSaveConfirmCallback = null;
+var grnReceiveAllConfirmCallback = null;
+
+function grnCloseReceiveAllConfirmModal() {
+    var modal = document.getElementById('grnReceiveAllConfirmModal');
+    if (!modal) {
+        return;
+    }
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.style.overflow = '';
+    grnReceiveAllConfirmCallback = null;
+    var proceedBtn = document.getElementById('grnReceiveAllConfirmProceed');
+    if (proceedBtn) {
+        proceedBtn.disabled = false;
+    }
+}
+
+function grnShowReceiveAllConfirmModal(totalCount, batchCount, onConfirm) {
+    var modal = document.getElementById('grnReceiveAllConfirmModal');
+    var totalEl = document.getElementById('grnReceiveAllTotalCount');
+    var batchEl = document.getElementById('grnReceiveAllBatchCount');
+    var warnEl = document.getElementById('grnReceiveAllWarning');
+    if (!modal || !totalEl || !batchEl || !warnEl) {
+        if (typeof onConfirm === 'function') {
+            onConfirm();
+        }
         return;
     }
 
+    totalEl.textContent = grnFormatCount(totalCount);
+    batchEl.textContent = grnFormatCount(batchCount) + ' server batch' + (batchCount === 1 ? '' : 'es');
+
+    if (totalCount <= 0) {
+        warnEl.textContent = 'This transfer has no line items to receive.';
+        warnEl.classList.remove('hidden');
+    } else {
+        warnEl.textContent = '';
+        warnEl.classList.add('hidden');
+    }
+
+    grnReceiveAllConfirmCallback = onConfirm;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+    var proceedBtn = document.getElementById('grnReceiveAllConfirmProceed');
+    if (proceedBtn) {
+        proceedBtn.disabled = totalCount <= 0;
+        proceedBtn.focus();
+    }
+}
+
+function grnCloseSaveConfirmModal() {
+    var modal = document.getElementById('grnSaveConfirmModal');
+    if (!modal) {
+        return;
+    }
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.style.overflow = '';
+    grnSaveConfirmCallback = null;
+}
+
+function grnShowSaveConfirmModal(totalCount, readyCount, loadedCount, onConfirm) {
+    var modal = document.getElementById('grnSaveConfirmModal');
+    var totalEl = document.getElementById('grnConfirmTotalCount');
+    var readyEl = document.getElementById('grnConfirmReadyCount');
+    var noteEl = document.getElementById('grnConfirmNote');
+    var warnEl = document.getElementById('grnConfirmWarning');
+    if (!modal || !totalEl || !readyEl || !noteEl || !warnEl) {
+        if (typeof onConfirm === 'function') {
+            onConfirm();
+        }
+        return;
+    }
+
+    totalEl.textContent = grnFormatCount(totalCount);
+    readyEl.textContent = grnFormatCount(readyCount);
+    noteEl.textContent = 'Only loaded lines with a received quantity greater than zero will be included in this GRN. Large saves are processed in batches automatically.';
+
+    var warnings = [];
+    var notLoaded = Math.max(0, totalCount - loadedCount);
+    if (notLoaded > 0) {
+        warnings.push(notLoaded + ' line' + (notLoaded === 1 ? '' : 's') + ' are not loaded yet and will not be saved.');
+    }
+    var skipped = Math.max(0, loadedCount - readyCount);
+    if (skipped > 0) {
+        warnings.push(skipped + ' loaded line' + (skipped === 1 ? '' : 's') + ' have no received quantity and will not be saved.');
+    }
+
+    if (warnings.length > 0) {
+        warnEl.textContent = warnings.join(' ');
+        warnEl.classList.remove('hidden');
+    } else {
+        warnEl.textContent = '';
+        warnEl.classList.add('hidden');
+    }
+
+    grnSaveConfirmCallback = onConfirm;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+    var proceedBtn = document.getElementById('grnSaveConfirmProceed');
+    if (proceedBtn) {
+        proceedBtn.focus();
+    }
+}
+
+function grnExecuteSave(items, transferId, receivedBy, warehouse, receivedDate, remarks) {
+    grnRunBatchedSave({
+        transferId: transferId,
+        receivedBy: receivedBy,
+        warehouse: warehouse,
+        receivedDate: receivedDate,
+        remarks: remarks,
+        items: items,
+        receiveAllRemaining: false
+    });
+}
+
+function grnExecuteReceiveAllRemaining(transferId, receivedBy, warehouse, receivedDate, remarks) {
+    var totalLines = grnGetTotalLineCount();
+    var batchTotal = Math.max(1, Math.ceil(totalLines / GRN_SAVE_CHUNK_SIZE));
+
+    grnRunBatchedSave({
+        transferId: transferId,
+        receivedBy: receivedBy,
+        warehouse: warehouse,
+        receivedDate: receivedDate,
+        remarks: remarks,
+        items: [],
+        receiveAllRemaining: true,
+        batchTotal: batchTotal,
+        totalLines: totalLines
+    });
+}
+
+function grnRunBatchedSave(config) {
     var fileInput = document.querySelector('input[name="grn_file[]"]');
     if (fileInput && fileInput.files.length > 0) {
         for (var f = 0; f < fileInput.files.length; f++) {
@@ -673,24 +1116,35 @@ function saveStockTransferGrn(event) {
         }
     }
 
-    var chunks = grnChunkArray(items, GRN_SAVE_CHUNK_SIZE);
-    var totalBatches = chunks.length;
+    var receiveAll = !!config.receiveAllRemaining;
+    var items = config.items || [];
+    var chunks = receiveAll ? [] : grnChunkArray(items, GRN_SAVE_CHUNK_SIZE);
+    var totalBatches = receiveAll ? (config.batchTotal || 1) : chunks.length;
+    var lineCountLabel = receiveAll ? (config.totalLines || totalBatches * GRN_SAVE_CHUNK_SIZE) : items.length;
+
     var baseFields = {
-        transferId: parseInt(transferId, 10),
-        receivedBy: parseInt(receivedBy, 10),
-        warehouse: parseInt(warehouse, 10),
-        receivedDate: receivedDate,
-        remarks: remarks
+        transferId: parseInt(config.transferId, 10),
+        receivedBy: parseInt(config.receivedBy, 10),
+        warehouse: parseInt(config.warehouse, 10),
+        receivedDate: config.receivedDate,
+        remarks: config.remarks
     };
 
     var statusEl = document.getElementById('grnStatus');
     var saveBtn = document.getElementById('saveChanges');
+    var receiveAllBtn = document.getElementById('receiveAllRemaining');
     if (saveBtn) {
         saveBtn.disabled = true;
     }
+    if (receiveAllBtn) {
+        receiveAllBtn.disabled = true;
+    }
+
     statusEl.textContent = totalBatches > 1
-        ? ('Saving ' + items.length + ' lines in ' + totalBatches + ' batches…')
-        : 'Saving…';
+        ? (receiveAll
+            ? ('Receiving all remaining lines (' + grnFormatCount(lineCountLabel) + ' lines) in ' + totalBatches + ' server batches…')
+            : ('Saving ' + items.length + ' lines in ' + totalBatches + ' batches…'))
+        : (receiveAll ? 'Receiving all remaining lines…' : 'Saving…');
     statusEl.classList.remove('text-red-600', 'text-green-600');
     statusEl.classList.add('text-gray-600');
     if (totalBatches > 1) {
@@ -701,6 +1155,7 @@ function saveStockTransferGrn(event) {
     }
 
     var batchIndex = 0;
+    var saveOptions = { receiveAllRemaining: receiveAll };
 
     function runNextBatch() {
         if (batchIndex >= totalBatches) {
@@ -708,10 +1163,10 @@ function saveStockTransferGrn(event) {
         }
 
         var currentBatch = batchIndex;
-        var batchItems = chunks[currentBatch];
-        grnUpdateSaveProgress(currentBatch, totalBatches, batchItems.length);
+        var batchItems = receiveAll ? [] : chunks[currentBatch];
+        grnUpdateSaveProgress(currentBatch, totalBatches, receiveAll ? GRN_SAVE_CHUNK_SIZE : batchItems.length);
 
-        var formData = grnBuildBatchFormData(baseFields, batchItems, currentBatch, totalBatches, fileInput);
+        var formData = grnBuildBatchFormData(baseFields, batchItems, currentBatch, totalBatches, fileInput, saveOptions);
 
         return fetch('?page=stock_transfer_grns&action=create_post', {
             method: 'POST',
@@ -746,7 +1201,7 @@ function saveStockTransferGrn(event) {
                 document.getElementById('grnSaveProgressBar').style.width = '100%';
             }
             setTimeout(function () {
-                window.location.href = '?page=stock_transfer_grns&action=list&transfer_id=' + encodeURIComponent(transferId);
+                window.location.href = '?page=stock_transfer_grns&action=list&transfer_id=' + encodeURIComponent(config.transferId);
             }, 900);
         })
         .catch(function (err) {
@@ -754,32 +1209,192 @@ function saveStockTransferGrn(event) {
             statusEl.classList.add('text-red-600');
             var msg = err && err.message ? err.message : 'Request failed. Please try again.';
             if (totalBatches > 1 && batchIndex > 0) {
-                msg += ' Earlier batches may already be saved — refresh this page and save only the remaining lines before retrying.';
+                msg += receiveAll
+                    ? ' Earlier batches may already be saved — refresh and use Receive all remaining again for outstanding lines.'
+                    : ' Earlier batches may already be saved — refresh this page and save only the remaining lines before retrying.';
             }
             statusEl.textContent = msg;
             console.error(err);
             if (saveBtn) {
                 saveBtn.disabled = false;
             }
+            if (receiveAllBtn) {
+                receiveAllBtn.disabled = false;
+            }
         });
 }
 
-(function () {
-    var saveBtn = document.getElementById('saveChanges');
-    var indicator = document.getElementById('grnPageLoadIndicator');
-    if (!saveBtn || !indicator) {
+function saveStockTransferGrn(event) {
+    event.preventDefault();
+
+    var receivedBy = document.querySelector('select[name="received_by"]').value;
+    var warehouse = document.querySelector('select[name="warehouse_id"]').value;
+
+    if (!warehouse) {
+        alert('Please select a receiving warehouse.');
         return;
     }
 
-    function enableGrnSaveButton() {
-        indicator.classList.add('hidden');
-        saveBtn.disabled = false;
+    if (!receivedBy) {
+        alert('Please select who received the shipment.');
+        return;
     }
 
-    if (document.readyState === 'complete') {
-        enableGrnSaveButton();
-    } else {
-        window.addEventListener('load', enableGrnSaveButton, { once: true });
+    var transferId = document.querySelector('input[name="transfer_id"]').value;
+    var receivedDate = document.querySelector('input[name="received_date"]').value;
+    var dispatchMinEl = document.getElementById('transferDispatchDateMin');
+    var dispatchMin = dispatchMinEl ? String(dispatchMinEl.value || '').trim() : '';
+    if (!receivedDate) {
+        alert('Please enter the received date.');
+        return;
+    }
+    if (dispatchMin && receivedDate < dispatchMin) {
+        alert('Received date cannot be before the transfer dispatch date.');
+        return;
+    }
+
+    var remarks = document.getElementById('grnRemarks') ? document.getElementById('grnRemarks').value : '';
+    var items = grnCollectSaveItems();
+
+    if (items.length === 0) {
+        alert('Enter a received quantity for at least one line.');
+        return;
+    }
+
+    var totalCount = grnGetTotalLineCount();
+    var readyCount = items.length;
+    var loadedCount = grnGetLoadedLineCount();
+
+    grnShowSaveConfirmModal(totalCount, readyCount, loadedCount, function () {
+        grnCloseSaveConfirmModal();
+        grnExecuteSave(items, transferId, receivedBy, warehouse, receivedDate, remarks);
+    });
+}
+
+function saveReceiveAllRemaining(event) {
+    event.preventDefault();
+
+    var receivedBy = document.querySelector('select[name="received_by"]').value;
+    var warehouse = document.querySelector('select[name="warehouse_id"]').value;
+
+    if (!warehouse) {
+        alert('Please select a receiving warehouse.');
+        return;
+    }
+
+    if (!receivedBy) {
+        alert('Please select who received the shipment.');
+        return;
+    }
+
+    var transferId = document.querySelector('input[name="transfer_id"]').value;
+    var receivedDate = document.querySelector('input[name="received_date"]').value;
+    var dispatchMinEl = document.getElementById('transferDispatchDateMin');
+    var dispatchMin = dispatchMinEl ? String(dispatchMinEl.value || '').trim() : '';
+    if (!receivedDate) {
+        alert('Please enter the received date.');
+        return;
+    }
+    if (dispatchMin && receivedDate < dispatchMin) {
+        alert('Received date cannot be before the transfer dispatch date.');
+        return;
+    }
+
+    var remarks = document.getElementById('grnRemarks') ? document.getElementById('grnRemarks').value : '';
+    var totalCount = grnGetTotalLineCount();
+    var batchCount = Math.max(1, Math.ceil(totalCount / GRN_SAVE_CHUNK_SIZE));
+
+    grnShowReceiveAllConfirmModal(totalCount, batchCount, function () {
+        grnCloseReceiveAllConfirmModal();
+        grnExecuteReceiveAllRemaining(transferId, receivedBy, warehouse, receivedDate, remarks);
+    });
+}
+
+(function () {
+    var modal = document.getElementById('grnSaveConfirmModal');
+    var cancelBtn = document.getElementById('grnSaveConfirmCancel');
+    var proceedBtn = document.getElementById('grnSaveConfirmProceed');
+    if (!modal) {
+        return;
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', grnCloseSaveConfirmModal);
+    }
+    if (proceedBtn) {
+        proceedBtn.addEventListener('click', function () {
+            if (typeof grnSaveConfirmCallback === 'function') {
+                grnSaveConfirmCallback();
+            }
+        });
+    }
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+            grnCloseSaveConfirmModal();
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+            grnCloseSaveConfirmModal();
+        }
+    });
+})();
+
+(function () {
+    var modal = document.getElementById('grnReceiveAllConfirmModal');
+    var cancelBtn = document.getElementById('grnReceiveAllConfirmCancel');
+    var proceedBtn = document.getElementById('grnReceiveAllConfirmProceed');
+    if (!modal) {
+        return;
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', grnCloseReceiveAllConfirmModal);
+    }
+    if (proceedBtn) {
+        proceedBtn.addEventListener('click', function () {
+            if (typeof grnReceiveAllConfirmCallback === 'function') {
+                grnReceiveAllConfirmCallback();
+            }
+        });
+    }
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+            grnCloseReceiveAllConfirmModal();
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+            grnCloseReceiveAllConfirmModal();
+        }
+    });
+})();
+
+(function initGrnLazyLines() {
+    var container = document.getElementById('grnLinesContainer');
+    if (!container) {
+        return;
+    }
+
+    var transferInput = document.getElementById('grnTransferId');
+    grnLinesState.transferId = transferInput ? (parseInt(transferInput.value, 10) || 0) : 0;
+    grnLinesState.totalCount = grnGetTotalLineCount();
+    grnLinesState.offset = 0;
+    grnLinesState.loadedCount = 0;
+    grnLinesState.pendingCount = Math.max(0, grnLinesState.totalCount);
+    grnLinesState.hasMore = grnLinesState.totalCount > 0;
+
+    var loadBtn = document.getElementById('grnLoadMoreBtn');
+    if (loadBtn) {
+        loadBtn.addEventListener('click', function () {
+            grnLoadMoreLines(false);
+        });
+    }
+
+    if (grnLinesState.transferId > 0) {
+        grnLoadMoreLines(true);
+    } else if (document.getElementById('grnLinesLoading')) {
+        document.getElementById('grnLinesLoading').classList.add('hidden');
     }
 })();
 </script>
