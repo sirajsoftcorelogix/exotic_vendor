@@ -2658,6 +2658,12 @@ class StockTransfer
         $remarks = isset($data['remarks']) ? trim($data['remarks']) : '';
         $items = isset($data['items']) && is_array($data['items']) ? $data['items'] : [];
         $userId = isset($data['user_id']) ? (int)$data['user_id'] : $receivedBy;
+        $batchIndex = isset($data['batch_index']) ? max(0, (int)$data['batch_index']) : 0;
+        $batchTotal = isset($data['batch_total']) ? max(1, (int)$data['batch_total']) : 1;
+        $finalizeTransfer = array_key_exists('finalize_transfer', $data)
+            ? !empty($data['finalize_transfer'])
+            : ($batchTotal <= 1);
+        $saveFiles = !array_key_exists('save_files', $data) || !empty($data['save_files']);
 
         if ($transferId <= 0) {
             return ['success' => false, 'message' => 'Invalid transfer id'];
@@ -2788,6 +2794,7 @@ class StockTransfer
 
             $firstGrnId = null;
             $requestedInThisSaveBySku = [];
+            $itemsSaved = 0;
             foreach ($items as $item) {
                 $transferItemId = isset($item['transfer_item_id']) ? (int)$item['transfer_item_id'] : 0;
                 $sku = trim($item['sku'] ?? '');
@@ -2906,28 +2913,43 @@ class StockTransfer
                     'Received from stock transfer: ' . $transferOrderNo,
                     $currentGrnId
                 );
+                $itemsSaved++;
             }
 
             $itemStmt->close();
 
-            // Save uploaded GRN files (if any) against first inserted row
-            if (isset($data['files']) && $firstGrnId) {
+            // Save uploaded GRN files (if any) against first inserted row in the first batch only
+            if ($saveFiles && isset($data['files']) && $firstGrnId) {
                 $this->saveGrnFiles($firstGrnId, $data['files'], $userId);
             }
 
-            // Update transfer status
-            $updateSql = "UPDATE vp_stock_transfer SET status = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateSql);
-            if ($updateStmt) {
-                $status = 'received';
-                $updateStmt->bind_param('si', $status, $transferId);
-                $updateStmt->execute();
-                $updateStmt->close();
+            // Update transfer status only after the final batch completes
+            if ($finalizeTransfer) {
+                $updateSql = "UPDATE vp_stock_transfer SET status = ? WHERE id = ?";
+                $updateStmt = $this->db->prepare($updateSql);
+                if ($updateStmt) {
+                    $status = 'received';
+                    $updateStmt->bind_param('si', $status, $transferId);
+                    $updateStmt->execute();
+                    $updateStmt->close();
+                }
             }
 
             $this->db->commit();
 
-            return ['success' => true, 'message' => 'GRN created successfully', 'grn_id' => $firstGrnId];
+            $batchMessage = ($batchTotal > 1)
+                ? ('Batch ' . ($batchIndex + 1) . ' of ' . $batchTotal . ' saved (' . $itemsSaved . ' lines).')
+                : 'GRN created successfully';
+
+            return [
+                'success' => true,
+                'message' => $finalizeTransfer ? 'GRN created successfully' : $batchMessage,
+                'grn_id' => $firstGrnId,
+                'batch_index' => $batchIndex,
+                'batch_total' => $batchTotal,
+                'items_saved' => $itemsSaved,
+                'finalize_transfer' => $finalizeTransfer,
+            ];
 
         } catch (Exception $e) {
             $this->db->rollback();

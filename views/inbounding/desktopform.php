@@ -843,7 +843,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Redirect:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars((string) ($data['form2']['redirect'] ?? '')) ?>" name="redirect" placeholder="redirect">
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="redirect_input" class="flex-1 min-w-0 h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars((string) ($data['form2']['redirect'] ?? '')) ?>" name="redirect" placeholder="Item code">
+                            <button type="button" id="redirect_validate_btn" class="shrink-0 h-[32px] px-3 text-xs font-bold text-white bg-[#d97824] border-none rounded-[3px] cursor-pointer hover:bg-[#db8235] disabled:opacity-60 disabled:cursor-not-allowed">Validate</button>
+                        </div>
+                        <p id="redirect_validate_msg" class="hidden text-xs mt-1"></p>
                     </div>
                     <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? '', '', true); ?>
                     <div class="flex-1">
@@ -5355,5 +5359,90 @@ document.addEventListener('DOMContentLoaded', function() {
     if (imgDirInput && imgDirInput.value === "") {
         setTimeout(updateImageDirectory, 500); // Small delay to let TomSelect load
     }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const input = document.getElementById('redirect_input');
+    const btn = document.getElementById('redirect_validate_btn');
+    const msg = document.getElementById('redirect_validate_msg');
+    if (!input || !btn) {
+        return;
+    }
+
+    let validatedValue = '';
+
+    function showRedirectMessage(text, isError) {
+        if (!msg) {
+            return;
+        }
+        msg.textContent = text;
+        msg.className = 'text-xs mt-1 ' + (isError ? 'text-red-600' : 'text-green-700');
+        msg.classList.remove('hidden');
+    }
+
+    function clearRedirectMessage() {
+        if (!msg) {
+            return;
+        }
+        msg.textContent = '';
+        msg.classList.add('hidden');
+    }
+
+    function resetValidateButton() {
+        btn.disabled = false;
+        btn.textContent = 'Validate';
+        validatedValue = '';
+    }
+
+    function setValidatedState() {
+        validatedValue = input.value.trim();
+        btn.disabled = true;
+        btn.textContent = 'Valid';
+    }
+
+    input.addEventListener('input', function () {
+        if (validatedValue !== '' && input.value.trim() !== validatedValue) {
+            resetValidateButton();
+            clearRedirectMessage();
+        }
+    });
+
+    btn.addEventListener('click', function () {
+        const code = input.value.trim();
+        if (!code) {
+            showRedirectMessage('Enter an item code to validate.', true);
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Checking...';
+        clearRedirectMessage();
+
+        fetch('index.php?page=inbounding&action=validateRedirectItemCode&item_code=' + encodeURIComponent(code), {
+            credentials: 'include'
+        })
+            .then(function (response) {
+                return response.json();
+            })
+            .then(function (data) {
+                if (data && data.success) {
+                    setValidatedState();
+                    let successText = data.message || 'Product found.';
+                    if (data.title) {
+                        successText += ' (' + data.title + ')';
+                    }
+                    showRedirectMessage(successText, false);
+                    return;
+                }
+
+                resetValidateButton();
+                showRedirectMessage((data && data.message) ? data.message : 'Validation failed.', true);
+            })
+            .catch(function () {
+                resetValidateButton();
+                showRedirectMessage('Validation request failed.', true);
+            });
+    });
 });
 </script>

@@ -1735,6 +1735,40 @@ class InboundingController {
         }
         exit;
     }
+
+    public function validateRedirectItemCodeAjax()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $itemCode = trim((string) ($_GET['item_code'] ?? $_POST['item_code'] ?? ''));
+        if ($itemCode === '') {
+            echo json_encode(['success' => false, 'message' => 'Item code is required.']);
+            exit;
+        }
+
+        global $conn;
+        $productModel = new product($conn);
+        $rows = $productModel->getProductByItemCode($itemCode);
+
+        if (!empty($rows)) {
+            $title = trim((string) ($rows[0]['title'] ?? ''));
+            echo json_encode([
+                'success' => true,
+                'message' => 'Product found.',
+                'title' => $title,
+                'count' => count($rows),
+            ]);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'No product found for item code: ' . $itemCode,
+        ]);
+        exit;
+    }
+
     public function deleteSelected() {
         global $inboundingModel;
         
