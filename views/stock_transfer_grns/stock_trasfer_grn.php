@@ -337,10 +337,17 @@ $warehouses = $warehouses ?? [];
                 Save changes
             </button>
         <?php else: ?>
-            <button type="button" onclick="saveStockTransferGrn(event)" id="saveChanges" class="order-1 sm:order-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap shrink-0">
-                <i class="fas fa-check text-xs opacity-95" aria-hidden="true"></i>
-                Save GRN
-            </button>
+            <div class="order-1 sm:order-2 flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto shrink-0">
+                <div id="grnPageLoadIndicator" class="flex items-center justify-center sm:justify-end gap-2 text-xs text-gray-600" role="status" aria-live="polite">
+                    <i class="fas fa-spinner fa-spin text-amber-700" aria-hidden="true"></i>
+                    <span>Loading <?php echo number_format(count($transferItems)); ?> line items — Save will be enabled when ready</span>
+                </div>
+                <button type="button" onclick="saveStockTransferGrn(event)" id="saveChanges" disabled
+                    class="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:pointer-events-none">
+                    <i class="fas fa-check text-xs opacity-95" aria-hidden="true"></i>
+                    Save GRN
+                </button>
+            </div>
         <?php endif; ?>
     </div>
 
@@ -582,6 +589,11 @@ function grnBuildBatchFormData(baseFields, batchItems, batchIndex, batchTotal, f
 function saveStockTransferGrn(event) {
     event.preventDefault();
 
+    var saveBtnEarly = document.getElementById('saveChanges');
+    if (saveBtnEarly && saveBtnEarly.disabled) {
+        return;
+    }
+
     var receivedBy = document.querySelector('select[name="received_by"]').value;
     var warehouse = document.querySelector('select[name="warehouse_id"]').value;
     var qtyInputs = Array.from(document.querySelectorAll('input[name="qty_received[]"]'));
@@ -751,4 +763,23 @@ function saveStockTransferGrn(event) {
             }
         });
 }
+
+(function () {
+    var saveBtn = document.getElementById('saveChanges');
+    var indicator = document.getElementById('grnPageLoadIndicator');
+    if (!saveBtn || !indicator) {
+        return;
+    }
+
+    function enableGrnSaveButton() {
+        indicator.classList.add('hidden');
+        saveBtn.disabled = false;
+    }
+
+    if (document.readyState === 'complete') {
+        enableGrnSaveButton();
+    } else {
+        window.addEventListener('load', enableGrnSaveButton, { once: true });
+    }
+})();
 </script>
