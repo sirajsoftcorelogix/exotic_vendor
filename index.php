@@ -1199,6 +1199,9 @@ switch ($page) {
             case 'delete_bulk':
                 $controller->deleteBulk();
                 break;
+            case 'delete_bulk_post':
+                $controller->deleteBulkPost();
+                break;
             default:
                 $controller->listGrns();
                 break;

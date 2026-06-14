@@ -367,12 +367,12 @@ $warehouses = $warehouses ?? [];
             <input type="hidden" id="grnTransferId" value="<?php echo (int) $transferId; ?>">
             <div class="order-1 sm:order-2 flex flex-col sm:flex-row gap-3 w-full sm:w-auto shrink-0">
                 <button type="button" onclick="saveReceiveAllRemaining(event)" id="receiveAllRemaining"
-                    class="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 rounded-xl border-2 border-amber-600/80 bg-white text-amber-900 text-sm font-semibold hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
+                    class="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 rounded-xl border-2 border-amber-600/80 bg-white text-amber-900 text-sm font-semibold hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed disabled:pointer-events-none">
                     <i class="fas fa-truck-loading text-xs opacity-90" aria-hidden="true"></i>
                     Receive all remaining
                 </button>
                 <button type="button" onclick="saveStockTransferGrn(event)" id="saveChanges"
-                    class="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
+                    class="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed disabled:pointer-events-none">
                     <i class="fas fa-check text-xs opacity-95" aria-hidden="true"></i>
                     Save GRN
                 </button>
@@ -614,6 +614,19 @@ function grnSupportingFileWithinSizeLimit(file) {
 
 var GRN_SAVE_CHUNK_SIZE = 50;
 var GRN_LOAD_PAGE_SIZE = 50;
+var grnSaveInProgress = false;
+
+function grnSetSaveButtonsDisabled(disabled) {
+    grnSaveInProgress = !!disabled;
+    ['saveChanges', 'receiveAllRemaining'].forEach(function (id) {
+        var btn = document.getElementById(id);
+        if (!btn) {
+            return;
+        }
+        btn.disabled = disabled;
+        btn.setAttribute('aria-busy', disabled ? 'true' : 'false');
+    });
+}
 
 var grnLinesState = {
     transferId: 0,
@@ -1107,14 +1120,18 @@ function grnRunBatchedSave(config) {
         for (var f = 0; f < fileInput.files.length; f++) {
             if (!grnIsAllowedSupportingFile(fileInput.files[f])) {
                 alert('Only PNG, JPG, and PDF files are allowed. Remove or replace: ' + fileInput.files[f].name);
+                grnSetSaveButtonsDisabled(false);
                 return;
             }
             if (!grnSupportingFileWithinSizeLimit(fileInput.files[f])) {
                 alert('Each file must be 2 MB or smaller. Remove or replace: ' + fileInput.files[f].name);
+                grnSetSaveButtonsDisabled(false);
                 return;
             }
         }
     }
+
+    grnSetSaveButtonsDisabled(true);
 
     var receiveAll = !!config.receiveAllRemaining;
     var items = config.items || [];
@@ -1131,14 +1148,6 @@ function grnRunBatchedSave(config) {
     };
 
     var statusEl = document.getElementById('grnStatus');
-    var saveBtn = document.getElementById('saveChanges');
-    var receiveAllBtn = document.getElementById('receiveAllRemaining');
-    if (saveBtn) {
-        saveBtn.disabled = true;
-    }
-    if (receiveAllBtn) {
-        receiveAllBtn.disabled = true;
-    }
 
     statusEl.textContent = totalBatches > 1
         ? (receiveAll
@@ -1215,17 +1224,16 @@ function grnRunBatchedSave(config) {
             }
             statusEl.textContent = msg;
             console.error(err);
-            if (saveBtn) {
-                saveBtn.disabled = false;
-            }
-            if (receiveAllBtn) {
-                receiveAllBtn.disabled = false;
-            }
+            grnSetSaveButtonsDisabled(false);
         });
 }
 
 function saveStockTransferGrn(event) {
     event.preventDefault();
+
+    if (grnSaveInProgress) {
+        return;
+    }
 
     var receivedBy = document.querySelector('select[name="received_by"]').value;
     var warehouse = document.querySelector('select[name="warehouse_id"]').value;
@@ -1273,6 +1281,10 @@ function saveStockTransferGrn(event) {
 
 function saveReceiveAllRemaining(event) {
     event.preventDefault();
+
+    if (grnSaveInProgress) {
+        return;
+    }
 
     var receivedBy = document.querySelector('select[name="received_by"]').value;
     var warehouse = document.querySelector('select[name="warehouse_id"]').value;

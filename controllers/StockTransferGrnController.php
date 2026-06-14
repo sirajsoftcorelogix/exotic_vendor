@@ -182,16 +182,117 @@ class StockTransferGrnController {
             return;
         }
 
-        $grnIds = array_values(array_unique(array_filter(array_map('intval', $idsRaw), static function ($v) {
-            return $v > 0;
-        })));
-
+        $grnIds = $this->normalizeGrnIdList($idsRaw);
         if (empty($grnIds)) {
             renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No valid GRN IDs provided']], 'Error');
             return;
         }
 
+        $result = $this->processBulkGrnDelete($transferId, $grnIds);
+
+        if (!empty($result['failed_ids'])) {
+            $suffix = implode(', ', $result['failed_ids']);
+            renderTemplate('views/errors/error.php', [
+                'message' => ['type' => 'error', 'text' => 'Some GRN rows could not be deleted: ' . $suffix],
+            ], 'Error');
+            return;
+        }
+
+        header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . $transferId);
+    }
+
+    /**
+     * Chunked bulk delete (JSON) for large transfers.
+     */
+    public function deleteBulkPost() {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        if (stripos($contentType, 'application/json') !== false) {
+            $raw = file_get_contents('php://input');
+            $data = json_decode($raw, true) ?: [];
+        } else {
+            $data = $_POST;
+            if (isset($data['grn_ids']) && is_string($data['grn_ids'])) {
+                $decoded = json_decode($data['grn_ids'], true);
+                if (is_array($decoded)) {
+                    $data['grn_ids'] = $decoded;
+                }
+            }
+        }
+
+        $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
+        $idsRaw = isset($data['grn_ids']) && is_array($data['grn_ids']) ? $data['grn_ids'] : [];
+        $batchIndex = isset($data['batch_index']) ? max(0, (int)$data['batch_index']) : 0;
+        $batchTotal = isset($data['batch_total']) ? max(1, (int)$data['batch_total']) : 1;
+
+        if (empty($idsRaw)) {
+            echo json_encode(['success' => false, 'message' => 'No GRN rows selected for deletion']);
+            return;
+        }
+
+        $grnIds = $this->normalizeGrnIdList($idsRaw);
+        if (empty($grnIds)) {
+            echo json_encode(['success' => false, 'message' => 'No valid GRN IDs provided']);
+            return;
+        }
+
+        if (count($grnIds) > 50) {
+            echo json_encode(['success' => false, 'message' => 'Too many IDs in one batch (max 50).']);
+            return;
+        }
+
+        $result = $this->processBulkGrnDelete($transferId, $grnIds);
+        $deleted = (int)($result['deleted_count'] ?? 0);
+        $failedIds = $result['failed_ids'] ?? [];
+
+        if (!empty($failedIds)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Some GRN rows could not be deleted in batch ' . ($batchIndex + 1) . ' of ' . $batchTotal . '.',
+                'failed_ids' => $failedIds,
+                'deleted_count' => $deleted,
+                'batch_index' => $batchIndex,
+                'batch_total' => $batchTotal,
+            ]);
+            return;
+        }
+
+        $batchMessage = ($batchTotal > 1)
+            ? ('Batch ' . ($batchIndex + 1) . ' of ' . $batchTotal . ' deleted (' . $deleted . ' lines).')
+            : ('Deleted ' . $deleted . ' GRN line(s).');
+
+        echo json_encode([
+            'success' => true,
+            'message' => $batchMessage,
+            'deleted_count' => $deleted,
+            'failed_ids' => [],
+            'batch_index' => $batchIndex,
+            'batch_total' => $batchTotal,
+        ]);
+    }
+
+    /**
+     * @param list<int|string> $idsRaw
+     * @return list<int>
+     */
+    private function normalizeGrnIdList(array $idsRaw): array
+    {
+        return array_values(array_unique(array_filter(array_map('intval', $idsRaw), static function ($v) {
+            return $v > 0;
+        })));
+    }
+
+    /**
+     * @param list<int> $grnIds
+     * @return array{failed_ids: list<int>, deleted_count: int}
+     */
+    private function processBulkGrnDelete(int $transferId, array $grnIds): array
+    {
         $failedIds = [];
+        $deletedCount = 0;
+
         foreach ($grnIds as $grnId) {
             $grn = $this->stockTransferModel->getTransferGrnById($grnId);
             if (!$grn) {
@@ -204,18 +305,15 @@ class StockTransferGrnController {
             }
             if (!$this->stockTransferModel->deleteTransferGrn($grnId)) {
                 $failedIds[] = $grnId;
+                continue;
             }
+            $deletedCount++;
         }
 
-        if (!empty($failedIds)) {
-            $suffix = implode(', ', $failedIds);
-            renderTemplate('views/errors/error.php', [
-                'message' => ['type' => 'error', 'text' => 'Some GRN rows could not be deleted: ' . $suffix],
-            ], 'Error');
-            return;
-        }
-
-        header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . $transferId);
+        return [
+            'failed_ids' => $failedIds,
+            'deleted_count' => $deletedCount,
+        ];
     }
 
     public function createPost() {
