@@ -351,12 +351,31 @@ class DispatchController {
                     ];
 
                     $createResult = $courierGateway->createShipment($createRequest);
+                    
                     if (empty($createResult['success'])) {
                         header('Content-Type: application/json');
+                        
+                        // Build detailed error message
+                        $errorMsg = (string) ($createResult['message'] ?? $createResult['error'] ?? ('Aramex shipment failed for Box ' . $boxNo));
+                        $errorDetails = [];
+                        
+                        if (!empty($createResult['errors'])) {
+                            foreach ((array)$createResult['errors'] as $err) {
+                                if (is_array($err)) {
+                                    $errorDetails[] = ($err['code'] ?? '') . ': ' . ($err['message'] ?? 'Unknown error');
+                                } elseif (is_object($err)) {
+                                    $errorDetails[] = ($err->Code ?? $err->code ?? '') . ': ' . ($err->Message ?? $err->message ?? 'Unknown error');
+                                } else {
+                                    $errorDetails[] = (string)$err;
+                                }
+                            }
+                        }
+                        
                         echo json_encode([
                             'status' => 'error',
-                            'message' => (string) ($createResult['message'] ?? $createResult['error'] ?? ('Aramex shipment failed for Box ' . $boxNo)),
-                            'debug' => $createResult['debug'] ?? null,
+                            'message' => $errorMsg,
+                            'error_details' => $errorDetails,
+                            'debug' => $createResult['debug'] ?? $createResult['raw_response'] ?? null,
                         ]);
                         exit();
                     }
@@ -621,11 +640,36 @@ class DispatchController {
                 if (!empty($invoice['items'][0]['order_number'])) {
                     $primaryOrderNumber = (string) $invoice['items'][0]['order_number'];
                 }
-                $invoices[] = $invoice;
+                
                 //fetch dispatch records for this invoice   
                 $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoice_id);
                 //print_array($dispatchRecords);
+                //set pickup locations for international shipments
+                if ($isInternational) {
+                    $pickupLocations = $dispatchModel->getInternationalPickupLocations();
+                    if (is_array($pickupLocations) && !empty($pickupLocations)) {
+                        foreach ($pickupLocations as &$loc) {
+                            $loc['display_name'] = $loc['location_name'] . ' - ' . $loc['address_line1'] . ', ' . $loc['city'] . ', ' . $loc['state'] . ', ' . $loc['country'];
+                        }
+                    }else {
+                        // add firm_details address as fallback pickup location
+                        $pickupLocations = $invoice['firm_details'] ? [
+                            [
+                                'id' => 'firm_address',
+                                'location_name' => $invoice['firm_details']['firm_name'] ?? 'Firm Address',
+                                'address' => $invoice['firm_details']['address'] ?? '',                                
+                                'city' => $invoice['firm_details']['city'] ?? '',
+                                'state' => $invoice['firm_details']['state'] ?? '',
+                                'country' => $invoice['firm_details']['country'] ?? '',
+                                'pickup_location' => 'Headoffice - ' . ($invoice['firm_details']['address'] ?? '') . ', ' . ($invoice['firm_details']['city'] ?? '') . ', ' . ($invoice['firm_details']['state'] ?? '') . ', ' . ($invoice['firm_details']['country'] ?? '')
+                            ]
+                        ] : [];
+                    }
+                    $invoice['pickup_locations'] = $pickupLocations;
+                }
+                $invoices[] = $invoice;
             }
+            //print_array($invoice);
             renderTemplate('views/dispatch/create.php', [
                 'invoices' => $invoices,
                 'dispatchRecords' => $dispatchRecords,
@@ -2150,7 +2194,7 @@ class DispatchController {
      * Get available couriers from Shiprocket based on serviceability
      */
     public function getCourierServiceability() {
-        global $dispatchModel, $commanModel, $ordersModel;
+        global $dispatchModel, $commanModel, $ordersModel , $invoiceModel;
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
@@ -2217,14 +2261,101 @@ class DispatchController {
             }
 
             $courierDispatch = new CourierDispatchService($GLOBALS['conn']);
-            if ($courierDispatch->isInternationalOrder($orderInfo)) {
-                http_response_code(400);
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'International rates unavailable. Use single order dispatch for Aramex.',
-                    'international' => true,
-                ]);
-                exit;
+            $isInternational = $courierDispatch->isInternationalOrder($orderInfo);
+            
+            // Handle international orders via Aramex
+            if ($isInternational) {
+                // Get the full invoice to access the complete address data
+                $invoice = $invoiceModel->getInvoiceByOrderNumber($order_number);
+                if (!$invoice) {
+                    http_response_code(404);
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Invoice not found for order',
+                        'debug' => ['order_number' => $order_number]
+                    ]);
+                    exit;
+                }
+                
+                // Get the dispatch address from the invoice
+                $address = $commanModel->getDispatchAddress($invoice['vp_order_info_id'] ?? 0) ?? ($invoice['address'] ?? []);
+                
+                // Extract destination country from address
+                $rawCountry = (string) ($address['shipping_country'] 
+                    ?? $address['country'] 
+                    ?? $address['shipping_country_code']
+                    ?? $address['country_code']
+                    ?? $orderInfo['shipping_country']
+                    ?? $orderInfo['country']
+                    ?? 'IN');
+                
+                $destCountry = normalizeCountryIso2($rawCountry, $GLOBALS['conn'] ?? null);
+                
+                // Validate the destination country
+                if (empty($destCountry) || $destCountry === 'IN') {
+                    http_response_code(400);
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Invalid or domestic destination country',
+                        'debug' => [
+                            'raw_country' => $rawCountry,
+                            'normalized_country' => $destCountry,
+                            'address_fields' => [
+                                'shipping_country' => $address['shipping_country'] ?? null,
+                                'country' => $address['country'] ?? null,
+                                'shipping_country_code' => $address['shipping_country_code'] ?? null,
+                                'country_code' => $address['country_code'] ?? null,
+                            ],
+                            'order_fields' => [
+                                'shipping_country' => $orderInfo['shipping_country'] ?? null,
+                                'country' => $orderInfo['country'] ?? null,
+                            ]
+                        ]
+                    ]);
+                    exit;
+                }
+                
+                $courierGateway = new CourierGateway($GLOBALS['conn']);
+                $ratesRequest = [
+                    'order_number' => $order_number,
+                    'destination_country' => $destCountry,
+                    'destination' => [
+                        'country_code' => $destCountry,
+                        'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                        'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                        'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                    ],
+                    'chargeable_weight_kg' => $weight,
+                    'partner_account_id' => (int) ($input['partner_account_id'] ?? 0),
+                ];
+                
+                $ratesResult = $courierGateway->getRates($ratesRequest);
+                
+                if (!empty($ratesResult['success'])) {
+                    http_response_code(200);
+                    echo json_encode(array_merge($ratesResult, [
+                        'international' => true,
+                        'message' => 'Aramex rates fetched successfully'
+                    ]));
+                    exit;
+                } else {
+                    // Enhanced error response with debugging info
+                    http_response_code(400);
+                    $errorDebug = [
+                        'request' => $ratesRequest,
+                        'response_message' => $ratesResult['message'] ?? 'Unknown error',
+                        'response_debug' => $ratesResult['debug'] ?? null,
+                        'couriers' => $ratesResult['couriers'] ?? null,
+                        'test_endpoint' => base_url('?page=dispatch&action=test_aramex_api')
+                    ];
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $ratesResult['message'] ?? 'Failed to fetch Aramex rates. Check debug info below.',
+                        'international' => true,
+                        'debug' => $errorDebug
+                    ]);
+                    exit;
+                }
             }
 
             if (empty($orderInfo['shipping_zipcode'])) {
@@ -2238,7 +2369,7 @@ class DispatchController {
             
             $delivery_postcode = $orderInfo['shipping_zipcode'];
             
-            // Call Shiprocket serviceability API
+            // Call Shiprocket serviceability API for domestic orders
             $serviceability = $dispatchModel->getCourierServiceability(
                 $pickup_postcode,
                 $delivery_postcode,
@@ -2848,6 +2979,201 @@ class DispatchController {
         http_response_code(502);
         require __DIR__ . '/../views/dispatch/delhivery_label_failed.php';
     }
+
+    /**
+     * Test Aramex API connectivity and rates
+     * Access via: ?page=dispatch&action=test_aramex_api
+     * POST with JSON: { order_number: "...", length: 10, breadth: 10, height: 10, weight: 1, destination_country: "US" }
+     */
+    public function testAramexAPI()
+    {
+        global $commanModel, $invoiceModel;
+        is_login();
+        // echo "Testing Aramex API...\n";
+        // exit;
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => 'POST request required',
+                'usage' => 'POST JSON data with order_number, length, breadth, height, weight, destination_country'
+            ]);
+            exit;
+        }
+
+        try {
+            $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+            
+            $order_number = (string) ($input['order_number'] ?? '');
+            $length = (float) ($input['length'] ?? 0);
+            $breadth = (float) ($input['breadth'] ?? 0);
+            $height = (float) ($input['height'] ?? 0);
+            $weight = (float) ($input['weight'] ?? 0);
+            $destCountry = (string) ($input['destination_country'] ?? 'US');
+
+            $testResults = [
+                'test_time' => date('Y-m-d H:i:s'),
+                'input' => compact('order_number', 'length', 'breadth', 'height', 'weight', 'destCountry'),
+                'steps' => []
+            ];
+
+            // Step 1: Check if Aramex account exists
+            $testResults['steps'][] = ['step' => 1, 'name' => 'Check Aramex Account', 'status' => 'pending'];
+            require_once __DIR__ . '/../models/courier/CourierAccount.php';
+            $accountModel = new CourierAccount($GLOBALS['conn']);
+            $accounts = $accountModel->listActiveAccountsByPartnerCode('aramex');
+           
+            if (!$accounts) {
+                $testResults['steps'][0]['status'] = 'failed';
+                $testResults['steps'][0]['message'] = 'No active Aramex account configured.';
+                http_response_code(400);
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'test_results' => $testResults]);
+                exit;
+            }
+            
+            $testResults['steps'][0]['status'] = 'success';
+            $testResults['steps'][0]['message'] = 'Found ' . count($accounts) . ' active Aramex account(s)';
+            $testResults['aramex_accounts'] = array_map(function($acc) {
+                return ['id' => $acc['id'], 'account_pin' => $acc['account_pin'], 'account_number' => $acc['account_code']];
+            }, $accounts);
+
+            // Step 2: Get credentials
+            $testResults['steps'][] = ['step' => 2, 'name' => 'Get Credentials', 'status' => 'pending'];
+            $accountId = (int) ($accounts[0]['id']);
+            $credentials = $accountModel->getCredentialsJson($accountId);
+            
+            if (!$credentials || !isset($credentials['account_number'])) {
+                $testResults['steps'][1]['status'] = 'failed';
+                $testResults['steps'][1]['message'] = 'Invalid credentials';
+                http_response_code(400);
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'test_results' => $testResults]);
+                exit;
+            }
+            
+            $testResults['steps'][1]['status'] = 'success';
+            $testResults['steps'][1]['message'] = 'Credentials loaded';
+            $testResults['credentials_check'] = [
+                'account_number' => $credentials['account_number'],
+                'has_username' => !empty($credentials['username']),
+                'has_password' => !empty($credentials['password']),
+                'has_account_pin' => !empty($credentials['account_pin'])
+            ];
+
+            // Step 3: Initialize Aramex Service
+            $testResults['steps'][] = ['step' => 3, 'name' => 'Initialize Aramex Service', 'status' => 'pending'];
+            require_once __DIR__ . '/../aramex_service.php';
+            $service = new AramexService($credentials);
+            
+            $testResults['steps'][2]['status'] = 'success';
+            $testResults['steps'][2]['message'] = 'AramexService initialized';
+
+            // Step 4: Build rate request
+            $testResults['steps'][] = ['step' => 4, 'name' => 'Build Rate Request', 'status' => 'pending'];
+            require_once __DIR__ . '/../helpers/courier/AramexShipmentBuilder.php';
+            
+            $origin = [
+                'Line1' => $credentials['shipper']['line1'] ?? 'Exotic India',
+                'City' => $credentials['shipper']['city'] ?? 'Delhi',
+                'StateOrProvinceCode' => $credentials['shipper']['state'] ?? 'DL',
+                'PostCode' => $credentials['shipper']['postcode'] ?? '110052',
+                'CountryCode' => $credentials['shipper']['country_code'] ?? 'IN',
+            ];
+
+            $destination = [
+                'Line1' => 'Test Address',
+                'City' => 'Test City',
+                'StateOrProvinceCode' => 'TS',
+                'PostCode' => '12345',
+                'CountryCode' => normalizeCountryIso2($destCountry, $GLOBALS['conn']),
+            ];
+
+            $testResults['steps'][3]['status'] = 'success';
+            $testResults['steps'][3]['message'] = 'Rate request parameters prepared';
+            $testResults['rate_request'] = [
+                'origin' => $origin,
+                'destination' => $destination,
+                'weight_kg' => $weight
+            ];
+
+            // Step 5: Call Aramex CalculateRate API
+            $testResults['steps'][] = ['step' => 5, 'name' => 'Call Aramex Rate Calculation', 'status' => 'pending'];
+            
+            $rateOptions = [
+                'product_group' => $credentials['default_product_group'] ?? 'EXP',
+                'product_type' => $credentials['default_product_type'] ?? 'PPX'
+            ];
+
+            $response = $service->calculateRate($origin, $destination, $weight, $rateOptions);
+            
+            if (empty($response['success'])) {
+                $testResults['steps'][4]['status'] = 'failed';
+                $testResults['steps'][4]['message'] = $response['error'] ?? 'Rate calculation failed';
+                $testResults['steps'][4]['response'] = $response;
+                http_response_code(400);
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'test_results' => $testResults]);
+                exit;
+            }
+
+            $testResults['steps'][4]['status'] = 'success';
+            $testResults['steps'][4]['message'] = 'Aramex API returned rates successfully';
+            $testResults['steps'][4]['response'] = $response;
+
+            // Step 6: Parse rate quote
+            $testResults['steps'][] = ['step' => 6, 'name' => 'Parse Rate Quote', 'status' => 'pending'];
+            require_once __DIR__ . '/../helpers/courier/Adapters/AramexAdapter.php';
+            
+            $quote = (new ReflectionClass('AramexAdapter'))->getMethod('parseRateQuote')->invoke(
+                new AramexAdapter($accountModel),
+                $response['data'] ?? null,
+                $rateOptions['product_group'],
+                $rateOptions['product_type']
+            );
+
+            if ($quote === null) {
+                $testResults['steps'][5]['status'] = 'failed';
+                $testResults['steps'][5]['message'] = 'Could not parse rate from Aramex response';
+                http_response_code(400);
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'test_results' => $testResults]);
+                exit;
+            }
+
+            $testResults['steps'][5]['status'] = 'success';
+            $testResults['steps'][5]['message'] = 'Rate quote parsed successfully';
+            $testResults['rate_quote'] = $quote;
+
+            // All tests passed
+            http_response_code(200);
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'message' => 'Aramex API test passed successfully',
+                'test_results' => $testResults,
+                'final_rate' => [
+                    'amount' => $quote['amount'] ?? 0,
+                    'currency' => $quote['currency'] ?? 'USD',
+                    'etd' => $quote['etd'] ?? 'N/A'
+                ]
+            ]);
+            exit;
+
+        } catch (Exception $e) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => 'Test failed with exception',
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            exit;
+        }
+    }
+
 
     private function isDelhiveryPdfLabelUrl(string $url): bool
     {

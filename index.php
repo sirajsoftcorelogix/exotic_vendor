@@ -1360,6 +1360,15 @@ switch ($page) {
             case 'delhivery_label':
                 $controller->delhiveryLabel();
                 break;
+            case 'test_aramex_api':
+                $controller->testAramexAPI();
+                break;
+            case 'test_aramex_wsdl':
+                require __DIR__ . '/test_aramex_wsdl.php';
+                exit;
+            case 'test_aramex_createshipments':
+                require __DIR__ . '/test_aramex_createshipments.php';
+                exit;
             default:
                 $controller->create();
                 break;
