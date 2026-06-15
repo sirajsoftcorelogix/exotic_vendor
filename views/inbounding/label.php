@@ -50,6 +50,23 @@ if (!empty($label_data[0]['group_name'])) {
     }
     $categoryName = $inboundingModel->resolveInboundLabelCategorySlug($label_data[0]['group_name']);
 }
+
+$inboundRecordId = (int) ($_GET['id'] ?? ($label_data[0]['id'] ?? 0));
+$showVendorOnLabel = true;
+if ($inboundRecordId > 0) {
+    if (!isset($inboundingModel)) {
+        require_once 'models/inbounding/Inbounding.php';
+        if (!isset($conn)) {
+            require_once 'settings/database/database.php';
+            $conn = Database::getConnection();
+        }
+        $inboundingModel = new Inbounding($conn);
+    }
+    $showVendorOnLabel = !$inboundingModel->isInboundPublished($inboundRecordId);
+}
+
+$usePostPublishLabel = !$showVendorOnLabel && $categoryName !== 'book';
+
 function safeInt($value)
 {
     return intval($value ?? 0);
@@ -77,6 +94,33 @@ function labelFirstAuthorName(array $row): string
     }
 
     return $name;
+}
+
+function labelDimensionsText(array $row): string
+{
+    $dims = trim((string) ($row['dimensions'] ?? ''));
+    if ($dims !== '') {
+        return $dims;
+    }
+
+    $w = safeInt($row['width'] ?? 0);
+    $h = safeInt($row['height'] ?? 0);
+    $d = safeInt($row['depth'] ?? 0);
+    if ($w > 0 || $h > 0 || $d > 0) {
+        return "{$w}x{$h}x{$d}";
+    }
+
+    return 'N/A';
+}
+
+function labelLocationText(array $row, array $parentRow = []): string
+{
+    $loc = trim((string) ($row['store_location'] ?? $row['location'] ?? ''));
+    if ($loc === '') {
+        $loc = trim((string) ($parentRow['store_location'] ?? $parentRow['location'] ?? ''));
+    }
+
+    return labelInboundText($loc);
 }
 
 $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
@@ -247,6 +291,38 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                     </div>
 
 
+                <?php  } elseif ($usePostPublishLabel) { ?>
+                    <div class="flex flex-row w-full h-[450px] border-b-[3px] border-black">
+                        <div class="w-[350px] h-full flex flex-col items-center justify-center p-6">
+                            <div class="qrcode-highres" style="width: 300px; height: 300px;"></div>
+                        </div>
+                        <div class="w-[400px] h-full flex items-center justify-center p-4 border-l-[3px] border-black">
+                            <img src="<?php echo $thisPhotoUrl; ?>" crossorigin="anonymous" class="object-contain max-w-full max-h-[95%] grayscale hover:grayscale-0 transition-all">
+                        </div>
+                        <div class="flex-1 h-full flex flex-col justify-center pl-10 pr-6 pt-6 space-y-5 border-l-[3px] border-black">
+                            <div class="flex flex-col leading-none">
+                                <span class="text-[30px] font-bold uppercase leading-none mb-2 text-black">Item code</span>
+                                <span class="text-[50px] font-black tracking-tight leading-none"><?php echo safe($current_label['Item_code']); ?></span>
+                            </div>
+                            <div class="flex flex-col leading-none">
+                                <span class="text-[30px] font-bold uppercase leading-none mb-2 text-black">Color</span>
+                                <span class="text-[42px] font-black leading-tight"><?php echo safe(labelInboundText($current_label['color'] ?? '')); ?></span>
+                            </div>
+                            <div class="flex flex-col leading-none">
+                                <span class="text-[30px] font-bold uppercase leading-none mb-2 text-black">Size</span>
+                                <span class="text-[42px] font-black leading-none"><?php echo safe(labelInboundText($current_label['size'] ?? '')); ?></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-full h-[160px] flex flex-col justify-center pl-8 border-b-[3px] border-black">
+                        <span class="text-[30px] font-bold uppercase leading-none mb-1 text-black">Dimensions</span>
+                        <span class="text-[42px] font-black leading-tight"><?php echo safe(labelDimensionsText($current_label)); ?></span>
+                    </div>
+                    <div class="flex-1 w-full flex flex-col justify-center pl-8">
+                        <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">Location</span>
+                        <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2"><?php echo safe(labelLocationText($current_label, $label_data[0] ?? [])); ?></span>
+                    </div>
+
                 <?php  } elseif ($categoryName == 'sculptures' || $categoryName == 'homeandliving' || $categoryName == 'paintings') { ?>
                     <div class="flex flex-row w-full h-[450px] border-b-[3px] border-black">
                         <div class="w-[350px] h-full flex flex-col items-center justify-center p-6">
@@ -328,12 +404,14 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                     </div>
 
 
+                    <?php if ($showVendorOnLabel): ?>
                     <div class="flex-1 w-full flex flex-col justify-center pl-8">
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">VENDOR:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
                             <?php echo safe($current_label['vendor_name'] ?? 'Jagapoorani Arts & Crafts'); ?>
                         </span>
                     </div>
+                    <?php endif; ?>
 
 
                 <?php } elseif ($categoryName == 'jewelry' || $categoryName == 'textiles') { ?>
@@ -426,12 +504,14 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                     </div>
 
 
+                    <?php if ($showVendorOnLabel): ?>
                     <div class="flex-1 w-full flex flex-col justify-center pl-8">
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">VENDOR:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
                             <?php echo safe($current_label['vendor_name'] ?? 'Jagapoorani Arts & Crafts'); ?>
                         </span>
                     </div>
+                    <?php endif; ?>
 
 
                 <?php } else { ?>
@@ -502,12 +582,14 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         </div>
                     </div>
 
+                    <?php if ($showVendorOnLabel): ?>
                     <div class="flex-1 w-full flex flex-col justify-center pl-8">
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">VENDOR:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
                             <?php echo safe($current_label['vendor_name'] ?? 'Jagapoorani Arts & Crafts'); ?>
                         </span>
                     </div>
+                    <?php endif; ?>
                 <?php  } ?>
             </div>
 
@@ -546,10 +628,11 @@ if ($itemCodeForPdf !== '') {
         const qrContainers = document.querySelectorAll(".qrcode-highres");
         qrContainers.forEach(container => {
             container.innerHTML = "";
+            const qrSize = parseInt(container.dataset.qrSize || "300", 10);
             new QRCode(container, {
                 text: "<?php echo $currentUrl; ?>",
-                width: 300,
-                height: 300,
+                width: qrSize,
+                height: qrSize,
                 colorDark: "#000000",
                 colorLight: "#ffffff",
                 correctLevel: QRCode.CorrectLevel.H

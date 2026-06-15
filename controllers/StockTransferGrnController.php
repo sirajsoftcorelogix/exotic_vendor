@@ -54,7 +54,7 @@ class StockTransferGrnController {
             return;
         }
 
-        $transfer = $this->stockTransferModel->getTransferById($transferId);
+        $transfer = $this->stockTransferModel->getTransferHeaderById($transferId);
         if (!$transfer) {
             renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Stock transfer not found']], 'Error');
             return;
@@ -65,20 +65,8 @@ class StockTransferGrnController {
             $transfer['dispatch_date'] = date('Y-m-d');
         }
 
-        // Cumulative qty already GRN'd for this SKU on this transfer (for remaining / caps in UI)
-        $receivedBySku = $this->stockTransferModel->getReceivedQtyByTransferSkuMap($transferId);
-        if (!empty($transfer['items'])) {
-            foreach ($transfer['items'] as &$item) {
-                $itemSku = trim($item['sku'] ?? '');
-                $item['already_received_on_transfer'] = 0;
-                if ($itemSku !== '' && $transferId > 0) {
-                    $item['already_received_on_transfer'] = (int)($receivedBySku[$itemSku] ?? 0);
-                }
-                $tq = (int)($item['transfer_qty'] ?? 0);
-                $item['remaining_to_receive'] = max(0, $tq - $item['already_received_on_transfer']);
-            }
-            unset($item);
-        }
+        $transfer['items'] = [];
+        $totalLineCount = (int)($transfer['line_item_count'] ?? 0);
 
         // Receiving warehouse is always the transfer destination (single option)
         $destId = (int)($transfer['to_warehouse'] ?? 0);
@@ -118,8 +106,31 @@ class StockTransferGrnController {
             'users' => $users,
             'warehouses' => $warehouses,
             'default_warehouse_id' => (int)($transfer['to_warehouse'] ?? 0),
-            'default_received_by' => $defaultReceivedBy
+            'default_received_by' => $defaultReceivedBy,
+            'total_line_count' => $totalLineCount,
         ], 'Stock Transfer GRN');
+    }
+
+    public function createItems() {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $transferId = isset($_GET['transfer_id']) ? (int)$_GET['transfer_id'] : 0;
+        $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+
+        if ($transferId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid transfer id']);
+            return;
+        }
+
+        $header = $this->stockTransferModel->getTransferHeaderById($transferId);
+        if (!$header) {
+            echo json_encode(['success' => false, 'message' => 'Stock transfer not found']);
+            return;
+        }
+
+        echo json_encode($this->stockTransferModel->getTransferGrnCreateItems($transferId, $offset, $limit));
     }
 
     public function edit() {
@@ -171,16 +182,117 @@ class StockTransferGrnController {
             return;
         }
 
-        $grnIds = array_values(array_unique(array_filter(array_map('intval', $idsRaw), static function ($v) {
-            return $v > 0;
-        })));
-
+        $grnIds = $this->normalizeGrnIdList($idsRaw);
         if (empty($grnIds)) {
             renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'No valid GRN IDs provided']], 'Error');
             return;
         }
 
+        $result = $this->processBulkGrnDelete($transferId, $grnIds);
+
+        if (!empty($result['failed_ids'])) {
+            $suffix = implode(', ', $result['failed_ids']);
+            renderTemplate('views/errors/error.php', [
+                'message' => ['type' => 'error', 'text' => 'Some GRN rows could not be deleted: ' . $suffix],
+            ], 'Error');
+            return;
+        }
+
+        header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . $transferId);
+    }
+
+    /**
+     * Chunked bulk delete (JSON) for large transfers.
+     */
+    public function deleteBulkPost() {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        if (stripos($contentType, 'application/json') !== false) {
+            $raw = file_get_contents('php://input');
+            $data = json_decode($raw, true) ?: [];
+        } else {
+            $data = $_POST;
+            if (isset($data['grn_ids']) && is_string($data['grn_ids'])) {
+                $decoded = json_decode($data['grn_ids'], true);
+                if (is_array($decoded)) {
+                    $data['grn_ids'] = $decoded;
+                }
+            }
+        }
+
+        $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
+        $idsRaw = isset($data['grn_ids']) && is_array($data['grn_ids']) ? $data['grn_ids'] : [];
+        $batchIndex = isset($data['batch_index']) ? max(0, (int)$data['batch_index']) : 0;
+        $batchTotal = isset($data['batch_total']) ? max(1, (int)$data['batch_total']) : 1;
+
+        if (empty($idsRaw)) {
+            echo json_encode(['success' => false, 'message' => 'No GRN rows selected for deletion']);
+            return;
+        }
+
+        $grnIds = $this->normalizeGrnIdList($idsRaw);
+        if (empty($grnIds)) {
+            echo json_encode(['success' => false, 'message' => 'No valid GRN IDs provided']);
+            return;
+        }
+
+        if (count($grnIds) > 50) {
+            echo json_encode(['success' => false, 'message' => 'Too many IDs in one batch (max 50).']);
+            return;
+        }
+
+        $result = $this->processBulkGrnDelete($transferId, $grnIds);
+        $deleted = (int)($result['deleted_count'] ?? 0);
+        $failedIds = $result['failed_ids'] ?? [];
+
+        if (!empty($failedIds)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Some GRN rows could not be deleted in batch ' . ($batchIndex + 1) . ' of ' . $batchTotal . '.',
+                'failed_ids' => $failedIds,
+                'deleted_count' => $deleted,
+                'batch_index' => $batchIndex,
+                'batch_total' => $batchTotal,
+            ]);
+            return;
+        }
+
+        $batchMessage = ($batchTotal > 1)
+            ? ('Batch ' . ($batchIndex + 1) . ' of ' . $batchTotal . ' deleted (' . $deleted . ' lines).')
+            : ('Deleted ' . $deleted . ' GRN line(s).');
+
+        echo json_encode([
+            'success' => true,
+            'message' => $batchMessage,
+            'deleted_count' => $deleted,
+            'failed_ids' => [],
+            'batch_index' => $batchIndex,
+            'batch_total' => $batchTotal,
+        ]);
+    }
+
+    /**
+     * @param list<int|string> $idsRaw
+     * @return list<int>
+     */
+    private function normalizeGrnIdList(array $idsRaw): array
+    {
+        return array_values(array_unique(array_filter(array_map('intval', $idsRaw), static function ($v) {
+            return $v > 0;
+        })));
+    }
+
+    /**
+     * @param list<int> $grnIds
+     * @return array{failed_ids: list<int>, deleted_count: int}
+     */
+    private function processBulkGrnDelete(int $transferId, array $grnIds): array
+    {
         $failedIds = [];
+        $deletedCount = 0;
+
         foreach ($grnIds as $grnId) {
             $grn = $this->stockTransferModel->getTransferGrnById($grnId);
             if (!$grn) {
@@ -193,18 +305,15 @@ class StockTransferGrnController {
             }
             if (!$this->stockTransferModel->deleteTransferGrn($grnId)) {
                 $failedIds[] = $grnId;
+                continue;
             }
+            $deletedCount++;
         }
 
-        if (!empty($failedIds)) {
-            $suffix = implode(', ', $failedIds);
-            renderTemplate('views/errors/error.php', [
-                'message' => ['type' => 'error', 'text' => 'Some GRN rows could not be deleted: ' . $suffix],
-            ], 'Error');
-            return;
-        }
-
-        header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . $transferId);
+        return [
+            'failed_ids' => $failedIds,
+            'deleted_count' => $deletedCount,
+        ];
     }
 
     public function createPost() {
@@ -235,13 +344,17 @@ class StockTransferGrnController {
         $warehouseId = isset($data['warehouse_id']) ? (int)$data['warehouse_id'] : 0;
 
         $items = isset($data['items']) && is_array($data['items']) ? $data['items'] : [];
+        $receiveAllRemaining = !empty($data['receive_all_remaining'])
+            || (isset($data['receive_all_remaining']) && (string)$data['receive_all_remaining'] === '1');
 
         if ($transferId <= 0) {
             echo json_encode(['success' => false, 'message' => 'Invalid transfer ID']);
             return;
         }
 
-        $transfer = $this->stockTransferModel->getTransferById($transferId);
+        $transfer = $receiveAllRemaining
+            ? $this->stockTransferModel->getTransferHeaderById($transferId)
+            : $this->stockTransferModel->getTransferById($transferId);
         if (!$transfer) {
             echo json_encode(['success' => false, 'message' => 'Stock transfer not found']);
             return;
@@ -284,7 +397,36 @@ class StockTransferGrnController {
             return;
         }
 
-        if (empty($items)) {
+        $batchIndex = isset($data['batch_index']) ? max(0, (int)$data['batch_index']) : 0;
+        $batchTotal = isset($data['batch_total']) ? max(1, (int)$data['batch_total']) : 1;
+        $batchSize = isset($data['batch_size']) ? max(1, min(200, (int)$data['batch_size'])) : 50;
+        $finalizeTransfer = array_key_exists('finalize_transfer', $data)
+            ? ((string)$data['finalize_transfer'] === '1' || $data['finalize_transfer'] === true || $data['finalize_transfer'] === 1)
+            : ($batchTotal <= 1);
+
+        if ($receiveAllRemaining) {
+            $built = $this->stockTransferModel->buildReceiveAllRemainingBatchItems($transferId, $batchIndex, $batchSize);
+            $items = $built['items'];
+            $batchTotal = max(1, (int)($built['batch_total'] ?? $batchTotal));
+            $finalizeTransfer = ($batchIndex >= $batchTotal - 1);
+
+            if (empty($items)) {
+                if ($finalizeTransfer) {
+                    echo json_encode($this->stockTransferModel->finalizeTransferReceiptIfComplete($transferId));
+                    return;
+                }
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Batch ' . ($batchIndex + 1) . ' of ' . $batchTotal . ' skipped (no remaining quantity in this slice).',
+                    'items_saved' => 0,
+                    'batch_index' => $batchIndex,
+                    'batch_total' => $batchTotal,
+                    'finalize_transfer' => false,
+                ]);
+                return;
+            }
+        } elseif (empty($items)) {
             echo json_encode(['success' => false, 'message' => 'No items found']);
             return;
         }
@@ -298,6 +440,10 @@ class StockTransferGrnController {
             'items' => $items,
             'files' => $files,
             'user_id' => $_SESSION['user']['id'] ?? 0,
+            'batch_index' => $batchIndex,
+            'batch_total' => $batchTotal,
+            'finalize_transfer' => $finalizeTransfer,
+            'save_files' => ($batchIndex === 0),
         ]);
 
         echo json_encode($result);

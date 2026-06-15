@@ -25,45 +25,190 @@ class product
         if (is_float($value)) return (int)$value;
         $str = trim((string)$value);
         if ($str === '') return (int)$default;
+        if (is_numeric($str)) {
+            return max(0, (int)round((float)$str));
+        }
         if (preg_match('/-?\d+/', $str, $m)) {
             return (int)$m[0];
         }
         return (int)$default;
     }
 
+    /** DATE column values from vendor API — reject MySQL zero dates like 0000-00-00 00:00:00. */
+    private function normalizeApiDateValue($value): string
+    {
+        $str = trim((string) $value);
+        if ($str === '' || preg_match('/^0000-00-00/', $str)) {
+            return '';
+        }
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $str, $m)) {
+            return $m[1];
+        }
+        $ts = strtotime($str);
+        return ($ts !== false) ? date('Y-m-d', $ts) : '';
+    }
+
+    /** Cast API payload scalars the same way as modal form POST (trim strings, int/float numbers). */
+    private function apiFormString($value): string
+    {
+        if ($value === null || is_array($value) || is_object($value)) {
+            return '';
+        }
+        return trim((string) $value);
+    }
+
+    private function apiFormFloat($value, float $default = 0.0): float
+    {
+        if ($value === null || $value === '' || is_array($value) || is_object($value)) {
+            return $default;
+        }
+        return (float) $value;
+    }
+
+    /** @return array<string, mixed> */
+    private function castApiProductLikeForm(array $row): array
+    {
+        foreach ([
+            'asin', 'upc', 'location', 'vendor', 'category', 'itemtype', 'snippet_description',
+            'keywords', 'hscode', 'hsn', 'long_description', 'long_description_india', 'aplus_content_ids',
+            'item_level', 'marketplace_vendor', 'colormap', 'flex_status', 'vendor_us',
+            'today_global', 'today_india', 'amazon_itemcode_alias', 'youtube_links', 'sketchfab_links',
+            'dimensions', 'size', 'color', 'sku', 'search_term', 'search_category',
+        ] as $key) {
+            if (array_key_exists($key, $row)) {
+                $row[$key] = $this->apiFormString($row[$key]);
+            }
+        }
+        foreach ([
+            'local_stock', 'fba_in', 'fba_us', 'permanently_available', 'numsold', 'numsold_india',
+            'numsold_global', 'india_net_qty', 'usblock', 'indiablock', 'topurchase', 'backorder_percent',
+            'backorder_weeks', 'amazon_sold', 'amazon_leadtime',
+        ] as $key) {
+            if (array_key_exists($key, $row)) {
+                $row[$key] = $this->normalizeIntValue($row[$key], 0);
+            }
+        }
+        foreach ([
+            'shippingfee', 'sourcingfee', 'price', 'price_india', 'price_india_suggested', 'mrp_india',
+            'permanent_discount', 'discount_global', 'discount_india', 'cp', 'usd',
+        ] as $key) {
+            if (array_key_exists($key, $row)) {
+                $row[$key] = $this->apiFormFloat($row[$key]);
+            }
+        }
+        if (array_key_exists('leadtime', $row)) {
+            $row['leadtime'] = $this->normalizeIntValue($row['leadtime'], 0);
+        }
+        if (array_key_exists('instock_leadtime', $row)) {
+            $row['instock_leadtime'] = $this->normalizeIntValue($row['instock_leadtime'], 0);
+        }
+        if (array_key_exists('lastsold', $row)) {
+            $row['lastsold'] = $this->normalizeIntValue($row['lastsold'], 0);
+        }
+        if (array_key_exists('date_first_added', $row)) {
+            $row['date_first_added'] = $this->normalizeApiDateValue($row['date_first_added']);
+        }
+        return $row;
+    }
+
+    /** @var string|null Cached vp_products TABLE_COLLATION (e.g. utf8mb4_unicode_ci). */
+    private $vpProductsTableCollation = null;
+
+    private function vpProductsTableCollation(): string
+    {
+        if ($this->vpProductsTableCollation !== null) {
+            return $this->vpProductsTableCollation;
+        }
+        $this->vpProductsTableCollation = 'utf8mb4_unicode_ci';
+        $res = $this->db->query(
+            "SELECT TABLE_COLLATION FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vp_products' LIMIT 1"
+        );
+        if ($res && ($row = $res->fetch_assoc()) && !empty($row['TABLE_COLLATION'])) {
+            $this->vpProductsTableCollation = (string) $row['TABLE_COLLATION'];
+        }
+        return $this->vpProductsTableCollation;
+    }
+
+    private function connectionCharsetUsesUtf8mb4(string $charset): bool
+    {
+        return stripos($charset, 'utf8mb4') !== false;
+    }
+
+    /** @return array{charset: string, collation: string} */
+    private function alignConnectionForVpProducts(): array
+    {
+        $prevCharset = mysqli_character_set_name($this->db);
+        if ($prevCharset === false) {
+            $prevCharset = '';
+        }
+        $prevCollation = '';
+        $colRes = $this->db->query('SELECT @@collation_connection AS collation_connection');
+        if ($colRes && ($row = $colRes->fetch_assoc()) && !empty($row['collation_connection'])) {
+            $prevCollation = (string) $row['collation_connection'];
+        }
+
+        $tableCollation = $this->vpProductsTableCollation();
+        $tableUsesUtf8mb4 = stripos($tableCollation, 'utf8mb4') !== false;
+
+        if ($tableUsesUtf8mb4 && !$this->connectionCharsetUsesUtf8mb4($prevCharset)) {
+            $this->db->set_charset('utf8mb4');
+        } elseif (!$tableUsesUtf8mb4 && $this->connectionCharsetUsesUtf8mb4($prevCharset)) {
+            try {
+                $this->db->set_charset('utf8mb3');
+            } catch (\mysqli_sql_exception $e) {
+                $this->db->set_charset('utf8');
+            }
+        }
+
+        $safeCollation = preg_replace('/[^a-zA-Z0-9_]/', '', $tableCollation);
+        if ($safeCollation !== '' && $prevCollation !== $safeCollation) {
+            $this->db->query("SET collation_connection = '{$safeCollation}'");
+        }
+
+        return ['charset' => $prevCharset, 'collation' => $prevCollation];
+    }
+
+    /** @param array{charset: string, collation: string} $previous */
+    private function restoreConnectionAfterVpProducts(array $previous): void
+    {
+        if ($previous['charset'] !== '') {
+            $current = mysqli_character_set_name($this->db);
+            if ($current !== false && $current !== $previous['charset']) {
+                try {
+                    $this->db->set_charset($previous['charset']);
+                } catch (\Throwable $e) {
+                    // ignore restore failure
+                }
+            }
+        }
+        if ($previous['collation'] !== '') {
+            $safe = preg_replace('/[^a-zA-Z0-9_]/', '', $previous['collation']);
+            if ($safe !== '') {
+                $this->db->query("SET collation_connection = '{$safe}'");
+            }
+        }
+    }
+
     /**
-     * vp_products may still use utf8mb3 while the connection uses utf8mb4; MySQL 8+ can reject
-     * bound parameters when an implicit collation conversion is not allowed.
+     * Bulk product update only (updateAllProductScript): align connection to vp_products charset.
+     *
+     * @return array{charset: string, collation: string}
      */
+    public function beginBulkProductUpdateConnection(): array
+    {
+        return $this->alignConnectionForVpProducts();
+    }
+
+    /** @param array{charset: string, collation: string} $previous */
+    public function endBulkProductUpdateConnection(array $previous): void
+    {
+        $this->restoreConnectionAfterVpProducts($previous);
+    }
+
     private function executeVpProductsStmt(\mysqli_stmt $stmt): bool
     {
-        $prev = mysqli_character_set_name($this->db);
-        $needCompat = $prev !== false && stripos((string) $prev, 'utf8mb4') !== false;
-        if ($needCompat) {
-            try {
-                $ok = $this->db->set_charset('utf8mb3');
-            } catch (\mysqli_sql_exception $e) {
-                $ok = false;
-            }
-            if (!$ok) {
-                try {
-                    $this->db->set_charset('utf8');
-                } catch (\mysqli_sql_exception $e) {
-                    // keep existing charset if neither is supported
-                }
-            }
-        }
-        try {
-            return $stmt->execute();
-        } finally {
-            if ($needCompat && $prev !== false && $prev !== '') {
-                try {
-                    $this->db->set_charset($prev);
-                } catch (\mysqli_sql_exception $e) {
-                    // ignore restore failure; statement execution already completed
-                }
-            }
-        }
+        return $stmt->execute();
     }
 
     /**
@@ -578,6 +723,7 @@ class product
                     continue;
                 }
                 $product['itemcode'] = $itemcode;
+                $product = $this->castApiProductLikeForm($product);
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($product['size'] ?? ''), (string)($product['color'] ?? ''));
@@ -629,7 +775,7 @@ class product
                     $usblock = isset($product['usblock']) ? (int)$product['usblock'] : 0;
                     $indiablock = isset($product['indiablock']) ? (int)$product['indiablock'] : 0;
                     $hscode = isset($product['hscode']) ? $product['hscode'] : '';
-                    $date_first_added = isset($product['date_first_added']) ? $product['date_first_added'] : '';
+                    $date_first_added = $this->normalizeApiDateValue($product['date_first_added'] ?? '');
                     $relatedSearch = self::vendorApiRelatedSearchFields($product);
                     $search_term = $relatedSearch['search_term'];
                     $search_category = $relatedSearch['search_category'];
@@ -830,6 +976,10 @@ class product
                 }
                 if (isset($product['variations'])) {
                     foreach ($product['variations'] as $variation) {
+                        if (!is_array($variation)) {
+                            continue;
+                        }
+                        $variation = $this->castApiProductLikeForm($variation);
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
                         $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($variation['size'] ?? ''), (string)($variation['color'] ?? ''));
                         $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
@@ -880,7 +1030,9 @@ class product
                             $usblock = isset($variation['usblock']) ? (int)$variation['usblock'] : (isset($product['usblock']) ? (int)$product['usblock'] : 0);
                             $indiablock = isset($variation['indiablock']) ? (int)$variation['indiablock'] : (isset($product['indiablock']) ? (int)$product['indiablock'] : 0);
                             $hscode = isset($variation['hscode']) ? $variation['hscode'] : (isset($product['hscode']) ? $product['hscode'] : '');
-                            $date_first_added = isset($variation['date_first_added']) ? $variation['date_first_added'] : (isset($product['date_first_added']) ? $product['date_first_added'] : '');
+                            $date_first_added = $this->normalizeApiDateValue(
+                                $variation['date_first_added'] ?? $product['date_first_added'] ?? ''
+                            );
                             $variationSearch = self::vendorApiRelatedSearchFields($variation);
                             $parentSearch = self::vendorApiRelatedSearchFields($product);
                             $search_term = $variationSearch['search_term'] !== ''
@@ -1715,8 +1867,10 @@ class product
 
     public function createProduct($data)
     {
-        $data['leadtime'] = $this->normalizeIntValue($data['leadtime'] ?? null, 0);
-        $data['instock_leadtime'] = $this->normalizeIntValue($data['instock_leadtime'] ?? null, 0);
+        $data = $this->castApiProductLikeForm($data);
+        if (($data['date_first_added'] ?? '') === '') {
+            $data['date_first_added'] = null;
+        }
         $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at, category, itemtype, snippet_description, india_net_qty, keywords, usblock, indiablock, hscode, date_first_added, search_term, search_category, long_description, long_description_india, aplus_content_ids, item_level, marketplace_vendor, colormap, flex_status, vendor_us, today_global, today_india, topurchase, backorder_percent, backorder_weeks, cp, usd, amazon_sold, amazon_leadtime, amazon_itemcode_alias, youtube_links, sketchfab_links, dimensions)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
@@ -4026,23 +4180,94 @@ class product
         ];
     }
 
+    public function getBulkProductUpdateCatalogStats(): array
+    {
+        $hasFlag = $this->vpProductsHasColumn('update_flag');
+
+        $totalRows = 0;
+        $res = $this->db->query('SELECT COUNT(*) AS c FROM vp_products');
+        if ($res && ($row = $res->fetch_assoc())) {
+            $totalRows = (int) $row['c'];
+        }
+
+        $pendingRows = $totalRows;
+        $updatedRows = 0;
+        if ($hasFlag) {
+            $res = $this->db->query(
+                'SELECT COUNT(*) AS c FROM vp_products WHERE update_flag IS NULL OR update_flag = 0'
+            );
+            if ($res && ($row = $res->fetch_assoc())) {
+                $pendingRows = (int) $row['c'];
+            }
+            $updatedRows = max(0, $totalRows - $pendingRows);
+        }
+
+        $distinctTotalCodes = 0;
+        $res = $this->db->query(
+            'SELECT COUNT(DISTINCT item_code) AS c FROM vp_products WHERE TRIM(IFNULL(item_code, \'\')) <> \'\''
+        );
+        if ($res && ($row = $res->fetch_assoc())) {
+            $distinctTotalCodes = (int) $row['c'];
+        }
+
+        $distinctPendingCodes = $distinctTotalCodes;
+        if ($hasFlag) {
+            $res = $this->db->query(
+                'SELECT COUNT(DISTINCT item_code) AS c FROM vp_products
+                 WHERE (update_flag IS NULL OR update_flag = 0) AND TRIM(IFNULL(item_code, \'\')) <> \'\''
+            );
+            if ($res && ($row = $res->fetch_assoc())) {
+                $distinctPendingCodes = (int) $row['c'];
+            }
+        }
+
+        return [
+            'has_update_flag' => $hasFlag,
+            'total_db_rows' => $totalRows,
+            'pending_db_rows' => $pendingRows,
+            'updated_db_rows' => $updatedRows,
+            'distinct_item_codes_total' => $distinctTotalCodes,
+            'distinct_item_codes_pending' => $distinctPendingCodes,
+        ];
+    }
+
+    /** Mark every product row pending again for bulk API sync. */
+    public function requeueAllProductsForBulkUpdate(): int
+    {
+        if (!$this->vpProductsHasColumn('update_flag')) {
+            return 0;
+        }
+        $this->db->query('UPDATE vp_products SET update_flag = 0');
+        return (int) $this->db->affected_rows;
+    }
+
     public function fetchProductsForUpdateScript($offset = 0, $limit = 500)
     {
-        $sql = "SELECT id, item_code, sku, size, color FROM vp_products WHERE update_flag IS NULL OR update_flag = 0 LIMIT ? OFFSET ?";
+        $offset = max(0, (int) $offset);
+        $limit = max(1, min(500, (int) $limit));
+        $where = '';
+        if ($this->vpProductsHasColumn('update_flag')) {
+            $where = ' WHERE update_flag IS NULL OR update_flag = 0';
+        }
+        $sql = "SELECT id, item_code, sku, size, color FROM vp_products{$where} ORDER BY id ASC LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
         }
-        $stmt->bind_param("ii", $limit, $offset);
+        $stmt->bind_param('ii', $limit, $offset);
         $stmt->execute();
         $result = $stmt->get_result();
         $products = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-                $products[] = $row['item_code'];
+                $itemCode = trim((string) ($row['item_code'] ?? ''));
+                if ($itemCode !== '') {
+                    $products[] = $itemCode;
+                }
             }
         }
-        return array_unique($products);
+        $stmt->close();
+        return array_values(array_unique($products));
         // if ($result && $result->num_rows > 0) {
         //     return ['success' => true, 'data' => $result->fetch_all(MYSQLI_ASSOC)];
         // }

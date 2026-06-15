@@ -1,6 +1,9 @@
 <?php
 
 require_once __DIR__ . '/../../shiprocket_service.php';
+require_once __DIR__ . '/../../helpers/dispatch_delivery_dates.php';
+require_once __DIR__ . '/../../helpers/dispatch_courier_identity.php';
+require_once __DIR__ . '/../../helpers/exotic_india_shipment_api.php';
 
 class Dispatch {
     private $db;
@@ -28,6 +31,47 @@ class Dispatch {
     {
         return $this->shiprocket()->apiUrl($path);
     }
+
+    /**
+     * @param array<string, mixed> $beforeDispatch row before update (empty on create)
+     */
+    private function maybeLogExoticIndiaShipment(int $dispatchId, array $beforeDispatch = []): void
+    {
+        if ($dispatchId <= 0) {
+            return;
+        }
+
+        try {
+            $result = exotic_india_log_dispatch_shipment($this->db, $dispatchId, $beforeDispatch);
+            if (empty($result['success']) && empty($result['skipped'])) {
+                error_log(
+                    'Exotic India shipment-add failed for dispatch '
+                    . $dispatchId
+                    . ': '
+                    . (string) ($result['message'] ?? 'unknown error')
+                );
+            }
+        } catch (Throwable $e) {
+            error_log(
+                'Exotic India shipment-add exception for dispatch '
+                . $dispatchId
+                . ': '
+                . $e->getMessage()
+            );
+        }
+    }
+
+    /** @param mixed $value mysqli bind_param rejects null for type "i" on PHP 8.1+ */
+    private function nullableIntBindValue($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $intVal = (int) $value;
+
+        return $intVal > 0 ? (string) $intVal : null;
+    }
+
     public function checkDispatchExists($invoiceId, $boxNo) {
         $sql = "SELECT id FROM vp_dispatch_details WHERE invoice_id = ? AND box_no = ?";
         $stmt = $this->db->prepare($sql);
@@ -42,10 +86,13 @@ class Dispatch {
     }   
     public function createDispatch($data) {
        
-        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, shiprocket_tracking_url, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, awb_code, shipment_status, label_url, groupname, box_size, created_by, created_at, pickup_location, batch_no) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, courier_company_id, shipper_id, courier_partner_id, awb_code, shipment_status, label_url, tracking_url, etd, edd, groupname, box_size, created_by, created_at, pickup_location, batch_no) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return false;
+        if (!$stmt) {
+            error_log('createDispatch prepare failed: ' . $this->db->error);
+            return false;
+        }
 
         $data['created_by'] = isset($data['created_by']) ? (int)$data['created_by'] : 0;
         $data['created_at'] = $data['created_at'] ?? date('Y-m-d H:i:s');
@@ -59,7 +106,6 @@ class Dispatch {
         $order_number = $data['order_number'] ?? null;
         $shiprocket_order_id = $data['shiprocket_order_id'] ?? null;
         $shiprocket_shipment_id = $data['shiprocket_shipment_id'] ?? null;
-        $shiprocket_tracking_url = $data['shiprocket_tracking_url'] ?? null;
         $box_items = $boxItemsJson;
         $pickup_location = $data['pickup_location'] ?? null;
         $length = (float)($data['length'] ?? 0);
@@ -71,22 +117,28 @@ class Dispatch {
         $shipping_charges = (float)($data['shipping_charges'] ?? 0);
         $dispatch_date = $data['dispatch_date'] ?? date('Y-m-d H:i:s');
         $courier_name = $data['courier_name'] ?? null;
+        $courier_company_id = $this->nullableIntBindValue($data['courier_company_id'] ?? null);
+        $shipper_id = $this->nullableIntBindValue($data['shipper_id'] ?? null);
+        $courier_partner_id = $this->nullableIntBindValue($data['courier_partner_id'] ?? null);
         $awb_code = $data['awb_code'] ?? null;
         $shipment_status = $data['shipment_status'] ?? null;
         $label_url = $data['label_url'] ?? null;
+        $tracking_url = $data['tracking_url'] ?? null;
+        $deliveryDates = extractDispatchDeliveryDates($data, $dispatch_date);
+        $etd = $deliveryDates['etd'];
+        $edd = $deliveryDates['edd'];
         $groupname = $data['groupname'] ?? null;
         $box_size = $data['box_size'] ?? null;
         $created_by = (int)$data['created_by'];
         $created_at = $data['created_at'];
 
         $stmt->bind_param(
-            'iisssssdddddddsssssssisss',
+            'iissssdddddddsssssssssssssisss',
             $invoice_id,
             $box_no,
             $order_number,
             $shiprocket_order_id,
             $shiprocket_shipment_id,
-            $shiprocket_tracking_url,
             $box_items,
             $length,
             $width,
@@ -97,9 +149,15 @@ class Dispatch {
             $shipping_charges,
             $dispatch_date,
             $courier_name,
+            $courier_company_id,
+            $shipper_id,
+            $courier_partner_id,
             $awb_code,
             $shipment_status,
             $label_url,
+            $tracking_url,
+            $etd,
+            $edd,
             $groupname,
             $box_size,
             $created_by,
@@ -109,12 +167,12 @@ class Dispatch {
         );
 
         if ($stmt->execute()) {
-            return $this->db->insert_id;
+            $dispatchId = (int) $this->db->insert_id;
+            $this->maybeLogExoticIndiaShipment($dispatchId);
+            return $dispatchId;
         }
-        //error return
         if ($stmt->error) {
-            error_log("Database error in createDispatch: " . $stmt->error);
-            echo "Database error: " . $stmt->error;
+            error_log('Database error in createDispatch: ' . $stmt->error);
         }
         return false;
     }
@@ -144,38 +202,84 @@ class Dispatch {
     //shiprocket api call
    
     public function shiprocketCreateShipment(array $payload) {
-        $apiUrl = $this->shiprocketUrl('/v1/external/orders/create/adhoc');
-        $authToken = $this->getShiprocketToken();
-        $ch = curl_init($apiUrl);
-        $json = json_encode($payload);
+        return $this->shiprocketJsonRequest('POST', '/v1/external/orders/create/adhoc', $payload);
+    }
 
+    /**
+     * @param array<string, mixed>|null $payload
+     * @return array{http_code:int,raw:string|false,json:array<string,mixed>|null,curl_error:string,auth_error:string}
+     */
+    private function shiprocketJsonRequest(string $method, string $path, ?array $payload = null): array
+    {
+        $apiUrl = $this->shiprocketUrl($path);
+        $authToken = $this->getShiprocketToken();
+        $authError = $this->shiprocket()->getLastAuthError();
+        if ($authToken === '') {
+            return [
+                'http_code' => 503,
+                'raw' => '',
+                'json' => ['message' => $authError !== '' ? $authError : 'Shiprocket auth token missing'],
+                'curl_error' => '',
+                'auth_error' => $authError,
+            ];
+        }
+
+        $response = $this->executeShiprocketCurl($apiUrl, $method, $authToken, $payload);
+        if ((int) ($response['http_code'] ?? 0) === 401) {
+            $authToken = $this->shiprocket()->handleUnauthorized();
+            $authError = $this->shiprocket()->getLastAuthError();
+            if ($authToken !== '') {
+                $response = $this->executeShiprocketCurl($apiUrl, $method, $authToken, $payload);
+                if ((int) ($response['http_code'] ?? 0) !== 401) {
+                    $authError = '';
+                }
+            }
+        }
+
+        $response['auth_error'] = $authError;
+
+        return $response;
+    }
+
+    /**
+     * @param array<string, mixed>|null $payload
+     * @return array{http_code:int,raw:string|false,json:array<string,mixed>|null,curl_error:string}
+     */
+    private function executeShiprocketCurl(string $apiUrl, string $method, string $authToken, ?array $payload = null): array
+    {
+        $ch = curl_init($apiUrl);
+        $json = $payload !== null ? json_encode($payload) : null;
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
             'Authorization: Bearer ' . $authToken,
-            'Accept: application/json'
+            'Accept: application/json',
         ]);
+
+        if (strtoupper($method) === 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+            if ($json !== null) {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
+            }
+        }
+
         $responseRaw = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlErr = curl_error($ch);
         curl_close($ch);
 
-        // Log for debugging
-        //file_put_contents(__DIR__ . '/shiprocket_http_log.txt', date('c') . " - URL: $apiUrl - HTTP: $httpCode - Error: $curlErr - Request: $json - Response: $responseRaw\n", FILE_APPEND);
-        //@chmod(__DIR__ . '/shiprocket_http_log.txt', 0666);
-
         $responseDecoded = null;
-        if ($responseRaw) {
-            $responseDecoded = json_decode($responseRaw, true);
+        if (is_string($responseRaw) && $responseRaw !== '') {
+            $decoded = json_decode($responseRaw, true);
+            $responseDecoded = is_array($decoded) ? $decoded : null;
         }
 
         return [
             'http_code' => $httpCode,
             'raw' => $responseRaw,
             'json' => $responseDecoded,
-            'curl_error' => $curlErr
+            'curl_error' => $curlErr,
         ];
     }
 
@@ -185,18 +289,15 @@ class Dispatch {
     }
 
     public function pickupLocations() {
-        $url = $this->shiprocketUrl('/v1/external/settings/company/pickup');
-        $headers = [
-            "Content-Type: application/json",
-            "Authorization: Bearer " . $this->getShiprocketToken()
-        ];
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        $response = curl_exec($ch); 
-        curl_close($ch);
-        return json_decode($response, true);
+        $response = $this->shiprocketJsonRequest('GET', '/v1/external/settings/company/pickup');
+        if (!is_array($response['json'])) {
+            return [
+                'auth_error' => $response['auth_error'] ?? '',
+                'data' => ['shipping_address' => []],
+            ];
+        }
+
+        return $response['json'];
     }
     // Get available couriers from Shiprocket based on serviceability
     public function getCourierServiceability($pickup_postcode, $delivery_postcode, $weight, $length, $breadth, $height, $cod = 0, $is_return = 0, $qc_check = 0, $mode = null) {
@@ -216,115 +317,139 @@ class Dispatch {
             $params['mode'] = $mode;
         }
         
-        // Build URL with query string
-        $url = $this->shiprocketUrl('/v1/external/courier/serviceability/?' . http_build_query($params));
-        
-        $headers = [
-            "Content-Type: application/json",
-            "Authorization: Bearer " . $this->getShiprocketToken()
-        ];
-        
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        // GET is the default, no need to set it explicitly
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-        
-        $responseDecoded = json_decode($response, true);
+        $path = '/v1/external/courier/serviceability/?' . http_build_query($params);
+        $url = $this->shiprocketUrl($path);
+        $authToken = $this->getShiprocketToken();
+        $authError = $this->shiprocket()->getLastAuthError();
+        if ($authToken === '') {
+            return [
+                'http_code' => 503,
+                'data' => ['message' => $authError !== '' ? $authError : 'Shiprocket auth token missing'],
+                'success' => false,
+                'params' => $params,
+                'request_url' => $url,
+                'curl_error' => '',
+                'auth_error' => $authError,
+            ];
+        }
+
+        $response = $this->executeShiprocketCurl($url, 'GET', $authToken);
+        if ((int) ($response['http_code'] ?? 0) === 401) {
+            $authToken = $this->shiprocket()->handleUnauthorized();
+            $authError = $this->shiprocket()->getLastAuthError();
+            if ($authToken !== '') {
+                $response = $this->executeShiprocketCurl($url, 'GET', $authToken);
+            }
+        }
+
+        $httpCode = (int) ($response['http_code'] ?? 0);
+        $responseDecoded = $response['json'] ?? null;
+
         return [
             'http_code' => $httpCode,
             'data' => $responseDecoded,
-            'success' => $httpCode == 200 && !empty($responseDecoded),
+            'success' => $httpCode === 200 && !empty($responseDecoded),
             'params' => $params,
             'request_url' => $url,
-            'curl_error' => $curlError,
+            'curl_error' => $response['curl_error'] ?? '',
+            'auth_error' => $authError,
         ];
     }
     //get labels from shiprocket
     public function getShiprocketLabels($shipmentId) {
-        //$url = "https://apiv2.shiprocket.in/v1/external/shipments/{$shipmentId}/label";
-        $url = $this->shiprocketUrl('/v1/external/courier/generate/label');
-        $headers = [
-            "Content-Type: application/json",
-            "Authorization: Bearer " . $this->getShiprocketToken()
-        ];
-        $postData = json_encode([
-            "shipment_id" => ["$shipmentId"]
+        $response = $this->shiprocketJsonRequest('POST', '/v1/external/courier/generate/label', [
+            'shipment_id' => [(string) $shipmentId],
         ]);
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        $response = curl_exec($ch); 
-        curl_close($ch);
-        return json_decode($response, true);
+
+        return $response['json'] ?? null;
     }
     //get tracking info from shiprocket
     public function getShiprocketTrackingInfo($shipment_id) {
-        $url = $this->shiprocketUrl('/v1/external/courier/track/shipment/' . rawurlencode((string) $shipment_id));
-        $headers = [
-            "Content-Type: application/json",
-            "Authorization: Bearer " . $this->getShiprocketToken()
-        ];
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        $response = curl_exec($ch); 
-        curl_close($ch);
-        return json_decode($response, true);
+        $response = $this->shiprocketJsonRequest(
+            'GET',
+            '/v1/external/courier/track/shipment/' . rawurlencode((string) $shipment_id)
+        );
+
+        return $response['json'] ?? null;
     }
     //get tracking info from shiprocket by AWB code
     public function getShiprocketTrackingByAWB($awb_code) {
-        $url = $this->shiprocketUrl('/v1/external/courier/track/awb/' . rawurlencode((string) $awb_code));
-        $headers = [
-            "Content-Type: application/json",
-            "Authorization: Bearer " . $this->getShiprocketToken()
-        ];
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        $response = curl_exec($ch); 
-        curl_close($ch);
-        return json_decode($response, true);
+        $response = $this->shiprocketJsonRequest(
+            'GET',
+            '/v1/external/courier/track/awb/' . rawurlencode((string) $awb_code)
+        );
+
+        return $response['json'] ?? null;
     }
     //get awb info from shiprocket (optional courier_id = user-selected courier from serviceability)
     public function getShiprocketAwbInfo($shipment_id, $courier_id = null) {
-        $url = $this->shiprocketUrl('/v1/external/courier/assign/awb');
-        $headers = [
-            "Content-Type: application/json",
-            "Authorization: Bearer " . $this->getShiprocketToken()
-        ];
         $body = ['shipment_id' => $shipment_id];
         if ($courier_id !== null && $courier_id !== '' && is_numeric($courier_id)) {
-            $body['courier_id'] = (int)$courier_id;
+            $body['courier_id'] = (int) $courier_id;
         }
-        $postData = json_encode($body);
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        $response = curl_exec($ch);
-        curl_close($ch);
-        return json_decode($response, true);
-    }
-    public function updateDispatchAwbCode($shipment_id, $awb_code) {
-        $sql = "UPDATE vp_dispatch_details SET awb_code = ? WHERE shiprocket_shipment_id = ?";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) return false;
 
-        $stmt->bind_param('si', $awb_code, $shipment_id);
+        $response = $this->shiprocketJsonRequest('POST', '/v1/external/courier/assign/awb', $body);
+
+        return $response['json'] ?? null;
+    }
+    public function updateDispatchAwbCode($shipment_id, $awb_code, array $extra = []) {
+        $fields = array_merge(['awb_code' => $awb_code], $extra);
+        return $this->updateDispatchByShiprocketShipmentId((int) $shipment_id, $fields);
+    }
+
+    public function updateDispatchByShiprocketShipmentId(int $shipment_id, array $data): bool
+    {
+        if ($shipment_id <= 0 || empty($data)) {
+            return false;
+        }
+
+        $setParts = [];
+        $types = '';
+        $values = [];
+
+        foreach ($data as $field => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+            $setParts[] = "$field = ?";
+            if (in_array($field, ['courier_company_id', 'shipper_id', 'courier_partner_id'], true)) {
+                $types .= 'i';
+                $values[] = (int) $value;
+            } else {
+                $types .= 's';
+                $values[] = $value;
+            }
+        }
+
+        if (empty($setParts)) {
+            return false;
+        }
+
+        $beforeDispatch = [];
+        $lookup = $this->db->prepare('SELECT * FROM vp_dispatch_details WHERE shiprocket_shipment_id = ? LIMIT 1');
+        if ($lookup) {
+            $lookup->bind_param('i', $shipment_id);
+            $lookup->execute();
+            $beforeDispatch = $lookup->get_result()?->fetch_assoc() ?: [];
+            $lookup->close();
+        }
+
+        $types .= 'i';
+        $values[] = $shipment_id;
+        $sql = 'UPDATE vp_dispatch_details SET ' . implode(', ', $setParts) . ' WHERE shiprocket_shipment_id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param($types, ...$values);
         $result = $stmt->execute();
         $stmt->close();
+
+        if ($result && !empty($beforeDispatch['id'])) {
+            $this->maybeLogExoticIndiaShipment((int) $beforeDispatch['id'], $beforeDispatch);
+        }
+
         return $result;
     }
     public function updateDispatchLabelUrl($shipment_id, $label_url) {
@@ -339,18 +464,48 @@ class Dispatch {
     }
     
     public function updateDispatchStatus($dispatchId, $status, $tracking_url = null, $etd = null, $edd = null) {
-        $sql = "UPDATE vp_dispatch_details SET shipment_status = ?, shiprocket_tracking_url = ?, etd = ?, edd = ? WHERE id = ?";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) return false;
+        $fields = ['shipment_status' => $status];
+        $argc = func_num_args();
 
-        $stmt->bind_param('ssssi', $status, $tracking_url, $etd, $edd, $dispatchId);
-        $result = $stmt->execute();
-        $stmt->close();
-        return $result;
+        if ($argc >= 3 && $tracking_url !== null && $tracking_url !== '') {
+            $fields['tracking_url'] = $tracking_url;
+        }
+        if ($argc >= 4 && $etd !== null && $etd !== '') {
+            $normalizedEtd = normalizeDispatchDeliveryDatetime($etd);
+            if ($normalizedEtd !== null) {
+                $fields['etd'] = $normalizedEtd;
+            }
+        }
+        if ($argc >= 5 && $edd !== null && $edd !== '') {
+            $normalizedEdd = normalizeDispatchDeliveryDatetime($edd);
+            if ($normalizedEdd !== null) {
+                $fields['edd'] = $normalizedEdd;
+            }
+        }
+
+        return $this->updateDispatch($dispatchId, $fields);
     }
 
     public function updateDispatch($dispatchId, $data) {
         if (empty($data)) return false;
+
+        $record = $this->getDispatchById($dispatchId);
+        $baseDate = is_array($record) ? (string) ($record['dispatch_date'] ?? date('Y-m-d H:i:s')) : date('Y-m-d H:i:s');
+        if (array_key_exists('etd', $data) && $data['etd'] !== null && $data['etd'] !== '') {
+            $data['etd'] = normalizeDispatchDeliveryDatetime($data['etd'], $baseDate);
+        }
+        if (array_key_exists('edd', $data) && $data['edd'] !== null && $data['edd'] !== '') {
+            $data['edd'] = normalizeDispatchDeliveryDatetime($data['edd'], $baseDate);
+        }
+        if (array_key_exists('etd', $data) && $data['etd'] === null) {
+            unset($data['etd']);
+        }
+        if (array_key_exists('edd', $data) && $data['edd'] === null) {
+            unset($data['edd']);
+        }
+        if (empty($data)) {
+            return false;
+        }
         
         $setParts = [];
         $types = '';
@@ -358,8 +513,13 @@ class Dispatch {
         
         foreach ($data as $field => $value) {
             $setParts[] = "$field = ?";
-            $types .= 's';
-            $values[] = $value;
+            if (in_array($field, ['courier_company_id', 'shipper_id', 'courier_partner_id', 'invoice_id', 'box_no', 'created_by'], true)) {
+                $types .= 'i';
+                $values[] = (int) $value;
+            } else {
+                $types .= 's';
+                $values[] = $value;
+            }
         }
         
         $types .= 'i'; // for dispatchId
@@ -372,6 +532,10 @@ class Dispatch {
         $stmt->bind_param($types, ...$values);
         $result = $stmt->execute();
         $stmt->close();
+        if ($result) {
+            $this->maybeLogExoticIndiaShipment($dispatchId, is_array($record) ? $record : []);
+        }
+
         return $result;
     }
       
@@ -402,13 +566,15 @@ class Dispatch {
         $labelInfoResponse = $this->getShiprocketLabels($shipmentId);
         //update dispatch record with new AWB code and label URL if available
         if($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
-            $awbCode = $awbInfoResponse['awb_code'] ?? null;
-            if($awbCode == null) {
-                $awbCode = $awbInfoResponse['response']['data']['awb_code'] ?? null;
+            $assignment = buildShiprocketAssignmentUpdate($this->db, $awbInfoResponse, [
+                'courier_name' => (string) ($dispatchRecord['courier_name'] ?? ''),
+                'courier_id' => (string) ($dispatchRecord['courier_company_id'] ?? ''),
+                'partner_code' => 'shiprocket',
+            ]);
+            if (!empty($assignment)) {
+                $this->updateDispatchByShiprocketShipmentId((int) $shipmentId, $assignment);
             }
-            if($awbCode) {
-                $this->updateDispatchAwbCode($shipmentId, $awbCode);
-            }
+            $awbCode = $assignment['awb_code'] ?? null;
         }
         if($labelInfoResponse && isset($labelInfoResponse['label_created']) && $labelInfoResponse['label_created'] == 1) {
             $labelUrl = $labelInfoResponse['label_url'] ?? null;
@@ -423,25 +589,23 @@ class Dispatch {
         if(!$shiprocketOrderId) {
             return ['success' => false, 'message' => 'No Shiprocket order ID associated with this dispatch record'];
         }
-        //call shiprocket cancel shipment API
-        $url = $this->shiprocketUrl('/v1/external/orders/cancel');
-        $headers = [
-            "Content-Type: application/json",
-            "Authorization: Bearer " . $this->getShiprocketToken()
-        ];
-        $postData = json_encode([
-            "ids" => [$shiprocketOrderId]
+        $response = $this->shiprocketJsonRequest('POST', '/v1/external/orders/cancel', [
+            'ids' => [$shiprocketOrderId],
         ]);
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        $response = curl_exec($ch); 
-        curl_close($ch);
-        $responseDecoded = json_decode($response, true);
-        return ['success' => $responseDecoded['status_code'] ?? $responseDecoded['status'] ?? false, 'message' => $responseDecoded['message'] ?? 'No response message', 'data' => $responseDecoded];
+        $responseDecoded = $response['json'] ?? null;
+        if (!is_array($responseDecoded)) {
+            return [
+                'success' => false,
+                'message' => (string) ($response['auth_error'] ?? 'No response from Shiprocket cancel API'),
+                'data' => $response,
+            ];
+        }
+
+        return [
+            'success' => $responseDecoded['status_code'] ?? $responseDecoded['status'] ?? false,
+            'message' => $responseDecoded['message'] ?? 'No response message',
+            'data' => $responseDecoded,
+        ];
         if(isset($responseDecoded['status_code']) && $responseDecoded['status_code'] == 200) {
             //update dispatch record to mark as cancelled
             // $sql = "UPDATE vp_dispatch_details SET shipment_status = 'cancelled' WHERE id = ?";

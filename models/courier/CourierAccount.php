@@ -230,12 +230,12 @@ class CourierAccount
         }
 
         $stmt = $this->conn->prepare(
-            'UPDATE courier_partner_accounts SET credentials_json = ?, updated_at = NOW() WHERE id = ?'
+            'UPDATE courier_partner_accounts SET credentials_json = ?, environment = ?, updated_at = NOW() WHERE id = ?'
         );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Could not prepare credential update.'];
         }
-        $stmt->bind_param('si', $normalized, $accountId);
+        $stmt->bind_param('ssi', $normalized, $effectiveEnv, $accountId);
         $ok = $stmt->execute();
         $err = $stmt->error;
         $stmt->close();

@@ -407,6 +407,8 @@ class ProductsController
     }
     public function updateApiCall()
     {
+        $this->prepareJsonAjaxResponse();
+        $this->startJsonApiErrorCapture();
         is_login();
         header('Content-Type: application/json; charset=UTF-8');
         global $productModel;
@@ -492,13 +494,22 @@ class ProductsController
 
         $externalApi['normalized_rows'] = $productRows;
         $updateLocalStock = isset($_GET['update_local_stock']) && (string)$_GET['update_local_stock'] === '1';
-        $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
+        $bulkConnection = $productModel->beginBulkProductUpdateConnection();
+        try {
+            $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
+        } finally {
+            $productModel->endBulkProductUpdateConnection($bulkConnection);
+        }
         if (!is_array($updateResult)) {
             $updateResult = ['success' => false, 'message' => 'Product update failed.'];
         }
         $updateResult['local_stock_updated'] = $updateLocalStock;
         $updateResult['external_api'] = $externalApi;
-        echo json_encode($updateResult, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $this->stopJsonApiErrorCapture();
+        echo json_encode(
+            $this->attachJsonApiDiagnostics($updateResult),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+        );
         exit;
         // if ($updatedCount['success']) {
         //     renderTemplateClean('views/success/success.php', ['message' => 'Product updated successfully. Total products updated: ' . $updatedCount['updated_count']], 'Update Successful');
@@ -680,6 +691,9 @@ class ProductsController
             $items = [$apiResult];
         }*/
         $items = product::normalizeVendorProductFetchItems($apiResult);
+        if (count($codes) > 1) {
+            $items = $this->backfillVendorApiLocalStockFromSingleFetch($items, $headers);
+        }
         //print_array($items);
         if (count($items) === 0) {
             if ($internalCall) {
@@ -727,7 +741,7 @@ class ProductsController
                     ? ('https://cdn.exoticindia.com/images/products/original/' . $apiItem['image'])
                     : '';
                 $item['groupname'] = $apiItem['groupname'] ?? '';
-                $item['local_stock'] = isset($apiItem['local_stock']) ? (int)$apiItem['local_stock'] : (isset($apiItem['stock']) ? (int)$apiItem['stock'] : 0);
+                $item['local_stock'] = max(0, (int)round((float)($apiItem['local_stock'] ?? $apiItem['stock'] ?? 0)));
                 $localStockByCode[$codeKey] = $item['local_stock'];
                 $baseSku = strtoupper(trim((string)($item['sku'] ?? '')));
                 if ($baseSku !== '') {
@@ -825,7 +839,7 @@ class ProductsController
                         $variantItem['size'] = $variant['size'] ?? '';
                         $variantItem['color'] = $variant['color'] ?? '';
                         $variantItem['title'] = $variant['title'] ?? $item['title'];
-                        $variantItem['local_stock'] = isset($variant['local_stock']) ? (int)$variant['local_stock'] : 0;
+                        $variantItem['local_stock'] = max(0, (int)round((float)($variant['local_stock'] ?? 0)));
                         $variantSku = strtoupper(trim((string)($variantItem['sku'] ?? '')));
                         if ($variantSku !== '') {
                             $localStockBySku[$variantSku] = $variantItem['local_stock'];
@@ -913,6 +927,15 @@ class ProductsController
                 }
                 $failed[] = (string)$reqCode;
             }
+            // Same stock sync as product detail "Refresh from API → Yes"
+            if ($items !== []) {
+                $bulkConnection = $productModel->beginBulkProductUpdateConnection();
+                try {
+                    $productModel->updateProductFromApi($items, ['preserve_local_stock' => false]);
+                } finally {
+                    $productModel->endBulkProductUpdateConnection($bulkConnection);
+                }
+            }
         }
         $failed = array_values(array_unique(array_map('strval', $failed)));
 
@@ -931,6 +954,64 @@ class ProductsController
             $payload['local_stock_by_variant'] = $localStockByVariant;
         }
         return $respond($payload);
+    }
+
+    /**
+     * Vendor batch fetch sometimes omits local_stock on some items (e.g. DDN329 when fetched with HBG309).
+     * Re-fetch those codes one at a time and merge stock fields only.
+     *
+     * @param list<array<string,mixed>> $items
+     * @param list<string> $headers
+     * @return list<array<string,mixed>>
+     */
+    private function backfillVendorApiLocalStockFromSingleFetch(array $items, array $headers): array
+    {
+        foreach ($items as $idx => $apiItem) {
+            if (!is_array($apiItem)) {
+                continue;
+            }
+            $code = trim((string)($apiItem['itemcode'] ?? $apiItem['item_code'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $ls = $apiItem['local_stock'] ?? null;
+            $st = $apiItem['stock'] ?? null;
+            $hasStock = ($ls !== null && $ls !== '') || ($st !== null && $st !== '');
+            if ($hasStock) {
+                continue;
+            }
+            $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($code);
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            $response = curl_exec($ch);
+            curl_close($ch);
+            if ($response === false) {
+                continue;
+            }
+            $one = json_decode($response, true);
+            if (!is_array($one)) {
+                continue;
+            }
+            $oneRows = product::normalizeVendorProductFetchItems($one);
+            $oneItem = $oneRows[0] ?? null;
+            if (!is_array($oneItem)) {
+                continue;
+            }
+            if (array_key_exists('local_stock', $oneItem) && $oneItem['local_stock'] !== null && $oneItem['local_stock'] !== '') {
+                $items[$idx]['local_stock'] = $oneItem['local_stock'];
+            }
+            if (array_key_exists('stock', $oneItem) && $oneItem['stock'] !== null && $oneItem['stock'] !== '') {
+                $items[$idx]['stock'] = $oneItem['stock'];
+            }
+            if (isset($oneItem['variations']) && is_array($oneItem['variations'])) {
+                $items[$idx]['variations'] = $oneItem['variations'];
+            }
+        }
+
+        return $items;
     }
 
     public function bulkImportScreen()
@@ -1842,6 +1923,30 @@ class ProductsController
             ];
         }
 
+        // Item code only (column A) — qty comes from API during import
+        if ($nf === 1) {
+            return [
+                'code' => $code,
+                'sku_raw' => '',
+                'color' => '',
+                'size' => '',
+                'qty' => 0,
+                'location' => '',
+            ];
+        }
+
+        // Code + optional sku/color without qty column
+        if ($nf >= 2 && $nf <= 3 && !$this->bulkImportCellLooksLikeQty((string)($row[1] ?? ''))) {
+            return [
+                'code' => $code,
+                'sku_raw' => trim((string)($row[1] ?? '')),
+                'color' => trim((string)($row[2] ?? '')),
+                'size' => '',
+                'qty' => 0,
+                'location' => '',
+            ];
+        }
+
         return null;
     }
 
@@ -2085,6 +2190,18 @@ class ProductsController
             ];
         }
 
+        // Item code only (column A) or partial columns without qty — qty comes from API during import
+        if (!$hasD && !$hasE) {
+            return [
+                'code' => $code,
+                'sku_raw' => trim($b),
+                'color' => trim($c),
+                'size' => '',
+                'qty' => 0,
+                'location' => '',
+            ];
+        }
+
         return null;
     }
 
@@ -2116,7 +2233,7 @@ class ProductsController
 
     private function findProductRowForOpeningStock(mysqli $conn, string $itemCode): ?array
     {
-        $sql = "SELECT id, sku, item_code, size, color FROM vp_products
+        $sql = "SELECT id, sku, item_code, size, color, local_stock FROM vp_products
                 WHERE item_code = ?
                 ORDER BY (CASE WHEN (size IS NULL OR size = '') AND (color IS NULL OR color = '') THEN 0 ELSE 1 END), id ASC
                 LIMIT 1";
@@ -2148,7 +2265,7 @@ class ProductsController
         $co = trim($importColor);
 
         if ($importSku !== '') {
-            $sql = 'SELECT id, sku, item_code, size, color FROM vp_products WHERE item_code = ? AND sku = ? LIMIT 1';
+            $sql = 'SELECT id, sku, item_code, size, color, local_stock FROM vp_products WHERE item_code = ? AND sku = ? LIMIT 1';
             $stmt = $conn->prepare($sql);
             if ($stmt) {
                 $stmt->bind_param('ss', $itemCode, $importSku);
@@ -2162,7 +2279,7 @@ class ProductsController
             }
         }
 
-        $sql2 = "SELECT id, sku, item_code, size, color FROM vp_products
+        $sql2 = "SELECT id, sku, item_code, size, color, local_stock FROM vp_products
                  WHERE item_code = ?
                  AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
                  AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
@@ -2320,6 +2437,9 @@ class ProductsController
         string $stockLocation,
         int $userId
     ): ?string {
+        if ($openingQty <= 0) {
+            return null;
+        }
         if ($warehouseId <= 0) {
             return 'Warehouse is required for opening stock.';
         }
@@ -2350,7 +2470,7 @@ class ProductsController
             $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
         }
         $qty = max(0, (int)$openingQty);
-        $runningStock = $qty; // new opening line baseline
+        $runningStock = $qty;
         $reason = 'Migration From Egreen';
         $refType = 'Egreen';
         $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
@@ -3025,9 +3145,13 @@ class ProductsController
         if (!empty($result['success'])) {
             $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
             $createdIdsByCode = is_array($result['created_ids_by_code'] ?? null) ? $result['created_ids_by_code'] : [];
-            $localStockByCode = is_array($result['local_stock_by_code'] ?? null) ? $result['local_stock_by_code'] : [];
-            $localStockBySku = is_array($result['local_stock_by_sku'] ?? null) ? $result['local_stock_by_sku'] : [];
-            $localStockByVariant = is_array($result['local_stock_by_variant'] ?? null) ? $result['local_stock_by_variant'] : [];
+            $failedCodeLookup = [];
+            foreach ($failedCodes as $fc) {
+                $fk = strtoupper(trim((string)$fc));
+                if ($fk !== '') {
+                    $failedCodeLookup[$fk] = true;
+                }
+            }
             foreach ($ids as $idx => $id) {
                 $code = $codes[$idx];
                 $rowPick = $picked[$idx] ?? [];
@@ -3039,30 +3163,9 @@ class ProductsController
                 if ($impSku === '') {
                     $impSku = $this->buildBulkImportAutoSku((string)$code, $isz, $ico);
                 }
-                // If uploaded qty is missing/0, use API local stock as import qty fallback.
-                if ($openQty <= 0) {
-                    $resolvedQty = null;
-                    $skuKey = strtoupper($impSku);
-                    $variantKey = strtoupper((string)$code) . '|' . strtolower($isz) . '|' . strtolower($ico);
-                    $codeKey = strtoupper((string)$code);
-                    if ($skuKey !== '' && array_key_exists($skuKey, $localStockBySku)) {
-                        $resolvedQty = (int)$localStockBySku[$skuKey];
-                    } elseif (array_key_exists($variantKey, $localStockByVariant)) {
-                        $resolvedQty = (int)$localStockByVariant[$variantKey];
-                    } elseif (array_key_exists($codeKey, $localStockByCode)) {
-                        $resolvedQty = (int)$localStockByCode[$codeKey];
-                    }
-                    if ($resolvedQty !== null) {
-                        $openQty = max(0, $resolvedQty);
-                        $qtyUp = $conn->prepare("UPDATE product_import_items SET opening_qty = ? WHERE id = ?");
-                        if ($qtyUp) {
-                            $qtyUp->bind_param('ii', $openQty, $id);
-                            $qtyUp->execute();
-                            $qtyUp->close();
-                        }
-                    }
-                }
-                $isFailed = in_array($code, $failedCodes, true);
+                $fileQty = $openQty;
+                $codeKeyLookup = strtoupper(trim((string)$code));
+                $isFailed = $codeKeyLookup !== '' && isset($failedCodeLookup[$codeKeyLookup]);
                 if ($isFailed) {
                     $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
                     $err = 'Failed to import from API response.';
@@ -3070,7 +3173,7 @@ class ProductsController
                     $stmtF->execute();
                     $stmtF->close();
                 } else {
-                    $createdIds = $createdIdsByCode[$code] ?? [];
+                    $createdIds = $createdIdsByCode[$code] ?? $createdIdsByCode[$codeKeyLookup] ?? [];
                     if (!is_array($createdIds)) {
                         $createdIds = [];
                     }
@@ -3083,6 +3186,14 @@ class ProductsController
                             $up->execute();
                             $up->close();
                         }
+                    }
+                    // No qty in file: local_stock already synced via updateProductFromApi in importApiCall.
+                    if ($fileQty <= 0) {
+                        $stmtS = $conn->prepare("UPDATE product_import_items SET status='success', error_message=NULL, processed_at=NOW() WHERE id=?");
+                        $stmtS->bind_param('i', $id);
+                        $stmtS->execute();
+                        $stmtS->close();
+                        continue;
                     }
                     $openErr = $this->bulkImportApplyOpeningStock(
                         $conn,
@@ -3253,102 +3364,25 @@ class ProductsController
                 $failedCodeLookup[$fu] = true;
             }
         }
-        $localStockByCode = is_array($result['local_stock_by_code'] ?? null) ? $result['local_stock_by_code'] : [];
-        $localStockBySku = is_array($result['local_stock_by_sku'] ?? null) ? $result['local_stock_by_sku'] : [];
-        $localStockByVariant = is_array($result['local_stock_by_variant'] ?? null) ? $result['local_stock_by_variant'] : [];
         $batchUserId = (int)($_SESSION['user']['id'] ?? 0);
         $updatedRows = 0;
         $failedRows = 0;
         foreach ($picked as $row) {
             $rowCode = (string)($row['item_code'] ?? '');
             $rowCodeUpper = strtoupper(trim($rowCode));
+            $rowId = (int)($row['id'] ?? 0);
             if ($rowCodeUpper !== '' && isset($failedCodeLookup[$rowCodeUpper])) {
                 $failedRows++;
-            } else {
-                $rowId = (int)($row['id'] ?? 0);
-                $impSku = trim((string)($row['import_sku'] ?? ''));
-                $isz = trim((string)($row['import_size'] ?? ''));
-                $ico = trim((string)($row['import_color'] ?? ''));
-                $stockLoc = (string)($row['stock_location'] ?? '');
-                if ($impSku === '') {
-                    $impSku = $this->buildBulkImportAutoSku($rowCode, $isz, $ico);
+                continue;
+            }
+            if ($rowId > 0) {
+                $stmtS = $conn->prepare("UPDATE product_import_items SET status='success', error_message=NULL, processed_at=NOW() WHERE id=?");
+                if ($stmtS) {
+                    $stmtS->bind_param('i', $rowId);
+                    $stmtS->execute();
+                    $stmtS->close();
                 }
-                if ($jobWarehouseId <= 0 || $rowId <= 0) {
-                    $failedRows++;
-                    if ($rowCodeUpper !== '') {
-                        $failedCodeLookup[$rowCodeUpper] = true;
-                        $failedCodes[] = $rowCode;
-                    }
-                    if ($rowId > 0) {
-                        $msg = 'ReUpdate skipped: warehouse is not configured for this job.';
-                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
-                        if ($stmtF) {
-                            $stmtF->bind_param('si', $msg, $rowId);
-                            $stmtF->execute();
-                            $stmtF->close();
-                        }
-                    }
-                    continue;
-                }
-                $resolvedQty = null;
-                $skuKey = strtoupper($impSku);
-                $variantKey = strtoupper($rowCode) . '|' . strtolower($isz) . '|' . strtolower($ico);
-                $codeKey = strtoupper($rowCode);
-                if ($skuKey !== '' && array_key_exists($skuKey, $localStockBySku)) {
-                    $resolvedQty = (int)$localStockBySku[$skuKey];
-                } elseif (array_key_exists($variantKey, $localStockByVariant)) {
-                    $resolvedQty = (int)$localStockByVariant[$variantKey];
-                } elseif (array_key_exists($codeKey, $localStockByCode)) {
-                    $resolvedQty = (int)$localStockByCode[$codeKey];
-                }
-                if ($resolvedQty === null) {
-                    $failedRows++;
-                    if ($rowCodeUpper !== '') {
-                        $failedCodeLookup[$rowCodeUpper] = true;
-                        $failedCodes[] = $rowCode;
-                    }
-                    $msg = 'ReUpdate skipped: API local stock missing for this item/SKU.';
-                    $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
-                    if ($stmtF) {
-                        $stmtF->bind_param('si', $msg, $rowId);
-                        $stmtF->execute();
-                        $stmtF->close();
-                    }
-                    continue;
-                }
-                $stockApplied = false;
-                if ($resolvedQty !== null && $rowId > 0 && $jobWarehouseId > 0) {
-                    $stockErr = $this->bulkImportApplyRefetchStock(
-                        $conn,
-                        $jobWarehouseId,
-                        $rowCode,
-                        $impSku,
-                        $isz,
-                        $ico,
-                        max(0, (int)$resolvedQty),
-                        $stockLoc,
-                        $batchUserId,
-                        $rowId
-                    );
-                    if ($stockErr !== null) {
-                        $failedRows++;
-                        if ($rowCodeUpper !== '') {
-                            $failedCodeLookup[$rowCodeUpper] = true;
-                            $failedCodes[] = $rowCode;
-                        }
-                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
-                        if ($stmtF) {
-                            $stmtF->bind_param('si', $stockErr, $rowId);
-                            $stmtF->execute();
-                            $stmtF->close();
-                        }
-                        continue;
-                    }
-                    $stockApplied = true;
-                }
-                if ($stockApplied) {
-                    $updatedRows++;
-                }
+                $updatedRows++;
             }
         }
         $newLastId = (int)end($picked)['id'];
@@ -5511,8 +5545,7 @@ class ProductsController
 
         // Validation
         if (empty($transfer_order_no)) {
-            echo json_encode(['success' => false, 'message' => 'Transfer order number is required']);
-            exit;
+            $this->exitTransferRequestResponse(['success' => false, 'message' => 'Transfer order number is required'], $wantsJson);
         }
 
         if (empty($product_ids) && !empty($data['items'])) {
@@ -5544,40 +5577,34 @@ class ProductsController
                 }
             }
             if (!$canResolve) {
-                echo json_encode(['success' => false, 'message' => 'No products specified']);
-                exit;
+                $this->exitTransferRequestResponse(['success' => false, 'message' => 'No products specified'], $wantsJson);
             }
         }
 
         if ($from_warehouse <= 0 || $to_warehouse <= 0) {
-            echo json_encode(['success' => false, 'message' => 'Please select source and destination warehouses']);
-            exit;
+            $this->exitTransferRequestResponse(['success' => false, 'message' => 'Please select source and destination warehouses'], $wantsJson);
         }
 
         if ($from_warehouse === $to_warehouse) {
-            echo json_encode(['success' => false, 'message' => 'Source and destination warehouses must be different']);
-            exit;
+            $this->exitTransferRequestResponse(['success' => false, 'message' => 'Source and destination warehouses must be different'], $wantsJson);
         }
 
         // Validate items have transfer quantities
         if (!isset($data['items']) || empty($data['items'])) {
-            echo json_encode(['success' => false, 'message' => 'No items found']);
-            exit;
+            $this->exitTransferRequestResponse(['success' => false, 'message' => 'No items found'], $wantsJson);
         }
 
         $hasItems = false;
         foreach ($data['items'] as $item) {
             $transfer_qty = isset($item['transfer_qty']) ? (int)$item['transfer_qty'] : 0;
             if ($transfer_qty <= 0) {
-                echo json_encode(['success' => false, 'message' => 'Transfer quantity must be greater than zero for all selected items']);
-                exit;
+                $this->exitTransferRequestResponse(['success' => false, 'message' => 'Transfer quantity must be greater than zero for all selected items'], $wantsJson);
             }
             $hasItems = true;
         }
 
         if (!$hasItems) {
-            echo json_encode(['success' => false, 'message' => 'Please enter transfer quantity for at least one item']);
-            exit;
+            $this->exitTransferRequestResponse(['success' => false, 'message' => 'Please enter transfer quantity for at least one item'], $wantsJson);
         }
 
         // Determine transfer ID (if editing existing transfer) before validating items.
@@ -5604,6 +5631,7 @@ class ProductsController
         $normalizedItems = [];
         $unresolvedItems = [];
         $itemCodesForRefresh = [];
+        $isBulkTransfer = !empty($data['is_bulk_transfer']) || array_key_exists('bulk_mode', $data);
         foreach ($data['items'] as $idx => $item) {
             $transfer_qty = (int)$item['transfer_qty'];
             if ($transfer_qty <= 0) {
@@ -5679,22 +5707,20 @@ class ProductsController
                 $lines[] = $lineText;
             }
             $uniqueCodes = array_values(array_unique(array_filter($codes)));
-            echo json_encode([
+            $this->exitTransferRequestResponse([
                 'success' => false,
                 'message' => 'Could not resolve SKU for some rows. Please review the list below, then click "Refresh from API" to sync all item codes at once.',
                 'unresolved_items' => $unresolvedItems,
                 'details' => $lines,
                 'refreshable_item_codes' => $uniqueCodes,
-            ]);
-            exit;
+            ], $wantsJson);
         }
 
-        if (!empty($itemCodesForRefresh)) {
+        if (!$isBulkTransfer && !empty($itemCodesForRefresh)) {
             $codes = array_values($itemCodesForRefresh);
             $apiSync = $this->refreshTransferItemsFromApi($codes, $productModel);
             if (!$apiSync['success']) {
-                echo json_encode(['success' => false, 'message' => $apiSync['message']]);
-                exit;
+                $this->exitTransferRequestResponse(['success' => false, 'message' => $apiSync['message']], $wantsJson);
             }
         }
 
@@ -5743,13 +5769,13 @@ class ProductsController
                 $skuLabels[] = $label;
                 $parts[] = $label . ' req:' . $row['requested_qty'] . ' avail:' . $row['available_qty'];
             }
-            echo json_encode([
+            $this->exitTransferRequestResponse([
                 'success' => false,
-                'message' => 'Insufficient stock in source warehouse for SKU(s): ' . implode(', ', array_unique($skuLabels)) . '. Please reduce transfer quantity and try again.',
+                'error_type' => 'insufficient_stock',
+                'message' => $this->insufficientStockSummaryMessage($insufficient),
                 'insufficient_items' => $insufficient,
                 'details' => $parts,
-            ]);
-            exit;
+            ], $wantsJson);
         }
 
         $data['items'] = $normalizedItems;
@@ -5801,8 +5827,7 @@ class ProductsController
                 exit;
             }
 
-            echo json_encode($result);
-            exit;
+            $this->finishJsonApiResponse($result);
         }
 
         // Call model to create transfer
@@ -5813,8 +5838,7 @@ class ProductsController
             exit;
         }
 
-        echo json_encode($result);
-        exit;
+        $this->finishJsonApiResponse($result);
     }
 
     /**
@@ -5880,7 +5904,12 @@ class ProductsController
             return ['success' => false, 'message' => 'Failed to refresh product data from API: no item rows returned for the submitted codes.' . $suffix];
         }
 
-        $res = $productModel->updateProductFromApi($allRows);
+        $charsetState = $productModel->beginBulkProductUpdateConnection();
+        try {
+            $res = $productModel->updateProductFromApi($allRows);
+        } finally {
+            $productModel->endBulkProductUpdateConnection($charsetState);
+        }
         if (!is_array($res) || empty($res['success'])) {
             $msg = is_array($res) ? (string)($res['message'] ?? 'Unknown API refresh error.') : 'Unknown API refresh error.';
             return ['success' => false, 'message' => 'Could not sync product data from API before transfer: ' . $msg];
@@ -5969,6 +5998,11 @@ class ProductsController
         ], $pageTitle);
     }
 
+    /** @var list<string> */
+    private array $jsonApiCapturedErrors = [];
+    private bool $jsonApiResponseSent = false;
+    private bool $jsonApiBodySent = false;
+
     /**
      * Clears nested output buffers (see index.php ob_start) and avoids printing PHP notices as HTML,
      * so stock-transfer AJAX responses stay valid JSON for fetch().json().
@@ -5983,6 +6017,257 @@ class ProductsController
         }
     }
 
+    private function markJsonApiBodySent(): void
+    {
+        $this->jsonApiBodySent = true;
+        $this->jsonApiResponseSent = true;
+        $GLOBALS['__vendor_json_api_body_sent'] = true;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function writeJsonApiPayload(array $payload, int $httpCode = 200): void
+    {
+        $this->prepareJsonAjaxResponse();
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=UTF-8');
+            if ($httpCode !== 200) {
+                http_response_code($httpCode);
+            }
+        }
+        $encoded = json_encode(
+            $this->attachJsonApiDiagnostics($payload),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        if ($encoded === false) {
+            $encoded = json_encode([
+                'success' => false,
+                'message' => 'Could not encode server response.',
+                'json_error' => json_last_error_msg(),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+        echo $encoded !== false ? $encoded : '{"success":false,"message":"Could not encode server response."}';
+        if (function_exists('flush')) {
+            @flush();
+        }
+        $this->markJsonApiBodySent();
+    }
+
+    private function startJsonApiErrorCapture(): void
+    {
+        $this->jsonApiCapturedErrors = [];
+        $this->jsonApiBodySent = false;
+        $this->jsonApiResponseSent = false;
+        $GLOBALS['__vendor_json_api_body_sent'] = false;
+        $this->registerVendorJsonShutdownGuard();
+        set_error_handler(function (int $severity, string $message, string $file, int $line): bool {
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
+            $this->jsonApiCapturedErrors[] = $this->formatJsonApiError($message, $file, $line);
+            if (!isset($GLOBALS['__vendor_json_api_php_errors']) || !is_array($GLOBALS['__vendor_json_api_php_errors'])) {
+                $GLOBALS['__vendor_json_api_php_errors'] = [];
+            }
+            $GLOBALS['__vendor_json_api_php_errors'][] = $this->formatJsonApiError($message, $file, $line);
+            return true;
+        });
+        register_shutdown_function([$this, 'handleJsonApiFatalShutdown']);
+    }
+
+    /**
+     * Global shutdown guard — runs even if instance handlers fail; ensures JSON body is never empty.
+     */
+    private function registerVendorJsonShutdownGuard(): void
+    {
+        if (!empty($GLOBALS['__vendor_json_shutdown_guard_registered'])) {
+            return;
+        }
+        $GLOBALS['__vendor_json_shutdown_guard_registered'] = true;
+        $GLOBALS['__vendor_json_api_php_errors'] = [];
+
+        register_shutdown_function(static function (): void {
+            if (!empty($GLOBALS['__vendor_json_api_body_sent'])) {
+                return;
+            }
+
+            $action = isset($_GET['action']) ? (string)$_GET['action'] : '';
+            $jsonActions = [
+                'process_transfer_stock_bulk',
+                'validate_transfer_stock_bulk_preview',
+                'refresh_transfer_items_from_api',
+            ];
+            if (!in_array($action, $jsonActions, true)) {
+                return;
+            }
+
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            $last = error_get_last();
+            $phpErrors = [];
+            if (!empty($GLOBALS['__vendor_json_api_php_errors']) && is_array($GLOBALS['__vendor_json_api_php_errors'])) {
+                $phpErrors = array_values(array_unique($GLOBALS['__vendor_json_api_php_errors']));
+            }
+            if ($last) {
+                $lastLine = $last['message'] . ' [' . basename(str_replace('\\', '/', (string)$last['file'])) . ':' . (int)$last['line'] . ']';
+                $phpErrors[] = $lastLine;
+                $phpErrors = array_values(array_unique($phpErrors));
+            }
+
+            $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+            $isFatal = $last && in_array($last['type'], $fatalTypes, true);
+            $message = $isFatal && $last
+                ? ('Fatal PHP error: ' . (string)$last['message'])
+                : 'Request ended without JSON output. The server may have timed out, run out of memory, or hit an uncaught error.';
+
+            if (!headers_sent()) {
+                header('Content-Type: application/json; charset=UTF-8');
+                http_response_code(500);
+            }
+
+            $payload = json_encode([
+                'success' => false,
+                'error_type' => 'empty_response',
+                'message' => $message,
+                'php_errors' => $phpErrors,
+                'action' => $action,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+            echo $payload !== false ? $payload : '{"success":false,"message":"Fatal error","error_type":"empty_response"}';
+            if (function_exists('flush')) {
+                @flush();
+            }
+            $GLOBALS['__vendor_json_api_body_sent'] = true;
+        });
+    }
+
+    public function handleJsonApiFatalShutdown(): void
+    {
+        if ($this->jsonApiBodySent || !empty($GLOBALS['__vendor_json_api_body_sent'])) {
+            return;
+        }
+
+        $last = error_get_last();
+        $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+        if ($last && in_array($last['type'], $fatalTypes, true)) {
+            $this->jsonApiCapturedErrors[] = $this->formatJsonApiError(
+                (string) $last['message'],
+                (string) $last['file'],
+                (int) $last['line']
+            );
+            $this->forceEmitJsonApiErrorResponse('Fatal PHP error during request.');
+            return;
+        }
+
+        $action = isset($_GET['action']) ? (string)$_GET['action'] : '';
+        $jsonActions = [
+            'process_transfer_stock_bulk',
+            'validate_transfer_stock_bulk_preview',
+            'refresh_transfer_items_from_api',
+        ];
+        if (in_array($action, $jsonActions, true)) {
+            error_log('[vendor JSON API] empty response for action=' . $action
+                . ($last ? (' last_error=' . $last['message'] . ' in ' . $last['file'] . ':' . $last['line']) : ''));
+            $this->forceEmitJsonApiErrorResponse('Request ended without a JSON response. Check PHP error logs or retry with fewer lines.');
+        }
+    }
+
+    private function stopJsonApiErrorCapture(): void
+    {
+        restore_error_handler();
+    }
+
+    private function formatJsonApiError(string $message, string $file, int $line): string
+    {
+        $message = trim(strip_tags($message));
+        $file = basename(str_replace('\\', '/', $file));
+        return $message . ' [' . $file . ':' . $line . ']';
+    }
+
+    /**
+     * @param array<string, mixed> $extra
+     */
+    private function emitJsonApiErrorResponse(string $summary, array $extra = []): void
+    {
+        if ($this->jsonApiBodySent) {
+            exit;
+        }
+        $payload = array_merge([
+            'success' => false,
+            'message' => $summary,
+            'php_errors' => array_values(array_unique($this->jsonApiCapturedErrors)),
+            'completed' => true,
+        ], $extra);
+        $this->writeJsonApiPayload($payload, 500);
+        exit;
+    }
+
+    private function forceEmitJsonApiErrorResponse(string $summary, array $extra = []): void
+    {
+        $this->jsonApiResponseSent = false;
+        $this->jsonApiBodySent = false;
+        $GLOBALS['__vendor_json_api_body_sent'] = false;
+        $this->emitJsonApiErrorResponse($summary, $extra);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function attachJsonApiDiagnostics(array $payload): array
+    {
+        if ($this->jsonApiCapturedErrors !== []) {
+            $payload['php_errors'] = array_values(array_unique($this->jsonApiCapturedErrors));
+            if (empty($payload['message']) && isset($payload['php_errors'][0])) {
+                $payload['message'] = $payload['php_errors'][0];
+            }
+        }
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function finishJsonApiResponse(array $payload, int $httpCode = 200): void
+    {
+        if ($this->jsonApiBodySent) {
+            exit;
+        }
+        $this->stopJsonApiErrorCapture();
+        $this->writeJsonApiPayload($payload, $httpCode);
+        exit;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $insufficient
+     */
+    private function insufficientStockSummaryMessage(array $insufficient): string
+    {
+        $count = count($insufficient);
+        if ($count === 1) {
+            return '1 product does not have enough stock at the source warehouse.';
+        }
+        if ($count > 1) {
+            return $count . ' products do not have enough stock at the source warehouse.';
+        }
+
+        return 'One or more items do not have enough stock at the source warehouse.';
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function exitTransferRequestResponse(array $payload, bool $wantsJson): void
+    {
+        if ($wantsJson) {
+            $this->finishJsonApiResponse($payload);
+        }
+        $this->writeJsonApiPayload($payload);
+        exit;
+    }
+
     public function transferBulkTemplate()
     {
         is_login();
@@ -5995,119 +6280,129 @@ class ProductsController
 
     public function processTransferStockBulk()
     {
-        is_login();
-        global $conn;
-
+        @set_time_limit(300);
+        @ini_set('memory_limit', '512M');
         $this->prepareJsonAjaxResponse();
+        $this->startJsonApiErrorCapture();
 
-        header('Content-Type: application/json');
+        try {
+            is_login();
+            global $conn;
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
-            exit;
-        }
-
-        require_once 'models/product/StockTransfer.php';
-        $stockTransferModel = new StockTransfer($conn);
-
-        $mode = isset($_POST['bulk_mode']) ? trim((string)$_POST['bulk_mode']) : 'upload';
-        $rows = [];
-
-        if ($mode === 'grid') {
-            $raw = $_POST['bulk_rows_json'] ?? '[]';
-            $decoded = json_decode($raw, true);
-            if (!is_array($decoded)) {
-                echo json_encode(['success' => false, 'message' => 'Invalid spreadsheet grid data']);
-                exit;
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid request method'], 405);
             }
-            foreach ($decoded as $r) {
-                if (!is_array($r)) {
-                    continue;
+
+            require_once 'models/product/StockTransfer.php';
+            $stockTransferModel = new StockTransfer($conn);
+
+            $mode = isset($_POST['bulk_mode']) ? trim((string)$_POST['bulk_mode']) : 'upload';
+            $rows = [];
+
+            if ($mode === 'grid') {
+                $raw = $_POST['bulk_rows_json'] ?? '[]';
+                $decoded = json_decode($raw, true);
+                if (!is_array($decoded)) {
+                    $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid spreadsheet grid data']);
                 }
-                $rows[] = [
-                    'item_code' => trim((string)($r['item_code'] ?? '')),
-                    'size' => trim((string)($r['size'] ?? '')),
-                    'color' => trim((string)($r['color'] ?? '')),
-                    'quantity' => isset($r['quantity']) ? (int)$r['quantity'] : 0,
-                ];
+                foreach ($decoded as $r) {
+                    if (!is_array($r)) {
+                        continue;
+                    }
+                    $rows[] = [
+                        'item_code' => trim((string)($r['item_code'] ?? '')),
+                        'size' => trim((string)($r['size'] ?? '')),
+                        'color' => trim((string)($r['color'] ?? '')),
+                        'quantity' => isset($r['quantity']) ? (int)$r['quantity'] : 0,
+                    ];
+                }
+            } else {
+                if (empty($_FILES['bulk_file']['tmp_name']) || !is_uploaded_file($_FILES['bulk_file']['tmp_name'])) {
+                    $this->finishJsonApiResponse(['success' => false, 'message' => 'Please choose a file (.csv, .xlsx, or .xls) with columns ItemCode, Size, Color, Quantity']);
+                }
+                $parsed = $this->parseBulkTransferUpload($_FILES['bulk_file']);
+                if (!empty($parsed['error'])) {
+                    $this->finishJsonApiResponse(['success' => false, 'message' => $parsed['error']]);
+                }
+                $rows = $parsed['rows'];
             }
-        } else {
-            if (empty($_FILES['bulk_file']['tmp_name']) || !is_uploaded_file($_FILES['bulk_file']['tmp_name'])) {
-                echo json_encode(['success' => false, 'message' => 'Please choose a file (.csv, .xlsx, or .xls) with columns ItemCode, Size, Color, Quantity']);
-                exit;
+
+            $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
+            if (!empty($aggregated['not_found'])) {
+                $this->respondBulkTransferProductNotFound($aggregated['not_found']);
             }
-            $parsed = $this->parseBulkTransferUpload($_FILES['bulk_file']);
-            if (!empty($parsed['error'])) {
-                echo json_encode(['success' => false, 'message' => $parsed['error']]);
-                exit;
+            if (!empty($aggregated['errors'])) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => $aggregated['errors'][0] ?? 'Validation failed']);
             }
-            $rows = $parsed['rows'];
+            if (empty($aggregated['items'])) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'No valid lines to transfer']);
+            }
+
+            $data = $_POST;
+            $data['is_bulk_transfer'] = true;
+            $data['items'] = $aggregated['items'];
+            $ids = [];
+            foreach ($aggregated['items'] as $it) {
+                if (!empty($it['product_id'])) {
+                    $ids[] = (int)$it['product_id'];
+                }
+            }
+            $data['product_ids'] = implode(',', array_unique($ids));
+
+            $this->validateAndSaveTransferRequest($data, $stockTransferModel, true);
+        } catch (Throwable $e) {
+            $this->finishJsonApiResponse([
+                'success' => false,
+                'message' => 'Bulk transfer failed: ' . $e->getMessage(),
+            ], 500);
         }
 
-        $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
-        if (!empty($aggregated['errors'])) {
-            echo json_encode(['success' => false, 'message' => implode(' ', $aggregated['errors'])]);
-            exit;
-        }
-        if (empty($aggregated['items'])) {
-            echo json_encode(['success' => false, 'message' => 'No valid lines to transfer']);
-            exit;
-        }
-
-        $data = $_POST;
-        $data['items'] = $aggregated['items'];
-        $ids = [];
-        foreach ($aggregated['items'] as $it) {
-            if (!empty($it['product_id'])) {
-                $ids[] = (int)$it['product_id'];
-            }
-        }
-        $data['product_ids'] = implode(',', array_unique($ids));
-
-        $this->validateAndSaveTransferRequest($data, $stockTransferModel, true);
+        $this->finishJsonApiResponse([
+            'success' => false,
+            'message' => 'Server did not return a transfer result. Please retry or contact support.',
+        ], 500);
     }
 
     public function validateTransferStockBulkPreview()
     {
-        is_login();
-        global $conn;
-
         $this->prepareJsonAjaxResponse();
+        $this->startJsonApiErrorCapture();
 
-        header('Content-Type: application/json');
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
-            exit;
-        }
+        try {
+            is_login();
+            global $conn;
 
-        require_once 'models/product/StockTransfer.php';
-        $stockTransferModel = new StockTransfer($conn);
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid request method'], 405);
+            }
 
-        $fromWarehouse = isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0;
-        if ($fromWarehouse <= 0) {
-            echo json_encode(['success' => false, 'message' => 'Please select source warehouse']);
-            exit;
-        }
+            require_once 'models/product/StockTransfer.php';
+            $stockTransferModel = new StockTransfer($conn);
 
-        $rowsRaw = $_POST['rows_json'] ?? '[]';
-        $rows = json_decode((string)$rowsRaw, true);
-        if (!is_array($rows)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid grid data']);
-            exit;
-        }
+            $fromWarehouse = isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0;
+            if ($fromWarehouse <= 0) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'Please select source warehouse']);
+            }
 
-        $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
-        if (!empty($aggregated['errors'])) {
-            echo json_encode(['success' => false, 'message' => implode(' ', $aggregated['errors'])]);
-            exit;
-        }
-        $items = $aggregated['items'] ?? [];
-        if (empty($items)) {
-            echo json_encode(['success' => false, 'message' => 'No valid lines to validate']);
-            exit;
-        }
+            $rowsRaw = $_POST['rows_json'] ?? '[]';
+            $rows = json_decode((string)$rowsRaw, true);
+            if (!is_array($rows)) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid grid data']);
+            }
 
-        $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
+            $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
+            if (!empty($aggregated['not_found'])) {
+                $this->respondBulkTransferProductNotFound($aggregated['not_found']);
+            }
+            if (!empty($aggregated['errors'])) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => $aggregated['errors'][0] ?? 'Validation failed']);
+            }
+            $items = $aggregated['items'] ?? [];
+            if (empty($items)) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'No valid lines to validate']);
+            }
+
+            $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
         $existingQtyBySku = [];
         if ($transferId > 0) {
             $existingTransfer = $stockTransferModel->getTransferById($transferId);
@@ -6174,14 +6469,13 @@ class ProductsController
                 $lines[] = $lineText;
             }
             $uniqueCodes = array_values(array_unique(array_filter($codes)));
-            echo json_encode([
+            $this->finishJsonApiResponse([
                 'success' => false,
                 'message' => 'Could not resolve SKU for some rows. Please review the list below, then click "Refresh from API" to sync all item codes at once.',
                 'unresolved_items' => $unresolvedItems,
                 'details' => $lines,
                 'refreshable_item_codes' => $uniqueCodes,
             ]);
-            exit;
         }
 
         $insufficient = [];
@@ -6209,17 +6503,27 @@ class ProductsController
                 $skuLabels[] = $label;
                 $parts[] = $label . ' req:' . $row['requested_qty'] . ' avail:' . $row['available_qty'];
             }
-            echo json_encode([
+            $this->finishJsonApiResponse([
                 'success' => false,
-                'message' => 'Insufficient stock in source warehouse for SKU(s): ' . implode(', ', array_unique($skuLabels)) . '. Please reduce transfer quantity and try again.',
+                'error_type' => 'insufficient_stock',
+                'message' => $this->insufficientStockSummaryMessage($insufficient),
                 'insufficient_items' => $insufficient,
                 'details' => $parts,
             ]);
-            exit;
         }
 
-        echo json_encode(['success' => true, 'message' => 'Stock is available for all grid lines.']);
-        exit;
+        $this->finishJsonApiResponse(['success' => true, 'message' => 'Stock is available for all grid lines.']);
+        } catch (Throwable $e) {
+            $this->finishJsonApiResponse([
+                'success' => false,
+                'message' => 'Stock preview failed: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        $this->finishJsonApiResponse([
+            'success' => false,
+            'message' => 'Server did not return a preview result.',
+        ], 500);
     }
 
     public function refreshTransferItemsFromApiAjax()
@@ -6263,6 +6567,98 @@ class ProductsController
             'refreshed_codes' => $codes,
         ]);
         exit;
+    }
+
+    /**
+     * @param list<array{item_code:string,size:string,color:string,quantity?:int,qty?:int}> $notFound
+     */
+    private function respondBulkTransferProductNotFound(array $notFound): void
+    {
+        $items = $this->enrichBulkTransferNotFoundItems($notFound);
+        $count = count($items);
+        $codes = [];
+        foreach ($items as $it) {
+            $ic = trim((string)($it['item_code'] ?? ''));
+            if ($ic !== '') {
+                $codes[strtoupper($ic)] = $ic;
+            }
+        }
+
+        $this->finishJsonApiResponse([
+            'success' => false,
+            'error_type' => 'product_not_found',
+            'message' => $count === 1
+                ? '1 row could not be matched to a product in your catalog.'
+                : $count . ' rows could not be matched to products in your catalog.',
+            'not_found_items' => $items,
+            'refreshable_item_codes' => array_values($codes),
+        ]);
+    }
+
+    /**
+     * @param list<array{item_code:string,size:string,color:string,quantity?:int,qty?:int}> $notFound
+     * @return list<array{item_code:string,size:string,color:string,quantity:int,catalog_variants:list<array{sku:string,size:string,color:string}>}>
+     */
+    private function enrichBulkTransferNotFoundItems(array $notFound): array
+    {
+        global $conn;
+
+        $variantCache = [];
+        $enriched = [];
+        foreach ($notFound as $row) {
+            $ic = trim((string)($row['item_code'] ?? ''));
+            $size = trim((string)($row['size'] ?? ''));
+            $color = trim((string)($row['color'] ?? ''));
+            $qty = (int)($row['quantity'] ?? $row['qty'] ?? 0);
+
+            $cacheKey = strtoupper($ic);
+            if ($ic !== '' && !isset($variantCache[$cacheKey])) {
+                $variantCache[$cacheKey] = $this->fetchCatalogVariantsForItemCode($conn, $ic);
+            }
+
+            $enriched[] = [
+                'item_code' => $ic,
+                'size' => $size,
+                'color' => $color,
+                'quantity' => $qty,
+                'catalog_variants' => $ic !== '' ? ($variantCache[$cacheKey] ?? []) : [],
+            ];
+        }
+
+        return $enriched;
+    }
+
+    /**
+     * @return list<array{sku:string,size:string,color:string}>
+     */
+    private function fetchCatalogVariantsForItemCode($conn, string $itemCode): array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return [];
+        }
+
+        $stmt = $conn->prepare(
+            'SELECT sku, IFNULL(TRIM(size), \'\') AS size, IFNULL(TRIM(color), \'\') AS color
+             FROM vp_products WHERE item_code = ? ORDER BY sku'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $itemCode);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = [
+                'sku' => (string)($row['sku'] ?? ''),
+                'size' => (string)($row['size'] ?? ''),
+                'color' => (string)($row['color'] ?? ''),
+            ];
+        }
+        $stmt->close();
+
+        return $rows;
     }
 
     /**
@@ -6953,21 +7349,115 @@ class ProductsController
     public function updateAllProduct()
     {
         is_login();
-        renderTemplateClean('views/products/update_all_product.php', [], 'Bulk Order Update all products');
+        global $productModel;
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $session = $_SESSION['bulk_import'] ?? ['count' => 0, 'offset' => 0];
+        $data = [
+            'bulk_max_limit' => $this->bulkProductUpdateMaxRecords(),
+            'bulk_catalog' => $productModel->getBulkProductUpdateCatalogStats(),
+            'bulk_session' => [
+                'api_products_this_run' => (int) ($session['count'] ?? 0),
+                'db_row_offset' => (int) ($session['offset'] ?? 0),
+                'db_rows_updated_this_run' => (int) ($session['affected_rows'] ?? 0),
+            ],
+        ];
+        renderTemplateClean('views/products/update_all_product.php', $data, 'Bulk product update from API');
     }
+
+    private function bulkProductUpdateMaxRecords(): int
+    {
+        return 5000;
+    }
+
+    /** @return array{api_products_this_run: int, db_row_offset: int} */
+    private function bulkProductUpdateSessionState(): array
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $session = $_SESSION['bulk_import'] ?? ['count' => 0, 'offset' => 0];
+        return [
+            'api_products_this_run' => (int) ($session['count'] ?? 0),
+            'db_row_offset' => (int) ($session['offset'] ?? 0),
+            'db_rows_updated_this_run' => (int) ($session['affected_rows'] ?? 0),
+        ];
+    }
+
+    /** @param array<string, mixed> $extra */
+    private function bulkProductUpdateInfoPayload(array $extra = []): array
+    {
+        global $productModel;
+        return array_merge([
+            'success' => true,
+            'max_limit' => $this->bulkProductUpdateMaxRecords(),
+            'session' => $this->bulkProductUpdateSessionState(),
+            'catalog' => $productModel->getBulkProductUpdateCatalogStats(),
+        ], $extra);
+    }
+
+    public function bulkProductUpdateStats()
+    {
+        is_login();
+        $this->prepareJsonAjaxResponse();
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($this->bulkProductUpdateInfoPayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    public function bulkProductUpdateReset()
+    {
+        is_login();
+        $this->prepareJsonAjaxResponse();
+        header('Content-Type: application/json; charset=UTF-8');
+        global $productModel;
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'POST required.']);
+            exit;
+        }
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        unset($_SESSION['bulk_import']);
+
+        $requeueAll = !empty($_POST['requeue_all']);
+        $requeuedRows = 0;
+        if ($requeueAll) {
+            $requeuedRows = $productModel->requeueAllProductsForBulkUpdate();
+        }
+
+        echo json_encode($this->bulkProductUpdateInfoPayload([
+            'message' => $requeueAll
+                ? "Started fresh: progress reset and {$requeuedRows} product rows marked pending for sync."
+                : 'Run progress reset. Next start will begin a new batch from the current pending queue.',
+            'requeued_rows' => $requeuedRows,
+            'requeue_all' => $requeueAll,
+        ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function updateAllProductScript()
     {
+        $this->prepareJsonAjaxResponse();
+        $this->startJsonApiErrorCapture();
         ini_set('max_execution_time', 30000);
         set_time_limit(30000);
-        global $ordersModel, $productModel;
-        
-        // Security check
-        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
-            http_response_code(403);
-            die('Unauthorized access.');
-        }
-        
-        header('Content-Type: application/json');
+        global $productModel;
+
+        header('Content-Type: application/json; charset=UTF-8');
+
+        try {
+            if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => 'Unauthorized access.'], 403);
+            }
+
+            if (!isset($productModel) || !is_object($productModel)) {
+                throw new \RuntimeException('Product model is not available.');
+            }
         
         // Initialize session for bulk import tracking
         if (session_status() === PHP_SESSION_NONE) {
@@ -6976,12 +7466,13 @@ class ProductsController
         if (!isset($_SESSION['bulk_import'])) {
             $_SESSION['bulk_import'] = [
                 'count' => 0,
-                'offset' => 0
+                'offset' => 0,
+                'affected_rows' => 0,
             ];
         }
         
         // Configuration
-        $MAX_RECORDS = 5000;
+        $MAX_RECORDS = $this->bulkProductUpdateMaxRecords();
         $BATCH_SIZE = 50; // API batch size
         $DB_LIMIT = 500;  // Database fetch limit per execution
         $SLEEP_SECONDS = 5; // Recommended sleep between calls
@@ -6992,7 +7483,8 @@ class ProductsController
         
         // Check if we've reached the limit
         if ($totalImported >= $MAX_RECORDS) {
-            echo json_encode([
+            unset($_SESSION['bulk_import']);
+            $this->finishJsonApiResponse([
                 'success' => true,
                 'message' => "✓ Maximum limit of {$MAX_RECORDS} records reached for today. Process completed successfully.",
                 'batch_imported' => 0,
@@ -7004,17 +7496,20 @@ class ProductsController
                 'should_continue' => false,
                 'next_action' => null
             ]);
-            unset($_SESSION['bulk_import']);
-            exit;
         }
         
         // Fetch up to 500 orders to update from database using offset
-        //$odr = $ordersModel->fetchOrdersForUpdateScript($currentOffset);
         $odr = $productModel->fetchProductsForUpdateScript($currentOffset, $DB_LIMIT);
-        // print_array($odr);
-        // exit;
+        if (!is_array($odr) || (array_key_exists('success', $odr) && $odr['success'] === false)) {
+            $this->finishJsonApiResponse([
+                'success' => false,
+                'message' => is_array($odr) ? ($odr['message'] ?? 'Failed to load products from database.') : 'Failed to load products from database.',
+                'completed' => true,
+            ]);
+        }
         if (empty($odr)) {
-            echo json_encode([
+            unset($_SESSION['bulk_import']);
+            $this->finishJsonApiResponse([
                 'success' => true,
                 'message' => '✓ No more products found in database. All available products have been processed.',
                 'batch_imported' => 0,
@@ -7026,8 +7521,6 @@ class ProductsController
                 'should_continue' => false,
                 'next_action' => null
             ]);
-            unset($_SESSION['bulk_import']);
-            exit;
         }
         
         // API configuration for product fetch
@@ -7046,7 +7539,9 @@ class ProductsController
         $errors = [];
         $batchesProcessed = 0;
         $affected_rows = 0;
-        
+
+        $bulkConnection = $productModel->beginBulkProductUpdateConnection();
+        try {
         // Process all batches from this 500-record fetch
         foreach ($productChunks as $chunkIndex => $chunk) {
             // Check if we'll exceed limit before processing
@@ -7098,6 +7593,10 @@ class ProductsController
             // exit;
             // Update products using updateProductFromApi
             $updateResult = $productModel->updateProductFromApi($productData, ['preserve_local_stock' => true]);
+            if (is_array($updateResult) && empty($updateResult['success'])) {
+                $errors[] = $updateResult['message'] ?? 'Product update failed.';
+                continue;
+            }
             $affected_rows += $updateResult['updated_count'] ?? 0;
             
             // Count items processed
@@ -7113,10 +7612,14 @@ class ProductsController
                 break;
             }
         }
+        } finally {
+            $productModel->endBulkProductUpdateConnection($bulkConnection);
+        }
         
         // Update total count and offset in session
         $totalImported += $imported;
         $_SESSION['bulk_import']['count'] = $totalImported;
+        $_SESSION['bulk_import']['affected_rows'] = (int) ($_SESSION['bulk_import']['affected_rows'] ?? 0) + $affected_rows;
         
         // Update offset for next batch (increase by 500)
         $nextOffset = $currentOffset + $DB_LIMIT;
@@ -7141,15 +7644,15 @@ class ProductsController
         }
         
         // Prepare response
-        $response = [
-            'success' => true,
+        $response = $this->bulkProductUpdateInfoPayload([
             'message' => $message,
             'batch_imported' => $imported,
             'batch_total_items' => $totalorder,
             'batch_skipped' => $skipped,
             'batches_processed' => $batchesProcessed,
             'total_imported' => $totalImported,
-            'max_limit' => $MAX_RECORDS,
+            'batch_affected_rows' => $affected_rows,
+            'session_affected_rows' => (int) $_SESSION['bulk_import']['affected_rows'],
             'completed' => $completed,
             'should_continue' => $shouldContinue,
             'progress_percent' => round(($totalImported / $MAX_RECORDS) * 100, 2),
@@ -7157,8 +7660,8 @@ class ProductsController
             'result' => $result,
             'affected_rows' => $affected_rows,
             'current_offset' => $currentOffset,
-            'next_offset' => $nextOffset
-        ];
+            'next_offset' => $nextOffset,
+        ]);
         
         // Add next action if should continue
         if ($shouldContinue) {
@@ -7175,7 +7678,12 @@ class ProductsController
             $response['error_count'] = count($errors);
         }
         
-        echo json_encode($response);
-        exit;
+            $this->finishJsonApiResponse($response);
+        } catch (\Throwable $e) {
+            $this->stopJsonApiErrorCapture();
+            $this->emitJsonApiErrorResponse('Bulk update failed: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+            ]);
+        }
     }
 }

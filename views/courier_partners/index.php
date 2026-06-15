@@ -6,16 +6,21 @@ if ($flash) {
 $rows = $rows ?? [];
 $search = $search ?? '';
 $statusFilter = $status_filter ?? '';
+$shipperIdFilter = $shipper_id_filter ?? '';
+$shipperIdExact = $shipper_id_exact ?? '';
+$serviceAreaFilter = $service_area_filter ?? '';
+$accountsFilter = $accounts_filter ?? '';
 $currentPage = (int)($currentPage ?? 1);
 $totalPages = (int)($totalPages ?? 1);
-$limit = (int)($limit ?? 20);
+$limit = (int)($limit ?? 50);
 $totalRecords = (int)($totalRecords ?? 0);
 $rowCount = is_array($rows) ? count($rows) : 0;
-$filtersPanelOpen = trim($search) !== '' || ($statusFilter !== '' && $statusFilter !== null);
+$filtersPanelOpen = trim($search) !== '' || in_array($shipperIdFilter, ['missing', 'specific'], true) || ($serviceAreaFilter !== '' && $serviceAreaFilter !== null) || ($accountsFilter !== '' && $accountsFilter !== null) || ($statusFilter !== '' && $statusFilter !== null);
 $qsParams = $_GET ?? [];
 unset($qsParams['page_no']);
 $qs = $qsParams ? ('&' . http_build_query($qsParams)) : '';
 $pgBase = '?page=courier_partners&action=list' . $qs;
+$partnersPayloadJson = '';
 ?>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -36,6 +41,12 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                 </p>
             </div>
             <div class="flex flex-col sm:flex-row shrink-0 lg:pl-4 lg:self-center gap-2">
+                <form method="post" action="?page=courier_partners&amp;action=syncShippers" class="inline">
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition whitespace-nowrap">
+                        <i class="fas fa-sync-alt text-xs" aria-hidden="true"></i>
+                        Sync shippers
+                    </button>
+                </form>
                 <button type="button" id="cpBtnOpenAdd"
                     class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
                     <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
@@ -72,7 +83,7 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                 </span>
                 <div class="min-w-0">
                     <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Filter by partner name, code, or active status.</p>
+                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Filter by name, shipper ID, service area, courier accounts, or status.</p>
                 </div>
             </div>
             <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
@@ -86,13 +97,33 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
             <input type="hidden" name="page" value="courier_partners">
             <input type="hidden" name="action" value="list">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4">
-                <div class="sm:col-span-2">
+            <div class="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-end">
+                <div class="w-full sm:max-w-[16.5rem] xl:w-[16.5rem] shrink-0">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Keyword</label>
-                    <input type="text" name="search_text" value="<?php echo htmlspecialchars($search); ?>" placeholder="Partner name or code"
+                    <input type="text" name="search_text" value="<?php echo htmlspecialchars($search); ?>" placeholder="Name or code"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                 </div>
-                <div>
+                <div class="w-full sm:max-w-[10.5rem] xl:w-40 shrink-0">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Shipper ID</label>
+                    <select name="shipper_id_filter" id="cp_shipper_id_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="">All</option>
+                        <option value="missing" <?php echo $shipperIdFilter === 'missing' ? 'selected' : ''; ?>>No Shipper ID</option>
+                        <option value="specific" <?php echo $shipperIdFilter === 'specific' ? 'selected' : ''; ?>>Specific ID</option>
+                    </select>
+                    <input type="number" name="shipper_id_exact" id="cp_shipper_id_exact" min="1" step="1" placeholder="ID"
+                        value="<?php echo htmlspecialchars((string) $shipperIdExact); ?>"
+                        class="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition <?php echo $shipperIdFilter === 'specific' ? '' : 'hidden'; ?>">
+                </div>
+                <div class="w-full sm:max-w-[9.5rem] xl:w-36 shrink-0">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Service area</label>
+                    <select name="service_area_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="">All</option>
+                        <option value="domestic" <?php echo $serviceAreaFilter === 'domestic' ? 'selected' : ''; ?>>Domestic</option>
+                        <option value="international" <?php echo $serviceAreaFilter === 'international' ? 'selected' : ''; ?>>International</option>
+                        <option value="both" <?php echo $serviceAreaFilter === 'both' ? 'selected' : ''; ?>>Both</option>
+                    </select>
+                </div>
+                <div class="w-full sm:max-w-[7.5rem] xl:w-28 shrink-0">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
                     <select name="status_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                         <option value="">All</option>
@@ -100,9 +131,15 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                         <option value="0" <?php echo $statusFilter === '0' ? 'selected' : ''; ?>>Inactive</option>
                     </select>
                 </div>
-            </div>
-
-            <div class="mt-5 flex flex-wrap items-center gap-3">
+                <div class="w-full sm:max-w-[7.5rem] xl:w-28 shrink-0">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Configured</label>
+                    <select name="accounts_filter" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="">All</option>
+                        <option value="1" <?php echo $accountsFilter === '1' ? 'selected' : ''; ?>>Yes</option>
+                        <option value="0" <?php echo $accountsFilter === '0' ? 'selected' : ''; ?>>No</option>
+                    </select>
+                </div>
+                <div class="flex flex-wrap items-center gap-3 xl:ml-auto xl:pb-0.5">
                 <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
                     <i class="fas fa-search text-xs opacity-90" aria-hidden="true"></i>
                     Apply filters
@@ -110,9 +147,23 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                 <a href="?page=courier_partners&action=list" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition">
                     Reset
                 </a>
+                </div>
             </div>
         </form>
     </details>
+
+    <script>
+    (function () {
+        var sel = document.getElementById('cp_shipper_id_filter');
+        var exact = document.getElementById('cp_shipper_id_exact');
+        if (!sel || !exact) return;
+        function syncShipperIdExact() {
+            exact.classList.toggle('hidden', sel.value !== 'specific');
+        }
+        sel.addEventListener('change', syncShipperIdExact);
+        syncShipperIdExact();
+    })();
+    </script>
 
     <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
         <div class="overflow-x-auto">
@@ -121,15 +172,17 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                     <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <th class="px-5 py-3.5 whitespace-nowrap">Code</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Partner name</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Shipper ID</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Domestic</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">International</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Accounts</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap">Actions</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap min-w-[11rem]">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <?php if (!$rows): ?>
-                        <tr><td colspan="6" class="px-5 py-16 text-center">
+                        <tr><td colspan="8" class="px-5 py-16 text-center">
                             <div class="mx-auto flex max-w-sm flex-col items-center">
                                 <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                     <i class="fas fa-truck" aria-hidden="true"></i>
@@ -140,23 +193,26 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                             </div>
                         </td></tr>
                     <?php else: ?>
-                        <?php foreach ($rows as $r): ?>
-                            <?php
+                        <?php
+                        $partnersPayload = [];
+                        foreach ($rows as $r):
+                                $shipperId = (int) ($r['shipper_id'] ?? 0);
                                 $payload = [
-                                    'id' => (int)$r['id'],
-                                    'partner_code' => (string)$r['partner_code'],
-                                    'partner_name' => (string)$r['partner_name'],
-                                    'supports_domestic' => (int)$r['supports_domestic'],
-                                    'supports_international' => (int)$r['supports_international'],
-                                    'is_active' => (int)$r['is_active'],
-                                    'notes' => (string)($r['notes'] ?? ''),
+                                    'id' => (int) $r['id'],
+                                    'partner_code' => (string) $r['partner_code'],
+                                    'partner_name' => (string) $r['partner_name'],
+                                    'shipper_id' => $shipperId > 0 ? $shipperId : '',
+                                    'supports_domestic' => (int) $r['supports_domestic'],
+                                    'supports_international' => (int) $r['supports_international'],
+                                    'is_active' => (int) $r['is_active'],
+                                    'notes' => (string) ($r['notes'] ?? ''),
                                 ];
-                                /* HEX_* so JSON is safe inside double-quoted HTML attribute for JSON.parse */
-                                $payloadJson = json_encode($payload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
-                            ?>
+                                $partnersPayload[] = $payload;
+                        ?>
                             <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors align-top">
                                 <td class="px-5 py-4 font-semibold text-gray-800"><?php echo htmlspecialchars((string)$r['partner_code']); ?></td>
                                 <td class="px-5 py-4 text-sm text-gray-800"><?php echo htmlspecialchars((string)$r['partner_name']); ?></td>
+                                <td class="px-5 py-4 text-sm tabular-nums text-gray-700"><?php echo $shipperId > 0 ? (int) $shipperId : '—'; ?></td>
                                 <td class="px-5 py-4">
                                     <?php if ((int)$r['supports_domestic'] === 1): ?>
                                         <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 shadow-sm ring-1 ring-inset ring-emerald-600/25">Yes</span>
@@ -171,6 +227,7 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                                         <span class="text-xs font-medium text-gray-400 tabular-nums">No</span>
                                     <?php endif; ?>
                                 </td>
+                                <td class="px-5 py-4 text-sm tabular-nums text-gray-700"><?php echo (int) ($r['account_count'] ?? 0); ?></td>
                                 <td class="px-5 py-4">
                                     <?php if ((int)$r['is_active'] === 1): ?>
                                         <span class="inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-800">Active</span>
@@ -178,19 +235,14 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                                         <span class="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">Inactive</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-5 py-4">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <a href="?page=courier_accounts&amp;action=list&amp;partner_id=<?php echo (int) $r['id']; ?>"
-                                            class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition">
-                                            <i class="fas fa-id-card-alt text-[10px]" aria-hidden="true"></i>
-                                            Accounts
-                                        </a>
-                                        <button type="button" class="cp-btn-edit inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50 transition"
-                                            data-partner="<?php echo $payloadJson; ?>">
+                                <td class="px-5 py-4 min-w-[11rem] whitespace-nowrap">
+                                    <div class="flex flex-nowrap items-center gap-2">
+                                        <button type="button" class="cp-btn-edit inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50 transition"
+                                            data-partner-id="<?php echo (int) $r['id']; ?>">
                                             <i class="fas fa-pen text-[10px] text-indigo-600" aria-hidden="true"></i>
                                             Edit
                                         </button>
-                                        <form method="post" action="?page=courier_partners&action=deleteRecord" class="inline" onsubmit="return confirm('Delete this courier partner?');">
+                                        <form method="post" action="?page=courier_partners&action=deleteRecord" class="inline-flex shrink-0" onsubmit="return confirm('Delete this courier partner?');">
                                             <input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>">
                                             <button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 transition">
                                                 <i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
@@ -201,6 +253,15 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                        <?php
+                        $partnersPayloadJson = json_encode(
+                            $partnersPayload,
+                            JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
+                        );
+                        if ($partnersPayloadJson === false) {
+                            $partnersPayloadJson = '[]';
+                        }
+                        ?>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -234,6 +295,10 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
         </div>
     <?php endif; ?>
 </div>
+
+<?php if ($partnersPayloadJson !== ''): ?>
+<script type="application/json" id="cpPartnersData"><?php echo $partnersPayloadJson; ?></script>
+<?php endif; ?>
 
 <!-- Modal: Add / Edit Courier Partner -->
 <div id="courierPartnerModal" class="fixed inset-0 z-[100] hidden opacity-0 transition-opacity duration-200" aria-hidden="true" role="dialog" aria-labelledby="cpModalTitle">
@@ -275,6 +340,11 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
                         <label for="cp_field_name" class="block text-xs font-semibold text-gray-600 mb-1.5">Partner name <span class="text-red-500">*</span></label>
                         <input type="text" name="partner_name" id="cp_field_name" maxlength="120" required autocomplete="organization"
                             placeholder="e.g. DHL Express India"
+                            class="h-11 w-full rounded-xl border border-gray-300 px-3.5 text-sm text-gray-900 shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition">
+                    </div>
+                    <div class="sm:col-span-1">
+                        <label for="cp_field_shipper_id" class="block text-xs font-semibold text-gray-600 mb-1.5">Shipper ID</label>
+                        <input type="number" name="shipper_id" id="cp_field_shipper_id" min="1" step="1"
                             class="h-11 w-full rounded-xl border border-gray-300 px-3.5 text-sm text-gray-900 shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition">
                     </div>
                 </div>
@@ -320,6 +390,27 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
     var titleEl = document.getElementById('cpModalTitle');
     var subtitleEl = document.getElementById('cpModalSubtitle');
     var submitBtn = document.getElementById('cpSubmitBtn');
+    var partnersById = {};
+
+    (function loadPartnersData() {
+        var el = document.getElementById('cpPartnersData');
+        if (!el) return;
+        try {
+            var list = JSON.parse(el.textContent || '[]');
+            if (!Array.isArray(list)) return;
+            list.forEach(function (row) {
+                if (row && row.id != null) {
+                    partnersById[String(row.id)] = row;
+                }
+            });
+        } catch (err) {
+            console.error('Courier partners: could not parse partner data', err);
+        }
+    })();
+
+    if (!modal || !form || !titleEl || !subtitleEl || !submitBtn) {
+        return;
+    }
 
     function openModal() {
         if (!modal || !panel) return;
@@ -372,6 +463,7 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
         document.getElementById('cp_field_domestic').checked = true;
         document.getElementById('cp_field_intl').checked = true;
         document.getElementById('cp_field_status').value = '1';
+        document.getElementById('cp_field_shipper_id').value = '';
         syncMarketCardStyles();
     }
 
@@ -379,6 +471,7 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
         document.getElementById('cp_field_id').value = p.id || '';
         document.getElementById('cp_field_code').value = p.partner_code || '';
         document.getElementById('cp_field_name').value = p.partner_name || '';
+        document.getElementById('cp_field_shipper_id').value = p.shipper_id ? String(p.shipper_id) : '';
         document.getElementById('cp_field_domestic').checked = !!p.supports_domestic;
         document.getElementById('cp_field_intl').checked = !!p.supports_international;
         document.getElementById('cp_field_status').value = String(p.is_active === 1 ? 1 : 0);
@@ -389,10 +482,13 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
         syncMarketCardStyles();
     }
 
-    document.getElementById('cpBtnOpenAdd').addEventListener('click', function () {
-        resetFormAdd();
-        openModal();
-    });
+    var addBtn = document.getElementById('cpBtnOpenAdd');
+    if (addBtn) {
+        addBtn.addEventListener('click', function () {
+            resetFormAdd();
+            openModal();
+        });
+    }
 
     document.querySelectorAll('.cp-open-add').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -403,26 +499,30 @@ $pgBase = '?page=courier_partners&action=list' . $qs;
 
     document.querySelectorAll('.cp-btn-edit').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            var raw = btn.getAttribute('data-partner');
-            if (!raw) return;
-            try {
-                var p = JSON.parse(raw);
-                fillFormEdit(p);
-                openModal();
-            } catch (e) {}
+            var id = btn.getAttribute('data-partner-id');
+            if (!id) return;
+            var p = partnersById[String(id)];
+            if (!p) return;
+            fillFormEdit(p);
+            openModal();
         });
     });
 
     modal.querySelectorAll('.cp-modal-close').forEach(function (el) {
         el.addEventListener('click', closeModal);
     });
-    modal.querySelector('.cp-modal-backdrop').addEventListener('click', closeModal);
+    var backdrop = modal.querySelector('.cp-modal-backdrop');
+    if (backdrop) {
+        backdrop.addEventListener('click', closeModal);
+    }
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
     });
 
-    document.getElementById('cp_field_domestic').addEventListener('change', syncMarketCardStyles);
-    document.getElementById('cp_field_intl').addEventListener('change', syncMarketCardStyles);
+    var domesticField = document.getElementById('cp_field_domestic');
+    var intlField = document.getElementById('cp_field_intl');
+    if (domesticField) domesticField.addEventListener('change', syncMarketCardStyles);
+    if (intlField) intlField.addEventListener('change', syncMarketCardStyles);
 })();
 </script>

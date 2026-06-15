@@ -155,7 +155,11 @@ function api_call_log_write(array $payload): void
         $slug
     );
 
-    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PRETTY_PRINT);
+    $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $jsonFlags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    $json = json_encode($payload, $jsonFlags);
     if ($json === false) {
         $json = '{"error":"json_encode_failed"}';
     }

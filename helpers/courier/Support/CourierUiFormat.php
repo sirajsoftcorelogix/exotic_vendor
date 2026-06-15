@@ -18,10 +18,17 @@ class CourierUiFormat
             if (!is_array($quote)) {
                 continue;
             }
+            $metadata = is_array($quote['metadata'] ?? null) ? $quote['metadata'] : [];
+            $priceSource = (string) ($quote['price_source'] ?? $metadata['price_source'] ?? '');
+            if ($priceSource !== '') {
+                $metadata['price_source'] = $priceSource;
+            }
             $rows[] = [
                 'id' => (string) ($quote['id'] ?? ''),
                 'name' => (string) ($quote['name'] ?? 'Courier'),
-                'price' => (float) ($quote['price'] ?? 0),
+                'price' => array_key_exists('price', $quote) && $quote['price'] === null
+                    ? null
+                    : (float) ($quote['price'] ?? 0),
                 'currency' => strtoupper((string) ($quote['currency'] ?? 'INR')),
                 'etd' => (string) ($quote['etd'] ?? 'N/A'),
                 'rating' => (float) ($quote['rating'] ?? 0),
@@ -30,7 +37,9 @@ class CourierUiFormat
                 'product_group' => (string) ($quote['product_group'] ?? ''),
                 'product_type' => (string) ($quote['product_type'] ?? ''),
                 'service_code' => (string) ($quote['service_code'] ?? $quote['product_type'] ?? ''),
-                'metadata' => is_array($quote['metadata'] ?? null) ? $quote['metadata'] : [],
+                'price_source' => $priceSource,
+                'price_label' => (string) ($quote['price_label'] ?? $metadata['price_label'] ?? ''),
+                'metadata' => $metadata,
             ];
         }
         return $rows;

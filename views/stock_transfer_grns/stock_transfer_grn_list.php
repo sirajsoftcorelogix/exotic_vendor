@@ -426,25 +426,156 @@ if (!function_exists('grn_item_group_camel_case')) {
     </div>
 </div>
 
+<div id="grnBulkDeleteProgressModal" class="fixed inset-0 z-[210] hidden items-center justify-center bg-black/55 p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="grnBulkDeleteProgressTitle" aria-describedby="grnBulkDeleteProgressMessage">
+    <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl ring-1 ring-gray-900/5 overflow-hidden">
+        <div class="px-5 py-4 sm:px-6 border-b border-gray-100 bg-red-50/80">
+            <div class="flex items-start gap-3">
+                <span id="grnBulkDeleteProgressIcon" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                    <i class="fas fa-trash-alt text-lg" aria-hidden="true"></i>
+                </span>
+                <div class="min-w-0 pt-0.5">
+                    <h3 id="grnBulkDeleteProgressTitle" class="text-base font-semibold text-gray-900">Deleting GRN lines</h3>
+                    <p id="grnBulkDeleteProgressMessage" class="text-sm text-gray-600 mt-1 leading-relaxed">Preparing…</p>
+                </div>
+            </div>
+        </div>
+        <div class="px-5 py-5 sm:px-6 space-y-4">
+            <dl class="grid grid-cols-2 gap-3 text-sm">
+                <div class="rounded-xl border border-gray-200 bg-slate-50/80 px-4 py-3">
+                    <dt class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Lines</dt>
+                    <dd id="grnBulkDeleteProgressLineCount" class="font-bold text-gray-900 tabular-nums mt-1">0</dd>
+                </div>
+                <div class="rounded-xl border border-red-200 bg-red-50/60 px-4 py-3">
+                    <dt class="text-[11px] font-semibold uppercase tracking-wide text-red-800/80">Batches</dt>
+                    <dd id="grnBulkDeleteProgressBatchCount" class="font-bold text-red-950 tabular-nums mt-1">0</dd>
+                </div>
+            </dl>
+            <div aria-live="polite">
+                <div class="flex items-center justify-between text-xs text-gray-600 mb-1.5">
+                    <span id="grnBulkDeleteProgressLabel">Starting…</span>
+                    <span id="grnBulkDeleteProgressPct" class="font-semibold tabular-nums">0%</span>
+                </div>
+                <div class="h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div id="grnBulkDeleteProgressBar" class="h-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-300 ease-out" style="width:0%"></div>
+                </div>
+            </div>
+            <p id="grnBulkDeleteProgressNote" class="text-xs text-gray-500 leading-relaxed">
+                Please keep this page open until deletion completes. Large transfers are processed in batches of 50.
+            </p>
+            <p id="grnBulkDeleteProgressError" class="hidden text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2 leading-relaxed"></p>
+        </div>
+        <div id="grnBulkDeleteProgressActions" class="hidden px-5 py-4 sm:px-6 border-t border-gray-100 bg-gray-50/80 flex justify-end">
+            <button type="button" id="grnBulkDeleteProgressClose" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
+    var GRN_DELETE_CHUNK_SIZE = 50;
+    var grnBulkDeleteInProgress = false;
+
     var bulkForm = document.getElementById('grnBulkDeleteForm');
     var bulkBtn = document.getElementById('grnBulkDeleteBtn');
     var bulkBtnText = bulkBtn ? bulkBtn.querySelector('.grn-bulk-delete-btn-text') : null;
     var bulkSelectAll = document.getElementById('grnBulkSelectAll');
+    var bulkDeleteModal = document.getElementById('grnBulkDeleteProgressModal');
+    var bulkDeleteTitle = document.getElementById('grnBulkDeleteProgressTitle');
+    var bulkDeleteMessage = document.getElementById('grnBulkDeleteProgressMessage');
+    var bulkDeleteLineCount = document.getElementById('grnBulkDeleteProgressLineCount');
+    var bulkDeleteBatchCount = document.getElementById('grnBulkDeleteProgressBatchCount');
+    var bulkProgressLabel = document.getElementById('grnBulkDeleteProgressLabel');
+    var bulkProgressPct = document.getElementById('grnBulkDeleteProgressPct');
+    var bulkProgressBar = document.getElementById('grnBulkDeleteProgressBar');
+    var bulkDeleteError = document.getElementById('grnBulkDeleteProgressError');
+    var bulkDeleteActions = document.getElementById('grnBulkDeleteProgressActions');
+    var bulkDeleteCloseBtn = document.getElementById('grnBulkDeleteProgressClose');
+    var bulkDeleteIcon = document.getElementById('grnBulkDeleteProgressIcon');
+
+    function openBulkDeleteModal(lineCount, batchCount) {
+        if (!bulkDeleteModal) return;
+        if (bulkDeleteTitle) bulkDeleteTitle.textContent = 'Deleting GRN lines';
+        if (bulkDeleteMessage) bulkDeleteMessage.textContent = 'Preparing batch 1 of ' + batchCount + '…';
+        if (bulkDeleteLineCount) bulkDeleteLineCount.textContent = String(lineCount);
+        if (bulkDeleteBatchCount) bulkDeleteBatchCount.textContent = String(batchCount);
+        if (bulkDeleteError) {
+            bulkDeleteError.textContent = '';
+            bulkDeleteError.classList.add('hidden');
+        }
+        if (bulkDeleteActions) bulkDeleteActions.classList.add('hidden');
+        if (bulkDeleteIcon) {
+            bulkDeleteIcon.className = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600';
+            bulkDeleteIcon.innerHTML = '<i class="fas fa-trash-alt text-lg" aria-hidden="true"></i>';
+        }
+        resetBulkDeleteProgress();
+        bulkDeleteModal.classList.remove('hidden');
+        bulkDeleteModal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeBulkDeleteModal() {
+        if (!bulkDeleteModal) return;
+        bulkDeleteModal.classList.add('hidden');
+        bulkDeleteModal.classList.remove('flex');
+        document.body.style.overflow = '';
+    }
+
+    function showBulkDeleteModalError(message) {
+        if (bulkDeleteTitle) bulkDeleteTitle.textContent = 'Delete failed';
+        if (bulkDeleteMessage) bulkDeleteMessage.textContent = 'Some GRN rows could not be deleted.';
+        if (bulkDeleteError) {
+            bulkDeleteError.textContent = message;
+            bulkDeleteError.classList.remove('hidden');
+        }
+        if (bulkDeleteIcon) {
+            bulkDeleteIcon.className = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600';
+            bulkDeleteIcon.innerHTML = '<i class="fas fa-exclamation-triangle text-lg" aria-hidden="true"></i>';
+        }
+        if (bulkDeleteActions) bulkDeleteActions.classList.remove('hidden');
+    }
+
+    function showBulkDeleteModalSuccess(message) {
+        if (bulkDeleteTitle) bulkDeleteTitle.textContent = 'Delete complete';
+        if (bulkDeleteMessage) bulkDeleteMessage.textContent = message;
+        if (bulkDeleteIcon) {
+            bulkDeleteIcon.className = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600';
+            bulkDeleteIcon.innerHTML = '<i class="fas fa-check text-lg" aria-hidden="true"></i>';
+        }
+    }
+
+    if (bulkDeleteCloseBtn) {
+        bulkDeleteCloseBtn.addEventListener('click', closeBulkDeleteModal);
+    }
 
     function bulkCheckboxes() {
         return document.querySelectorAll('.grn-bulk-delete-cb');
     }
 
+    function selectedBulkIds() {
+        var ids = [];
+        bulkCheckboxes().forEach(function (cb) {
+            if (cb.checked) {
+                var id = parseInt(cb.value, 10);
+                if (id > 0) {
+                    ids.push(id);
+                }
+            }
+        });
+        return ids;
+    }
+
     function selectedBulkCount() {
-        var n = 0;
-        bulkCheckboxes().forEach(function (cb) { if (cb.checked) n++; });
-        return n;
+        return selectedBulkIds().length;
     }
 
     function updateBulkDeleteButtonState() {
         if (!bulkBtn) return;
+        if (grnBulkDeleteInProgress) {
+            bulkBtn.disabled = true;
+            return;
+        }
         var n = selectedBulkCount();
         bulkBtn.disabled = n === 0;
         var label = n > 0 ? ('Delete selected (' + n + ')') : 'Delete selected';
@@ -455,8 +586,124 @@ if (!function_exists('grn_item_group_camel_case')) {
         }
     }
 
+    function chunkArray(arr, size) {
+        var chunks = [];
+        for (var i = 0; i < arr.length; i += size) {
+            chunks.push(arr.slice(i, i + size));
+        }
+        return chunks;
+    }
+
+    function setBulkDeleteProgress(currentBatch, totalBatches) {
+        var pct = totalBatches > 0 ? Math.round(((currentBatch + 1) / totalBatches) * 100) : 0;
+        if (bulkProgressLabel) {
+            bulkProgressLabel.textContent = totalBatches > 1
+                ? ('Deleting batch ' + (currentBatch + 1) + ' of ' + totalBatches + '…')
+                : 'Deleting…';
+        }
+        if (bulkDeleteMessage && totalBatches > 1) {
+            bulkDeleteMessage.textContent = 'Processing batch ' + (currentBatch + 1) + ' of ' + totalBatches + '. Please wait…';
+        }
+        if (bulkProgressPct) bulkProgressPct.textContent = pct + '%';
+        if (bulkProgressBar) bulkProgressBar.style.width = pct + '%';
+    }
+
+    function resetBulkDeleteProgress() {
+        if (bulkProgressBar) bulkProgressBar.style.width = '0%';
+        if (bulkProgressPct) bulkProgressPct.textContent = '0%';
+        if (bulkProgressLabel) bulkProgressLabel.textContent = 'Starting…';
+    }
+
+    function parseJsonResponse(r) {
+        return r.text().then(function (text) {
+            try {
+                return text ? JSON.parse(text) : null;
+            } catch (e) {
+                throw new Error('Invalid server response (HTTP ' + r.status + ').');
+            }
+        });
+    }
+
+    function runBulkDeleteBatches(transferId, allIds) {
+        var chunks = chunkArray(allIds, GRN_DELETE_CHUNK_SIZE);
+        var totalBatches = chunks.length;
+        var batchIndex = 0;
+        var totalDeleted = 0;
+
+        grnBulkDeleteInProgress = true;
+        updateBulkDeleteButtonState();
+        if (bulkSelectAll) bulkSelectAll.disabled = true;
+        bulkCheckboxes().forEach(function (cb) { cb.disabled = true; });
+
+        openBulkDeleteModal(allIds.length, totalBatches);
+        setBulkDeleteProgress(-1, totalBatches);
+
+        function runNextBatch() {
+            if (batchIndex >= totalBatches) {
+                return Promise.resolve({ success: true });
+            }
+
+            var currentBatch = batchIndex;
+            var batchIds = chunks[currentBatch];
+            setBulkDeleteProgress(currentBatch, totalBatches);
+
+            return fetch('?page=stock_transfer_grns&action=delete_bulk_post', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({
+                    transfer_id: parseInt(transferId, 10) || 0,
+                    grn_ids: batchIds,
+                    batch_index: currentBatch,
+                    batch_total: totalBatches
+                })
+            })
+                .then(function (r) { return parseJsonResponse(r); })
+                .then(function (res) {
+                    if (!res || !res.success) {
+                        var failMsg = (res && res.message) ? res.message : 'Could not delete GRN rows.';
+                        if (totalBatches > 1) {
+                            failMsg = 'Batch ' + (currentBatch + 1) + ' of ' + totalBatches + ' failed: ' + failMsg;
+                        }
+                        throw new Error(failMsg);
+                    }
+                    totalDeleted += parseInt(res.deleted_count, 10) || batchIds.length;
+                    batchIndex++;
+                    if (batchIndex < totalBatches) {
+                        return runNextBatch();
+                    }
+                    return res;
+                });
+        }
+
+        return runNextBatch()
+            .then(function (res) {
+                var successMsg = (res && res.message)
+                    ? res.message
+                    : ('Deleted ' + totalDeleted + ' GRN line(s). Redirecting…');
+                showBulkDeleteModalSuccess(successMsg);
+                setBulkDeleteProgress(totalBatches - 1, totalBatches);
+                setTimeout(function () {
+                    window.location.href = '?page=stock_transfer_grns&action=list&transfer_id=' + encodeURIComponent(transferId);
+                }, 800);
+            })
+            .catch(function (err) {
+                grnBulkDeleteInProgress = false;
+                if (bulkSelectAll) bulkSelectAll.disabled = false;
+                bulkCheckboxes().forEach(function (cb) { cb.disabled = false; });
+                updateBulkDeleteButtonState();
+                var msg = err && err.message ? err.message : 'Delete failed. Please try again.';
+                if (batchIndex > 0) {
+                    msg += ' Some batches may already be deleted — refresh the page.';
+                }
+                showBulkDeleteModalError(msg);
+                console.error(err);
+            });
+    }
+
     if (bulkSelectAll) {
         bulkSelectAll.addEventListener('change', function () {
+            if (grnBulkDeleteInProgress) return;
             var on = !!bulkSelectAll.checked;
             bulkCheckboxes().forEach(function (cb) { cb.checked = on; });
             updateBulkDeleteButtonState();
@@ -467,12 +714,19 @@ if (!function_exists('grn_item_group_camel_case')) {
     });
     if (bulkBtn && bulkForm) {
         bulkBtn.addEventListener('click', function () {
-            var n = selectedBulkCount();
-            if (n < 1) return;
-            if (!confirm('Delete ' + n + ' selected GRN row(s)? This action cannot be undone from this screen.')) {
+            if (grnBulkDeleteInProgress) return;
+            var ids = selectedBulkIds();
+            if (ids.length < 1) return;
+            var transferInput = bulkForm.querySelector('input[name="transfer_id"]');
+            var transferId = transferInput ? transferInput.value : '0';
+            var batchCount = Math.max(1, Math.ceil(ids.length / GRN_DELETE_CHUNK_SIZE));
+            var confirmMsg = ids.length > GRN_DELETE_CHUNK_SIZE
+                ? ('Delete ' + ids.length + ' selected GRN rows in ' + batchCount + ' batches? This cannot be undone from this screen.')
+                : ('Delete ' + ids.length + ' selected GRN row(s)? This action cannot be undone from this screen.');
+            if (!confirm(confirmMsg)) {
                 return;
             }
-            bulkForm.submit();
+            runBulkDeleteBatches(transferId, ids);
         });
     }
     updateBulkDeleteButtonState();

@@ -98,7 +98,7 @@ class StockTransfer
      * Merge bulk rows (item_code, size, color, quantity) into transfer items; resolves products and sums duplicate variants.
      *
      * @param list<array<string,mixed>> $rows
-     * @return array{items: list<array<string,mixed>>, errors: list<string>}
+     * @return array{items: list<array<string,mixed>>, errors: list<string>, not_found: list<array{item_code:string,size:string,color:string,quantity:int}>}
      */
     public function aggregateBulkVariantRows(array $rows): array
     {
@@ -127,6 +127,7 @@ class StockTransfer
 
         $items = [];
         $errors = [];
+        $notFound = [];
         foreach ($merged as $m) {
             $resolved = $this->resolveProductForTransferItem([
                 'product_id' => 0,
@@ -136,9 +137,12 @@ class StockTransfer
                 'color' => $m['color'],
             ]);
             if (!$resolved) {
-                $errors[] = 'No product for ItemCode ' . $m['item_code']
-                    . ', Size ' . ($m['size'] !== '' ? $m['size'] : '(blank)')
-                    . ', Color ' . ($m['color'] !== '' ? $m['color'] : '(blank)');
+                $notFound[] = [
+                    'item_code' => $m['item_code'],
+                    'size' => $m['size'],
+                    'color' => $m['color'],
+                    'quantity' => $m['qty'],
+                ];
                 continue;
             }
             $pid = (int)$resolved['id'];
@@ -156,7 +160,7 @@ class StockTransfer
             }
         }
 
-        return ['items' => array_values($items), 'errors' => $errors];
+        return ['items' => array_values($items), 'errors' => $errors, 'not_found' => $notFound];
     }
 
     /**
@@ -1299,6 +1303,161 @@ class StockTransfer
     }
 
     /**
+     * Transfer header for GRN create (no line items — loaded via AJAX).
+     */
+    public function getTransferHeaderById(int $transferId): ?array
+    {
+        $transferId = max(0, $transferId);
+        if ($transferId <= 0) {
+            return null;
+        }
+
+        $sql = "SELECT t.*,
+                       f.address_title AS source_name,
+                       d.address_title AS dest_name,
+                       (SELECT COUNT(*) FROM vp_item_stock_transfer i WHERE i.transfer_order_no = t.transfer_order_no) AS line_item_count
+                FROM vp_stock_transfer t
+                LEFT JOIN exotic_address f ON f.id = t.from_warehouse
+                LEFT JOIN exotic_address d ON d.id = t.to_warehouse
+                WHERE t.id = ?
+                LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $transferId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $transfer = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return $transfer ?: null;
+    }
+
+    /**
+     * Paginated line items for GRN create page (JSON API).
+     *
+     * @return array{success:bool,message?:string,items:list<array<string,mixed>>,offset:int,limit:int,total_count:int,loaded_count:int,pending_count:int,has_more:bool}
+     */
+    public function getTransferGrnCreateItems(int $transferId, int $offset = 0, int $limit = 50): array
+    {
+        $transferId = max(0, $transferId);
+        $limit = max(1, min(50, $limit));
+        $offset = max(0, $offset);
+
+        if ($transferId <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Invalid transfer id',
+                'items' => [],
+                'offset' => $offset,
+                'limit' => $limit,
+                'total_count' => 0,
+                'loaded_count' => 0,
+                'pending_count' => 0,
+                'has_more' => false,
+            ];
+        }
+
+        $paginated = $this->getTransferItemsPaginated($transferId, $limit, $offset);
+        $total = (int)($paginated['total'] ?? 0);
+        $rows = $paginated['rows'] ?? [];
+
+        if ($total === 0 && empty($rows)) {
+            return [
+                'success' => false,
+                'message' => 'Stock transfer not found or has no line items',
+                'items' => [],
+                'offset' => $offset,
+                'limit' => $limit,
+                'total_count' => 0,
+                'loaded_count' => 0,
+                'pending_count' => 0,
+                'has_more' => false,
+            ];
+        }
+
+        $receivedBySku = $this->getReceivedQtyByTransferSkuMap($transferId);
+
+        $skuCandidates = [];
+        foreach ($rows as $row) {
+            $sku = trim((string)($row['sku'] ?? ''));
+            if ($sku !== '') {
+                $skuCandidates[$sku] = true;
+            }
+        }
+
+        $productBySku = [];
+        $skuList = array_keys($skuCandidates);
+        if (!empty($skuList)) {
+            $placeholders = implode(',', array_fill(0, count($skuList), '?'));
+            $prodSql = "SELECT sku, image, title, product_weight, product_weight_unit, material
+                        FROM vp_products
+                        WHERE sku IN ($placeholders)";
+            $prodStmt = $this->db->prepare($prodSql);
+            if ($prodStmt) {
+                $types = str_repeat('s', count($skuList));
+                $bind = [$types];
+                foreach ($skuList as $k => $v) {
+                    $bind[] = &$skuList[$k];
+                }
+                call_user_func_array([$prodStmt, 'bind_param'], $bind);
+                $prodStmt->execute();
+                $prodRes = $prodStmt->get_result();
+                if ($prodRes) {
+                    while ($prodRow = $prodRes->fetch_assoc()) {
+                        $psku = trim((string)($prodRow['sku'] ?? ''));
+                        if ($psku !== '') {
+                            $productBySku[$psku] = $prodRow;
+                        }
+                    }
+                }
+                $prodStmt->close();
+            }
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            $sku = trim((string)($row['sku'] ?? ''));
+            $itemCode = trim((string)($row['item_code'] ?? ''));
+            $label = $sku !== '' ? $sku : $itemCode;
+            $product = ($sku !== '' && isset($productBySku[$sku])) ? $productBySku[$sku] : null;
+            $already = ($sku !== '' && $transferId > 0) ? (int)($receivedBySku[$sku] ?? 0) : (int)($row['qty_received_total'] ?? 0);
+            $transferQty = (int)($row['transfer_qty'] ?? 0);
+            $remaining = max(0, $transferQty - $already);
+
+            $items[] = [
+                'id' => (int)($row['id'] ?? 0),
+                'product_id' => (int)($row['product_id'] ?? 0),
+                'sku' => $sku,
+                'item_code' => $itemCode,
+                'transfer_qty' => $transferQty,
+                'already_received' => $already,
+                'remaining' => $remaining,
+                'title' => $product ? (string)($product['title'] ?? $label) : $label,
+                'image' => $product ? (string)($product['image'] ?? '') : '',
+                'material' => $product ? (string)($product['material'] ?? '') : '',
+                'product_weight' => $product ? (string)($product['product_weight'] ?? '') : '',
+                'product_weight_unit' => $product ? (string)($product['product_weight_unit'] ?? '') : '',
+            ];
+        }
+
+        $loadedCount = $offset + count($items);
+        $pending = max(0, $total - $loadedCount);
+
+        return [
+            'success' => true,
+            'items' => $items,
+            'offset' => $offset,
+            'limit' => $limit,
+            'total_count' => $total,
+            'loaded_count' => $loadedCount,
+            'pending_count' => $pending,
+            'has_more' => $loadedCount < $total,
+        ];
+    }
+
+    /**
      * Receipt progress for all transfer lines vs GRNs (same SKU/item_code matching as line-items page).
      *
      * @return string 'empty' | 'none' | 'partial' | 'full'
@@ -1379,6 +1538,232 @@ class StockTransfer
         }
 
         return 'none';
+    }
+
+    /**
+     * Sum of transfer_qty per SKU for one transfer order.
+     *
+     * @return array<string,int>
+     */
+    public function getTransferQtyBySkuMap(string $transferOrderNo): array
+    {
+        $transferOrderNo = trim($transferOrderNo);
+        if ($transferOrderNo === '') {
+            return [];
+        }
+
+        $sql = "SELECT sku, SUM(transfer_qty) AS total_qty
+                FROM vp_item_stock_transfer
+                WHERE transfer_order_no = ?
+                  AND NULLIF(TRIM(IFNULL(sku, '')), '') IS NOT NULL
+                GROUP BY sku";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $transferOrderNo);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $map = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $sku = trim((string)($row['sku'] ?? ''));
+                if ($sku === '') {
+                    continue;
+                }
+                $map[$sku] = (int)($row['total_qty'] ?? 0);
+            }
+        }
+        $stmt->close();
+
+        return $map;
+    }
+
+    /**
+     * Paginated transfer lines (by transfer order number).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function getTransferLineSlice(string $transferOrderNo, int $offset, int $limit): array
+    {
+        $transferOrderNo = trim($transferOrderNo);
+        $offset = max(0, $offset);
+        $limit = max(1, min(200, $limit));
+        if ($transferOrderNo === '') {
+            return [];
+        }
+
+        $sql = "SELECT id, product_id, sku, item_code, transfer_qty, item_notes
+                FROM vp_item_stock_transfer
+                WHERE transfer_order_no = ?
+                ORDER BY id ASC
+                LIMIT ? OFFSET ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('sii', $transferOrderNo, $limit, $offset);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $rows = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $rows[] = $row;
+            }
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
+    /**
+     * Build GRN save payload for one batch when receiving all remaining quantities server-side.
+     *
+     * @return array{items: list<array<string,mixed>>, batch_index: int, batch_total: int, batch_size: int}
+     */
+    public function buildReceiveAllRemainingBatchItems(int $transferId, int $batchIndex, int $batchSize = 50): array
+    {
+        $transferId = max(0, $transferId);
+        $batchIndex = max(0, $batchIndex);
+        $batchSize = max(1, min(200, $batchSize));
+
+        if ($transferId <= 0) {
+            return [
+                'items' => [],
+                'batch_index' => $batchIndex,
+                'batch_total' => 0,
+                'batch_size' => $batchSize,
+            ];
+        }
+
+        $header = $this->getTransferHeaderById($transferId);
+        if (!$header || empty($header['transfer_order_no'])) {
+            return [
+                'items' => [],
+                'batch_index' => $batchIndex,
+                'batch_total' => 0,
+                'batch_size' => $batchSize,
+            ];
+        }
+
+        $orderNo = (string)$header['transfer_order_no'];
+        $totalLines = (int)($header['line_item_count'] ?? 0);
+        if ($totalLines <= 0) {
+            $countSql = 'SELECT COUNT(*) AS c FROM vp_item_stock_transfer WHERE transfer_order_no = ?';
+            $cStmt = $this->db->prepare($countSql);
+            if ($cStmt) {
+                $cStmt->bind_param('s', $orderNo);
+                $cStmt->execute();
+                $cRes = $cStmt->get_result();
+                $cRow = $cRes ? $cRes->fetch_assoc() : null;
+                $cStmt->close();
+                $totalLines = (int)($cRow['c'] ?? 0);
+            }
+        }
+
+        $batchTotal = $totalLines > 0 ? (int)max(1, ceil($totalLines / $batchSize)) : 1;
+        $offset = $batchIndex * $batchSize;
+        $lines = $this->getTransferLineSlice($orderNo, $offset, $batchSize);
+        $receivedBySku = $this->getReceivedQtyByTransferSkuMap($transferId);
+        $transferQtyBySku = $this->getTransferQtyBySkuMap($orderNo);
+
+        $items = [];
+        $requestedInBatchBySku = [];
+        foreach ($lines as $row) {
+            $sku = trim((string)($row['sku'] ?? ''));
+            $itemCode = trim((string)($row['item_code'] ?? ''));
+            $transferQty = (int)($row['transfer_qty'] ?? 0);
+            if ($transferQty <= 0) {
+                continue;
+            }
+
+            $alreadyReceived = ($sku !== '') ? (int)($receivedBySku[$sku] ?? 0) : 0;
+            $transferQtyTotalForSku = ($sku !== '' && isset($transferQtyBySku[$sku]))
+                ? (int)$transferQtyBySku[$sku]
+                : $transferQty;
+            $alreadyRequestedNow = ($sku !== '') ? (int)($requestedInBatchBySku[$sku] ?? 0) : 0;
+            $remainingQty = max(0, $transferQtyTotalForSku - $alreadyReceived - $alreadyRequestedNow);
+
+            if ($remainingQty <= 0) {
+                continue;
+            }
+
+            $receivedQty = min($transferQty, $remainingQty);
+            if ($sku !== '') {
+                $requestedInBatchBySku[$sku] = $alreadyRequestedNow + $receivedQty;
+            }
+
+            $items[] = [
+                'transfer_item_id' => (int)($row['id'] ?? 0),
+                'sku' => $sku,
+                'item_code' => $itemCode,
+                'transfer_qty' => $transferQty,
+                'received_qty' => $receivedQty,
+                'acceptable' => true,
+                'qty_acceptable' => $receivedQty,
+                'remarks' => '',
+            ];
+        }
+
+        return [
+            'items' => $items,
+            'batch_index' => $batchIndex,
+            'batch_total' => $batchTotal,
+            'batch_size' => $batchSize,
+        ];
+    }
+
+    /**
+     * Mark transfer as received when every line is fully GRN'd; no-op otherwise.
+     *
+     * @return array{success: bool, message: string, items_saved: int, finalize_transfer: bool}
+     */
+    public function finalizeTransferReceiptIfComplete(int $transferId): array
+    {
+        $transferId = max(0, $transferId);
+        if ($transferId <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Invalid transfer id',
+                'items_saved' => 0,
+                'finalize_transfer' => false,
+            ];
+        }
+
+        $status = $this->getTransferReceiptStatus($transferId);
+        if ($status === 'full') {
+            $updateSql = "UPDATE vp_stock_transfer SET status = ? WHERE id = ?";
+            $updateStmt = $this->db->prepare($updateSql);
+            if ($updateStmt) {
+                $receivedStatus = 'received';
+                $updateStmt->bind_param('si', $receivedStatus, $transferId);
+                $updateStmt->execute();
+                $updateStmt->close();
+            }
+
+            return [
+                'success' => true,
+                'message' => 'GRN created successfully',
+                'items_saved' => 0,
+                'finalize_transfer' => true,
+            ];
+        }
+
+        if ($status === 'empty') {
+            return [
+                'success' => false,
+                'message' => 'Stock transfer not found or has no line items',
+                'items_saved' => 0,
+                'finalize_transfer' => false,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'No remaining quantity to receive for this transfer.',
+            'items_saved' => 0,
+            'finalize_transfer' => true,
+        ];
     }
 
     /**
@@ -2654,6 +3039,12 @@ class StockTransfer
         $remarks = isset($data['remarks']) ? trim($data['remarks']) : '';
         $items = isset($data['items']) && is_array($data['items']) ? $data['items'] : [];
         $userId = isset($data['user_id']) ? (int)$data['user_id'] : $receivedBy;
+        $batchIndex = isset($data['batch_index']) ? max(0, (int)$data['batch_index']) : 0;
+        $batchTotal = isset($data['batch_total']) ? max(1, (int)$data['batch_total']) : 1;
+        $finalizeTransfer = array_key_exists('finalize_transfer', $data)
+            ? !empty($data['finalize_transfer'])
+            : ($batchTotal <= 1);
+        $saveFiles = !array_key_exists('save_files', $data) || !empty($data['save_files']);
 
         if ($transferId <= 0) {
             return ['success' => false, 'message' => 'Invalid transfer id'];
@@ -2784,6 +3175,7 @@ class StockTransfer
 
             $firstGrnId = null;
             $requestedInThisSaveBySku = [];
+            $itemsSaved = 0;
             foreach ($items as $item) {
                 $transferItemId = isset($item['transfer_item_id']) ? (int)$item['transfer_item_id'] : 0;
                 $sku = trim($item['sku'] ?? '');
@@ -2902,28 +3294,43 @@ class StockTransfer
                     'Received from stock transfer: ' . $transferOrderNo,
                     $currentGrnId
                 );
+                $itemsSaved++;
             }
 
             $itemStmt->close();
 
-            // Save uploaded GRN files (if any) against first inserted row
-            if (isset($data['files']) && $firstGrnId) {
+            // Save uploaded GRN files (if any) against first inserted row in the first batch only
+            if ($saveFiles && isset($data['files']) && $firstGrnId) {
                 $this->saveGrnFiles($firstGrnId, $data['files'], $userId);
             }
 
-            // Update transfer status
-            $updateSql = "UPDATE vp_stock_transfer SET status = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateSql);
-            if ($updateStmt) {
-                $status = 'received';
-                $updateStmt->bind_param('si', $status, $transferId);
-                $updateStmt->execute();
-                $updateStmt->close();
+            // Update transfer status only after the final batch completes
+            if ($finalizeTransfer) {
+                $updateSql = "UPDATE vp_stock_transfer SET status = ? WHERE id = ?";
+                $updateStmt = $this->db->prepare($updateSql);
+                if ($updateStmt) {
+                    $status = 'received';
+                    $updateStmt->bind_param('si', $status, $transferId);
+                    $updateStmt->execute();
+                    $updateStmt->close();
+                }
             }
 
             $this->db->commit();
 
-            return ['success' => true, 'message' => 'GRN created successfully', 'grn_id' => $firstGrnId];
+            $batchMessage = ($batchTotal > 1)
+                ? ('Batch ' . ($batchIndex + 1) . ' of ' . $batchTotal . ' saved (' . $itemsSaved . ' lines).')
+                : 'GRN created successfully';
+
+            return [
+                'success' => true,
+                'message' => $finalizeTransfer ? 'GRN created successfully' : $batchMessage,
+                'grn_id' => $firstGrnId,
+                'batch_index' => $batchIndex,
+                'batch_total' => $batchTotal,
+                'items_saved' => $itemsSaved,
+                'finalize_transfer' => $finalizeTransfer,
+            ];
 
         } catch (Exception $e) {
             $this->db->rollback();

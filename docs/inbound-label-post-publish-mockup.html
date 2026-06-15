@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inbound label after publish — stacked column layout review</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: "Segoe UI", system-ui, sans-serif; background: #f3f4f6; }
+    .label-canvas {
+      width: 1200px;
+      height: 800px;
+      border: 3px solid #000;
+      background: #fff;
+      box-sizing: border-box;
+    }
+    .zone { outline: 2px dashed rgba(217, 130, 43, 0.9); outline-offset: -4px; position: relative; }
+    .zone-tag {
+      position: absolute; top: 4px; left: 4px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+      color: #b45309; background: #fff7ed; border: 1px solid #fdba74;
+      padding: 2px 6px; border-radius: 4px; z-index: 10;
+    }
+    .stack-field + .stack-field { border-top: 2px solid #e5e7eb; padding-top: 10px; margin-top: 10px; }
+    .preview-scale { transform: scale(0.42); transform-origin: top left; }
+    .preview-wrap { width: 504px; height: 336px; overflow: hidden; }
+    .option-tab { cursor: pointer; }
+    .option-tab.active { background: #d9822b; color: white; border-color: #d9822b; }
+    .option-panel { display: none; }
+    .option-panel.active { display: block; }
+    @media print {
+      body { background: white; }
+      .no-print { display: none !important; }
+      .option-panel { display: none !important; }
+      .option-panel.print-active { display: block !important; }
+      .preview-scale { transform: none; }
+      .preview-wrap { width: auto; height: auto; overflow: visible; }
+    }
+  </style>
+</head>
+<body class="p-6 md:p-10">
+  <div class="max-w-6xl mx-auto no-print mb-8">
+    <h1 class="text-2xl font-bold text-gray-900">After-publish label — stacked column layout</h1>
+    <p class="text-gray-600 mt-2 max-w-3xl">
+      Physical size: <strong>3″ × 2″</strong> landscape (1200 × 800 px).  
+      Item code, color, and size share <strong>one vertical column</strong>.  
+      Dimensions (and location) each get a <strong>full-width row</strong>.
+    </p>
+    <p class="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 inline-block">
+      Mockup only — <code>label.php</code> unchanged until you approve.
+    </p>
+  </div>
+
+  <!-- ASCII diagram -->
+  <div class="max-w-6xl mx-auto no-print mb-8">
+    <pre class="text-xs sm:text-sm bg-white border border-gray-200 rounded-lg p-4 overflow-x-auto text-gray-800 leading-relaxed">┌────────┬─────────────────────┬──────────────┐
+│        │                     │  Item code   │
+│   QR   │   Product photo     │  Color       │  ← top band
+│        │                     │  Size        │
+├────────┴─────────────────────┴──────────────┤
+│  DIMENSIONS (full width)                    │
+├─────────────────────────────────────────────┤
+│  LOCATION (full width)                      │
+└─────────────────────────────────────────────┘</pre>
+  </div>
+
+  <!-- Layout option tabs -->
+  <div class="max-w-6xl mx-auto no-print mb-6 flex flex-wrap gap-2">
+    <button type="button" class="option-tab active px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold" data-option="a">
+      Option A — Stack column on right (recommended)
+    </button>
+    <button type="button" class="option-tab px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold bg-white" data-option="b">
+      Option B — Stack column between QR and photo
+    </button>
+  </div>
+
+  <div class="max-w-6xl mx-auto flex flex-col xl:flex-row gap-10 items-start">
+
+    <!-- Scaled preview -->
+    <div class="no-print shrink-0 sticky top-6">
+      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Scaled preview</p>
+      <div class="preview-wrap shadow-xl border border-gray-300 bg-white mb-2" id="preview-a-wrap">
+        <div class="preview-scale"><div id="preview-a"></div></div>
+      </div>
+      <div class="preview-wrap shadow-xl border border-gray-300 bg-white hidden" id="preview-b-wrap">
+        <div class="preview-scale"><div id="preview-b"></div></div>
+      </div>
+    </div>
+
+    <!-- OPTION A: QR | Photo | Stack -->
+    <div class="option-panel active flex-1 min-w-0" id="panel-a">
+      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 no-print">Option A — full canvas</p>
+      <div class="label-canvas flex flex-col shadow-2xl" id="label-a">
+
+        <!-- Row 1: QR | Photo | Item/Color/Size column -->
+        <div class="flex flex-row w-full h-[500px] border-b-[3px] border-black shrink-0">
+          <div class="zone w-[280px] h-full flex items-center justify-center p-4 shrink-0">
+            <span class="zone-tag">QR</span>
+            <div class="w-[220px] h-[220px] border-2 border-gray-400 bg-gray-50 flex items-center justify-center text-gray-400 text-xs font-semibold text-center">
+              QR CODE
+            </div>
+          </div>
+          <div class="zone flex-1 h-full flex items-center justify-center p-4 border-l-[3px] border-black min-w-0">
+            <span class="zone-tag">Product photo</span>
+            <div class="w-full h-[92%] border-2 border-dashed border-gray-300 bg-gray-100 flex items-center justify-center text-gray-500 text-sm text-center px-4">
+              Product photo
+            </div>
+          </div>
+          <div class="zone w-[320px] h-full flex flex-col justify-center px-5 py-4 border-l-[3px] border-black shrink-0">
+            <span class="zone-tag">Item · Color · Size</span>
+            <div class="stack-field">
+              <div class="text-[22px] font-bold uppercase leading-none mb-1 text-gray-600">Item code</div>
+              <div class="text-[44px] font-black tracking-tight leading-none">SCL231</div>
+            </div>
+            <div class="stack-field">
+              <div class="text-[20px] font-bold uppercase leading-none mb-1 text-gray-600">Color</div>
+              <div class="text-[30px] font-black leading-tight">Antique Gold</div>
+            </div>
+            <div class="stack-field">
+              <div class="text-[20px] font-bold uppercase leading-none mb-1 text-gray-600">Size</div>
+              <div class="text-[30px] font-black leading-none">12 in</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Dimensions full width -->
+        <div class="zone w-full h-[150px] flex flex-col justify-center px-8 border-b-[3px] border-black shrink-0">
+          <span class="zone-tag">Dimensions</span>
+          <div class="text-[26px] font-bold uppercase leading-none mb-1 text-gray-600">Dimensions</div>
+          <div class="text-[42px] font-black leading-tight">8 × 6 × 4 in</div>
+        </div>
+
+        <!-- Row 3: Location full width -->
+        <div class="zone flex-1 w-full flex flex-col justify-center px-8 min-h-[150px]">
+          <span class="zone-tag">Location</span>
+          <div class="text-[26px] font-bold uppercase leading-none mb-1 text-gray-600">Location</div>
+          <div class="text-[42px] font-black leading-tight">WH-A / Rack 12-B</div>
+        </div>
+      </div>
+      <p class="no-print text-xs text-gray-500 mt-3 max-w-2xl">
+        <strong>A:</strong> Photo keeps maximum width in the centre. Stack column on the right — easy to scan item identity while handling the label.
+      </p>
+    </div>
+
+    <!-- OPTION B: QR | Stack | Photo -->
+    <div class="option-panel flex-1 min-w-0" id="panel-b">
+      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 no-print">Option B — full canvas</p>
+      <div class="label-canvas flex flex-col shadow-2xl" id="label-b">
+
+        <!-- Row 1: QR | Stack | Photo -->
+        <div class="flex flex-row w-full h-[500px] border-b-[3px] border-black shrink-0">
+          <div class="zone w-[280px] h-full flex items-center justify-center p-4 shrink-0">
+            <span class="zone-tag">QR</span>
+            <div class="w-[220px] h-[220px] border-2 border-gray-400 bg-gray-50 flex items-center justify-center text-gray-400 text-xs font-semibold text-center">
+              QR CODE
+            </div>
+          </div>
+          <div class="zone w-[320px] h-full flex flex-col justify-center px-5 py-4 border-l-[3px] border-black shrink-0">
+            <span class="zone-tag">Item · Color · Size</span>
+            <div class="stack-field">
+              <div class="text-[22px] font-bold uppercase leading-none mb-1 text-gray-600">Item code</div>
+              <div class="text-[44px] font-black tracking-tight leading-none">SCL231</div>
+            </div>
+            <div class="stack-field">
+              <div class="text-[20px] font-bold uppercase leading-none mb-1 text-gray-600">Color</div>
+              <div class="text-[30px] font-black leading-tight">Antique Gold</div>
+            </div>
+            <div class="stack-field">
+              <div class="text-[20px] font-bold uppercase leading-none mb-1 text-gray-600">Size</div>
+              <div class="text-[30px] font-black leading-none">12 in</div>
+            </div>
+          </div>
+          <div class="zone flex-1 h-full flex items-center justify-center p-4 border-l-[3px] border-black min-w-0">
+            <span class="zone-tag">Product photo</span>
+            <div class="w-full h-[92%] border-2 border-dashed border-gray-300 bg-gray-100 flex items-center justify-center text-gray-500 text-sm text-center px-4">
+              Product photo (slightly narrower)
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Dimensions full width -->
+        <div class="zone w-full h-[150px] flex flex-col justify-center px-8 border-b-[3px] border-black shrink-0">
+          <span class="zone-tag">Dimensions</span>
+          <div class="text-[26px] font-bold uppercase leading-none mb-1 text-gray-600">Dimensions</div>
+          <div class="text-[42px] font-black leading-tight">8 × 6 × 4 in</div>
+        </div>
+
+        <!-- Row 3: Location full width -->
+        <div class="zone flex-1 w-full flex flex-col justify-center px-8 min-h-[150px]">
+          <span class="zone-tag">Location</span>
+          <div class="text-[26px] font-bold uppercase leading-none mb-1 text-gray-600">Location</div>
+          <div class="text-[42px] font-black leading-tight">WH-A / Rack 12-B</div>
+        </div>
+      </div>
+      <p class="no-print text-xs text-gray-500 mt-3 max-w-2xl">
+        <strong>B:</strong> Stack column sits immediately after QR — item code visible before the photo when reading left-to-right.
+      </p>
+    </div>
+  </div>
+
+  <!-- Row heights -->
+  <div class="max-w-6xl mx-auto mt-10 no-print">
+    <h2 class="text-lg font-bold text-gray-900 mb-3">Row heights (both options)</h2>
+    <table class="text-sm border border-gray-200 bg-white rounded-lg overflow-hidden max-w-md">
+      <thead class="bg-gray-50 text-left">
+        <tr><th class="p-3 border-b font-semibold">Row</th><th class="p-3 border-b font-semibold">Height</th></tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <tr><td class="p-3">Top band (QR + photo + stack)</td><td class="p-3">500 px (~62%)</td></tr>
+        <tr><td class="p-3">Dimensions</td><td class="p-3">150 px (~19%)</td></tr>
+        <tr><td class="p-3">Location</td><td class="p-3">150 px (~19%)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Field mapping -->
+  <div class="max-w-6xl mx-auto mt-10 no-print">
+    <h2 class="text-lg font-bold text-gray-900 mb-3">Field placement</h2>
+    <table class="w-full text-sm border border-gray-200 bg-white rounded-lg overflow-hidden max-w-3xl">
+      <thead class="bg-gray-50 text-left">
+        <tr>
+          <th class="p-3 border-b font-semibold">Field</th>
+          <th class="p-3 border-b font-semibold">Placement</th>
+          <th class="p-3 border-b font-semibold">Source</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <tr><td class="p-3">QR</td><td class="p-3">Top-left</td><td class="p-3">Label print URL</td></tr>
+        <tr><td class="p-3">Product photo</td><td class="p-3">Top band (centre or right)</td><td class="p-3"><code>product_photo</code></td></tr>
+        <tr><td class="p-3">Item code</td><td class="p-3">Stack column — top</td><td class="p-3"><code>Item_code</code></td></tr>
+        <tr><td class="p-3">Color</td><td class="p-3">Stack column — middle</td><td class="p-3"><code>color</code></td></tr>
+        <tr><td class="p-3">Size</td><td class="p-3">Stack column — bottom</td><td class="p-3"><code>size</code></td></tr>
+        <tr><td class="p-3 font-semibold">Dimensions</td><td class="p-3 font-semibold">Full-width row</td><td class="p-3"><code>dimensions</code> or W×H×D</td></tr>
+        <tr><td class="p-3">Location</td><td class="p-3">Full-width row</td><td class="p-3"><code>store_location</code></td></tr>
+      </tbody>
+    </table>
+    <h3 class="text-sm font-bold text-gray-800 mt-6 mb-2">Excluded</h3>
+    <p class="text-sm text-gray-600">CP · QTY · Date · Vendor · Weight · Material</p>
+  </div>
+
+  <script>
+    const tabs = document.querySelectorAll('.option-tab');
+    const panelA = document.getElementById('panel-a');
+    const panelB = document.getElementById('panel-b');
+    const previewAWrap = document.getElementById('preview-a-wrap');
+    const previewBWrap = document.getElementById('preview-b-wrap');
+
+    document.getElementById('preview-a').appendChild(document.getElementById('label-a').cloneNode(true));
+    document.getElementById('preview-b').appendChild(document.getElementById('label-b').cloneNode(true));
+
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        const opt = tab.getAttribute('data-option');
+        tabs.forEach(function (t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        panelA.classList.toggle('active', opt === 'a');
+        panelB.classList.toggle('active', opt === 'b');
+        panelA.classList.toggle('print-active', opt === 'a');
+        panelB.classList.toggle('print-active', opt === 'b');
+        previewAWrap.classList.toggle('hidden', opt !== 'a');
+        previewBWrap.classList.toggle('hidden', opt !== 'b');
+      });
+    });
+    panelA.classList.add('print-active');
+  </script>
+</body>
+</html>

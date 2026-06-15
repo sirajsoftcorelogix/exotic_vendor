@@ -685,6 +685,12 @@ switch ($page) {
             case 'show_bulk_update':
                 $controller->updateAllProduct();
                 break;
+            case 'bulk_product_update_stats':
+                $controller->bulkProductUpdateStats();
+                break;
+            case 'bulk_product_update_reset':
+                $controller->bulkProductUpdateReset();
+                break;
             case 'updateAllProductScript':
                 $controller->updateAllProductScript();
                 break;
@@ -958,6 +964,9 @@ switch ($page) {
             case 'deleteRecord':
                 $controller->deleteRecord();
                 break;
+            case 'syncShippers':
+                $controller->syncShippers();
+                break;
             default:
                 $controller->index();
                 break;
@@ -1050,6 +1059,9 @@ switch ($page) {
 
             case 'addMaterialAjax':
                 $controller->addMaterialAjax();
+                break;
+            case 'validateRedirectItemCode':
+                $controller->validateRedirectItemCodeAjax();
                 break;
             // --- ADD THIS NEW CASE ---
             case 'download_photos':
@@ -1175,6 +1187,9 @@ switch ($page) {
             case 'create':
                 $controller->create();
                 break;
+            case 'create_items':
+                $controller->createItems();
+                break;
             case 'create_post':
                 $controller->createPost();
                 break;
@@ -1183,6 +1198,9 @@ switch ($page) {
                 break;
             case 'delete_bulk':
                 $controller->deleteBulk();
+                break;
+            case 'delete_bulk_post':
+                $controller->deleteBulkPost();
                 break;
             default:
                 $controller->listGrns();
@@ -1345,6 +1363,9 @@ switch ($page) {
             case 'bulk_create_invoices_dispatch':
                 $controller->bulkCreateInvoicesDispatch();
                 break;
+            case 'export_bluedart_excel':
+                $controller->exportBlueDartExcel();
+                break;
             case 'bulk_print_labels':
                 $controller->bulkPrintLabels();
                 break;
@@ -1369,10 +1390,20 @@ switch ($page) {
             case 'test_aramex_createshipments':
                 require __DIR__ . '/test_aramex_createshipments.php';
                 exit;
+            case 'bluedart_label':
+                $controller->bluedartLabel();
+                break;
+            case 'shipment_add_preview':
+                $controller->shipmentAddPreview();
+                break;
+            case 'shipment_add_execute':
+                $controller->shipmentAddExecute();
+                break;
             default:
                 $controller->create();
                 break;
         }
+        break;
     case 'search':
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController($conn);

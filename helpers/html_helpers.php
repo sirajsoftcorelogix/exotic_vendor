@@ -10,11 +10,20 @@ function is_login()
 			. '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
 
 		// identify AJAX requests and handle differently
-		$headers = getallheaders();
-		$isAjax = isset($headers['X-Requested-With']) && strtolower($headers['X-Requested-With']) === 'xmlhttprequest';
-		if ($isAjax) {
-			echo "Session Expired - Please <a href=\"$domain?page=users&action=login\" style=\"color:red;\">Login Again</a>.";
-			//echo json_encode(['status' => 'error', 'message' => 'Session expired. Please login again.', 'redirect' => $domain . '?page=users&action=login']);
+		$headers = function_exists('getallheaders') ? getallheaders() : [];
+		$isAjax = (isset($headers['X-Requested-With']) && strtolower($headers['X-Requested-With']) === 'xmlhttprequest')
+			|| (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+		$accept = $_SERVER['HTTP_ACCEPT'] ?? ($headers['Accept'] ?? '');
+		$wantsJson = $isAjax || stripos($accept, 'application/json') !== false;
+		if ($wantsJson) {
+			if (!headers_sent()) {
+				header('Content-Type: application/json; charset=UTF-8');
+			}
+			echo json_encode([
+				'success' => false,
+				'message' => 'Session expired. Please login again.',
+				'redirect' => $domain . '?page=users&action=login',
+			]);
 			exit;
 		}
 

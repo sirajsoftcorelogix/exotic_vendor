@@ -28,7 +28,7 @@ class CourierPartner
         $this->conn->query($sql);
     }
 
-    public function getAll(int $page = 1, int $limit = 20, string $search = '', string $status = ''): array
+    public function getAll(int $page = 1, int $limit = 20, string $search = '', string $status = '', int $shipperId = 0, string $serviceArea = '', bool $missingShipperId = false, string $accountsFilter = ''): array
     {
         $page = max(1, $page);
         $limit = max(1, $limit);
@@ -50,6 +50,27 @@ class CourierPartner
             $types .= 'i';
             $params[] = (int)$status;
         }
+        if ($missingShipperId) {
+            $where[] = '(shipper_id IS NULL OR shipper_id = 0)';
+        } elseif ($shipperId > 0) {
+            $where[] = 'shipper_id = ?';
+            $types .= 'i';
+            $params[] = $shipperId;
+        }
+        $serviceArea = strtolower(trim($serviceArea));
+        if ($serviceArea === 'domestic') {
+            $where[] = 'supports_domestic = 1 AND supports_international = 0';
+        } elseif ($serviceArea === 'international') {
+            $where[] = 'supports_international = 1 AND supports_domestic = 0';
+        } elseif ($serviceArea === 'both') {
+            $where[] = 'supports_domestic = 1 AND supports_international = 1';
+        }
+        $accountsFilter = strtolower(trim($accountsFilter));
+        if ($accountsFilter === 'configured') {
+            $where[] = 'EXISTS (SELECT 1 FROM courier_partner_accounts ca WHERE ca.partner_id = courier_partners.id)';
+        } elseif ($accountsFilter === 'not_configured') {
+            $where[] = 'NOT EXISTS (SELECT 1 FROM courier_partner_accounts ca WHERE ca.partner_id = courier_partners.id)';
+        }
 
         $whereSql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
 
@@ -68,7 +89,8 @@ class CourierPartner
             $countStmt->close();
         }
 
-        $listSql = "SELECT id, partner_code, partner_name, supports_domestic, supports_international, is_active, notes, created_at, updated_at
+        $listSql = "SELECT id, partner_code, partner_name, shipper_id, supports_domestic, supports_international, is_active, notes, created_at, updated_at,
+                    (SELECT COUNT(*) FROM courier_partner_accounts ca WHERE ca.partner_id = courier_partners.id) AS account_count
                     FROM courier_partners" . $whereSql . " ORDER BY partner_name ASC LIMIT ? OFFSET ?";
         $listStmt = $this->conn->prepare($listSql);
         $rows = [];
@@ -104,20 +126,27 @@ class CourierPartner
             return ['success' => false, 'message' => 'Partner code and partner name are required.'];
         }
 
+        $dup = $this->duplicatePartnerError($code, (int) preg_replace('/\D/', '', (string) ($data['shipper_id'] ?? '')));
+        if ($dup !== null) {
+            return ['success' => false, 'message' => $dup];
+        }
+
         $supportsDomestic = !empty($data['supports_domestic']) ? 1 : 0;
         $supportsInternational = !empty($data['supports_international']) ? 1 : 0;
         $isActive = isset($data['is_active']) ? (int)$data['is_active'] : 1;
         $isActive = $isActive === 1 ? 1 : 0;
         $notes = trim((string)($data['notes'] ?? ''));
+        $sid = (int) preg_replace('/\D/', '', (string) ($data['shipper_id'] ?? ''));
+        $shipperIdBind = $sid > 0 ? (string) $sid : null;
 
         $sql = "INSERT INTO courier_partners
-                (partner_code, partner_name, supports_domestic, supports_international, is_active, notes)
-                VALUES (?, ?, ?, ?, ?, ?)";
+                (partner_code, partner_name, shipper_id, supports_domestic, supports_international, is_active, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
             return ['success' => false, 'message' => 'Could not prepare insert statement.'];
         }
-        $stmt->bind_param('ssiiis', $code, $name, $supportsDomestic, $supportsInternational, $isActive, $notes);
+        $stmt->bind_param('sssiiis', $code, $name, $shipperIdBind, $supportsDomestic, $supportsInternational, $isActive, $notes);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Courier partner added successfully.'];
         }
@@ -135,20 +164,31 @@ class CourierPartner
             return ['success' => false, 'message' => 'Partner code and partner name are required.'];
         }
 
+        $dup = $this->duplicatePartnerError(
+            $code,
+            (int) preg_replace('/\D/', '', (string) ($data['shipper_id'] ?? '')),
+            $id
+        );
+        if ($dup !== null) {
+            return ['success' => false, 'message' => $dup];
+        }
+
         $supportsDomestic = !empty($data['supports_domestic']) ? 1 : 0;
         $supportsInternational = !empty($data['supports_international']) ? 1 : 0;
         $isActive = isset($data['is_active']) ? (int)$data['is_active'] : 1;
         $isActive = $isActive === 1 ? 1 : 0;
         $notes = trim((string)($data['notes'] ?? ''));
+        $sid = (int) preg_replace('/\D/', '', (string) ($data['shipper_id'] ?? ''));
+        $shipperIdBind = $sid > 0 ? (string) $sid : null;
 
         $sql = "UPDATE courier_partners
-                SET partner_code = ?, partner_name = ?, supports_domestic = ?, supports_international = ?, is_active = ?, notes = ?, updated_at = NOW()
+                SET partner_code = ?, partner_name = ?, shipper_id = ?, supports_domestic = ?, supports_international = ?, is_active = ?, notes = ?, updated_at = NOW()
                 WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
             return ['success' => false, 'message' => 'Could not prepare update statement.'];
         }
-        $stmt->bind_param('ssiiisi', $code, $name, $supportsDomestic, $supportsInternational, $isActive, $notes, $id);
+        $stmt->bind_param('sssiiisi', $code, $name, $shipperIdBind, $supportsDomestic, $supportsInternational, $isActive, $notes, $id);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Courier partner updated successfully.'];
         }
@@ -182,6 +222,179 @@ class CourierPartner
             }
         }
         return $rows;
+    }
+
+    /**
+     * Resolve courier_partners.id by partner_code (booking integration).
+     */
+    public function resolvePartnerIdByCode(?string $partnerCode): ?int
+    {
+        $code = strtoupper(str_replace(' ', '', trim((string) $partnerCode)));
+        if ($code === '') {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT id FROM courier_partners WHERE partner_code = ? AND is_active = 1 LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->bind_param('s', $code);
+        $stmt->execute();
+        $row = $stmt->get_result()?->fetch_assoc();
+        $stmt->close();
+
+        $id = (int) ($row['id'] ?? 0);
+
+        return $id > 0 ? $id : null;
+    }
+
+    /**
+     * Match courier_partners.shipper_id by partner code and/or carrier display name.
+     */
+    public function resolveShipperId(?string $courierName = null, ?string $partnerCode = null): ?int
+    {
+        $code = strtoupper(str_replace(' ', '', trim((string) $partnerCode)));
+        if ($code !== '') {
+            $stmt = $this->conn->prepare(
+                'SELECT shipper_id FROM courier_partners WHERE partner_code = ? AND is_active = 1 LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('s', $code);
+                $stmt->execute();
+                $row = $stmt->get_result()?->fetch_assoc();
+                $stmt->close();
+                $sid = (int) ($row['shipper_id'] ?? 0);
+                if ($sid > 0) {
+                    return $sid;
+                }
+            }
+        }
+
+        $name = trim((string) $courierName);
+        if ($name === '') {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare(
+            "SELECT shipper_id FROM courier_partners
+             WHERE is_active = 1 AND partner_code != 'SHIPROCKET' AND shipper_id > 0
+             AND INSTR(?, partner_name) > 0
+             ORDER BY LENGTH(partner_name) DESC
+             LIMIT 1"
+        );
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->bind_param('s', $name);
+        $stmt->execute();
+        $row = $stmt->get_result()?->fetch_assoc();
+        $stmt->close();
+
+        $sid = (int) ($row['shipper_id'] ?? 0);
+
+        return $sid > 0 ? $sid : null;
+    }
+
+    /** @param list<array<string, mixed>> $apiRows */
+    public function syncShippers(array $apiRows): array
+    {
+        $partners = [];
+        $res = $this->conn->query('SELECT id, partner_code, partner_name, shipper_id FROM courier_partners');
+        if ($res) {
+            while ($r = $res->fetch_assoc()) {
+                $partners[] = $r;
+            }
+        }
+
+        $norm = static fn(string $s): string => preg_replace('/[^a-z0-9]/', '', strtolower($s)) ?? '';
+        $updated = $skipped = 0;
+
+        foreach ($apiRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sid = (int) ($row['shipper_id'] ?? $row['id'] ?? 0);
+            $name = trim((string) ($row['courier_name'] ?? $row['name'] ?? ''));
+            if ($sid <= 0 || $name === '') {
+                continue;
+            }
+
+            $code = strtoupper(substr(preg_replace('/[^A-Z0-9]/', '', strtoupper($name)) ?? '', 0, 50));
+            $key = $norm($name);
+
+            $match = null;
+            foreach ($partners as $p) {
+                if ((int) ($p['shipper_id'] ?? 0) === $sid
+                    || ($code !== '' && strcasecmp((string) $p['partner_code'], $code) === 0)
+                    || $norm((string) $p['partner_name']) === $key
+                    || $norm((string) $p['partner_code']) === $key) {
+                    $match = $p;
+                    break;
+                }
+            }
+
+            if (!$match) {
+                $skipped++;
+                continue;
+            }
+
+            $pid = (int) $match['id'];
+            foreach ($partners as $p) {
+                if ((int) ($p['shipper_id'] ?? 0) === $sid && (int) $p['id'] !== $pid) {
+                    $skipped++;
+                    continue 2;
+                }
+            }
+
+            if ((int) ($match['shipper_id'] ?? 0) === $sid) {
+                continue;
+            }
+
+            $stmt = $this->conn->prepare('UPDATE courier_partners SET shipper_id = ? WHERE id = ?');
+            $stmt->bind_param('ii', $sid, $pid);
+            if ($stmt->execute()) {
+                $updated++;
+                $match['shipper_id'] = $sid;
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => "Shipper sync done: {$updated} updated, {$skipped} skipped (no local match or shipper ID already used).",
+        ];
+    }
+
+    private function duplicatePartnerError(string $code, int $shipperId, int $excludeId = 0): ?string
+    {
+        $stmt = $this->conn->prepare('SELECT id FROM courier_partners WHERE partner_code = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $code);
+            $stmt->execute();
+            $row = $stmt->get_result()?->fetch_assoc();
+            $stmt->close();
+            if ($row && (int) $row['id'] !== $excludeId) {
+                return 'Partner code already exists.';
+            }
+        }
+
+        if ($shipperId > 0) {
+            $stmt = $this->conn->prepare('SELECT id FROM courier_partners WHERE shipper_id = ? LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $shipperId);
+                $stmt->execute();
+                $row = $stmt->get_result()?->fetch_assoc();
+                $stmt->close();
+                if ($row && (int) $row['id'] !== $excludeId) {
+                    return 'Shipper ID is already assigned to another partner.';
+                }
+            }
+        }
+
+        return null;
     }
 }
 

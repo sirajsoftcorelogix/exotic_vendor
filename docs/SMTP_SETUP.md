@@ -1,8 +1,25 @@
-# SMTP setup (login OTP and password reset)
+# Email setup (login OTP and password reset)
 
-All portal OTP email goes through `helpers/mail_helper.php`, which reads **only** from:
+Portal OTP email goes through `helpers/mail_helper.php`, configured in:
 
-`bootstrap/init/init.php` (this file is gitignored; use `folders/bootstrap/init/init.php` as a template)
+`bootstrap/init/init.php` (gitignored; use `folders/bootstrap/init/init.php` as a template)
+
+## Preferred: Exotic India vendor email API
+
+```php
+define('vendorEmailApiUrl', 'https://www.exoticindia.com/vendor-api/email');
+define('vendorMailTransport', 'api'); // api | smtp
+```
+
+When `vendorMailTransport` is `api`, OTP emails use the same HTML templates (`templates/login_otp.html`, `templates/password_recovery.html`) and POST:
+
+- `recipient_email`, `recipient_name`, `subject`, `body`
+
+Requests also send the same vendor API headers as order/product imports (`x-api-key`, `x-adminapitest`) via `helpers/vendor_external_api.php`. Missing headers cause **Incorrect Access Parameters** from the remote API.
+
+Set `vendorMailTransport` to `smtp` to fall back to PHPMailer below.
+
+## SMTP fallback (`vendorMailTransport` = `smtp`)
 
 ## Required settings
 

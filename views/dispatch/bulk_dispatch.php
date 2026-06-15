@@ -45,11 +45,23 @@
     </div>
     
 
-    <div class="border-t border-gray-200 px-4 py-3 flex justify-end bg-white">
-        <button id="bulkCreateInvoiceDispatchBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2">
-            <span>🚚</span>
-            <span>Invoice &amp; Dispatch</span>
-        </button>
+    <div class="border-t border-gray-200 px-4 py-3 flex flex-wrap justify-between items-center gap-3 bg-white">
+        <div id="bluedartExcelExportHint" class="hidden min-w-0 flex-1 flex flex-col gap-0.5 text-left pr-3">
+            <span class="text-xs font-semibold text-sky-900">Blue Dart items</span>
+            <span class="text-[11px] text-gray-500">Export to Excel for manual booking on the Blue Dart dashboard (Air and Surface sheets).</span>
+        </div>
+        <div id="bulkDispatchPrimaryActionSlot" class="shrink-0 ml-auto">
+            <button id="bulkCreateInvoiceDispatchBtn" type="button" disabled
+                    class="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2"
+                    title="Add orders, load courier rates, and select a courier for each order">
+                <span>🚚</span>
+                <span>Invoice &amp; Dispatch</span>
+            </button>
+            <button type="button" id="downloadBlueDartExcelBtn" class="hidden bg-sky-600 hover:bg-sky-700 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2" title="Export Blue Dart boxes to Excel">
+                <span>📥</span>
+                <span>Export to Excel</span>
+            </button>
+        </div>
     </div>
 </div>
 
@@ -227,6 +239,68 @@
         let currentShippingAddress = ''; // Store shipping address from API response
         if (!modal) return;
 
+        const CUSTOM_INVOICE_NUMBER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,49}$/;
+
+        function clearCustomInvoiceFieldError(orderSection) {
+            const input = orderSection.querySelector('.custom-invoice-number-input');
+            const errorEl = orderSection.querySelector('.custom-invoice-error');
+            if (input) {
+                input.classList.remove('border-red-500', 'ring-1', 'ring-red-300');
+            }
+            if (errorEl) {
+                errorEl.textContent = '';
+                errorEl.classList.add('hidden');
+            }
+        }
+
+        function setCustomInvoiceFieldError(orderSection, message) {
+            const input = orderSection.querySelector('.custom-invoice-number-input');
+            const errorEl = orderSection.querySelector('.custom-invoice-error');
+            if (input) {
+                input.classList.add('border-red-500', 'ring-1', 'ring-red-300');
+            }
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        function validateCustomInvoiceFields(orderSections) {
+            const seen = new Map();
+
+            for (const orderSection of orderSections) {
+                clearCustomInvoiceFieldError(orderSection);
+                const input = orderSection.querySelector('.custom-invoice-number-input');
+                if (!input) {
+                    continue;
+                }
+
+                const value = input.value.trim();
+                if (value === '') {
+                    continue;
+                }
+
+                const orderBox = orderSection.querySelector('[data-order-number]');
+                const orderLabel = orderBox ? orderBox.getAttribute('data-order-number') : 'order';
+
+                if (!CUSTOM_INVOICE_NUMBER_PATTERN.test(value)) {
+                    const msg = 'Use letters, numbers, dot, slash, underscore, and hyphen only.';
+                    setCustomInvoiceFieldError(orderSection, msg);
+                    return { valid: false, message: 'Order ' + orderLabel + ': ' + msg };
+                }
+
+                const key = value.toLowerCase();
+                if (seen.has(key)) {
+                    const msg = 'Invoice number already entered for order ' + seen.get(key) + '.';
+                    setCustomInvoiceFieldError(orderSection, msg);
+                    return { valid: false, message: 'Order ' + orderLabel + ': ' + msg };
+                }
+                seen.set(key, orderLabel);
+            }
+
+            return { valid: true, message: '' };
+        }
+
         function bulkDispatchOrderTheme(isInternational) {
             if (isInternational) {
                 return {
@@ -376,7 +450,7 @@
             errorModal.className = 'fixed inset-0 z-50 flex items-center justify-center';
             errorModal.innerHTML = `
                 <div class="absolute inset-0 bg-black/40"></div>
-                <div class="relative z-10 w-full max-w-2xl bg-white shadow-lg border border-gray-300 mx-3 rounded">
+                <div class="relative z-10 w-full max-w-4xl bg-white shadow-lg border border-gray-300 mx-3 rounded">
                     <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-red-500 text-white rounded-t">
                         <h2 class="font-semibold text-sm">⚠️ Shipment Creation Errors</h2>
                         <button type="button" class="text-white text-xl leading-none px-2 hover:text-white/90 close-error-modal">&times;</button>
@@ -386,12 +460,12 @@
                         <div class="mb-3 text-sm text-gray-700">
                             <p><strong>Batch #${data.batch_no}</strong></p>
                             <p class="text-xs text-gray-600 mt-1">✓ ${data.invoices_created} invoices and ${data.dispatches_created} dispatch records created successfully.</p>
-                            <p class="text-xs text-gray-600">✗ ${data.errors.length} courier shipment(s) failed. Click "Retry" to try again (Delhivery or Shiprocket based on your selection).</p>
+                            <p class="text-xs text-gray-600">✗ ${data.errors.length} courier shipment(s) failed. Click "Retry" to try again (Shiprocket, Delhivery, or Blue Dart based on your selection).</p>
                         </div>
 
-                        <div class="bg-red-50 border border-red-200 rounded p-3 max-h-64 overflow-y-auto">
+                        <div class="bg-red-50 border border-red-200 rounded p-3 max-h-96 overflow-y-auto">
                             <div class="text-xs text-red-800">
-                                ${data.errors.map(err => `<div class="mb-2 pb-2 border-b border-red-200 last:border-b-0">• ${escapeHtml(err)}</div>`).join('')}
+                                ${data.errors.map(err => renderShipmentErrorHtml(err)).join('')}
                             </div>
                         </div>
                     </div>
@@ -471,7 +545,7 @@
                                             ${dispatch.invoice.invoice_number || '-'}
                                         </a>
                                     </td>
-                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.shiprocket_shipment_id || '-'}</td>
+                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.exotic_shipment_id || '-'}</td>
                                     <td class="p-2 border-b border-gray-200 text-right">
                                         ${dispatch.awb_code ? `<a href="${dispatch.label_url || '#'}" target="_blank" class="text-blue-600 hover:underline">${dispatch.awb_code}</a>` : '-'}
                                     </td>
@@ -538,7 +612,7 @@
                             // Update the error list and keep modal open
                             const errorList = errorModal.querySelector('.bg-red-50 .text-red-800');
                             if (errorList) {
-                                errorList.innerHTML = data.errors.map(err => `<div class="mb-2 pb-2 border-b border-red-200 last:border-b-0">• ${escapeHtml(err)}</div>`).join('');
+                                errorList.innerHTML = data.errors.map(err => renderShipmentErrorHtml(err)).join('');
                             }
                             
                             // Update status message
@@ -576,6 +650,72 @@
                 "'": '&#039;'
             };
             return safeText.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function renderShipmentErrorHtml(err) {
+            const msg = (typeof err === 'string') ? err : (err.message || 'Unknown error');
+            let html = '<div class="mb-3 pb-3 border-b border-red-200 last:border-b-0">';
+            html += '<div class="font-medium">• ' + escapeHtml(msg) + '</div>';
+
+            const debug = (typeof err === 'object' && err && err.debug) ? err.debug : null;
+            if (debug && (debug.request || debug.response !== undefined || debug.endpoint)) {
+                html += '<details class="mt-2 text-[11px]">';
+                html += '<summary class="cursor-pointer text-red-700 hover:underline select-none">Show API request / response</summary>';
+                html += '<div class="mt-2 space-y-2">';
+
+                if (debug.endpoint) {
+                    let meta = escapeHtml(debug.endpoint);
+                    if (debug.soap_variant) {
+                        meta += ' (' + escapeHtml(debug.soap_variant) + ')';
+                    }
+                    if (debug.http_code) {
+                        meta += ' — HTTP ' + escapeHtml(String(debug.http_code));
+                    }
+                    if (debug.bytes_received !== undefined && debug.bytes_received !== null) {
+                        meta += ' — ' + escapeHtml(String(debug.bytes_received)) + ' bytes';
+                    }
+                    html += '<p class="text-gray-600"><strong>Endpoint:</strong> ' + meta + '</p>';
+                } else if (debug.http_code || debug.bytes_received !== undefined) {
+                    let meta = '';
+                    if (debug.http_code) {
+                        meta += 'HTTP ' + escapeHtml(String(debug.http_code));
+                    }
+                    if (debug.bytes_received !== undefined && debug.bytes_received !== null) {
+                        meta += (meta ? ' — ' : '') + escapeHtml(String(debug.bytes_received)) + ' bytes received';
+                    }
+                    html += '<p class="text-gray-600"><strong>Transport:</strong> ' + meta + '</p>';
+                }
+
+                if (debug.curl_error) {
+                    html += '<p class="text-gray-600"><strong>cURL:</strong> ' + escapeHtml(debug.curl_error) + '</p>';
+                }
+
+                if (debug.product_code) {
+                    html += '<p class="text-gray-600"><strong>Product:</strong> '
+                        + escapeHtml(String(debug.product_code)) + ' / '
+                        + escapeHtml(String(debug.sub_product_code || '')) + '</p>';
+                }
+
+                if (debug.request) {
+                    html += '<div><p class="font-semibold text-gray-700 mb-1">Request</p>';
+                    html += '<pre class="bg-gray-900 text-green-100 p-2 rounded overflow-x-auto max-h-56 text-[10px] whitespace-pre-wrap break-all">';
+                    html += escapeHtml(debug.request);
+                    html += '</pre></div>';
+                }
+
+                const responseText = (debug.response !== undefined && debug.response !== null)
+                    ? String(debug.response)
+                    : '';
+                html += '<div><p class="font-semibold text-gray-700 mb-1">Response</p>';
+                html += '<pre class="bg-gray-900 text-amber-100 p-2 rounded overflow-x-auto max-h-56 text-[10px] whitespace-pre-wrap break-all">';
+                html += escapeHtml(responseText === '' ? '(empty body)' : responseText);
+                html += '</pre></div>';
+
+                html += '</div></details>';
+            }
+
+            html += '</div>';
+            return html;
         }
 
         const closeButtons = modal.querySelectorAll('[data-close-select-items]');
@@ -733,6 +873,17 @@
                                 <span class="font-semibold">Shipping to:</span>
                                 ${currentShippingAddress || 'Address not available'}
                             </div>
+                        </div>
+
+                        <div class="custom-invoice-strip px-4 py-2 bg-amber-50 border border-amber-200 border-t-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm">
+                            <label class="font-semibold text-amber-900 shrink-0">Invoice No (optional)</label>
+                            <input type="text"
+                                   class="custom-invoice-number-input border border-amber-300 rounded px-2 py-1 w-full sm:w-52 text-sm bg-white"
+                                   maxlength="50"
+                                   placeholder="Auto-generated if blank"
+                                   autocomplete="off" />
+                            <span class="custom-invoice-hint text-[11px] text-amber-800/80 hidden sm:inline">Letters, numbers, dot, slash, underscore, hyphen</span>
+                            <span class="custom-invoice-error text-[11px] text-red-600 hidden w-full sm:w-auto"></span>
                         </div>
 
                         <div class="bulk-dispatch-box border ${tm.boxBorder} border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
@@ -963,6 +1114,7 @@
                         }, 100);
                         // Fetch available couriers for this box
                         fetchCouriersForBox(currentBox);
+                        updateBlueDartExcelExportButton();
                     }
                     selectAllCheckbox.checked = false;
                     closeModal();
@@ -1024,14 +1176,15 @@
             }
         }
 
-        function fetchShiprocketRates(payload) {
+        function fetchShiprocketRates(payload, signal) {
             return fetch('?page=dispatch&action=getCourierServiceability', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal: signal
             }).then(response => response.text().then(function (text) {
                 const cleaned = (typeof text === 'string' ? text : String(text ?? '')).replace(/^\uFEFF/, '').trim();
                 let parsed = {};
@@ -1054,26 +1207,80 @@
             }));
         }
 
-        function fetchDelhiveryRates(payload) {
+        function fetchDirectCourierRates(payload, partnerCode, signal) {
+            const body = Object.assign({}, payload, { partner_code: partnerCode });
             return fetch('?page=dispatch&action=getDirectCourierRates', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(body),
+                signal: signal
             }).then(r => r.text()).then((text) => {
                 const cleaned = (typeof text === 'string') ? text.replace(/^\uFEFF/, '').trim() : '';
                 try {
                     return cleaned ? JSON.parse(cleaned) : {};
                 } catch (err) {
-                    return { success: false, message: 'Invalid Delhivery response' };
+                    return { success: false, message: 'Invalid ' + partnerCode + ' response' };
                 }
             });
         }
 
-        function mergeCourierOptions(shiprocketCouriers, delhiveryCouriers) {
+        function isBlueDartShiprocketQuote(courier) {
+            const name = String(courier?.name || '');
+            return /blue\s*dart|bluedart/i.test(name);
+        }
+
+        function matchShiprocketBlueDartQuote(courier, srBlueDart) {
+            const haystack = String(courier.name || '') + ' ' + String(courier.product_type || '');
+            if (srBlueDart.length === 1) {
+                return srBlueDart[0];
+            }
+            let match = null;
+            let bestScore = -1;
+            srBlueDart.forEach((sr) => {
+                const srName = String(sr.name || '').toLowerCase();
+                let score = 0;
+                if (/air/i.test(haystack) && /air/i.test(srName)) score += 3;
+                if ((/surface|ground|_e_/i.test(haystack)) && (/surface|ground/i.test(srName))) score += 3;
+                if (score > bestScore) {
+                    bestScore = score;
+                    match = sr;
+                }
+            });
+            return match || srBlueDart[0];
+        }
+
+        function applyShiprocketPriceToBlueDart(bluedartCouriers, shiprocketCouriers) {
+            const srBlueDart = (shiprocketCouriers || []).filter(isBlueDartShiprocketQuote);
+            if (!srBlueDart.length) {
+                return bluedartCouriers || [];
+            }
+            return (bluedartCouriers || []).map((courier) => {
+                const match = matchShiprocketBlueDartQuote(courier, srBlueDart);
+                if (!match || match.price == null || parseFloat(match.price) <= 0) {
+                    return courier;
+                }
+                const metadata = Object.assign({}, courier.metadata || {}, {
+                    price_source: 'shiprocket',
+                    price_label: 'Price via Shiprocket',
+                    shiprocket_courier_name: match.name || ''
+                });
+                return Object.assign({}, courier, {
+                    price: parseFloat(match.price),
+                    price_source: 'shiprocket',
+                    price_label: 'Price via Shiprocket',
+                    rating: match.rating != null ? match.rating : courier.rating,
+                    metadata: metadata
+                });
+            });
+        }
+
+        function mergeCourierOptions(shiprocketCouriers, delhiveryCouriers, bluedartCouriers) {
+            const enrichedBlueDart = applyShiprocketPriceToBlueDart(bluedartCouriers, shiprocketCouriers);
             const merged = [];
+            // Keep all Shiprocket quotes (including Blue Dart via aggregator) alongside direct Blue Dart tiles.
             (shiprocketCouriers || []).forEach((courier) => {
                 merged.push(Object.assign({}, courier, {
                     rate_source: 'shiprocket',
@@ -1084,6 +1291,12 @@
                 merged.push(Object.assign({}, courier, {
                     rate_source: 'delhivery',
                     partner_code: courier.partner_code || 'delhivery'
+                }));
+            });
+            (enrichedBlueDart || []).forEach((courier) => {
+                merged.push(Object.assign({}, courier, {
+                    rate_source: 'bluedart',
+                    partner_code: courier.partner_code || 'bluedart'
                 }));
             });
             merged.sort((a, b) => {
@@ -1099,31 +1312,54 @@
             const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
             const currency = (courier.currency || 'INR').toUpperCase();
             const priceSymbol = currency === 'INR' ? '₹ ' : (currency + ' ');
-            const price = courier.price != null && courier.price !== ''
-                ? (priceSymbol + parseFloat(courier.price).toFixed(2))
+            const parsedPrice = parseFloat(courier.price);
+            const hasPrice = courier.price != null && courier.price !== '' && !isNaN(parsedPrice) && parsedPrice > 0;
+            const price = hasPrice
+                ? (priceSymbol + parsedPrice.toFixed(2))
                 : 'N/A';
             const etd = courier.etd || 'N/A';
             const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
             const cid = courier.id != null ? String(courier.id) : '';
             const checkedAttr = idx === 0 ? ' checked' : '';
             const isDelhivery = courier.rate_source === 'delhivery';
-            const providerBadge = isDelhivery
-                ? '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 border border-red-200">Delhivery</span>'
-                : '<span class="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 border border-violet-200">Shiprocket</span>';
-            const priceClass = isDelhivery ? 'text-emerald-700' : tm.courierPrice;
+            const isBlueDart = courier.rate_source === 'bluedart';
+            let providerBadge = '<span class="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 border border-violet-200">Shiprocket</span>';
+            if (isDelhivery) {
+                providerBadge = '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 border border-red-200">Delhivery</span>';
+            } else if (isBlueDart) {
+                providerBadge = '<span class="flex flex-wrap items-center gap-1">' +
+                    '<span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-900 border border-sky-200">Blue Dart</span>' +
+                    '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-900 border border-emerald-200" title="Use Export to Excel at the bottom of this page">Excel Export</span>' +
+                    '</span>';
+            }
+            const priceClass = (isDelhivery || isBlueDart) ? 'text-emerald-700' : tm.courierPrice;
+            const priceSource = String(courier.price_source || courier.metadata?.price_source || '');
+            const priceLabel = String(courier.price_label || courier.metadata?.price_label || 'Price via Shiprocket');
+            const priceViaShiprocket = isBlueDart && priceSource === 'shiprocket' && hasPrice;
+            const priceNote = priceViaShiprocket
+                ? '<span class="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full border border-violet-300/70 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold leading-tight text-violet-800 shadow-[0_1px_2px_rgba(124,58,237,0.14)] ring-1 ring-violet-100" title="Freight estimate from Shiprocket aggregator">' +
+                    '<i class="fas fa-rocket text-[9px] text-violet-500 shrink-0" aria-hidden="true"></i>' +
+                    '<span class="truncate">' + escapeHtml(priceLabel) + '</span>' +
+                  '</span>'
+                : (isBlueDart && !hasPrice ? '<div class="text-[10px] text-gray-400 mt-0.5">No Shiprocket price</div>' : '');
+            const etdSource = String(courier.metadata?.etd_source || '');
+            const etdLabel = (isBlueDart && etdShort !== '—' && etdSource === 'bluedart')
+                ? 'ETD (Blue Dart)'
+                : 'ETD';
             return `
                 <label class="relative flex w-[13.5rem] sm:w-56 shrink-0 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md ${tm.courierTileHover} ${tm.courierTileChecked}">
-                    <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 ${tm.courierRadio}" data-courier-name="${escapeHtml(String(courier.name ?? ''))}" data-partner-code="${escapeHtml(String(courier.partner_code ?? ''))}" data-product-group="${escapeHtml(String(courier.product_group ?? ''))}" data-product-type="${escapeHtml(String(courier.product_type ?? ''))}" data-partner-account-id="${escapeHtml(String(courier.partner_account_id ?? ''))}" data-rate-source="${escapeHtml(String(courier.rate_source ?? 'shiprocket'))}"${checkedAttr}/>
+                    <input type="radio" name="${courierGroupName}" value="${escapeHtml(cid)}" class="courier-tile-radio absolute left-2.5 top-3.5 h-4 w-4 shrink-0 border-gray-300 ${tm.courierRadio}" data-courier-name="${escapeHtml(String(courier.name ?? ''))}" data-courier-etd="${escapeHtml(etdShort !== '—' ? String(etd) : '')}" data-partner-code="${escapeHtml(String(courier.partner_code ?? ''))}" data-product-group="${escapeHtml(String(courier.product_group ?? ''))}" data-product-type="${escapeHtml(String(courier.product_type ?? ''))}" data-product-code="${escapeHtml(String(courier.metadata?.product_code ?? ''))}" data-sub-product-code="${escapeHtml(String(courier.metadata?.sub_product_code ?? ''))}" data-pack-type="${escapeHtml(String(courier.metadata?.pack_type ?? ''))}" data-partner-account-id="${escapeHtml(String(courier.partner_account_id ?? ''))}" data-rate-source="${escapeHtml(String(courier.rate_source ?? 'shiprocket'))}"${checkedAttr}/>
                     ${idx === 0 ? '<span class="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm pointer-events-none ' + tm.courierTopPick + '">Top pick</span>' : ''}
                     <div class="mb-1.5">${providerBadge}</div>
                     <p class="pr-14 text-sm font-semibold leading-snug text-gray-900 line-clamp-2">${escapeHtml(courier.name || 'Courier')}</p>
                     <div class="mt-3">
                         <div class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Price</div>
                         <div class="text-lg font-bold tabular-nums ${priceClass}">${price}</div>
+                        ${priceNote}
                     </div>
                     <div class="mt-3 flex flex-wrap gap-1.5">
                         <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                            <span class="text-slate-400">ETD</span> ${escapeHtml(etdShort)}
+                            <span class="text-slate-400">${escapeHtml(etdLabel)}</span> ${escapeHtml(etdShort)}
                         </span>
                         <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-100">
                             <i class="fas fa-star text-amber-500 text-[10px]" aria-hidden="true"></i> ${escapeHtml(rating)}
@@ -1145,6 +1381,7 @@
                 syncTargets().forEach((el) => {
                     el.setAttribute('data-selected-courier-id', radio.value || '');
                     el.setAttribute('data-selected-courier-name', radio.getAttribute('data-courier-name') || '');
+                    el.setAttribute('data-selected-courier-etd', radio.getAttribute('data-courier-etd') || '');
                     el.setAttribute('data-partner-code', radio.getAttribute('data-partner-code') || '');
                     el.setAttribute('data-product-group', radio.getAttribute('data-product-group') || '');
                     el.setAttribute('data-product-type', radio.getAttribute('data-product-type') || '');
@@ -1156,6 +1393,7 @@
                     orderSection.setAttribute('data-partner-code', radio.getAttribute('data-partner-code') || '');
                     orderSection.setAttribute('data-rate-source', radio.getAttribute('data-rate-source') || '');
                 }
+                updateBlueDartExcelExportButton();
             };
             courierContainer.querySelectorAll('.courier-tile-radio').forEach((r) => {
                 r.addEventListener('change', () => syncCourierPick(r));
@@ -1169,25 +1407,37 @@
                 return {
                     courier_id: checked.value || '',
                     courier_name: checked.getAttribute('data-courier-name') || '',
+                    courier_etd: checked.getAttribute('data-courier-etd') || '',
                     partner_code: checked.getAttribute('data-partner-code') || '',
                     rate_source: checked.getAttribute('data-rate-source') || '',
                     product_group: checked.getAttribute('data-product-group') || '',
                     product_type: checked.getAttribute('data-product-type') || '',
                     partner_account_id: checked.getAttribute('data-partner-account-id') || '',
+                    metadata: {
+                        product_code: checked.getAttribute('data-product-code') || '',
+                        sub_product_code: checked.getAttribute('data-sub-product-code') || '',
+                        pack_type: checked.getAttribute('data-pack-type') || '',
+                    },
                 };
             }
             return {
                 courier_id: boxElement.getAttribute('data-selected-courier-id') || '',
                 courier_name: boxElement.getAttribute('data-selected-courier-name') || '',
+                courier_etd: boxElement.getAttribute('data-selected-courier-etd') || '',
                 partner_code: boxElement.getAttribute('data-partner-code') || '',
                 rate_source: boxElement.getAttribute('data-rate-source') || '',
                 product_group: boxElement.getAttribute('data-product-group') || '',
                 product_type: boxElement.getAttribute('data-product-type') || '',
                 partner_account_id: boxElement.getAttribute('data-partner-account-id') || '',
+                metadata: {
+                    product_code: boxElement.getAttribute('data-product-code') || '',
+                    sub_product_code: boxElement.getAttribute('data-sub-product-code') || '',
+                    pack_type: boxElement.getAttribute('data-pack-type') || '',
+                },
             };
         }
 
-        function renderUnifiedCourierPanel(boxElement, courierContainer, tm, mergedCouriers, shiprocketData, delhiveryData, delhiveryError) {
+        function renderUnifiedCourierPanel(boxElement, courierContainer, tm, mergedCouriers, shiprocketData, delhiveryData, delhiveryError, pendingBlueDartNote, bluedartError) {
             let boxUid = boxElement.getAttribute('data-box-uid');
             if (!boxUid) {
                 boxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
@@ -1205,7 +1455,7 @@
                             </span>
                             <div class="min-w-0">
                                 <div class="font-semibold text-gray-900 leading-tight">Courier rates</div>
-                                <div class="text-[11px] text-gray-500 mt-0.5">Shiprocket &amp; Delhivery — select one option</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">Shiprocket, Delhivery &amp; Blue Dart — select one option</div>
                             </div>
                             <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tm.courierCountBadge}">${n}</span>
                         </div>
@@ -1271,6 +1521,37 @@
                     </div>`;
             }
 
+            if (pendingBlueDartNote) {
+                courierHtml += `
+                    <div class="px-3 pb-3">
+                        <div class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] text-sky-900 flex items-center gap-2">
+                            <i class="fas fa-spinner fa-spin text-sky-600" aria-hidden="true"></i>
+                            <span>${escapeHtml(pendingBlueDartNote)}</span>
+                        </div>
+                    </div>`;
+            }
+
+            if (bluedartError) {
+                courierHtml += `
+                    <div class="px-3 pb-3">
+                        <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                            <span class="font-semibold">Blue Dart direct rates:</span> ${escapeHtml(bluedartError)}
+                        </div>
+                    </div>`;
+            }
+
+            const hasBlueDartOptions = mergedCouriers.some((c) => String(c.rate_source || '').toLowerCase() === 'bluedart'
+                || String(c.partner_code || '').toLowerCase() === 'bluedart');
+            if (hasBlueDartOptions) {
+                courierHtml += `
+                    <div class="px-3 pb-3">
+                        <div class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] text-sky-900">
+                            <span class="font-semibold">Blue Dart items:</span>
+                            After selecting Air or Surface, use <span class="font-semibold">Export to Excel</span> at the bottom of this page to download rows for the Blue Dart dashboard (separate sheets for Air and Surface).
+                        </div>
+                    </div>`;
+            }
+
             courierHtml += `</div>`;
 
             courierContainer.innerHTML = courierHtml;
@@ -1331,7 +1612,12 @@
 
             const orderSectionForTheme = boxElement.closest('.px-4.pt-4.pb-2');
             const tm = bulkDispatchThemeFromSection(orderSectionForTheme);
-            
+            if (orderSectionForTheme) {
+                orderSectionForTheme.setAttribute('data-courier-loading', '1');
+                orderSectionForTheme.removeAttribute('data-courier-loaded');
+                updateBlueDartExcelExportButton();
+            }
+
             // Show loading state in courier container
             const courierContainer = orderSectionForTheme && orderSectionForTheme.querySelector('#availableCourierCompanies');
             console.log('Courier container found:', !!courierContainer);
@@ -1344,7 +1630,7 @@
                             </span>
                             <div>
                                 <div class="font-semibold text-gray-900">Loading courier options</div>
-                                <div class="text-[11px] text-gray-500 mt-0.5">Fetching Shiprocket &amp; Delhivery rates…</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">Fetching Shiprocket, Delhivery &amp; Blue Dart rates…</div>
                             </div>
                         </div>
                     </div>`;
@@ -1364,18 +1650,21 @@
             
             console.log('Sending payload to PHP endpoint:', payload);
             boxElement._lastCourierRequestPayload = payload;
-            
-            Promise.allSettled([
-                fetchShiprocketRates(payload),
-                fetchDelhiveryRates(payload)
-            ]).then((results) => {
-                const shiprocketResult = results[0];
-                const delhiveryResult = results[1];
 
-                let shiprocketData = null;
-                let shiprocketError = null;
-                if (shiprocketResult.status === 'fulfilled') {
-                    shiprocketData = shiprocketResult.value;
+            if (boxElement._courierFetchAbort) {
+                boxElement._courierFetchAbort.abort();
+            }
+            const abortController = new AbortController();
+            boxElement._courierFetchAbort = abortController;
+            const fetchSignal = abortController.signal;
+            const fetchId = (boxElement._courierFetchId = (boxElement._courierFetchId || 0) + 1);
+
+            function isStaleFetch() {
+                return fetchId !== boxElement._courierFetchId;
+            }
+
+            function applyShiprocketDebug(shiprocketData, shiprocketError) {
+                if (shiprocketData) {
                     boxElement._lastCourierDebugRequest = shiprocketData?.debug?.serviceability_request || null;
                     const resolvedPickupLocation = shiprocketData?.debug?.serviceability_request?.pickup_resolution?.pickup_location;
                     if (resolvedPickupLocation) {
@@ -1383,32 +1672,61 @@
                     }
                     boxElement._lastCourierDebugInput = shiprocketData?.debug?.input_before_filter || null;
                     boxElement._lastCourierDebugOutput = shiprocketData?.debug?.output_after_filter || null;
-                } else {
-                    shiprocketError = shiprocketResult.reason;
+                } else if (shiprocketError) {
                     boxElement._lastCourierDebugRequest = shiprocketError?.courierDebugRequest || boxElement._lastCourierDebugRequest || null;
-                    console.error('Shiprocket rates failed:', shiprocketError);
                 }
+            }
 
+            function parseDelhiveryResult(delhiveryResult) {
                 let delhiveryCouriers = [];
                 let delhiveryError = null;
                 if (delhiveryResult.status === 'fulfilled' && delhiveryResult.value?.success && Array.isArray(delhiveryResult.value.couriers)) {
                     delhiveryCouriers = delhiveryResult.value.couriers;
                 } else if (delhiveryResult.status === 'fulfilled') {
                     delhiveryError = delhiveryResult.value?.message || 'Delhivery rates unavailable';
-                } else {
+                } else if (delhiveryResult.reason && delhiveryResult.reason.name !== 'AbortError') {
                     delhiveryError = 'Could not load Delhivery rates';
                     console.warn('Delhivery rates failed:', delhiveryResult.reason);
+                }
+                if (delhiveryCouriers.length > 0) {
+                    delhiveryError = null;
+                }
+                return { delhiveryCouriers, delhiveryError };
+            }
+
+            function finishCourierLoad(shiprocketData, shiprocketError, delhiveryResult, bluedartResult) {
+                if (isStaleFetch() || !courierContainer) {
+                    return;
+                }
+
+                let delhiveryCouriers = [];
+                let delhiveryError = null;
+                if (delhiveryResult) {
+                    const parsedDel = parseDelhiveryResult(delhiveryResult);
+                    delhiveryCouriers = parsedDel.delhiveryCouriers;
+                    delhiveryError = parsedDel.delhiveryError;
+                }
+
+                let bluedartCouriers = [];
+                let bluedartError = null;
+                if (bluedartResult) {
+                    if (bluedartResult.status === 'fulfilled' && bluedartResult.value?.success && Array.isArray(bluedartResult.value.couriers)) {
+                        bluedartCouriers = bluedartResult.value.couriers;
+                    } else if (bluedartResult.status === 'fulfilled') {
+                        bluedartError = bluedartResult.value?.message || 'Blue Dart rates unavailable';
+                    } else if (bluedartResult.reason && bluedartResult.reason.name !== 'AbortError') {
+                        bluedartError = 'Could not load Blue Dart rates';
+                        console.warn('Blue Dart rates failed:', bluedartResult.reason);
+                    }
+                    if (bluedartCouriers.length > 0) {
+                        bluedartError = null;
+                    }
                 }
 
                 const shiprocketCouriers = (shiprocketData && shiprocketData.success && Array.isArray(shiprocketData.couriers))
                     ? shiprocketData.couriers
                     : [];
-                const mergedCouriers = mergeCourierOptions(shiprocketCouriers, delhiveryCouriers);
-                if (delhiveryCouriers.length > 0) {
-                    delhiveryError = null;
-                }
-
-                if (!courierContainer) return;
+                const mergedCouriers = mergeCourierOptions(shiprocketCouriers, delhiveryCouriers, bluedartCouriers);
 
                 if (mergedCouriers.length > 0) {
                     renderUnifiedCourierPanel(
@@ -1417,16 +1735,23 @@
                         tm,
                         mergedCouriers,
                         shiprocketData,
-                        delhiveryResult.status === 'fulfilled' ? delhiveryResult.value : null,
-                        delhiveryError
+                        delhiveryResult && delhiveryResult.status === 'fulfilled' ? delhiveryResult.value : null,
+                        delhiveryError,
+                        null,
+                        bluedartError
                     );
+                    if (orderSectionForTheme) {
+                        orderSectionForTheme.setAttribute('data-courier-loading', '0');
+                        orderSectionForTheme.setAttribute('data-courier-loaded', '1');
+                    }
+                    updateBlueDartExcelExportButton();
                     return;
                 }
 
                 const errorMessage = shiprocketError && shiprocketError.message
                     ? shiprocketError.message
-                    : (shiprocketCouriers.length === 0 && delhiveryCouriers.length === 0
-                        ? 'No courier options returned from Shiprocket or Delhivery for this box.'
+                    : (shiprocketCouriers.length === 0 && delhiveryCouriers.length === 0 && bluedartCouriers.length === 0
+                        ? 'No courier options returned from Shiprocket, Delhivery, or Blue Dart for this box.'
                         : 'Courier serviceability request failed. Please retry or open debug.');
 
                 courierContainer.innerHTML = `
@@ -1438,6 +1763,7 @@
                             <div class="font-semibold text-red-900">Could not load courier options</div>
                             <p class="text-[12px] text-red-800/90 mt-1">${escapeHtml(errorMessage)}</p>
                             ${delhiveryError ? '<p class="text-[12px] text-amber-800/90 mt-1">' + escapeHtml('Delhivery: ' + delhiveryError) + '</p>' : ''}
+                            ${bluedartError ? '<p class="text-[12px] text-amber-800/90 mt-1">' + escapeHtml('Blue Dart: ' + bluedartError) + '</p>' : ''}
                             <button type="button" class="retry-couriers-btn mt-3 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-800 shadow-sm hover:bg-red-50">
                                 <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i> Refresh courier list
                             </button>
@@ -1446,9 +1772,94 @@
                             </button>
                         </div>
                     </div>`;
+                if (orderSectionForTheme) {
+                    orderSectionForTheme.setAttribute('data-courier-loading', '0');
+                    orderSectionForTheme.setAttribute('data-courier-loaded', '0');
+                }
+                updateBlueDartExcelExportButton();
+            }
+
+            // Phase 1: Shiprocket + Delhivery in parallel (saves a duplicate Shiprocket call for Blue Dart).
+            Promise.allSettled([
+                fetchShiprocketRates(payload, fetchSignal),
+                fetchDirectCourierRates(payload, 'delhivery', fetchSignal)
+            ]).then((phase1Results) => {
+                if (isStaleFetch()) {
+                    return null;
+                }
+
+                const shiprocketResult = phase1Results[0];
+                const delhiveryResult = phase1Results[1];
+
+                let shiprocketData = null;
+                let shiprocketError = null;
+                if (shiprocketResult.status === 'fulfilled') {
+                    shiprocketData = shiprocketResult.value;
+                } else if (shiprocketResult.reason && shiprocketResult.reason.name !== 'AbortError') {
+                    shiprocketError = shiprocketResult.reason;
+                    console.error('Shiprocket rates failed:', shiprocketError);
+                }
+                applyShiprocketDebug(shiprocketData, shiprocketError);
+
+                const phase1Del = parseDelhiveryResult(delhiveryResult);
+                const shiprocketCouriers = (shiprocketData && shiprocketData.success && Array.isArray(shiprocketData.couriers))
+                    ? shiprocketData.couriers
+                    : [];
+                const interimCouriers = mergeCourierOptions(shiprocketCouriers, phase1Del.delhiveryCouriers, []);
+                if (interimCouriers.length > 0 && courierContainer) {
+                    renderUnifiedCourierPanel(
+                        boxElement,
+                        courierContainer,
+                        tm,
+                        interimCouriers,
+                        shiprocketData,
+                        delhiveryResult.status === 'fulfilled' ? delhiveryResult.value : null,
+                        phase1Del.delhiveryError,
+                        'Loading Blue Dart options…',
+                        null
+                    );
+                }
+
+                const bluedartPayload = Object.assign({}, payload);
+                const preloadedServiceability = shiprocketData?.debug?.input_before_filter;
+                if (preloadedServiceability) {
+                    bluedartPayload.shiprocket_serviceability = preloadedServiceability;
+                }
+
+                return fetchDirectCourierRates(bluedartPayload, 'bluedart', fetchSignal)
+                    .then((bluedartValue) => ({
+                        shiprocketData,
+                        shiprocketError,
+                        delhiveryResult,
+                        bluedartResult: { status: 'fulfilled', value: bluedartValue }
+                    }))
+                    .catch((err) => {
+                        if (err && err.name === 'AbortError') {
+                            return null;
+                        }
+                        return {
+                            shiprocketData,
+                            shiprocketError,
+                            delhiveryResult,
+                            bluedartResult: { status: 'rejected', reason: err }
+                        };
+                    });
+            }).then((finalBundle) => {
+                if (!finalBundle || isStaleFetch()) {
+                    return;
+                }
+                finishCourierLoad(
+                    finalBundle.shiprocketData,
+                    finalBundle.shiprocketError,
+                    finalBundle.delhiveryResult,
+                    finalBundle.bluedartResult
+                );
             }).catch((error) => {
+                if (error && error.name === 'AbortError') {
+                    return;
+                }
                 console.error('Error fetching couriers:', error);
-                if (!courierContainer) return;
+                if (isStaleFetch() || !courierContainer) return;
                 courierContainer.innerHTML = `
                     <div class="rounded-xl border border-red-200 bg-gradient-to-b from-red-50 to-white px-4 py-3 shadow-sm flex gap-3 items-start text-[13px]">
                         <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600" aria-hidden="true">
@@ -1462,6 +1873,11 @@
                             </button>
                         </div>
                     </div>`;
+                if (orderSectionForTheme) {
+                    orderSectionForTheme.setAttribute('data-courier-loading', '0');
+                    orderSectionForTheme.setAttribute('data-courier-loaded', '0');
+                }
+                updateBlueDartExcelExportButton();
             });
         }
 
@@ -1774,7 +2190,10 @@
         if (e.target.matches('.remove-order-btn') || e.target.closest('.remove-order-btn')) {
             e.preventDefault();
             const orderWrapper = e.target.closest('.px-4.pt-4.pb-2');
-            if (orderWrapper) orderWrapper.remove();
+            if (orderWrapper) {
+                orderWrapper.remove();
+                updateBlueDartExcelExportButton();
+            }
             return;
         }
 
@@ -1783,6 +2202,7 @@
             const box = e.target.closest('[data-order-number]');
             if (box) {
                 box.remove();
+                updateBlueDartExcelExportButton();
             }
         }
     });
@@ -1815,6 +2235,7 @@
                 // Update totals after removing the item
                 if (boxElement) {
                     updateBoxTotals(boxElement);
+                    updateBlueDartExcelExportButton();
                 }
             }
             return;
@@ -1956,11 +2377,332 @@
         }
     });
 
+    function isDirectBlueDartCourierSelection(courierFields) {
+        const partnerCode = String(courierFields.partner_code || '').toLowerCase();
+        const rateSource = String(courierFields.rate_source || '').toLowerCase();
+        return partnerCode === 'bluedart' || rateSource === 'bluedart';
+    }
+
+    function readActiveCourierFieldsForOrder(orderSection) {
+        if (!orderSection) {
+            return null;
+        }
+        const checked = orderSection.querySelector('.courier-tile-radio:checked');
+        if (!checked || !checked.value) {
+            return null;
+        }
+        return {
+            courier_id: checked.value || '',
+            courier_name: checked.getAttribute('data-courier-name') || '',
+            partner_code: checked.getAttribute('data-partner-code') || '',
+            rate_source: checked.getAttribute('data-rate-source') || '',
+            product_group: checked.getAttribute('data-product-group') || '',
+            product_type: checked.getAttribute('data-product-type') || '',
+            partner_account_id: checked.getAttribute('data-partner-account-id') || '',
+            metadata: {
+                product_code: checked.getAttribute('data-product-code') || '',
+                sub_product_code: checked.getAttribute('data-sub-product-code') || '',
+                pack_type: checked.getAttribute('data-pack-type') || '',
+            },
+        };
+    }
+
+    function orderSectionHasDispatchItems(orderSection) {
+        const boxElements = orderSection.querySelectorAll('[data-order-number]');
+        for (const boxElement of boxElements) {
+            if (boxElement.querySelectorAll('.items-container > div.px-4.py-1').length > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function hasBlueDartExportSelection() {
+        const container = document.getElementById('invDispatchesContainer');
+        if (!container) {
+            return false;
+        }
+
+        const orderSections = container.querySelectorAll('.px-4.pt-4.pb-2');
+        for (const orderSection of orderSections) {
+            if (!orderSectionHasDispatchItems(orderSection)) {
+                continue;
+            }
+            const courierFields = readActiveCourierFieldsForOrder(orderSection);
+            if (courierFields && isDirectBlueDartCourierSelection(courierFields)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function parseItemTotalAmount(text) {
+        return parseFloat(String(text || '').replace(/[^0-9.]/g, '')) || 0;
+    }
+
+    function readBoxDimensionsCm(boxElement) {
+        const boxSizeSelect = boxElement.querySelector('select.BoxSize') || boxElement.querySelector('select');
+        const selectedOption = boxSizeSelect ? boxSizeSelect.options[boxSizeSelect.selectedIndex] : null;
+        const inchToCm = 2.54;
+        const lengthIn = selectedOption ? parseFloat(selectedOption.getAttribute('data-length')) || 0 : 0;
+        const widthIn = selectedOption ? parseFloat(selectedOption.getAttribute('data-width')) || 0 : 0;
+        const heightIn = selectedOption ? parseFloat(selectedOption.getAttribute('data-height')) || 0 : 0;
+        return {
+            length_cm: lengthIn > 0 ? Math.round(lengthIn * inchToCm * 100) / 100 : 10,
+            width_cm: widthIn > 0 ? Math.round(widthIn * inchToCm * 100) / 100 : 10,
+            height_cm: heightIn > 0 ? Math.round(heightIn * inchToCm * 100) / 100 : 10,
+        };
+    }
+
+    function collectBlueDartBoxesForExport() {
+        const container = document.getElementById('invDispatchesContainer');
+        const orderSections = container.querySelectorAll('.px-4.pt-4.pb-2');
+        const boxes = [];
+        const warnings = [];
+
+        orderSections.forEach((orderSection) => {
+            const orderBox = orderSection.querySelector('[data-order-number]');
+            if (!orderBox) {
+                return;
+            }
+
+            const orderNumber = orderBox.getAttribute('data-order-number') || '';
+            const customerName = orderBox.getAttribute('data-customer-name') || '';
+            const boxElements = orderSection.querySelectorAll('[data-order-number]');
+            let boxNo = 0;
+
+            const orderCourierFields = readActiveCourierFieldsForOrder(orderSection);
+            if (!orderCourierFields || !isDirectBlueDartCourierSelection(orderCourierFields)) {
+                return;
+            }
+
+            boxElements.forEach((boxElement) => {
+                const itemRows = boxElement.querySelectorAll('.items-container > div.px-4.py-1');
+                if (!itemRows.length) {
+                    return;
+                }
+
+                const courierFields = orderCourierFields;
+
+                boxNo += 1;
+                let declaredValue = 0;
+                let isCod = boxElement.getAttribute('data-is-cod') === '1';
+                itemRows.forEach((row) => {
+                    const cols = row.querySelectorAll('[class*="col-span"]');
+                    declaredValue += parseItemTotalAmount(cols[7]?.textContent);
+                    const paymentType = (cols[8]?.textContent || '').toLowerCase();
+                    if (paymentType.includes('cod')) {
+                        isCod = true;
+                    }
+                });
+
+                const weightInput = boxElement.querySelector('.weight-input');
+                const weight = weightInput ? parseFloat(weightInput.value) || 0 : 0;
+                const dims = readBoxDimensionsCm(boxElement);
+                const boxSizeSelect = boxElement.querySelector('select.BoxSize') || boxElement.querySelector('select');
+                const boxSize = boxSizeSelect ? boxSizeSelect.value : '';
+
+                boxes.push({
+                    order_number: orderNumber,
+                    customer_name: customerName,
+                    box_no: boxNo,
+                    box_size: boxSize,
+                    weight: weight,
+                    declared_value: declaredValue > 0 ? declaredValue : 0.01,
+                    is_cod: isCod,
+                    piece_count: 1,
+                    courier_id: courierFields.courier_id,
+                    courier_name: courierFields.courier_name,
+                    courier_etd: courierFields.courier_etd,
+                    partner_code: courierFields.partner_code,
+                    rate_source: courierFields.rate_source,
+                    product_group: courierFields.product_group,
+                    product_type: courierFields.product_type,
+                    partner_account_id: courierFields.partner_account_id,
+                    metadata: courierFields.metadata || {},
+                    length_cm: dims.length_cm,
+                    width_cm: dims.width_cm,
+                    height_cm: dims.height_cm,
+                });
+            });
+        });
+
+        return { boxes, warnings };
+    }
+
+    function getBulkDispatchCourierReadiness() {
+        const container = document.getElementById('invDispatchesContainer');
+        if (!container) {
+            return { ready: false, reason: 'Add at least one order with items.' };
+        }
+
+        const orderSections = container.querySelectorAll('.px-4.pt-4.pb-2');
+        let activeOrders = 0;
+
+        for (const orderSection of orderSections) {
+            if (!orderSectionHasDispatchItems(orderSection)) {
+                continue;
+            }
+            activeOrders++;
+
+            const orderBox = orderSection.querySelector('[data-order-number]');
+            const orderLabel = orderBox ? (orderBox.getAttribute('data-order-number') || 'this order') : 'this order';
+
+            if (orderSection.getAttribute('data-courier-loading') === '1') {
+                return {
+                    ready: false,
+                    reason: 'Courier rates are still loading for order ' + orderLabel + '.',
+                };
+            }
+
+            if (!orderSection.querySelector('.courier-tile-radio')) {
+                return {
+                    ready: false,
+                    reason: 'Wait for courier rates to load for order ' + orderLabel + ' (check weight and box size).',
+                };
+            }
+
+            const courier = readActiveCourierFieldsForOrder(orderSection);
+            if (!courier || !courier.courier_id) {
+                return {
+                    ready: false,
+                    reason: 'Select a courier for order ' + orderLabel + '.',
+                };
+            }
+        }
+
+        if (activeOrders === 0) {
+            return { ready: false, reason: 'Add at least one order with items before invoicing.' };
+        }
+
+        return { ready: true, reason: '' };
+    }
+
+    function updateBlueDartExcelExportButton() {
+        const hint = document.getElementById('bluedartExcelExportHint');
+        const exportBtn = document.getElementById('downloadBlueDartExcelBtn');
+        const invoiceDispatchBtn = document.getElementById('bulkCreateInvoiceDispatchBtn');
+        if (!exportBtn || !invoiceDispatchBtn) {
+            return;
+        }
+
+        const ready = hasBlueDartExportSelection();
+        const exporting = exportBtn.dataset.exporting === '1';
+        const showBlueDartExport = ready || exporting;
+        const courierReadiness = getBulkDispatchCourierReadiness();
+
+        exportBtn.classList.toggle('hidden', !showBlueDartExport);
+        invoiceDispatchBtn.classList.toggle('hidden', showBlueDartExport);
+        if (hint) {
+            hint.classList.toggle('hidden', !showBlueDartExport);
+        }
+
+        if (!exporting) {
+            exportBtn.disabled = false;
+        }
+
+        if (!showBlueDartExport) {
+            invoiceDispatchBtn.disabled = !courierReadiness.ready;
+            invoiceDispatchBtn.title = courierReadiness.ready
+                ? 'Create invoice and dispatch for all orders'
+                : courierReadiness.reason;
+        }
+    }
+
+    const downloadBlueDartExcelBtn = document.getElementById('downloadBlueDartExcelBtn');
+    if (downloadBlueDartExcelBtn) {
+        downloadBlueDartExcelBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+
+            const collected = collectBlueDartBoxesForExport();
+            if (collected.warnings.length) {
+                showAlert(collected.warnings[0], 'warning');
+            }
+            if (!collected.boxes.length) {
+                showAlert('No Blue Dart boxes to export. Select Blue Dart as courier on at least one box with items.', 'warning');
+                return;
+            }
+
+            const invalidWeight = collected.boxes.find((box) => !box.weight || box.weight <= 0);
+            if (invalidWeight) {
+                showAlert('Enter a valid weight for all Blue Dart boxes before exporting to Excel.', 'warning');
+                return;
+            }
+
+            const btn = downloadBlueDartExcelBtn;
+            const originalHtml = btn.innerHTML;
+            btn.dataset.exporting = '1';
+            btn.disabled = true;
+            btn.innerHTML = '<span>Preparing...</span>';
+
+            try {
+                const response = await fetch('?page=dispatch&action=export_bluedart_excel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ boxes: collected.boxes }),
+                });
+
+                const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
+                if (!response.ok || contentType.includes('application/json')) {
+                    let message = 'Could not generate Excel.';
+                    try {
+                        const data = await response.json();
+                        message = data.message || message;
+                    } catch (err) {
+                        // ignore parse errors
+                    }
+                    throw new Error(message);
+                }
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'bluedart_dispatch_' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.xlsx';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                showAlert('Blue Dart items exported to Excel (' + collected.boxes.length + ' box(es)).', 'success');
+            } catch (err) {
+                showAlert(err.message || 'Failed to download Excel.', 'error');
+            } finally {
+                btn.dataset.exporting = '0';
+                btn.innerHTML = originalHtml;
+                updateBlueDartExcelExportButton();
+            }
+        });
+    }
+
+    const invDispatchesContainer = document.getElementById('invDispatchesContainer');
+    if (invDispatchesContainer) {
+        invDispatchesContainer.addEventListener('change', function(e) {
+            if (e.target.matches('.courier-tile-radio')) {
+                updateBlueDartExcelExportButton();
+            }
+        });
+        invDispatchesContainer.addEventListener('input', function(e) {
+            if (e.target.matches('.custom-invoice-number-input')) {
+                const orderSection = e.target.closest('.px-4.pt-4.pb-2');
+                if (orderSection) {
+                    clearCustomInvoiceFieldError(orderSection);
+                }
+            }
+        });
+    }
+    updateBlueDartExcelExportButton();
+
     // Handle bulk create invoices and dispatch
     const bulkCreateBtn = document.getElementById('bulkCreateInvoiceDispatchBtn');
     if (bulkCreateBtn) {
         bulkCreateBtn.addEventListener('click', function(e) {
             e.preventDefault();
+
+            const courierReadiness = getBulkDispatchCourierReadiness();
+            if (!courierReadiness.ready) {
+                showAlert(courierReadiness.reason, 'warning');
+                return;
+            }
 
             const container = document.getElementById('invDispatchesContainer');
             const orderSections = container.querySelectorAll('.px-4.pt-4.pb-2');
@@ -2023,11 +2765,13 @@
                             groupname: boxGroupname,
                             courier_id: courierFields.courier_id,
                             courier_name: courierFields.courier_name,
+                            courier_etd: courierFields.courier_etd,
                             partner_code: courierFields.partner_code,
                             rate_source: courierFields.rate_source,
                             product_group: courierFields.product_group,
                             product_type: courierFields.product_type,
                             partner_account_id: courierFields.partner_account_id,
+                            metadata: courierFields.metadata || {},
                             pickup_location: boxElement.getAttribute('data-pickup-location') || 'Head Off'
                         });
                     }
@@ -2044,11 +2788,14 @@
                     });
                     
                     const order_ids = Array.from(allOrderIds);
-                    
+                    const customInvoiceInput = orderSection.querySelector('.custom-invoice-number-input');
+                    const custom_invoice_number = customInvoiceInput ? customInvoiceInput.value.trim() : '';
+
                     orders.push({
                         order_number: order_number,
                         customer_id: customer_id,
                         customer_name: customer_name,
+                        custom_invoice_number: custom_invoice_number,
                         order_ids: order_ids,  // Include order IDs from all boxes
                         boxes: boxes
                     });
@@ -2057,6 +2804,12 @@
 
             if (orders.length === 0) {
                 showAlert('Please add items to at least one box', 'warning');
+                return;
+            }
+
+            const invoiceValidation = validateCustomInvoiceFields(orderSections);
+            if (!invoiceValidation.valid) {
+                showAlert(invoiceValidation.message, 'warning');
                 return;
             }
 
@@ -2121,13 +2874,31 @@
                 },
                 body: JSON.stringify({ orders: orders })
             })
-            .then(response => response.json())
-            .then(data => {
+            .then(async (response) => {
+                const rawText = await response.text();
+                let data;
+                try {
+                    data = rawText ? JSON.parse(rawText) : {};
+                } catch (parseErr) {
+                    const snippet = rawText.replace(/^\uFEFF/, '').trim().slice(0, 1200);
+                    throw new Error(
+                        snippet
+                            ? ('Server returned non-JSON response (HTTP ' + response.status + '): ' + snippet)
+                            : ('Empty server response (HTTP ' + response.status + ')')
+                    );
+                }
+                return { response, data };
+            })
+            .then(({ response, data }) => {
                 // Hide overlay
                 overlay.style.display = 'none';
                 
                 bulkCreateBtn.disabled = false;
                 bulkCreateBtn.innerHTML = '<span>🚚</span><span>Invoice &amp; Dispatch</span>';
+
+                if (data.debug_php_output) {
+                    console.error('PHP debug output from bulk dispatch:', data.debug_php_output);
+                }
 
                 if (data.success) {
                     if (data.errors && data.errors.length > 0) {
@@ -2162,7 +2933,7 @@
                                             ${dispatch.invoice.invoice_number || '-'}
                                         </a>
                                     </td>
-                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.shiprocket_shipment_id || '-'}</td>
+                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.exotic_shipment_id || '-'}</td>
                                     <td class="p-2 border-b border-gray-200 text-right">
                                         ${dispatch.awb_code ? `<a href="${dispatch.label_url || '#'}" target="_blank" class="text-blue-600 hover:underline">${dispatch.awb_code}</a>` : '-'}
                                     </td>
@@ -2182,7 +2953,11 @@
                         console.log('Created Dispatches:', data.dispatches);
                     }
                 } else {
-                    showAlert('Error: ' + (data.message || 'Failed to create invoices'), 'error');
+                    let errMsg = data.message || 'Failed to create invoices';
+                    if (data.debug_php_output) {
+                        errMsg += '\n\nPHP output:\n' + String(data.debug_php_output).slice(0, 500);
+                    }
+                    showAlert('Error: ' + errMsg, 'error');
                     if (data.errors) {
                         console.error('Errors:', data.errors);
                     }
@@ -2512,7 +3287,7 @@
                 }
                 boxElement._courierDebounce = setTimeout(() => {
                     fetchCouriersForBox(boxElement);
-                }, 1000);
+                }, 500);
             }
         }
     });

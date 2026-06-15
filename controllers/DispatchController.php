@@ -7,6 +7,10 @@ require_once 'courier_selector.php';
 require_once __DIR__ . '/../helpers/courier/country_codes.php';
 require_once __DIR__ . '/../helpers/courier/Gateway/CourierGateway.php';
 require_once __DIR__ . '/../helpers/courier/CourierDispatchService.php';
+require_once __DIR__ . '/../helpers/courier/bluedart_rate_helpers.php';
+require_once __DIR__ . '/../helpers/dispatch_delivery_dates.php';
+require_once __DIR__ . '/../helpers/dispatch_courier_identity.php';
+require_once __DIR__ . '/../helpers/exotic_india_shipment_api.php';
 require_once __DIR__ . '/../models/courier/CourierShipment.php';
 require_once __DIR__ . '/../models/order/stock.php';
 $commanModel = new Tables($conn);
@@ -15,6 +19,47 @@ $dispatchModel = new Dispatch($conn);
 $ordersModel = new Order($conn);
 
 class DispatchController {
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<int, array<string, mixed>> $sources
+     * @return array<string, mixed>
+     */
+    private function withDispatchDeliveryDates(array $payload, array $sources): array
+    {
+        return mergeDispatchDeliveryDates($payload, $sources);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<int, array<string, mixed>> $sources
+     * @param array<string, mixed> $courierContext
+     * @return array<string, mixed>
+     */
+    private function enrichDispatchRecord(array $payload, array $sources = [], array $courierContext = []): array
+    {
+        global $conn;
+
+        $payload = mergeDispatchDeliveryDates($payload, $sources);
+
+        return mergeDispatchCourierIdentity($payload, $conn, $courierContext);
+    }
+
+    private function applyShiprocketAwbAssignment($dispatchModel, int $shipmentId, ?array $awbInfoResponse, array $fallback = []): void
+    {
+        if ($shipmentId <= 0 || !is_array($awbInfoResponse)) {
+            return;
+        }
+        if (empty($awbInfoResponse['awb_assign_status']) || (int) $awbInfoResponse['awb_assign_status'] !== 1) {
+            return;
+        }
+
+        global $conn;
+        $assignment = buildShiprocketAssignmentUpdate($conn, $awbInfoResponse, $fallback);
+        if (!empty($assignment)) {
+            $dispatchModel->updateDispatchByShiprocketShipmentId($shipmentId, $assignment);
+        }
+    }
+
     private function resolveDefaultShiprocketPickupLocation(array $firm = [], ?string $override = null): string
     {
         global $dispatchModel;
@@ -28,6 +73,23 @@ class DispatchController {
         }
 
         return $pickup !== '' ? $pickup : 'Head Off';
+    }
+
+    /**
+     * @param array<string, mixed> $result
+     * @return string|array{message:string,debug:array<string,mixed>}
+     */
+    private function buildShipmentErrorEntry(string $message, array $result = [])
+    {
+        $debug = is_array($result['debug'] ?? null) ? $result['debug'] : [];
+        if ($debug === []) {
+            return $message;
+        }
+
+        return [
+            'message' => $message,
+            'debug' => $debug,
+        ];
     }
 
     private function resolveShiprocketPickupPostcode($dispatchModel, array $firm, string $pickupLocation): array
@@ -123,33 +185,14 @@ class DispatchController {
      */
     private function resolveShipmentPartnerCode(array $boxData, ?array $dispatchRecord = null): string
     {
-        foreach ([
-            strtolower(trim((string)($boxData['partner_code'] ?? ''))),
-            strtolower(trim((string)($boxData['rate_source'] ?? ''))),
-        ] as $candidate) {
-            if ($candidate === 'delhivery') {
-                return 'delhivery';
+        foreach (['rate_source', 'partner_code'] as $key) {
+            $code = strtolower(trim((string) ($boxData[$key] ?? '')));
+            if ($code !== '' && $code !== 'shiprocket') {
+                return $code;
             }
         }
 
-        $courierId = (string)($boxData['courier_id'] ?? '');
-        if (stripos($courierId, 'delhivery_') === 0) {
-            return 'delhivery';
-        }
-
-        $courierName = strtolower(trim((string)($boxData['courier_name'] ?? '')));
-        if ($courierName !== '' && strpos($courierName, 'delhivery') !== false) {
-            return 'delhivery';
-        }
-
-        if ($dispatchRecord) {
-            $savedName = strtolower(trim((string)($dispatchRecord['courier_name'] ?? '')));
-            if ($savedName !== '' && strpos($savedName, 'delhivery') !== false) {
-                return 'delhivery';
-            }
-        }
-
-        return strtolower(trim((string)($boxData['partner_code'] ?? '')));
+        return 'shiprocket';
     }
 
     public function create() {
@@ -385,7 +428,7 @@ class DispatchController {
                     $courierName = (string) ($data['courier_name'][$boxNo] ?? $data['delivery_partner'] ?? 'Aramex');
                     $billingWeight = max($actualKg, $volumetricKg);
 
-                    $dispatchData = [
+                    $dispatchData = $this->enrichDispatchRecord([
                         'invoice_id' => $data['invoice_id'],
                         'box_no' => $boxNo,
                         'order_number' => $invOrderNumber,
@@ -402,14 +445,22 @@ class DispatchController {
                         'courier_name' => $courierName,
                         'shiprocket_order_id' => null,
                         'shiprocket_shipment_id' => null,
-                        'shiprocket_tracking_url' => null,
                         'awb_code' => $awbCode !== '' ? $awbCode : null,
                         'shipment_status' => 'created',
                         'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                        'tracking_url' => ($t = (string) ($createResult['tracking_url'] ?? '')) !== '' ? $t : null,
                         'groupname' => $box['groupname'] ?? null,
                         'created_by' => $_SESSION['user']['id'] ?? 0,
                         'created_at' => date('Y-m-d H:i:s'),
-                    ];
+                    ], [
+                        $createResult,
+                        [
+                            'courier_etd' => $data['courier_etd'][$boxNo] ?? null,
+                        ],
+                    ], [
+                        'courier_name' => $courierName,
+                        'partner_code' => (string) ($data['partner_code'][$boxNo] ?? 'aramex'),
+                    ]);
 
                     $dispatchId = $dispatchModel->createDispatch($dispatchData);
                     if (!$dispatchId) {
@@ -521,7 +572,7 @@ class DispatchController {
                 $shiprocketResponses[$boxNo] = $shiprocketResponse['json'];
 
                 // Create dispatch record for this box
-                $dispatchData = [
+                $dispatchData = $this->enrichDispatchRecord([
                     'invoice_id' => $data['invoice_id'],
                     'box_no' => $boxNo,
                     'order_number' => $invOrderNumber,                    
@@ -535,17 +586,26 @@ class DispatchController {
                     'billing_weight' => $totalBillableWeight,
                     'shipping_charges' => $totalShippingCharges,
                     'dispatch_date' => date('Y-m-d H:i:s'),
-                    'courier_name' => $data['delivery_partner'],
+                    'courier_name' => (string) ($data['courier_name'][$boxNo] ?? $data['delivery_partner']),
                     'shiprocket_order_id' => $shiprocketResponse['json']['order_id'] ?? null,
                     'shiprocket_shipment_id' => $shiprocketResponse['json']['shipment_id'] ?? null,
-                    'shiprocket_tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,                    
                     'awb_code' => $shiprocketResponse['json']['awb_code'] ?? null,
                     'shipment_status' => $shiprocketResponse['json']['status'] ?? null,
                     'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
+                    'tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
                     'groupname' => $box['groupname'] ?? null,
                     'created_by' => $_SESSION['user']['id'] ?? 0,
-                    'created_at' => date('Y-m-d H:i:s')
-                ];
+                    'created_at' => date('Y-m-d H:i:s'),
+                ], [
+                    $shiprocketResponse['json'] ?? [],
+                    [
+                        'courier_etd' => $data['courier_etd'][$boxNo] ?? null,
+                    ],
+                ], [
+                    'courier_name' => (string) ($data['courier_name'][$boxNo] ?? $data['delivery_partner']),
+                    'courier_id' => (string) ($data['courier_id'][$boxNo] ?? ''),
+                    'partner_code' => 'shiprocket',
+                ]);
 
                 $dispatchId = $dispatchModel->createDispatch($dispatchData);
                 //print_array($dispatchData);
@@ -557,9 +617,17 @@ class DispatchController {
                 //chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
                 $dispatchRecords['awb_assign_status'][$boxNo] = $awbInfoResponse['awb_assign_status'] ?? null;
                 if($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
-                    // Update dispatch record with AWB code
-                    $awbCode = $awbInfoResponse['response']['data']['awb_code'];
-                    $dispatchModel->updateDispatchAwbCode($shiprocketResponse['json']['shipment_id'], $awbCode);
+                    $this->applyShiprocketAwbAssignment(
+                        $dispatchModel,
+                        (int) $shiprocketResponse['json']['shipment_id'],
+                        $awbInfoResponse,
+                        [
+                            'courier_name' => (string) ($data['courier_name'][$boxNo] ?? $data['delivery_partner']),
+                            'courier_id' => (string) ($data['courier_id'][$boxNo] ?? ''),
+                            'partner_code' => 'shiprocket',
+                        ]
+                    );
+                    $awbCode = $awbInfoResponse['response']['data']['awb_code'] ?? null;
                     $dispatchRecords['awb'][$boxNo] = $awbCode;
                 } else {                   
                     //file_put_contents('shiprocket_awb_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - AWB code not found in response\n", FILE_APPEND);
@@ -984,23 +1052,24 @@ class DispatchController {
                     continue;
                 }
 
-                // best-effort extraction of status and tracking URL from response
+                $trackingData = is_array($resp['tracking_data'] ?? null) ? $resp['tracking_data'] : [];
+                $deliveryDates = extractDispatchDeliveryDates($trackingData);
                 $status = null;
-                $tracking_url = null;
-                if (isset($resp['tracking_data']['shipment_track']) && is_array($resp['tracking_data']['shipment_track'])) {
-                    foreach ($resp['tracking_data']['shipment_track'] as $track) {
-                        $edd = $track['edd'] ?? null;
-                        if (isset($track['current_status'])) {
+                $tracking_url = $trackingData['track_url'] ?? null;
+                if (isset($trackingData['shipment_track']) && is_array($trackingData['shipment_track'])) {
+                    foreach ($trackingData['shipment_track'] as $track) {
+                        if (!is_array($track)) {
+                            continue;
+                        }
+                        if ($status === null && isset($track['current_status'])) {
                             $status = $track['current_status'];
-                            break;
                         }
                     }
                 }
-                $tracking_url = $resp['tracking_data']['track_url'] ?? null;
-                //echo "Extracted status: $status, tracking_url: $tracking_url for AWB $awb (dispatch $dispatchId)\n";
-                $etd = $resp['tracking_data']['etd'] ?? null;
+                $etd = $deliveryDates['etd'];
+                $edd = $deliveryDates['edd'];
                 
-                if ($status !== null || $tracking_url !== null) {
+                if ($status !== null || $tracking_url !== null || $etd !== null || $edd !== null) {
                     $updated = $dispatchModel->updateDispatchStatus($dispatchId, $status ?? '', $tracking_url, $etd, $edd);
                     if ($updated) {
                         $summary['updated']++;
@@ -1141,6 +1210,169 @@ class DispatchController {
             'staffList' => $commanModel->get_staff_list(),
             'country_list' => $commanModel->get_counry_list(),
             'warehouseList' => $commanModel->get_exotic_address()
+        ]);
+    }
+
+    /**
+     * Preview JSON body for Exotic India POST /order/shipment-add.
+     */
+    public function shipmentAddPreview(): void
+    {
+        global $conn, $dispatchModel;
+        is_login();
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $dispatchId = (int) ($_GET['dispatch_id'] ?? $_POST['dispatch_id'] ?? 0);
+        if ($dispatchId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'dispatch_id is required']);
+            return;
+        }
+
+        $dispatch = $dispatchModel->getDispatchById($dispatchId);
+        if (!$dispatch) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Dispatch not found']);
+            return;
+        }
+
+        $preview = exotic_india_shipment_add_preview($conn, $dispatch);
+        $payload = $preview['payload'];
+        $alreadyGenerated = trim((string) ($dispatch['exotic_shipment_id'] ?? '')) !== '';
+        $canGenerate = exotic_india_dispatch_can_generate_shipper_id($dispatch);
+
+        echo json_encode([
+            'success' => true,
+            'dispatch' => [
+                'id' => (int) $dispatch['id'],
+                'invoice_id' => (int) ($dispatch['invoice_id'] ?? 0),
+                'box_no' => (int) ($dispatch['box_no'] ?? 0),
+                'order_number' => (string) ($dispatch['order_number'] ?? ''),
+                'awb_code' => (string) ($dispatch['awb_code'] ?? ''),
+                'shipper_id' => (int) ($dispatch['shipper_id'] ?? 0),
+                'courier_name' => (string) ($dispatch['courier_name'] ?? ''),
+                'shipment_status' => (string) ($dispatch['shipment_status'] ?? ''),
+                'exotic_shipment_id' => (string) ($dispatch['exotic_shipment_id'] ?? ''),
+            ],
+            'already_generated' => $alreadyGenerated,
+            'can_generate' => $canGenerate,
+            'api_url' => $preview['api_url'],
+            'ready' => !$alreadyGenerated && $canGenerate && (bool) $preview['ready'],
+            'issues' => $preview['issues'],
+            'user_issues' => exotic_india_shipment_add_friendly_issues($preview['issues']),
+            'payload' => $payload,
+            'payload_json' => $payload !== null
+                ? json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+                : null,
+        ]);
+    }
+
+    /**
+     * Execute Exotic India POST /order/shipment-add for a dispatch (manual / verify).
+     */
+    public function shipmentAddExecute(): void
+    {
+        global $conn, $dispatchModel;
+        is_login();
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Invalid JSON body']);
+            return;
+        }
+
+        $dispatchId = (int) ($input['dispatch_id'] ?? 0);
+        if ($dispatchId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'dispatch_id is required']);
+            return;
+        }
+
+        $dispatch = $dispatchModel->getDispatchById($dispatchId);
+        if (!$dispatch) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Dispatch not found']);
+            return;
+        }
+
+        $existingShipperId = trim((string) ($dispatch['exotic_shipment_id'] ?? ''));
+        if ($existingShipperId !== '') {
+            echo json_encode([
+                'success' => true,
+                'already_generated' => true,
+                'shipment_id' => $existingShipperId,
+                'message' => 'Shipper ID is already generated for this package.',
+            ]);
+            return;
+        }
+
+        if (!exotic_india_dispatch_can_generate_shipper_id($dispatch)) {
+            $preview = exotic_india_shipment_add_preview($conn, $dispatch);
+            http_response_code(422);
+            echo json_encode([
+                'success' => false,
+                'message' => exotic_india_dispatch_shipment_is_cancelled($dispatch)
+                    ? 'This shipment is cancelled. Shipper ID cannot be generated.'
+                    : 'Tracking number (AWB) is required before generating Shipper ID.',
+                'issues' => $preview['issues'],
+                'user_issues' => exotic_india_shipment_add_friendly_issues($preview['issues']),
+            ]);
+            return;
+        }
+
+        $preview = exotic_india_shipment_add_preview($conn, $dispatch);
+        if (empty($preview['payload'])) {
+            http_response_code(422);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Cannot generate Shipper ID yet. Please fix the items listed and try again.',
+                'issues' => $preview['issues'],
+                'user_issues' => exotic_india_shipment_add_friendly_issues($preview['issues']),
+            ]);
+            return;
+        }
+
+        $result = exotic_india_post_shipment_add($preview['payload']);
+        $result = exotic_india_persist_shipment_add_result($conn, $dispatchId, $result);
+
+        $responseRaw = (string) ($result['raw'] ?? '');
+        $responseHeaders = (string) ($result['response_headers'] ?? '');
+        $friendlyMessage = !empty($result['success'])
+            ? ((string) ($result['shipment_id'] ?? '') !== ''
+                ? 'Shipper ID generated successfully.'
+                : (string) ($result['message'] ?? 'Shipper ID request completed.'))
+            : ('Could not generate Shipper ID. ' . (string) ($result['message'] ?? 'Please try again or contact support.'));
+        echo json_encode([
+            'success' => !empty($result['success']),
+            'message' => $friendlyMessage,
+            'http_code' => (int) ($result['http_code'] ?? 0),
+            'shipment_id' => (string) ($result['shipment_id'] ?? ''),
+            'api_url' => $preview['api_url'],
+            'request' => $preview['payload'],
+            'response' => $result['data'] ?? null,
+            'response_raw' => $responseRaw,
+            'response_headers' => $responseHeaders,
+            'response_body_empty' => $responseRaw === '',
+            'response_body_length' => strlen($responseRaw),
+            'request_url' => (string) ($result['request_url'] ?? $preview['api_url']),
+            'request_headers' => $result['request_headers'] ?? [],
+            'curl_error' => (string) ($result['curl_error'] ?? ''),
+            'issues' => $preview['issues'],
+            'user_issues' => exotic_india_shipment_add_friendly_issues($preview['issues']),
         ]);
     }
     
@@ -1359,13 +1591,9 @@ class DispatchController {
                         'awb_code' => $reDispatchResult['json']['awb_code'] ?? '',
                         'order_number' => $newOrderId,
                         'updated_at' => date('Y-m-d H:i:s'),
-                        'is_re_dispatch' => 1,
-                        're_dispatch_count' => $record['re_dispatch_count'] + 1,
                         'label_url' => null,
                         'etd' => null,
                         'edd' => null,
-                        'shiprocket_tracking_url' => null
-
                     ], $record['id']);
                     //create new dispatch record with same details but new shipment info
                     // $dispatchData = [
@@ -1386,7 +1614,6 @@ class DispatchController {
                     //     'courier_name' => $record['courier_name'] ?? null,
                     //     'shiprocket_order_id' => $reDispatchResult['json']['order_id'] ?? null,
                     //     'shiprocket_shipment_id' => $reDispatchResult['json']['shipment_id'] ?? null,
-                    //     'shiprocket_tracking_url' => $reDispatchResult['json']['tracking_url'] ?? null,                    
                     //     'awb_code' => $reDispatchResult['json']['awb_code'] ?? null,
                     //     'shipment_status' => $reDispatchResult['json']['status'] ?? null,
                     //     'label_url' => $reDispatchResult['json']['label_url'] ?? null,
@@ -1490,7 +1717,85 @@ class DispatchController {
         unset($invoice);
         renderTemplate('views/dispatch/bulk_dispatch.php', ['invoices' => [], 'dispatchRecords' => $invoice_dispatch]);
     }
-   
+
+    /**
+     * Export Blue Dart–selected bulk dispatch boxes to Excel (one sheet per service family: Air / Surface).
+     */
+    public function exportBlueDartExcel(): void
+    {
+        global $ordersModel;
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        is_login();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['success' => false, 'message' => 'POST required.']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/dispatch/bluedart_bulk_excel_export.php';
+
+        $raw = file_get_contents('php://input');
+        $payload = is_string($raw) ? json_decode($raw, true) : null;
+        if (!is_array($payload)) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['success' => false, 'message' => 'Invalid request body.']);
+            exit;
+        }
+
+        $boxes = $payload['boxes'] ?? [];
+        if (!is_array($boxes) || $boxes === []) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['success' => false, 'message' => 'No boxes submitted for export.']);
+            exit;
+        }
+
+        $orderCache = [];
+        $orderInfoResolver = static function (string $orderNumber) use ($ordersModel, &$orderCache): array {
+            if (isset($orderCache[$orderNumber])) {
+                return $orderCache[$orderNumber];
+            }
+            $numeric = (int) preg_replace('/\D/', '', $orderNumber);
+            $info = $numeric > 0 ? $ordersModel->getRemarksByOrderNumber($numeric) : null;
+            $orderCache[$orderNumber] = is_array($info) ? $info : [];
+
+            return $orderCache[$orderNumber];
+        };
+
+        $prepared = bluedartBulkExcelPrepareSheets($boxes, $orderInfoResolver);
+        if (empty($prepared['success'])) {
+            http_response_code(400);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode([
+                'success' => false,
+                'message' => (string) ($prepared['message'] ?? 'Could not prepare export.'),
+                'skipped' => $prepared['skipped'] ?? [],
+            ]);
+            exit;
+        }
+
+        $filename = 'bluedart_dispatch_' . date('Y-m-d_His') . '.xlsx';
+
+        try {
+            bluedartBulkExcelStreamDownload($prepared['sheets'] ?? [], $filename);
+        } catch (Throwable $e) {
+            error_log('Blue Dart Excel export failed: ' . $e->getMessage());
+            http_response_code(500);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not generate Excel file. Please try again.',
+            ]);
+            exit;
+        }
+    }
 
     /**
      * Bulk create invoices and dispatch records from bulk dispatch form
@@ -1498,7 +1803,9 @@ class DispatchController {
     public function bulkCreateInvoicesDispatch() {
         global $invoiceModel, $dispatchModel, $ordersModel, $commanModel;
         is_login();
-        
+
+        ob_start();
+
         header('Content-Type: application/json');
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -1526,6 +1833,10 @@ class DispatchController {
         
         try {
             require_once __DIR__ . '/../helpers/dispatch/shipping_address_validation.php';
+            require_once __DIR__ . '/../helpers/invoice_number_resolver.php';
+
+            global $conn;
+            $batchCustomInvoiceNumbers = [];
 
             // Process each order
             foreach ($input['orders'] as $orderData) {
@@ -1582,18 +1893,17 @@ class DispatchController {
                     $total_amount += ($item_total + $item_tax);
                 }
 
-                // Create invoice
-                // Generate invoice number from global_settings
-                $globalSettings = $commanModel->getRecordById('global_settings', 1);
-                $invoice_prefix = $globalSettings['invoice_prefix'] ?? 'INV';
-                $invoice_series = $globalSettings['invoice_series'] ?? 0;
-                $invoice_series++;
-                
-                // Update global_settings with new invoice_series
-                $commanModel->updateRecord('global_settings', ['invoice_series' => $invoice_series], ['id' => 1]);
-                
-                $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
-                
+                $customInvoiceNumber = trim((string) ($orderData['custom_invoice_number'] ?? ''));
+                $invoiceNumberResult = resolve_invoice_number($conn, $customInvoiceNumber, $batchCustomInvoiceNumbers);
+                if (empty($invoiceNumberResult['success'])) {
+                    $errors[] = 'Order #' . $order_number . ': ' . ($invoiceNumberResult['message'] ?? 'Invalid invoice number.');
+                    continue;
+                }
+                $invoice_number = (string) $invoiceNumberResult['invoice_number'];
+                if ($customInvoiceNumber !== '') {
+                    $batchCustomInvoiceNumbers[] = $customInvoiceNumber;
+                }
+
                 $invoiceData = [
                     'invoice_number' => $invoice_number,
                     'invoice_date' => date('Y-m-d'),
@@ -1713,7 +2023,7 @@ class DispatchController {
                         $height = $box_size_mapping[$box_size]['height'] ?? 0;
                     }
                     $volumetric_weight = ($length * $width * $height) / 5000;
-                    $dispatchData = [
+                    $dispatchData = $this->enrichDispatchRecord([
                         'invoice_id' => $invoiceId,
                         'box_no' => $box_no,
                         'order_number' => $order_number,
@@ -1729,7 +2039,6 @@ class DispatchController {
                         'courier_name' => !empty($boxData['courier_name']) ? $boxData['courier_name'] : null,
                         'shiprocket_order_id' => null,
                         'shiprocket_shipment_id' => null,
-                        'shiprocket_tracking_url' => null,
                         'awb_code' => null,
                         'shipment_status' => 'pending',
                         'label_url' => null,
@@ -1738,8 +2047,13 @@ class DispatchController {
                         'created_at' => date('Y-m-d H:i:s'),
                         'pickup_location' => $this->resolveDefaultShiprocketPickupLocation([], $boxData['pickup_location'] ?? null),
                         'batch_no' => $batch_no,
-                        'box_size' => $box_size
-                    ];
+                        'box_size' => $box_size,
+                    ], [$boxData], [
+                        'courier_name' => (string) ($boxData['courier_name'] ?? ''),
+                        'courier_id' => (string) ($boxData['courier_id'] ?? ''),
+                        'partner_code' => (string) ($boxData['partner_code'] ?? ''),
+                        'rate_source' => (string) ($boxData['rate_source'] ?? ''),
+                    ]);
 
                     $dispatchId = $dispatchModel->createDispatch($dispatchData);
                     if ($dispatchId) {
@@ -1773,7 +2087,7 @@ class DispatchController {
             if (!empty($batch_no) && !empty($created_dispatches)) {
                 $courierGateway = null;
                 $courierShipmentModel = null;
-
+                
                 foreach ($created_dispatches as $index => $dispatchInfo) {
                     $dispatchId = $dispatchInfo['dispatch_id'];
                     $invoiceId = $dispatchInfo['invoice_id'];
@@ -2009,6 +2323,7 @@ class DispatchController {
                             'cod' => $isCod ? 1 : 0,
                             'cod_amount' => $isCod ? round($subTotal, 2) : 0,
                             'sub_total' => round($subTotal, 2),
+                            'courier_etd' => $boxData['courier_etd'] ?? null,
                         ];
 
                         $createResult = $courierGateway->createShipment($createRequest);
@@ -2017,15 +2332,19 @@ class DispatchController {
                             $labelUrl = (string)($createResult['label_url'] ?? '');
                             $trackingUrl = (string)($createResult['tracking_url'] ?? '');
 
-                            $dispatchModel->updateDispatch($dispatchId, [
+                            $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
                                 'shiprocket_order_id' => $createResult['order_id'] ?? null,
                                 'shiprocket_shipment_id' => null,
-                                'shiprocket_tracking_url' => $trackingUrl,
                                 'awb_code' => $awbCode !== '' ? $awbCode : null,
                                 'shipment_status' => 'created',
                                 'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                                'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
+                                'courier_name' => (string) ($boxData['courier_name'] ?? 'Delhivery'),
                                 'updated_at' => date('Y-m-d H:i:s'),
-                            ]);
+                            ], [$createResult, $boxData], [
+                                'courier_name' => (string) ($boxData['courier_name'] ?? 'Delhivery'),
+                                'partner_code' => 'delhivery',
+                            ]));
                             $ordersModel->updateOrderByOrderNumber($order_number, ['status' => 'Dispatched']);
 
                             $courierShipmentModel->saveShipment([
@@ -2054,6 +2373,121 @@ class DispatchController {
                             $created_dispatches[$index]['partner_code'] = 'delhivery';
                         } else {
                             $errors[] = 'Delhivery error for order #' . $order_number . ', box #' . $box_no . ': ' . ($createResult['message'] ?? 'Unknown error');
+                            $dispatchModel->updateDispatch($dispatchId, [
+                                'shipment_status' => 'failed',
+                                'updated_at' => date('Y-m-d H:i:s'),
+                            ]);
+                        }
+                        continue;
+                    }
+
+                    if ($partnerCode === 'bluedart') {
+                        if ($courierGateway === null) {
+                            $courierGateway = new CourierGateway($GLOBALS['conn']);
+                            $courierShipmentModel = new CourierShipment($GLOBALS['conn']);
+                        }
+
+                        $blueDartItems = [];
+                        foreach ($orderItems as $oi) {
+                            $blueDartItems[] = [
+                                'name' => $oi['name'] ?? 'Item',
+                                'sku' => $oi['sku'] ?? '',
+                                'quantity' => (int)($oi['units'] ?? 1),
+                                'unit_price' => (float)($oi['selling_price'] ?? 0),
+                                'hsn' => $oi['hsn'] ?? '',
+                            ];
+                        }
+
+                        $paymentMethod = strtoupper((string)($invoice['payment_method'] ?? 'PREPAID'));
+                        $isCod = (strpos($paymentMethod, 'COD') !== false);
+
+                        $createRequest = [
+                            'partner_code' => 'bluedart',
+                            'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                            'dispatch_id' => $dispatchId,
+                            'order_number' => $order_number,
+                            'box_no' => $box_no,
+                            'courier_id' => (string)($boxData['courier_id'] ?? ''),
+                            'product_type' => (string)($boxData['product_type'] ?? ''),
+                            'metadata' => is_array($boxData['metadata'] ?? null) ? $boxData['metadata'] : [],
+                            'pickup_location' => (string)($boxData['pickup_location'] ?? $firm['pickup_location'] ?? ''),
+                            'weight' => $weight,
+                            'length_cm' => $length,
+                            'width_cm' => $width,
+                            'height_cm' => $height,
+                            'destination' => [
+                                'name' => trim(($address['shipping_first_name'] ?? $billingFirstName) . ' ' . ($address['shipping_last_name'] ?? $billingLastName)),
+                                'line1' => $address['shipping_address_line1'] ?? $billingAddress1,
+                                'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                                'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                                'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                                'phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                                'country_code' => 'IN',
+                            ],
+                            'address' => $address,
+                            'items' => $blueDartItems,
+                            'invoice' => [
+                                'invoice_number' => $invoice['invoice_number'] ?? '',
+                                'total_amount' => (float)($invoice['total_amount'] ?? $subTotal),
+                            ],
+                            'description' => (string)($groupname ?? ''),
+                            'cod' => $isCod ? 1 : 0,
+                            'cod_amount' => $isCod ? round($subTotal, 2) : 0,
+                            'sub_total' => round($subTotal, 2),
+                            'courier_etd' => $boxData['courier_etd'] ?? null,
+                        ];
+
+                        $createResult = $courierGateway->createShipment($createRequest);
+                        if (!empty($createResult['success'])) {
+                            $awbCode = (string)($createResult['awb'] ?? $createResult['awb_code'] ?? '');
+                            $labelUrl = (string)($createResult['label_url'] ?? '');
+                            $trackingUrl = (string)($createResult['tracking_url'] ?? '');
+
+                            $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
+                                'shiprocket_order_id' => $createResult['order_id'] ?? null,
+                                'shiprocket_shipment_id' => null,
+                                'awb_code' => $awbCode !== '' ? $awbCode : null,
+                                'shipment_status' => 'created',
+                                'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                                'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
+                                'courier_name' => (string) ($boxData['courier_name'] ?? 'Blue Dart'),
+                                'updated_at' => date('Y-m-d H:i:s'),
+                            ], [$createResult, $boxData], [
+                                'courier_name' => (string) ($boxData['courier_name'] ?? 'Blue Dart'),
+                                'partner_code' => 'bluedart',
+                            ]));
+                            $ordersModel->updateOrderByOrderNumber($order_number, ['status' => 'Dispatched']);
+
+                            $courierShipmentModel->saveShipment([
+                                'invoice_id' => $invoiceId,
+                                'box_no' => $box_no,
+                                'order_number' => $order_number,
+                                'legacy_dispatch_id' => $dispatchId,
+                                'partner_code' => 'bluedart',
+                                'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                                'partner_shipment_id' => $awbCode,
+                                'awb' => $awbCode,
+                                'tracking_url' => $trackingUrl,
+                                'product_group' => (string)($createResult['metadata']['service_code'] ?? ''),
+                                'service_level' => (string)($boxData['courier_name'] ?? 'Blue Dart'),
+                                'payment_mode' => $isCod ? 'cod' : 'prepaid',
+                                'is_international' => 0,
+                                'currency' => 'INR',
+                                'label_url' => $labelUrl,
+                                'status' => 'created',
+                                'status_text' => 'Blue Dart shipment created',
+                                'metadata_json' => json_encode($createResult['metadata'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            ]);
+
+                            $created_dispatches[$index]['awb_code'] = $awbCode;
+                            $created_dispatches[$index]['label_url'] = $labelUrl;
+                            $created_dispatches[$index]['partner_code'] = 'bluedart';
+                        } else {
+                            $errors[] = $this->buildShipmentErrorEntry(
+                                'Blue Dart error for order #' . $order_number . ', box #' . $box_no . ': '
+                                    . ($createResult['message'] ?? 'Unknown error'),
+                                $createResult
+                            );
                             $dispatchModel->updateDispatch($dispatchId, [
                                 'shipment_status' => 'failed',
                                 'updated_at' => date('Y-m-d H:i:s'),
@@ -2107,15 +2541,24 @@ class DispatchController {
                     
                     // Update dispatch record with Shiprocket response
                     if ($shiprocketResponse && isset($shiprocketResponse['json']['order_id']) && ($shiprocketResponse['json']['status'] ?? '') === 'NEW') {
-                        $updateData = [
+                        $updateData = $this->enrichDispatchRecord([
                             'shiprocket_order_id' => $shiprocketResponse['json']['order_id'] ?? null,
                             'shiprocket_shipment_id' => $shiprocketResponse['json']['shipment_id'] ?? null,
-                            'shiprocket_tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
                             'awb_code' => $shiprocketResponse['json']['awb_code'] ?? null,
                             'shipment_status' => $shiprocketResponse['json']['status'] ?? 'NEW',
                             'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
-                            'updated_at' => date('Y-m-d H:i:s')
-                        ];
+                            'tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
+                            'courier_name' => (string) ($boxData['courier_name'] ?? ''),
+                            'updated_at' => date('Y-m-d H:i:s'),
+                        ], [
+                            $shiprocketResponse['json'] ?? [],
+                            $boxData,
+                        ], [
+                            'courier_name' => (string) ($boxData['courier_name'] ?? ''),
+                            'courier_id' => (string) ($boxData['courier_id'] ?? ''),
+                            'partner_code' => (string) ($boxData['partner_code'] ?? 'shiprocket'),
+                            'rate_source' => (string) ($boxData['rate_source'] ?? 'shiprocket'),
+                        ]);
                         
                         $dispatchModel->updateDispatch($dispatchId, $updateData);
                         //Update order status to dispatched
@@ -2130,10 +2573,17 @@ class DispatchController {
                                 $selectedCourierId = (int)$boxData['courier_id'];
                             }
                             $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shiprocketResponse['json']['shipment_id'], $selectedCourierId);
-                            if ($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
-                                $awbCode = $awbInfoResponse['response']['data']['awb_code'];
-                                $dispatchModel->updateDispatchAwbCode($shiprocketResponse['json']['shipment_id'], $awbCode);
-                            }
+                            $this->applyShiprocketAwbAssignment(
+                                $dispatchModel,
+                                (int) $shiprocketResponse['json']['shipment_id'],
+                                is_array($awbInfoResponse) ? $awbInfoResponse : null,
+                                [
+                                    'courier_name' => (string) ($boxData['courier_name'] ?? ''),
+                                    'courier_id' => (string) ($boxData['courier_id'] ?? ''),
+                                    'partner_code' => (string) ($boxData['partner_code'] ?? 'shiprocket'),
+                                    'rate_source' => (string) ($boxData['rate_source'] ?? 'shiprocket'),
+                                ]
+                            );
                         }
                         //add awb_code in created_dispatches array for response
                         if (!empty($shiprocketResponse['json']['shipment_id']) && is_array($awbInfoResponse) && !empty($awbInfoResponse['response']['data']['awb_code'])) {
@@ -2165,6 +2615,22 @@ class DispatchController {
                 }
             }
 
+            foreach ($created_dispatches as $idx => $dispatchInfo) {
+                $dispatchId = (int) ($dispatchInfo['dispatch_id'] ?? 0);
+                if ($dispatchId <= 0) {
+                    continue;
+                }
+                $row = $dispatchModel->getDispatchById($dispatchId);
+                if (is_array($row)) {
+                    $created_dispatches[$idx]['exotic_shipment_id'] = (string) ($row['exotic_shipment_id'] ?? '');
+                }
+            }
+
+            $spuriousOutput = trim((string) ob_get_clean());
+            if ($spuriousOutput !== '') {
+                error_log('bulkCreateInvoicesDispatch stray output: ' . substr($spuriousOutput, 0, 2000));
+            }
+
             // Return success response
             http_response_code(200);
             echo json_encode([
@@ -2175,16 +2641,22 @@ class DispatchController {
                 'dispatches_created' => count($created_dispatches),
                 'invoices' => $created_invoices,
                 'dispatches' => $created_dispatches,
-                'errors' => $errors
+                'errors' => $errors,
+                'debug_php_output' => $spuriousOutput !== '' ? $spuriousOutput : null,
             ]);
             exit;
 
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
+            $spuriousOutput = trim((string) ob_get_clean());
+            if ($spuriousOutput !== '') {
+                error_log('bulkCreateInvoicesDispatch stray output: ' . substr($spuriousOutput, 0, 2000));
+            }
             http_response_code(500);
             echo json_encode([
                 'success' => false,
                 'message' => 'Error creating invoices: ' . $e->getMessage(),
-                'errors' => $errors
+                'errors' => $errors,
+                'debug_php_output' => $spuriousOutput !== '' ? $spuriousOutput : null,
             ]);
             exit;
         }
@@ -2384,9 +2856,12 @@ class DispatchController {
             
             if (!$serviceability['success']) {
                 http_response_code($serviceability['http_code'] ?? 400);
+                $authError = trim((string) ($serviceability['auth_error'] ?? ''));
                 echo json_encode([
                     'success' => false,
-                    'message' => 'Failed to fetch courier serviceability',
+                    'message' => $authError !== ''
+                        ? $authError
+                        : 'Failed to fetch courier serviceability',
                     'details' => $serviceability['data'],
                     'debug' => [
                         'serviceability_request' => [
@@ -2394,6 +2869,7 @@ class DispatchController {
                             'pickup_resolution' => $pickupResolution,
                             'request_url' => $serviceability['request_url'] ?? '',
                             'curl_error' => $serviceability['curl_error'] ?? '',
+                            'auth_error' => $authError,
                         ],
                     ],
                 ]);
@@ -2454,12 +2930,12 @@ class DispatchController {
 
     /**
      * Get direct courier provider rates (non-aggregator) for bulk dispatch UI.
-     * Currently: Delhivery only.
+     * Supports partner_code: delhivery | bluedart (default: delhivery).
      */
     public function getDirectCourierRates()
     {
         global $commanModel, $ordersModel, $dispatchModel;
-
+        
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
             echo json_encode(['success' => false, 'message' => 'Method not allowed']);
@@ -2497,7 +2973,13 @@ class DispatchController {
             $courierDispatch = new CourierDispatchService($GLOBALS['conn']);
             $rateRequest = $courierDispatch->buildRateRequest($input, $orderInfo);
             $rateRequest['pickup_location'] = $requestedPickupLocation;
-            $rateRequest['partner_code'] = 'delhivery';
+            $partnerCode = strtolower(trim((string) ($input['partner_code'] ?? 'delhivery')));
+            if (!in_array($partnerCode, ['delhivery', 'bluedart'], true)) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Unsupported partner_code. Use delhivery or bluedart.']);
+                exit;
+            }
+            $rateRequest['partner_code'] = $partnerCode;
             $rateRequest['cod'] = $cod;
 
             // Use the same pickup postcode resolution as Shiprocket serviceability.
@@ -2513,6 +2995,29 @@ class DispatchController {
             }
 
             $gatewayResult = $courierDispatch->getRates($rateRequest);
+
+            if ($partnerCode === 'bluedart') {
+                $preloadedServiceability = $input['shiprocket_serviceability'] ?? null;
+                if (is_array($preloadedServiceability)) {
+                    $shiprocketQuotes = bluedartExtractShiprocketQuotes($preloadedServiceability);
+                } else {
+                    $shiprocketQuotes = $this->resolveShiprocketBlueDartQuotes(
+                        $dispatchModel,
+                        is_array($firm) ? $firm : [],
+                        $requestedPickupLocation,
+                        $orderInfo,
+                        $weight,
+                        $length,
+                        $breadth,
+                        $height,
+                        $cod
+                    );
+                }
+                if ($shiprocketQuotes !== []) {
+                    $gatewayResult = bluedartEnrichGatewayResultWithShiprocketPrices($gatewayResult, $shiprocketQuotes);
+                }
+            }
+
             $uiResponse = $courierDispatch->formatServiceabilityForUi($gatewayResult);
 
             http_response_code(!empty($uiResponse['success']) ? 200 : 400);
@@ -2523,6 +3028,45 @@ class DispatchController {
             echo json_encode(['success' => false, 'message' => 'Error fetching direct courier rates: ' . $e->getMessage()]);
             exit;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $firm
+     * @param array<string, mixed> $orderInfo
+     * @return list<array{name:string,price:float,etd?:string,rating?:float,id?:mixed}>
+     */
+    private function resolveShiprocketBlueDartQuotes(
+        $dispatchModel,
+        array $firm,
+        string $pickupLocation,
+        array $orderInfo,
+        float $weight,
+        float $length,
+        float $breadth,
+        float $height,
+        int $cod
+    ): array {
+        $pickupResolution = $this->resolveShiprocketPickupPostcode($dispatchModel, $firm, $pickupLocation);
+        $pickupPostcode = trim((string) ($pickupResolution['postcode'] ?? ''));
+        $deliveryPostcode = trim((string) ($orderInfo['shipping_zipcode'] ?? ''));
+        if ($pickupPostcode === '' || $deliveryPostcode === '') {
+            return [];
+        }
+
+        $serviceability = $dispatchModel->getCourierServiceability(
+            $pickupPostcode,
+            $deliveryPostcode,
+            $weight,
+            $length,
+            $breadth,
+            $height,
+            $cod
+        );
+        if (empty($serviceability['success']) || !is_array($serviceability['data'] ?? null)) {
+            return [];
+        }
+
+        return bluedartExtractShiprocketQuotes($serviceability['data']);
     }
 
     /**
@@ -2547,7 +3091,7 @@ class DispatchController {
         }
 
         $invoice = $invoiceModel->getInvoiceById($invoiceId);
-        if (!$invoice) {
+                    if (!$invoice) {
             return ['success' => false, 'provider' => 'system', 'message' => 'Invoice not found'];
         }
 
@@ -2584,7 +3128,7 @@ class DispatchController {
                 'sku' => $invItem['item_code'] ?? '',
                 'units' => $units,
                 'selling_price' => $price,
-                'discount' => 0,
+                                'discount' => 0,
                 'tax' => $invItem['tax_amount'] ?? 0,
                 'hsn' => $hsnVal,
             ];
@@ -2707,15 +3251,19 @@ class DispatchController {
             $labelUrl = (string)($createResult['label_url'] ?? '');
             $trackingUrl = (string)($createResult['tracking_url'] ?? '');
 
-            $dispatchModel->updateDispatch($dispatchId, [
+            $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
                 'shiprocket_order_id' => $createResult['order_id'] ?? null,
                 'shiprocket_shipment_id' => null,
-                'shiprocket_tracking_url' => $trackingUrl,
                 'awb_code' => $awbCode !== '' ? $awbCode : null,
                 'shipment_status' => 'created',
                 'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
+                'courier_name' => (string) ($dispatchRecord['courier_name'] ?? 'Delhivery'),
                 'updated_at' => date('Y-m-d H:i:s'),
-            ]);
+            ], [$createResult, $boxData, $dispatchRecord], [
+                'courier_name' => (string) ($dispatchRecord['courier_name'] ?? 'Delhivery'),
+                'partner_code' => 'delhivery',
+            ]));
             $ordersModel->updateOrderByOrderNumber($orderNumber, ['status' => 'Dispatched']);
 
             $courierShipmentModel->saveShipment([
@@ -2739,6 +3287,114 @@ class DispatchController {
             ]);
 
             return ['success' => true, 'provider' => 'delhivery'];
+        }
+
+        if ($this->resolveShipmentPartnerCode($boxData, $dispatchRecord) === 'bluedart') {
+            $courierGateway = new CourierGateway($GLOBALS['conn']);
+            $courierShipmentModel = new CourierShipment($GLOBALS['conn']);
+
+            $blueDartItems = [];
+            foreach ($orderItems as $oi) {
+                $blueDartItems[] = [
+                    'name' => $oi['name'] ?? 'Item',
+                    'sku' => $oi['sku'] ?? '',
+                    'quantity' => (int)($oi['units'] ?? 1),
+                    'unit_price' => (float)($oi['selling_price'] ?? 0),
+                    'hsn' => $oi['hsn'] ?? '',
+                ];
+            }
+
+            $paymentMethod = strtoupper((string)($invoice['payment_method'] ?? 'PREPAID'));
+            $isCod = (strpos($paymentMethod, 'COD') !== false);
+
+            $createResult = $courierGateway->createShipment([
+                'partner_code' => 'bluedart',
+                'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                'dispatch_id' => $dispatchId,
+                'order_number' => $orderNumber,
+                'box_no' => $boxNo,
+                'courier_id' => (string)($boxData['courier_id'] ?? ''),
+                'product_type' => (string)($boxData['product_type'] ?? ''),
+                'metadata' => is_array($boxData['metadata'] ?? null) ? $boxData['metadata'] : [],
+                'pickup_location' => (string)($boxData['pickup_location'] ?? ''),
+                'weight' => $weight,
+                'length_cm' => $length,
+                'width_cm' => $width,
+                'height_cm' => $height,
+                'destination' => [
+                    'name' => trim(($address['shipping_first_name'] ?? $billingCustomerName) . ' ' . ($address['shipping_last_name'] ?? $billingLastName)),
+                    'line1' => $address['shipping_address_line1'] ?? $billingAddress1,
+                    'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                    'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                    'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                    'phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                    'country_code' => 'IN',
+                ],
+                'address' => $address,
+                'items' => $blueDartItems,
+                'invoice' => [
+                    'invoice_number' => $invoice['invoice_number'] ?? '',
+                    'total_amount' => (float)($invoice['total_amount'] ?? $subTotal),
+                ],
+                'description' => (string)($dispatchRecord['groupname'] ?? ''),
+                'cod' => $isCod ? 1 : 0,
+                'cod_amount' => $isCod ? round($subTotal, 2) : 0,
+                'sub_total' => round($subTotal, 2),
+            ]);
+
+            if (empty($createResult['success'])) {
+                $dispatchModel->updateDispatch($dispatchId, [
+                    'shipment_status' => 'failed',
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+                return [
+                    'success' => false,
+                    'provider' => 'bluedart',
+                    'message' => (string)($createResult['message'] ?? 'Blue Dart shipment failed'),
+                    'debug' => is_array($createResult['debug'] ?? null) ? $createResult['debug'] : [],
+                ];
+            }
+
+            $awbCode = (string)($createResult['awb'] ?? $createResult['awb_code'] ?? '');
+            $labelUrl = (string)($createResult['label_url'] ?? '');
+            $trackingUrl = (string)($createResult['tracking_url'] ?? '');
+
+            $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
+                'shiprocket_order_id' => $createResult['order_id'] ?? null,
+                'shiprocket_shipment_id' => null,
+                'awb_code' => $awbCode !== '' ? $awbCode : null,
+                'shipment_status' => 'created',
+                'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
+                'courier_name' => (string) ($dispatchRecord['courier_name'] ?? 'Blue Dart'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ], [$createResult, $boxData, $dispatchRecord], [
+                'courier_name' => (string) ($dispatchRecord['courier_name'] ?? 'Blue Dart'),
+                'partner_code' => 'bluedart',
+            ]));
+            $ordersModel->updateOrderByOrderNumber($orderNumber, ['status' => 'Dispatched']);
+
+            $courierShipmentModel->saveShipment([
+                'invoice_id' => $invoiceId,
+                'box_no' => $boxNo,
+                'order_number' => $orderNumber,
+                'legacy_dispatch_id' => $dispatchId,
+                'partner_code' => 'bluedart',
+                'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                'partner_shipment_id' => $awbCode,
+                'awb' => $awbCode,
+                'tracking_url' => $trackingUrl,
+                'service_level' => (string)($dispatchRecord['courier_name'] ?? 'Blue Dart'),
+                'payment_mode' => $isCod ? 'cod' : 'prepaid',
+                'is_international' => 0,
+                'currency' => 'INR',
+                'label_url' => $labelUrl,
+                'status' => 'created',
+                'status_text' => 'Blue Dart shipment created (retry)',
+                'metadata_json' => json_encode($createResult['metadata'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+
+            return ['success' => true, 'provider' => 'bluedart'];
         }
 
         foreach ($orderItems as &$oi) {
@@ -2787,22 +3443,38 @@ class DispatchController {
         }
 
         $shipmentId = $shiprocketResponse['json']['shipment_id'] ?? null;
-        $dispatchModel->updateDispatch($dispatchId, [
+        $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
             'shiprocket_order_id' => $shiprocketResponse['json']['order_id'] ?? null,
             'shiprocket_shipment_id' => $shipmentId,
-            'shiprocket_tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
             'awb_code' => $shiprocketResponse['json']['awb_code'] ?? null,
             'shipment_status' => $shiprocketResponse['json']['status'] ?? 'NEW',
             'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
+            'tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
+            'courier_name' => (string) ($dispatchRecord['courier_name'] ?? ''),
             'updated_at' => date('Y-m-d H:i:s'),
-        ]);
+        ], [
+            $shiprocketResponse['json'] ?? [],
+            $boxData,
+            $dispatchRecord,
+        ], [
+            'courier_name' => (string) ($dispatchRecord['courier_name'] ?? ''),
+            'courier_id' => (string) ($boxData['courier_id'] ?? ''),
+            'partner_code' => (string) ($boxData['partner_code'] ?? 'shiprocket'),
+        ]));
         $ordersModel->updateOrderByOrderNumber($orderNumber, ['status' => 'Dispatched']);
 
         if (!empty($shipmentId)) {
             $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shipmentId);
-            if (!empty($awbInfoResponse['awb_assign_status']) && !empty($awbInfoResponse['response']['data']['awb_code'])) {
-                $dispatchModel->updateDispatchAwbCode($shipmentId, $awbInfoResponse['response']['data']['awb_code']);
-            }
+            $this->applyShiprocketAwbAssignment(
+                $dispatchModel,
+                (int) $shipmentId,
+                is_array($awbInfoResponse) ? $awbInfoResponse : null,
+                [
+                    'courier_name' => (string) ($dispatchRecord['courier_name'] ?? ''),
+                    'courier_id' => (string) ($boxData['courier_id'] ?? ''),
+                    'partner_code' => (string) ($boxData['partner_code'] ?? 'shiprocket'),
+                ]
+            );
             $labelInfoResponse = $dispatchModel->getShiprocketLabels($shipmentId);
             if (!empty($labelInfoResponse['label_created']) && !empty($labelInfoResponse['label_url'])) {
                 $dispatchModel->updateDispatchLabelUrl($shipmentId, $labelInfoResponse['label_url']);
@@ -2862,9 +3534,12 @@ class DispatchController {
                 }
                 $failed_count++;
                 $provider = ucfirst((string)($result['provider'] ?? 'courier'));
-                $errors[] = $provider . ' error for order #' . ($dispatch_record['order_number'] ?? '')
-                    . ', dispatch ID #' . ($dispatch_record['id'] ?? '')
-                    . ': ' . ($result['message'] ?? 'Unknown error');
+                $errors[] = $this->buildShipmentErrorEntry(
+                    $provider . ' error for order #' . ($dispatch_record['order_number'] ?? '')
+                        . ', dispatch ID #' . ($dispatch_record['id'] ?? '')
+                        . ': ' . ($result['message'] ?? 'Unknown error'),
+                    $result
+                );
             }
 
             http_response_code(200);
@@ -2887,6 +3562,122 @@ class DispatchController {
             ]);
             exit;
         }
+    }
+
+    /**
+     * Serve Blue Dart shipping label PDF (saved from GenerateWayBill AWBPrintContent).
+     * URL: ?page=dispatch&action=bluedart_label&dispatch_id=123  or  &awb=AWB
+     */
+    public function bluedartLabel()
+    {
+        global $dispatchModel;
+        is_login();
+
+        require_once __DIR__ . '/../bluedart_service.php';
+
+        $dispatchId = (int)($_GET['dispatch_id'] ?? 0);
+        $awb = trim((string)($_GET['awb'] ?? ''));
+        $dispatch = null;
+
+        if ($dispatchId > 0) {
+            $dispatch = $dispatchModel->getDispatchById($dispatchId);
+            if ($dispatch && $awb === '' && !empty($dispatch['awb_code'])) {
+                $awb = trim((string)$dispatch['awb_code']);
+            }
+        }
+
+        if ($awb === '') {
+            http_response_code(400);
+            echo 'Missing or invalid dispatch / AWB for Blue Dart label.';
+            exit;
+        }
+
+        $service = new BlueDartService();
+        $labelPath = $service->resolveStoredLabelPath($awb);
+        if ($labelPath === null || !is_file($labelPath)) {
+            $labelPath = $this->loadBlueDartLabelPathFromShipmentMeta($dispatchId, $awb);
+        }
+
+        if ($labelPath !== null && is_file($labelPath)) {
+            $this->streamLocalPdfLabel($labelPath, 'bluedart_' . preg_replace('/[^A-Za-z0-9_-]/', '', $awb) . '.pdf');
+            exit;
+        }
+
+        $labelError = 'Blue Dart label PDF not found on server for AWB ' . $awb . '. Re-create the shipment or contact support.';
+        $this->renderBlueDartLabelFailure($dispatchId, $awb, $labelError);
+        exit;
+    }
+
+    private function loadBlueDartLabelPathFromShipmentMeta(int $dispatchId, string $awb): ?string
+    {
+        $stmtSql = $dispatchId > 0
+            ? 'SELECT metadata_json FROM courier_shipments WHERE legacy_dispatch_id = ? AND partner_code = ? ORDER BY id DESC LIMIT 1'
+            : 'SELECT metadata_json FROM courier_shipments WHERE awb = ? AND partner_code = ? ORDER BY id DESC LIMIT 1';
+
+        $stmt = $GLOBALS['conn']->prepare($stmtSql);
+        if (!$stmt) {
+            return null;
+        }
+
+        $partner = 'bluedart';
+        if ($dispatchId > 0) {
+            $stmt->bind_param('is', $dispatchId, $partner);
+        } else {
+            $stmt->bind_param('ss', $awb, $partner);
+        }
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row || empty($row['metadata_json'])) {
+            return null;
+        }
+
+        $meta = json_decode((string)$row['metadata_json'], true);
+        if (!is_array($meta)) {
+            return null;
+        }
+
+        $file = trim((string)($meta['label_file'] ?? ''));
+        if ($file === '') {
+            return null;
+        }
+
+        $path = __DIR__ . '/../tmp/bluedart_labels/' . basename($file);
+        return is_file($path) ? $path : null;
+    }
+
+    private function streamLocalPdfLabel(string $path, string $filename): void
+    {
+        $download = !empty($_GET['download']);
+        $body = @file_get_contents($path);
+        if (!is_string($body) || $body === '' || strncmp($body, '%PDF', 4) !== 0) {
+            http_response_code(404);
+            echo 'Label file is missing or invalid.';
+            return;
+        }
+
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($body));
+        echo $body;
+    }
+
+    private function renderBlueDartLabelFailure(int $dispatchId, string $awb, string $errorMessage): void
+    {
+        $retryParams = [
+            'page' => 'dispatch',
+            'action' => 'bluedart_label',
+        ];
+        if ($dispatchId > 0) {
+            $retryParams['dispatch_id'] = (string) $dispatchId;
+        } else {
+            $retryParams['awb'] = $awb;
+        }
+        $retryUrl = base_url('index.php?' . http_build_query($retryParams));
+
+        http_response_code(404);
+        $partnerLabel = 'Blue Dart';
+        require __DIR__ . '/../views/dispatch/courier_label_failed.php';
     }
 
     /**

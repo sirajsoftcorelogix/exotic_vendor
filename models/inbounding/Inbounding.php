@@ -960,6 +960,8 @@ class Inbounding {
         return $stmt->execute();
     }
     public function updatedesktopform($id, $data) {
+        $this->ensureInboundRedirectColumn();
+
         // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
         
@@ -979,6 +981,12 @@ class Inbounding {
             }
             if ($key === 'permanently_available') {
                 $val = ((int) $val === 1) ? 1 : 0;
+            }
+            if ($key === 'permanent_discount') {
+                $val = ((int) $val === 1) ? 1 : 0;
+            }
+            if (in_array($key, ['amazon_sold', 'amazon_leadtime', 'discount_global', 'discount_india'], true)) {
+                $val = (int) $val;
             }
             $cols[] = "$key = ?";
             $values[] = $val;
@@ -1006,6 +1014,15 @@ class Inbounding {
         
         return ['success' => false, 'message' => "Update failed: " . $stmt->error];
     }
+
+    private function ensureInboundRedirectColumn(): void
+    {
+        $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE 'redirect'");
+        if ($res && $res->num_rows === 0) {
+            @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN redirect VARCHAR(500) NOT NULL DEFAULT '' AFTER discount_india");
+        }
+    }
+
     // --- Add these functions inside your InboundingModel class ---
 
     /**
@@ -1829,6 +1846,27 @@ class Inbounding {
         }
         return $blocked;
     }
+
+    public function isInboundPublished(int $id): bool
+    {
+        if ($id <= 0) {
+            return false;
+        }
+
+        $stmt = $this->conn->prepare(
+            "SELECT id FROM inbound_logs WHERE i_id = ? AND LOWER(TRIM(stat)) = 'published' LIMIT 1"
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $row = $stmt->get_result()?->fetch_assoc();
+        $stmt->close();
+
+        return !empty($row['id']);
+    }
+
     public function getProductBysku($sku) {
         $sql = "SELECT id FROM vp_products WHERE sku = ? LIMIT 1";
         $stmt = $this->conn->prepare($sql);
