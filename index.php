@@ -467,6 +467,9 @@ switch ($page) {
             case 'import_order':
                 $controller->importOrderForDirectPurchase();
                 break;
+            case 'sync_vendor_qty':
+                $controller->syncVendorQtyForItem();
+                break;
             case 'return_list':
                 $controller->returnList();
                 break;

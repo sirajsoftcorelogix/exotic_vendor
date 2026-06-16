@@ -29,6 +29,7 @@ $dpDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->f
 $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
 $warehouses = $data['warehouses'] ?? [];
 $dpLocked = !empty($data['purchase_locked']);
+$dpPurchaseId = (int) ($pData['id'] ?? 0);
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Header band (stock transfer style) -->
@@ -203,8 +204,16 @@ $dpLocked = !empty($data['purchase_locked']);
                             <?php
                             $lineImg = trim((string) ($it['product_image'] ?? ''));
                             $thumbShow = $lineImg !== '' ? $lineImg : $dpThumbPlaceholder;
+                            $dpLineItemId = (int) ($it['id'] ?? 0);
+                            $dpVendorQtySynced = (int) ($it['vendor_qty_synced'] ?? 0) === 1;
+                            $dpVendorQtySyncedQty = isset($it['vendor_qty_synced_qty']) && $it['vendor_qty_synced_qty'] !== null
+                                ? (string) $it['vendor_qty_synced_qty']
+                                : '';
                             ?>
-                            <tr class="dp-line hover:bg-amber-50/30 transition-colors">
+                            <tr class="dp-line hover:bg-amber-50/30 transition-colors"
+                                data-dp-item-id="<?= $dpLineItemId ?>"
+                                data-vendor-qty-synced="<?= $dpVendorQtySynced ? '1' : '0' ?>"
+                                data-vendor-qty-synced-qty="<?= htmlspecialchars($dpVendorQtySyncedQty, ENT_QUOTES, 'UTF-8') ?>">
                                 <td class="px-2 py-2 align-top text-center w-16">
                                     <button type="button" class="dp-thumb-trigger mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0 shadow-sm transition hover:ring-2 hover:ring-amber-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 <?= $lineImg === '' ? 'opacity-60 cursor-not-allowed' : 'cursor-zoom-in' ?>"
                                         data-full-src="<?= htmlspecialchars($lineImg) ?>"
@@ -241,7 +250,17 @@ $dpLocked = !empty($data['purchase_locked']);
                                         </button>
                                     </div>
                                 </td>
-                                <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.001" name="qty[]" class="dp-qty w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2 align-top min-w-[7rem]">
+                                    <div class="flex items-center gap-1">
+                                        <input type="number" step="0.001" name="qty[]" class="dp-qty flex-1 min-w-[4rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>">
+                                        <button type="button" class="dp-sync-vendor-qty shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 <?= $dpVendorQtySynced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100' ?>"
+                                            title="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : ($dpLineItemId > 0 ? 'Push qty to vendor API' : 'Save purchase first to sync qty') ?>"
+                                            aria-label="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : 'Push qty to vendor API' ?>"
+                                            <?= ($dpLocked || ($dpLineItemId <= 0 && !$dpVendorQtySynced)) ? 'disabled' : '' ?>>
+                                            <i class="fas <?= $dpVendorQtySynced ? 'fa-check' : 'fa-cloud-upload-alt' ?> text-xs" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                </td>
                                 <td class="px-3 py-2 align-top min-w-[8rem]"><input name="hsn[]" class="w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
                                 <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
                                 <td class="px-3 py-2 align-top min-w-[6rem]"><input name="unit[]" class="w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
@@ -420,7 +439,7 @@ $dpLocked = !empty($data['purchase_locked']);
 
 <table class="hidden">
     <tbody id="line-item-template">
-        <tr class="dp-line hover:bg-amber-50/30 transition-colors">
+        <tr class="dp-line hover:bg-amber-50/30 transition-colors" data-dp-item-id="0" data-vendor-qty-synced="0" data-vendor-qty-synced-qty="">
             <td class="px-2 py-2 align-top text-center w-16">
                 <button type="button" class="dp-thumb-trigger mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0 opacity-60 cursor-not-allowed shadow-sm"
                     data-full-src="" title="" aria-label="No product image">
@@ -454,7 +473,15 @@ $dpLocked = !empty($data['purchase_locked']);
                     </button>
                 </div>
             </td>
-            <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.001" name="qty[]" class="dp-qty w-full min-w-[5rem] <?= $inpSm ?>" value="1"></td>
+            <td class="px-3 py-2 align-top min-w-[7rem]">
+                <div class="flex items-center gap-1">
+                    <input type="number" step="0.001" name="qty[]" class="dp-qty flex-1 min-w-[4rem] <?= $inpSm ?>" value="1">
+                    <button type="button" class="dp-sync-vendor-qty shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Save purchase first to sync qty" aria-label="Push qty to vendor API" disabled>
+                        <i class="fas fa-cloud-upload-alt text-xs" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </td>
             <td class="px-3 py-2 align-top min-w-[8rem]"><input name="hsn[]" class="w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 align-top min-w-[6rem]"><input name="unit[]" class="w-full min-w-[5rem] <?= $inpSm ?>" value=""></td>
@@ -472,6 +499,7 @@ $dpLocked = !empty($data['purchase_locked']);
 (function () {
     var DP_THUMB_PLACEHOLDER = <?= json_encode($dpThumbPlaceholder, JSON_UNESCAPED_UNICODE) ?>;
     var DP_CUR_SYM = <?= json_encode(dp_currency_symbol_map(), JSON_UNESCAPED_UNICODE) ?>;
+    var DP_PURCHASE_ID = <?= (int) $dpPurchaseId ?>;
 
     function syncSummaryCurrencySymbols() {
         var sel = document.getElementById('dp_currency');
@@ -656,6 +684,113 @@ $dpLocked = !empty($data['purchase_locked']);
         u.searchParams.set('action', 'import_order');
         u.searchParams.set('orderid', orderNumber || '');
         return u.toString();
+    }
+
+    function syncVendorQtyUrl(itemId, purchaseId) {
+        var u = new URL(window.location.href);
+        u.searchParams.set('page', 'direct_purchase');
+        u.searchParams.set('action', 'sync_vendor_qty');
+        u.searchParams.set('item_id', String(itemId || ''));
+        u.searchParams.set('purchase_id', String(purchaseId || ''));
+        return u.toString();
+    }
+
+    function dpParseQty(val) {
+        var n = parseFloat(val);
+        return isNaN(n) ? 0 : n;
+    }
+
+    function dpIsVendorQtySynced(tr) {
+        return tr && String(tr.getAttribute('data-vendor-qty-synced') || '0') === '1';
+    }
+
+    function dpUpdateVendorQtySyncButton(tr) {
+        if (!tr) return;
+        var btn = tr.querySelector('.dp-sync-vendor-qty');
+        if (!btn) return;
+        var icon = btn.querySelector('i');
+        var itemId = parseInt(tr.getAttribute('data-dp-item-id') || '0', 10);
+        var synced = dpIsVendorQtySynced(tr);
+        var qtyInput = tr.querySelector('.dp-qty');
+        var currentQty = qtyInput ? dpParseQty(qtyInput.value) : 0;
+        var syncedQty = dpParseQty(tr.getAttribute('data-vendor-qty-synced-qty') || '');
+
+        if (synced && Math.abs(currentQty - syncedQty) > 0.0001) {
+            synced = false;
+            tr.setAttribute('data-vendor-qty-synced', '0');
+        }
+
+        btn.classList.remove('border-emerald-200', 'bg-emerald-50', 'text-emerald-700', 'border-violet-200', 'bg-violet-50', 'text-violet-800', 'hover:bg-violet-100');
+        if (synced) {
+            btn.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-700');
+            btn.disabled = true;
+            btn.title = 'Qty synced to vendor API';
+            btn.setAttribute('aria-label', 'Qty synced to vendor API');
+            if (icon) icon.className = 'fas fa-check text-xs';
+        } else {
+            btn.classList.add('border-violet-200', 'bg-violet-50', 'text-violet-800', 'hover:bg-violet-100');
+            if (itemId > 0 && DP_PURCHASE_ID > 0) {
+                btn.disabled = false;
+                btn.title = 'Push qty to vendor API';
+                btn.setAttribute('aria-label', 'Push qty to vendor API');
+            } else {
+                btn.disabled = true;
+                btn.title = 'Save purchase first to sync qty';
+                btn.setAttribute('aria-label', 'Push qty to vendor API');
+            }
+            if (icon) icon.className = 'fas fa-cloud-upload-alt text-xs';
+        }
+    }
+
+    function dpMarkVendorQtyUnsynced(tr) {
+        if (!tr) return;
+        tr.setAttribute('data-vendor-qty-synced', '0');
+        dpUpdateVendorQtySyncButton(tr);
+    }
+
+    function dpSyncVendorQty(tr, btn) {
+        if (!tr || !btn || btn.disabled) return;
+        var itemId = parseInt(tr.getAttribute('data-dp-item-id') || '0', 10);
+        if (itemId <= 0 || DP_PURCHASE_ID <= 0) {
+            dpShowStatusModal('Save this purchase first before syncing qty to the vendor API.', 'warning');
+            return;
+        }
+
+        var icon = btn.querySelector('i');
+        var prevIconClass = icon ? icon.className : 'fas fa-cloud-upload-alt text-xs';
+        btn.disabled = true;
+        if (icon) icon.className = 'fas fa-spinner fa-spin text-xs';
+
+        fetch(syncVendorQtyUrl(itemId, DP_PURCHASE_ID), {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.success) {
+                    dpShowStatusModal((data && data.message) ? data.message : 'Could not sync qty to vendor API.', 'error', 'Vendor qty sync failed');
+                    dpUpdateVendorQtySyncButton(tr);
+                    return;
+                }
+                var qtyInput = tr.querySelector('.dp-qty');
+                var currentQty = qtyInput ? String(qtyInput.value || '') : '';
+                tr.setAttribute('data-vendor-qty-synced', '1');
+                tr.setAttribute('data-vendor-qty-synced-qty', currentQty);
+                dpUpdateVendorQtySyncButton(tr);
+                dpShowStatusModal((data && data.message) ? data.message : 'Qty synced to vendor API.', 'success', 'Qty synced');
+            })
+            .catch(function () {
+                dpShowStatusModal('The vendor qty sync request failed. Check your connection and try again.', 'error', 'Request failed');
+                dpUpdateVendorQtySyncButton(tr);
+            })
+            .finally(function () {
+                if (icon && !dpIsVendorQtySynced(tr)) {
+                    icon.className = prevIconClass;
+                }
+            });
     }
 
     function dpClosePendingOrdersModal() {
@@ -1172,7 +1307,12 @@ $dpLocked = !empty($data['purchase_locked']);
     function bindRow(tr) {
         ['.dp-cost', '.dp-qty', '.dp-rate'].forEach(function (sel) {
             var el = tr.querySelector(sel);
-            if (el) el.addEventListener('input', function () { recalcRow(tr); });
+            if (el) el.addEventListener('input', function () {
+                recalcRow(tr);
+                if (sel === '.dp-qty') {
+                    dpMarkVendorQtyUnsynced(tr);
+                }
+            });
         });
         var lineTot = tr.querySelector('.dp-line-total');
         if (lineTot) lineTot.addEventListener('input', function () { recalcInvoiceTotals(); });
@@ -1198,6 +1338,13 @@ $dpLocked = !empty($data['purchase_locked']);
                 dpFetchPendingOrders(tr, pendingBtn);
             });
         }
+        var qtySyncBtn = tr.querySelector('.dp-sync-vendor-qty');
+        if (qtySyncBtn) {
+            qtySyncBtn.addEventListener('click', function () {
+                dpSyncVendorQty(tr, qtySyncBtn);
+            });
+        }
+        dpUpdateVendorQtySyncButton(tr);
     }
 
     function initDpImageLightbox() {

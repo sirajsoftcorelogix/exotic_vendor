@@ -3987,6 +3987,84 @@ class product
         return $stmt->execute();
     }
 
+    public function setProductCp($productId, $cp)
+    {
+        $productId = (int) $productId;
+        $cp = (float) $cp;
+        $sql = 'UPDATE vp_products SET cp = ?, cost_price = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ddi', $cp, $cp, $productId);
+
+        return $stmt->execute();
+    }
+
+    /**
+     * Push CP and/or local_stock_delta to exoticindia.com via vendor product/modify.
+     *
+     * @param array<string, mixed> $product
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    public function syncCpToVendorFrontend(array $product, float $cp, ?float $localStockDelta = null): array
+    {
+        if (!function_exists('exotic_india_api_post')) {
+            require_once __DIR__ . '/../../helpers/exotic_india_api.php';
+        }
+
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor product sync.'];
+        }
+
+        $postFields = [];
+        if ($cp > 0) {
+            $postFields['cp'] = $cp;
+        }
+        if ($localStockDelta !== null && abs($localStockDelta) > 0.0001) {
+            $postFields['local_stock_delta'] = (int) round($localStockDelta);
+        }
+        if ($postFields === []) {
+            return ['success' => false, 'message' => 'Nothing to sync to vendor API.'];
+        }
+
+        $size = trim((string) ($product['size'] ?? ''));
+        $color = trim((string) ($product['color'] ?? ''));
+        $endpoint = 'product/modify'
+            . '?itemcode=' . rawurlencode($itemCode)
+            . '&size=' . rawurlencode($size)
+            . '&color=' . rawurlencode($color);
+
+        $api = exotic_india_api_post(
+            $endpoint,
+            http_build_query($postFields),
+            ['Content-Type: application/x-www-form-urlencoded']
+        );
+
+        if (!$api['success']) {
+            return [
+                'success' => false,
+                'message' => trim((string) ($api['message'] ?? '')) !== ''
+                    ? (string) $api['message']
+                    : 'Vendor product sync failed.',
+                'http_code' => (int) ($api['http_code'] ?? 0),
+            ];
+        }
+
+        $data = is_array($api['data'] ?? null) ? $api['data'] : [];
+        $apiSuccess = !isset($data['success']) || (bool) $data['success'];
+
+        return [
+            'success' => $apiSuccess,
+            'message' => trim((string) ($data['message'] ?? '')) !== ''
+                ? (string) $data['message']
+                : ($apiSuccess ? 'Vendor product sync completed.' : 'Vendor product sync failed.'),
+            'http_code' => (int) ($api['http_code'] ?? 0),
+            'response' => $data,
+        ];
+    }
+
     public function modifyProduct($id, $data)
     {
         // Build UPDATE query dynamically
