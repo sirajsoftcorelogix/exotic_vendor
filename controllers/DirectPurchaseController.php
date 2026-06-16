@@ -181,7 +181,8 @@ class DirectPurchaseController
             exit;
         }
 
-        $apiOrders = $this->normalizeItemFetchOrders($api['data'] ?? []);
+        $apiOrders = $this->normalizeItemFetchOrders($api['data'] ?? [], $api['raw'] ?? '');
+        $apiOrders = $this->enrichItemFetchOrdersWithQty($itemCode, $size, $color, $apiOrders);
         $orders = $this->compareItemFetchOrdersWithLocal($conn, $itemCode, $size, $color, $apiOrders);
         $needsImport = array_values(array_filter($orders, static function (array $row): bool {
             return !empty($row['needs_import']);
@@ -221,22 +222,70 @@ class DirectPurchaseController
     }
 
     /**
+     * itemfetch returns either order detail objects or a bare JSON array of order IDs, e.g. [2938539, 2931833].
+     *
      * @param array<string, mixed> $decoded
      * @return list<array{order_number:string,qty:float}>
      */
-    private function normalizeItemFetchOrders(array $decoded): array
+    private function normalizeItemFetchOrders(array $decoded, string $raw = ''): array
     {
+        if ($decoded === [] && $raw !== '') {
+            $fromRaw = json_decode($raw, true);
+            if (is_array($fromRaw)) {
+                $decoded = $fromRaw;
+            }
+        }
+
+        if ($decoded !== [] && array_keys($decoded) === range(0, count($decoded) - 1)) {
+            $first = reset($decoded);
+            if (is_scalar($first) && !is_array($first)) {
+                $out = [];
+                foreach ($decoded as $id) {
+                    if (!is_scalar($id)) {
+                        continue;
+                    }
+                    $orderNumber = trim((string) $id);
+                    if ($orderNumber === '') {
+                        continue;
+                    }
+                    $out[] = [
+                        'order_number' => $orderNumber,
+                        'qty' => 0.0,
+                    ];
+                }
+                return $out;
+            }
+        }
+
         $list = [];
         if (isset($decoded['orders']) && is_array($decoded['orders'])) {
-            $list = $decoded['orders'];
+            $ordersNode = $decoded['orders'];
+            if ($ordersNode !== [] && array_keys($ordersNode) !== range(0, count($ordersNode) - 1)) {
+                $list = array_values($ordersNode);
+            } else {
+                $list = $ordersNode;
+            }
         } elseif (isset($decoded['data']) && is_array($decoded['data'])) {
             $list = $decoded['data'];
+        } elseif (isset($decoded['result']) && is_array($decoded['result'])) {
+            $list = $decoded['result'];
         } elseif ($decoded !== [] && array_keys($decoded) === range(0, count($decoded) - 1)) {
             $list = $decoded;
         }
 
         $out = [];
         foreach ($list as $row) {
+            if (is_scalar($row)) {
+                $orderNumber = trim((string) $row);
+                if ($orderNumber === '') {
+                    continue;
+                }
+                $out[] = [
+                    'order_number' => $orderNumber,
+                    'qty' => 0.0,
+                ];
+                continue;
+            }
             if (!is_array($row)) {
                 continue;
             }
@@ -252,6 +301,123 @@ class DirectPurchaseController
         }
 
         return $out;
+    }
+
+    /**
+     * itemfetch only returns order IDs; load line qty from order/fetch cart when missing.
+     *
+     * @param list<array{order_number:string,qty:float}> $orders
+     * @return list<array{order_number:string,qty:float}>
+     */
+    private function enrichItemFetchOrdersWithQty(string $itemCode, string $size, string $color, array $orders): array
+    {
+        $maxFetches = 25;
+        $fetched = 0;
+
+        foreach ($orders as &$row) {
+            if ((float) ($row['qty'] ?? 0) > 0) {
+                continue;
+            }
+            if ($fetched >= $maxFetches) {
+                break;
+            }
+
+            $orderNumber = trim((string) ($row['order_number'] ?? ''));
+            if ($orderNumber === '') {
+                continue;
+            }
+
+            $qty = $this->fetchLineQtyForOrderFromVendorApi($orderNumber, $itemCode, $size, $color);
+            if ($qty !== null) {
+                $row['qty'] = $qty;
+            }
+            $fetched++;
+        }
+        unset($row);
+
+        return $orders;
+    }
+
+    private function fetchLineQtyForOrderFromVendorApi(
+        string $orderNumber,
+        string $itemCode,
+        string $size,
+        string $color
+    ): ?float {
+        $api = exotic_india_api_post(
+            'order/fetch',
+            http_build_query([
+                'makeRequestOf' => 'vendors-orderjson',
+                'orderid' => $orderNumber,
+            ]),
+            ['Content-Type: application/x-www-form-urlencoded']
+        );
+
+        if (!$api['success']) {
+            return null;
+        }
+
+        $order = $this->extractVendorOrderNode($api['data'] ?? [], $orderNumber);
+        if ($order === null) {
+            return null;
+        }
+
+        $cart = $order['cart'] ?? [];
+        if (!is_array($cart)) {
+            return null;
+        }
+
+        $totalQty = 0.0;
+        $matched = false;
+        foreach ($cart as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $lineItemCode = trim((string) ($item['itemcode'] ?? $item['item_code'] ?? ''));
+            if (strcasecmp($lineItemCode, $itemCode) !== 0) {
+                continue;
+            }
+            $lineSize = trim((string) ($item['size'] ?? ''));
+            $lineColor = trim((string) ($item['color'] ?? ''));
+            if ($size !== '' && strcasecmp($lineSize, $size) !== 0) {
+                continue;
+            }
+            if ($color !== '' && strcasecmp($lineColor, $color) !== 0) {
+                continue;
+            }
+            $totalQty += (float) ($item['qty'] ?? $item['quantity'] ?? 0);
+            $matched = true;
+        }
+
+        return $matched ? $totalQty : null;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>|null
+     */
+    private function extractVendorOrderNode(array $data, string $orderNumber): ?array
+    {
+        if (isset($data['orders']) && is_array($data['orders'])) {
+            $orders = $data['orders'];
+            if (isset($orders[$orderNumber]) && is_array($orders[$orderNumber])) {
+                return $orders[$orderNumber];
+            }
+            foreach ($orders as $order) {
+                if (!is_array($order)) {
+                    continue;
+                }
+                if ((string) ($order['orderid'] ?? '') === $orderNumber) {
+                    return $order;
+                }
+            }
+        }
+
+        if (isset($data['orderid']) || isset($data['cart'])) {
+            return $data;
+        }
+
+        return null;
     }
 
     /**
