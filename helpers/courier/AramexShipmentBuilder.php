@@ -110,16 +110,102 @@ class AramexShipmentBuilder
                 'PersonName' => $person,
                 'Title' => '',
                 'CompanyName' => $company,
-                'PhoneNumber1' => (string) ($address['shipping_mobile'] ?? $address['mobile'] ?? ''),
+                'PhoneNumber1' => self::extractPhone($address),
                 'PhoneNumber1Ext' => '',
                 'PhoneNumber2' => '',
                 'PhoneNumber2Ext' => '',
                 'FaxNumber' => '',
-                'CellPhone' => (string) ($address['shipping_mobile'] ?? $address['mobile'] ?? ''),
+                'CellPhone' => self::extractPhone($address),
                 'EmailAddress' => (string) ($address['shipping_email'] ?? $address['email'] ?? ''),
                 'Type' => '',
             ],
         ];
+    }
+
+    private static function extractPhone(array $address): string
+    {
+        // Try various phone field names in order of preference
+        $phone = 
+            $address['shipping_phone'] ?? 
+            $address['shipping_mobile'] ?? 
+            $address['shipping_cell'] ?? 
+            $address['shipping_telephone'] ?? 
+            $address['phone'] ?? 
+            $address['mobile'] ?? 
+            $address['cell'] ?? 
+            $address['telephone'] ?? 
+            '';
+        
+        return (string) $phone;
+    }
+
+    private static function parseAndFormatDate($date, $format = 'm/d/Y'): string
+    {
+        if (empty($date)) {
+            return date($format);
+        }
+
+        $date = trim((string) $date);
+
+        // Already in correct format? (Y-m-d)
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            list($year, $month, $day) = explode('-', $date);
+            return date($format, mktime(0, 0, 0, (int) $month, (int) $day, (int) $year));
+        }
+
+        // Already in correct format? (m/d/Y)
+        if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $date)) {
+            return $date;
+        }
+
+        // Unix timestamp
+        if (is_numeric($date) || ctype_digit($date)) {
+            return date($format, (int) $date);
+        }
+
+        // Try strtotime
+        $parsed = strtotime($date);
+        if ($parsed !== false) {
+            return date($format, $parsed);
+        }
+
+        // Try common date formats manually
+        // DD/MM/YYYY (e.g., 15/06/2026)
+        if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $date, $m)) {
+            $ts = mktime(0, 0, 0, (int) $m[2], (int) $m[1], (int) $m[3]);
+            // Check if it's a valid date
+            if ($ts !== false && checkdate((int) $m[2], (int) $m[1], (int) $m[3])) {
+                return date($format, $ts);
+            }
+        }
+
+        // DD-MM-YYYY (e.g., 15-06-2026)
+        if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $date, $m)) {
+            $ts = mktime(0, 0, 0, (int) $m[2], (int) $m[1], (int) $m[3]);
+            if ($ts !== false && checkdate((int) $m[2], (int) $m[1], (int) $m[3])) {
+                return date($format, $ts);
+            }
+        }
+
+        // YYYY/MM/DD (e.g., 2026/06/15)
+        if (preg_match('/^(\d{4})\/(\d{2})\/(\d{2})$/', $date, $m)) {
+            $ts = mktime(0, 0, 0, (int) $m[2], (int) $m[3], (int) $m[1]);
+            if ($ts !== false && checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+                return date($format, $ts);
+            }
+        }
+
+        // YYYYMMDD (e.g., 20260615)
+        if (preg_match('/^(\d{4})(\d{2})(\d{2})$/', $date, $m)) {
+            $ts = mktime(0, 0, 0, (int) $m[2], (int) $m[3], (int) $m[1]);
+            if ($ts !== false && checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+                return date($format, $ts);
+            }
+        }
+
+        // If all else fails, use today
+        error_log("Warning: Could not parse invoice date '$date', using today's date");
+        return date($format);
     }
 
     public static function normalizeCurrencyCode(string $code): string
@@ -185,12 +271,18 @@ class AramexShipmentBuilder
         }
 
         $invoiceNumber = (string) ($invoice['invoice_number'] ?? $context['invoice_number'] ?? '');
-        $invoiceDate = (string) ($invoice['invoice_date'] ?? $context['invoice_date'] ?? date('m/d/Y'));
+        
+        // Invoice date MUST be in MM/DD/YYYY format for Aramex ERR48 compliance
+        // (Even though ISO 8601 would be standard, Aramex API requires American date format)
+        $invDateRaw = $invoice['invoice_date'] ?? $context['invoice_date'] ?? date('Y-m-d');
+        $invoiceDate = self::parseAndFormatDate($invDateRaw, 'm/d/Y');
+        
         $taxAmount = round((float) ($context['tax_amount'] ?? $invoice['tax_amount'] ?? 0), 2);
 
         $shippingTs = $context['shipping_date'] ?? time();
+        // Convert to ISO 8601 format for SOAP/XML (not JavaScript /Date()/ format)
         if (is_numeric($shippingTs)) {
-            $shippingDateTime = '/Date(' . ((int) $shippingTs * 1000) . ')/';
+            $shippingDateTime = date('Y-m-d\TH:i:s', (int) $shippingTs);
         } else {
             $shippingDateTime = (string) $shippingTs;
         }
