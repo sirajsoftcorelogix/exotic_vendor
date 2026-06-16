@@ -76,13 +76,11 @@ class DirectPurchaseController
         $vendors = $directPurchaseVendorModel->getActiveVendorsWithExoticVendorId();
         $commanModel = new Tables($conn);
         $warehouses = $commanModel->get_exotic_address();
-        $defaultWarehouseId = (int) ($_SESSION['warehouse_id'] ?? ($_SESSION['user']['warehouse_id'] ?? 0));
         renderTemplate('views/direct_purchase/form.php', [
             'purchase' => null,
             'items' => [],
             'vendors' => $vendors,
             'warehouses' => $warehouses,
-            'default_warehouse_id' => $defaultWarehouseId,
             'is_edit' => false,
             'purchase_locked' => false,
         ], 'Add direct purchase');
@@ -120,7 +118,6 @@ class DirectPurchaseController
         $vendors = $directPurchaseVendorModel->getAllVendors();
         $commanModel = new Tables($conn);
         $warehouses = $commanModel->get_exotic_address();
-        $defaultWarehouseId = (int) ($purchase['warehouse_id'] ?? ($_SESSION['warehouse_id'] ?? ($_SESSION['user']['warehouse_id'] ?? 0)));
         $purchaseLocked = $directPurchaseModel->countReturns($id) > 0;
 
         renderTemplate('views/direct_purchase/form.php', [
@@ -128,7 +125,6 @@ class DirectPurchaseController
             'items' => $items,
             'vendors' => $vendors,
             'warehouses' => $warehouses,
-            'default_warehouse_id' => $defaultWarehouseId,
             'is_edit' => true,
             'purchase_locked' => $purchaseLocked,
         ], 'Edit direct purchase');
