@@ -530,7 +530,7 @@
 
       <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
         <div class="px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600">
-          Running stock by warehouse (net of IN, OUT, transfers, and opening stock). Location is from the latest movement at each warehouse.
+          Running stock by warehouse — same as the <a href="<?php echo htmlspecialchars(base_url('?page=pos_register&action=stock-report'), ENT_QUOTES, 'UTF-8'); ?>" class="text-amber-700 font-medium underline underline-offset-2 hover:text-amber-900" target="_blank" rel="noopener noreferrer">POS stock report</a> (latest movement balance per warehouse). Location is from that movement.
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full text-sm">
