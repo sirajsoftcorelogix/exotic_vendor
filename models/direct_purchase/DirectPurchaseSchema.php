@@ -26,6 +26,19 @@ final class DirectPurchaseSchema
             'ALTER TABLE `vp_direct_purchases` ADD COLUMN `currency` VARCHAR(10) NOT NULL DEFAULT \'INR\' AFTER `invoice_file`'
         );
 
+        self::ensureColumn(
+            $conn,
+            'vp_direct_purchase_items',
+            'vendor_qty_synced',
+            'ALTER TABLE `vp_direct_purchase_items` ADD COLUMN `vendor_qty_synced` TINYINT(1) NOT NULL DEFAULT 0 AFTER `sort_order`'
+        );
+        self::ensureColumn(
+            $conn,
+            'vp_direct_purchase_items',
+            'vendor_qty_synced_qty',
+            'ALTER TABLE `vp_direct_purchase_items` ADD COLUMN `vendor_qty_synced_qty` DECIMAL(15,3) DEFAULT NULL AFTER `vendor_qty_synced`'
+        );
+
         self::ensureTable(
             $conn,
             'vp_direct_purchase_returns',

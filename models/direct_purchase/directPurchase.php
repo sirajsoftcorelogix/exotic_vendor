@@ -136,6 +136,65 @@ class DirectPurchase
         return $rows;
     }
 
+    public function getItemById(int $itemId): ?array
+    {
+        $this->ensureSchema();
+        $stmt = $this->conn->prepare('SELECT * FROM vp_direct_purchase_items WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $itemId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return $row ?: null;
+    }
+
+    public function markItemVendorQtySynced(int $itemId): bool
+    {
+        $this->ensureSchema();
+        $stmt = $this->conn->prepare(
+            'UPDATE vp_direct_purchase_items
+             SET vendor_qty_synced = 1, vendor_qty_synced_qty = qty
+             WHERE id = ?'
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('i', $itemId);
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        return $ok;
+    }
+
+    public function markItemsVendorQtySyncedByVariant(
+        int $purchaseId,
+        string $itemCode,
+        string $size,
+        string $color
+    ): bool {
+        $this->ensureSchema();
+        $stmt = $this->conn->prepare(
+            'UPDATE vp_direct_purchase_items
+             SET vendor_qty_synced = 1, vendor_qty_synced_qty = qty
+             WHERE direct_purchase_id = ?
+               AND item_code = ?
+               AND COALESCE(TRIM(size), \'\') = ?
+               AND COALESCE(TRIM(color), \'\') = ?'
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('isss', $purchaseId, $itemCode, $size, $color);
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        return $ok;
+    }
+
     public function countReturns(int $purchaseId): int
     {
         $this->ensureSchema();
@@ -355,8 +414,8 @@ class DirectPurchase
     private function insertItemRows(int $purchaseId, array $items): void
     {
         $sql = 'INSERT INTO vp_direct_purchase_items (
-            direct_purchase_id, item_code, sku, color, size, cost_per_item, qty, hsn, gst_rate, unit, gst_amount, line_total, sort_order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)';
+            direct_purchase_id, item_code, sku, color, size, cost_per_item, qty, hsn, gst_rate, unit, gst_amount, line_total, sort_order, vendor_qty_synced, vendor_qty_synced_qty
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,NULL)';
         $stmt = $this->conn->prepare($sql);
         $order = 0;
         foreach ($items as $row) {

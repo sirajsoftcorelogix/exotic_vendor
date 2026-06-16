@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS `vp_direct_purchase_items` (
   `gst_amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   `line_total` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   `sort_order` INT UNSIGNED NOT NULL DEFAULT 0,
+  `vendor_qty_synced` TINYINT(1) NOT NULL DEFAULT 0,
+  `vendor_qty_synced_qty` DECIMAL(15,3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_vp_dpi_purchase` (`direct_purchase_id`),
   CONSTRAINT `fk_vp_dpi_purchase`

@@ -687,13 +687,21 @@ class DirectPurchaseController
         ];
 
         try {
-            if ($id > 0) {
+            $isEdit = $id > 0;
+            $previousItems = $isEdit ? $directPurchaseModel->getItems($id) : [];
+            $purchaseId = $id;
+            if ($isEdit) {
                 $directPurchaseModel->updatePurchase($id, $header, $items);
-                $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Purchase updated.'];
+                $flashText = 'Purchase updated.';
             } else {
-                $directPurchaseModel->insertPurchase($header, $items);
-                $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Purchase saved.'];
+                $purchaseId = $directPurchaseModel->insertPurchase($header, $items);
+                $flashText = 'Purchase saved.';
             }
+            $cpSyncNote = $this->syncDirectPurchaseCpToVendor($items, $previousItems, $isEdit, $purchaseId);
+            if ($cpSyncNote !== '') {
+                $flashText .= ' ' . $cpSyncNote;
+            }
+            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => $flashText];
         } catch (Throwable $e) {
             error_log('DirectPurchase save: ' . $e->getMessage());
             $detail = trim($e->getMessage());
@@ -704,6 +712,98 @@ class DirectPurchaseController
         }
 
         header('Location: ?page=direct_purchase&action=list');
+        exit;
+    }
+
+    public function syncVendorQtyForItem()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+        global $directPurchaseModel;
+
+        $itemId = (int) ($_GET['item_id'] ?? $_POST['item_id'] ?? 0);
+        $purchaseId = (int) ($_GET['purchase_id'] ?? $_POST['purchase_id'] ?? 0);
+        if ($itemId <= 0 || $purchaseId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid purchase line.']);
+            exit;
+        }
+
+        $item = $directPurchaseModel->getItemById($itemId);
+        if (!$item || (int) ($item['direct_purchase_id'] ?? 0) !== $purchaseId) {
+            echo json_encode(['success' => false, 'message' => 'Purchase line not found.']);
+            exit;
+        }
+
+        $currentQty = (float) ($item['qty'] ?? 0);
+        if ($currentQty <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Line qty must be greater than zero.']);
+            exit;
+        }
+
+        $syncedQty = isset($item['vendor_qty_synced_qty']) && $item['vendor_qty_synced_qty'] !== null
+            ? (float) $item['vendor_qty_synced_qty']
+            : 0.0;
+        $isSynced = (int) ($item['vendor_qty_synced'] ?? 0) === 1;
+        if ($isSynced && abs($currentQty - $syncedQty) < 0.0001) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'Qty already synced to vendor API.',
+                'vendor_qty_synced' => 1,
+            ]);
+            exit;
+        }
+
+        $stockDelta = $isSynced ? ($currentQty - $syncedQty) : $currentQty;
+        if (abs($stockDelta) < 0.0001) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'No qty change to sync.',
+                'vendor_qty_synced' => 1,
+            ]);
+            exit;
+        }
+
+        $productModel = new product($conn);
+        $variant = $this->resolveDirectPurchaseVariant($item, $productModel);
+        if ($variant === null) {
+            echo json_encode(['success' => false, 'message' => 'Could not resolve item code for this line.']);
+            exit;
+        }
+
+        $row = $productModel->findByItemCodeSizeColor($variant['item_code'], $variant['size'], $variant['color']);
+        if (!$row) {
+            $row = $productModel->findByItemCodeSizeColor($variant['item_code'], '', '');
+        }
+
+        $product = [
+            'item_code' => $variant['item_code'],
+            'size' => $variant['size'],
+            'color' => $variant['color'],
+        ];
+        if (is_array($row) && !empty($row['id'])) {
+            $fresh = $productModel->getProduct((int) $row['id']);
+            if (is_array($fresh)) {
+                $product = $fresh;
+            }
+        }
+
+        $sync = $productModel->syncCpToVendorFrontend($product, 0.0, $stockDelta);
+        if (empty($sync['success'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => trim((string) ($sync['message'] ?? 'Vendor qty sync failed.')),
+            ]);
+            exit;
+        }
+
+        $directPurchaseModel->markItemVendorQtySynced($itemId);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Qty synced to vendor API.',
+            'vendor_qty_synced' => 1,
+            'local_stock_delta' => $stockDelta,
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -1097,5 +1197,225 @@ class DirectPurchaseController
             return null;
         }
         return 'uploads/direct_purchase/' . $newName;
+    }
+
+    /**
+     * After a successful purchase save, push cost_per_item (CP) and qty (local_stock_delta) to vendor product/modify.
+     *
+     * New purchase: local_stock_delta = line qty (positive).
+     * Edit purchase: local_stock_delta = new qty − previous qty (positive or negative).
+     *
+     * @param list<array<string, mixed>> $items
+     * @param list<array<string, mixed>> $previousItems Saved lines before update (edit only)
+     */
+    private function syncDirectPurchaseCpToVendor(
+        array $items,
+        array $previousItems = [],
+        bool $isEdit = false,
+        int $purchaseId = 0
+    ): string {
+        global $conn;
+        global $directPurchaseModel;
+        $productModel = new product($conn);
+        $failures = [];
+
+        $currentByVariant = $this->aggregateDirectPurchaseVendorLines($items, $productModel);
+        $previousByVariant = $isEdit
+            ? $this->aggregateDirectPurchaseQtyByVariant($previousItems, $productModel)
+            : [];
+
+        $allKeys = array_unique(array_merge(array_keys($currentByVariant), array_keys($previousByVariant)));
+
+        foreach ($allKeys as $dedupeKey) {
+            $current = $currentByVariant[$dedupeKey] ?? null;
+            $previous = $previousByVariant[$dedupeKey] ?? null;
+
+            $newQty = (float) ($current['qty'] ?? 0);
+            $oldQty = (float) ($previous['qty'] ?? 0);
+            $stockDelta = $isEdit ? ($newQty - $oldQty) : $newQty;
+            $cost = (float) ($current['cost'] ?? 0);
+
+            if ($cost <= 0 && abs($stockDelta) < 0.0001) {
+                if (
+                    $purchaseId > 0
+                    && $isEdit
+                    && $newQty > 0
+                    && abs($newQty - $oldQty) < 0.0001
+                    && is_array($line)
+                ) {
+                    $directPurchaseModel->markItemsVendorQtySyncedByVariant(
+                        $purchaseId,
+                        $line['item_code'],
+                        $line['size'],
+                        $line['color']
+                    );
+                }
+                continue;
+            }
+
+            $line = is_array($current) ? $current : $previous;
+            if (!is_array($line)) {
+                continue;
+            }
+
+            $itemCode = $line['item_code'];
+            $size = $line['size'];
+            $color = $line['color'];
+
+            $row = $productModel->findByItemCodeSizeColor($itemCode, $size, $color);
+            if (!$row) {
+                $row = $productModel->findByItemCodeSizeColor($itemCode, '', '');
+            }
+
+            $product = [
+                'item_code' => $itemCode,
+                'size' => $size,
+                'color' => $color,
+            ];
+            if (is_array($row) && !empty($row['id'])) {
+                if ($cost > 0) {
+                    $productModel->setProductCp((int) $row['id'], $cost);
+                }
+                $fresh = $productModel->getProduct((int) $row['id']);
+                if (is_array($fresh)) {
+                    $product = $fresh;
+                }
+            }
+
+            $stockDeltaArg = abs($stockDelta) > 0.0001 ? $stockDelta : null;
+            $sync = $productModel->syncCpToVendorFrontend($product, $cost, $stockDeltaArg);
+            if (empty($sync['success'])) {
+                $failures[] = $itemCode . ' — ' . trim((string) ($sync['message'] ?? 'vendor product sync failed'));
+                continue;
+            }
+
+            if ($purchaseId > 0) {
+                $qtyUnchangedOnEdit = $isEdit && $newQty > 0 && abs($newQty - $oldQty) < 0.0001;
+                if ($stockDeltaArg !== null || $qtyUnchangedOnEdit) {
+                    $directPurchaseModel->markItemsVendorQtySyncedByVariant($purchaseId, $itemCode, $size, $color);
+                }
+            }
+        }
+
+        if ($failures === []) {
+            return '';
+        }
+
+        $shown = array_slice($failures, 0, 3);
+        $suffix = count($failures) > 3 ? ' (and ' . (count($failures) - 3) . ' more)' : '';
+
+        return 'Vendor product update issue: ' . implode('; ', $shown) . $suffix . '.';
+    }
+
+    /**
+     * @param list<array<string, mixed>> $items
+     * @return array<string, array{item_code:string,size:string,color:string,qty:float,cost:float,key:string}>
+     */
+    private function aggregateDirectPurchaseVendorLines(array $items, product $productModel): array
+    {
+        $out = [];
+        foreach ($items as $line) {
+            $normalized = $this->normalizeDirectPurchaseVendorLine($line, $productModel);
+            if ($normalized === null) {
+                continue;
+            }
+            $key = $normalized['key'];
+            if (!isset($out[$key])) {
+                $out[$key] = $normalized;
+                $out[$key]['qty'] = 0.0;
+                $out[$key]['cost'] = 0.0;
+            }
+            $out[$key]['qty'] += $normalized['qty'];
+            if ($normalized['cost'] > 0) {
+                $out[$key]['cost'] = $normalized['cost'];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Qty totals per variant from saved purchase lines (edit comparison; includes lines with qty only).
+     *
+     * @param list<array<string, mixed>> $items
+     * @return array<string, array{item_code:string,size:string,color:string,qty:float,key:string}>
+     */
+    private function aggregateDirectPurchaseQtyByVariant(array $items, product $productModel): array
+    {
+        $out = [];
+        foreach ($items as $line) {
+            $variant = $this->resolveDirectPurchaseVariant($line, $productModel);
+            if ($variant === null) {
+                continue;
+            }
+            $qty = (float) ($line['qty'] ?? 0);
+            if ($qty <= 0) {
+                continue;
+            }
+            $key = $variant['key'];
+            if (!isset($out[$key])) {
+                $out[$key] = $variant;
+                $out[$key]['qty'] = 0.0;
+            }
+            $out[$key]['qty'] += $qty;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $line
+     * @return array{item_code:string,sku:string,size:string,color:string,key:string}|null
+     */
+    private function resolveDirectPurchaseVariant(array $line, product $productModel): ?array
+    {
+        $itemCode = trim((string) ($line['item_code'] ?? ''));
+        $sku = trim((string) ($line['sku'] ?? ''));
+        if ($itemCode === '' && $sku !== '') {
+            $bySku = $productModel->getProductByskuExact($sku);
+            if (is_array($bySku)) {
+                $itemCode = trim((string) ($bySku['item_code'] ?? ''));
+            }
+            if ($itemCode === '') {
+                $itemCode = $sku;
+            }
+        }
+        if ($itemCode === '') {
+            return null;
+        }
+
+        $size = trim((string) ($line['size'] ?? ''));
+        $color = trim((string) ($line['color'] ?? ''));
+
+        return [
+            'item_code' => $itemCode,
+            'sku' => $sku,
+            'size' => $size,
+            'color' => $color,
+            'key' => strtolower($itemCode) . '|' . $size . '|' . $color,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $line
+     * @return array{item_code:string,sku:string,size:string,color:string,qty:float,cost:float,key:string}|null
+     */
+    private function normalizeDirectPurchaseVendorLine(array $line, product $productModel): ?array
+    {
+        $variant = $this->resolveDirectPurchaseVariant($line, $productModel);
+        if ($variant === null) {
+            return null;
+        }
+
+        $cost = (float) ($line['cost_per_item'] ?? 0);
+        $qty = (float) ($line['qty'] ?? 0);
+        if ($cost <= 0 && $qty <= 0) {
+            return null;
+        }
+
+        return array_merge($variant, [
+            'qty' => $qty,
+            'cost' => $cost,
+        ]);
     }
 }
