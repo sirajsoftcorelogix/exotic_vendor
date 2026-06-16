@@ -604,8 +604,8 @@ $dpLocked = !empty($data['purchase_locked']);
             .then(function (data) {
                 if (!data || !data.success) {
                     var errMsg = (data && data.message) ? data.message : 'Could not fetch latest price.';
-                    var errTitle = (errMsg.indexOf('no cost price') !== -1 || errMsg.indexOf('(cp)') !== -1)
-                        ? 'No cost price from API'
+                    var errTitle = (errMsg.indexOf('CP (cost price)') !== -1 || errMsg.indexOf('no cost price') !== -1 || errMsg.indexOf('(cp)') !== -1)
+                        ? 'No CP from vendor API'
                         : 'Could not fetch price';
                     dpShowStatusModal(errMsg, 'error', errTitle);
                     return;
@@ -683,9 +683,11 @@ $dpLocked = !empty($data['purchase_locked']);
             .replace(/"/g, '&quot;');
     }
 
-    function dpCopyOrderNumber(orderNumber, btn) {
-        var text = String(orderNumber || '').trim();
+    function dpCopyText(text, btn, defaultTitle, failMessage) {
+        text = String(text || '').trim();
         if (!text) return;
+        defaultTitle = defaultTitle || 'Copy';
+        failMessage = failMessage || 'Could not copy to clipboard.';
 
         function flashCopied() {
             if (!btn) return;
@@ -696,13 +698,13 @@ $dpLocked = !empty($data['purchase_locked']);
             btn.setAttribute('title', 'Copied');
             setTimeout(function () {
                 icon.className = prev;
-                btn.setAttribute('title', 'Copy order number');
+                btn.setAttribute('title', defaultTitle);
             }, 1200);
         }
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(flashCopied).catch(function () {
-                dpShowStatusModal('Could not copy order number to clipboard.', 'warning');
+                dpShowStatusModal(failMessage, 'warning');
             });
             return;
         }
@@ -718,12 +720,20 @@ $dpLocked = !empty($data['purchase_locked']);
             if (document.execCommand('copy')) {
                 flashCopied();
             } else {
-                dpShowStatusModal('Could not copy order number to clipboard.', 'warning');
+                dpShowStatusModal(failMessage, 'warning');
             }
         } catch (err) {
-            dpShowStatusModal('Could not copy order number to clipboard.', 'warning');
+            dpShowStatusModal(failMessage, 'warning');
         }
         document.body.removeChild(ta);
+    }
+
+    function dpCopyOrderNumber(orderNumber, btn) {
+        dpCopyText(orderNumber, btn, 'Copy order number', 'Could not copy order number to clipboard.');
+    }
+
+    function dpCopySku(sku, btn) {
+        dpCopyText(sku, btn, 'Copy SKU', 'Could not copy SKU to clipboard.');
     }
 
     function dpRenderPendingOrdersTable(orders, defaultSku) {
@@ -761,7 +771,16 @@ $dpLocked = !empty($data['purchase_locked']);
                         '</button>' +
                     '</div>' +
                 '</td>' +
-                '<td class="py-2.5 pr-3 font-mono text-xs text-gray-700">' + dpEscHtml(lineSku) + '</td>' +
+                '<td class="py-2.5 pr-3">' +
+                    '<div class="flex items-center gap-2">' +
+                        '<span class="font-medium text-gray-900 tabular-nums">' + dpEscHtml(lineSku) + '</span>' +
+                        (lineSku ? (
+                            '<button type="button" class="dp-po-copy-sku inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500" title="Copy SKU" aria-label="Copy SKU ' + dpEscHtml(lineSku) + '" data-sku="' + dpEscHtml(lineSku) + '">' +
+                                '<i class="fas fa-copy text-xs" aria-hidden="true"></i>' +
+                            '</button>'
+                        ) : '') +
+                    '</div>' +
+                '</td>' +
                 '<td class="py-2.5 text-right tabular-nums text-gray-900">' + dpEscHtml(qtyText) + '</td>';
 
             tbody.appendChild(tr);
@@ -834,10 +853,17 @@ $dpLocked = !empty($data['purchase_locked']);
         if (closeBtn) closeBtn.addEventListener('click', dpClosePendingOrdersModal);
         if (tbody) {
             tbody.addEventListener('click', function (e) {
-                var btn = e.target.closest('.dp-po-copy-order');
-                if (!btn) return;
-                e.preventDefault();
-                dpCopyOrderNumber(btn.getAttribute('data-order-number') || '', btn);
+                var orderBtn = e.target.closest('.dp-po-copy-order');
+                if (orderBtn) {
+                    e.preventDefault();
+                    dpCopyOrderNumber(orderBtn.getAttribute('data-order-number') || '', orderBtn);
+                    return;
+                }
+                var skuBtn = e.target.closest('.dp-po-copy-sku');
+                if (skuBtn) {
+                    e.preventDefault();
+                    dpCopySku(skuBtn.getAttribute('data-sku') || '', skuBtn);
+                }
             });
         }
         document.addEventListener('keydown', function (e) {
