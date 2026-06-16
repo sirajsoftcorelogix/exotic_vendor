@@ -215,15 +215,21 @@ $dpLocked = !empty($data['purchase_locked']);
                                     </button>
                                 </td>
                                 <td class="px-3 py-2 align-top min-w-[14rem]">
-                                    <div class="relative dp-sku-cell">
-                                        <input type="hidden" name="item_code[]" class="dp-h-item-code" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
-                                        <input type="hidden" name="color[]" class="dp-h-color" value="<?= htmlspecialchars($it['color'] ?? '') ?>">
-                                        <input type="hidden" name="size[]" class="dp-h-size" value="<?= htmlspecialchars($it['size'] ?? '') ?>">
-                                        <input type="hidden" name="gst_amount[]" class="dp-gst" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>">
-                                        <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
-                                            class="dp-sku w-full min-w-[12rem] <?= $inpSm ?>"
-                                            value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
-                                        <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
+                                    <div class="flex items-start gap-1">
+                                        <div class="relative dp-sku-cell flex-1 min-w-0">
+                                            <input type="hidden" name="item_code[]" class="dp-h-item-code" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
+                                            <input type="hidden" name="color[]" class="dp-h-color" value="<?= htmlspecialchars($it['color'] ?? '') ?>">
+                                            <input type="hidden" name="size[]" class="dp-h-size" value="<?= htmlspecialchars($it['size'] ?? '') ?>">
+                                            <input type="hidden" name="gst_amount[]" class="dp-gst" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>">
+                                            <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
+                                                class="dp-sku w-full min-w-[10rem] <?= $inpSm ?>"
+                                                value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
+                                            <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
+                                        </div>
+                                        <button type="button" class="dp-fetch-pending-orders shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU" <?= $dpLocked ? 'disabled' : '' ?>>
+                                            <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
+                                        </button>
                                     </div>
                                 </td>
                                 <td class="px-3 py-2 align-top min-w-[8rem]">
@@ -372,6 +378,41 @@ $dpLocked = !empty($data['purchase_locked']);
     </div>
 </div>
 
+<div id="dp-pending-orders-modal" class="fixed inset-0 z-[220] hidden items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="dp-pending-orders-title">
+    <button type="button" id="dp-pending-orders-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" aria-label="Close dialog"></button>
+    <div class="relative flex w-full max-w-3xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-sky-200/40 bg-white shadow-2xl shadow-sky-900/10 ring-1 ring-black/5 animate-[dpModalIn_0.22s_ease-out]">
+        <div class="border-b border-gray-100 bg-gradient-to-r from-sky-50/80 to-white px-6 py-4">
+            <h3 id="dp-pending-orders-title" class="text-lg font-bold tracking-tight text-gray-900">Pending orders for SKU</h3>
+            <p id="dp-pending-orders-subtitle" class="mt-1 text-sm text-gray-600"></p>
+            <p id="dp-pending-orders-import-status" class="mt-2 text-xs font-medium text-sky-700 hidden"></p>
+        </div>
+        <div class="flex-1 overflow-auto px-6 py-4">
+            <div id="dp-pending-orders-loading" class="hidden py-10 text-center text-sm text-gray-500">
+                <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Fetching orders…
+            </div>
+            <div id="dp-pending-orders-empty" class="hidden py-10 text-center text-sm text-gray-500">No pending orders found for this item in the selected date range.</div>
+            <table id="dp-pending-orders-table" class="hidden w-full text-sm">
+                <thead>
+                    <tr class="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <th class="pb-2 pr-3">Order #</th>
+                        <th class="pb-2 pr-3 text-right">API Qty</th>
+                        <th class="pb-2 pr-3 text-right">Local Qty</th>
+                        <th class="pb-2 pr-3">In system</th>
+                        <th class="pb-2">Import</th>
+                    </tr>
+                </thead>
+                <tbody id="dp-pending-orders-tbody" class="divide-y divide-gray-100"></tbody>
+            </table>
+        </div>
+        <div class="border-t border-gray-100 bg-gray-50/80 px-6 py-4 flex justify-end gap-2">
+            <button type="button" id="dp-pending-orders-close"
+                class="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 transition">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
 <style>
 @keyframes dpModalIn {
     from { opacity: 0; transform: translateY(8px) scale(0.98); }
@@ -390,14 +431,20 @@ $dpLocked = !empty($data['purchase_locked']);
                 </button>
             </td>
             <td class="px-3 py-2 align-top min-w-[14rem]">
-                <div class="relative dp-sku-cell">
-                    <input type="hidden" name="item_code[]" class="dp-h-item-code" value="">
-                    <input type="hidden" name="color[]" class="dp-h-color" value="">
-                    <input type="hidden" name="size[]" class="dp-h-size" value="">
-                    <input type="hidden" name="gst_amount[]" class="dp-gst" value="">
-                    <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
-                        class="dp-sku w-full min-w-[12rem] <?= $inpSm ?>" value="">
-                    <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
+                <div class="flex items-start gap-1">
+                    <div class="relative dp-sku-cell flex-1 min-w-0">
+                        <input type="hidden" name="item_code[]" class="dp-h-item-code" value="">
+                        <input type="hidden" name="color[]" class="dp-h-color" value="">
+                        <input type="hidden" name="size[]" class="dp-h-size" value="">
+                        <input type="hidden" name="gst_amount[]" class="dp-gst" value="">
+                        <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
+                            class="dp-sku w-full min-w-[10rem] <?= $inpSm ?>" value="">
+                        <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
+                    </div>
+                    <button type="button" class="dp-fetch-pending-orders shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU">
+                        <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
+                    </button>
                 </div>
             </td>
             <td class="px-3 py-2 align-top min-w-[8rem]">
@@ -591,6 +638,284 @@ $dpLocked = !empty($data['purchase_locked']);
                 if (icon) {
                     icon.className = prevIconClass;
                 }
+            });
+    }
+
+    function fetchPendingOrdersUrl(itemCode, sku, color, size) {
+        var u = new URL(window.location.href);
+        u.searchParams.set('page', 'direct_purchase');
+        u.searchParams.set('action', 'fetch_pending_orders');
+        u.searchParams.set('item_code', itemCode || '');
+        u.searchParams.set('sku', sku || '');
+        u.searchParams.set('color', color || '');
+        u.searchParams.set('size', size || '');
+        return u.toString();
+    }
+
+    function importOrderUrl(orderNumber) {
+        var u = new URL(window.location.href);
+        u.searchParams.set('page', 'direct_purchase');
+        u.searchParams.set('action', 'import_order');
+        u.searchParams.set('orderid', orderNumber || '');
+        return u.toString();
+    }
+
+    function dpClosePendingOrdersModal() {
+        var modal = document.getElementById('dp-pending-orders-modal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.style.overflow = '';
+    }
+
+    function dpFormatUnixRange(fromTs, toTs) {
+        function fmt(ts) {
+            if (!ts) return '';
+            var d = new Date(ts * 1000);
+            if (isNaN(d.getTime())) return '';
+            return d.toLocaleDateString();
+        }
+        return fmt(fromTs) + ' – ' + fmt(toTs);
+    }
+
+    function dpPendingOrderStatusLabel(row) {
+        if (!row) return '';
+        if (row.match_status === 'matched') return 'Matched';
+        if (row.match_status === 'qty_mismatch') return 'Qty mismatch';
+        if (row.match_status === 'missing') return 'Not in system';
+        return row.in_local_db ? 'In system' : 'Not in system';
+    }
+
+    function dpPendingOrderStatusClass(row) {
+        if (!row) return 'text-gray-600';
+        if (row.match_status === 'matched') return 'text-emerald-700';
+        if (row.match_status === 'qty_mismatch') return 'text-amber-700';
+        return 'text-red-700';
+    }
+
+    function dpRenderPendingOrdersTable(orders) {
+        var tbody = document.getElementById('dp-pending-orders-tbody');
+        var table = document.getElementById('dp-pending-orders-table');
+        var empty = document.getElementById('dp-pending-orders-empty');
+        if (!tbody || !table || !empty) return;
+
+        tbody.innerHTML = '';
+        if (!orders || !orders.length) {
+            table.classList.add('hidden');
+            empty.classList.remove('hidden');
+            return;
+        }
+
+        empty.classList.add('hidden');
+        table.classList.remove('hidden');
+
+        orders.forEach(function (row, idx) {
+            var tr = document.createElement('tr');
+            tr.className = row.needs_import ? 'bg-amber-50/60' : '';
+            tr.setAttribute('data-order-number', row.order_number || '');
+            tr.setAttribute('data-row-index', String(idx));
+
+            var importHtml = row.needs_import
+                ? '<span class="dp-po-import-status text-xs text-sky-700"><i class="fas fa-clock mr-1" aria-hidden="true"></i>Queued</span>'
+                : '<span class="text-xs text-emerald-700"><i class="fas fa-check mr-1" aria-hidden="true"></i>OK</span>';
+
+            tr.innerHTML =
+                '<td class="py-2 pr-3 font-medium text-gray-900">' + (row.order_number || '') + '</td>' +
+                '<td class="py-2 pr-3 text-right tabular-nums">' + (row.qty != null ? row.qty : '') + '</td>' +
+                '<td class="py-2 pr-3 text-right tabular-nums dp-po-local-qty">' + (row.in_local_db ? row.local_qty : '—') + '</td>' +
+                '<td class="py-2 pr-3 ' + dpPendingOrderStatusClass(row) + ' dp-po-match-status">' + dpPendingOrderStatusLabel(row) + '</td>' +
+                '<td class="py-2 dp-po-import-cell">' + importHtml + '</td>';
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function dpUpdatePendingOrderRow(tr, patch) {
+        if (!tr || !patch) return;
+        if (patch.local_qty != null) {
+            var lq = tr.querySelector('.dp-po-local-qty');
+            if (lq) lq.textContent = String(patch.local_qty);
+        }
+        if (patch.match_status) {
+            var ms = tr.querySelector('.dp-po-match-status');
+            if (ms) {
+                ms.textContent = dpPendingOrderStatusLabel(patch);
+                ms.className = 'py-2 pr-3 dp-po-match-status ' + dpPendingOrderStatusClass(patch);
+            }
+            if (patch.match_status === 'matched') {
+                tr.classList.remove('bg-amber-50/60');
+            }
+        }
+        if (patch.import_html) {
+            var ic = tr.querySelector('.dp-po-import-cell');
+            if (ic) ic.innerHTML = patch.import_html;
+        }
+    }
+
+    function dpImportPendingOrdersSequential(orders) {
+        var toImport = (orders || []).filter(function (row) { return row && row.needs_import; });
+        var statusEl = document.getElementById('dp-pending-orders-import-status');
+        if (!toImport.length) {
+            if (statusEl) {
+                statusEl.textContent = 'All listed orders are already in the system.';
+                statusEl.classList.remove('hidden');
+            }
+            return Promise.resolve();
+        }
+
+        if (statusEl) {
+            statusEl.textContent = 'Importing ' + toImport.length + ' order(s) in background…';
+            statusEl.classList.remove('hidden');
+        }
+
+        var chain = Promise.resolve();
+        toImport.forEach(function (row, i) {
+            chain = chain.then(function () {
+                var tbody = document.getElementById('dp-pending-orders-tbody');
+                var tr = tbody ? tbody.querySelector('tr[data-order-number="' + CSS.escape(row.order_number) + '"]') : null;
+                if (tr) {
+                    dpUpdatePendingOrderRow(tr, {
+                        import_html: '<span class="dp-po-import-status text-xs text-sky-700"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>Importing…</span>'
+                    });
+                }
+                if (statusEl) {
+                    statusEl.textContent = 'Importing order ' + (i + 1) + ' of ' + toImport.length + '…';
+                }
+                return fetch(importOrderUrl(row.order_number), {
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        var ok = data && data.success;
+                        if (tr) {
+                            if (ok) {
+                                dpUpdatePendingOrderRow(tr, {
+                                    local_qty: row.qty,
+                                    match_status: 'matched',
+                                    import_html: '<span class="text-xs text-emerald-700"><i class="fas fa-check mr-1" aria-hidden="true"></i>Imported</span>'
+                                });
+                            } else {
+                                var msg = (data && data.message) ? data.message : 'Import failed';
+                                dpUpdatePendingOrderRow(tr, {
+                                    import_html: '<span class="text-xs text-red-700" title="' + msg.replace(/"/g, '&quot;') + '"><i class="fas fa-times mr-1" aria-hidden="true"></i>Failed</span>'
+                                });
+                            }
+                        }
+                    })
+                    .catch(function () {
+                        if (tr) {
+                            dpUpdatePendingOrderRow(tr, {
+                                import_html: '<span class="text-xs text-red-700"><i class="fas fa-times mr-1" aria-hidden="true"></i>Failed</span>'
+                            });
+                        }
+                    });
+            });
+        });
+
+        return chain.then(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Background import finished.';
+            }
+        });
+    }
+
+    function initDpPendingOrdersModal() {
+        var modal = document.getElementById('dp-pending-orders-modal');
+        if (!modal) return;
+        var backdrop = document.getElementById('dp-pending-orders-backdrop');
+        var closeBtn = document.getElementById('dp-pending-orders-close');
+        if (backdrop) backdrop.addEventListener('click', dpClosePendingOrdersModal);
+        if (closeBtn) closeBtn.addEventListener('click', dpClosePendingOrdersModal);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                dpClosePendingOrdersModal();
+            }
+        });
+    }
+
+    function dpFetchPendingOrders(tr, btn) {
+        if (!tr || !btn || btn.disabled) return;
+
+        var cell = tr.querySelector('.dp-sku-cell');
+        var itemCode = cell && cell.querySelector('.dp-h-item-code') ? String(cell.querySelector('.dp-h-item-code').value || '').trim() : '';
+        var sku = cell && cell.querySelector('.dp-sku') ? String(cell.querySelector('.dp-sku').value || '').trim() : '';
+        var color = cell && cell.querySelector('.dp-h-color') ? String(cell.querySelector('.dp-h-color').value || '').trim() : '';
+        var size = cell && cell.querySelector('.dp-h-size') ? String(cell.querySelector('.dp-h-size').value || '').trim() : '';
+        if (!itemCode && !sku) {
+            dpShowStatusModal('Select a product from SKU search or enter a SKU linked to an item code before fetching pending orders.', 'warning');
+            return;
+        }
+
+        var modal = document.getElementById('dp-pending-orders-modal');
+        var loading = document.getElementById('dp-pending-orders-loading');
+        var table = document.getElementById('dp-pending-orders-table');
+        var empty = document.getElementById('dp-pending-orders-empty');
+        var subtitle = document.getElementById('dp-pending-orders-subtitle');
+        var statusEl = document.getElementById('dp-pending-orders-import-status');
+        var title = document.getElementById('dp-pending-orders-title');
+
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+        if (loading) loading.classList.remove('hidden');
+        if (table) table.classList.add('hidden');
+        if (empty) empty.classList.add('hidden');
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.classList.add('hidden');
+        }
+        if (title) {
+            title.textContent = sku ? ('Pending orders — ' + sku) : 'Pending orders for SKU';
+        }
+        if (subtitle) {
+            subtitle.textContent = 'Loading…';
+        }
+
+        var icon = btn.querySelector('i');
+        var prevIconClass = icon ? icon.className : 'fas fa-clipboard-list text-xs';
+        btn.disabled = true;
+        if (icon) icon.className = 'fas fa-spinner fa-spin text-xs';
+
+        fetch(fetchPendingOrdersUrl(itemCode, sku, color, size), {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (loading) loading.classList.add('hidden');
+                if (!data || !data.success) {
+                    dpClosePendingOrdersModal();
+                    dpShowStatusModal((data && data.message) ? data.message : 'Could not fetch pending orders.', 'error');
+                    return;
+                }
+                if (subtitle) {
+                    var range = dpFormatUnixRange(data.from_date, data.to_date);
+                    var parts = [];
+                    if (data.item_code) parts.push('Item ' + data.item_code);
+                    if (range) parts.push(range);
+                    if (data.total != null) parts.push(data.total + ' order(s)');
+                    subtitle.textContent = parts.join(' · ');
+                }
+                dpRenderPendingOrdersTable(data.orders || []);
+                dpImportPendingOrdersSequential(data.orders || []);
+            })
+            .catch(function () {
+                if (loading) loading.classList.add('hidden');
+                dpClosePendingOrdersModal();
+                dpShowStatusModal('The pending orders request failed. Check your connection and try again.', 'error', 'Request failed');
+            })
+            .finally(function () {
+                btn.disabled = false;
+                if (icon) icon.className = prevIconClass;
             });
     }
 
@@ -831,6 +1156,12 @@ $dpLocked = !empty($data['purchase_locked']);
                 dpFetchLatestPrice(tr, fetchBtn);
             });
         }
+        var pendingBtn = tr.querySelector('.dp-fetch-pending-orders');
+        if (pendingBtn) {
+            pendingBtn.addEventListener('click', function () {
+                dpFetchPendingOrders(tr, pendingBtn);
+            });
+        }
     }
 
     function initDpImageLightbox() {
@@ -870,6 +1201,7 @@ $dpLocked = !empty($data['purchase_locked']);
 
     document.querySelectorAll('#line-items-body .dp-line').forEach(bindRow);
     initDpStatusModal();
+    initDpPendingOrdersModal();
     initDpImageLightbox();
     window.addEventListener('resize', syncAllOpenSkuSuggestBoxes);
     window.addEventListener('scroll', syncAllOpenSkuSuggestBoxes, true);

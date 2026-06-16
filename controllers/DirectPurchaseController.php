@@ -5,6 +5,7 @@ require_once 'models/direct_purchase/directPurchaseReturn.php';
 require_once 'models/vendor/vendor.php';
 require_once 'models/product/product.php';
 require_once 'models/comman/tables.php';
+require_once 'helpers/exotic_india_api.php';
 
 $directPurchaseModel = new DirectPurchase($conn);
 $directPurchaseReturnModel = new DirectPurchaseReturn($conn);
@@ -105,6 +106,222 @@ class DirectPurchaseController
         $result = $productModel->refreshVariantCostFromVendorApi($itemCode, $size, $color);
         echo json_encode($result, JSON_UNESCAPED_UNICODE);
         exit;
+    }
+
+    public function fetchPendingOrdersForSku()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        $itemCode = trim((string) ($_GET['item_code'] ?? $_POST['item_code'] ?? ''));
+        $sku = trim((string) ($_GET['sku'] ?? $_POST['sku'] ?? ''));
+        $color = trim((string) ($_GET['color'] ?? $_POST['color'] ?? ''));
+        $size = trim((string) ($_GET['size'] ?? $_POST['size'] ?? ''));
+
+        $productModel = new product($conn);
+        if ($itemCode === '' && $sku !== '') {
+            $bySku = $productModel->getProductByskuExact($sku);
+            if (is_array($bySku)) {
+                $itemCode = trim((string) ($bySku['item_code'] ?? ''));
+                if ($color === '') {
+                    $color = trim((string) ($bySku['color'] ?? ''));
+                }
+                if ($size === '') {
+                    $size = trim((string) ($bySku['size'] ?? ''));
+                }
+            }
+        }
+
+        if ($itemCode === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Select a product or enter a SKU with a linked item code first.',
+            ]);
+            exit;
+        }
+
+        $toDate = isset($_GET['to_date']) ? (int) $_GET['to_date'] : time();
+        $fromDate = isset($_GET['from_date']) ? (int) $_GET['from_date'] : strtotime('-90 days');
+        if ($fromDate <= 0) {
+            $fromDate = strtotime('-90 days');
+        }
+        if ($toDate <= 0) {
+            $toDate = time();
+        }
+        if ($fromDate > $toDate) {
+            $tmp = $fromDate;
+            $fromDate = $toDate;
+            $toDate = $tmp;
+        }
+
+        $postFields = [
+            'itemcode' => $itemCode,
+            'from_date' => $fromDate,
+            'to_date' => $toDate,
+        ];
+        if ($size !== '') {
+            $postFields['size'] = $size;
+        }
+        if ($color !== '') {
+            $postFields['color'] = $color;
+        }
+
+        $api = exotic_india_api_post(
+            'order/itemfetch',
+            http_build_query($postFields),
+            ['Content-Type: application/x-www-form-urlencoded']
+        );
+
+        if (!$api['success']) {
+            echo json_encode([
+                'success' => false,
+                'message' => $api['message'] ?? 'Could not fetch pending orders from vendor API.',
+            ]);
+            exit;
+        }
+
+        $apiOrders = $this->normalizeItemFetchOrders($api['data'] ?? []);
+        $orders = $this->compareItemFetchOrdersWithLocal($conn, $itemCode, $size, $color, $apiOrders);
+        $needsImport = array_values(array_filter($orders, static function (array $row): bool {
+            return !empty($row['needs_import']);
+        }));
+
+        echo json_encode([
+            'success' => true,
+            'item_code' => $itemCode,
+            'sku' => $sku,
+            'size' => $size,
+            'color' => $color,
+            'from_date' => $fromDate,
+            'to_date' => $toDate,
+            'orders' => $orders,
+            'needs_import_count' => count($needsImport),
+            'total' => count($orders),
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    public function importOrderForDirectPurchase()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $orderNumber = trim((string) ($_GET['orderid'] ?? $_POST['orderid'] ?? $_GET['order_number'] ?? $_POST['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
+            exit;
+        }
+
+        require_once __DIR__ . '/OrdersController.php';
+        $ordersController = new OrdersController();
+        $result = $ordersController->importSingleOrderForCheckoutWithRetry($orderNumber);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    /**
+     * @param array<string, mixed> $decoded
+     * @return list<array{order_number:string,qty:float}>
+     */
+    private function normalizeItemFetchOrders(array $decoded): array
+    {
+        $list = [];
+        if (isset($decoded['orders']) && is_array($decoded['orders'])) {
+            $list = $decoded['orders'];
+        } elseif (isset($decoded['data']) && is_array($decoded['data'])) {
+            $list = $decoded['data'];
+        } elseif ($decoded !== [] && array_keys($decoded) === range(0, count($decoded) - 1)) {
+            $list = $decoded;
+        }
+
+        $out = [];
+        foreach ($list as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $orderNumber = trim((string) ($row['orderid'] ?? $row['order_id'] ?? $row['order_number'] ?? $row['order_no'] ?? ''));
+            if ($orderNumber === '') {
+                continue;
+            }
+            $qty = (float) ($row['qty'] ?? $row['quantity'] ?? $row['order_qty'] ?? $row['item_qty'] ?? 0);
+            $out[] = [
+                'order_number' => $orderNumber,
+                'qty' => $qty,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param list<array{order_number:string,qty:float}> $apiOrders
+     * @return list<array<string, mixed>>
+     */
+    private function compareItemFetchOrdersWithLocal(
+        mysqli $conn,
+        string $itemCode,
+        string $size,
+        string $color,
+        array $apiOrders
+    ): array {
+        $stmt = $conn->prepare(
+            'SELECT COALESCE(SUM(quantity), 0) AS local_qty, COUNT(*) AS line_count
+             FROM vp_orders
+             WHERE order_number = ? AND item_code = ?
+               AND (TRIM(COALESCE(size, "")) = ? OR ? = "")
+               AND (TRIM(COALESCE(color, "")) = ? OR ? = "")'
+        );
+        if (!$stmt) {
+            return array_map(static function (array $row): array {
+                return array_merge($row, [
+                    'in_local_db' => false,
+                    'local_qty' => 0.0,
+                    'needs_import' => true,
+                    'match_status' => 'unknown',
+                ]);
+            }, $apiOrders);
+        }
+
+        $out = [];
+        foreach ($apiOrders as $row) {
+            $orderNumber = $row['order_number'];
+            $apiQty = (float) $row['qty'];
+            $localQty = 0.0;
+            $lineCount = 0;
+
+            $stmt->bind_param('ssssss', $orderNumber, $itemCode, $size, $size, $color, $color);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && ($dbRow = $res->fetch_assoc())) {
+                $localQty = (float) ($dbRow['local_qty'] ?? 0);
+                $lineCount = (int) ($dbRow['line_count'] ?? 0);
+            }
+
+            $inLocal = $lineCount > 0;
+            $qtyMatch = $inLocal && abs($localQty - $apiQty) < 0.001;
+            $needsImport = !$inLocal || !$qtyMatch;
+
+            if (!$inLocal) {
+                $matchStatus = 'missing';
+            } elseif (!$qtyMatch) {
+                $matchStatus = 'qty_mismatch';
+            } else {
+                $matchStatus = 'matched';
+            }
+
+            $out[] = [
+                'order_number' => $orderNumber,
+                'qty' => $apiQty,
+                'in_local_db' => $inLocal,
+                'local_qty' => $localQty,
+                'needs_import' => $needsImport,
+                'match_status' => $matchStatus,
+            ];
+        }
+        $stmt->close();
+
+        return $out;
     }
 
     public function add()

@@ -461,6 +461,12 @@ switch ($page) {
             case 'fetch_line_price':
                 $controller->fetchLinePrice();
                 break;
+            case 'fetch_pending_orders':
+                $controller->fetchPendingOrdersForSku();
+                break;
+            case 'import_order':
+                $controller->importOrderForDirectPurchase();
+                break;
             case 'return_list':
                 $controller->returnList();
                 break;
