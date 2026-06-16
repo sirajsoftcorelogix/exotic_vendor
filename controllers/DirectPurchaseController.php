@@ -182,8 +182,8 @@ class DirectPurchaseController
         }
 
         $apiOrders = $this->normalizeItemFetchOrders($api['data'] ?? [], $api['raw'] ?? '');
-        $apiOrders = $this->enrichItemFetchOrdersWithQty($itemCode, $size, $color, $apiOrders);
-        $orders = $this->compareItemFetchOrdersWithLocal($conn, $itemCode, $size, $color, $apiOrders);
+        $apiOrders = $this->enrichItemFetchOrdersWithQty($itemCode, $size, $color, $apiOrders, $sku);
+        $orders = $this->compareItemFetchOrdersWithLocal($conn, $itemCode, $size, $color, $apiOrders, $sku);
         $needsImport = array_values(array_filter($orders, static function (array $row): bool {
             return !empty($row['needs_import']);
         }));
@@ -294,9 +294,11 @@ class DirectPurchaseController
                 continue;
             }
             $qty = (float) ($row['qty'] ?? $row['quantity'] ?? $row['order_qty'] ?? $row['item_qty'] ?? 0);
+            $lineSku = trim((string) ($row['sku'] ?? $row['itemcode'] ?? $row['item_code'] ?? ''));
             $out[] = [
                 'order_number' => $orderNumber,
                 'qty' => $qty,
+                'sku' => $lineSku,
             ];
         }
 
@@ -306,16 +308,23 @@ class DirectPurchaseController
     /**
      * itemfetch only returns order IDs; load line qty from order/fetch cart when missing.
      *
-     * @param list<array{order_number:string,qty:float}> $orders
-     * @return list<array{order_number:string,qty:float}>
+     * @param list<array{order_number:string,qty:float,sku?:string}> $orders
+     * @return list<array{order_number:string,qty:float,sku?:string}>
      */
-    private function enrichItemFetchOrdersWithQty(string $itemCode, string $size, string $color, array $orders): array
-    {
+    private function enrichItemFetchOrdersWithQty(
+        string $itemCode,
+        string $size,
+        string $color,
+        array $orders,
+        string $fallbackSku = ''
+    ): array {
         $maxFetches = 25;
         $fetched = 0;
 
         foreach ($orders as &$row) {
-            if ((float) ($row['qty'] ?? 0) > 0) {
+            $hasQty = (float) ($row['qty'] ?? 0) > 0;
+            $hasSku = trim((string) ($row['sku'] ?? '')) !== '';
+            if ($hasQty && $hasSku) {
                 continue;
             }
             if ($fetched >= $maxFetches) {
@@ -327,9 +336,12 @@ class DirectPurchaseController
                 continue;
             }
 
-            $qty = $this->fetchLineQtyForOrderFromVendorApi($orderNumber, $itemCode, $size, $color);
-            if ($qty !== null) {
-                $row['qty'] = $qty;
+            $details = $this->fetchLineDetailsForOrderFromVendorApi($orderNumber, $itemCode, $size, $color);
+            if ($details !== null) {
+                $row['qty'] = $details['qty'];
+                $row['sku'] = $details['sku'];
+            } elseif ($fallbackSku !== '' && !$hasSku) {
+                $row['sku'] = $fallbackSku;
             }
             $fetched++;
         }
@@ -338,12 +350,15 @@ class DirectPurchaseController
         return $orders;
     }
 
-    private function fetchLineQtyForOrderFromVendorApi(
+    /**
+     * @return array{qty:float,sku:string}|null
+     */
+    private function fetchLineDetailsForOrderFromVendorApi(
         string $orderNumber,
         string $itemCode,
         string $size,
         string $color
-    ): ?float {
+    ): ?array {
         $api = exotic_india_api_post(
             'order/fetch',
             http_build_query([
@@ -368,6 +383,7 @@ class DirectPurchaseController
         }
 
         $totalQty = 0.0;
+        $lineSku = '';
         $matched = false;
         foreach ($cart as $item) {
             if (!is_array($item)) {
@@ -386,10 +402,20 @@ class DirectPurchaseController
                 continue;
             }
             $totalQty += (float) ($item['qty'] ?? $item['quantity'] ?? 0);
+            if ($lineSku === '') {
+                $lineSku = trim((string) ($item['sku'] ?? $item['itemcode'] ?? $item['item_code'] ?? ''));
+            }
             $matched = true;
         }
 
-        return $matched ? $totalQty : null;
+        if (!$matched) {
+            return null;
+        }
+
+        return [
+            'qty' => $totalQty,
+            'sku' => $lineSku !== '' ? $lineSku : $itemCode,
+        ];
     }
 
     /**
@@ -429,7 +455,8 @@ class DirectPurchaseController
         string $itemCode,
         string $size,
         string $color,
-        array $apiOrders
+        array $apiOrders,
+        string $fallbackSku = ''
     ): array {
         $stmt = $conn->prepare(
             'SELECT COALESCE(SUM(quantity), 0) AS local_qty, COUNT(*) AS line_count
@@ -478,6 +505,9 @@ class DirectPurchaseController
 
             $out[] = [
                 'order_number' => $orderNumber,
+                'sku' => trim((string) ($row['sku'] ?? '')) !== ''
+                    ? trim((string) $row['sku'])
+                    : ($fallbackSku !== '' ? $fallbackSku : $itemCode),
                 'qty' => $apiQty,
                 'in_local_db' => $inLocal,
                 'local_qty' => $localQty,
