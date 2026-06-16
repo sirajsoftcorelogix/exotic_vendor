@@ -352,6 +352,33 @@ $dpLocked = !empty($data['purchase_locked']);
     <img id="dp-img-lightbox-img" src="" alt="" class="max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl ring-1 ring-white/10">
 </div>
 
+<div id="dp-status-modal" class="fixed inset-0 z-[210] hidden items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="dp-status-modal-title" aria-describedby="dp-status-modal-message">
+    <button type="button" id="dp-status-modal-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" aria-label="Close dialog"></button>
+    <div class="relative w-full max-w-md overflow-hidden rounded-2xl border border-amber-200/40 bg-white shadow-2xl shadow-amber-900/10 ring-1 ring-black/5 animate-[dpModalIn_0.22s_ease-out]">
+        <div class="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-amber-200/30 blur-3xl" aria-hidden="true"></div>
+        <div class="relative px-6 pt-7 pb-5 text-center">
+            <div id="dp-status-modal-icon-wrap" class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border shadow-sm">
+                <i id="dp-status-modal-icon" class="text-2xl" aria-hidden="true"></i>
+            </div>
+            <h3 id="dp-status-modal-title" class="text-lg font-bold tracking-tight text-gray-900 mb-2"></h3>
+            <p id="dp-status-modal-message" class="text-sm text-gray-600 leading-relaxed whitespace-pre-line"></p>
+        </div>
+        <div class="relative border-t border-gray-100 bg-gradient-to-b from-gray-50/90 to-white px-6 py-4 flex justify-center">
+            <button type="button" id="dp-status-modal-ok"
+                class="inline-flex min-w-[7rem] items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
+                OK
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes dpModalIn {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+</style>
+
 <table class="hidden">
     <tbody id="line-item-template">
         <tr class="dp-line hover:bg-amber-50/30 transition-colors">
@@ -429,6 +456,77 @@ $dpLocked = !empty($data['purchase_locked']);
         return u.toString();
     }
 
+    var DP_STATUS_STYLES = {
+        error: {
+            title: 'Could not fetch price',
+            iconWrap: 'bg-red-50 border-red-200 text-red-600',
+            icon: 'fas fa-exclamation-circle'
+        },
+        warning: {
+            title: 'Action needed',
+            iconWrap: 'bg-amber-50 border-amber-200 text-amber-700',
+            icon: 'fas fa-info-circle'
+        },
+        success: {
+            title: 'Price updated',
+            iconWrap: 'bg-emerald-50 border-emerald-200 text-emerald-600',
+            icon: 'fas fa-check-circle'
+        }
+    };
+
+    function dpCloseStatusModal() {
+        var modal = document.getElementById('dp-status-modal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.style.overflow = '';
+    }
+
+    function dpShowStatusModal(message, type, titleOverride) {
+        var modal = document.getElementById('dp-status-modal');
+        var titleEl = document.getElementById('dp-status-modal-title');
+        var msgEl = document.getElementById('dp-status-modal-message');
+        var iconWrap = document.getElementById('dp-status-modal-icon-wrap');
+        var iconEl = document.getElementById('dp-status-modal-icon');
+        if (!modal || !titleEl || !msgEl || !iconWrap || !iconEl) {
+            window.alert(message || 'Notice');
+            return;
+        }
+
+        var style = DP_STATUS_STYLES[type] || DP_STATUS_STYLES.error;
+        titleEl.textContent = titleOverride || style.title;
+        msgEl.textContent = message || '';
+        iconWrap.className = 'mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border shadow-sm ' + style.iconWrap;
+        iconEl.className = style.icon + ' text-2xl';
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+
+        var okBtn = document.getElementById('dp-status-modal-ok');
+        if (okBtn) {
+            okBtn.focus();
+        }
+    }
+
+    function initDpStatusModal() {
+        var modal = document.getElementById('dp-status-modal');
+        if (!modal) return;
+        var backdrop = document.getElementById('dp-status-modal-backdrop');
+        var okBtn = document.getElementById('dp-status-modal-ok');
+        if (backdrop) {
+            backdrop.addEventListener('click', dpCloseStatusModal);
+        }
+        if (okBtn) {
+            okBtn.addEventListener('click', dpCloseStatusModal);
+        }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                dpCloseStatusModal();
+            }
+        });
+    }
+
     function dpFetchLatestPrice(tr, btn) {
         if (!tr || !btn || btn.disabled) {
             return;
@@ -439,7 +537,7 @@ $dpLocked = !empty($data['purchase_locked']);
         var color = cell && cell.querySelector('.dp-h-color') ? String(cell.querySelector('.dp-h-color').value || '').trim() : '';
         var size = cell && cell.querySelector('.dp-h-size') ? String(cell.querySelector('.dp-h-size').value || '').trim() : '';
         if (!itemCode && !sku) {
-            window.alert('Select a product or enter SKU first.');
+            dpShowStatusModal('Select a product from SKU search or enter a SKU that is linked to an item code before fetching price.', 'warning');
             return;
         }
 
@@ -460,7 +558,11 @@ $dpLocked = !empty($data['purchase_locked']);
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!data || !data.success) {
-                    window.alert((data && data.message) ? data.message : 'Could not fetch latest price.');
+                    var errMsg = (data && data.message) ? data.message : 'Could not fetch latest price.';
+                    var errTitle = (errMsg.indexOf('no cost price') !== -1 || errMsg.indexOf('(cp)') !== -1)
+                        ? 'No cost price from API'
+                        : 'Could not fetch price';
+                    dpShowStatusModal(errMsg, 'error', errTitle);
                     return;
                 }
                 var cost = tr.querySelector('.dp-cost');
@@ -482,7 +584,7 @@ $dpLocked = !empty($data['purchase_locked']);
                 recalcRow(tr);
             })
             .catch(function () {
-                window.alert('Could not fetch latest price. Try again.');
+                dpShowStatusModal('The price fetch request failed. Check your connection and try again.', 'error', 'Request failed');
             })
             .finally(function () {
                 btn.disabled = false;
@@ -767,6 +869,7 @@ $dpLocked = !empty($data['purchase_locked']);
     }
 
     document.querySelectorAll('#line-items-body .dp-line').forEach(bindRow);
+    initDpStatusModal();
     initDpImageLightbox();
     window.addEventListener('resize', syncAllOpenSkuSuggestBoxes);
     window.addEventListener('scroll', syncAllOpenSkuSuggestBoxes, true);
