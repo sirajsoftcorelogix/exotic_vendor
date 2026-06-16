@@ -3736,11 +3736,11 @@ class product
         return $result ? $result->fetch_assoc() : null;
     }
     /**
-     * Latest stock per warehouse for product detail (aligns with POS: one row per warehouse).
-     * running_stock is net IN/OUT/TRANSFER/OPENING quantity at that warehouse, not a duplicated global chain value.
+     * Latest running_stock per warehouse for product detail — same basis as POS stock report
+     * (latest vp_stock_movements row per warehouse + product_id, not a sum of quantities).
      *
      * @param int $productId
-     * @param string $sku Optional; resolved from product when empty
+     * @param string $sku Unused; kept for call-site compatibility
      * @return list<array<string,mixed>>
      */
     public function getLatestRunningStockByWarehouseLocation($productId, $sku = '')
@@ -3750,77 +3750,29 @@ class product
             return [];
         }
 
-        $sku = trim((string)$sku);
-        if ($sku === '') {
-            $prod = $this->getProduct($productId);
-            $sku = trim((string)($prod['sku'] ?? ''));
+        $sql = "SELECT 
+                    sm.id AS movement_id,
+                    sm.warehouse_id,
+                    COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
+                    sm.location,
+                    sm.running_stock,
+                    sm.updated_at,
+                    sm.created_at
+                FROM vp_stock_movements sm
+                INNER JOIN (
+                    SELECT warehouse_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE product_id = ?
+                    GROUP BY warehouse_id
+                ) latest ON latest.max_id = sm.id
+                LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
+                WHERE sm.product_id = ?
+                ORDER BY ea.address_title ASC, sm.location ASC";
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
         }
-
-        $inboundTypes = "'IN','TRANSFER_IN','OPENING_STOCK'";
-        $outboundTypes = "'OUT','TRANSFER_OUT'";
-
-        if ($sku !== '') {
-            $sql = "SELECT 
-                        sm.id AS movement_id,
-                        sm.warehouse_id,
-                        COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
-                        sm.location,
-                        agg.net_stock AS running_stock,
-                        sm.updated_at,
-                        sm.created_at
-                    FROM (
-                        SELECT 
-                            warehouse_id,
-                            MAX(id) AS max_id,
-                            SUM(CASE 
-                                WHEN movement_type IN ({$inboundTypes}) THEN quantity
-                                WHEN movement_type IN ({$outboundTypes}) THEN -quantity
-                                ELSE 0
-                            END) AS net_stock
-                        FROM vp_stock_movements
-                        WHERE product_id = ? OR sku = ?
-                        GROUP BY warehouse_id
-                    ) agg
-                    INNER JOIN vp_stock_movements sm ON sm.id = agg.max_id
-                    LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
-                    ORDER BY ea.address_title ASC, sm.location ASC";
-            $stmt = $this->db->prepare($sql);
-            if ($stmt === false) {
-                return [];
-            }
-            $stmt->bind_param('is', $productId, $sku);
-        } else {
-            $sql = "SELECT 
-                        sm.id AS movement_id,
-                        sm.warehouse_id,
-                        COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
-                        sm.location,
-                        agg.net_stock AS running_stock,
-                        sm.updated_at,
-                        sm.created_at
-                    FROM (
-                        SELECT 
-                            warehouse_id,
-                            MAX(id) AS max_id,
-                            SUM(CASE 
-                                WHEN movement_type IN ({$inboundTypes}) THEN quantity
-                                WHEN movement_type IN ({$outboundTypes}) THEN -quantity
-                                ELSE 0
-                            END) AS net_stock
-                        FROM vp_stock_movements
-                        WHERE product_id = ?
-                        GROUP BY warehouse_id
-                    ) agg
-                    INNER JOIN vp_stock_movements sm ON sm.id = agg.max_id
-                    LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
-                    ORDER BY ea.address_title ASC, sm.location ASC";
-            $stmt = $this->db->prepare($sql);
-            if ($stmt === false) {
-                return [];
-            }
-            $stmt->bind_param('i', $productId);
-        }
-
+        $stmt->bind_param('ii', $productId, $productId);
         $stmt->execute();
         $result = $stmt->get_result();
         $rows = [];
