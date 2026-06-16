@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aramex API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #ff9900;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-top: 10px;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #ff9900;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 15px;
+        }
+        button:hover {
+            background: #e68a00;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #ff9900;
+            border-radius: 4px;
+        }
+        .results pre {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .loading {
+            color: #007bff;
+            font-weight: bold;
+        }
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚚 Aramex API Test Suite</h1>
+        
+        <div class="two-column">
+            <div>
+                <h2>Test Parameters</h2>
+                
+                <div class="section">
+                    <label>Order Number</label>
+                    <input type="text" id="orderNumber" value="TEST-001" placeholder="e.g., TEST-001">
+                </div>
+
+                <div class="section">
+                    <label>Length (cm)</label>
+                    <input type="number" id="length" value="25" step="0.1">
+                </div>
+
+                <div class="section">
+                    <label>Breadth/Width (cm)</label>
+                    <input type="number" id="breadth" value="20" step="0.1">
+                </div>
+
+                <div class="section">
+                    <label>Height (cm)</label>
+                    <input type="number" id="height" value="15" step="0.1">
+                </div>
+
+                <div class="section">
+                    <label>Weight (kg)</label>
+                    <input type="number" id="weight" value="1" step="0.1">
+                </div>
+
+                <div class="section">
+                    <label>Destination Country</label>
+                    <select id="destCountry">
+                        <option value="US">USA</option>
+                        <option value="GB">UK</option>
+                        <option value="DE">Germany</option>
+                        <option value="FR">France</option>
+                        <option value="IN">India</option>
+                        <option value="AE">UAE</option>
+                        <option value="AU">Australia</option>
+                        <option value="CA">Canada</option>
+                    </select>
+                </div>
+
+                <button onclick="testAramexAPI()">🔍 Test Aramex API</button>
+            </div>
+
+            <div>
+                <h2>Test Results</h2>
+                <div id="resultsContainer" class="results" style="display:none;">
+                    <div id="statusMessage"></div>
+                    <pre id="resultsContent"></pre>
+                </div>
+                <div id="noResults" class="results" style="display:block; border-left-color: #ccc; color: #999;">
+                    <p>Run a test to see results here...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function testAramexAPI() {
+            const orderNumber = document.getElementById('orderNumber').value;
+            const length = parseFloat(document.getElementById('length').value);
+            const breadth = parseFloat(document.getElementById('breadth').value);
+            const height = parseFloat(document.getElementById('height').value);
+            const weight = parseFloat(document.getElementById('weight').value);
+            const destCountry = document.getElementById('destCountry').value;
+
+            // Validation
+            if (!orderNumber || length <= 0 || breadth <= 0 || height <= 0 || weight <= 0) {
+                showError('Please fill in all fields with valid values');
+                return;
+            }
+
+            showLoading('Testing Aramex API connection...');
+
+            const payload = {
+                order_number: orderNumber,
+                length: length,
+                breadth: breadth,
+                height: height,
+                weight: weight,
+                destination_country: destCountry
+            };
+
+            fetch('http://localhost/exotic_vendor/index.php?page=dispatch&action=test_aramex_api', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayResults(data);
+            })
+            .catch(error => {
+                showError('Network error: ' + error.message);
+            });
+        }
+
+        function showLoading(message) {
+            const container = document.getElementById('resultsContainer');
+            const noResults = document.getElementById('noResults');
+            const status = document.getElementById('statusMessage');
+            
+            status.innerHTML = '<div class="loading">' + message + '</div>';
+            container.style.display = 'block';
+            noResults.style.display = 'none';
+        }
+
+        function showError(message) {
+            const container = document.getElementById('resultsContainer');
+            const noResults = document.getElementById('noResults');
+            const status = document.getElementById('statusMessage');
+            const content = document.getElementById('resultsContent');
+            
+            status.innerHTML = '<div class="error">❌ Error: ' + message + '</div>';
+            content.textContent = '';
+            container.style.display = 'block';
+            noResults.style.display = 'none';
+        }
+
+        function displayResults(data) {
+            const container = document.getElementById('resultsContainer');
+            const noResults = document.getElementById('noResults');
+            const status = document.getElementById('statusMessage');
+            const content = document.getElementById('resultsContent');
+            
+            if (data.success) {
+                status.innerHTML = '<div class="success">✅ Success! Aramex API is working correctly.</div>';
+                content.textContent = JSON.stringify(data, null, 2);
+            } else {
+                status.innerHTML = '<div class="error">❌ Failed: ' + (data.message || 'Unknown error') + '</div>';
+                
+                // Try to format error details
+                let errorDetails = {
+                    message: data.message,
+                    debug: data.debug,
+                    test_results: data.test_results
+                };
+                
+                content.textContent = JSON.stringify(errorDetails, null, 2);
+            }
+            
+            container.style.display = 'block';
+            noResults.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

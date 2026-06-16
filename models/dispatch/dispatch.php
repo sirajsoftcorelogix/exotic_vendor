@@ -688,4 +688,12 @@ class Dispatch {
         }
         return false;
     }
+    public function getInternationalPickupLocations() {
+        // $sql = "SELECT id, location_name FROM vp_international_pickup_locations ORDER BY location_name ASC";
+        // $result = $this->db->query($sql);
+        // if ($result) {
+        //     return $result->fetch_all(MYSQLI_ASSOC);
+        // }
+        return [];
+    }
 }
