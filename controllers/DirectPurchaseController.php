@@ -68,6 +68,45 @@ class DirectPurchaseController
         exit;
     }
 
+    public function fetchLinePrice()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        $itemCode = trim((string) ($_GET['item_code'] ?? $_POST['item_code'] ?? ''));
+        $sku = trim((string) ($_GET['sku'] ?? $_POST['sku'] ?? ''));
+        $color = trim((string) ($_GET['color'] ?? $_POST['color'] ?? ''));
+        $size = trim((string) ($_GET['size'] ?? $_POST['size'] ?? ''));
+
+        $productModel = new product($conn);
+
+        if ($itemCode === '' && $sku !== '') {
+            $bySku = $productModel->getProductByskuExact($sku);
+            if (is_array($bySku)) {
+                $itemCode = trim((string) ($bySku['item_code'] ?? ''));
+                if ($color === '') {
+                    $color = trim((string) ($bySku['color'] ?? ''));
+                }
+                if ($size === '') {
+                    $size = trim((string) ($bySku['size'] ?? ''));
+                }
+            }
+        }
+
+        if ($itemCode === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Select a product or enter a SKU with a linked item code first.',
+            ]);
+            exit;
+        }
+
+        $result = $productModel->refreshVariantCostFromVendorApi($itemCode, $size, $color);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function add()
     {
         is_login();

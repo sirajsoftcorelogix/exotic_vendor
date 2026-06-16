@@ -77,7 +77,7 @@ class DirectPurchase
         $total = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
         $stmt->close();
 
-        $listSql = "SELECT DISTINCT p.*, v.vendor_name, v.contact_name
+        $listSql = "SELECT DISTINCT p.*, v.vendor_name, v.contact_name, v.vendor_id AS exotic_vendor_id
             FROM vp_direct_purchases p
             JOIN vp_vendors v ON v.id = p.vendor_id
             $joinItems

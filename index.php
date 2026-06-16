@@ -458,6 +458,9 @@ switch ($page) {
             case 'product_search':
                 $controller->productSearch();
                 break;
+            case 'fetch_line_price':
+                $controller->fetchLinePrice();
+                break;
             case 'return_list':
                 $controller->returnList();
                 break;
