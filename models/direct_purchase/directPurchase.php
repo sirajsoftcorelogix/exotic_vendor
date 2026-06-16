@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/DirectPurchaseStock.php';
+require_once __DIR__ . '/DirectPurchaseSchema.php';
 
 class DirectPurchase
 {
@@ -14,46 +15,7 @@ class DirectPurchase
 
     private function ensureSchema(): void
     {
-        static $checked = false;
-        if ($checked) {
-            return;
-        }
-        $checked = true;
-
-        $this->ensureTableColumn(
-            'vp_direct_purchases',
-            'warehouse_id',
-            'ALTER TABLE `vp_direct_purchases` ADD COLUMN `warehouse_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `vendor_id`'
-        );
-        $this->ensureTableColumn(
-            'vp_direct_purchases',
-            'currency',
-            'ALTER TABLE `vp_direct_purchases` ADD COLUMN `currency` VARCHAR(10) NOT NULL DEFAULT \'INR\' AFTER `invoice_file`'
-        );
-    }
-
-    private function ensureTableColumn(string $table, string $column, string $alterSql): void
-    {
-        $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
-        $safeColumn = preg_replace('/[^a-zA-Z0-9_]/', '', $column);
-        if ($safeTable === '' || $safeColumn === '') {
-            return;
-        }
-
-        $res = @$this->conn->query("SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeColumn}'");
-        if ($res && $res->num_rows > 0) {
-            $res->free();
-            return;
-        }
-
-        if (!@$this->conn->query($alterSql)) {
-            $err = (string) $this->conn->error;
-            if (stripos($err, 'Duplicate column') === false) {
-                throw new \RuntimeException(
-                    "Database schema update failed for {$safeTable}.{$safeColumn}: {$err}"
-                );
-            }
-        }
+        DirectPurchaseSchema::ensureAll($this->conn);
     }
 
     /**
@@ -176,6 +138,7 @@ class DirectPurchase
 
     public function countReturns(int $purchaseId): int
     {
+        $this->ensureSchema();
         $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_direct_purchase_returns WHERE direct_purchase_id = ?');
         if (!$stmt) {
             return 0;
@@ -193,6 +156,7 @@ class DirectPurchase
      */
     public function getReturnIdsForPurchase(int $purchaseId): array
     {
+        $this->ensureSchema();
         $stmt = $this->conn->prepare('SELECT id FROM vp_direct_purchase_returns WHERE direct_purchase_id = ? ORDER BY id ASC');
         if (!$stmt) {
             return [];
@@ -218,6 +182,7 @@ class DirectPurchase
      */
     public function getItemsWithReturnable(int $purchaseId): array
     {
+        $this->ensureSchema();
         $items = $this->getItems($purchaseId);
         $stmt = $this->conn->prepare(
             'SELECT ri.direct_purchase_item_id, SUM(ri.return_qty) AS sq
@@ -251,6 +216,7 @@ class DirectPurchase
 
     public function delete(int $id): bool
     {
+        $this->ensureSchema();
         $this->conn->begin_transaction();
         try {
             foreach ($this->getReturnIdsForPurchase($id) as $rid) {

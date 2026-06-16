@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/DirectPurchaseStock.php';
+require_once __DIR__ . '/DirectPurchaseSchema.php';
 
 class DirectPurchaseReturn
 {
@@ -10,10 +11,17 @@ class DirectPurchaseReturn
     public function __construct($conn)
     {
         $this->conn = $conn;
+        $this->ensureSchema();
+    }
+
+    private function ensureSchema(): void
+    {
+        DirectPurchaseSchema::ensureAll($this->conn);
     }
 
     public function countForPurchase(int $purchaseId): int
     {
+        $this->ensureSchema();
         $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_direct_purchase_returns WHERE direct_purchase_id = ?');
         if (!$stmt) {
             return 0;
@@ -153,6 +161,7 @@ class DirectPurchaseReturn
      */
     public function insertReturn(array $header, array $lines): int
     {
+        $this->ensureSchema();
         $this->conn->begin_transaction();
         try {
             $sql = 'INSERT INTO vp_direct_purchase_returns (
