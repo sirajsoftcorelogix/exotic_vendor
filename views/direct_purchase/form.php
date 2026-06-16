@@ -380,7 +380,7 @@ $dpLocked = !empty($data['purchase_locked']);
 
 <div id="dp-pending-orders-modal" class="fixed inset-0 z-[220] hidden items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="dp-pending-orders-title">
     <button type="button" id="dp-pending-orders-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" aria-label="Close dialog"></button>
-    <div class="relative flex w-full max-w-3xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-sky-200/40 bg-white shadow-2xl shadow-sky-900/10 ring-1 ring-black/5 animate-[dpModalIn_0.22s_ease-out]">
+    <div class="relative flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-sky-200/40 bg-white shadow-2xl shadow-sky-900/10 ring-1 ring-black/5 animate-[dpModalIn_0.22s_ease-out]">
         <div class="border-b border-gray-100 bg-gradient-to-r from-sky-50/80 to-white px-6 py-4">
             <h3 id="dp-pending-orders-title" class="text-lg font-bold tracking-tight text-gray-900">Pending orders for SKU</h3>
             <p id="dp-pending-orders-subtitle" class="mt-1 text-sm text-gray-600"></p>
@@ -395,10 +395,8 @@ $dpLocked = !empty($data['purchase_locked']);
                 <thead>
                     <tr class="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <th class="pb-2 pr-3">Order #</th>
-                        <th class="pb-2 pr-3 text-right">API Qty</th>
-                        <th class="pb-2 pr-3 text-right">Local Qty</th>
-                        <th class="pb-2 pr-3">In system</th>
-                        <th class="pb-2">Import</th>
+                        <th class="pb-2 pr-3">SKU</th>
+                        <th class="pb-2 text-right">Qty</th>
                     </tr>
                 </thead>
                 <tbody id="dp-pending-orders-tbody" class="divide-y divide-gray-100"></tbody>
@@ -678,22 +676,57 @@ $dpLocked = !empty($data['purchase_locked']);
         return fmt(fromTs) + ' – ' + fmt(toTs);
     }
 
-    function dpPendingOrderStatusLabel(row) {
-        if (!row) return '';
-        if (row.match_status === 'matched') return 'Matched';
-        if (row.match_status === 'qty_mismatch') return 'Qty mismatch';
-        if (row.match_status === 'missing') return 'Not in system';
-        return row.in_local_db ? 'In system' : 'Not in system';
+    function dpEscHtml(s) {
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/"/g, '&quot;');
     }
 
-    function dpPendingOrderStatusClass(row) {
-        if (!row) return 'text-gray-600';
-        if (row.match_status === 'matched') return 'text-emerald-700';
-        if (row.match_status === 'qty_mismatch') return 'text-amber-700';
-        return 'text-red-700';
+    function dpCopyOrderNumber(orderNumber, btn) {
+        var text = String(orderNumber || '').trim();
+        if (!text) return;
+
+        function flashCopied() {
+            if (!btn) return;
+            var icon = btn.querySelector('i');
+            if (!icon) return;
+            var prev = icon.className;
+            icon.className = 'fas fa-check text-xs text-emerald-600';
+            btn.setAttribute('title', 'Copied');
+            setTimeout(function () {
+                icon.className = prev;
+                btn.setAttribute('title', 'Copy order number');
+            }, 1200);
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(flashCopied).catch(function () {
+                dpShowStatusModal('Could not copy order number to clipboard.', 'warning');
+            });
+            return;
+        }
+
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            if (document.execCommand('copy')) {
+                flashCopied();
+            } else {
+                dpShowStatusModal('Could not copy order number to clipboard.', 'warning');
+            }
+        } catch (err) {
+            dpShowStatusModal('Could not copy order number to clipboard.', 'warning');
+        }
+        document.body.removeChild(ta);
     }
 
-    function dpRenderPendingOrdersTable(orders) {
+    function dpRenderPendingOrdersTable(orders, defaultSku) {
         var tbody = document.getElementById('dp-pending-orders-tbody');
         var table = document.getElementById('dp-pending-orders-table');
         var empty = document.getElementById('dp-pending-orders-empty');
@@ -715,16 +748,21 @@ $dpLocked = !empty($data['purchase_locked']);
             tr.setAttribute('data-order-number', row.order_number || '');
             tr.setAttribute('data-row-index', String(idx));
 
-            var importHtml = row.needs_import
-                ? '<span class="dp-po-import-status text-xs text-sky-700"><i class="fas fa-clock mr-1" aria-hidden="true"></i>Queued</span>'
-                : '<span class="text-xs text-emerald-700"><i class="fas fa-check mr-1" aria-hidden="true"></i>OK</span>';
+            var orderNo = row.order_number || '';
+            var lineSku = row.sku || defaultSku || '';
+            var qtyText = row.qty != null && row.qty !== '' ? row.qty : '—';
 
             tr.innerHTML =
-                '<td class="py-2 pr-3 font-medium text-gray-900">' + (row.order_number || '') + '</td>' +
-                '<td class="py-2 pr-3 text-right tabular-nums">' + (row.qty != null ? row.qty : '') + '</td>' +
-                '<td class="py-2 pr-3 text-right tabular-nums dp-po-local-qty">' + (row.in_local_db ? row.local_qty : '—') + '</td>' +
-                '<td class="py-2 pr-3 ' + dpPendingOrderStatusClass(row) + ' dp-po-match-status">' + dpPendingOrderStatusLabel(row) + '</td>' +
-                '<td class="py-2 dp-po-import-cell">' + importHtml + '</td>';
+                '<td class="py-2.5 pr-3">' +
+                    '<div class="flex items-center gap-2">' +
+                        '<span class="font-medium text-gray-900 tabular-nums">' + dpEscHtml(orderNo) + '</span>' +
+                        '<button type="button" class="dp-po-copy-order inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500" title="Copy order number" aria-label="Copy order number ' + dpEscHtml(orderNo) + '" data-order-number="' + dpEscHtml(orderNo) + '">' +
+                            '<i class="fas fa-copy text-xs" aria-hidden="true"></i>' +
+                        '</button>' +
+                    '</div>' +
+                '</td>' +
+                '<td class="py-2.5 pr-3 font-mono text-xs text-gray-700">' + dpEscHtml(lineSku) + '</td>' +
+                '<td class="py-2.5 text-right tabular-nums text-gray-900">' + dpEscHtml(qtyText) + '</td>';
 
             tbody.appendChild(tr);
         });
@@ -732,23 +770,8 @@ $dpLocked = !empty($data['purchase_locked']);
 
     function dpUpdatePendingOrderRow(tr, patch) {
         if (!tr || !patch) return;
-        if (patch.local_qty != null) {
-            var lq = tr.querySelector('.dp-po-local-qty');
-            if (lq) lq.textContent = String(patch.local_qty);
-        }
-        if (patch.match_status) {
-            var ms = tr.querySelector('.dp-po-match-status');
-            if (ms) {
-                ms.textContent = dpPendingOrderStatusLabel(patch);
-                ms.className = 'py-2 pr-3 dp-po-match-status ' + dpPendingOrderStatusClass(patch);
-            }
-            if (patch.match_status === 'matched') {
-                tr.classList.remove('bg-amber-50/60');
-            }
-        }
-        if (patch.import_html) {
-            var ic = tr.querySelector('.dp-po-import-cell');
-            if (ic) ic.innerHTML = patch.import_html;
+        if (patch.match_status === 'matched') {
+            tr.classList.remove('bg-amber-50/60');
         }
     }
 
@@ -773,11 +796,6 @@ $dpLocked = !empty($data['purchase_locked']);
             chain = chain.then(function () {
                 var tbody = document.getElementById('dp-pending-orders-tbody');
                 var tr = tbody ? tbody.querySelector('tr[data-order-number="' + CSS.escape(row.order_number) + '"]') : null;
-                if (tr) {
-                    dpUpdatePendingOrderRow(tr, {
-                        import_html: '<span class="dp-po-import-status text-xs text-sky-700"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>Importing…</span>'
-                    });
-                }
                 if (statusEl) {
                     statusEl.textContent = 'Importing order ' + (i + 1) + ' of ' + toImport.length + '…';
                 }
@@ -791,28 +809,11 @@ $dpLocked = !empty($data['purchase_locked']);
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
                         var ok = data && data.success;
-                        if (tr) {
-                            if (ok) {
-                                dpUpdatePendingOrderRow(tr, {
-                                    local_qty: row.qty,
-                                    match_status: 'matched',
-                                    import_html: '<span class="text-xs text-emerald-700"><i class="fas fa-check mr-1" aria-hidden="true"></i>Imported</span>'
-                                });
-                            } else {
-                                var msg = (data && data.message) ? data.message : 'Import failed';
-                                dpUpdatePendingOrderRow(tr, {
-                                    import_html: '<span class="text-xs text-red-700" title="' + msg.replace(/"/g, '&quot;') + '"><i class="fas fa-times mr-1" aria-hidden="true"></i>Failed</span>'
-                                });
-                            }
+                        if (tr && ok) {
+                            dpUpdatePendingOrderRow(tr, { match_status: 'matched' });
                         }
                     })
-                    .catch(function () {
-                        if (tr) {
-                            dpUpdatePendingOrderRow(tr, {
-                                import_html: '<span class="text-xs text-red-700"><i class="fas fa-times mr-1" aria-hidden="true"></i>Failed</span>'
-                            });
-                        }
-                    });
+                    .catch(function () { /* keep row highlighted on failure */ });
             });
         });
 
@@ -828,8 +829,17 @@ $dpLocked = !empty($data['purchase_locked']);
         if (!modal) return;
         var backdrop = document.getElementById('dp-pending-orders-backdrop');
         var closeBtn = document.getElementById('dp-pending-orders-close');
+        var tbody = document.getElementById('dp-pending-orders-tbody');
         if (backdrop) backdrop.addEventListener('click', dpClosePendingOrdersModal);
         if (closeBtn) closeBtn.addEventListener('click', dpClosePendingOrdersModal);
+        if (tbody) {
+            tbody.addEventListener('click', function (e) {
+                var btn = e.target.closest('.dp-po-copy-order');
+                if (!btn) return;
+                e.preventDefault();
+                dpCopyOrderNumber(btn.getAttribute('data-order-number') || '', btn);
+            });
+        }
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
                 dpClosePendingOrdersModal();
@@ -905,7 +915,7 @@ $dpLocked = !empty($data['purchase_locked']);
                     if (data.total != null) parts.push(data.total + ' order(s)');
                     subtitle.textContent = parts.join(' · ');
                 }
-                dpRenderPendingOrdersTable(data.orders || []);
+                dpRenderPendingOrdersTable(data.orders || [], data.sku || sku);
                 dpImportPendingOrdersSequential(data.orders || []);
             })
             .catch(function () {
