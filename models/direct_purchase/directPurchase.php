@@ -264,7 +264,13 @@ class DirectPurchase
 
             $this->insertItemRows($pid, $items);
             $stockLines = DirectPurchaseStock::buildStockLinesFromPostedItems($this->conn, $items);
-            DirectPurchaseStock::applyPurchaseIn($this->conn, $pid, (int) $header['warehouse_id'], $stockLines);
+            DirectPurchaseStock::applyPurchaseIn(
+                $this->conn,
+                $pid,
+                (int) $header['warehouse_id'],
+                $stockLines,
+                (int) ($header['created_by'] ?? 0)
+            );
             $this->conn->commit();
             return $pid;
         } catch (Throwable $e) {
@@ -317,7 +323,13 @@ class DirectPurchase
             $this->insertItemRows($id, $items);
             $fresh = $this->getItems($id);
             $stockLines = DirectPurchaseStock::buildStockLinesFromDbItems($this->conn, $fresh);
-            DirectPurchaseStock::applyPurchaseIn($this->conn, $id, (int) $header['warehouse_id'], $stockLines);
+            DirectPurchaseStock::applyPurchaseIn(
+                $this->conn,
+                $id,
+                (int) $header['warehouse_id'],
+                $stockLines,
+                (int) ($header['created_by'] ?? 0)
+            );
             $this->conn->commit();
         } catch (Throwable $e) {
             $this->conn->rollback();

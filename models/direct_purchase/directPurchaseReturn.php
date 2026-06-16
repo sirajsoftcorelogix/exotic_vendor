@@ -200,7 +200,13 @@ class DirectPurchaseReturn
             $ins->close();
 
             $stockLines = $this->buildReturnStockLines($rid);
-            DirectPurchaseStock::applyReturnOut($this->conn, $rid, (int) $header['warehouse_id'], $stockLines);
+            DirectPurchaseStock::applyReturnOut(
+                $this->conn,
+                $rid,
+                (int) $header['warehouse_id'],
+                $stockLines,
+                (int) ($header['created_by'] ?? 0)
+            );
 
             $this->conn->commit();
 
@@ -251,7 +257,14 @@ class DirectPurchaseReturn
                 (string) ($it['color'] ?? ''),
                 (string) ($it['size'] ?? '')
             );
-            $out[] = ['sku' => $sku, 'return_qty' => $rq, 'product_id' => $pid];
+            $out[] = [
+                'sku' => $sku,
+                'return_qty' => $rq,
+                'product_id' => $pid,
+                'item_code' => trim((string) ($it['item_code'] ?? '')),
+                'size' => trim((string) ($it['size'] ?? '')),
+                'color' => trim((string) ($it['color'] ?? '')),
+            ];
         }
 
         return $out;

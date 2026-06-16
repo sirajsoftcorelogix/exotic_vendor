@@ -248,7 +248,11 @@ class DirectPurchaseController
             }
         } catch (Throwable $e) {
             error_log('DirectPurchase save: ' . $e->getMessage());
-            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not save purchase.'];
+            $detail = trim($e->getMessage());
+            $_SESSION['direct_purchase_flash'] = [
+                'type' => 'error',
+                'text' => $detail !== '' ? ('Could not save purchase. ' . $detail) : 'Could not save purchase.',
+            ];
         }
 
         header('Location: ?page=direct_purchase&action=list');
