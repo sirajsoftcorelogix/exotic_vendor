@@ -28,9 +28,7 @@ $dpCurrencySym = dp_currency_symbol($dpCurrencyVal);
 $dpDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
 $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
 $warehouses = $data['warehouses'] ?? [];
-$defWh = (int) ($data['default_warehouse_id'] ?? 0);
 $dpLocked = !empty($data['purchase_locked']);
-$whSelected = (int) ($pData['warehouse_id'] ?? $defWh);
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Header band (stock transfer style) -->
@@ -109,9 +107,18 @@ $whSelected = (int) ($pData['warehouse_id'] ?? $defWh);
                     <select name="vendor_id" id="vendor_id" required class="<?= $inp ?> bg-white">
                         <option value="">Select vendor</option>
                         <?php foreach ($vendors as $v): ?>
+                            <?php
+                            $exoticVendorId = trim((string) ($v['vendor_id'] ?? ''));
+                            $vendorLabel = trim((string) ($v['vendor_name'] ?? ''));
+                            if ($exoticVendorId !== '' && $vendorLabel !== '') {
+                                $vendorLabel = $exoticVendorId . '-' . $vendorLabel;
+                            } elseif ($exoticVendorId !== '') {
+                                $vendorLabel = $exoticVendorId;
+                            }
+                            ?>
                             <option value="<?= (int) $v['id'] ?>"
                                 <?= ($purchase && (int) ($purchase['vendor_id'] ?? 0) === (int) $v['id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($v['vendor_name'] ?? '') ?>
+                                <?= htmlspecialchars($vendorLabel) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -121,8 +128,14 @@ $whSelected = (int) ($pData['warehouse_id'] ?? $defWh);
                     <select name="warehouse_id" id="warehouse_id" class="<?= $inp ?> bg-white" <?= $dpLocked ? 'disabled' : 'required' ?>>
                         <option value="">Select warehouse</option>
                         <?php foreach ($warehouses as $wh): ?>
-                            <option value="<?= (int) ($wh['id'] ?? 0) ?>"
-                                <?= $whSelected === (int) ($wh['id'] ?? 0) ? 'selected' : '' ?>>
+                            <?php
+                            $whId = (int) ($wh['id'] ?? 0);
+                            $isWhSelected = $isEdit
+                                ? ((int) ($pData['warehouse_id'] ?? 0) === $whId)
+                                : !empty($wh['is_default']);
+                            ?>
+                            <option value="<?= $whId ?>"
+                                <?= $isWhSelected ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($wh['address_title'] ?? ('#' . (int) ($wh['id'] ?? 0))) ?>
                             </option>
                         <?php endforeach; ?>
