@@ -2056,7 +2056,14 @@ class InboundingController {
             $API_data['itemtype'] ='product';
         }
         $API_data['title'] = $d['product_title'] ?? '';
-        $API_data['redirect'] = $d['redirect'] ?? '';
+        // Vendor API expects `redirect` in a strict format.
+        // If empty/invalid, omit the field to avoid "Invalid format for fields: redirect".
+        $redirect = trim((string) ($d['redirect'] ?? ''));
+        if ($redirect !== '' && preg_match('/^[A-Za-z0-9][A-Za-z0-9_\-\.]*$/', $redirect)) {
+            $API_data['redirect'] = $redirect;
+        } else {
+            unset($API_data['redirect']);
+        }
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
 
