@@ -4289,7 +4289,7 @@ class ProductsController
             $order['variants'] = $itemCode !== '' ? $productModel->getVariantsByItemCode($itemCode) : [];
             $order['warehouses'] = $productModel->getAllWarehouses();
             $order['stock_movements'] = $productModel->get_stock_movements($id);
-            $order['warehouse_location_stock'] = $productModel->getLatestRunningStockByWarehouseLocation((int)$id);
+            $order['warehouse_location_stock'] = $productModel->getLatestRunningStockByWarehouseLocation((int)$id, $sku);
             $catalogDisplay = $productModel->buildProductCatalogDisplayFields($order);
             $order['item_identification'] = $catalogDisplay['item_identification'];
             $order['search_category_display'] = $catalogDisplay['search_category'];

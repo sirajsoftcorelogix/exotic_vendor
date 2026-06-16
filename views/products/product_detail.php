@@ -529,6 +529,9 @@
         </div>
 
       <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+        <div class="px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600">
+          Running stock by warehouse (net of IN, OUT, transfers, and opening stock). Location is from the latest movement at each warehouse.
+        </div>
         <div class="overflow-x-auto">
           <table class="min-w-full text-sm">
             <thead class="bg-gray-100">
