@@ -12,6 +12,50 @@ class DirectPurchase
         $this->conn = $conn;
     }
 
+    private function ensureSchema(): void
+    {
+        static $checked = false;
+        if ($checked) {
+            return;
+        }
+        $checked = true;
+
+        $this->ensureTableColumn(
+            'vp_direct_purchases',
+            'warehouse_id',
+            'ALTER TABLE `vp_direct_purchases` ADD COLUMN `warehouse_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `vendor_id`'
+        );
+        $this->ensureTableColumn(
+            'vp_direct_purchases',
+            'currency',
+            'ALTER TABLE `vp_direct_purchases` ADD COLUMN `currency` VARCHAR(10) NOT NULL DEFAULT \'INR\' AFTER `invoice_file`'
+        );
+    }
+
+    private function ensureTableColumn(string $table, string $column, string $alterSql): void
+    {
+        $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+        $safeColumn = preg_replace('/[^a-zA-Z0-9_]/', '', $column);
+        if ($safeTable === '' || $safeColumn === '') {
+            return;
+        }
+
+        $res = @$this->conn->query("SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeColumn}'");
+        if ($res && $res->num_rows > 0) {
+            $res->free();
+            return;
+        }
+
+        if (!@$this->conn->query($alterSql)) {
+            $err = (string) $this->conn->error;
+            if (stripos($err, 'Duplicate column') === false) {
+                throw new \RuntimeException(
+                    "Database schema update failed for {$safeTable}.{$safeColumn}: {$err}"
+                );
+            }
+        }
+    }
+
     /**
      * @return array{rows: array<int, array<string, mixed>>, total: int}
      */
@@ -232,6 +276,7 @@ class DirectPurchase
      */
     public function insertPurchase(array $header, array $items): int
     {
+        $this->ensureSchema();
         $this->conn->begin_transaction();
         try {
             $sql = 'INSERT INTO vp_direct_purchases (
@@ -285,6 +330,7 @@ class DirectPurchase
      */
     public function updatePurchase(int $id, array $header, array $items): void
     {
+        $this->ensureSchema();
         $this->conn->begin_transaction();
         try {
             DirectPurchaseStock::reverseMovementsForRef($this->conn, DirectPurchaseStock::REF_PURCHASE, $id);
