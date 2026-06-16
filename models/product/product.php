@@ -704,6 +704,119 @@ class product
         }
         return $orderItems;
     }
+
+    /**
+     * Fetch vendor product/fetch API, sync vp_products (keep local stock), return latest cost for a variant line.
+     *
+     * @return array{success: bool, message?: string, cost_price?: float, cp?: float, gst?: float, hsn?: string}
+     */
+    public function refreshVariantCostFromVendorApi(string $itemCode, string $size = '', string $color = ''): array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Item code is required to fetch price.'];
+        }
+
+        $decoded = $this->fetchVendorProductApiPayload($itemCode);
+        if ($decoded === null) {
+            return ['success' => false, 'message' => 'Product fetch API request failed.'];
+        }
+
+        $productRows = self::normalizeVendorProductFetchItems($decoded);
+        if ($productRows === []) {
+            return ['success' => false, 'message' => 'No product data in API response.'];
+        }
+
+        $bulkConnection = $this->beginBulkProductUpdateConnection();
+        try {
+            $updateResult = $this->updateProductFromApi($productRows, ['preserve_local_stock' => true]);
+        } finally {
+            $this->endBulkProductUpdateConnection($bulkConnection);
+        }
+
+        if (!is_array($updateResult) || empty($updateResult['success'])) {
+            return [
+                'success' => false,
+                'message' => is_array($updateResult) ? (string) ($updateResult['message'] ?? 'Product update failed.') : 'Product update failed.',
+            ];
+        }
+
+        $row = $this->findByItemCodeSizeColor($itemCode, trim($size), trim($color));
+        if (!$row) {
+            $row = $this->findByItemCodeSizeColor($itemCode, '', '');
+        }
+        if (!$row || empty($row['id'])) {
+            return ['success' => false, 'message' => 'Product row not found after API sync.'];
+        }
+
+        $cp = (float) ($row['cp'] ?? 0);
+        $productId = (int) $row['id'];
+        if ($cp > 0) {
+            $stmt = $this->db->prepare('UPDATE vp_products SET cost_price = ? WHERE id = ?');
+            if ($stmt) {
+                $stmt->bind_param('di', $cp, $productId);
+                $stmt->execute();
+                $stmt->close();
+                $row['cost_price'] = $cp;
+            }
+        }
+
+        $cost = (float) ($row['cost_price'] ?? 0);
+        if ($cost <= 0 && $cp > 0) {
+            $cost = $cp;
+        }
+        if ($cost <= 0) {
+            return ['success' => false, 'message' => 'API returned no cost price (cp) for this product.'];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Latest cost price fetched from API.',
+            'cost_price' => $cost,
+            'cp' => $cp,
+            'gst' => (float) ($row['gst'] ?? 0),
+            'hsn' => trim((string) ($row['hsn'] ?? '')),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function fetchVendorProductApiPayload(string $itemCode): ?array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return null;
+        }
+
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemCode);
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return null;
+        }
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $response = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false || $httpCode < 200 || $httpCode >= 300) {
+            return null;
+        }
+
+        $decoded = json_decode($response, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
     public function updateProductFromApi($productData, array $options = [])
     {
         $updatedCount = 0;

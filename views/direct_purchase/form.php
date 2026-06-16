@@ -226,7 +226,15 @@ $dpLocked = !empty($data['purchase_locked']);
                                         <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                                     </div>
                                 </td>
-                                <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>"></td>
+                                <td class="px-3 py-2 align-top min-w-[8rem]">
+                                    <div class="flex items-center gap-1">
+                                        <input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost flex-1 min-w-0 <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>">
+                                        <button type="button" class="dp-fetch-price shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API" <?= $dpLocked ? 'disabled' : '' ?>>
+                                            <i class="fas fa-arrow-down text-xs" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                </td>
                                 <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.001" name="qty[]" class="dp-qty w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>"></td>
                                 <td class="px-3 py-2 align-top min-w-[8rem]"><input name="hsn[]" class="w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
                                 <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
@@ -250,7 +258,7 @@ $dpLocked = !empty($data['purchase_locked']);
                 </button>
             </div>
             <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                Type at least 2 characters to search products by SKU only. Line amounts recalc from cost, qty, and GST %; invoice totals below update automatically.
+                Type at least 2 characters to search products by SKU only. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest cost from the product API (updates <code class="text-[11px] bg-gray-100 px-1 rounded">vp_products</code>). Line amounts recalc from cost, qty, and GST %.
             </p>
 
             <div class="mt-6 pt-5 border-t border-gray-200">
@@ -365,7 +373,15 @@ $dpLocked = !empty($data['purchase_locked']);
                     <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                 </div>
             </td>
-            <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
+            <td class="px-3 py-2 align-top min-w-[8rem]">
+                <div class="flex items-center gap-1">
+                    <input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost flex-1 min-w-0 <?= $inpSm ?>" value="">
+                    <button type="button" class="dp-fetch-price shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API">
+                        <i class="fas fa-arrow-down text-xs" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </td>
             <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.001" name="qty[]" class="dp-qty w-full min-w-[5rem] <?= $inpSm ?>" value="1"></td>
             <td class="px-3 py-2 align-top min-w-[8rem]"><input name="hsn[]" class="w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value=""></td>
@@ -400,6 +416,80 @@ $dpLocked = !empty($data['purchase_locked']);
         u.searchParams.set('action', 'product_search');
         u.searchParams.set('q', q);
         return u.toString();
+    }
+
+    function fetchLinePriceUrl(itemCode, sku, color, size) {
+        var u = new URL(window.location.href);
+        u.searchParams.set('page', 'direct_purchase');
+        u.searchParams.set('action', 'fetch_line_price');
+        u.searchParams.set('item_code', itemCode || '');
+        u.searchParams.set('sku', sku || '');
+        u.searchParams.set('color', color || '');
+        u.searchParams.set('size', size || '');
+        return u.toString();
+    }
+
+    function dpFetchLatestPrice(tr, btn) {
+        if (!tr || !btn || btn.disabled) {
+            return;
+        }
+        var cell = tr.querySelector('.dp-sku-cell');
+        var itemCode = cell && cell.querySelector('.dp-h-item-code') ? String(cell.querySelector('.dp-h-item-code').value || '').trim() : '';
+        var sku = cell && cell.querySelector('.dp-sku') ? String(cell.querySelector('.dp-sku').value || '').trim() : '';
+        var color = cell && cell.querySelector('.dp-h-color') ? String(cell.querySelector('.dp-h-color').value || '').trim() : '';
+        var size = cell && cell.querySelector('.dp-h-size') ? String(cell.querySelector('.dp-h-size').value || '').trim() : '';
+        if (!itemCode && !sku) {
+            window.alert('Select a product or enter SKU first.');
+            return;
+        }
+
+        var icon = btn.querySelector('i');
+        var prevIconClass = icon ? icon.className : 'fas fa-arrow-down text-xs';
+        btn.disabled = true;
+        if (icon) {
+            icon.className = 'fas fa-spinner fa-spin text-xs';
+        }
+
+        fetch(fetchLinePriceUrl(itemCode, sku, color, size), {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.success) {
+                    window.alert((data && data.message) ? data.message : 'Could not fetch latest price.');
+                    return;
+                }
+                var cost = tr.querySelector('.dp-cost');
+                if (cost && data.cost_price != null && data.cost_price !== '') {
+                    cost.value = data.cost_price;
+                }
+                if (data.hsn) {
+                    var hsn = tr.querySelector('input[name="hsn[]"]');
+                    if (hsn && String(hsn.value || '').trim() === '') {
+                        hsn.value = String(data.hsn);
+                    }
+                }
+                if (data.gst != null && data.gst !== '') {
+                    var rate = tr.querySelector('.dp-rate');
+                    if (rate && String(rate.value || '').trim() === '') {
+                        rate.value = data.gst;
+                    }
+                }
+                recalcRow(tr);
+            })
+            .catch(function () {
+                window.alert('Could not fetch latest price. Try again.');
+            })
+            .finally(function () {
+                btn.disabled = false;
+                if (icon) {
+                    icon.className = prevIconClass;
+                }
+            });
     }
 
     function parseNum(el) {
@@ -633,6 +723,12 @@ $dpLocked = !empty($data['purchase_locked']);
         });
         var sku = tr.querySelector('.dp-sku');
         if (sku) initSkuSearch(sku);
+        var fetchBtn = tr.querySelector('.dp-fetch-price');
+        if (fetchBtn) {
+            fetchBtn.addEventListener('click', function () {
+                dpFetchLatestPrice(tr, fetchBtn);
+            });
+        }
     }
 
     function initDpImageLightbox() {
