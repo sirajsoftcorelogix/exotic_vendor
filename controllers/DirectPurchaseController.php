@@ -73,7 +73,7 @@ class DirectPurchaseController
         is_login();
         global $conn;
         global $directPurchaseVendorModel;
-        $vendors = $directPurchaseVendorModel->getAllVendors();
+        $vendors = $directPurchaseVendorModel->getActiveVendorsWithExoticVendorId();
         $commanModel = new Tables($conn);
         $warehouses = $commanModel->get_exotic_address();
         $defaultWarehouseId = (int) ($_SESSION['warehouse_id'] ?? ($_SESSION['user']['warehouse_id'] ?? 0));
