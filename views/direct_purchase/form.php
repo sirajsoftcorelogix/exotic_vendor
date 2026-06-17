@@ -505,7 +505,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
 }
 #line-items-table col.dp-col-img { width: 60px; }
 #line-items-table col.dp-col-sku { width: 24%; }
-#line-items-table col.dp-col-cost { width: 10.8%; }
+#line-items-table col.dp-col-cost { width: 12.96%; }
 #line-items-table col.dp-col-qty { width: 14%; }
 #line-items-table col.dp-col-hsn { width: 10%; }
 #line-items-table col.dp-col-gst { width: 6%; }
@@ -545,7 +545,11 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     min-width: 0;
 }
 #line-items-table .dp-col-cost .dp-cell-with-actions {
-    grid-template-columns: minmax(0, 1fr) 1.75rem;
+    grid-template-columns: 83.33% 1.75rem;
+}
+#line-items-table .dp-col-cost .dp-cell-with-actions > .dp-inp-cell {
+    width: 100%;
+    max-width: 100%;
 }
 #line-items-table .dp-col-qty .dp-cell-with-actions {
     grid-template-columns: 60% 1.75rem;
