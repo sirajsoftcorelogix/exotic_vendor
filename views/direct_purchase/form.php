@@ -193,7 +193,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                             <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-cost">Cost / item</th>
                             <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-qty">Qty</th>
                             <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-hsn">HSN</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">GST %</th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-gst">GST %</th>
                             <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-unit">Unit</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">Line total</th>
                             <th class="px-3 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 w-12"></th>
@@ -268,7 +268,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                     </div>
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell w-full <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
-                                <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
+                                <td class="px-1 py-2 align-top dp-col-gst"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate dp-inp-cell w-full <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
                                 <td class="px-1 py-2 align-top dp-col-unit"><input name="unit[]" class="dp-inp-cell w-full <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
                                 <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
                                 <td class="px-3 py-2 text-center align-top">
@@ -482,16 +482,20 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
 #line-items-table .dp-col-cost {
-    width: 8rem;
-    max-width: 8rem;
+    width: 9.5rem;
+    max-width: 9.5rem;
 }
 #line-items-table .dp-col-qty {
-    width: 5.75rem;
-    max-width: 5.75rem;
+    width: 6.75rem;
+    max-width: 6.75rem;
 }
 #line-items-table .dp-col-hsn {
     width: 5rem;
     max-width: 5rem;
+}
+#line-items-table .dp-col-gst {
+    width: 3.25rem;
+    max-width: 3.25rem;
 }
 #line-items-table .dp-col-unit {
     width: 3.75rem;
@@ -504,14 +508,14 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     font-size: 0.8125rem;
 }
 #line-items-table .dp-col-cost .dp-inp-compact {
+    width: 5.5rem;
+    max-width: 5.5rem;
+    flex: 0 0 5.5rem;
+}
+#line-items-table .dp-col-qty .dp-inp-compact {
     width: 4.25rem;
     max-width: 4.25rem;
     flex: 0 0 4.25rem;
-}
-#line-items-table .dp-col-qty .dp-inp-compact {
-    width: 3.5rem;
-    max-width: 3.5rem;
-    flex: 0 0 3.5rem;
 }
 #line-items-table .dp-inp-cell {
     min-width: 0;
@@ -588,7 +592,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 </div>
             </td>
             <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell w-full <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value=""></td>
+            <td class="px-1 py-2 align-top dp-col-gst"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate dp-inp-cell w-full <?= $inpSm ?>" value=""></td>
             <td class="px-1 py-2 align-top dp-col-unit"><input name="unit[]" class="dp-inp-cell w-full <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 text-center align-top">
