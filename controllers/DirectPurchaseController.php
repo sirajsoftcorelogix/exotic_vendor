@@ -807,6 +807,72 @@ class DirectPurchaseController
         exit;
     }
 
+    public function verifyVendorLine()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+        global $directPurchaseModel;
+
+        $itemId = (int) ($_GET['item_id'] ?? $_POST['item_id'] ?? 0);
+        $purchaseId = (int) ($_GET['purchase_id'] ?? $_POST['purchase_id'] ?? 0);
+        $formCost = (float) ($_GET['cost_per_item'] ?? $_POST['cost_per_item'] ?? 0);
+
+        $line = [];
+        if ($itemId > 0 && $purchaseId > 0) {
+            $item = $directPurchaseModel->getItemById($itemId);
+            if (!$item || (int) ($item['direct_purchase_id'] ?? 0) !== $purchaseId) {
+                echo json_encode(['success' => false, 'message' => 'Purchase line not found.']);
+                exit;
+            }
+            $line = $item;
+        } else {
+            $line = [
+                'item_code' => trim((string) ($_GET['item_code'] ?? $_POST['item_code'] ?? '')),
+                'sku' => trim((string) ($_GET['sku'] ?? $_POST['sku'] ?? '')),
+                'size' => trim((string) ($_GET['size'] ?? $_POST['size'] ?? '')),
+                'color' => trim((string) ($_GET['color'] ?? $_POST['color'] ?? '')),
+                'cost_per_item' => $formCost,
+            ];
+        }
+
+        $productModel = new product($conn);
+        $variant = $this->resolveDirectPurchaseVariant($line, $productModel);
+        if ($variant === null) {
+            echo json_encode(['success' => false, 'message' => 'Select a product or enter a SKU with a linked item code first.']);
+            exit;
+        }
+
+        $expectedCp = $formCost > 0 ? $formCost : (float) ($line['cost_per_item'] ?? 0);
+
+        $expectedLocalStock = null;
+        $row = $productModel->findByItemCodeSizeColor($variant['item_code'], $variant['size'], $variant['color']);
+        if (!$row) {
+            $row = $productModel->findByItemCodeSizeColor($variant['item_code'], '', '');
+        }
+        if (is_array($row) && !empty($row['id'])) {
+            $fresh = $productModel->getProduct((int) $row['id']);
+            if (is_array($fresh) && array_key_exists('local_stock', $fresh)) {
+                $expectedLocalStock = (float) $fresh['local_stock'];
+            }
+        }
+
+        $result = $productModel->verifyVendorCpAndStockAgainstExpected(
+            $variant['item_code'],
+            $variant['size'],
+            $variant['color'],
+            $expectedCp,
+            $expectedLocalStock
+        );
+
+        if (is_array($result)) {
+            $result['sku'] = trim((string) ($line['sku'] ?? $variant['sku'] ?? ''));
+        }
+
+        echo json_encode($result, JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function delete()
     {
         is_login();

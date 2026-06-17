@@ -190,8 +190,8 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                         <tr class="bg-gray-100">
                             <th class="px-2 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 w-16">Image</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[14rem]">SKU</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">Cost / item</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">Qty</th>
+                            <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-cost">Cost / item</th>
+                            <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-qty">Qty</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">HSN</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">GST %</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">Unit</th>
@@ -241,23 +241,29 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                         </button>
                                     </div>
                                 </td>
-                                <td class="px-3 py-2 align-top min-w-[8rem]">
-                                    <div class="flex items-center gap-1">
-                                        <input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost flex-1 min-w-0 <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>">
-                                        <button type="button" class="dp-fetch-price shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API" <?= $dpLocked ? 'disabled' : '' ?>>
-                                            <i class="fas fa-arrow-down text-xs" aria-hidden="true"></i>
-                                        </button>
+                                <td class="px-1 py-2 align-top dp-col-cost">
+                                    <div class="flex items-center gap-0.5">
+                                        <input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost dp-inp-compact <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>">
+                                        <div class="dp-cost-actions shrink-0">
+                                            <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API" <?= $dpLocked ? 'disabled' : '' ?>>
+                                                <i class="fas fa-arrow-down" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com" <?= $dpLocked ? 'disabled' : '' ?>>
+                                                <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 </td>
-                                <td class="px-3 py-2 align-top min-w-[7rem]">
-                                    <div class="flex items-center gap-1">
-                                        <input type="number" step="0.001" name="qty[]" class="dp-qty flex-1 min-w-[4rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>">
-                                        <button type="button" class="dp-sync-vendor-qty shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 <?= $dpVendorQtySynced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100' ?>"
+                                <td class="px-1 py-2 align-top dp-col-qty">
+                                    <div class="flex items-center gap-0.5">
+                                        <input type="number" step="0.001" name="qty[]" class="dp-qty dp-inp-compact <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>">
+                                        <button type="button" class="dp-sync-vendor-qty dp-line-mini-btn inline-flex items-center justify-center rounded-md border disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 <?= $dpVendorQtySynced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100' ?>"
                                             title="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : ($dpLineItemId > 0 ? 'Push qty to vendor API' : 'Save purchase first to sync qty') ?>"
                                             aria-label="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : 'Push qty to vendor API' ?>"
                                             <?= ($dpLocked || ($dpLineItemId <= 0 && !$dpVendorQtySynced)) ? 'disabled' : '' ?>>
-                                            <i class="fas <?= $dpVendorQtySynced ? 'fa-check' : 'fa-cloud-upload-alt' ?> text-xs" aria-hidden="true"></i>
+                                            <i class="fas <?= $dpVendorQtySynced ? 'fa-check' : 'fa-cloud-upload-alt' ?>" aria-hidden="true"></i>
                                         </button>
                                     </div>
                                 </td>
@@ -283,7 +289,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 </button>
             </div>
             <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                Type at least 2 characters to search products by SKU only. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest cost from the product API (updates <code class="text-[11px] bg-gray-100 px-1 rounded">vp_products</code>). Line amounts recalc from cost, qty, and GST %.
+                Type at least 2 characters to search products by SKU only. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest cost from the product API (updates <code class="text-[11px] bg-gray-100 px-1 rounded">vp_products</code>). Use <i class="fas fa-clipboard-check text-[10px]" aria-hidden="true"></i> to verify CP and local stock on exoticindia.com against this line and <code class="text-[11px] bg-gray-100 px-1 rounded">vp_products</code>. Line amounts recalc from cost, qty, and GST %.
             </p>
 
             <div class="mt-6 pt-5 border-t border-gray-200">
@@ -397,6 +403,46 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     </div>
 </div>
 
+<div id="dp-verify-vendor-modal" class="fixed inset-0 z-[220] hidden items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="dp-verify-vendor-title">
+    <button type="button" id="dp-verify-vendor-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" aria-label="Close dialog"></button>
+    <div class="relative flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-teal-200/40 bg-white shadow-2xl shadow-teal-900/10 ring-1 ring-black/5 animate-[dpModalIn_0.22s_ease-out]">
+        <div class="border-b border-gray-100 bg-gradient-to-r from-teal-50/80 to-white px-6 py-4">
+            <div class="flex items-start gap-3">
+                <div id="dp-verify-vendor-icon-wrap" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-700">
+                    <i id="dp-verify-vendor-icon" class="fas fa-clipboard-check" aria-hidden="true"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <h3 id="dp-verify-vendor-title" class="text-lg font-bold tracking-tight text-gray-900">Vendor verification</h3>
+                    <p id="dp-verify-vendor-subtitle" class="mt-1 text-sm text-gray-600"></p>
+                    <p id="dp-verify-vendor-message" class="mt-2 text-sm text-gray-700"></p>
+                </div>
+            </div>
+        </div>
+        <div class="flex-1 overflow-auto px-6 py-4">
+            <div id="dp-verify-vendor-loading" class="hidden py-10 text-center text-sm text-gray-500">
+                <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Checking exoticindia.com…
+            </div>
+            <table id="dp-verify-vendor-table" class="hidden w-full text-sm">
+                <thead>
+                    <tr class="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <th class="pb-2 pr-3">Field</th>
+                        <th class="pb-2 pr-3 text-right">Expected</th>
+                        <th class="pb-2 pr-3 text-right">Vendor</th>
+                        <th class="pb-2 text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="dp-verify-vendor-tbody" class="divide-y divide-gray-100"></tbody>
+            </table>
+        </div>
+        <div class="border-t border-gray-100 bg-gray-50/80 px-6 py-4 flex justify-end gap-2">
+            <button type="button" id="dp-verify-vendor-close"
+                class="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
 <div id="dp-pending-orders-modal" class="fixed inset-0 z-[220] hidden items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="dp-pending-orders-title">
     <button type="button" id="dp-pending-orders-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" aria-label="Close dialog"></button>
     <div class="relative flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-sky-200/40 bg-white shadow-2xl shadow-sky-900/10 ring-1 ring-black/5 animate-[dpModalIn_0.22s_ease-out]">
@@ -435,6 +481,43 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     from { opacity: 0; transform: translateY(8px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
+#line-items-table .dp-col-cost {
+    width: 6.25rem;
+    max-width: 6.25rem;
+}
+#line-items-table .dp-col-qty {
+    width: 4.5rem;
+    max-width: 4.5rem;
+}
+#line-items-table .dp-inp-compact {
+    width: 3rem;
+    min-width: 0;
+    max-width: 3rem;
+    flex: 0 0 3rem;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+    font-size: 0.8125rem;
+}
+#line-items-table .dp-col-qty .dp-inp-compact {
+    width: 2.35rem;
+    max-width: 2.35rem;
+    flex-basis: 2.35rem;
+}
+#line-items-table .dp-line-mini-btn {
+    width: 1.5rem;
+    height: 1.5rem;
+    min-width: 1.5rem;
+    padding: 0;
+    line-height: 1;
+}
+#line-items-table .dp-line-mini-btn i {
+    font-size: 0.625rem;
+}
+#line-items-table .dp-cost-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
 </style>
 
 <table class="hidden">
@@ -464,21 +547,27 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                     </button>
                 </div>
             </td>
-            <td class="px-3 py-2 align-top min-w-[8rem]">
-                <div class="flex items-center gap-1">
-                    <input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost flex-1 min-w-0 <?= $inpSm ?>" value="">
-                    <button type="button" class="dp-fetch-price shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API">
-                        <i class="fas fa-arrow-down text-xs" aria-hidden="true"></i>
-                    </button>
+            <td class="px-1 py-2 align-top dp-col-cost">
+                <div class="flex items-center gap-0.5">
+                    <input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost dp-inp-compact <?= $inpSm ?>" value="">
+                    <div class="dp-cost-actions shrink-0">
+                        <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API">
+                            <i class="fas fa-arrow-down" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com">
+                            <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
             </td>
-            <td class="px-3 py-2 align-top min-w-[7rem]">
-                <div class="flex items-center gap-1">
-                    <input type="number" step="0.001" name="qty[]" class="dp-qty flex-1 min-w-[4rem] <?= $inpSm ?>" value="1">
-                    <button type="button" class="dp-sync-vendor-qty shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            <td class="px-1 py-2 align-top dp-col-qty">
+                <div class="flex items-center gap-0.5">
+                    <input type="number" step="0.001" name="qty[]" class="dp-qty dp-inp-compact <?= $inpSm ?>" value="1">
+                    <button type="button" class="dp-sync-vendor-qty dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Save purchase first to sync qty" aria-label="Push qty to vendor API" disabled>
-                        <i class="fas fa-cloud-upload-alt text-xs" aria-hidden="true"></i>
+                        <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
                     </button>
                 </div>
             </td>
@@ -693,6 +782,188 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
         u.searchParams.set('item_id', String(itemId || ''));
         u.searchParams.set('purchase_id', String(purchaseId || ''));
         return u.toString();
+    }
+
+    function syncVendorQtyUrl(itemId, purchaseId) {
+        var u = new URL(window.location.href);
+        u.searchParams.set('page', 'direct_purchase');
+        u.searchParams.set('action', 'sync_vendor_qty');
+        u.searchParams.set('item_id', String(itemId || ''));
+        u.searchParams.set('purchase_id', String(purchaseId || ''));
+        return u.toString();
+    }
+
+    function verifyVendorLineUrl(tr) {
+        var u = new URL(window.location.href);
+        u.searchParams.set('page', 'direct_purchase');
+        u.searchParams.set('action', 'verify_vendor_line');
+        var itemId = parseInt(tr.getAttribute('data-dp-item-id') || '0', 10);
+        if (itemId > 0 && DP_PURCHASE_ID > 0) {
+            u.searchParams.set('item_id', String(itemId));
+            u.searchParams.set('purchase_id', String(DP_PURCHASE_ID));
+        } else {
+            var itemCodeEl = tr.querySelector('.dp-h-item-code');
+            var skuEl = tr.querySelector('.dp-sku');
+            var colorEl = tr.querySelector('.dp-h-color');
+            var sizeEl = tr.querySelector('.dp-h-size');
+            u.searchParams.set('item_code', itemCodeEl ? String(itemCodeEl.value || '').trim() : '');
+            u.searchParams.set('sku', skuEl ? String(skuEl.value || '').trim() : '');
+            u.searchParams.set('color', colorEl ? String(colorEl.value || '').trim() : '');
+            u.searchParams.set('size', sizeEl ? String(sizeEl.value || '').trim() : '');
+        }
+        var costEl = tr.querySelector('.dp-cost');
+        var costVal = costEl ? String(costEl.value || '').trim() : '';
+        if (costVal !== '') {
+            u.searchParams.set('cost_per_item', costVal);
+        }
+        return u.toString();
+    }
+
+    function dpFormatVerifyNumber(val) {
+        if (val === null || val === undefined || val === '') return '—';
+        var n = parseFloat(val);
+        if (isNaN(n)) return String(val);
+        return Number.isInteger(n) ? String(n) : n.toFixed(4).replace(/\.?0+$/, '');
+    }
+
+    function dpCloseVerifyVendorModal() {
+        var modal = document.getElementById('dp-verify-vendor-modal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.style.overflow = '';
+    }
+
+    function dpOpenVerifyVendorModalLoading(subtitle) {
+        var modal = document.getElementById('dp-verify-vendor-modal');
+        var loading = document.getElementById('dp-verify-vendor-loading');
+        var table = document.getElementById('dp-verify-vendor-table');
+        var subtitleEl = document.getElementById('dp-verify-vendor-subtitle');
+        var messageEl = document.getElementById('dp-verify-vendor-message');
+        var iconWrap = document.getElementById('dp-verify-vendor-icon-wrap');
+        var icon = document.getElementById('dp-verify-vendor-icon');
+        if (!modal) return;
+        if (subtitleEl) subtitleEl.textContent = subtitle || '';
+        if (messageEl) messageEl.textContent = '';
+        if (loading) loading.classList.remove('hidden');
+        if (table) table.classList.add('hidden');
+        if (iconWrap) {
+            iconWrap.className = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-700';
+        }
+        if (icon) icon.className = 'fas fa-clipboard-check';
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function dpRenderVerifyVendorModal(data) {
+        var loading = document.getElementById('dp-verify-vendor-loading');
+        var table = document.getElementById('dp-verify-vendor-table');
+        var tbody = document.getElementById('dp-verify-vendor-tbody');
+        var subtitleEl = document.getElementById('dp-verify-vendor-subtitle');
+        var messageEl = document.getElementById('dp-verify-vendor-message');
+        var iconWrap = document.getElementById('dp-verify-vendor-icon-wrap');
+        var icon = document.getElementById('dp-verify-vendor-icon');
+        if (loading) loading.classList.add('hidden');
+
+        var itemCode = (data && data.item_code) ? String(data.item_code) : '';
+        var sku = (data && data.sku) ? String(data.sku) : '';
+        var size = (data && data.size) ? String(data.size) : '';
+        var color = (data && data.color) ? String(data.color) : '';
+        var parts = [itemCode || sku];
+        if (size) parts.push('size ' + size);
+        if (color) parts.push(color);
+        if (subtitleEl) subtitleEl.textContent = parts.filter(Boolean).join(' · ');
+
+        var allMatch = !!(data && data.success);
+        var partial = data && data.checks;
+        if (messageEl) {
+            messageEl.textContent = (data && data.message) ? data.message : (allMatch ? 'Vendor values match.' : 'Vendor verification failed.');
+            messageEl.className = 'mt-2 text-sm ' + (allMatch ? 'text-emerald-700 font-medium' : 'text-amber-800 font-medium');
+        }
+        if (iconWrap && icon) {
+            if (allMatch) {
+                iconWrap.className = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700';
+                icon.className = 'fas fa-check';
+            } else if (partial) {
+                iconWrap.className = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-700';
+                icon.className = 'fas fa-exclamation-triangle';
+            } else {
+                iconWrap.className = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-700';
+                icon.className = 'fas fa-times';
+            }
+        }
+
+        if (!tbody || !partial) {
+            if (table) table.classList.add('hidden');
+            return;
+        }
+
+        var rows = [];
+        ['cp', 'local_stock'].forEach(function (key) {
+            var check = partial[key];
+            if (!check) return;
+            var statusHtml;
+            if (!check.checked) {
+                statusHtml = '<span class="text-xs text-gray-400">Skipped</span>';
+            } else if (check.match) {
+                statusHtml = '<span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><i class="fas fa-check" aria-hidden="true"></i>Match</span>';
+            } else {
+                statusHtml = '<span class="inline-flex items-center gap-1 text-xs font-semibold text-red-700"><i class="fas fa-times" aria-hidden="true"></i>Mismatch</span>';
+            }
+            var note = check.note ? '<div class="text-xs text-gray-400 mt-0.5">' + dpEscHtml(check.note) + '</div>' : '';
+            rows.push(
+                '<tr>' +
+                '<td class="py-2.5 pr-3 align-top font-medium text-gray-800">' + dpEscHtml(check.label || key) + note + '</td>' +
+                '<td class="py-2.5 pr-3 align-top text-right tabular-nums text-gray-700">' + dpEscHtml(dpFormatVerifyNumber(check.expected)) + '</td>' +
+                '<td class="py-2.5 pr-3 align-top text-right tabular-nums text-gray-900 font-medium">' + dpEscHtml(dpFormatVerifyNumber(check.vendor)) + '</td>' +
+                '<td class="py-2.5 text-center align-top">' + statusHtml + '</td>' +
+                '</tr>'
+            );
+        });
+
+        tbody.innerHTML = rows.join('');
+        if (table) table.classList.remove('hidden');
+    }
+
+    function dpVerifyVendorLine(tr, btn) {
+        if (!tr || !btn || btn.disabled) return;
+        var itemCodeEl = tr.querySelector('.dp-h-item-code');
+        var skuEl = tr.querySelector('.dp-sku');
+        var itemCode = itemCodeEl ? String(itemCodeEl.value || '').trim() : '';
+        var sku = skuEl ? String(skuEl.value || '').trim() : '';
+        if (!itemCode && !sku) {
+            dpShowStatusModal('Select a product from SKU search or enter a SKU linked to an item code before verifying vendor data.', 'warning');
+            return;
+        }
+
+        var icon = btn.querySelector('i');
+        var prevIconClass = icon ? icon.className : 'fas fa-clipboard-check text-xs';
+        btn.disabled = true;
+        if (icon) icon.className = 'fas fa-spinner fa-spin text-xs';
+
+        var subtitle = itemCode || sku;
+        dpOpenVerifyVendorModalLoading(subtitle);
+
+        fetch(verifyVendorLineUrl(tr), {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                dpRenderVerifyVendorModal(data || {});
+            })
+            .catch(function () {
+                dpCloseVerifyVendorModal();
+                dpShowStatusModal('The vendor verification request failed. Check your connection and try again.', 'error', 'Request failed');
+            })
+            .finally(function () {
+                btn.disabled = false;
+                if (icon) icon.className = prevIconClass;
+            });
     }
 
     function dpParseQty(val) {
@@ -1004,6 +1275,20 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
                 dpClosePendingOrdersModal();
+            }
+        });
+    }
+
+    function initDpVerifyVendorModal() {
+        var modal = document.getElementById('dp-verify-vendor-modal');
+        if (!modal) return;
+        var backdrop = document.getElementById('dp-verify-vendor-backdrop');
+        var closeBtn = document.getElementById('dp-verify-vendor-close');
+        if (backdrop) backdrop.addEventListener('click', dpCloseVerifyVendorModal);
+        if (closeBtn) closeBtn.addEventListener('click', dpCloseVerifyVendorModal);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                dpCloseVerifyVendorModal();
             }
         });
     }
@@ -1344,6 +1629,12 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 dpSyncVendorQty(tr, qtySyncBtn);
             });
         }
+        var verifyBtn = tr.querySelector('.dp-verify-vendor');
+        if (verifyBtn) {
+            verifyBtn.addEventListener('click', function () {
+                dpVerifyVendorLine(tr, verifyBtn);
+            });
+        }
         dpUpdateVendorQtySyncButton(tr);
     }
 
@@ -1385,6 +1676,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     document.querySelectorAll('#line-items-body .dp-line').forEach(bindRow);
     initDpStatusModal();
     initDpPendingOrdersModal();
+    initDpVerifyVendorModal();
     initDpImageLightbox();
     window.addEventListener('resize', syncAllOpenSkuSuggestBoxes);
     window.addEventListener('scroll', syncAllOpenSkuSuggestBoxes, true);

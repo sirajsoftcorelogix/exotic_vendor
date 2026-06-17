@@ -4065,6 +4065,160 @@ class product
         ];
     }
 
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getVendorApiVariantRow(string $itemCode, string $size = '', string $color = ''): ?array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return null;
+        }
+
+        $decoded = $this->fetchVendorProductApiPayload($itemCode);
+        if ($decoded === null) {
+            return null;
+        }
+
+        $rows = self::normalizeVendorProductFetchItems($decoded);
+        if ($rows === []) {
+            return null;
+        }
+
+        $size = trim($size);
+        $color = trim($color);
+        $fallback = null;
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $rowSize = trim((string) ($row['size'] ?? ''));
+            $rowColor = trim((string) ($row['color'] ?? ''));
+            if ($size !== '' && strcasecmp($rowSize, $size) !== 0) {
+                continue;
+            }
+            if ($color !== '' && strcasecmp($rowColor, $color) !== 0) {
+                continue;
+            }
+            if ($size === '' && $color === '' && $fallback === null) {
+                $fallback = $row;
+                continue;
+            }
+            if ($size !== '' || $color !== '') {
+                return $row;
+            }
+            $fallback = $row;
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * Compare vendor product/fetch CP and local_stock with purchase line expectations.
+     *
+     * @return array<string, mixed>
+     */
+    public function verifyVendorCpAndStockAgainstExpected(
+        string $itemCode,
+        string $size,
+        string $color,
+        float $expectedCp,
+        ?float $expectedLocalStock = null
+    ): array {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Item code is required to verify vendor data.'];
+        }
+
+        $vendorRow = $this->getVendorApiVariantRow($itemCode, $size, $color);
+        if ($vendorRow === null) {
+            return [
+                'success' => false,
+                'message' => 'Could not load product from vendor API (product/fetch).',
+                'item_code' => $itemCode,
+            ];
+        }
+
+        $vendorCp = (float) ($vendorRow['cp'] ?? 0);
+        $vendorStock = (float) ($vendorRow['local_stock'] ?? 0);
+        $checks = [];
+        $allMatch = true;
+        $anyChecked = false;
+
+        if ($expectedCp > 0) {
+            $cpMatch = abs($vendorCp - $expectedCp) < 0.01;
+            $checks['cp'] = [
+                'label' => 'CP (cost price)',
+                'checked' => true,
+                'expected' => $expectedCp,
+                'vendor' => $vendorCp,
+                'match' => $cpMatch,
+            ];
+            $anyChecked = true;
+            if (!$cpMatch) {
+                $allMatch = false;
+            }
+        } else {
+            $checks['cp'] = [
+                'label' => 'CP (cost price)',
+                'checked' => false,
+                'expected' => 0.0,
+                'vendor' => $vendorCp,
+                'match' => null,
+                'note' => 'No cost on this line to verify.',
+            ];
+        }
+
+        if ($expectedLocalStock !== null) {
+            $stockMatch = abs($vendorStock - $expectedLocalStock) < 0.01;
+            $checks['local_stock'] = [
+                'label' => 'Local stock',
+                'checked' => true,
+                'expected' => $expectedLocalStock,
+                'vendor' => $vendorStock,
+                'local_db' => $expectedLocalStock,
+                'match' => $stockMatch,
+            ];
+            $anyChecked = true;
+            if (!$stockMatch) {
+                $allMatch = false;
+            }
+        } else {
+            $checks['local_stock'] = [
+                'label' => 'Local stock',
+                'checked' => false,
+                'expected' => null,
+                'vendor' => $vendorStock,
+                'local_db' => null,
+                'match' => null,
+                'note' => 'No local product row to compare stock.',
+            ];
+        }
+
+        if (!$anyChecked) {
+            return [
+                'success' => false,
+                'message' => 'Nothing to verify — enter a cost and/or link a product with local stock.',
+                'item_code' => $itemCode,
+                'checks' => $checks,
+            ];
+        }
+
+        $message = $allMatch
+            ? 'Vendor CP and stock match expected values on exoticindia.com.'
+            : 'Vendor values on exoticindia.com do not fully match expected CP/stock.';
+
+        return [
+            'success' => $allMatch,
+            'message' => $message,
+            'item_code' => $itemCode,
+            'size' => trim($size),
+            'color' => trim($color),
+            'checks' => $checks,
+        ];
+    }
+
     public function modifyProduct($id, $data)
     {
         // Build UPDATE query dynamically

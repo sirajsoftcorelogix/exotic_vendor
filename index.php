@@ -470,6 +470,9 @@ switch ($page) {
             case 'sync_vendor_qty':
                 $controller->syncVendorQtyForItem();
                 break;
+            case 'verify_vendor_line':
+                $controller->verifyVendorLine();
+                break;
             case 'return_list':
                 $controller->returnList();
                 break;
