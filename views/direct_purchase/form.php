@@ -505,8 +505,8 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
 }
 #line-items-table col.dp-col-img { width: 60px; }
 #line-items-table col.dp-col-sku { width: 24%; }
-#line-items-table col.dp-col-cost { width: 9%; }
-#line-items-table col.dp-col-qty { width: 7%; }
+#line-items-table col.dp-col-cost { width: 10.8%; }
+#line-items-table col.dp-col-qty { width: 14%; }
 #line-items-table col.dp-col-hsn { width: 10%; }
 #line-items-table col.dp-col-gst { width: 6%; }
 #line-items-table col.dp-col-unit { width: 8%; }
