@@ -548,7 +548,11 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     grid-template-columns: minmax(0, 1fr) 1.75rem;
 }
 #line-items-table .dp-col-qty .dp-cell-with-actions {
-    grid-template-columns: minmax(0, 1fr) 1.75rem;
+    grid-template-columns: 60% 1.75rem;
+}
+#line-items-table .dp-col-qty .dp-cell-with-actions > .dp-inp-cell {
+    width: 100%;
+    max-width: 100%;
 }
 #line-items-table .dp-cell-with-actions > .dp-inp-cell {
     width: 100%;
