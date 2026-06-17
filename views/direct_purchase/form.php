@@ -270,12 +270,14 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                 <td class="px-1 py-2 align-top dp-col-qty dp-col-numeric">
                                     <div class="dp-cell-with-actions">
                                         <input type="number" step="0.001" name="qty[]" class="dp-qty dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>">
+                                        <div class="dp-cell-actions-slot">
                                         <button type="button" class="dp-sync-vendor-qty dp-line-mini-btn inline-flex items-center justify-center rounded-md border disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 <?= $dpVendorQtySynced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100' ?>"
                                             title="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : ($dpLineItemId > 0 ? 'Push qty to vendor API' : 'Save purchase first to sync qty') ?>"
                                             aria-label="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : 'Push qty to vendor API' ?>"
                                             <?= ($dpLocked || ($dpLineItemId <= 0 && !$dpVendorQtySynced)) ? 'disabled' : '' ?>>
                                             <i class="fas <?= $dpVendorQtySynced ? 'fa-check' : 'fa-cloud-upload-alt' ?>" aria-hidden="true"></i>
                                         </button>
+                                        </div>
                                     </div>
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
@@ -502,9 +504,9 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     vertical-align: top;
 }
 #line-items-table col.dp-col-img { width: 60px; }
-#line-items-table col.dp-col-sku { width: 25%; }
-#line-items-table col.dp-col-cost { width: 8%; }
-#line-items-table col.dp-col-qty { width: 6%; }
+#line-items-table col.dp-col-sku { width: 24%; }
+#line-items-table col.dp-col-cost { width: 9%; }
+#line-items-table col.dp-col-qty { width: 7%; }
 #line-items-table col.dp-col-hsn { width: 10%; }
 #line-items-table col.dp-col-gst { width: 6%; }
 #line-items-table col.dp-col-unit { width: 8%; }
@@ -522,6 +524,10 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
 #line-items-table .dp-col-numeric .dp-inp-cell {
     white-space: nowrap;
 }
+#line-items-table td.dp-col-cost,
+#line-items-table td.dp-col-qty {
+    overflow: visible;
+}
 #line-items-table .dp-inp-cell {
     box-sizing: border-box;
     display: block;
@@ -533,14 +539,26 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     font-size: 0.8125rem;
 }
 #line-items-table .dp-cell-with-actions {
-    display: flex;
+    display: grid;
     align-items: center;
-    gap: 0.125rem;
+    gap: 0.2rem;
     min-width: 0;
 }
+#line-items-table .dp-col-cost .dp-cell-with-actions {
+    grid-template-columns: minmax(0, 1fr) 1.75rem;
+}
+#line-items-table .dp-col-qty .dp-cell-with-actions {
+    grid-template-columns: minmax(0, 1fr) 1.75rem;
+}
 #line-items-table .dp-cell-with-actions > .dp-inp-cell {
-    flex: 1 1 0;
-    width: auto;
+    width: 100%;
+    min-width: 0;
+}
+#line-items-table .dp-cell-actions-slot,
+#line-items-table .dp-cost-actions {
+    width: 1.75rem;
+    min-width: 1.75rem;
+    flex-shrink: 0;
 }
 #line-items-table .dp-col-sku .dp-sku-cell {
     min-width: 0;
@@ -563,7 +581,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     display: flex;
     flex-direction: column;
     gap: 0.125rem;
-    flex-shrink: 0;
+    justify-content: center;
 }
 </style>
 
@@ -612,10 +630,12 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
             <td class="px-1 py-2 align-top dp-col-qty dp-col-numeric">
                 <div class="dp-cell-with-actions">
                     <input type="number" step="0.001" name="qty[]" class="dp-qty dp-inp-cell <?= $inpSm ?>" value="1">
+                    <div class="dp-cell-actions-slot">
                     <button type="button" class="dp-sync-vendor-qty dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Save purchase first to sync qty" aria-label="Push qty to vendor API" disabled>
                         <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
                     </button>
+                    </div>
                 </div>
             </td>
             <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell <?= $inpSm ?>" value=""></td>
