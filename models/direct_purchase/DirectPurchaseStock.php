@@ -2,10 +2,13 @@
 
 /**
  * Warehouse stock (vp_stock) + vp_stock_movements for direct purchase IN and purchase return OUT.
- * Mirrors controllers/GrnsController.php GRN flow (8-column movement insert).
  */
 final class DirectPurchaseStock
 {
+    public const REF_PURCHASE = 'DIRECT_PURCHASE';
+
+    public const REF_RETURN = 'DIRECT_PURCHASE_RETURN';
+
     public static function resolveProductId(\mysqli $conn, string $sku, string $itemCode, string $color, string $size): int
     {
         $sku = trim($sku);
@@ -46,7 +49,7 @@ final class DirectPurchaseStock
 
     /**
      * @param array<int, array<string, mixed>> $postedItems Same shape as collectLineItemsFromPost
-     * @return array<int, array{sku: string, qty: float, product_id: int}>
+     * @return array<int, array{sku: string, qty: float, product_id: int, item_code: string, size: string, color: string}>
      */
     public static function buildStockLinesFromPostedItems(\mysqli $conn, array $postedItems): array
     {
@@ -57,14 +60,18 @@ final class DirectPurchaseStock
             if ($sku === '' || $qty <= 0) {
                 continue;
             }
-            $pid = self::resolveProductId(
-                $conn,
-                $sku,
-                (string) ($row['item_code'] ?? ''),
-                (string) ($row['color'] ?? ''),
-                (string) ($row['size'] ?? '')
-            );
-            $out[] = ['sku' => $sku, 'qty' => $qty, 'product_id' => $pid];
+            $itemCode = trim((string) ($row['item_code'] ?? ''));
+            $color = trim((string) ($row['color'] ?? ''));
+            $size = trim((string) ($row['size'] ?? ''));
+            $pid = self::resolveProductId($conn, $sku, $itemCode, $color, $size);
+            $out[] = [
+                'sku' => $sku,
+                'qty' => $qty,
+                'product_id' => $pid,
+                'item_code' => $itemCode,
+                'size' => $size,
+                'color' => $color,
+            ];
         }
 
         return $out;
@@ -72,7 +79,7 @@ final class DirectPurchaseStock
 
     /**
      * @param array<int, array<string, mixed>> $dbItems Rows from vp_direct_purchase_items
-     * @return array<int, array{sku: string, qty: float, product_id: int}>
+     * @return array<int, array{sku: string, qty: float, product_id: int, item_code: string, size: string, color: string}>
      */
     public static function buildStockLinesFromDbItems(\mysqli $conn, array $dbItems): array
     {
@@ -83,22 +90,22 @@ final class DirectPurchaseStock
             if ($sku === '' || $qty <= 0) {
                 continue;
             }
-            $pid = self::resolveProductId(
-                $conn,
-                $sku,
-                (string) ($row['item_code'] ?? ''),
-                (string) ($row['color'] ?? ''),
-                (string) ($row['size'] ?? '')
-            );
-            $out[] = ['sku' => $sku, 'qty' => $qty, 'product_id' => $pid];
+            $itemCode = trim((string) ($row['item_code'] ?? ''));
+            $color = trim((string) ($row['color'] ?? ''));
+            $size = trim((string) ($row['size'] ?? ''));
+            $pid = self::resolveProductId($conn, $sku, $itemCode, $color, $size);
+            $out[] = [
+                'sku' => $sku,
+                'qty' => $qty,
+                'product_id' => $pid,
+                'item_code' => $itemCode,
+                'size' => $size,
+                'color' => $color,
+            ];
         }
 
         return $out;
     }
-
-    public const REF_PURCHASE = 'DIRECT_PURCHASE';
-
-    public const REF_RETURN = 'DIRECT_PURCHASE_RETURN';
 
     /**
      * Remove all movements for ref and adjust vp_stock to match (best-effort; does not recalc running_stock on later rows).
@@ -149,7 +156,7 @@ final class DirectPurchaseStock
     }
 
     /**
-     * @param array<int, array<string, mixed>> $lines Each: sku, qty, product_id (int)
+     * @param array<int, array<string, mixed>> $lines Each: sku, qty, product_id, item_code, size, color
      */
     public static function applyPurchaseIn(\mysqli $conn, int $purchaseId, int $warehouseId, array $lines, int $userId = 0): void
     {
@@ -157,11 +164,11 @@ final class DirectPurchaseStock
             return;
         }
         $refType = self::REF_PURCHASE;
+        $location = self::warehouseLocationLabel($conn, $warehouseId);
         $selectStock = $conn->prepare('SELECT id, current_stock FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1');
         $updateStock = $conn->prepare('UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?');
         $insertStock = $conn->prepare('INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)');
-        $insertMov = $conn->prepare('INSERT INTO vp_stock_movements (product_id, sku, warehouse_id, movement_type, quantity, running_stock, ref_type, ref_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-        if (!$selectStock || !$updateStock || !$insertStock || !$insertMov) {
+        if (!$selectStock || !$updateStock || !$insertStock) {
             throw new \RuntimeException('applyPurchaseIn prepare failed: ' . $conn->error);
         }
 
@@ -169,6 +176,9 @@ final class DirectPurchaseStock
             $sku = trim((string) ($line['sku'] ?? ''));
             $qty = (float) ($line['qty'] ?? 0);
             $productId = (int) ($line['product_id'] ?? 0);
+            $itemCode = trim((string) ($line['item_code'] ?? ''));
+            $size = trim((string) ($line['size'] ?? ''));
+            $color = trim((string) ($line['color'] ?? ''));
             if ($sku === '' || $qty <= 0) {
                 continue;
             }
@@ -192,36 +202,47 @@ final class DirectPurchaseStock
                 }
             }
 
-            $movementType = 'IN';
-            $pidBind = $productId > 0 ? $productId : 0;
-            $refIdBind = $purchaseId;
-            if (!$insertMov->bind_param('isisddsi', $pidBind, $sku, $warehouseId, $movementType, $qty, $running, $refType, $refIdBind)) {
-                throw new \RuntimeException('movement bind_param failed');
-            }
-            if (!$insertMov->execute()) {
-                throw new \RuntimeException('vp_stock_movements insert failed: ' . $insertMov->error);
+            self::insertStockMovement(
+                $conn,
+                $productId,
+                $sku,
+                $itemCode,
+                $size,
+                $color,
+                $warehouseId,
+                $location,
+                'IN',
+                $qty,
+                $running,
+                $refType,
+                (string) $purchaseId,
+                $userId,
+                'Direct purchase'
+            );
+
+            if ($productId > 0) {
+                self::syncProductLocalStock($conn, $productId, (int) round($running));
             }
         }
 
         $selectStock->close();
         $updateStock->close();
         $insertStock->close();
-        $insertMov->close();
     }
 
     /**
-     * @param array<int, array<string, mixed>> $lines sku, return_qty, product_id
+     * @param array<int, array<string, mixed>> $lines sku, return_qty, product_id, item_code, size, color
      */
-    public static function applyReturnOut(\mysqli $conn, int $returnId, int $warehouseId, array $lines): void
+    public static function applyReturnOut(\mysqli $conn, int $returnId, int $warehouseId, array $lines, int $userId = 0): void
     {
         if ($warehouseId <= 0) {
             return;
         }
         $refType = self::REF_RETURN;
+        $location = self::warehouseLocationLabel($conn, $warehouseId);
         $selectStock = $conn->prepare('SELECT id, current_stock FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1');
         $updateStock = $conn->prepare('UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?');
-        $insertMov = $conn->prepare('INSERT INTO vp_stock_movements (product_id, sku, warehouse_id, movement_type, quantity, running_stock, ref_type, ref_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-        if (!$selectStock || !$updateStock || !$insertMov) {
+        if (!$selectStock || !$updateStock) {
             throw new \RuntimeException('applyReturnOut prepare failed: ' . $conn->error);
         }
 
@@ -229,6 +250,9 @@ final class DirectPurchaseStock
             $sku = trim((string) ($line['sku'] ?? ''));
             $qty = (float) ($line['return_qty'] ?? 0);
             $productId = (int) ($line['product_id'] ?? 0);
+            $itemCode = trim((string) ($line['item_code'] ?? ''));
+            $size = trim((string) ($line['size'] ?? ''));
+            $color = trim((string) ($line['color'] ?? ''));
             if ($sku === '' || $qty <= 0) {
                 continue;
             }
@@ -250,19 +274,156 @@ final class DirectPurchaseStock
                 throw new \RuntimeException('vp_stock update (return) failed: ' . $updateStock->error);
             }
 
-            $movementType = 'OUT';
-            $pidBind = $productId > 0 ? $productId : 0;
-            if (!$insertMov->bind_param('isisddsi', $pidBind, $sku, $warehouseId, $movementType, $qty, $running, $refType, $returnId)) {
-                throw new \RuntimeException('return movement bind_param failed');
-            }
-            if (!$insertMov->execute()) {
-                throw new \RuntimeException('vp_stock_movements insert (return) failed: ' . $insertMov->error);
+            self::insertStockMovement(
+                $conn,
+                $productId,
+                $sku,
+                $itemCode,
+                $size,
+                $color,
+                $warehouseId,
+                $location,
+                'OUT',
+                $qty,
+                $running,
+                $refType,
+                (string) $returnId,
+                $userId,
+                'Direct purchase return'
+            );
+
+            if ($productId > 0) {
+                self::syncProductLocalStock($conn, $productId, (int) round($running));
             }
         }
 
         $selectStock->close();
         $updateStock->close();
-        $insertMov->close();
+    }
+
+    private static function insertStockMovement(
+        \mysqli $conn,
+        int $productId,
+        string $sku,
+        string $itemCode,
+        string $size,
+        string $color,
+        int $warehouseId,
+        string $location,
+        string $movementType,
+        float $quantity,
+        float $runningStock,
+        string $refType,
+        string $refId,
+        int $userId,
+        string $reason
+    ): void {
+        $itemCodeCol = self::resolveVpStockMovementsItemCodeColumn($conn);
+        $safeItemCol = '`' . str_replace('`', '``', $itemCodeCol) . '`';
+        $pidBind = $productId > 0 ? $productId : 0;
+        $qtyBind = (string) $quantity;
+        $runningBind = (float) $runningStock;
+
+        $fullSql = "INSERT INTO vp_stock_movements
+            (product_id, sku, {$safeItemCol}, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($fullSql);
+        if ($stmt) {
+            $stmt->bind_param(
+                'issssisssdsssi',
+                $pidBind,
+                $sku,
+                $itemCode,
+                $size,
+                $color,
+                $warehouseId,
+                $location,
+                $movementType,
+                $qtyBind,
+                $runningBind,
+                $refType,
+                $refId,
+                $reason,
+                $userId
+            );
+            if ($stmt->execute()) {
+                $stmt->close();
+                return;
+            }
+            $fullErr = $stmt->error;
+            $stmt->close();
+        } else {
+            $fullErr = $conn->error;
+        }
+
+        $minimalSql = 'INSERT INTO vp_stock_movements (product_id, sku, warehouse_id, movement_type, quantity, running_stock, ref_type, ref_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+        $min = $conn->prepare($minimalSql);
+        if (!$min) {
+            throw new \RuntimeException('vp_stock_movements insert failed: ' . ($fullErr ?: $conn->error));
+        }
+        $min->bind_param('isissdss', $pidBind, $sku, $warehouseId, $movementType, $qtyBind, $runningBind, $refType, $refId);
+        if (!$min->execute()) {
+            $err = $min->error;
+            $min->close();
+            throw new \RuntimeException('vp_stock_movements insert failed: ' . ($err ?: $fullErr));
+        }
+        $min->close();
+    }
+
+    private static function resolveVpStockMovementsItemCodeColumn(\mysqli $conn): string
+    {
+        static $cached = [];
+        $key = spl_object_id($conn);
+        if (isset($cached[$key])) {
+            return $cached[$key];
+        }
+        $col = 'item_code';
+        $res = @$conn->query('SHOW COLUMNS FROM vp_stock_movements');
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $field = trim((string) ($row['Field'] ?? ''));
+                if (strcasecmp($field, 'item_code') === 0) {
+                    $col = $field;
+                    break;
+                }
+            }
+            $res->free();
+        }
+        $cached[$key] = $col;
+
+        return $col;
+    }
+
+    private static function warehouseLocationLabel(\mysqli $conn, int $warehouseId): string
+    {
+        if ($warehouseId <= 0) {
+            return '';
+        }
+        $stmt = $conn->prepare('SELECT address_title FROM exotic_address WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('i', $warehouseId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return trim((string) ($row['address_title'] ?? ''));
+    }
+
+    private static function syncProductLocalStock(\mysqli $conn, int $productId, int $runningStock): void
+    {
+        if ($productId <= 0) {
+            return;
+        }
+        $stmt = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('ii', $runningStock, $productId);
+        $stmt->execute();
+        $stmt->close();
     }
 
     private static function adjustVpStock(\mysqli $conn, string $sku, int $warehouseId, float $delta): void

@@ -21,6 +21,26 @@ class vendor
         }
         return $vendors;
     }
+
+    /**
+     * Active vendors that have a linked Exotic vendor_id (vp_vendors.vendor_id).
+     */
+    public function getActiveVendorsWithExoticVendorId()
+    {
+        $sql = "SELECT * FROM vp_vendors
+            WHERE is_active = 1
+              AND vendor_id IS NOT NULL AND TRIM(vendor_id) <> ''
+            ORDER BY vendor_name ASC";
+        $result = $this->conn->query($sql);
+        $vendors = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $vendors[] = $row;
+            }
+        }
+
+        return $vendors;
+    }
     public function getVendorById($id)
     {
         $sql = "SELECT * FROM vp_vendors WHERE id = ?";

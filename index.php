@@ -458,6 +458,21 @@ switch ($page) {
             case 'product_search':
                 $controller->productSearch();
                 break;
+            case 'fetch_line_price':
+                $controller->fetchLinePrice();
+                break;
+            case 'fetch_pending_orders':
+                $controller->fetchPendingOrdersForSku();
+                break;
+            case 'import_order':
+                $controller->importOrderForDirectPurchase();
+                break;
+            case 'sync_vendor_qty':
+                $controller->syncVendorQtyForItem();
+                break;
+            case 'verify_vendor_line':
+                $controller->verifyVendorLine();
+                break;
             case 'return_list':
                 $controller->returnList();
                 break;

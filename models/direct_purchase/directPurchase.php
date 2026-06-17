@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/DirectPurchaseStock.php';
+require_once __DIR__ . '/DirectPurchaseSchema.php';
 
 class DirectPurchase
 {
@@ -10,6 +11,11 @@ class DirectPurchase
     public function __construct($conn)
     {
         $this->conn = $conn;
+    }
+
+    private function ensureSchema(): void
+    {
+        DirectPurchaseSchema::ensureAll($this->conn);
     }
 
     /**
@@ -71,7 +77,7 @@ class DirectPurchase
         $total = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
         $stmt->close();
 
-        $listSql = "SELECT DISTINCT p.*, v.vendor_name, v.contact_name
+        $listSql = "SELECT DISTINCT p.*, v.vendor_name, v.contact_name, v.vendor_id AS exotic_vendor_id
             FROM vp_direct_purchases p
             JOIN vp_vendors v ON v.id = p.vendor_id
             $joinItems
@@ -130,8 +136,68 @@ class DirectPurchase
         return $rows;
     }
 
+    public function getItemById(int $itemId): ?array
+    {
+        $this->ensureSchema();
+        $stmt = $this->conn->prepare('SELECT * FROM vp_direct_purchase_items WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $itemId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return $row ?: null;
+    }
+
+    public function markItemVendorQtySynced(int $itemId): bool
+    {
+        $this->ensureSchema();
+        $stmt = $this->conn->prepare(
+            'UPDATE vp_direct_purchase_items
+             SET vendor_qty_synced = 1, vendor_qty_synced_qty = qty
+             WHERE id = ?'
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('i', $itemId);
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        return $ok;
+    }
+
+    public function markItemsVendorQtySyncedByVariant(
+        int $purchaseId,
+        string $itemCode,
+        string $size,
+        string $color
+    ): bool {
+        $this->ensureSchema();
+        $stmt = $this->conn->prepare(
+            'UPDATE vp_direct_purchase_items
+             SET vendor_qty_synced = 1, vendor_qty_synced_qty = qty
+             WHERE direct_purchase_id = ?
+               AND item_code = ?
+               AND COALESCE(TRIM(size), \'\') = ?
+               AND COALESCE(TRIM(color), \'\') = ?'
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('isss', $purchaseId, $itemCode, $size, $color);
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        return $ok;
+    }
+
     public function countReturns(int $purchaseId): int
     {
+        $this->ensureSchema();
         $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_direct_purchase_returns WHERE direct_purchase_id = ?');
         if (!$stmt) {
             return 0;
@@ -149,6 +215,7 @@ class DirectPurchase
      */
     public function getReturnIdsForPurchase(int $purchaseId): array
     {
+        $this->ensureSchema();
         $stmt = $this->conn->prepare('SELECT id FROM vp_direct_purchase_returns WHERE direct_purchase_id = ? ORDER BY id ASC');
         if (!$stmt) {
             return [];
@@ -174,6 +241,7 @@ class DirectPurchase
      */
     public function getItemsWithReturnable(int $purchaseId): array
     {
+        $this->ensureSchema();
         $items = $this->getItems($purchaseId);
         $stmt = $this->conn->prepare(
             'SELECT ri.direct_purchase_item_id, SUM(ri.return_qty) AS sq
@@ -207,6 +275,7 @@ class DirectPurchase
 
     public function delete(int $id): bool
     {
+        $this->ensureSchema();
         $this->conn->begin_transaction();
         try {
             foreach ($this->getReturnIdsForPurchase($id) as $rid) {
@@ -232,6 +301,7 @@ class DirectPurchase
      */
     public function insertPurchase(array $header, array $items): int
     {
+        $this->ensureSchema();
         $this->conn->begin_transaction();
         try {
             $sql = 'INSERT INTO vp_direct_purchases (
@@ -264,7 +334,13 @@ class DirectPurchase
 
             $this->insertItemRows($pid, $items);
             $stockLines = DirectPurchaseStock::buildStockLinesFromPostedItems($this->conn, $items);
-            DirectPurchaseStock::applyPurchaseIn($this->conn, $pid, (int) $header['warehouse_id'], $stockLines);
+            DirectPurchaseStock::applyPurchaseIn(
+                $this->conn,
+                $pid,
+                (int) $header['warehouse_id'],
+                $stockLines,
+                (int) ($header['created_by'] ?? 0)
+            );
             $this->conn->commit();
             return $pid;
         } catch (Throwable $e) {
@@ -279,6 +355,7 @@ class DirectPurchase
      */
     public function updatePurchase(int $id, array $header, array $items): void
     {
+        $this->ensureSchema();
         $this->conn->begin_transaction();
         try {
             DirectPurchaseStock::reverseMovementsForRef($this->conn, DirectPurchaseStock::REF_PURCHASE, $id);
@@ -317,7 +394,13 @@ class DirectPurchase
             $this->insertItemRows($id, $items);
             $fresh = $this->getItems($id);
             $stockLines = DirectPurchaseStock::buildStockLinesFromDbItems($this->conn, $fresh);
-            DirectPurchaseStock::applyPurchaseIn($this->conn, $id, (int) $header['warehouse_id'], $stockLines);
+            DirectPurchaseStock::applyPurchaseIn(
+                $this->conn,
+                $id,
+                (int) $header['warehouse_id'],
+                $stockLines,
+                (int) ($header['created_by'] ?? 0)
+            );
             $this->conn->commit();
         } catch (Throwable $e) {
             $this->conn->rollback();
@@ -331,8 +414,8 @@ class DirectPurchase
     private function insertItemRows(int $purchaseId, array $items): void
     {
         $sql = 'INSERT INTO vp_direct_purchase_items (
-            direct_purchase_id, item_code, sku, color, size, cost_per_item, qty, hsn, gst_rate, unit, gst_amount, line_total, sort_order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)';
+            direct_purchase_id, item_code, sku, color, size, cost_per_item, qty, hsn, gst_rate, unit, gst_amount, line_total, sort_order, vendor_qty_synced, vendor_qty_synced_qty
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,NULL)';
         $stmt = $this->conn->prepare($sql);
         $order = 0;
         foreach ($items as $row) {

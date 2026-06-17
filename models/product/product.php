@@ -704,6 +704,119 @@ class product
         }
         return $orderItems;
     }
+
+    /**
+     * Fetch vendor product/fetch API, sync vp_products (keep local stock), return latest cost for a variant line.
+     *
+     * @return array{success: bool, message?: string, cost_price?: float, cp?: float, gst?: float, hsn?: string}
+     */
+    public function refreshVariantCostFromVendorApi(string $itemCode, string $size = '', string $color = ''): array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Item code is required to fetch price.'];
+        }
+
+        $decoded = $this->fetchVendorProductApiPayload($itemCode);
+        if ($decoded === null) {
+            return ['success' => false, 'message' => 'Product fetch API request failed.'];
+        }
+
+        $productRows = self::normalizeVendorProductFetchItems($decoded);
+        if ($productRows === []) {
+            return ['success' => false, 'message' => 'No product data in API response.'];
+        }
+
+        $bulkConnection = $this->beginBulkProductUpdateConnection();
+        try {
+            $updateResult = $this->updateProductFromApi($productRows, ['preserve_local_stock' => true]);
+        } finally {
+            $this->endBulkProductUpdateConnection($bulkConnection);
+        }
+
+        if (!is_array($updateResult) || empty($updateResult['success'])) {
+            return [
+                'success' => false,
+                'message' => is_array($updateResult) ? (string) ($updateResult['message'] ?? 'Product update failed.') : 'Product update failed.',
+            ];
+        }
+
+        $row = $this->findByItemCodeSizeColor($itemCode, trim($size), trim($color));
+        if (!$row) {
+            $row = $this->findByItemCodeSizeColor($itemCode, '', '');
+        }
+        if (!$row || empty($row['id'])) {
+            return ['success' => false, 'message' => 'Product row not found after API sync.'];
+        }
+
+        $cp = (float) ($row['cp'] ?? 0);
+        $productId = (int) $row['id'];
+        if ($cp > 0) {
+            $stmt = $this->db->prepare('UPDATE vp_products SET cost_price = ? WHERE id = ?');
+            if ($stmt) {
+                $stmt->bind_param('di', $cp, $productId);
+                $stmt->execute();
+                $stmt->close();
+                $row['cost_price'] = $cp;
+            }
+        }
+
+        $cost = (float) ($row['cost_price'] ?? 0);
+        if ($cost <= 0 && $cp > 0) {
+            $cost = $cp;
+        }
+        if ($cost <= 0) {
+            return ['success' => false, 'message' => 'API returned no cost price (cp) for this product.'];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Latest cost price fetched from API.',
+            'cost_price' => $cost,
+            'cp' => $cp,
+            'gst' => (float) ($row['gst'] ?? 0),
+            'hsn' => trim((string) ($row['hsn'] ?? '')),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function fetchVendorProductApiPayload(string $itemCode): ?array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return null;
+        }
+
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemCode);
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return null;
+        }
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $response = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false || $httpCode < 200 || $httpCode >= 300) {
+            return null;
+        }
+
+        $decoded = json_decode($response, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
     public function updateProductFromApi($productData, array $options = [])
     {
         $updatedCount = 0;
@@ -3735,8 +3848,21 @@ class product
         $result = $stmt->get_result();
         return $result ? $result->fetch_assoc() : null;
     }
-    public function getLatestRunningStockByWarehouseLocation($productId)
+    /**
+     * Latest running_stock per warehouse for product detail — same basis as POS stock report
+     * (latest vp_stock_movements row per warehouse + product_id, not a sum of quantities).
+     *
+     * @param int $productId
+     * @param string $sku Unused; kept for call-site compatibility
+     * @return list<array<string,mixed>>
+     */
+    public function getLatestRunningStockByWarehouseLocation($productId, $sku = '')
     {
+        $productId = (int)$productId;
+        if ($productId <= 0) {
+            return [];
+        }
+
         $sql = "SELECT 
                     sm.id AS movement_id,
                     sm.warehouse_id,
@@ -3747,10 +3873,10 @@ class product
                     sm.created_at
                 FROM vp_stock_movements sm
                 INNER JOIN (
-                    SELECT warehouse_id, COALESCE(NULLIF(TRIM(location), ''), '__EMPTY__') AS location_key, MAX(id) AS max_id
+                    SELECT warehouse_id, MAX(id) AS max_id
                     FROM vp_stock_movements
                     WHERE product_id = ?
-                    GROUP BY warehouse_id, COALESCE(NULLIF(TRIM(location), ''), '__EMPTY__')
+                    GROUP BY warehouse_id
                 ) latest ON latest.max_id = sm.id
                 LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
                 WHERE sm.product_id = ?
@@ -3759,14 +3885,16 @@ class product
         if ($stmt === false) {
             return [];
         }
-        $pid = (int)$productId;
-        $stmt->bind_param('ii', $pid, $pid);
+        $stmt->bind_param('ii', $productId, $productId);
         $stmt->execute();
         $result = $stmt->get_result();
+        $rows = [];
         if ($result && $result->num_rows > 0) {
-            return $result->fetch_all(MYSQLI_ASSOC);
+            $rows = $result->fetch_all(MYSQLI_ASSOC);
         }
-        return [];
+        $stmt->close();
+
+        return $rows;
     }
     public function updateStockMovementLocation($movementId, $productId, $location)
     {
@@ -3857,6 +3985,238 @@ class product
         }
         $stmt->bind_param('di', $price, $productId);
         return $stmt->execute();
+    }
+
+    public function setProductCp($productId, $cp)
+    {
+        $productId = (int) $productId;
+        $cp = (float) $cp;
+        $sql = 'UPDATE vp_products SET cp = ?, cost_price = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ddi', $cp, $cp, $productId);
+
+        return $stmt->execute();
+    }
+
+    /**
+     * Push CP and/or local_stock_delta to exoticindia.com via vendor product/modify.
+     *
+     * @param array<string, mixed> $product
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    public function syncCpToVendorFrontend(array $product, float $cp, ?float $localStockDelta = null): array
+    {
+        if (!function_exists('exotic_india_api_post')) {
+            require_once __DIR__ . '/../../helpers/exotic_india_api.php';
+        }
+
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor product sync.'];
+        }
+
+        $postFields = [];
+        if ($cp > 0) {
+            $postFields['cp'] = $cp;
+        }
+        if ($localStockDelta !== null && abs($localStockDelta) > 0.0001) {
+            $postFields['local_stock_delta'] = (int) round($localStockDelta);
+        }
+        if ($postFields === []) {
+            return ['success' => false, 'message' => 'Nothing to sync to vendor API.'];
+        }
+
+        $size = trim((string) ($product['size'] ?? ''));
+        $color = trim((string) ($product['color'] ?? ''));
+        $endpoint = 'product/modify'
+            . '?itemcode=' . rawurlencode($itemCode)
+            . '&size=' . rawurlencode($size)
+            . '&color=' . rawurlencode($color);
+
+        $api = exotic_india_api_post(
+            $endpoint,
+            http_build_query($postFields),
+            ['Content-Type: application/x-www-form-urlencoded']
+        );
+
+        if (!$api['success']) {
+            return [
+                'success' => false,
+                'message' => trim((string) ($api['message'] ?? '')) !== ''
+                    ? (string) $api['message']
+                    : 'Vendor product sync failed.',
+                'http_code' => (int) ($api['http_code'] ?? 0),
+            ];
+        }
+
+        $data = is_array($api['data'] ?? null) ? $api['data'] : [];
+        $apiSuccess = !isset($data['success']) || (bool) $data['success'];
+
+        return [
+            'success' => $apiSuccess,
+            'message' => trim((string) ($data['message'] ?? '')) !== ''
+                ? (string) $data['message']
+                : ($apiSuccess ? 'Vendor product sync completed.' : 'Vendor product sync failed.'),
+            'http_code' => (int) ($api['http_code'] ?? 0),
+            'response' => $data,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getVendorApiVariantRow(string $itemCode, string $size = '', string $color = ''): ?array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return null;
+        }
+
+        $decoded = $this->fetchVendorProductApiPayload($itemCode);
+        if ($decoded === null) {
+            return null;
+        }
+
+        $rows = self::normalizeVendorProductFetchItems($decoded);
+        if ($rows === []) {
+            return null;
+        }
+
+        $size = trim($size);
+        $color = trim($color);
+        $fallback = null;
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $rowSize = trim((string) ($row['size'] ?? ''));
+            $rowColor = trim((string) ($row['color'] ?? ''));
+            if ($size !== '' && strcasecmp($rowSize, $size) !== 0) {
+                continue;
+            }
+            if ($color !== '' && strcasecmp($rowColor, $color) !== 0) {
+                continue;
+            }
+            if ($size === '' && $color === '' && $fallback === null) {
+                $fallback = $row;
+                continue;
+            }
+            if ($size !== '' || $color !== '') {
+                return $row;
+            }
+            $fallback = $row;
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * Compare vendor product/fetch CP and local_stock with purchase line expectations.
+     *
+     * @return array<string, mixed>
+     */
+    public function verifyVendorCpAndStockAgainstExpected(
+        string $itemCode,
+        string $size,
+        string $color,
+        float $expectedCp,
+        ?float $expectedLocalStock = null
+    ): array {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Item code is required to verify vendor data.'];
+        }
+
+        $vendorRow = $this->getVendorApiVariantRow($itemCode, $size, $color);
+        if ($vendorRow === null) {
+            return [
+                'success' => false,
+                'message' => 'Could not load product from vendor API (product/fetch).',
+                'item_code' => $itemCode,
+            ];
+        }
+
+        $vendorCp = (float) ($vendorRow['cp'] ?? 0);
+        $vendorStock = (float) ($vendorRow['local_stock'] ?? 0);
+        $checks = [];
+        $allMatch = true;
+        $anyChecked = false;
+
+        if ($expectedCp > 0) {
+            $cpMatch = abs($vendorCp - $expectedCp) < 0.01;
+            $checks['cp'] = [
+                'label' => 'CP (cost price)',
+                'checked' => true,
+                'expected' => $expectedCp,
+                'vendor' => $vendorCp,
+                'match' => $cpMatch,
+            ];
+            $anyChecked = true;
+            if (!$cpMatch) {
+                $allMatch = false;
+            }
+        } else {
+            $checks['cp'] = [
+                'label' => 'CP (cost price)',
+                'checked' => false,
+                'expected' => 0.0,
+                'vendor' => $vendorCp,
+                'match' => null,
+                'note' => 'No cost on this line to verify.',
+            ];
+        }
+
+        if ($expectedLocalStock !== null) {
+            $stockMatch = abs($vendorStock - $expectedLocalStock) < 0.01;
+            $checks['local_stock'] = [
+                'label' => 'Local stock',
+                'checked' => true,
+                'expected' => $expectedLocalStock,
+                'vendor' => $vendorStock,
+                'local_db' => $expectedLocalStock,
+                'match' => $stockMatch,
+            ];
+            $anyChecked = true;
+            if (!$stockMatch) {
+                $allMatch = false;
+            }
+        } else {
+            $checks['local_stock'] = [
+                'label' => 'Local stock',
+                'checked' => false,
+                'expected' => null,
+                'vendor' => $vendorStock,
+                'local_db' => null,
+                'match' => null,
+                'note' => 'No local product row to compare stock.',
+            ];
+        }
+
+        if (!$anyChecked) {
+            return [
+                'success' => false,
+                'message' => 'Nothing to verify — enter a cost and/or link a product with local stock.',
+                'item_code' => $itemCode,
+                'checks' => $checks,
+            ];
+        }
+
+        $message = $allMatch
+            ? 'Vendor CP and stock match expected values on exoticindia.com.'
+            : 'Vendor values on exoticindia.com do not fully match expected CP/stock.';
+
+        return [
+            'success' => $allMatch,
+            'message' => $message,
+            'item_code' => $itemCode,
+            'size' => trim($size),
+            'color' => trim($color),
+            'checks' => $checks,
+        ];
     }
 
     public function modifyProduct($id, $data)
