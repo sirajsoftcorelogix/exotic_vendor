@@ -192,9 +192,9 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[14rem]">SKU</th>
                             <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-cost">Cost / item</th>
                             <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-qty">Qty</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">HSN</th>
+                            <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-hsn">HSN</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">GST %</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[6rem]">Unit</th>
+                            <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-unit">Unit</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">Line total</th>
                             <th class="px-3 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 w-12"></th>
                         </tr>
@@ -267,9 +267,9 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                         </button>
                                     </div>
                                 </td>
-                                <td class="px-3 py-2 align-top min-w-[8rem]"><input name="hsn[]" class="w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
+                                <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell w-full <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
                                 <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
-                                <td class="px-3 py-2 align-top min-w-[6rem]"><input name="unit[]" class="w-full min-w-[5rem] <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
+                                <td class="px-1 py-2 align-top dp-col-unit"><input name="unit[]" class="dp-inp-cell w-full <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
                                 <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
                                 <td class="px-3 py-2 text-center align-top">
                                     <button type="button" class="dp-remove inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
@@ -482,31 +482,47 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
 #line-items-table .dp-col-cost {
-    width: 6.25rem;
-    max-width: 6.25rem;
+    width: 8rem;
+    max-width: 8rem;
 }
 #line-items-table .dp-col-qty {
-    width: 4.5rem;
-    max-width: 4.5rem;
+    width: 5.75rem;
+    max-width: 5.75rem;
+}
+#line-items-table .dp-col-hsn {
+    width: 5rem;
+    max-width: 5rem;
+}
+#line-items-table .dp-col-unit {
+    width: 3.75rem;
+    max-width: 3.75rem;
 }
 #line-items-table .dp-inp-compact {
-    width: 3rem;
     min-width: 0;
-    max-width: 3rem;
-    flex: 0 0 3rem;
-    padding-left: 0.35rem;
-    padding-right: 0.35rem;
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
     font-size: 0.8125rem;
 }
+#line-items-table .dp-col-cost .dp-inp-compact {
+    width: 4.25rem;
+    max-width: 4.25rem;
+    flex: 0 0 4.25rem;
+}
 #line-items-table .dp-col-qty .dp-inp-compact {
-    width: 2.35rem;
-    max-width: 2.35rem;
-    flex-basis: 2.35rem;
+    width: 3.5rem;
+    max-width: 3.5rem;
+    flex: 0 0 3.5rem;
+}
+#line-items-table .dp-inp-cell {
+    min-width: 0;
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+    font-size: 0.8125rem;
 }
 #line-items-table .dp-line-mini-btn {
-    width: 1.5rem;
-    height: 1.5rem;
-    min-width: 1.5rem;
+    width: 1.65rem;
+    height: 1.65rem;
+    min-width: 1.65rem;
     padding: 0;
     line-height: 1;
 }
@@ -571,9 +587,9 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                     </button>
                 </div>
             </td>
-            <td class="px-3 py-2 align-top min-w-[8rem]"><input name="hsn[]" class="w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
+            <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell w-full <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 align-top min-w-[6rem]"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate w-full min-w-[5rem] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2 align-top min-w-[6rem]"><input name="unit[]" class="w-full min-w-[5rem] <?= $inpSm ?>" value=""></td>
+            <td class="px-1 py-2 align-top dp-col-unit"><input name="unit[]" class="dp-inp-cell w-full <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
             <td class="px-3 py-2 text-center align-top">
                 <button type="button" class="dp-remove inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
