@@ -185,18 +185,29 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 <div class="text-lg font-semibold text-gray-800">Line Items</div>
             </div>
             <div class="overflow-x-auto" id="line-items-x-scroll">
-                <table class="min-w-full divide-y divide-gray-200 text-sm" id="line-items-table">
+                <table class="w-full divide-y divide-gray-200 text-sm" id="line-items-table">
+                    <colgroup>
+                        <col class="dp-col-img">
+                        <col class="dp-col-sku">
+                        <col class="dp-col-cost">
+                        <col class="dp-col-qty">
+                        <col class="dp-col-hsn">
+                        <col class="dp-col-gst">
+                        <col class="dp-col-unit">
+                        <col class="dp-col-total">
+                        <col class="dp-col-actions">
+                    </colgroup>
                     <thead>
                         <tr class="bg-gray-100">
-                            <th class="px-2 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 w-16">Image</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[14rem]">SKU</th>
-                            <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-cost">Cost / item</th>
-                            <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-qty">Qty</th>
-                            <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-hsn">HSN</th>
+                            <th class="px-1 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 dp-col-img">Image</th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-sku">SKU</th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-cost">Cost / item</th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-qty">Qty</th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-hsn">HSN</th>
                             <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-gst">GST %</th>
-                            <th class="px-2 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-unit">Unit</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 min-w-[8rem]">Line total</th>
-                            <th class="px-3 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 w-12"></th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-unit">Unit</th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-total">Line total</th>
+                            <th class="px-1 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 dp-col-actions"></th>
                         </tr>
                     </thead>
                     <tbody id="line-items-body" class="divide-y divide-gray-100">
@@ -214,8 +225,8 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                 data-dp-item-id="<?= $dpLineItemId ?>"
                                 data-vendor-qty-synced="<?= $dpVendorQtySynced ? '1' : '0' ?>"
                                 data-vendor-qty-synced-qty="<?= htmlspecialchars($dpVendorQtySyncedQty, ENT_QUOTES, 'UTF-8') ?>">
-                                <td class="px-2 py-2 align-top text-center w-16">
-                                    <button type="button" class="dp-thumb-trigger mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0 shadow-sm transition hover:ring-2 hover:ring-amber-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 <?= $lineImg === '' ? 'opacity-60 cursor-not-allowed' : 'cursor-zoom-in' ?>"
+                                <td class="px-1 py-2 align-top text-center dp-col-img">
+                                    <button type="button" class="dp-thumb-trigger mx-auto flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0 shadow-sm transition hover:ring-2 hover:ring-amber-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 <?= $lineImg === '' ? 'opacity-60 cursor-not-allowed' : 'cursor-zoom-in' ?>"
                                         data-full-src="<?= htmlspecialchars($lineImg) ?>"
                                         title="<?= $lineImg !== '' ? 'View larger' : '' ?>"
                                         aria-label="<?= $lineImg !== '' ? 'Enlarge product image' : 'No product image' ?>">
@@ -223,19 +234,19 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                             onerror="this.onerror=null;this.src=this.getAttribute('data-placeholder')||'';">
                                     </button>
                                 </td>
-                                <td class="px-3 py-2 align-top min-w-[14rem]">
-                                    <div class="flex items-start gap-1">
+                                <td class="px-1 py-2 align-top dp-col-sku">
+                                    <div class="flex items-start gap-0.5">
                                         <div class="relative dp-sku-cell flex-1 min-w-0">
                                             <input type="hidden" name="item_code[]" class="dp-h-item-code" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
                                             <input type="hidden" name="color[]" class="dp-h-color" value="<?= htmlspecialchars($it['color'] ?? '') ?>">
                                             <input type="hidden" name="size[]" class="dp-h-size" value="<?= htmlspecialchars($it['size'] ?? '') ?>">
                                             <input type="hidden" name="gst_amount[]" class="dp-gst" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>">
                                             <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
-                                                class="dp-sku w-full min-w-[10rem] <?= $inpSm ?>"
+                                                class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?>"
                                                 value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
                                             <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                                         </div>
-                                        <button type="button" class="dp-fetch-pending-orders shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                             title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU" <?= $dpLocked ? 'disabled' : '' ?>>
                                             <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
                                         </button>
@@ -270,9 +281,9 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                 <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell w-full <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
                                 <td class="px-1 py-2 align-top dp-col-gst"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate dp-inp-cell w-full <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
                                 <td class="px-1 py-2 align-top dp-col-unit"><input name="unit[]" class="dp-inp-cell w-full <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
-                                <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-full min-w-[7rem] <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
-                                <td class="px-3 py-2 text-center align-top">
-                                    <button type="button" class="dp-remove inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
+                                <td class="px-1 py-2 align-top dp-col-total"><input type="number" step="0.01" name="line_total[]" class="dp-line-total dp-inp-cell w-full <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
+                                <td class="px-1 py-2 text-center align-top dp-col-actions">
+                                    <button type="button" class="dp-remove dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
                                         <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
                                     </button>
                                 </td>
@@ -481,56 +492,52 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     from { opacity: 0; transform: translateY(8px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
-#line-items-table .dp-col-cost {
-    width: 9.5rem;
-    max-width: 9.5rem;
+#line-items-table {
+    table-layout: fixed;
+    width: 100%;
 }
-#line-items-table .dp-col-qty {
-    width: 6.75rem;
-    max-width: 6.75rem;
+#line-items-table th,
+#line-items-table td {
+    overflow: hidden;
 }
-#line-items-table .dp-col-hsn {
-    width: 5rem;
-    max-width: 5rem;
-}
-#line-items-table .dp-col-gst {
-    width: 3.25rem;
-    max-width: 3.25rem;
-}
-#line-items-table .dp-col-unit {
-    width: 3.75rem;
-    max-width: 3.75rem;
-}
-#line-items-table .dp-inp-compact {
+#line-items-table col.dp-col-img { width: 3.25rem; }
+#line-items-table col.dp-col-cost { width: 8.75rem; }
+#line-items-table col.dp-col-qty { width: 6.25rem; }
+#line-items-table col.dp-col-hsn { width: 4.25rem; }
+#line-items-table col.dp-col-gst { width: 3rem; }
+#line-items-table col.dp-col-unit { width: 3rem; }
+#line-items-table col.dp-col-total { width: 5.25rem; }
+#line-items-table col.dp-col-actions { width: 2.75rem; }
+/* dp-col-sku: no width — absorbs remaining space */
+#line-items-table .dp-inp-compact,
+#line-items-table .dp-inp-cell {
     min-width: 0;
-    padding-left: 0.4rem;
-    padding-right: 0.4rem;
+    width: 100%;
+    max-width: 100%;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
     font-size: 0.8125rem;
 }
 #line-items-table .dp-col-cost .dp-inp-compact {
-    width: 5.5rem;
-    max-width: 5.5rem;
-    flex: 0 0 5.5rem;
+    width: 5rem;
+    max-width: 5rem;
+    flex: 0 0 5rem;
 }
 #line-items-table .dp-col-qty .dp-inp-compact {
-    width: 4.25rem;
-    max-width: 4.25rem;
-    flex: 0 0 4.25rem;
+    width: 3.75rem;
+    max-width: 3.75rem;
+    flex: 0 0 3.75rem;
 }
-#line-items-table .dp-inp-cell {
-    min-width: 0;
-    padding-left: 0.4rem;
-    padding-right: 0.4rem;
-    font-size: 0.8125rem;
-}
-#line-items-table .dp-line-mini-btn {
+#line-items-table .dp-line-mini-btn,
+#line-items-table .dp-line-action-btn {
     width: 1.65rem;
     height: 1.65rem;
     min-width: 1.65rem;
     padding: 0;
     line-height: 1;
 }
-#line-items-table .dp-line-mini-btn i {
+#line-items-table .dp-line-mini-btn i,
+#line-items-table .dp-line-action-btn i {
     font-size: 0.625rem;
 }
 #line-items-table .dp-cost-actions {
@@ -543,25 +550,25 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
 <table class="hidden">
     <tbody id="line-item-template">
         <tr class="dp-line hover:bg-amber-50/30 transition-colors" data-dp-item-id="0" data-vendor-qty-synced="0" data-vendor-qty-synced-qty="">
-            <td class="px-2 py-2 align-top text-center w-16">
-                <button type="button" class="dp-thumb-trigger mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0 opacity-60 cursor-not-allowed shadow-sm"
+            <td class="px-1 py-2 align-top text-center dp-col-img">
+                <button type="button" class="dp-thumb-trigger mx-auto flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0 opacity-60 cursor-not-allowed shadow-sm"
                     data-full-src="" title="" aria-label="No product image">
                     <img src="<?= htmlspecialchars($dpThumbPlaceholder) ?>" alt="" class="dp-line-thumb-img h-full w-full object-cover" loading="lazy" data-placeholder="<?= htmlspecialchars($dpThumbPlaceholder) ?>"
                         onerror="this.onerror=null;this.src=this.getAttribute('data-placeholder')||'';">
                 </button>
             </td>
-            <td class="px-3 py-2 align-top min-w-[14rem]">
-                <div class="flex items-start gap-1">
+            <td class="px-1 py-2 align-top dp-col-sku">
+                <div class="flex items-start gap-0.5">
                     <div class="relative dp-sku-cell flex-1 min-w-0">
                         <input type="hidden" name="item_code[]" class="dp-h-item-code" value="">
                         <input type="hidden" name="color[]" class="dp-h-color" value="">
                         <input type="hidden" name="size[]" class="dp-h-size" value="">
                         <input type="hidden" name="gst_amount[]" class="dp-gst" value="">
                         <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
-                            class="dp-sku w-full min-w-[10rem] <?= $inpSm ?>" value="">
+                            class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?>" value="">
                         <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                     </div>
-                    <button type="button" class="dp-fetch-pending-orders shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU">
                         <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
                     </button>
@@ -594,9 +601,9 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
             <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell w-full <?= $inpSm ?>" value=""></td>
             <td class="px-1 py-2 align-top dp-col-gst"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate dp-inp-cell w-full <?= $inpSm ?>" value=""></td>
             <td class="px-1 py-2 align-top dp-col-unit"><input name="unit[]" class="dp-inp-cell w-full <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2 align-top min-w-[8rem]"><input type="number" step="0.01" name="line_total[]" class="dp-line-total w-full min-w-[7rem] <?= $inpSm ?>" value=""></td>
-            <td class="px-3 py-2 text-center align-top">
-                <button type="button" class="dp-remove inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
+            <td class="px-1 py-2 align-top dp-col-total"><input type="number" step="0.01" name="line_total[]" class="dp-line-total dp-inp-cell w-full <?= $inpSm ?>" value=""></td>
+            <td class="px-1 py-2 text-center align-top dp-col-actions">
+                <button type="button" class="dp-remove dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
                     <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
                 </button>
             </td>
