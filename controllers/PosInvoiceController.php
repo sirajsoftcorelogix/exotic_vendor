@@ -499,6 +499,23 @@ WHERE i.pos_flag = 1
         return $map;
     }
 
+    private function posInclusiveUnitPriceMapByItemCode(array $priceRows): array
+    {
+        $map = [];
+        foreach ($priceRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $code = strtolower(trim((string)($row['itemcode'] ?? '')));
+            if ($code === '') {
+                continue;
+            }
+            $map[$code] = (float)str_replace(',', '', (string)($row['price'] ?? '0'));
+        }
+
+        return $map;
+    }
+
     /**
      * @param list<array<string, mixed>> $orderItems
      * @param array<string, mixed> $snapshot
@@ -507,12 +524,12 @@ WHERE i.pos_flag = 1
      */
     private function computePosInvoiceLineMetaFromSnapshot(array $orderItems, array $snapshot): array
     {
-        $listMap = $this->posInclusiveUnitPriceMap(
-            is_array($snapshot['list_line_prices'] ?? null) ? $snapshot['list_line_prices'] : []
-        );
-        $discMap = $this->posInclusiveUnitPriceMap(
-            is_array($snapshot['line_prices'] ?? null) ? $snapshot['line_prices'] : []
-        );
+        $listRows = is_array($snapshot['list_line_prices'] ?? null) ? $snapshot['list_line_prices'] : [];
+        $discRows = is_array($snapshot['line_prices'] ?? null) ? $snapshot['line_prices'] : [];
+        $listMap = $this->posInclusiveUnitPriceMap($listRows);
+        $discMap = $this->posInclusiveUnitPriceMap($discRows);
+        $listMapByCode = $this->posInclusiveUnitPriceMapByItemCode($listRows);
+        $discMapByCode = $this->posInclusiveUnitPriceMapByItemCode($discRows);
         $totalDiscount = round(
             (float)($snapshot['coupon_discount'] ?? 0)
             + (float)($snapshot['cash_discount'] ?? 0)
@@ -521,17 +538,25 @@ WHERE i.pos_flag = 1
             2
         );
 
-        $out = [];
+        $rows = [];
         foreach ($orderItems as $it) {
             $qty = max(1, (int)($it['quantity'] ?? 1));
             $gstRate = (float)($it['gst'] ?? 0);
+            $itemCode = strtolower(trim((string)($it['item_code'] ?? '')));
             $key = $this->posLinePriceLookupKey(
                 (string)($it['item_code'] ?? ''),
                 (string)($it['size'] ?? ''),
                 (string)($it['color'] ?? '')
             );
 
-            $listInclUnit = $listMap[$key] ?? null;
+            $listInclUnit = $listMap[$key] ?? ($itemCode !== '' ? ($listMapByCode[$itemCode] ?? null) : null);
+            $discInclUnit = $discMap[$key] ?? ($itemCode !== '' ? ($discMapByCode[$itemCode] ?? null) : null);
+
+            if ($discInclUnit === null || $discInclUnit <= 0) {
+                $discInclLine = (float)($it['finalprice'] ?? 0);
+                $discInclUnit = $qty >= 1 ? $discInclLine / $qty : $discInclLine;
+            }
+
             if ($listInclUnit === null || $listInclUnit <= 0) {
                 $listInclLine = (float)($it['finalprice'] ?? 0);
                 if ($listInclLine <= 0) {
@@ -540,30 +565,60 @@ WHERE i.pos_flag = 1
                 $listInclUnit = $qty >= 1 ? $listInclLine / $qty : $listInclLine;
             }
 
-            $discInclUnit = $discMap[$key] ?? null;
-            if ($discInclUnit === null || $discInclUnit <= 0) {
-                $discInclLine = (float)($it['finalprice'] ?? 0);
-                $discInclUnit = $qty >= 1 ? $discInclLine / $qty : $discInclLine;
-            }
-
-            if ($totalDiscount > 0.001 && count($orderItems) === 1 && $listInclUnit <= $discInclUnit + 0.02) {
-                $listInclUnit = round($discInclUnit + ($totalDiscount / $qty), 4);
-            }
-
-            $toPretax = static function (float $inclUnit) use ($gstRate): float {
-                if ($gstRate > 0) {
-                    return round($inclUnit / (1 + ($gstRate / 100)), 4);
-                }
-
-                return round($inclUnit, 4);
-            };
-
-            $out[] = [
+            $rows[] = [
                 'item_code' => (string)($it['item_code'] ?? ''),
                 'size' => (string)($it['size'] ?? ''),
                 'color' => (string)($it['color'] ?? ''),
-                'list_unit_pretax' => $toPretax((float)$listInclUnit),
-                'discounted_unit_pretax' => $toPretax((float)$discInclUnit),
+                'qty' => $qty,
+                'gst_rate' => $gstRate,
+                'list_incl_unit' => (float)$listInclUnit,
+                'disc_incl_unit' => (float)$discInclUnit,
+            ];
+        }
+
+        if ($totalDiscount > 0.001 && count($rows) > 0) {
+            $discExtendedSum = 0.0;
+            foreach ($rows as $row) {
+                $discExtendedSum += round($row['disc_incl_unit'] * $row['qty'], 2);
+            }
+            if ($discExtendedSum <= 0) {
+                $discExtendedSum = round((float)($snapshot['grand_total'] ?? 0), 2);
+            }
+
+            $remainingDiscount = $totalDiscount;
+            $lastIndex = count($rows) - 1;
+            foreach ($rows as $index => &$row) {
+                $share = $index === $lastIndex
+                    ? round($remainingDiscount, 2)
+                    : round(($totalDiscount * round($row['disc_incl_unit'] * $row['qty'], 2)) / max($discExtendedSum, 0.001), 2);
+                $remainingDiscount = round($remainingDiscount - $share, 2);
+
+                if ($row['list_incl_unit'] <= $row['disc_incl_unit'] + 0.02) {
+                    $row['list_incl_unit'] = round(
+                        $row['disc_incl_unit'] + ($share / max(1, $row['qty'])),
+                        4
+                    );
+                }
+            }
+            unset($row);
+        }
+
+        $toPretax = static function (float $inclUnit, float $gstRate): float {
+            if ($gstRate > 0) {
+                return round($inclUnit / (1 + ($gstRate / 100)), 4);
+            }
+
+            return round($inclUnit, 4);
+        };
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'item_code' => $row['item_code'],
+                'size' => $row['size'],
+                'color' => $row['color'],
+                'list_unit_pretax' => $toPretax((float)$row['list_incl_unit'], (float)$row['gst_rate']),
+                'discounted_unit_pretax' => $toPretax((float)$row['disc_incl_unit'], (float)$row['gst_rate']),
             ];
         }
 
@@ -594,6 +649,71 @@ WHERE i.pos_flag = 1
         }
 
         return $lineItemsMeta[$index];
+    }
+
+    /**
+     * When stored line meta has list = discounted, rebuild list pretax from summary discounts.
+     *
+     * @param list<array<string, mixed>> $items
+     */
+    private function applyPosListPriceFallbackFromDiscountMeta(array &$lineItemsMeta, array $items, array $posMeta): void
+    {
+        $totalDiscount = round(
+            (float)($posMeta['coupon_discount'] ?? 0)
+            + (float)($posMeta['cash_discount'] ?? 0)
+            + (float)($posMeta['gift_discount'] ?? 0)
+            + (float)($posMeta['line_discount'] ?? 0),
+            2
+        );
+        if ($totalDiscount <= 0.001 || count($items) === 0) {
+            return;
+        }
+
+        $discExtendedSum = 0.0;
+        foreach ($items as $item) {
+            $discExtendedSum += round((float)($item['line_total'] ?? 0), 2);
+        }
+        if ($discExtendedSum <= 0) {
+            $discExtendedSum = round((float)($posMeta['grand_total'] ?? 0), 2);
+        }
+
+        $remainingDiscount = $totalDiscount;
+        $lastIndex = count($items) - 1;
+        foreach ($items as $index => $item) {
+            $qty = max(1, (float)($item['quantity'] ?? 1));
+            $gstRate = (float)($item['tax_rate'] ?? 0);
+            $discPretax = (float)($item['unit_price'] ?? 0);
+            $meta = $this->posInvoiceLineMetaForItem($item, $index, $lineItemsMeta);
+            $listPretax = is_array($meta) ? (float)($meta['list_unit_pretax'] ?? 0) : 0.0;
+            if ($listPretax <= 0) {
+                $listPretax = $discPretax;
+            }
+
+            if ($listPretax > $discPretax + 0.02) {
+                continue;
+            }
+
+            $share = $index === $lastIndex
+                ? round($remainingDiscount, 2)
+                : round(($totalDiscount * round((float)($item['line_total'] ?? 0), 2)) / max($discExtendedSum, 0.001), 2);
+            $remainingDiscount = round($remainingDiscount - $share, 2);
+
+            $discInclUnit = $gstRate > 0 ? $discPretax * (1 + ($gstRate / 100)) : $discPretax;
+            $listInclUnit = round($discInclUnit + ($share / $qty), 4);
+            $listPretax = $gstRate > 0 ? round($listInclUnit / (1 + ($gstRate / 100)), 4) : round($listInclUnit, 4);
+
+            if (is_array($meta)) {
+                $lineItemsMeta[$index]['list_unit_pretax'] = $listPretax;
+            } else {
+                $lineItemsMeta[$index] = [
+                    'item_code' => (string)($item['item_code'] ?? ''),
+                    'size' => '',
+                    'color' => '',
+                    'list_unit_pretax' => $listPretax,
+                    'discounted_unit_pretax' => $discPretax,
+                ];
+            }
+        }
     }
 
     private function posLinePriceLookupKey(string $itemCode, string $size = '', string $color = ''): string
@@ -906,6 +1026,10 @@ WHERE i.pos_flag = 1
         $totalCgstAmt = 0;
         $totalIgstAmt = 0;
         $lineItemsMeta = $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null);
+        $posDiscountMeta = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
+        if (!empty($posDiscountMeta)) {
+            $this->applyPosListPriceFallbackFromDiscountMeta($lineItemsMeta, $items, $posDiscountMeta);
+        }
         $usePosItemLayout = !empty($lineItemsMeta) || !empty($invoice['pos_flag']);
 
         // Build item rows
@@ -1028,7 +1152,9 @@ WHERE i.pos_flag = 1
         }
         // Build summary rows with tax totals
         $discount = $invoice['discount_amount'] ?? 0;
-        $posDiscountMeta = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
+        if (empty($posDiscountMeta)) {
+            $posDiscountMeta = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
+        }
         if (empty($posDiscountMeta) && !empty($invoice['pos_flag'])) {
             $posDiscountMeta = [
                 'subtotal_goods' => round((float)($invoice['total_amount'] ?? 0), 2),
