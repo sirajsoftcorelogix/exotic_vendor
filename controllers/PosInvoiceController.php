@@ -462,6 +462,140 @@ WHERE i.pos_flag = 1
         return is_array($pos) ? $pos : [];
     }
 
+    private function parsePosInvoiceLineItemsMeta(?string $notes): array
+    {
+        if ($notes === null || trim($notes) === '') {
+            return [];
+        }
+        $decoded = json_decode($notes, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+        $lines = $decoded['line_items'] ?? null;
+
+        return is_array($lines) ? $lines : [];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $priceRows
+     *
+     * @return array<string, float>
+     */
+    private function posInclusiveUnitPriceMap(array $priceRows): array
+    {
+        $map = [];
+        foreach ($priceRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $key = $this->posLinePriceLookupKey(
+                (string)($row['itemcode'] ?? ''),
+                (string)($row['size'] ?? ''),
+                (string)($row['color'] ?? '')
+            );
+            $map[$key] = (float)str_replace(',', '', (string)($row['price'] ?? '0'));
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orderItems
+     * @param array<string, mixed> $snapshot
+     *
+     * @return list<array{item_code: string, size: string, color: string, list_unit_pretax: float, discounted_unit_pretax: float}>
+     */
+    private function computePosInvoiceLineMetaFromSnapshot(array $orderItems, array $snapshot): array
+    {
+        $listMap = $this->posInclusiveUnitPriceMap(
+            is_array($snapshot['list_line_prices'] ?? null) ? $snapshot['list_line_prices'] : []
+        );
+        $discMap = $this->posInclusiveUnitPriceMap(
+            is_array($snapshot['line_prices'] ?? null) ? $snapshot['line_prices'] : []
+        );
+        $totalDiscount = round(
+            (float)($snapshot['coupon_discount'] ?? 0)
+            + (float)($snapshot['cash_discount'] ?? 0)
+            + (float)($snapshot['gift_discount'] ?? 0)
+            + (float)($snapshot['line_discount'] ?? 0),
+            2
+        );
+
+        $out = [];
+        foreach ($orderItems as $it) {
+            $qty = max(1, (int)($it['quantity'] ?? 1));
+            $gstRate = (float)($it['gst'] ?? 0);
+            $key = $this->posLinePriceLookupKey(
+                (string)($it['item_code'] ?? ''),
+                (string)($it['size'] ?? ''),
+                (string)($it['color'] ?? '')
+            );
+
+            $listInclUnit = $listMap[$key] ?? null;
+            if ($listInclUnit === null || $listInclUnit <= 0) {
+                $listInclLine = (float)($it['finalprice'] ?? 0);
+                if ($listInclLine <= 0) {
+                    $listInclLine = (float)($it['itemprice'] ?? 0) * $qty;
+                }
+                $listInclUnit = $qty >= 1 ? $listInclLine / $qty : $listInclLine;
+            }
+
+            $discInclUnit = $discMap[$key] ?? null;
+            if ($discInclUnit === null || $discInclUnit <= 0) {
+                $discInclLine = (float)($it['finalprice'] ?? 0);
+                $discInclUnit = $qty >= 1 ? $discInclLine / $qty : $discInclLine;
+            }
+
+            if ($totalDiscount > 0.001 && count($orderItems) === 1 && $listInclUnit <= $discInclUnit + 0.02) {
+                $listInclUnit = round($discInclUnit + ($totalDiscount / $qty), 4);
+            }
+
+            $toPretax = static function (float $inclUnit) use ($gstRate): float {
+                if ($gstRate > 0) {
+                    return round($inclUnit / (1 + ($gstRate / 100)), 4);
+                }
+
+                return round($inclUnit, 4);
+            };
+
+            $out[] = [
+                'item_code' => (string)($it['item_code'] ?? ''),
+                'size' => (string)($it['size'] ?? ''),
+                'color' => (string)($it['color'] ?? ''),
+                'list_unit_pretax' => $toPretax((float)$listInclUnit),
+                'discounted_unit_pretax' => $toPretax((float)$discInclUnit),
+            ];
+        }
+
+        return $out;
+    }
+
+    private function posInvoiceLineMetaForItem(array $item, int $index, array $lineItemsMeta): ?array
+    {
+        if (!isset($lineItemsMeta[$index]) || !is_array($lineItemsMeta[$index])) {
+            foreach ($lineItemsMeta as $meta) {
+                if (!is_array($meta)) {
+                    continue;
+                }
+                if (trim((string)($meta['item_code'] ?? '')) !== trim((string)($item['item_code'] ?? ''))) {
+                    continue;
+                }
+                if (trim((string)($meta['size'] ?? '')) !== trim((string)($item['size'] ?? ''))) {
+                    continue;
+                }
+                if (trim((string)($meta['color'] ?? '')) !== trim((string)($item['color'] ?? ''))) {
+                    continue;
+                }
+
+                return $meta;
+            }
+
+            return null;
+        }
+
+        return $lineItemsMeta[$index];
+    }
+
     private function posLinePriceLookupKey(string $itemCode, string $size = '', string $color = ''): string
     {
         return strtolower(trim($itemCode)) . '|' . strtolower(trim($size)) . '|' . strtolower(trim($color));
@@ -604,7 +738,7 @@ WHERE i.pos_flag = 1
         }
     }
 
-    private function persistPosInvoiceDiscountNotes(mysqli $conn, int $invoiceId, array $discountMeta): void
+    private function persistPosInvoiceDiscountNotes(mysqli $conn, int $invoiceId, array $discountMeta, array $lineItemsMeta = []): void
     {
         if ($invoiceId <= 0) {
             return;
@@ -625,13 +759,17 @@ WHERE i.pos_flag = 1
                 'coupon_display_name' => trim((string)($discountMeta['coupon_display_name'] ?? '')),
             ],
         ];
+        if (count($lineItemsMeta) > 0) {
+            $payload['line_items'] = $lineItemsMeta;
+        }
 
         $hasSummary = ($payload['pos_discounts']['subtotal_goods'] > 0)
             || ($payload['pos_discounts']['coupon_discount'] > 0)
             || ($payload['pos_discounts']['cash_discount'] > 0)
             || ($payload['pos_discounts']['gift_discount'] > 0)
             || ($payload['pos_discounts']['line_discount'] > 0)
-            || ($payload['pos_discounts']['grand_total'] > 0);
+            || ($payload['pos_discounts']['grand_total'] > 0)
+            || count($lineItemsMeta) > 0;
 
         if (!$hasSummary) {
             return;
@@ -767,6 +905,8 @@ WHERE i.pos_flag = 1
         $totalSgstAmt = 0;
         $totalCgstAmt = 0;
         $totalIgstAmt = 0;
+        $lineItemsMeta = $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null);
+        $usePosItemLayout = !empty($lineItemsMeta) || !empty($invoice['pos_flag']);
 
         // Build item rows
         foreach ($items as $idx => $item) {
@@ -794,15 +934,56 @@ WHERE i.pos_flag = 1
             $totalSgstAmt += $item['sgst'];
             $totalCgstAmt += $item['cgst'];
             $totalIgstAmt += $item['igst'];
+
+            $discUnitPretax = (float)($item['unit_price'] ?? 0);
+            $listUnitPretax = $discUnitPretax;
+            $lineMeta = $this->posInvoiceLineMetaForItem($item, $idx, $lineItemsMeta);
+            if (is_array($lineMeta)) {
+                if ((float)($lineMeta['discounted_unit_pretax'] ?? 0) > 0) {
+                    $discUnitPretax = (float)$lineMeta['discounted_unit_pretax'];
+                }
+                if ((float)($lineMeta['list_unit_pretax'] ?? 0) > 0) {
+                    $listUnitPretax = (float)$lineMeta['list_unit_pretax'];
+                }
+            }
+            $rateBase = $discUnitPretax > 0 ? $discUnitPretax : (float)($item['unit_price'] ?? 0);
+
             if ($item['igst'] > 0) {
-                $igstRate = ($item['igst'] / $item['quantity']) / ($item['unit_price'] / 100);
+                $igstRate = $rateBase > 0 ? ($item['igst'] / $item['quantity']) / ($rateBase / 100) : 0;
                 $sgstRate = 0;
                 $cgstRate = 0;
             } else {
-                $sgstRate = ($item['sgst'] / $item['quantity']) / ($item['unit_price'] / 100);
-                $cgstRate = ($item['cgst'] / $item['quantity']) / ($item['unit_price'] / 100);
+                $sgstRate = $rateBase > 0 ? ($item['sgst'] / $item['quantity']) / ($rateBase / 100) : 0;
+                $cgstRate = $rateBase > 0 ? ($item['cgst'] / $item['quantity']) / ($rateBase / 100) : 0;
                 $igstRate = 0;
             }
+
+            if ($usePosItemLayout) {
+                $itemName = htmlspecialchars($item['item_name'] ?? '');
+                $hsnCode = trim((string)($item['hsn'] ?? ''));
+                $descHtml = $itemName;
+                if ($hsnCode !== '') {
+                    $descHtml .= '<br><span style="font-size:12px;color:#444;">HSN: '
+                        . htmlspecialchars($hsnCode) . '</span>';
+                }
+                $itemsrows .= '
+                    <tr>
+                        <td>' . ($idx + 1) . '</td>
+                        <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
+                        <td class="desc">' . $descHtml . '</td>
+                        <td class="right">' . number_format($listUnitPretax, 2) . '</td>
+                        <td>' . $item['quantity'] . '</td>
+                        <td class="right">' . number_format($discUnitPretax, 2) . '</td>
+                        <td class="right">' . number_format($sgstRate, 2) . '</td>
+                        <td class="right">' . number_format($item['sgst'], 2) . '</td>
+                        <td class="right">' . number_format($cgstRate, 2) . '</td>
+                        <td class="right">' . number_format($item['cgst'], 2) . '</td>
+                        <td class="right">' . number_format($igstRate, 2) . '</td>
+                        <td class="right">' . number_format($item['igst'], 2) . '</td>
+                        <td class="right bold">' . number_format($item['line_total'], 2) . '</td>
+                    </tr>
+            ';
+            } else {
             $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
@@ -820,6 +1001,7 @@ WHERE i.pos_flag = 1
                         <td class="right bold">' . number_format($item['line_total'], 2) . '</td>
                     </tr>
             ';
+            }
         }
         if (count($items) < 3) {
             // Add empty rows to maintain table height
@@ -969,6 +1151,13 @@ WHERE i.pos_flag = 1
         }
 
         $temphtml = file_get_contents($templatePath);
+        if ($usePosItemLayout && ($invoice['status'] ?? '') !== 'proforma') {
+            $temphtml = str_replace(
+                ['<th>HSN</th>', '<th>Price</th>'],
+                ['<th>List Price</th>', '<th>Disc. Price</th>'],
+                $temphtml
+            );
+        }
 
         // Replace placeholders
         $html = str_replace(
@@ -1118,6 +1307,9 @@ WHERE i.pos_flag = 1
         }
 
         $posDiscountMeta = $useSnapshot ? $checkoutSnapshot : [];
+        $lineItemsMeta = $useSnapshot
+            ? $this->computePosInvoiceLineMetaFromSnapshot($items, $checkoutSnapshot)
+            : [];
         $result = $this->createPostInternal();
         if (!empty($result['success']) && !empty($result['invoice_id']) && $useSnapshot && is_array($posDiscountMeta)) {
             $posDiscountMeta['gst_total'] = round((float)($_POST['tax_amount'] ?? 0), 2);
@@ -1128,7 +1320,7 @@ WHERE i.pos_flag = 1
             if (!isset($posDiscountMeta['discounts_absorbed']) || $posDiscountMeta['discounts_absorbed'] === '') {
                 $posDiscountMeta['discounts_absorbed'] = true;
             }
-            $this->persistPosInvoiceDiscountNotes($conn, (int)$result['invoice_id'], $posDiscountMeta);
+            $this->persistPosInvoiceDiscountNotes($conn, (int)$result['invoice_id'], $posDiscountMeta, $lineItemsMeta);
         }
         unset($_SESSION['pos_checkout_invoice_snapshot']);
 

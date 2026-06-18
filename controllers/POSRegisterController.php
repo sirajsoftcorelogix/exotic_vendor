@@ -3445,6 +3445,7 @@ class POSRegisterController
             'line_discount' => round((float)($payload['receipt_line_discount'] ?? 0), 2),
             'grand_total' => $orderTotal,
             'line_prices' => is_array($posLinePrices) ? $posLinePrices : [],
+            'list_line_prices' => is_array($payload['list_line_prices'] ?? null) ? $payload['list_line_prices'] : [],
             'discounts_absorbed' => !empty($payload['receipt_discounts_absorbed']),
             'custom_discount_mode' => trim((string)($payload['custom_discount_mode'] ?? '')),
             'custom_discount_value' => round((float)($payload['custom_discount_value'] ?? 0), 2),

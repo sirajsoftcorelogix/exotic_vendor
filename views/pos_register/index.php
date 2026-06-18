@@ -2159,6 +2159,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (Array.isArray(linePricePayload) && linePricePayload.length > 0) {
       body.pos_line_prices = linePricePayload;
     }
+    var listPricePayload =
+      typeof window.getPosListLinePricesPayloadForCheckout === "function"
+        ? window.getPosListLinePricesPayloadForCheckout()
+        : [];
+    if (Array.isArray(listPricePayload) && listPricePayload.length > 0) {
+      body.list_line_prices = listPricePayload;
+    }
     fetch("index.php?page=pos_register&action=checkout-create", {
       method: "POST",
       credentials: "same-origin",

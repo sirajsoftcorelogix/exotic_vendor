@@ -1393,6 +1393,28 @@
     return out;
   }
 
+  /** Catalog / list unit prices (GST-inclusive) before checkout discounts. */
+  function buildListLinePricesPayload(data) {
+    var items = getCartItems(data || {});
+    var out = [];
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      var qty = lineQty(row);
+      var listU = lineListUnitNumber(row, qty);
+      if (listU == null || isNaN(listU)) {
+        listU = 0;
+      }
+      out.push({
+        itemcode: lineItemCodeForApi(row),
+        size: lineSizeForApi(row),
+        color: lineColorForApi(row),
+        price:
+          formatMoneyDisplay(listU) != null ? String(formatMoneyDisplay(listU)) : String(round2(listU))
+      });
+    }
+    return out;
+  }
+
   function pruneLineAdjustMaps(refsUsed) {
     var next = {};
     for (var i = 0; i < refsUsed.length; i++) {
@@ -3091,6 +3113,14 @@
       return [];
     }
     return buildPosLinePricesPayload(d, getTotalsForCheckoutAlloc());
+  };
+
+  window.getPosListLinePricesPayloadForCheckout = function () {
+    var d = window.__posCartLastRetrieveData;
+    if (!d || typeof d !== 'object') {
+      return [];
+    }
+    return buildListLinePricesPayload(d);
   };
 
   window.hasPosLinePriceOverridesForCheckout = function () {
