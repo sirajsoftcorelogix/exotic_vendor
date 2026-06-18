@@ -741,6 +741,7 @@ class ProductsController
                     ? ('https://cdn.exoticindia.com/images/products/original/' . $apiItem['image'])
                     : '';
                 $item['groupname'] = $apiItem['groupname'] ?? '';
+                $item['accounts_group'] = product::vendorApiAccountsGroup($apiItem);
                 $item['local_stock'] = max(0, (int)round((float)($apiItem['local_stock'] ?? $apiItem['stock'] ?? 0)));
                 $localStockByCode[$codeKey] = $item['local_stock'];
                 $baseSku = strtoupper(trim((string)($item['sku'] ?? '')));
@@ -826,6 +827,7 @@ class ProductsController
                 }
 
                 $productModel->syncProductVendorMapFromApiItem($code, $apiItem);
+                $productModel->syncAccountsGroupFromApiItem($code, $apiItem);
 
                 // echo "Processed item code: " . $code . "\n";
                 // echo "Created: $created, Updated: $updated, Failed: " . count($failed) . "\n";

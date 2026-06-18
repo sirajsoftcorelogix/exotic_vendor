@@ -73,7 +73,7 @@ class product
             'keywords', 'hscode', 'hsn', 'long_description', 'long_description_india', 'aplus_content_ids',
             'item_level', 'marketplace_vendor', 'colormap', 'flex_status', 'vendor_us',
             'today_global', 'today_india', 'amazon_itemcode_alias', 'youtube_links', 'sketchfab_links',
-            'dimensions', 'size', 'color', 'sku', 'search_term', 'search_category',
+            'dimensions', 'size', 'color', 'sku', 'search_term', 'search_category', 'accounts_group',
         ] as $key) {
             if (array_key_exists($key, $row)) {
                 $row[$key] = $this->apiFormString($row[$key]);
@@ -245,6 +245,17 @@ class product
         }
 
         return trim((string)($masterRow['hsn'] ?? ''));
+    }
+
+    /** Master API row: account group name is on `account_group` (publish/inbound) or `accounts_group`. */
+    public static function vendorApiAccountsGroup(array $masterRow): string
+    {
+        $name = trim((string)($masterRow['account_group'] ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        return trim((string)($masterRow['accounts_group'] ?? ''));
     }
 
     /**
@@ -817,6 +828,23 @@ class product
         return is_array($decoded) ? $decoded : null;
     }
 
+    /** Set accounts_group on all rows for an item code from the vendor product/fetch master row. */
+    public function syncAccountsGroupFromApiItem(string $itemCode, array $apiItem): void
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '' || !$this->vpProductsHasColumn('accounts_group')) {
+            return;
+        }
+        $value = self::vendorApiAccountsGroup($apiItem);
+        $stmt = $this->db->prepare('UPDATE vp_products SET accounts_group = ? WHERE item_code = ?');
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('ss', $value, $itemCode);
+        $stmt->execute();
+        $stmt->close();
+    }
+
     public function updateProductFromApi($productData, array $options = [])
     {
         $updatedCount = 0;
@@ -1352,6 +1380,7 @@ class product
                 }
 
                 if ($itemcode !== '') {
+                    $this->syncAccountsGroupFromApiItem($itemcode, $product);
                     $mapResult = $this->syncProductVendorMapFromApiItem($itemcode, $product);
                     $vendorMapSynced += (int) ($mapResult['synced'] ?? 0);
                     $vendorMapSkipped += (int) ($mapResult['skipped'] ?? 0);
