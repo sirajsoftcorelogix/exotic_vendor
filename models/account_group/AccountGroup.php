@@ -165,6 +165,35 @@ class AccountGroup
         return $rows;
     }
 
+    /**
+     * Active account groups for a parent item group slug (category.name / account_group.item_group).
+     *
+     * @return list<array{id:int,account_group_name:string}>
+     */
+    public function getActiveByItemGroup(string $itemGroup): array
+    {
+        $itemGroup = trim($itemGroup);
+        if ($itemGroup === '') {
+            return [];
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT id, account_group_name
+             FROM account_group
+             WHERE is_active = 1 AND item_group = ?
+             ORDER BY account_group_name ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $itemGroup);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        return $rows;
+    }
+
     public function isValidItemGroup(?string $itemGroup): bool
     {
         if ($itemGroup === null || $itemGroup === '') {

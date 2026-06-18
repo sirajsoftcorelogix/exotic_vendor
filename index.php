@@ -1127,6 +1127,9 @@ switch ($page) {
             case 'syncVendorReferenceCache':
                 $controller->syncVendorReferenceCache();
                 break;
+            case 'fetchAccountGroups':
+                $controller->fetchAccountGroupsAjax();
+                break;
             case 'printInboundLabel':
                 $controller->printInboundLabel();
                 break;

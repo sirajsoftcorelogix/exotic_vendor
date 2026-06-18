@@ -781,6 +781,7 @@ class Inbounding {
     }
     public function getform2data($id) {
         $id = (int)$id;
+        $this->ensureInboundAccountsGroupColumn();
 
         // 1. Get Main Inbound Data
         // $sql = "SELECT vi.*, vv.vendor_name FROM vp_inbound AS vi LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id WHERE vi.id = $id";
@@ -806,7 +807,7 @@ class Inbounding {
         $r = $this->conn->query("SELECT id, material_name FROM `material` ORDER BY material_name ASC");
         $material = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
         
-        $r = $this->conn->query("SELECT id, category, display_name, parent FROM `category` ORDER BY parent, display_name");
+        $r = $this->conn->query("SELECT id, category, display_name, parent, name FROM `category` ORDER BY parent, display_name");
         $category = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
         $r = $this->conn->query("SELECT id, display_name as `address_title` FROM `exotic_address` ORDER BY address_title ASC");
@@ -961,6 +962,7 @@ class Inbounding {
     }
     public function updatedesktopform($id, $data) {
         $this->ensureInboundRedirectColumn();
+        $this->ensureInboundAccountsGroupColumn();
 
         // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
@@ -1021,6 +1023,27 @@ class Inbounding {
         if ($res && $res->num_rows === 0) {
             @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN redirect VARCHAR(500) NOT NULL DEFAULT '' AFTER discount_india");
         }
+    }
+
+    private function ensureInboundAccountsGroupColumn(): void
+    {
+        $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE 'accounts_group'");
+        if ($res && $res->num_rows === 0) {
+            @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN accounts_group INT NULL DEFAULT NULL AFTER group_name");
+        }
+    }
+
+    /**
+     * Map inbound group_name (category.category) to account_group.item_group slug (category.name).
+     */
+    public function resolveItemGroupSlugFromGroupName($groupName): string
+    {
+        $row = $this->getBycateId($groupName);
+        if (!$row) {
+            return '';
+        }
+
+        return trim((string) ($row['name'] ?? ''));
     }
 
     // --- Add these functions inside your InboundingModel class ---
