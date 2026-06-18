@@ -178,7 +178,7 @@
                 destination_country: destCountry
             };
 
-            fetch('http://localhost/exotic_vendor/index.php?page=dispatch&action=test_aramex_api', {
+            fetch('/index.php?page=dispatch&action=test_aramex_api', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

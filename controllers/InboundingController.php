@@ -2,6 +2,7 @@
 require_once 'models/inbounding/Inbounding.php';
 require_once 'models/vendor/VendorReferenceCache.php';
 require_once 'controllers/ProductsController.php';
+require_once __DIR__ . '/../helpers/inbound_profiler.php';
 
 $inboundingModel = new Inbounding($conn);
 
@@ -18,6 +19,10 @@ class InboundingController {
     public function index() {
         is_login();
         global $inboundingModel;
+        $prof = inbound_profiler_start('list', [
+            'page_no' => isset($_GET['page_no']) ? (int) $_GET['page_no'] : 1,
+            'limit' => isset($_GET['limit']) ? (int) $_GET['limit'] : 50,
+        ]);
         
         // 1. Capture Filter Inputs
         $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
@@ -53,10 +58,16 @@ class InboundingController {
         $loggedUserId = $_SESSION['user']['id'];
         // 3. Fetch Main Data
         $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters ,$isMyInbound,$loggedUserId,$sort); 
+        inbound_profiler_step($prof, 'getAll', [
+            'rows' => count($pt_data['inbounding'] ?? []),
+            'total_records' => (int) ($pt_data['totalRecords'] ?? 0),
+        ]);
         
         // 4. Fetch Dynamic Dropdown Data (The function we just updated)
         $dropdowns = $inboundingModel->getFilterDropdowns();
+        inbound_profiler_step($prof, 'getFilterDropdowns');
         $alluser_list = $inboundingModel->getAllActiveUsers();
+        inbound_profiler_step($prof, 'getAllActiveUsers');
         $data = [
             'inbounding_data' => $pt_data["inbounding"],
             'page_no'         => $page_no,
@@ -75,6 +86,7 @@ class InboundingController {
             'alluser_list'      => $alluser_list
         ];
         renderTemplate('views/inbounding/index.php', $data, 'Manage Inbounding');
+        inbound_profiler_finish($prof, 'ok');
     }
     // In your Inbounding Controller
     public function bulk_assign_action(){
@@ -1209,8 +1221,9 @@ class InboundingController {
     }
     public function updatedesktopform() {
         global $inboundingModel;
-        // 1. Setup & Checks
         $id = (int) ($_GET['id'] ?? 0);
+        $prof = inbound_profiler_start('updatedesktopform', ['inbound_id' => $id]);
+        // 1. Setup & Checks
         if ($id <= 0) {
             echo "Invalid record.";
             exit;
@@ -1221,8 +1234,9 @@ class InboundingController {
         }
 
         $oldData = $inboundingModel->getform1data($id);
+        inbound_profiler_step($prof, 'getform1data');
 
-        if (!$oldData) { echo "Record not found."; exit; }
+        if (!$oldData) { echo "Record not found."; inbound_profiler_finish($prof, 'not_found'); exit; }
 
         // Gallery deletions first (single CSV field avoids PHP max_input_vars dropping many delete_gallery_image_ids[] fields on large forms)
         $delCsv = trim((string) ($_POST['delete_gallery_image_ids_csv'] ?? ''));
@@ -1410,6 +1424,7 @@ class InboundingController {
         
         // 4. Update Main Record
         $result = $inboundingModel->updatedesktopform($id, $data);
+        inbound_profiler_step($prof, 'updatedesktopform_db');
 
         // --- VARIATIONS LOGIC ---
         $allVariations = $_POST['variations'] ?? [];
@@ -1441,6 +1456,7 @@ class InboundingController {
         }
         unset($variant);
         $inboundingModel->saveVariations($id, $allVariations, $item_code, $deletedVariationIds);
+        inbound_profiler_step($prof, 'saveVariations', ['variation_count' => count($allVariations)]);
 
         // 4b. For cloned/new rows inheriting old_photo, create a dedicated copy of the main variation image.
         // This prevents multiple variations sharing one file path which can disappear after rename workflows.
@@ -1516,12 +1532,6 @@ class InboundingController {
             // START: ADVANCED RENAMING LOGIC (4 CASES)
             // =========================================================
             if (!empty($item_code) && $shouldRename && $action_clicked !== 'preview_json') {
-                // Pass current POST data to helper so we use fresh color/size values
-                // $currentDataForRename = [
-                //     'is_variant' => $is_variant,
-                //     'color'      => $_POST['color'] ?? '',
-                //     'size'       => $_POST['size'] ?? ''
-                // ];
                 $this->ensureImagesAreRenamed(
                     $id, 
                     $item_code, 
@@ -1529,10 +1539,12 @@ class InboundingController {
                     $_POST['color'] ?? '', 
                     $_POST['size'] ?? ''
                 );
+                inbound_profiler_step($prof, 'ensureImagesAreRenamed', ['item_code' => $item_code]);
             }
             // =========================================================
 
             if ($action_clicked === 'preview_json') {
+                inbound_profiler_finish($prof, 'preview_json');
                 while (ob_get_level() > 0) {
                     ob_end_clean();
                 }
@@ -1549,8 +1561,10 @@ class InboundingController {
             } else {
                 header("location: " . base_url('?page=inbounding&action=list'));
             }
+            inbound_profiler_finish($prof, 'ok', ['save_action' => $action_clicked]);
             exit;
         } else {
+            inbound_profiler_finish($prof, 'failed', ['message' => $result['message'] ?? '']);
             echo "Update failed: " . $result['message'];
         }
     }
@@ -1944,6 +1958,7 @@ class InboundingController {
         }
         global $inboundingModel;
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        $prof = inbound_profiler_start('inbound_product_publish', ['inbound_id' => $id]);
         $publish_status_req = isset($_GET['publish_status']) ? (int) $_GET['publish_status'] : 1;
         if ($publish_status_req !== 0 && $publish_status_req !== 1) {
             $publish_status_req = 1;
@@ -2007,6 +2022,7 @@ class InboundingController {
 
         // top level data
         $data1 = $inboundingModel->getpublishdata($id);
+        inbound_profiler_step($prof, 'getpublishdata_initial');
         if (
             empty($id) ||
             !is_array($data1) ||
@@ -2022,6 +2038,7 @@ class InboundingController {
                 'message' => 'Publish data not found or incomplete for this inbound record.',
                 'inbound_id' => $id
             ]);
+            inbound_profiler_finish($prof, 'error_incomplete_data');
             exit;
         }
         $this->ensureImagesAreRenamed(
@@ -2031,7 +2048,9 @@ class InboundingController {
             $data1['data']['color'] ?? '', 
             $data1['data']['size'] ?? ''
         );
+        inbound_profiler_step($prof, 'ensureImagesAreRenamed');
         $data = $inboundingModel->getpublishdata($id);
+        inbound_profiler_step($prof, 'getpublishdata_after_rename');
         if (!is_array($data) || !isset($data['data']) || !is_array($data['data'])) {
             if (ob_get_length()) { ob_clean(); }
             header('Content-Type: application/json');
@@ -2294,6 +2313,11 @@ class InboundingController {
         $API_data['images'] = $images_payload;
         // echo "<pre>";print_r($API_data);exit;
         $jsonString = json_encode($API_data, JSON_UNESCAPED_SLASHES);
+        inbound_profiler_step($prof, 'build_api_payload', [
+            'variation_rows' => count($d['var_rows'] ?? []),
+            'image_count' => count($d['img'] ?? []),
+            'payload_bytes' => strlen($jsonString),
+        ]);
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
@@ -2311,6 +2335,7 @@ class InboundingController {
                 ob_end_clean();
             }
             header('Content-Type: application/json; charset=utf-8');
+            inbound_profiler_finish($prof, 'preview_only');
             $discreteVendorId = (int) ($API_data['discrete_vendors'][0]['vendor'] ?? 0);
             echo json_encode([
                 'status' => 'success',
@@ -2362,6 +2387,7 @@ class InboundingController {
         $result = json_decode($response);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        inbound_profiler_step($prof, 'vendor_api_product_create', ['http_code' => $httpCode]);
         
         if (curl_errno($ch)) {
             $error = "cURL Error: " . curl_error($ch);
@@ -2381,6 +2407,7 @@ class InboundingController {
             if (ob_get_length()) { ob_clean(); }
             header('Content-Type: application/json');
             echo json_encode(['status' => 'error', 'message' => $error, 'log_file' => $logFileData['filename']]);
+            inbound_profiler_finish($prof, 'curl_error');
             exit;
         }
         
@@ -2403,6 +2430,7 @@ class InboundingController {
             if (ob_get_length()) { ob_clean(); }
             header('Content-Type: application/json');
             echo json_encode(['status' => 'error', 'message' => "API Error HTTP found.", 'debug' => $response, 'log_file' => $logFileData['filename']]);
+            inbound_profiler_finish($prof, 'http_error', ['http_code' => $httpCode]);
             exit;
         }
 
@@ -2421,10 +2449,12 @@ class InboundingController {
             // import API
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
+            inbound_profiler_step($prof, 'importApiCall');
             
             // insert stock moment
             $stoc_data = $inboundingModel->stock_data($id);
             $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
+            inbound_profiler_step($prof, 'insert_stock_data');
             
             // === LOG SUCCESS ===
             $logFileData = $this->logPublishProcess([
@@ -2445,6 +2475,7 @@ class InboundingController {
                 'message' => 'Product Upoaded Successfully!',
                 'log_file' => $logFileData['filename']
             ]);
+            inbound_profiler_finish($prof, 'success', ['item_code' => $itemCode]);
         } else {
             // === LOG API FAILURE (non-success response or has error) ===
             $errorMsg = isset($result->error) ? $result->error : 'API returned non-success status';
@@ -2462,6 +2493,7 @@ class InboundingController {
             if (ob_get_length()) { ob_clean(); }
             header('Content-Type: application/json');
             echo json_encode(['status' => 'error', 'message' => 'Publish failed. ' . $errorMsg, 'response' => $response, 'log_file' => $logFileData['filename']]);
+            inbound_profiler_finish($prof, 'api_response_failed');
         }
         exit;
     }
