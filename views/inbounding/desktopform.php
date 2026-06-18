@@ -1305,25 +1305,24 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             $rootCategories = [];
             if (!empty($data['category'])) {
                 foreach ($data['category'] as $row) {
-                    if (isset($row['is_active']) && $row['is_active'] != 1) { continue; }
-                    // 1. Get the Parent Key (Strict String)
-                    // This matches the 'parent' column in your DB (e.g. "clothing" or "mens_wear|clothing")
-                    $parentKey = isset($row['parent']) ? trim((string)$row['parent']) : '';
-                    // Skip orphans
-                    if ($parentKey === '') continue; 
-                    
-                    // 2. Identify the "Store Value" (The value used in the parent path)
-                    // Priority: 'category' column -> 'id' column
-                    // You mentioned "value should store of category field", so we use that.
+                    if (isset($row['is_active']) && (int) $row['is_active'] !== 1) {
+                        continue;
+                    }
+                    $parentId = (int) ($row['parent_id'] ?? -1);
+                    $parentKey = isset($row['parent']) ? trim((string) $row['parent']) : '';
+                    if ($parentKey === '') {
+                        continue;
+                    }
+
                     $storageValue = !empty($row['category']) ? $row['category'] : $row['id'];
-                    // 3. Build the Tree
                     $categoriesByParent1[$parentKey][] = [
                         'id'          => $row['id'],
                         'name'        => $row['display_name'],
-                        'store_val'   => $storageValue // <--- We send this to JS to build paths
+                        'store_val'   => $storageValue
                     ];
-                    // 4. Identify Root Groups (Parent is "0")
-                    if ($parentKey === '0') {
+
+                    $isRootGroup = ($parentId === 0) || ($parentKey === '0');
+                    if ($isRootGroup) {
                         $rootCategories[] = [
                             'id'          => $row['id'],
                             'name'        => $row['display_name'],
@@ -4638,13 +4637,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function reloadAccountsGroupsForGroup(groupValue, selectedId) {
-        const itemGroup = resolveItemGroupSlug(groupValue);
-        if (!itemGroup) {
+        let itemGroup = resolveItemGroupSlug(groupValue);
+        let url = fetchAccountGroupsUrl;
+        if (itemGroup) {
+            url += '&item_group=' + encodeURIComponent(itemGroup);
+        } else if (groupValue) {
+            url += '&group_name=' + encodeURIComponent(groupValue);
+        } else {
             setAccountsGroupOptions([], '');
             return;
         }
         try {
-            const url = fetchAccountGroupsUrl + '&item_group=' + encodeURIComponent(itemGroup);
             const res = await fetch(url, { credentials: 'include' });
             const json = await res.json();
             setAccountsGroupOptions(json.groups || [], selectedId);
@@ -4860,9 +4863,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- 7. STARTUP TRIGGER ---
+    const initialAccountsGroup = "<?php echo htmlspecialchars($selected_accounts_group, ENT_QUOTES, 'UTF-8'); ?>";
     if (groupingPreSelected.groupVal) {
         // Trigger the cascade
         updateGroupingCatList(groupingPreSelected.groupVal);
+        reloadAccountsGroupsForGroup(groupingPreSelected.groupVal, initialAccountsGroup);
     }
 });
 </script>

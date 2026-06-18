@@ -180,7 +180,8 @@ class AccountGroup
         $stmt = $this->conn->prepare(
             'SELECT id, account_group_name
              FROM account_group
-             WHERE is_active = 1 AND item_group = ?
+             WHERE is_active = 1
+               AND LOWER(TRIM(COALESCE(item_group, \'\'))) = LOWER(TRIM(?))
              ORDER BY account_group_name ASC'
         );
         if (!$stmt) {

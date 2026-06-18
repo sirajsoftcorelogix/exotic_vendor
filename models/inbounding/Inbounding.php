@@ -725,6 +725,34 @@ class Inbounding {
     }
 
     /**
+     * Root item group row (parent_id = 0) for vp_inbound.group_name / category.category code.
+     */
+    public function getRootCategoryByCode($categoryRef): ?array
+    {
+        $categoryRef = trim((string) $categoryRef);
+        if ($categoryRef === '') {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT id, name, display_name, category, parent, parent_id, is_active
+             FROM category
+             WHERE category = ? AND parent_id = 0
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->bind_param('s', $categoryRef);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $row ?: null;
+    }
+
+    /**
      * Slug used by inbound label templates (book, sculptures, jewelry, …).
      */
     public function resolveInboundLabelCategorySlug($groupName): string
@@ -807,7 +835,7 @@ class Inbounding {
         $r = $this->conn->query("SELECT id, material_name FROM `material` ORDER BY material_name ASC");
         $material = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
         
-        $r = $this->conn->query("SELECT id, category, display_name, parent, name FROM `category` ORDER BY parent, display_name");
+        $r = $this->conn->query("SELECT id, category, display_name, parent, parent_id, name, is_active FROM `category` ORDER BY parent, display_name");
         $category = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
         $r = $this->conn->query("SELECT id, display_name as `address_title` FROM `exotic_address` ORDER BY address_title ASC");
@@ -1034,11 +1062,11 @@ class Inbounding {
     }
 
     /**
-     * Map inbound group_name (category.category) to account_group.item_group slug (category.name).
+     * Map inbound group_name (category.category) to account_group.item_group via category.name.
      */
     public function resolveItemGroupSlugFromGroupName($groupName): string
     {
-        $row = $this->getBycateId($groupName);
+        $row = $this->getRootCategoryByCode($groupName);
         if (!$row) {
             return '';
         }
