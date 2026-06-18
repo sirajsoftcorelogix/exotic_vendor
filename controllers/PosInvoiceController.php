@@ -35,7 +35,9 @@ class PosInvoiceController
     {
         global $conn;
 
-        $warehouseId = $_SESSION['warehouse_id'] ?? 0;
+        is_login();
+
+        $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
 
         $sql = "
     SELECT 
@@ -72,8 +74,8 @@ LEFT JOIN vp_order_info o
 LEFT JOIN vp_customers c 
     ON c.id = i.customer_id
 
-WHERE IFNULL(o.payment_type,'') = 'offline' 
-  AND i.warehouse_id = " . intval($warehouseId) . "";
+WHERE i.pos_flag = 1
+  AND i.warehouse_id = " . $warehouseId;
 
         if (!empty($_GET['order_number'])) {
             $sql .= " AND o.order_number LIKE '%" . $conn->real_escape_string($_GET['order_number']) . "%'";
@@ -92,7 +94,7 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
         }
 
         if (!empty($_GET['type'])) {
-            $sql .= " AND o.payment_type = '" . $conn->real_escape_string($_GET['type']) . "'";
+            $sql .= " AND IFNULL(o.payment_type,'') = '" . $conn->real_escape_string($_GET['type']) . "'";
         }
 
         if (!empty($_GET['customer_id'])) {
@@ -107,16 +109,15 @@ WHERE IFNULL(o.payment_type,'') = 'offline'
             $sql .= " AND i.total_amount <= " . floatval($_GET['amount_max']);
         }
 
-
-        $sql .= " AND pos_flag = 1 ORDER BY i.id DESC";
-        //echo $sql;
-        //exit;
+        $sql .= " ORDER BY i.id DESC";
         $res = $conn->query($sql);
 
         $data = [];
 
-        while ($row = $res->fetch_assoc()) {
-            $data[] = $row;
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $data[] = $row;
+            }
         }
 
         echo json_encode($data);
