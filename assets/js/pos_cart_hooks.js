@@ -1394,22 +1394,35 @@
   }
 
   /** Catalog / list unit prices (GST-inclusive) before checkout discounts. */
-  function buildListLinePricesPayload(data) {
+  function buildListLinePricesPayload(data, totalsOverride) {
     var items = getCartItems(data || {});
+    var rawT =
+      totalsOverride && typeof totalsOverride === 'object'
+        ? totalsOverride
+        : totalsFromRetrieve(data && typeof data === 'object' ? data : {});
+    var alloc =
+      cartDeductionPoolFromTotals(rawT) > 0.001 ? computePerLineCartAllocations(data || {}, rawT) : null;
     var out = [];
     for (var i = 0; i < items.length; i++) {
       var row = items[i];
       var qty = lineQty(row);
-      var listU = lineListUnitNumber(row, qty);
-      if (listU == null || isNaN(listU)) {
-        listU = 0;
+      var posExt = linePosExtendedFromRow(row);
+      var cut = alloc != null && alloc.length === items.length ? alloc[i] || 0 : 0;
+      var effExt = Math.max(0, round2(posExt - cut));
+      // List = discounted row + cart-level share (coupon/custom/gift) allocated to this line.
+      var listInclUnit = qty >= 1 ? round2((effExt + cut) / qty) : round2(effExt + cut);
+      if (!(listInclUnit > 0)) {
+        var listU = lineListUnitNumber(row, qty);
+        listInclUnit = listU != null && !isNaN(listU) ? round2(listU) : 0;
       }
       out.push({
         itemcode: lineItemCodeForApi(row),
         size: lineSizeForApi(row),
         color: lineColorForApi(row),
         price:
-          formatMoneyDisplay(listU) != null ? String(formatMoneyDisplay(listU)) : String(round2(listU))
+          formatMoneyDisplay(listInclUnit) != null
+            ? String(formatMoneyDisplay(listInclUnit))
+            : String(round2(listInclUnit))
       });
     }
     return out;
@@ -3120,7 +3133,7 @@
     if (!d || typeof d !== 'object') {
       return [];
     }
-    return buildListLinePricesPayload(d);
+    return buildListLinePricesPayload(d, getTotalsForCheckoutAlloc());
   };
 
   window.hasPosLinePriceOverridesForCheckout = function () {
