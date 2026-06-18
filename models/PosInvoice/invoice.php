@@ -37,11 +37,12 @@ class POSInvoice
 
     public function createInvoice($data)
     {
-        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at, exchange_text, converted_amount, batch_no,warehouse_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)";
+        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at, exchange_text, converted_amount, batch_no, warehouse_id, pos_flag) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
         $warehouse_id = (int)($_SESSION['warehouse_id'] ?? 0);
+        $pos_flag = (int)($data['pos_flag'] ?? 1);
         $customer_id = (int)($data['customer_id'] ?? 0);
         $vp_order_info_id = (int)($data['vp_order_info_id'] ?? 0);
         $batch_no = (string)($data['batch_no'] ?? '');
@@ -58,7 +59,7 @@ class POSInvoice
         $exchange_text = (string)($data['exchange_text'] ?? '');
         $converted_amount = (float)($data['converted_amount'] ?? 0);
         $stmt->bind_param(
-            'ssiisddddsissdsi',
+            'ssiisddddsissdsii',
             $invoice_number,
             $invoice_date,
             $customer_id,
@@ -74,7 +75,8 @@ class POSInvoice
             $exchange_text,
             $converted_amount,
             $batch_no,
-            $warehouse_id
+            $warehouse_id,
+            $pos_flag
         );
 
         if ($stmt->execute()) {
