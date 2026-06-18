@@ -2300,8 +2300,15 @@ class POSRegisterController
                 exit;
 
             case 'customdiscount':
+                $customReduce = (string)($_GET['custom_reduce'] ?? $_REQUEST['custom_reduce'] ?? '0');
+                if ($customReduce === '' || (float)$customReduce <= 0) {
+                    unset($_SESSION['pos_exotic_cart_custom_reduce']);
+                    $customReduce = '0';
+                } else {
+                    $_SESSION['pos_exotic_cart_custom_reduce'] = $customReduce;
+                }
                 $this->emitCartApiResponse($this->exotic_api_call('/cart/addcustomdiscount', 'GET', [
-                    'custom_reduce' => (string)($_GET['custom_reduce'] ?? $_REQUEST['custom_reduce'] ?? '0'),
+                    'custom_reduce' => $customReduce,
                 ]));
                 return;
 
@@ -2379,6 +2386,10 @@ class POSRegisterController
         }
         if ($giftStr !== '') {
             $query['giftvoucherdetails'] = $giftStr;
+        }
+        $customReduce = trim((string)($_SESSION['pos_exotic_cart_custom_reduce'] ?? ''));
+        if ($customReduce !== '' && (float)$customReduce > 0) {
+            $query['custom_reduce'] = $customReduce;
         }
         $extraHeaders = [];
         if ($discountStr !== '') {
@@ -3320,6 +3331,15 @@ class POSRegisterController
         }
 
         $posLinePrices = $payload['pos_line_prices'] ?? null;
+        $receiptCouponDiscount = round((float)($payload['receipt_coupon_discount'] ?? 0), 2);
+        $receiptCashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
+        $receiptGiftDiscount = round((float)($payload['receipt_gift_discount'] ?? 0), 2);
+        if ((!is_array($posLinePrices) || count($posLinePrices) === 0)) {
+            $discountPool = $receiptCouponDiscount + $receiptCashDiscount + $receiptGiftDiscount;
+            if ($discountPool > 0.001) {
+                $posLinePrices = $this->buildPosLinePricesFromCartDiscountPool($cartData, $discountPool);
+            }
+        }
         if (is_array($posLinePrices) && count($posLinePrices) > 0) {
             if (count($posLinePrices) !== count($items)) {
                 echo json_encode([
@@ -3415,6 +3435,9 @@ class POSRegisterController
         if (!($paymentStage === 'final' && abs($paymentAmount - $orderTotal) <= 0.02)) {
             $customInvoiceNumber = '';
         }
+        $_SESSION['pos_checkout_invoice_discounts'] = [
+            'line_discount' => round((float)($payload['receipt_line_discount'] ?? 0), 2),
+        ];
         $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
         $shippedStatusMeta = $this->markPosCheckoutOrderShipped($conn, $orderNumber);
 
@@ -3427,6 +3450,8 @@ class POSRegisterController
         $receiptGstTotal = round((float)($payload['receipt_gst_total'] ?? 0), 2);
         $receiptCouponDiscount = round((float)($payload['receipt_coupon_discount'] ?? 0), 2);
         $receiptCashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
+        $receiptGiftDiscount = round((float)($payload['receipt_gift_discount'] ?? 0), 2);
+        $receiptLineDiscount = round((float)($payload['receipt_line_discount'] ?? 0), 2);
 
         $_SESSION['pos_last_checkout_receipt'] = [
             'receipt_number' => $receiptNo,
@@ -3442,7 +3467,8 @@ class POSRegisterController
             'receipt_subtotal_goods' => $receiptSubtotalGoods,
             'receipt_gst_total' => $receiptGstTotal,
             'receipt_coupon_discount' => $receiptCouponDiscount,
-            'receipt_gift_discount' => 0.0,
+            'receipt_gift_discount' => $receiptGiftDiscount,
+            'receipt_line_discount' => $receiptLineDiscount,
             'receipt_cash_discount' => $receiptCashDiscount,
             'receipt_grand_total' => $orderTotal,
             'receipt_qty_total' => 0.0,
@@ -3941,6 +3967,103 @@ class POSRegisterController
      *
      * @return array{data: mixed, code: int, raw: string}
      */
+    /**
+     * Spread cart-level coupon/custom discount across lines for pos_editorderprices when the client did not send overrides.
+     *
+     * @return list<array{itemcode: string, size: string, color: string, price: string}>
+     */
+    private function buildPosLinePricesFromCartDiscountPool(array $cartData, float $pool): array
+    {
+        $pool = round(max(0, $pool), 2);
+        if ($pool <= 0.001) {
+            return [];
+        }
+
+        $items = $cartData['cartitems'] ?? $cartData['cart_items'] ?? $cartData['items'] ?? $cartData['lines'] ?? [];
+        if (!is_array($items) || count($items) === 0) {
+            return [];
+        }
+
+        $rows = [];
+        $weights = [];
+        foreach ($items as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $qty = (float)($row['quantity'] ?? $row['qty'] ?? $row['prqt'] ?? 1);
+            if ($qty <= 0) {
+                $qty = 1;
+            }
+            $unit = null;
+            foreach (['unit_price', 'item_price', 'single_price', 'original_price', 'price', 'selling_price'] as $k) {
+                if (isset($row[$k]) && $row[$k] !== '' && is_numeric($row[$k])) {
+                    $unit = (float)$row[$k];
+                    break;
+                }
+            }
+            if ($unit === null) {
+                foreach (['line_total', 'linetotal', 'lineamount', 'amount'] as $k) {
+                    if (isset($row[$k]) && $row[$k] !== '' && is_numeric($row[$k])) {
+                        $unit = (float)$row[$k] / $qty;
+                        break;
+                    }
+                }
+            }
+            if ($unit === null || $unit < 0) {
+                $unit = 0.0;
+            }
+            $ext = round($unit * $qty, 2);
+            $rows[] = [
+                'itemcode' => trim((string)($row['code'] ?? $row['item_code'] ?? $row['sku'] ?? '')),
+                'size' => trim((string)($row['size'] ?? '')),
+                'color' => trim((string)($row['color'] ?? '')),
+                'qty' => $qty,
+                'extended' => $ext,
+            ];
+            $weights[] = $ext;
+        }
+
+        if (count($rows) === 0) {
+            return [];
+        }
+
+        $sumW = array_sum($weights);
+        $remaining = $pool;
+        $cuts = [];
+        $n = count($rows);
+        for ($i = 0; $i < $n; $i++) {
+            if ($i === $n - 1) {
+                $cuts[$i] = round($remaining, 2);
+            } elseif ($sumW > 0.001) {
+                $share = round(($pool * $weights[$i]) / $sumW, 2);
+                $cuts[$i] = $share;
+                $remaining = round($remaining - $share, 2);
+            } else {
+                $share = round($pool / $n, 2);
+                $cuts[$i] = $share;
+                $remaining = round($remaining - $share, 2);
+            }
+        }
+
+        $out = [];
+        foreach ($rows as $i => $row) {
+            if ($row['itemcode'] === '') {
+                continue;
+            }
+            $cut = min($row['extended'], max(0, $cuts[$i] ?? 0));
+            $effExt = max(0, round($row['extended'] - $cut, 2));
+            $unitAfter = $row['qty'] >= 1 ? round($effExt / $row['qty'], 2) : $effExt;
+            $out[] = [
+                'itemcode' => $row['itemcode'],
+                'size' => $row['size'],
+                'color' => $row['color'],
+                'price' => number_format($unitAfter, 2, '.', ''),
+            ];
+        }
+
+        return $out;
+    }
+
     private function exoticPosEditOrderPrices(string $orderId, array $lines): array
     {
         $post = ['orderid' => $orderId];

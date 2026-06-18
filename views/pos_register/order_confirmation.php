@@ -169,6 +169,8 @@ if ($receipt_download_filename_base === '') {
                 <div class="flex justify-between border-b border-dotted border-neutral-300 pb-1"><span>Sub Total (Goods)</span><span class="font-semibold"><?= $rfmt($receipt_subtotal_goods ?? 0) ?></span></div>
                 <div class="flex justify-between border-b border-dotted border-neutral-300 pb-1"><span>Total GST (computed)</span><span class="font-semibold"><?= $rfmt($receipt_gst_total ?? 0) ?></span></div>
                 <div class="flex justify-between border-b border-dotted border-neutral-300 pb-1"><span>Coupon Discount</span><span class="font-semibold"><?= $rfmt($receipt_coupon_discount ?? 0) ?></span></div>
+                <?php $ld = (float)($receipt_line_discount ?? 0); ?>
+                <div class="flex justify-between border-b border-dotted border-neutral-300 pb-1"><span>Line Discount</span><span class="font-semibold"><?= $ld > 0 ? $rfmt($ld) : '—' ?></span></div>
                 <div class="flex justify-between border-b border-dotted border-neutral-300 pb-1"><span>Cash Discount</span><span class="font-semibold"><?= ($cd > 0 ? $rfmt($cd) : '—') ?></span></div>
                 <div class="flex justify-between border-b border-dotted border-neutral-300 pb-1"><span>Gift Voucher Discount</span><span class="font-semibold"><?= $rfmt($receipt_gift_discount ?? 0) ?></span></div>
                 <div class="flex justify-between pt-1 text-[12px] font-black text-neutral-900"><span>Grand Total</span><span>₹<?= $rfmt($receipt_grand_total ?? 0) ?></span></div>

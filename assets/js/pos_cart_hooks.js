@@ -1010,7 +1010,9 @@
     var c = totals.couponDeduction != null && !isNaN(Number(totals.couponDeduction)) ? Number(totals.couponDeduction) : 0;
     var u =
       totals.customDeduction != null && !isNaN(Number(totals.customDeduction)) ? Number(totals.customDeduction) : 0;
-    return round2(Math.max(0, c) + Math.max(0, u));
+    var g =
+      totals.giftDeduction != null && !isNaN(Number(totals.giftDeduction)) ? Number(totals.giftDeduction) : 0;
+    return round2(Math.max(0, c) + Math.max(0, u) + Math.max(0, g));
   }
 
   function lineListExtendedWeight(row, qty) {
@@ -1326,11 +1328,49 @@
   }
 
   /**
+   * Totals used to allocate coupon/custom discount to lines at checkout (API fields may omit custom_reduce).
+   * @returns {Record<string, unknown>|null}
+   */
+  function getTotalsForCheckoutAlloc() {
+    var d = window.__posCartLastRetrieveData;
+    if (!d || typeof d !== 'object') {
+      return null;
+    }
+    var rawT = totalsFromRetrieve(d);
+    if (cartDeductionPoolFromTotals(rawT) > 0.001) {
+      return rawT;
+    }
+    var last = window.__posCartLastTotals;
+    if (last && cartDeductionPoolFromTotals(last) > 0.001) {
+      return {
+        subtotal: last.subtotal,
+        couponDeduction: last.couponDeduction,
+        customDeduction: last.customDeduction,
+        giftDeduction: last.giftDeduction
+      };
+    }
+    if (posCustomDiscountPersist && posCustomDiscountPersist.value > 0) {
+      var send = computeCustomReduceInr(
+        posCustomDiscountPersist.mode,
+        posCustomDiscountPersist.value,
+        rawT
+      );
+      if (send > 0) {
+        return Object.assign({}, rawT, { customDeduction: send });
+      }
+    }
+    return rawT;
+  }
+
+  /**
    * @returns {Array<{ itemcode: string, size: string, color: string, price: string }>}
    */
-  function buildPosLinePricesPayload(data) {
+  function buildPosLinePricesPayload(data, totalsOverride) {
     var items = getCartItems(data || {});
-    var rawT = totalsFromRetrieve(data && typeof data === 'object' ? data : {});
+    var rawT =
+      totalsOverride && typeof totalsOverride === 'object'
+        ? totalsOverride
+        : totalsFromRetrieve(data && typeof data === 'object' ? data : {});
     var alloc =
       cartDeductionPoolFromTotals(rawT) > 0.001 ? computePerLineCartAllocations(data || {}, rawT) : null;
     var out = [];
@@ -1608,8 +1648,25 @@
         'custom_reduce'
       ]) || pickNumber(cd, ['custom_discount', 'customdiscount']);
 
+    var giftDeduction =
+      pickNumber(d, [
+        'giftvoucherreduction',
+        'gift_voucher_reduction',
+        'giftvoucher_reduce',
+        'gift_voucher_reduce',
+        'giftvoucherdiscount',
+        'gift_discount',
+        'giftvouchereduction'
+      ]) ||
+      pickNumber(cd, [
+        'giftvoucher_reduce',
+        'gift_voucher_reduce',
+        'giftvoucher_reduction',
+        'giftvoucherdiscount'
+      ]);
+
     /**
-     * Grand total for this panel: GST-inclusive merchandise (sub) minus coupon/custom only.
+     * Grand total for this panel: GST-inclusive merchandise (sub) minus coupon/custom/gift.
      * We do not use the API "grand/total" here — Exotic often includes shipping or a sub+GST-style figure while sub is already tax-inclusive.
      */
     var grandTotal = null;
@@ -1620,6 +1677,9 @@
       }
       if (customDeduction != null && !isNaN(customDeduction)) {
         grandTotal -= customDeduction;
+      }
+      if (giftDeduction != null && !isNaN(giftDeduction)) {
+        grandTotal -= giftDeduction;
       }
       grandTotal = Math.round(grandTotal * 100) / 100;
     } else {
@@ -1644,6 +1704,7 @@
       couponDeduction: couponDeduction,
       couponDisplayName: couponDisplayName,
       customDeduction: customDeduction,
+      giftDeduction: giftDeduction,
       grandTotal: grandTotal
     };
   }
@@ -2193,6 +2254,7 @@
       totals.gstTotal != null ||
       isAmountGreaterThanZero(totals.couponDeduction) ||
       isAmountGreaterThanZero(totals.customDeduction) ||
+      isAmountGreaterThanZero(totals.giftDeduction) ||
       totals.grandTotal != null;
     if (showSummary) {
       html +=
@@ -2201,9 +2263,11 @@
         '<div class="space-y-0.5">';
       html += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
       var manualLineDisc = sumManualLineDiscountFromCartItems(data || {});
-      if (isAmountGreaterThanZero(manualLineDisc)) {
-        html += moneyRowSummary('Line Discount', manualLineDisc, false);
-      }
+      html += moneyRowSummary(
+        'Line Discount',
+        isAmountGreaterThanZero(manualLineDisc) ? manualLineDisc : 0,
+        false
+      );
       if (isAmountGreaterThanZero(totals.customDeduction)) {
         var cdLbl = 'Custom Discount';
         if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'percent') {
@@ -2230,6 +2294,15 @@
           totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
           false,
           'pos-cart-summary-remove-coupon'
+        );
+      }
+      if (isAmountGreaterThanZero(totals.giftDeduction)) {
+        html += moneyRowSummaryNote(
+          'Gift Voucher',
+          totals.giftDeduction,
+          totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
+          false,
+          ''
         );
       }
       html += moneyRowSummary('GST Total', totals.gstTotal, false);
@@ -2278,7 +2351,8 @@
       subtotal: totals.subtotal,
       gstTotal: totals.gstTotal,
       couponDeduction: totals.couponDeduction,
-      customDeduction: totals.customDeduction
+      customDeduction: totals.customDeduction,
+      giftDeduction: totals.giftDeduction
     };
     window.__posCartLocalStockWarnings = getLocalStockWarnings(data || {});
 
@@ -2977,12 +3051,34 @@
     return window.__posCartLastTotals || null;
   };
 
+  /** Receipt / checkout discount breakdown (cart + line level). */
+  window.getPosReceiptDiscountsForCheckout = function () {
+    var d = window.__posCartLastRetrieveData;
+    var last = window.__posCartLastTotals || {};
+    var lineDisc = d && typeof d === 'object' ? sumManualLineDiscountFromCartItems(d) : 0;
+    return {
+      couponDeduction:
+        last.couponDeduction != null && !isNaN(Number(last.couponDeduction))
+          ? Number(last.couponDeduction)
+          : 0,
+      customDeduction:
+        last.customDeduction != null && !isNaN(Number(last.customDeduction))
+          ? Number(last.customDeduction)
+          : 0,
+      giftDeduction:
+        last.giftDeduction != null && !isNaN(Number(last.giftDeduction)) ? Number(last.giftDeduction) : 0,
+      lineDiscount: lineDisc > 0 ? lineDisc : 0,
+      grandTotal:
+        last.grandTotal != null && !isNaN(Number(last.grandTotal)) ? Number(last.grandTotal) : 0
+    };
+  };
+
   window.getPosLinePricesPayloadForCheckout = function () {
     var d = window.__posCartLastRetrieveData;
     if (!d || typeof d !== 'object') {
       return [];
     }
-    return buildPosLinePricesPayload(d);
+    return buildPosLinePricesPayload(d, getTotalsForCheckoutAlloc());
   };
 
   window.hasPosLinePriceOverridesForCheckout = function () {
@@ -2993,8 +3089,14 @@
     if (hasLinePriceOverridesActive(d)) {
       return true;
     }
-    var tt = totalsFromRetrieve(d);
-    return cartDeductionPoolFromTotals(tt) > 0.001;
+    var allocTotals = getTotalsForCheckoutAlloc();
+    if (allocTotals && cartDeductionPoolFromTotals(allocTotals) > 0.001) {
+      return true;
+    }
+    if (posCustomDiscountPersist && posCustomDiscountPersist.value > 0) {
+      return true;
+    }
+    return false;
   };
 
   window.getPosLocalStockWarningsForCheckout = function () {

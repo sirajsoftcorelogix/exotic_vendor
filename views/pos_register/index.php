@@ -2082,7 +2082,16 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   function createOrderNow(addressPayload) {
     var customerId = getSelectedCustomerId();
     var live = typeof window.getPosCartTotalsForCheckout === "function" ? window.getPosCartTotalsForCheckout() : null;
-    var orderTotal = live && live.grandTotal != null ? parseFloat(String(live.grandTotal)) : NaN;
+    var disc =
+      typeof window.getPosReceiptDiscountsForCheckout === "function"
+        ? window.getPosReceiptDiscountsForCheckout()
+        : null;
+    var orderTotal =
+      disc && disc.grandTotal > 0
+        ? disc.grandTotal
+        : live && live.grandTotal != null
+          ? parseFloat(String(live.grandTotal))
+          : NaN;
     if (!isFinite(orderTotal) || orderTotal <= 0) {
       showToast("Cart total unavailable — add items or refresh the cart.", "red");
       return;
@@ -2094,8 +2103,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var note = (document.getElementById("payment_note") && document.getElementById("payment_note").value) || "";
     var subTotalGoods = live && live.subtotal != null ? parseFloat(String(live.subtotal)) : NaN;
     var gstTotal = live && live.gstTotal != null ? parseFloat(String(live.gstTotal)) : NaN;
-    var couponDeduction = live && live.couponDeduction != null ? parseFloat(String(live.couponDeduction)) : NaN;
-    var customDeduction = live && live.customDeduction != null ? parseFloat(String(live.customDeduction)) : NaN;
+    var couponDeduction = disc ? disc.couponDeduction : (live && live.couponDeduction != null ? parseFloat(String(live.couponDeduction)) : NaN);
+    var customDeduction = disc ? disc.customDeduction : (live && live.customDeduction != null ? parseFloat(String(live.customDeduction)) : NaN);
+    var giftDeduction = disc ? disc.giftDeduction : (live && live.giftDeduction != null ? parseFloat(String(live.giftDeduction)) : NaN);
+    var lineDiscount = disc ? disc.lineDiscount : 0;
     var customInvoiceEl = document.getElementById("custom_invoice_number");
     var customInvoiceNumber = isFullFinalPaymentSelected() && customInvoiceEl
       ? (customInvoiceEl.value || "").trim()
@@ -2111,7 +2122,9 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       receipt_subtotal_goods: isFinite(subTotalGoods) ? subTotalGoods : orderTotal,
       receipt_gst_total: isFinite(gstTotal) ? gstTotal : 0,
       receipt_coupon_discount: isFinite(couponDeduction) ? couponDeduction : 0,
-      receipt_cash_discount: isFinite(customDeduction) ? customDeduction : 0
+      receipt_cash_discount: isFinite(customDeduction) ? customDeduction : 0,
+      receipt_gift_discount: isFinite(giftDeduction) ? giftDeduction : 0,
+      receipt_line_discount: lineDiscount > 0 ? lineDiscount : 0
     });
     if (customInvoiceNumber !== "") {
       body.custom_invoice_number = customInvoiceNumber;
@@ -2135,11 +2148,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       typeof window.getPosLinePricesPayloadForCheckout === "function"
         ? window.getPosLinePricesPayloadForCheckout()
         : [];
-    var hasLinePriceOv =
-      typeof window.hasPosLinePriceOverridesForCheckout === "function"
-        ? window.hasPosLinePriceOverridesForCheckout()
-        : false;
-    if (hasLinePriceOv && Array.isArray(linePricePayload) && linePricePayload.length > 0) {
+    if (Array.isArray(linePricePayload) && linePricePayload.length > 0) {
       body.pos_line_prices = linePricePayload;
     }
     fetch("index.php?page=pos_register&action=checkout-create", {
@@ -2653,8 +2662,17 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       showToast("⚠ Enter valid discount", "red");
       return;
     }
-    showToast("Discount API removed — wire new cart before applying discounts.", "red");
+    if (typeof window.applyCustomDiscount !== "function") {
+      showToast("Cart is still loading — try again in a moment.", "red");
+      return;
+    }
+    var mode = type === "percent" ? "percent" : "fixed";
+    if (mode === "percent" && value > 100) {
+      showToast("Percentage must be between 0 and 100.", "red");
+      return;
+    }
     closeDiscountModal();
+    window.applyCustomDiscount(value, { mode: mode });
   }
 </script>
 <script>
