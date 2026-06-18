@@ -2107,6 +2107,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var customDeduction = disc ? disc.customDeduction : (live && live.customDeduction != null ? parseFloat(String(live.customDeduction)) : NaN);
     var giftDeduction = disc ? disc.giftDeduction : (live && live.giftDeduction != null ? parseFloat(String(live.giftDeduction)) : NaN);
     var lineDiscount = disc ? disc.lineDiscount : 0;
+    var customDiscMeta =
+      typeof window.getPosCustomDiscountMetaForCheckout === "function"
+        ? window.getPosCustomDiscountMetaForCheckout()
+        : null;
     var customInvoiceEl = document.getElementById("custom_invoice_number");
     var customInvoiceNumber = isFullFinalPaymentSelected() && customInvoiceEl
       ? (customInvoiceEl.value || "").trim()
@@ -2124,7 +2128,11 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       receipt_coupon_discount: isFinite(couponDeduction) ? couponDeduction : 0,
       receipt_cash_discount: isFinite(customDeduction) ? customDeduction : 0,
       receipt_gift_discount: isFinite(giftDeduction) ? giftDeduction : 0,
-      receipt_line_discount: lineDiscount > 0 ? lineDiscount : 0
+      receipt_line_discount: lineDiscount > 0 ? lineDiscount : 0,
+      receipt_discounts_absorbed: !!(live && live.cartDiscountAbsorbed),
+      custom_discount_mode: customDiscMeta ? customDiscMeta.mode : "",
+      custom_discount_value: customDiscMeta ? customDiscMeta.value : 0,
+      coupon_display_name: live && live.couponDisplayName ? String(live.couponDisplayName) : ""
     });
     if (customInvoiceNumber !== "") {
       body.custom_invoice_number = customInvoiceNumber;

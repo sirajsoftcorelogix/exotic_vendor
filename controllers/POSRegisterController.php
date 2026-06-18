@@ -3445,6 +3445,10 @@ class POSRegisterController
             'line_discount' => round((float)($payload['receipt_line_discount'] ?? 0), 2),
             'grand_total' => $orderTotal,
             'line_prices' => is_array($posLinePrices) ? $posLinePrices : [],
+            'discounts_absorbed' => !empty($payload['receipt_discounts_absorbed']),
+            'custom_discount_mode' => trim((string)($payload['custom_discount_mode'] ?? '')),
+            'custom_discount_value' => round((float)($payload['custom_discount_value'] ?? 0), 2),
+            'coupon_display_name' => trim((string)($payload['coupon_display_name'] ?? '')),
         ];
         $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
         $shippedStatusMeta = $this->markPosCheckoutOrderShipped($conn, $orderNumber);
