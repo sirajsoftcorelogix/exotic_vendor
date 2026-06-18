@@ -343,6 +343,13 @@
             <i class="fas fa-code text-[11px]" aria-hidden="true"></i>
           </button>
         </div>
+        <?php
+          $accountsGroupDisplay = trim((string)($products['accounts_group'] ?? ''));
+        ?>
+        <p id="productAccountsGroupDisplay" class="text-sm text-gray-500 mt-1">
+          Accounts Group:
+          <span class="font-medium text-gray-700"><?php echo htmlspecialchars($accountsGroupDisplay !== '' ? $accountsGroupDisplay : '—', ENT_QUOTES, 'UTF-8'); ?></span>
+        </p>
         <?php if (!$isBookProduct && $authorRaw !== ''): ?>
           <p class="text-sm text-gray-600 mt-1">Artist: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
         <?php endif; ?>
