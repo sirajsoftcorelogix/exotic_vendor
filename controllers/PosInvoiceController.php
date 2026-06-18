@@ -1096,8 +1096,8 @@ WHERE i.pos_flag = 1
                         <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
                         <td class="desc">' . $descHtml . '</td>
                         <td class="right">' . number_format($listUnitPretax, 2) . '</td>
-                        <td>' . $item['quantity'] . '</td>
                         <td class="right">' . number_format($discUnitPretax, 2) . '</td>
+                        <td>' . $item['quantity'] . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
                         <td class="right">' . number_format($item['sgst'], 2) . '</td>
                         <td class="right">' . number_format($cgstRate, 2) . '</td>
@@ -1279,8 +1279,8 @@ WHERE i.pos_flag = 1
         $temphtml = file_get_contents($templatePath);
         if ($usePosItemLayout && ($invoice['status'] ?? '') !== 'proforma') {
             $temphtml = str_replace(
-                ['<th>HSN</th>', '<th>Price</th>'],
-                ['<th>List Price</th>', '<th>Disc. Price</th>'],
+                "<th>HSN</th>\n        <th>Qty</th>\n        <th>Price</th>",
+                "<th>List Price</th>\n        <th>Disc. Price</th>\n        <th>Qty</th>",
                 $temphtml
             );
         }
