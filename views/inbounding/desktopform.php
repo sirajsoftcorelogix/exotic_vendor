@@ -1358,8 +1358,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
 
                     <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Group:</label>
-                        <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Group <span class="text-red-500">*</span></label>
+                        <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off" required>
                             <option value="">Select Group...</option>
                             <?php foreach($rootCategories as $group): 
                                 $isGroupSelected = ($selected_group_val == $group['store_value']) ? 'selected' : '';
@@ -1373,8 +1373,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
 
                     <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Accounts Group:</label>
-                        <select id="accounts_group_select" name="accounts_group" placeholder="Select Accounts Group..." autocomplete="off">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Accounts Group <span class="text-red-500">*</span></label>
+                        <select id="accounts_group_select" name="accounts_group" placeholder="Select Accounts Group..." autocomplete="off" required>
                             <option value="">Select Accounts Group...</option>
                             <?php foreach ($account_groups as $agRow): 
                                 $agId = (int) ($agRow['id'] ?? 0);
@@ -3500,6 +3500,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function performValidationOnly() {
         let errors = [];
         const form = document.getElementById('product_form');
+        syncFormTomSelectValues(form);
         
         const getVal = (name) => {
             const el = form.querySelector(`[name="${name}"]`);
@@ -3518,7 +3519,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
         const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
         if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
-        if (!getVal('group_name')) errors.push("Field 'Group' is required.");
+        if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
+        if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
         if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
         if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
         if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
@@ -4876,6 +4878,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function validateAndSubmit(actionType) {
     let errors = [];
     const form = document.getElementById('product_form');
+    syncFormTomSelectValues(form);
     
     // Helper to get value cleanly
     const getVal = (name) => {
@@ -4897,7 +4900,8 @@ function validateAndSubmit(actionType) {
     if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
     const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
     if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
-    if (!getVal('group_name')) errors.push("Field 'Group' is required.");
+    if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
+    if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
     if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
     if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
     if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");

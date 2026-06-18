@@ -2184,6 +2184,10 @@ class InboundingController {
         if ($d['groupname'] != 'book') {
         $API_data['material'] = $d['material_name'] ?? '';
         }
+        $accountGroupName = trim((string) ($d['account_group_name'] ?? ''));
+        if ($accountGroupName !== '') {
+            $API_data['account_group'] = $accountGroupName;
+        }
         $vendorApiId = (int) preg_replace('/\D/', '', (string) ($d['vendor_code'] ?? ''));
         $API_data['discrete_vendors'][0]['vendor'] = $vendorApiId;
         $API_data['discrete_vendors'][0]['priority'] = 1;
