@@ -1074,6 +1074,35 @@ class Inbounding {
         return trim((string) ($row['name'] ?? ''));
     }
 
+    /**
+     * Exotic product/create API expects account_group as the display name, not vp_inbound.accounts_group id.
+     */
+    public function resolveAccountGroupApiValue(array $row): string
+    {
+        $name = trim((string) ($row['account_group_name'] ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        $id = (int) ($row['accounts_group'] ?? 0);
+        if ($id <= 0) {
+            return '';
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT account_group_name FROM account_group WHERE id = ? LIMIT 1'
+        );
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $fetched = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return trim((string) ($fetched['account_group_name'] ?? ''));
+    }
+
     // --- Add these functions inside your InboundingModel class ---
 
     /**
