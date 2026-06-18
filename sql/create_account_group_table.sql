@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS account_group (
     UNIQUE KEY uq_account_group_name (account_group_name),
     INDEX idx_account_group_active (is_active),
     INDEX idx_account_group_item_group (item_group)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 INSERT INTO account_group (account_group_name, is_active) VALUES
 ('ART WARE OF IRON', 1),
