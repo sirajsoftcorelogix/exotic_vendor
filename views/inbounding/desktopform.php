@@ -4637,15 +4637,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function reloadAccountsGroupsForGroup(groupValue, selectedId) {
-        let itemGroup = resolveItemGroupSlug(groupValue);
-        let url = fetchAccountGroupsUrl;
-        if (itemGroup) {
-            url += '&item_group=' + encodeURIComponent(itemGroup);
-        } else if (groupValue) {
-            url += '&group_name=' + encodeURIComponent(groupValue);
-        } else {
+        if (!groupValue) {
             setAccountsGroupOptions([], '');
             return;
+        }
+        let url = fetchAccountGroupsUrl + '&group_name=' + encodeURIComponent(groupValue);
+        const itemGroup = resolveItemGroupSlug(groupValue);
+        if (itemGroup) {
+            url += '&item_group=' + encodeURIComponent(itemGroup);
         }
         try {
             const res = await fetch(url, { credentials: 'include' });
