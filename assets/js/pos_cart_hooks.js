@@ -2352,7 +2352,9 @@
       gstTotal: totals.gstTotal,
       couponDeduction: totals.couponDeduction,
       customDeduction: totals.customDeduction,
-      giftDeduction: totals.giftDeduction
+      giftDeduction: totals.giftDeduction,
+      cartDiscountAbsorbed: !!totals.cartDiscountAbsorbed,
+      couponDisplayName: totals.couponDisplayName || ''
     };
     window.__posCartLocalStockWarnings = getLocalStockWarnings(data || {});
 
@@ -3045,6 +3047,16 @@
           setPanelBusy(false);
         });
     });
+  };
+
+  window.getPosCustomDiscountMetaForCheckout = function () {
+    if (!posCustomDiscountPersist || !(posCustomDiscountPersist.value > 0)) {
+      return null;
+    }
+    return {
+      mode: posCustomDiscountPersist.mode === 'percent' ? 'percent' : 'fixed',
+      value: posCustomDiscountPersist.value
+    };
   };
 
   window.getPosCartTotalsForCheckout = function () {

@@ -619,6 +619,10 @@ WHERE i.pos_flag = 1
                 'gift_discount' => round((float)($discountMeta['gift_discount'] ?? 0), 2),
                 'line_discount' => round((float)($discountMeta['line_discount'] ?? 0), 2),
                 'grand_total' => round((float)($discountMeta['grand_total'] ?? 0), 2),
+                'discounts_absorbed' => !empty($discountMeta['discounts_absorbed']),
+                'custom_discount_mode' => trim((string)($discountMeta['custom_discount_mode'] ?? '')),
+                'custom_discount_value' => round((float)($discountMeta['custom_discount_value'] ?? 0), 2),
+                'coupon_display_name' => trim((string)($discountMeta['coupon_display_name'] ?? '')),
             ],
         ];
 
@@ -627,10 +631,7 @@ WHERE i.pos_flag = 1
             || ($payload['pos_discounts']['cash_discount'] > 0)
             || ($payload['pos_discounts']['gift_discount'] > 0)
             || ($payload['pos_discounts']['line_discount'] > 0)
-            || (
-                ($payload['pos_discounts']['grand_total'] > 0)
-                && ($payload['pos_discounts']['subtotal_goods'] - $payload['pos_discounts']['grand_total'] > 0.01)
-            );
+            || ($payload['pos_discounts']['grand_total'] > 0);
 
         if (!$hasSummary) {
             return;
@@ -650,9 +651,52 @@ WHERE i.pos_flag = 1
         $stmt->close();
     }
 
+    private function posInvoiceSummaryLabelRow(string $label, float $amount, string $note = '', bool $isGrand = false): string
+    {
+        $noteHtml = $note !== ''
+            ? '<br><span style="font-size:11px;font-weight:normal;color:#555;">' . htmlspecialchars($note) . '</span>'
+            : '';
+        $bg = $isGrand ? '#f0f0f0' : '#f9f9f9';
+        $weight = $isGrand ? 'font-weight:bold;font-size:14px;' : 'font-weight:bold;';
+        $borderTop = $isGrand ? 'border-top:2px solid #000;' : '';
+
+        return '
+                    <tr style="background:' . $bg . ';' . $borderTop . '">
+                        <td colspan="11" class="right" style="text-align:right;padding:8px 10px;border:1px solid #ddd;">'
+                            . '<span style="' . $weight . '">' . htmlspecialchars($label) . '</span>' . $noteHtml .
+                        '</td>
+                        <td colspan="2" class="right" style="text-align:right;padding:8px 10px;border:1px solid #ddd;' . $weight . '">'
+                            . number_format($amount, 2) .
+                        '</td>
+                    </tr>';
+    }
+
+    private function posInvoiceCustomDiscountLabel(array $posMeta): string
+    {
+        $mode = trim((string)($posMeta['custom_discount_mode'] ?? ''));
+        $value = round((float)($posMeta['custom_discount_value'] ?? 0), 2);
+        if ($mode === 'percent' && $value > 0) {
+            $pct = rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
+
+            return 'Custom Discount (' . $pct . '%)';
+        }
+
+        return 'Custom Discount (fixed ₹)';
+    }
+
+    private function posInvoiceCouponLabel(array $posMeta): string
+    {
+        $name = trim((string)($posMeta['coupon_display_name'] ?? ''));
+
+        return $name !== '' ? 'Coupon (' . $name . ')' : 'Coupon';
+    }
+
     private function buildPosInvoiceAmountSummaryRows(array $posMeta, float $grandTotal, float $taxAmount): string
     {
-        $subGoods = round((float)($posMeta['subtotal_goods'] ?? 0), 2);
+        $subInclGst = round((float)($posMeta['subtotal_goods'] ?? 0), 2);
+        if ($subInclGst <= 0 && $grandTotal > 0) {
+            $subInclGst = $grandTotal;
+        }
         $coupon = round((float)($posMeta['coupon_discount'] ?? 0), 2);
         $cash = round((float)($posMeta['cash_discount'] ?? 0), 2);
         $gift = round((float)($posMeta['gift_discount'] ?? 0), 2);
@@ -661,68 +705,50 @@ WHERE i.pos_flag = 1
         if ($gst <= 0 && $taxAmount > 0) {
             $gst = round($taxAmount, 2);
         }
+        if ($grandTotal <= 0) {
+            $grandTotal = $subInclGst;
+        }
 
-        $hasDiscounts = ($coupon + $cash + $gift + $line) > 0.001;
-        if ($subGoods <= 0 && !$hasDiscounts) {
+        $absorbed = !empty($posMeta['discounts_absorbed']);
+        $absorbedNote = $absorbed ? '(included in line totals)' : '';
+        $hasAnyDiscount = ($coupon + $cash + $gift + $line) > 0.001;
+        $showSummary = $subInclGst > 0 || $hasAnyDiscount || $grandTotal > 0;
+        if (!$showSummary) {
             return '';
         }
 
-        $rows = '';
-        if ($subGoods > 0) {
-            $rows .= '
-                    <tr style="background: #f9f9f9;">
-                        <td colspan="10"></td>
-                        <td class="right bold">Sub Total (Goods):</td>
-                        <td class="right bold">' . number_format($subGoods, 2) . '</td>
+        $rows = '
+                    <tr style="background:#ffffff;">
+                        <td colspan="13" style="text-align:left;padding:14px 8px 6px;border:none;border-top:2px solid #000;">
+                            <span style="font-size:13px;font-weight:bold;letter-spacing:0.08em;text-transform:uppercase;color:#333;">Summary</span>
+                        </td>
                     </tr>';
-        }
-        if ($line > 0) {
-            $rows .= '
-                    <tr style="background: #f9f9f9;">
-                        <td colspan="10"></td>
-                        <td class="right bold">Line Discount:</td>
-                        <td class="right bold">-' . number_format($line, 2) . '</td>
-                    </tr>';
-        }
-        if ($coupon > 0) {
-            $rows .= '
-                    <tr style="background: #f9f9f9;">
-                        <td colspan="10"></td>
-                        <td class="right bold">Coupon Discount:</td>
-                        <td class="right bold">-' . number_format($coupon, 2) . '</td>
-                    </tr>';
-        }
+
+        $rows .= $this->posInvoiceSummaryLabelRow('Sub total (incl. GST)', $subInclGst);
+        $rows .= $this->posInvoiceSummaryLabelRow('Line Discount', $line);
+
         if ($cash > 0) {
-            $rows .= '
-                    <tr style="background: #f9f9f9;">
-                        <td colspan="10"></td>
-                        <td class="right bold">Cash Discount:</td>
-                        <td class="right bold">-' . number_format($cash, 2) . '</td>
-                    </tr>';
+            $rows .= $this->posInvoiceSummaryLabelRow(
+                $this->posInvoiceCustomDiscountLabel($posMeta),
+                $cash,
+                $absorbedNote
+            );
         }
+
+        if ($coupon > 0) {
+            $rows .= $this->posInvoiceSummaryLabelRow(
+                $this->posInvoiceCouponLabel($posMeta),
+                $coupon,
+                $absorbedNote
+            );
+        }
+
         if ($gift > 0) {
-            $rows .= '
-                    <tr style="background: #f9f9f9;">
-                        <td colspan="10"></td>
-                        <td class="right bold">Gift Voucher Discount:</td>
-                        <td class="right bold">-' . number_format($gift, 2) . '</td>
-                    </tr>';
+            $rows .= $this->posInvoiceSummaryLabelRow('Gift Voucher', $gift, $absorbedNote);
         }
-        if ($gst > 0) {
-            $rows .= '
-                    <tr style="background: #f9f9f9;">
-                        <td colspan="10"></td>
-                        <td class="right bold">Total GST:</td>
-                        <td class="right bold">' . number_format($gst, 2) . '</td>
-                    </tr>';
-        }
-        if ($grandTotal > 0) {
-            $rows .= '
-                    <tr style="background: #f0f0f0; border-top: 2px solid #000;">
-                        <td colspan="12" class="right bold" style="text-align: right;">Grand Total:</td>
-                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($grandTotal, 2) . '</td>
-                    </tr>';
-        }
+
+        $rows .= $this->posInvoiceSummaryLabelRow('GST Total', $gst);
+        $rows .= $this->posInvoiceSummaryLabelRow('GRAND Total', $grandTotal, '', true);
 
         return $rows;
     }
@@ -821,6 +847,14 @@ WHERE i.pos_flag = 1
         // Build summary rows with tax totals
         $discount = $invoice['discount_amount'] ?? 0;
         $posDiscountMeta = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
+        if (empty($posDiscountMeta) && !empty($invoice['pos_flag'])) {
+            $posDiscountMeta = [
+                'subtotal_goods' => round((float)($invoice['total_amount'] ?? 0), 2),
+                'gst_total' => round((float)($invoice['tax_amount'] ?? 0), 2),
+                'grand_total' => round((float)($invoice['total_amount'] ?? 0), 2),
+                'discounts_absorbed' => true,
+            ];
+        }
         $summaryGrandTotal = round((float)($posDiscountMeta['grand_total'] ?? 0), 2);
         if ($summaryGrandTotal <= 0) {
             $summaryGrandTotal = round((float)$totalAmount, 2);
@@ -1088,6 +1122,12 @@ WHERE i.pos_flag = 1
         if (!empty($result['success']) && !empty($result['invoice_id']) && $useSnapshot && is_array($posDiscountMeta)) {
             $posDiscountMeta['gst_total'] = round((float)($_POST['tax_amount'] ?? 0), 2);
             $posDiscountMeta['grand_total'] = round((float)($_POST['total_amount'] ?? 0), 2);
+            if (empty($posDiscountMeta['subtotal_goods']) && $posDiscountMeta['grand_total'] > 0) {
+                $posDiscountMeta['subtotal_goods'] = $posDiscountMeta['grand_total'];
+            }
+            if (!isset($posDiscountMeta['discounts_absorbed']) || $posDiscountMeta['discounts_absorbed'] === '') {
+                $posDiscountMeta['discounts_absorbed'] = true;
+            }
             $this->persistPosInvoiceDiscountNotes($conn, (int)$result['invoice_id'], $posDiscountMeta);
         }
         unset($_SESSION['pos_checkout_invoice_snapshot']);
