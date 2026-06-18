@@ -311,9 +311,16 @@ class InboundingController {
         $data['form2']['gecolormaps'] = $vendorApis['gecolormaps'];
         $data['form2']['optionals_data'] = $vendorApis['optionals_data'];
         $data['form2']['permanently_available'] = ((int) ($data['form2']['permanently_available'] ?? 0) === 1) ? 1 : 0;
-        $itemGroupSlug = $inboundingModel->resolveItemGroupSlugFromGroupName($data['form2']['group_name'] ?? '');
+        $groupName = trim((string) ($data['form2']['group_name'] ?? ''));
+        $itemGroupSlug = $inboundingModel->resolveItemGroupSlugFromGroupName($groupName);
         $accountGroupModel = new AccountGroup($conn);
-        $data['account_groups'] = $itemGroupSlug !== '' ? $accountGroupModel->getActiveByItemGroup($itemGroupSlug) : [];
+        if ($groupName !== '') {
+            $data['account_groups'] = $accountGroupModel->getActiveByGroupCategoryCode($groupName);
+        } elseif ($itemGroupSlug !== '') {
+            $data['account_groups'] = $accountGroupModel->getActiveByItemGroup($itemGroupSlug);
+        } else {
+            $data['account_groups'] = [];
+        }
         $data['item_group_slug'] = $itemGroupSlug;
         $data['images'] = $inboundingModel->getitem_imgs($id);
         $data['markup_list'] = $inboundingModel->getMarkupData();
@@ -367,21 +374,21 @@ class InboundingController {
 
         global $inboundingModel, $conn;
 
+        $accountGroupModel = new AccountGroup($conn);
+        $groupName = trim((string) ($_GET['group_name'] ?? ''));
         $itemGroup = trim((string) ($_GET['item_group'] ?? ''));
-        if ($itemGroup === '') {
-            $groupName = trim((string) ($_GET['group_name'] ?? ''));
-            if ($groupName !== '') {
+
+        if ($groupName !== '') {
+            $groups = $accountGroupModel->getActiveByGroupCategoryCode($groupName);
+            if ($itemGroup === '') {
                 $itemGroup = $inboundingModel->resolveItemGroupSlugFromGroupName($groupName);
             }
-        }
-
-        if ($itemGroup === '') {
+        } elseif ($itemGroup !== '') {
+            $groups = $accountGroupModel->getActiveByItemGroup($itemGroup);
+        } else {
             echo json_encode(['ok' => true, 'item_group' => '', 'groups' => []], JSON_UNESCAPED_UNICODE);
             exit;
         }
-
-        $accountGroupModel = new AccountGroup($conn);
-        $groups = $accountGroupModel->getActiveByItemGroup($itemGroup);
 
         echo json_encode([
             'ok' => true,

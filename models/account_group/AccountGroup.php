@@ -195,6 +195,41 @@ class AccountGroup
         return $rows;
     }
 
+    /**
+     * Active account groups for an inbound group code (category.category, e.g. -4).
+     * Joins account_group.item_group to root category.name.
+     *
+     * @return list<array{id:int,account_group_name:string}>
+     */
+    public function getActiveByGroupCategoryCode(string $categoryCode): array
+    {
+        $categoryCode = trim($categoryCode);
+        if ($categoryCode === '') {
+            return [];
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT ag.id, ag.account_group_name
+             FROM account_group ag
+             INNER JOIN category c
+               ON LOWER(TRIM(ag.item_group)) = LOWER(TRIM(c.name))
+              AND c.parent_id = 0
+              AND c.is_active = 1
+             WHERE ag.is_active = 1
+               AND c.category = ?
+             ORDER BY ag.account_group_name ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $categoryCode);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        return $rows;
+    }
+
     public function isValidItemGroup(?string $itemGroup): bool
     {
         if ($itemGroup === null || $itemGroup === '') {
