@@ -3,6 +3,7 @@ require_once 'models/vendor/vendor.php';
 require_once 'models/country/country.php';
 require_once 'models/country/state.php';
 require_once 'models/teams/Teams.php';
+require_once 'helpers/vendor_external_api.php';
 
 $vendorsModel = new Vendor($conn);
 $countryModel = new Country($conn);
@@ -66,80 +67,15 @@ class VendorsController {
             $id = isset($data['id']) ? (int)$data['id'] : 0;
             if ($id > 0) {
                 $result = $vendorsModel->updateVendor($id, $data);
-                // Call external vendor API after local update:
-                // - vendormodify if remote vendor_id exists
-                // - vendorcreate if remote vendor_id is missing
                 if (isset($result['success']) && $result['success'] === true) {
-                    $vendor = $vendorsModel->getVendorById($id);
-                    $editGroups = $data['editGroupname'] ?? '';
-                    if (is_array($editGroups)) {
-                        $editGroups = implode(',', array_values(array_unique(array_filter(array_map('trim', $editGroups), static function ($v) {
-                            return $v !== '';
-                        }))));
-                    } else {
-                        $editGroups = trim((string)$editGroups);
-                    }
-                    $editVendorType = $this->resolveVendorTypeFromGroups($editGroups);
-                    $postData = [
-                        'name' => isset($data['editVendorName']) ? trim($data['editVendorName']) : '',
-                        'groupname' => $editGroups,
-                        'vendor_type' => $editVendorType,
-                        'webpage' => (isset($data['editWebpage']) && (string)$data['editWebpage'] === '1') ? '1' : '0'
-                    ];
-
-                    $remoteVendorId = trim((string)($vendor['vendor_id'] ?? ''));
-                    if ($remoteVendorId !== '') {
-                        $postData['vendor_id'] = $remoteVendorId;
-                        $result['api_response'] = $this->modifyVendorExternal($postData);
-                    } else {
-                        $createApiResponse = $this->createVendorExternal($postData);
-                        $result['api_response'] = $createApiResponse;
-                        if (!empty($createApiResponse)) {
-                            $apiData = json_decode($createApiResponse, true);
-                            if (is_array($apiData) && isset($apiData['vendor_id'])) {
-                                $vendorsModel->updateVendorRemoteId($id, $apiData['vendor_id']);
-                            }
-                        }
-                    }
+                    $result['api_response'] = $this->syncVendorToExternalApi($id, $data, true);
                 }
             } else {
                 $result = $vendorsModel->addVendor($data);
-                
-                // Call external API if vendor creation was successful
                 if (isset($result['success']) && $result['success'] === true) {
-                    $localVendorId = $result['inserted_id'] ?? 0;
-                    $addGroups = $data['groupname'] ?? '';
-                    if (is_array($addGroups)) {
-                        $addGroups = implode(',', array_values(array_unique(array_filter(array_map('trim', $addGroups), static function ($v) {
-                            return $v !== '';
-                        }))));
-                    } else {
-                        $addGroups = trim((string)$addGroups);
-                    }
-                    $addVendorType = '';
-                    if ($addGroups !== '') {
-                        $first = trim((string)explode(',', $addGroups)[0]);
-                        if ($first !== '') {
-                            $addVendorType = 'vendor_' . $first;
-                        }
-                    }
-                    
-                    $postData = [
-                        'name' => isset($data['addVendorName']) ? trim($data['addVendorName']) : '',
-                        'groupname' => $addGroups,
-                        'vendor_type' => $addVendorType,
-                        'webpage' => (isset($data['addWebpage']) && (string)$data['addWebpage'] === '1') ? '1' : '0'
-                    ];
-                    $createApiResponse = $this->createVendorExternal($postData);
-                    $result['api_response'] = $createApiResponse; // Include API response in the result
-                    
-                    // Update vendor with remote vendor_id from API response
-                    if (!empty($createApiResponse) && $localVendorId > 0) {
-                        $apiData = json_decode($createApiResponse, true);
-                        if (is_array($apiData) && isset($apiData['vendor_id'])) {
-                            $remoteVendorId = $apiData['vendor_id'];
-                            $updateResult = $vendorsModel->updateVendorRemoteId($localVendorId, $remoteVendorId);
-                        }
+                    $localVendorId = (int) ($result['inserted_id'] ?? 0);
+                    if ($localVendorId > 0) {
+                        $result['api_response'] = $this->syncVendorToExternalApi($localVendorId, $data, false);
                     }
                 }
             }
@@ -148,34 +84,82 @@ class VendorsController {
         exit;
     }
     public function createVendorExternal($postData){
-        if (!empty($postData)) {
-            $apiUrl = 'https://www.exoticindia.com/vendor-api/product/vendorcreate';
-            
-            $headers = [
-                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-                'x-adminapitest: 1',
-                'Content-Type: application/x-www-form-urlencoded'
-            ];
-            
-            $ch = curl_init($apiUrl);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-            
-            $apiResponse = curl_exec($ch);
-            $apiError = curl_error($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            
-            if ($apiResponse === false) {
-                error_log('Vendor API call failed: ' . $apiError);
-            } else {
-                error_log('Vendor API response: HTTP ' . $httpCode);
-            }
-            return $apiResponse;
+        $api = vendor_external_api_create(is_array($postData) ? $postData : []);
+        return json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    /**
+     * True when vp_vendors.vendor_id holds a valid Exotic remote id (not null/0/empty).
+     */
+    private function vendorHasRemoteId(?array $vendor): bool
+    {
+        if (!$vendor) {
+            return false;
         }
+        $remote = trim((string) ($vendor['vendor_id'] ?? ''));
+        if ($remote === '' || $remote === '0') {
+            return false;
+        }
+        $remoteInt = (int) preg_replace('/\D/', '', $remote);
+
+        return $remoteInt > 0;
+    }
+
+    private function normalizeVendorGroupsCsv($raw): string
+    {
+        if (is_array($raw)) {
+            $groups = array_values(array_unique(array_filter(array_map('trim', $raw), static function ($v) {
+                return $v !== '';
+            })));
+
+            return implode(',', $groups);
+        }
+
+        return trim((string) $raw);
+    }
+
+    /**
+     * After local save: vendormodify when remote id exists, otherwise vendorcreate + store vendor_id.
+     */
+    private function syncVendorToExternalApi(int $localVendorId, array $data, bool $isEdit): string
+    {
+        global $vendorsModel;
+
+        $vendor = $vendorsModel->getVendorById($localVendorId);
+        if (!$vendor) {
+            return json_encode(['success' => false, 'message' => 'Vendor not found for API sync.']);
+        }
+
+        $groups = $this->normalizeVendorGroupsCsv($isEdit ? ($data['editGroupname'] ?? '') : ($data['groupname'] ?? ''));
+        if ($groups === '') {
+            $groups = trim((string) ($vendor['groupname'] ?? ''));
+        }
+
+        $name = $isEdit
+            ? trim((string) ($data['editVendorName'] ?? $vendor['vendor_name'] ?? ''))
+            : trim((string) ($data['addVendorName'] ?? ''));
+
+        $webpageKey = $isEdit ? 'editWebpage' : 'addWebpage';
+        $postData = [
+            'name' => $name,
+            'groupname' => $groups,
+            'vendor_type' => $this->resolveVendorTypeFromGroups($groups),
+            'webpage' => (isset($data[$webpageKey]) && (string) $data[$webpageKey] === '1') ? '1' : '0',
+        ];
+
+        if ($this->vendorHasRemoteId($vendor)) {
+            $postData['vendor_id'] = trim((string) $vendor['vendor_id']);
+            $api = vendor_external_api_modify($postData);
+
+            return json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        }
+
+        $api = vendor_external_api_create($postData);
+        if (!empty($api['success']) && !empty($api['vendor_id'])) {
+            $vendorsModel->updateVendorRemoteId($localVendorId, (string) $api['vendor_id']);
+        }
+
+        return json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     private function resolveVendorTypeFromGroups(string $groupsCsv): string
