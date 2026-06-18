@@ -448,6 +448,45 @@ WHERE i.pos_flag = 1
         ], 'Invoice — ' . ($invoice['invoice_number'] ?? ''));
     }
 
+    private function parsePosInvoiceDiscountMeta(?string $notes): array
+    {
+        if ($notes === null || trim($notes) === '') {
+            return [];
+        }
+        $decoded = json_decode($notes, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+        $pos = $decoded['pos_discounts'] ?? null;
+
+        return is_array($pos) ? $pos : [];
+    }
+
+    private function persistPosInvoiceDiscountNotes(mysqli $conn, int $invoiceId, array $discountMeta): void
+    {
+        if ($invoiceId <= 0) {
+            return;
+        }
+        $lineDiscount = round((float)($discountMeta['line_discount'] ?? 0), 2);
+        if ($lineDiscount <= 0) {
+            return;
+        }
+        $payload = json_encode(
+            ['pos_discounts' => ['line_discount' => $lineDiscount]],
+            JSON_UNESCAPED_UNICODE
+        );
+        if ($payload === false) {
+            return;
+        }
+        $stmt = $conn->prepare('UPDATE vp_invoices SET notes = ? WHERE id = ?');
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('si', $payload, $invoiceId);
+        $stmt->execute();
+        $stmt->close();
+    }
+
     private function generateInvoiceHtml($invoice, $items, $type = '')
     {
         global $commanModel;
@@ -541,6 +580,8 @@ WHERE i.pos_flag = 1
         }
         // Build summary rows with tax totals
         $discount = $invoice['discount_amount'] ?? 0;
+        $posDiscountMeta = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
+        $lineDiscountSummary = round((float)($posDiscountMeta['line_discount'] ?? 0), 2);
 
         // Add row for tax amount totals (below each SGST/CGST/IGST column)
         $summaryrows .= '
@@ -558,6 +599,15 @@ WHERE i.pos_flag = 1
                     </tr>
         ';
 
+
+        if ($lineDiscountSummary > 0) {
+            $summaryrows .= '
+                    <tr style="background: #f9f9f9;">
+                        <td colspan="10"></td>
+                        <td class="right bold">Line Discount:</td>
+                        <td class="right bold">' . number_format($lineDiscountSummary, 2) . '</td>
+                    </tr>';
+        }
 
         if ($discount > 0) {
             $summaryrows .= '
@@ -784,7 +834,17 @@ WHERE i.pos_flag = 1
 
         $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
 
-        return $this->createPostInternal();
+        $posDiscountMeta = $_SESSION['pos_checkout_invoice_discounts'] ?? [];
+        $result = $this->createPostInternal();
+        if (!empty($result['success']) && !empty($result['invoice_id']) && is_array($posDiscountMeta)) {
+            $this->persistPosInvoiceDiscountNotes($conn, (int)$result['invoice_id'], $posDiscountMeta);
+            if ($lineDiscountSummary = round((float)($posDiscountMeta['line_discount'] ?? 0), 2)) {
+                $result['line_discount'] = $lineDiscountSummary;
+            }
+        }
+        unset($_SESSION['pos_checkout_invoice_discounts']);
+
+        return $result;
     }
     public function create_auto_from_order1()
     {
