@@ -462,29 +462,269 @@ WHERE i.pos_flag = 1
         return is_array($pos) ? $pos : [];
     }
 
+    private function posLinePriceLookupKey(string $itemCode, string $size = '', string $color = ''): string
+    {
+        return strtolower(trim($itemCode)) . '|' . strtolower(trim($size)) . '|' . strtolower(trim($color));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orderItems
+     * @param array<string, mixed> $snapshot
+     */
+    private function buildInvoicePostFromCheckoutSnapshot(array $orderItems, array $snapshot): void
+    {
+        $linePrices = is_array($snapshot['line_prices'] ?? null) ? $snapshot['line_prices'] : [];
+        $priceMap = [];
+        foreach ($linePrices as $lp) {
+            if (!is_array($lp)) {
+                continue;
+            }
+            $key = $this->posLinePriceLookupKey(
+                (string)($lp['itemcode'] ?? ''),
+                (string)($lp['size'] ?? ''),
+                (string)($lp['color'] ?? '')
+            );
+            $priceMap[$key] = (float)str_replace(',', '', (string)($lp['price'] ?? '0'));
+        }
+
+        $grandTarget = round((float)($snapshot['grand_total'] ?? 0), 2);
+        $discountPool = round(
+            (float)($snapshot['coupon_discount'] ?? 0)
+            + (float)($snapshot['cash_discount'] ?? 0)
+            + (float)($snapshot['gift_discount'] ?? 0),
+            2
+        );
+
+        $_POST['order_number'] = [];
+        $_POST['item_code'] = [];
+        $_POST['item_name'] = [];
+        $_POST['hsn'] = [];
+        $_POST['quantity'] = [];
+        $_POST['unit_price'] = [];
+        $_POST['tax_rate'] = [];
+        $_POST['cgst'] = [];
+        $_POST['sgst'] = [];
+        $_POST['igst'] = [];
+        $_POST['box_no'] = [];
+        $_POST['currency'] = [];
+        $_POST['subtotal'] = 0.0;
+        $_POST['tax_amount'] = 0.0;
+
+        $computedLines = [];
+        $computedInclTotal = 0.0;
+
+        foreach ($orderItems as $it) {
+            $qty = max(1, (int)($it['quantity'] ?? 1));
+            $gstRate = (float)($it['gst'] ?? 0);
+            $key = $this->posLinePriceLookupKey(
+                (string)($it['item_code'] ?? ''),
+                (string)($it['size'] ?? ''),
+                (string)($it['color'] ?? '')
+            );
+
+            $inclUnit = $priceMap[$key] ?? null;
+            if ($inclUnit === null || $inclUnit <= 0) {
+                $listInclLine = (float)($it['finalprice'] ?? 0);
+                if ($listInclLine <= 0) {
+                    $listInclLine = (float)($it['itemprice'] ?? 0) * $qty;
+                }
+                $inclLine = $listInclLine;
+            } else {
+                $inclLine = round($inclUnit * $qty, 2);
+            }
+
+            $computedInclTotal += $inclLine;
+            $computedLines[] = [
+                'it' => $it,
+                'qty' => $qty,
+                'gstRate' => $gstRate,
+                'inclLine' => $inclLine,
+            ];
+        }
+
+        if ($grandTarget > 0 && $computedInclTotal > 0 && abs($computedInclTotal - $grandTarget) > 0.02) {
+            if (count($computedLines) === 1) {
+                $computedLines[0]['inclLine'] = $grandTarget;
+            } else {
+                $factor = $grandTarget / $computedInclTotal;
+                $remaining = $grandTarget;
+                $last = count($computedLines) - 1;
+                for ($i = 0; $i < count($computedLines); $i++) {
+                    if ($i === $last) {
+                        $computedLines[$i]['inclLine'] = round($remaining, 2);
+                    } else {
+                        $share = round($computedLines[$i]['inclLine'] * $factor, 2);
+                        $computedLines[$i]['inclLine'] = $share;
+                        $remaining = round($remaining - $share, 2);
+                    }
+                }
+            }
+        } elseif ($grandTarget > 0 && $computedInclTotal <= 0 && count($computedLines) === 1) {
+            $computedLines[0]['inclLine'] = $grandTarget;
+        }
+
+        foreach ($computedLines as $line) {
+            $it = $line['it'];
+            $qty = $line['qty'];
+            $gstRate = $line['gstRate'];
+            $inclLine = round((float)$line['inclLine'], 2);
+            $inclUnit = $qty >= 1 ? $inclLine / $qty : $inclLine;
+            $pretaxUnit = $gstRate > 0 ? $inclUnit / (1 + ($gstRate / 100)) : $inclUnit;
+            $pretaxLine = round($pretaxUnit * $qty, 2);
+            $taxLine = round($inclLine - $pretaxLine, 2);
+
+            $_POST['order_number'][] = $it['order_number'];
+            $_POST['item_code'][] = $it['item_code'];
+            $_POST['item_name'][] = $it['title'];
+            $_POST['hsn'][] = $it['hsn'];
+            $_POST['quantity'][] = $qty;
+            $_POST['unit_price'][] = round($pretaxUnit, 4);
+            $_POST['tax_rate'][] = $gstRate;
+            $_POST['cgst'][] = $gstRate / 2;
+            $_POST['sgst'][] = $gstRate / 2;
+            $_POST['igst'][] = 0;
+            $_POST['box_no'][] = '';
+            $_POST['currency'][] = $it['currency'];
+
+            $_POST['subtotal'] += $pretaxLine;
+            $_POST['tax_amount'] += $taxLine;
+        }
+
+        $_POST['subtotal'] = round((float)$_POST['subtotal'], 2);
+        $_POST['tax_amount'] = round((float)$_POST['tax_amount'], 2);
+        $_POST['total_amount'] = round((float)$_POST['subtotal'] + (float)$_POST['tax_amount'], 2);
+
+        if ($grandTarget > 0 && abs($_POST['total_amount'] - $grandTarget) > 0.02) {
+            $_POST['total_amount'] = $grandTarget;
+            $_POST['tax_amount'] = round($grandTarget - (float)$_POST['subtotal'], 2);
+        }
+
+        if ($discountPool > 0.001) {
+            $_POST['discount_amount'] = 0;
+        }
+    }
+
     private function persistPosInvoiceDiscountNotes(mysqli $conn, int $invoiceId, array $discountMeta): void
     {
         if ($invoiceId <= 0) {
             return;
         }
-        $lineDiscount = round((float)($discountMeta['line_discount'] ?? 0), 2);
-        if ($lineDiscount <= 0) {
+
+        $payload = [
+            'pos_discounts' => [
+                'subtotal_goods' => round((float)($discountMeta['subtotal_goods'] ?? 0), 2),
+                'gst_total' => round((float)($discountMeta['gst_total'] ?? 0), 2),
+                'coupon_discount' => round((float)($discountMeta['coupon_discount'] ?? 0), 2),
+                'cash_discount' => round((float)($discountMeta['cash_discount'] ?? 0), 2),
+                'gift_discount' => round((float)($discountMeta['gift_discount'] ?? 0), 2),
+                'line_discount' => round((float)($discountMeta['line_discount'] ?? 0), 2),
+                'grand_total' => round((float)($discountMeta['grand_total'] ?? 0), 2),
+            ],
+        ];
+
+        $hasSummary = ($payload['pos_discounts']['subtotal_goods'] > 0)
+            || ($payload['pos_discounts']['coupon_discount'] > 0)
+            || ($payload['pos_discounts']['cash_discount'] > 0)
+            || ($payload['pos_discounts']['gift_discount'] > 0)
+            || ($payload['pos_discounts']['line_discount'] > 0)
+            || (
+                ($payload['pos_discounts']['grand_total'] > 0)
+                && ($payload['pos_discounts']['subtotal_goods'] - $payload['pos_discounts']['grand_total'] > 0.01)
+            );
+
+        if (!$hasSummary) {
             return;
         }
-        $payload = json_encode(
-            ['pos_discounts' => ['line_discount' => $lineDiscount]],
-            JSON_UNESCAPED_UNICODE
-        );
-        if ($payload === false) {
+
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
             return;
         }
+
         $stmt = $conn->prepare('UPDATE vp_invoices SET notes = ? WHERE id = ?');
         if (!$stmt) {
             return;
         }
-        $stmt->bind_param('si', $payload, $invoiceId);
+        $stmt->bind_param('si', $json, $invoiceId);
         $stmt->execute();
         $stmt->close();
+    }
+
+    private function buildPosInvoiceAmountSummaryRows(array $posMeta, float $grandTotal, float $taxAmount): string
+    {
+        $subGoods = round((float)($posMeta['subtotal_goods'] ?? 0), 2);
+        $coupon = round((float)($posMeta['coupon_discount'] ?? 0), 2);
+        $cash = round((float)($posMeta['cash_discount'] ?? 0), 2);
+        $gift = round((float)($posMeta['gift_discount'] ?? 0), 2);
+        $line = round((float)($posMeta['line_discount'] ?? 0), 2);
+        $gst = round((float)($posMeta['gst_total'] ?? 0), 2);
+        if ($gst <= 0 && $taxAmount > 0) {
+            $gst = round($taxAmount, 2);
+        }
+
+        $hasDiscounts = ($coupon + $cash + $gift + $line) > 0.001;
+        if ($subGoods <= 0 && !$hasDiscounts) {
+            return '';
+        }
+
+        $rows = '';
+        if ($subGoods > 0) {
+            $rows .= '
+                    <tr style="background: #f9f9f9;">
+                        <td colspan="10"></td>
+                        <td class="right bold">Sub Total (Goods):</td>
+                        <td class="right bold">' . number_format($subGoods, 2) . '</td>
+                    </tr>';
+        }
+        if ($line > 0) {
+            $rows .= '
+                    <tr style="background: #f9f9f9;">
+                        <td colspan="10"></td>
+                        <td class="right bold">Line Discount:</td>
+                        <td class="right bold">-' . number_format($line, 2) . '</td>
+                    </tr>';
+        }
+        if ($coupon > 0) {
+            $rows .= '
+                    <tr style="background: #f9f9f9;">
+                        <td colspan="10"></td>
+                        <td class="right bold">Coupon Discount:</td>
+                        <td class="right bold">-' . number_format($coupon, 2) . '</td>
+                    </tr>';
+        }
+        if ($cash > 0) {
+            $rows .= '
+                    <tr style="background: #f9f9f9;">
+                        <td colspan="10"></td>
+                        <td class="right bold">Cash Discount:</td>
+                        <td class="right bold">-' . number_format($cash, 2) . '</td>
+                    </tr>';
+        }
+        if ($gift > 0) {
+            $rows .= '
+                    <tr style="background: #f9f9f9;">
+                        <td colspan="10"></td>
+                        <td class="right bold">Gift Voucher Discount:</td>
+                        <td class="right bold">-' . number_format($gift, 2) . '</td>
+                    </tr>';
+        }
+        if ($gst > 0) {
+            $rows .= '
+                    <tr style="background: #f9f9f9;">
+                        <td colspan="10"></td>
+                        <td class="right bold">Total GST:</td>
+                        <td class="right bold">' . number_format($gst, 2) . '</td>
+                    </tr>';
+        }
+        if ($grandTotal > 0) {
+            $rows .= '
+                    <tr style="background: #f0f0f0; border-top: 2px solid #000;">
+                        <td colspan="12" class="right bold" style="text-align: right;">Grand Total:</td>
+                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($grandTotal, 2) . '</td>
+                    </tr>';
+        }
+
+        return $rows;
     }
 
     private function generateInvoiceHtml($invoice, $items, $type = '')
@@ -581,7 +821,11 @@ WHERE i.pos_flag = 1
         // Build summary rows with tax totals
         $discount = $invoice['discount_amount'] ?? 0;
         $posDiscountMeta = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
-        $lineDiscountSummary = round((float)($posDiscountMeta['line_discount'] ?? 0), 2);
+        $summaryGrandTotal = round((float)($posDiscountMeta['grand_total'] ?? 0), 2);
+        if ($summaryGrandTotal <= 0) {
+            $summaryGrandTotal = round((float)$totalAmount, 2);
+        }
+        $summaryTaxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
 
         // Add row for tax amount totals (below each SGST/CGST/IGST column)
         $summaryrows .= '
@@ -600,23 +844,27 @@ WHERE i.pos_flag = 1
         ';
 
 
-        if ($lineDiscountSummary > 0) {
-            $summaryrows .= '
-                    <tr style="background: #f9f9f9;">
-                        <td colspan="10"></td>
-                        <td class="right bold">Line Discount:</td>
-                        <td class="right bold">' . number_format($lineDiscountSummary, 2) . '</td>
-                    </tr>';
-        }
-
-        if ($discount > 0) {
-            $summaryrows .= '
+        $amountSummary = $this->buildPosInvoiceAmountSummaryRows($posDiscountMeta, $summaryGrandTotal, $summaryTaxAmount);
+        if ($amountSummary !== '') {
+            $summaryrows .= $amountSummary;
+            $totalAmount = $summaryGrandTotal;
+        } else {
+            if ($discount > 0) {
+                $summaryrows .= '
                     <tr style="background: #f9f9f9;">
                         <td colspan="10"></td>
                         <td class="right bold">Discount:</td>
                         <td class="right bold">-' . number_format($discount, 2) . '</td>
                     </tr>';
-            $totalAmount -= $discount;
+                $totalAmount -= $discount;
+            }
+
+            $summaryrows .= '
+                    <tr style="background: #f0f0f0; border-top: 2px solid #000;">
+                        <td colspan="12" class="right bold" style="text-align: right;">Grand Total:</td>                      
+                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($totalAmount, 2) . '</td>
+                    </tr>
+        ';
         }
 
         // Fetch currency exchange rate and add conversion row
@@ -652,13 +900,6 @@ WHERE i.pos_flag = 1
                     <td class="right bold">' . number_format($convertedAmount, 2) . '</td>
                 </tr>';
         }
-
-        $summaryrows .= '
-                    <tr style="background: #f0f0f0; border-top: 2px solid #000;">
-                        <td colspan="12" class="right bold" style="text-align: right;">Grand Total:</td>                      
-                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($totalAmount, 2) . '</td>
-                    </tr>
-        ';
 
         // Fetch customer and address information
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
@@ -810,39 +1051,46 @@ WHERE i.pos_flag = 1
             $_POST['custom_invoice_number'] = $customInvoiceNumber;
         }
 
-        foreach ($items as $it) {
-            $_POST['order_number'][] = $it['order_number'];
-            $_POST['item_code'][] = $it['item_code'];
-            $_POST['item_name'][] = $it['title'];
-            $_POST['hsn'][] = $it['hsn'];
-            $_POST['quantity'][] = $it['quantity'];
+        $checkoutSnapshot = $_SESSION['pos_checkout_invoice_snapshot'] ?? null;
+        $useSnapshot = is_array($checkoutSnapshot)
+            && trim((string)($checkoutSnapshot['order_number'] ?? '')) === $orderNumber;
 
-            $qty = max(1, (int)$it['quantity']);
-            $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $qty;
+        if ($useSnapshot) {
+            $this->buildInvoicePostFromCheckoutSnapshot($items, $checkoutSnapshot);
+        } else {
+            foreach ($items as $it) {
+                $_POST['order_number'][] = $it['order_number'];
+                $_POST['item_code'][] = $it['item_code'];
+                $_POST['item_name'][] = $it['title'];
+                $_POST['hsn'][] = $it['hsn'];
+                $_POST['quantity'][] = $it['quantity'];
 
-            $_POST['unit_price'][] = $unit;
-            $_POST['tax_rate'][] = $it['gst'];
-            $_POST['cgst'][] = $it['gst'] / 2;
-            $_POST['sgst'][] = $it['gst'] / 2;
-            $_POST['igst'][] = 0;
-            $_POST['box_no'][] = '';
-            $_POST['currency'][] = $it['currency'];
+                $qty = max(1, (int)$it['quantity']);
+                $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $qty;
 
-            $_POST['subtotal'] += $unit * $qty;
-            $_POST['tax_amount'] += ($unit * $qty) * ($it['gst'] / 100);
-        }
+                $_POST['unit_price'][] = $unit;
+                $_POST['tax_rate'][] = $it['gst'];
+                $_POST['cgst'][] = $it['gst'] / 2;
+                $_POST['sgst'][] = $it['gst'] / 2;
+                $_POST['igst'][] = 0;
+                $_POST['box_no'][] = '';
+                $_POST['currency'][] = $it['currency'];
 
-        $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
-
-        $posDiscountMeta = $_SESSION['pos_checkout_invoice_discounts'] ?? [];
-        $result = $this->createPostInternal();
-        if (!empty($result['success']) && !empty($result['invoice_id']) && is_array($posDiscountMeta)) {
-            $this->persistPosInvoiceDiscountNotes($conn, (int)$result['invoice_id'], $posDiscountMeta);
-            if ($lineDiscountSummary = round((float)($posDiscountMeta['line_discount'] ?? 0), 2)) {
-                $result['line_discount'] = $lineDiscountSummary;
+                $_POST['subtotal'] += $unit * $qty;
+                $_POST['tax_amount'] += ($unit * $qty) * ($it['gst'] / 100);
             }
+
+            $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
         }
-        unset($_SESSION['pos_checkout_invoice_discounts']);
+
+        $posDiscountMeta = $useSnapshot ? $checkoutSnapshot : [];
+        $result = $this->createPostInternal();
+        if (!empty($result['success']) && !empty($result['invoice_id']) && $useSnapshot && is_array($posDiscountMeta)) {
+            $posDiscountMeta['gst_total'] = round((float)($_POST['tax_amount'] ?? 0), 2);
+            $posDiscountMeta['grand_total'] = round((float)($_POST['total_amount'] ?? 0), 2);
+            $this->persistPosInvoiceDiscountNotes($conn, (int)$result['invoice_id'], $posDiscountMeta);
+        }
+        unset($_SESSION['pos_checkout_invoice_snapshot']);
 
         return $result;
     }

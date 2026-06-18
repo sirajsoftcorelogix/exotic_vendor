@@ -3435,8 +3435,16 @@ class POSRegisterController
         if (!($paymentStage === 'final' && abs($paymentAmount - $orderTotal) <= 0.02)) {
             $customInvoiceNumber = '';
         }
-        $_SESSION['pos_checkout_invoice_discounts'] = [
+        $_SESSION['pos_checkout_invoice_snapshot'] = [
+            'order_number' => $orderNumber,
+            'subtotal_goods' => round((float)($payload['receipt_subtotal_goods'] ?? $orderTotal), 2),
+            'gst_total' => round((float)($payload['receipt_gst_total'] ?? 0), 2),
+            'coupon_discount' => round((float)($payload['receipt_coupon_discount'] ?? 0), 2),
+            'cash_discount' => round((float)($payload['receipt_cash_discount'] ?? 0), 2),
+            'gift_discount' => round((float)($payload['receipt_gift_discount'] ?? 0), 2),
             'line_discount' => round((float)($payload['receipt_line_discount'] ?? 0), 2),
+            'grand_total' => $orderTotal,
+            'line_prices' => is_array($posLinePrices) ? $posLinePrices : [],
         ];
         $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
         $shippedStatusMeta = $this->markPosCheckoutOrderShipped($conn, $orderNumber);
