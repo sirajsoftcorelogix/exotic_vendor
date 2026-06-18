@@ -212,7 +212,8 @@ class AccountGroup
             'SELECT ag.id, ag.account_group_name
              FROM account_group ag
              INNER JOIN category c
-               ON LOWER(TRIM(ag.item_group)) = LOWER(TRIM(c.name))
+               ON LOWER(TRIM(ag.item_group)) COLLATE utf8mb4_unicode_ci
+                = LOWER(TRIM(c.name)) COLLATE utf8mb4_unicode_ci
               AND c.parent_id = 0
               AND c.is_active = 1
              WHERE ag.is_active = 1
