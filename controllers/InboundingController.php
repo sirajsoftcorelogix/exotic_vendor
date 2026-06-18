@@ -1,6 +1,7 @@
 <?php
 require_once 'models/inbounding/Inbounding.php';
 require_once 'models/vendor/VendorReferenceCache.php';
+require_once 'models/account_group/AccountGroup.php';
 require_once 'controllers/ProductsController.php';
 require_once __DIR__ . '/../helpers/inbound_profiler.php';
 
@@ -297,7 +298,7 @@ class InboundingController {
     }
     public function getdesktopform() {
         is_login();
-        global $inboundingModel;
+        global $inboundingModel, $conn;
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
@@ -310,6 +311,10 @@ class InboundingController {
         $data['form2']['gecolormaps'] = $vendorApis['gecolormaps'];
         $data['form2']['optionals_data'] = $vendorApis['optionals_data'];
         $data['form2']['permanently_available'] = ((int) ($data['form2']['permanently_available'] ?? 0) === 1) ? 1 : 0;
+        $itemGroupSlug = $inboundingModel->resolveItemGroupSlugFromGroupName($data['form2']['group_name'] ?? '');
+        $accountGroupModel = new AccountGroup($conn);
+        $data['account_groups'] = $itemGroupSlug !== '' ? $accountGroupModel->getActiveByItemGroup($itemGroupSlug) : [];
+        $data['item_group_slug'] = $itemGroupSlug;
         $data['images'] = $inboundingModel->getitem_imgs($id);
         $data['markup_list'] = $inboundingModel->getMarkupData();
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
@@ -349,6 +354,40 @@ class InboundingController {
 
         $msg = $allOk ? 'vendor_refs_synced' : 'vendor_refs_sync_failed';
         header('Location: ' . base_url('?page=inbounding&action=list&msg=' . $msg));
+        exit;
+    }
+
+    /**
+     * AJAX: active account groups for the selected inbound group (item_group slug).
+     */
+    public function fetchAccountGroupsAjax(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        global $inboundingModel, $conn;
+
+        $itemGroup = trim((string) ($_GET['item_group'] ?? ''));
+        if ($itemGroup === '') {
+            $groupName = trim((string) ($_GET['group_name'] ?? ''));
+            if ($groupName !== '') {
+                $itemGroup = $inboundingModel->resolveItemGroupSlugFromGroupName($groupName);
+            }
+        }
+
+        if ($itemGroup === '') {
+            echo json_encode(['ok' => true, 'item_group' => '', 'groups' => []], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $accountGroupModel = new AccountGroup($conn);
+        $groups = $accountGroupModel->getActiveByItemGroup($itemGroup);
+
+        echo json_encode([
+            'ok' => true,
+            'item_group' => $itemGroup,
+            'groups' => $groups,
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -1358,6 +1397,7 @@ class InboundingController {
             'Item_code'           => $item_code,
             'sku'                 => $generated_sku,
             'group_name'          => $_POST['group_name'] ?? '', 
+            'accounts_group'      => trim((string) ($_POST['accounts_group'] ?? '')) === '' ? null : (int) $_POST['accounts_group'],
             'colormaps'           => $_POST['colormaps'] ?? '',
             'image_directory'     => $_POST['image_directory'] ?? '',
             'category_code'       => $category_val,

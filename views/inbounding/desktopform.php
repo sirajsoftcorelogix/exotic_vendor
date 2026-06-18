@@ -1294,6 +1294,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         <?php 
             $selected_material = $data['form2']['material_code'] ?? '';
             $selected_group_val = $data['form2']['group_name'] ?? ''; 
+            $selected_accounts_group = (string) ($data['form2']['accounts_group'] ?? '');
+            $account_groups = is_array($data['account_groups'] ?? null) ? $data['account_groups'] : [];
             $selected_cat_id    = $data['form2']['category_code'] ?? '';
             $sub_raw = $data['form2']['sub_category_code'] ?? '';
             $selected_sub = is_array($sub_raw) ? $sub_raw : explode(',', $sub_raw);
@@ -1325,7 +1327,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         $rootCategories[] = [
                             'id'          => $row['id'],
                             'name'        => $row['display_name'],
-                            'store_value' => $storageValue // This becomes the root of the path
+                            'store_value' => $storageValue,
+                            'item_group'  => trim((string) ($row['name'] ?? '')),
                         ];
                     }
                 }
@@ -1335,8 +1338,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Grouping</legend>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                    <div class="w-full" id="material-code-field">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                    <div class="w-full min-w-0" id="material-code-field">
                         <label class="block text-xs font-bold text-[#222] mb-1">Material:</label>
                         <div class="flex gap-2 items-center w-full">
                             <div class="flex-1 w-full min-w-0"> 
@@ -1355,15 +1358,31 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </div>
                     </div>
 
-                    <div>
+                    <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#222] mb-1">Group:</label>
                         <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off">
                             <option value="">Select Group...</option>
                             <?php foreach($rootCategories as $group): 
                                 $isGroupSelected = ($selected_group_val == $group['store_value']) ? 'selected' : '';
+                                $itemGroupSlug = htmlspecialchars((string) ($group['item_group'] ?? ''), ENT_QUOTES, 'UTF-8');
                             ?>
-                                <option value="<?php echo $group['store_value']; ?>" <?php echo $isGroupSelected; ?>>
+                                <option value="<?php echo $group['store_value']; ?>" data-item-group="<?php echo $itemGroupSlug; ?>" <?php echo $isGroupSelected; ?>>
                                     <?php echo $group['name']; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="w-full min-w-0">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Accounts Group:</label>
+                        <select id="accounts_group_select" name="accounts_group" placeholder="Select Accounts Group..." autocomplete="off">
+                            <option value="">Select Accounts Group...</option>
+                            <?php foreach ($account_groups as $agRow): 
+                                $agId = (int) ($agRow['id'] ?? 0);
+                                $agSelected = ($selected_accounts_group !== '' && (string) $agId === $selected_accounts_group) ? 'selected' : '';
+                            ?>
+                                <option value="<?php echo $agId; ?>" <?php echo $agSelected; ?>>
+                                    <?php echo htmlspecialchars((string) ($agRow['account_group_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -4565,6 +4584,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 3. DOM ELEMENTS
     const groupSelectEl = document.getElementById("group_select");
+    const accountsGroupSelectEl = document.getElementById("accounts_group_select");
+    const fetchAccountGroupsUrl = '<?php echo base_url('?page=inbounding&action=fetchAccountGroups'); ?>';
     const catContainer = document.getElementById('category_container');
     const subContainer = document.getElementById('sub_category_container');
     const subSubContainer = document.getElementById('sub_sub_category_container');
@@ -4572,6 +4593,69 @@ document.addEventListener('DOMContentLoaded', function() {
     // 4. INIT TOM SELECT FOR GROUP
     const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
     let groupTs = null;
+    let accountsGroupTs = null;
+
+    function resolveItemGroupSlug(groupValue) {
+        if (!groupSelectEl || groupValue === '' || groupValue == null) {
+            return '';
+        }
+        const opts = groupSelectEl.options;
+        for (let i = 0; i < opts.length; i++) {
+            if (opts[i].value === String(groupValue)) {
+                return opts[i].getAttribute('data-item-group') || '';
+            }
+        }
+        return '';
+    }
+
+    function setAccountsGroupOptions(groups, selectedId) {
+        const sel = accountsGroupSelectEl;
+        if (!sel) return;
+
+        const keepId = selectedId != null && selectedId !== '' ? String(selectedId) : '';
+        const validIds = new Set((groups || []).map(function (g) { return String(g.id); }));
+
+        if (accountsGroupTs) {
+            accountsGroupTs.clearOptions();
+            accountsGroupTs.addOption({ value: '', text: 'Select Accounts Group...' });
+            (groups || []).forEach(function (g) {
+                accountsGroupTs.addOption({ value: String(g.id), text: g.account_group_name || '' });
+            });
+            accountsGroupTs.setValue(validIds.has(keepId) ? keepId : '');
+            return;
+        }
+
+        sel.innerHTML = '<option value="">Select Accounts Group...</option>';
+        (groups || []).forEach(function (g) {
+            const opt = document.createElement('option');
+            opt.value = String(g.id);
+            opt.textContent = g.account_group_name || '';
+            if (keepId !== '' && opt.value === keepId) {
+                opt.selected = true;
+            }
+            sel.appendChild(opt);
+        });
+    }
+
+    async function reloadAccountsGroupsForGroup(groupValue, selectedId) {
+        const itemGroup = resolveItemGroupSlug(groupValue);
+        if (!itemGroup) {
+            setAccountsGroupOptions([], '');
+            return;
+        }
+        try {
+            const url = fetchAccountGroupsUrl + '&item_group=' + encodeURIComponent(itemGroup);
+            const res = await fetch(url, { credentials: 'include' });
+            const json = await res.json();
+            setAccountsGroupOptions(json.groups || [], selectedId);
+        } catch (e) {
+            setAccountsGroupOptions([], '');
+        }
+    }
+
+    if (accountsGroupSelectEl && typeof window.safeTomSelect === 'function') {
+        accountsGroupTs = window.safeTomSelect(accountsGroupSelectEl, config);
+    }
 
     if (groupSelectEl && typeof window.safeTomSelect === 'function') {
         const hadTs = !!groupSelectEl.tomselect;
@@ -4582,6 +4666,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 groupingPreSelected.sub.clear();
                 groupingPreSelected.subsub.clear();
                 updateGroupingCatList(groupValue);
+                reloadAccountsGroupsForGroup(groupValue, '');
             });
         }
     }
