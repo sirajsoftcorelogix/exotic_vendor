@@ -2184,7 +2184,7 @@ class InboundingController {
         if ($d['groupname'] != 'book') {
         $API_data['material'] = $d['material_name'] ?? '';
         }
-        $accountGroupName = trim((string) ($d['account_group_name'] ?? ''));
+        $accountGroupName = $inboundingModel->resolveAccountGroupApiValue($d);
         if ($accountGroupName !== '') {
             $API_data['account_group'] = $accountGroupName;
         }
