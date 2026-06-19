@@ -439,7 +439,7 @@ WHERE i.pos_flag = 1
         $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
 
         $invoiceHtml = $this->generateInvoiceHtml($invoice, $items, 'tax_invoice');
-        $pdfUrl = 'index.php?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId;
+        $pdfUrl = pos_invoice_pdf_url($invoiceId);
 
         renderTemplateClean('views/posinvoice/print_preview.php', [
             'invoice_html' => $invoiceHtml,

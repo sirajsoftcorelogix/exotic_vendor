@@ -51,6 +51,16 @@ function base_url($path = '')
 	return $domain . '/' . ltrim($path, '/');
 	//return 'http://localhost:8082/' . ltrim($path, '/');
 }
+
+/** Tax invoice PDF for POS orders (PosInvoiceController layout with checkout discounts). */
+function pos_invoice_pdf_url(int $invoiceId): string
+{
+	if ($invoiceId <= 0) {
+		return '';
+	}
+
+	return base_url('?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId);
+}
 function print_array($data)
 {
 	echo "<pre>";

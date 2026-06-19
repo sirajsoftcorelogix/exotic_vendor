@@ -946,7 +946,7 @@
                                                     $invoiceCancelled = ($invStat === 'cancelled');
                                                     ?>
                                                     <?php if (!empty($order['invoice_id']) && !$invoiceCancelled): ?>
-                                                        <a href="<?= base_url("?page=invoices&action=generate_pdf&invoice_id=" . $order['invoice_id']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
+                                                        <a href="<?= pos_invoice_pdf_url((int)$order['invoice_id']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
                                                             <p class="mr-1">Download Invoice</p>
                                                             <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                                 <path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
