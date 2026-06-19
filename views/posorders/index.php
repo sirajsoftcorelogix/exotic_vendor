@@ -1476,6 +1476,25 @@
 </div>
 <!-- image popup close -->
 
+<!-- Exotic India API sync failure -->
+<div id="exoticApiSyncModal" class="fixed inset-0 z-[10000] hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeExoticApiSyncModal()"></div>
+    <div class="relative mx-auto mt-24 w-[92%] max-w-lg rounded-xl bg-white shadow-xl">
+        <div class="border-b border-amber-200 bg-amber-50 px-5 py-4 rounded-t-xl">
+            <h3 class="text-lg font-semibold text-amber-900">Exotic India sync failed</h3>
+            <p class="text-sm text-amber-800 mt-1">Local order status was saved, but the vendor portal could not be updated.</p>
+        </div>
+        <div class="px-5 py-4 space-y-3 text-sm text-gray-700">
+            <p id="exoticApiSyncSummary" class="font-medium text-gray-900"></p>
+            <div id="exoticApiSyncDetails" class="max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 font-mono text-xs whitespace-pre-wrap text-gray-800"></div>
+        </div>
+        <div class="flex flex-wrap justify-end gap-2 border-t border-gray-200 px-5 py-4">
+            <button type="button" onclick="closeExoticApiSyncModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Close</button>
+            <button type="button" id="exoticApiSyncRetryBtn" onclick="retryExoticApiSync()" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Retry sync</button>
+        </div>
+    </div>
+</div>
+
 <!-- Bulk Update Status Modal -->
 <div id="bulkStatusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkStatusPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
@@ -1966,6 +1985,143 @@
         document.getElementById('agentName').value = selectedOption.text;
     });
     // submit status form with validation
+    let exoticApiSyncRetryQueue = [];
+
+    function closeExoticApiSyncModal() {
+        document.getElementById('exoticApiSyncModal').classList.add('hidden');
+    }
+
+    function showExoticApiSyncFailure(apiSync, options) {
+        options = options || {};
+        const failures = Array.isArray(apiSync && apiSync.failures) ? apiSync.failures
+            : (apiSync && apiSync.attempted && !apiSync.success ? [apiSync] : []);
+
+        if (!failures.length) {
+            return;
+        }
+
+        exoticApiSyncRetryQueue = failures.map(function(item) {
+            return {
+                order_id: item.order_id,
+                orderStatus: options.orderStatus || document.getElementById('orderStatus')?.value || ''
+            };
+        });
+
+        const summary = failures.length === 1
+            ? ('Order ' + (failures[0].order_number || failures[0].order_id) + ' / ' + (failures[0].item_code || 'item'))
+            : (failures.length + ' items failed to sync');
+
+        const details = failures.map(function(item) {
+            const parts = [
+                'Order: ' + (item.order_number || item.order_id || '—'),
+                'Item: ' + (item.item_code || '—'),
+                'HTTP: ' + (item.http_code || '—'),
+                'Reason: ' + (item.message || 'Unknown error')
+            ];
+            if (item.raw) {
+                parts.push('Response: ' + String(item.raw).slice(0, 400));
+            }
+            return parts.join('\n');
+        }).join('\n\n');
+
+        document.getElementById('exoticApiSyncSummary').textContent = summary;
+        document.getElementById('exoticApiSyncDetails').textContent = details;
+        document.getElementById('exoticApiSyncRetryBtn').classList.toggle('hidden', exoticApiSyncRetryQueue.length === 0);
+        document.getElementById('exoticApiSyncModal').classList.remove('hidden');
+    }
+
+    function retryExoticApiSync() {
+        if (!exoticApiSyncRetryQueue.length) {
+            closeExoticApiSyncModal();
+            return;
+        }
+
+        const btn = document.getElementById('exoticApiSyncRetryBtn');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Retrying…';
+
+        const runNext = function(index) {
+            if (index >= exoticApiSyncRetryQueue.length) {
+                btn.disabled = false;
+                btn.textContent = originalText;
+                closeExoticApiSyncModal();
+                if (typeof showAlert === 'function') {
+                    showAlert('Exotic India sync retry completed.', 'success');
+                }
+                setTimeout(function() { location.reload(); }, 1200);
+                return;
+            }
+
+            const item = exoticApiSyncRetryQueue[index];
+            const formData = new FormData();
+            formData.append('order_id', item.order_id);
+            if (item.orderStatus) {
+                formData.append('orderStatus', item.orderStatus);
+            }
+
+            fetch('?page=posorders&action=retry_status_api', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (!data.success) {
+                    throw new Error(data.message || 'Retry failed');
+                }
+                runNext(index + 1);
+            })
+            .catch(function(err) {
+                btn.disabled = false;
+                btn.textContent = originalText;
+                document.getElementById('exoticApiSyncDetails').textContent = err.message || 'Retry failed';
+                if (typeof showAlert === 'function') {
+                    showAlert(err.message || 'Retry failed', 'error');
+                } else {
+                    alert(err.message || 'Retry failed');
+                }
+            });
+        };
+
+        runNext(0);
+    }
+
+    function handlePosOrderStatusResponse(data, errorDiv, onComplete) {
+        if (!data.success) {
+            errorDiv.classList.remove('text-green-500');
+            errorDiv.classList.add('text-red-500');
+            errorDiv.textContent = data.message || 'Error updating order status.';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        const apiSync = data.api_sync || null;
+        const apiFailed = apiSync && apiSync.attempted && !apiSync.success;
+
+        if (apiFailed) {
+            errorDiv.classList.remove('text-green-500');
+            errorDiv.classList.add('text-amber-600');
+            errorDiv.textContent = data.message || 'Saved locally, but Exotic India sync failed.';
+            errorDiv.classList.remove('hidden');
+            showExoticApiSyncFailure(apiSync, { orderStatus: document.getElementById('orderStatus')?.value || '' });
+            return;
+        }
+
+        errorDiv.classList.remove('text-red-500', 'text-amber-600');
+        errorDiv.classList.add('text-green-500');
+        errorDiv.textContent = data.message || 'Order status updated successfully.';
+        errorDiv.classList.remove('hidden');
+
+        if (typeof onComplete === 'function') {
+            onComplete();
+        } else {
+            setTimeout(function() {
+                closeStatusPopup();
+                location.reload();
+            }, 1500);
+        }
+    }
+
     document.getElementById('statusForm').addEventListener('submit', function(e) {
         const statusSelect = document.getElementById('orderStatus');
         const errorDiv = document.getElementById('orderStatusError');
@@ -1985,20 +2141,7 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    if (data.success) {
-                        errorDiv.classList.remove('text-red-500');
-                        errorDiv.classList.add('text-green-500');
-                        errorDiv.textContent = 'Order status updated successfully.';
-                        errorDiv.classList.remove('hidden');
-                        //closeStatusPopup();
-                        setTimeout(() => {
-                            closeStatusPopup();
-                            location.reload();
-                        }, 2000);
-                    } else {
-                        errorDiv.textContent = 'Error updating order status.';
-                        errorDiv.classList.remove('hidden');
-                    }
+                    handlePosOrderStatusResponse(data, errorDiv);
                 })
                 .catch(error => {
                     console.error('Error:', error);
@@ -2440,32 +2583,44 @@
         document.getElementById('bulkStatusError').classList.remove('hidden');
         e.preventDefault();
         const formData = new FormData(this);
-        fetch('index.php?action=bulk_update_status', {
+        fetch('?page=posorders&action=bulk_update_status', {
                 method: 'POST',
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    //alert(data.message);
-                    document.getElementById('bulkStatusError').classList.remove('text-red-500');
-                    document.getElementById('bulkStatusError').classList.add('text-green-500');
-                    document.getElementById('bulkStatusError').textContent = 'Order statuses updated successfully.';
-                    //poitem clear from localStorage
-                    localStorage.removeItem('selected_po_orders');
-
-                    //timeout to close popup and reload
-                    setTimeout(() => {
-                        closeBulkStatusPopup();
-                        location.reload();
-                    }, 3000);
-                    //bulkStatusError.classList.remove('hidden');
-                    //location.reload();
-                } else {
-                    alert(data.message);
+                const bulkError = document.getElementById('bulkStatusError');
+                if (!data.success) {
+                    bulkError.classList.remove('text-green-500');
+                    bulkError.classList.add('text-red-500');
+                    bulkError.textContent = data.message || 'Failed to update order statuses.';
+                    return;
                 }
-            });
 
+                const apiSync = data.api_sync || null;
+                const apiFailed = apiSync && apiSync.attempted && !apiSync.success;
+
+                if (apiFailed) {
+                    bulkError.classList.remove('text-green-500');
+                    bulkError.classList.add('text-amber-600');
+                    bulkError.textContent = data.message || 'Saved locally, but some Exotic India syncs failed.';
+                    showExoticApiSyncFailure(apiSync, { orderStatus: document.getElementById('bulkOrderStatus')?.value || '' });
+                    return;
+                }
+
+                bulkError.classList.remove('text-red-500', 'text-amber-600');
+                bulkError.classList.add('text-green-500');
+                bulkError.textContent = data.message || 'Order statuses updated successfully.';
+                localStorage.removeItem('selected_po_orders');
+                setTimeout(function() {
+                    closeBulkStatusPopup();
+                    location.reload();
+                }, 2000);
+            })
+            .catch(function(err) {
+                console.error(err);
+                document.getElementById('bulkStatusError').textContent = 'An error occurred while updating statuses.';
+            });
     });
     document.getElementById('bulkAssignForm').addEventListener('submit', function(e) {
         const agent = document.getElementById('bulkAssignAgent').value;

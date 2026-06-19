@@ -3137,7 +3137,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <?php require __DIR__ . '/partials/catalog_sync_script.php'; ?>
 <script>
-    const printJsonPreviewUrl = <?php echo json_encode(base_url('?page=inbounding&action=inbound_product_publish&preview_only=1')); ?>;
+    const printJsonPreviewUrl = <?php echo json_encode(base_url('?page=inbounding&action=inbound_product_preview_json')); ?>;
 
     function resetPublishPopup() {
         const idle = document.getElementById('publishConfirmIdle');
@@ -3279,6 +3279,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const form = document.getElementById('product_form');
         syncFormTomSelectValues(form);
         const formData = new FormData(form);
+        formData.set('save_action', 'preview_json');
         const recordId = new URLSearchParams(window.location.search).get('id');
 
         const choose = document.getElementById('printJsonChoose');
@@ -3297,7 +3298,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (localBtn) localBtn.disabled = true;
         if (cancelBtn) cancelBtn.disabled = true;
 
-        fetch(form.action + '&save_action=preview_json', {
+        fetch(form.action, {
             method: 'POST',
             body: formData,
             credentials: 'same-origin',
@@ -3606,6 +3607,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const form = document.getElementById('product_form');
         syncFormTomSelectValues(form);
         const formData = new FormData(form);
+        formData.set('save_action', 'generate');
         const recordId = new URLSearchParams(window.location.search).get('id');
 
         const idle = document.getElementById('publishConfirmIdle');
@@ -3623,9 +3625,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cancelBtn) cancelBtn.disabled = true;
 
         // First: Save the current form data so changes aren't lost
-        fetch(form.action + '&save_action=generate', {
+        fetch(form.action, {
             method: 'POST',
-            body: formData
+            body: formData,
+            redirect: 'manual'
+        })
+        .then(function (saveResponse) {
+            if (saveResponse.type === 'opaqueredirect' || (saveResponse.status >= 300 && saveResponse.status < 400)) {
+                return;
+            }
+            if (!saveResponse.ok) {
+                throw new Error('Form save failed (HTTP ' + saveResponse.status + ').');
+            }
         })
         .then(() => {
             // Second: Call the Publish API after save is successful
