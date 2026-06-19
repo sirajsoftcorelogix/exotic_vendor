@@ -1528,6 +1528,10 @@ switch ($page) {
                 $controller->delete();
                 break;
 
+            case 'cancel_invoice':
+                $controller->cancelInvoice();
+                break;
+
             case 'preview':
                 $controller->preview();
                 break;
@@ -1581,6 +1585,9 @@ switch ($page) {
                 break;
             case 'update_status':
                 $controller->updateStatus();
+                break;
+            case 'retry_status_api':
+                $controller->retryStatusApiSync();
                 break;
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();

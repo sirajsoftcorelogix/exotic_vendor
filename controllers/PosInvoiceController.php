@@ -140,6 +140,103 @@ WHERE i.pos_flag = 1
         exit;
     }
 
+    /**
+     * Cancel POS invoice: cancel linked shipments (if any), restore stock, mark invoice cancelled.
+     */
+    public function cancelInvoice(): void
+    {
+        header('Content-Type: application/json');
+        is_login();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($input) || empty($input['invoice_id'])) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Missing invoice_id']);
+            return;
+        }
+
+        global $conn, $invoiceModel, $commanModel;
+
+        require_once __DIR__ . '/../models/dispatch/dispatch.php';
+        require_once __DIR__ . '/../models/order/stock.php';
+
+        $dispatchModel = new Dispatch($conn);
+        $invoiceId = (int) $input['invoice_id'];
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+
+        if (!$invoice) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Invoice not found']);
+            return;
+        }
+
+        if ((int) ($invoice['pos_flag'] ?? 0) !== 1) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Only POS invoices can be cancelled from this screen.']);
+            return;
+        }
+
+        $warehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
+        if ($warehouseId > 0 && (int) ($invoice['warehouse_id'] ?? 0) !== $warehouseId) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Invoice not found in your warehouse.']);
+            return;
+        }
+
+        $invStatus = strtolower(trim((string) ($invoice['status'] ?? '')));
+        if ($invStatus === 'cancelled') {
+            echo json_encode(['success' => true, 'message' => 'Invoice already cancelled']);
+            return;
+        }
+
+        $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
+
+        try {
+            foreach ($dispatchRecords as $record) {
+                $shiprocketOrderId = $record['shiprocket_order_id'] ?? '';
+                if ($shiprocketOrderId) {
+                    $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
+                    if (empty($response['success'])) {
+                        echo json_encode([
+                            'success' => false,
+                            'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error'),
+                        ]);
+                        return;
+                    }
+                    $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
+                }
+            }
+
+            $stockModel = new Stock($conn);
+            $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
+            if (empty($stockRestore['success'])) {
+                http_response_code(500);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Shipment cancelled but stock could not be restored: ' . ($stockRestore['message'] ?? 'unknown'),
+                    'stock_restore' => $stockRestore,
+                ]);
+                return;
+            }
+
+            $invoiceModel->updateInvoiceStatus($invoiceId, 'cancelled');
+            echo json_encode([
+                'success' => true,
+                'message' => 'Invoice cancelled successfully',
+                'stock_restore' => $stockRestore,
+            ]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error cancelling invoice: ' . $e->getMessage()]);
+        }
+    }
+
     /* ===============================
        PREVIEW
     =============================== */

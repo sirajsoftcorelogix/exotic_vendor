@@ -596,27 +596,20 @@ class PosOrdersController
                 }
                 $updated = $ordersModel->updateStatus($order_id, $update_data);
 
-                // commented out on 09-11-2025 as per request
-                // call exotic india API to update order status
                 $orderval = $ordersModel->getOrderById($order_id);
-                $apidata = [
-                    'orderid' => $orderval['order_number'],
-                    'level' => 'item',
-                    'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
-                    'size' => trim($orderval['size']),
-                    'color' => trim($orderval['color']),
-                    'itemcode' => trim($orderval['item_code'])
-                ];
-                //run update if admin id not 0
-                if ($apidata['order_status'] > 0) {
-                    $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
-                }
+                $apiSync = $this->syncOrderStatusToExoticApi($order_id, $new_status);
                 //log status change
                 $logData = [
                     'order_id' => $order_id,
                     'status' => 'Status: ' . $new_status,
                     'changed_by' => $_SESSION['user']['id'],
-                    'api_response' => NULL, //json_encode($resp),
+                    'api_response' => !empty($apiSync['attempted'])
+                        ? json_encode([
+                            'success' => !empty($apiSync['success']),
+                            'http_code' => (int) ($apiSync['http_code'] ?? 0),
+                            'message' => (string) ($apiSync['message'] ?? ''),
+                        ], JSON_UNESCAPED_UNICODE)
+                        : null,
                     'change_date' => date('Y-m-d H:i:s')
                 ];
                 //print_array($apidata);
@@ -676,10 +669,21 @@ class PosOrdersController
                     $commanModel->add_order_status_log($remarksLogData);
                 }
 
-                if ($updated) {
-                    echo json_encode(['success' => true, 'message' => 'Order status updated successfully.']);
+                if (!empty($updated['success'])) {
+                    $localMessage = 'Order status updated successfully.';
+                    if (!empty($apiSync['attempted']) && empty($apiSync['success'])) {
+                        $localMessage .= ' Exotic India sync failed — use Retry to sync again.';
+                    }
+                    echo json_encode([
+                        'success' => true,
+                        'message' => $localMessage,
+                        'api_sync' => $apiSync,
+                    ]);
                 } else {
-                    echo json_encode(['success' => false, 'message' => 'Failed to update order status.']);
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $updated['message'] ?? 'Failed to update order status.',
+                    ]);
                 }
             } else {
                 echo json_encode(['success' => false, 'message' => 'Invalid order ID or status.']);
@@ -1165,29 +1169,31 @@ class PosOrdersController
             //exit;
             if (!empty($order_ids) && !empty($new_status)) {
                 $result = $ordersModel->updateStatusBulk($order_ids, $new_status);
+                $apiFailures = [];
+                $apiSynced = 0;
                 //log status change for each order
                 foreach ($order_ids as $oid) {
+                    $apiSync = $this->syncOrderStatusToExoticApi((int) $oid, $new_status);
                     $logData = [
                         'order_id' => $oid,
                         'status' => 'Status: ' . $new_status,
                         'changed_by' => $_SESSION['user']['id'],
-                        'api_response' => NULL,
+                        'api_response' => !empty($apiSync['attempted'])
+                            ? json_encode([
+                                'success' => !empty($apiSync['success']),
+                                'http_code' => (int) ($apiSync['http_code'] ?? 0),
+                                'message' => (string) ($apiSync['message'] ?? ''),
+                            ], JSON_UNESCAPED_UNICODE)
+                            : null,
                         'change_date' => date('Y-m-d H:i:s')
                     ];
                     $commanModel->add_order_status_log($logData);
-                    //call exotic india API to update order status
-                    $orderval = $ordersModel->getOrderById($oid);
-                    $apidata = [
-                        'orderid' => $orderval['order_number'],
-                        'level' => 'item',
-                        'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
-                        'size' => trim($orderval['size']),
-                        'color' => trim($orderval['color']),
-                        'itemcode' => trim($orderval['item_code'])
-                    ];
-                    //run update if admin id not 0
-                    if ($apidata['order_status'] > 0) {
-                        $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
+                    if (!empty($apiSync['attempted'])) {
+                        if (!empty($apiSync['success'])) {
+                            $apiSynced++;
+                        } else {
+                            $apiFailures[] = $apiSync;
+                        }
                     }
                     //notify agent if assigned
                     $orderval = $ordersModel->getOrderById($oid);
@@ -1196,13 +1202,23 @@ class PosOrdersController
                         insertNotification($orderval['agent_id'], 'Order Status Updated', 'The status of an order assigned to you has been updated. Please check the order details.', $link);
                     }
                 }
-                if ($result) {
-                    //session poitem array clean
-
-                    echo json_encode($result);
-                    //echo json_encode(['success' => true, 'message' => 'Order statuses updated successfully.']);
+                if (!empty($result['success'])) {
+                    $message = (string) ($result['message'] ?? 'Order statuses updated successfully.');
+                    if (!empty($apiFailures)) {
+                        $message .= ' Exotic India sync failed for ' . count($apiFailures) . ' item(s).';
+                    }
+                    echo json_encode([
+                        'success' => true,
+                        'message' => $message,
+                        'api_sync' => [
+                            'attempted' => ($apiSynced + count($apiFailures)) > 0,
+                            'success' => empty($apiFailures),
+                            'synced_count' => $apiSynced,
+                            'failures' => $apiFailures,
+                        ],
+                    ]);
                 } else {
-                    echo json_encode(['success' => false, 'message' => 'Failed to update order statuses.']);
+                    echo json_encode(['success' => false, 'message' => $result['message'] ?? 'Failed to update order statuses.']);
                 }
             } else {
                 echo json_encode(['success' => false, 'message' => 'Invalid order IDs or status.']);
@@ -1211,6 +1227,76 @@ class PosOrdersController
 
         exit;
     }
+
+    /**
+     * Retry Exotic India status sync only (local status already saved).
+     */
+    public function retryStatusApiSync(): void
+    {
+        is_login();
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        global $ordersModel, $commanModel;
+
+        $orderId = (int) ($_POST['order_id'] ?? 0);
+        $statusSlug = trim((string) ($_POST['orderStatus'] ?? ''));
+
+        if ($orderId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid order ID.']);
+            return;
+        }
+
+        $order = $ordersModel->getOrderById($orderId);
+        if (!$order) {
+            echo json_encode(['success' => false, 'message' => 'Order not found.']);
+            return;
+        }
+
+        if ($statusSlug === '') {
+            $statusSlug = trim((string) ($order['status'] ?? ''));
+        }
+        if ($statusSlug === '') {
+            echo json_encode(['success' => false, 'message' => 'Order status is missing.']);
+            return;
+        }
+
+        $apiSync = $this->syncOrderStatusToExoticApi($orderId, $statusSlug);
+        if (!empty($apiSync['skipped'])) {
+            echo json_encode([
+                'success' => true,
+                'message' => (string) ($apiSync['message'] ?? 'Nothing to sync.'),
+                'api_sync' => $apiSync,
+            ]);
+            return;
+        }
+
+        $commanModel->add_order_status_log([
+            'order_id' => $orderId,
+            'status' => 'Exotic India sync retry',
+            'changed_by' => $_SESSION['user']['id'],
+            'api_response' => json_encode([
+                'success' => !empty($apiSync['success']),
+                'http_code' => (int) ($apiSync['http_code'] ?? 0),
+                'message' => (string) ($apiSync['message'] ?? ''),
+            ], JSON_UNESCAPED_UNICODE),
+            'change_date' => date('Y-m-d H:i:s'),
+        ]);
+
+        echo json_encode([
+            'success' => !empty($apiSync['success']),
+            'message' => !empty($apiSync['success'])
+                ? 'Exotic India status synced successfully.'
+                : ((string) ($apiSync['message'] ?? 'Exotic India sync failed.')),
+            'api_sync' => $apiSync,
+        ]);
+    }
+
     public function bulkAssignOrder()
     {
         is_login();
@@ -1715,5 +1801,60 @@ class PosOrdersController
             ]);
             exit;
         }
+    }
+
+    /**
+     * @return array{attempted:bool,success:bool,skipped:bool,message:string,http_code?:int,raw?:string,order_id?:int,order_number?:string,item_code?:string}
+     */
+    private function syncOrderStatusToExoticApi(int $orderId, string $statusSlug): array
+    {
+        global $ordersModel, $commanModel;
+
+        $orderval = $ordersModel->getOrderById($orderId);
+        if (!$orderval) {
+            return [
+                'attempted' => false,
+                'success' => false,
+                'skipped' => true,
+                'message' => 'Order not found.',
+                'order_id' => $orderId,
+            ];
+        }
+
+        $statusRow = $commanModel->getExoticIndiaOrderStatusCode($statusSlug);
+        $adminId = (int) ($statusRow['admin_id'] ?? 0);
+        if ($adminId <= 0) {
+            return [
+                'attempted' => false,
+                'success' => true,
+                'skipped' => true,
+                'message' => 'This status is not synced to Exotic India.',
+                'order_id' => $orderId,
+                'order_number' => (string) ($orderval['order_number'] ?? ''),
+                'item_code' => (string) ($orderval['item_code'] ?? ''),
+            ];
+        }
+
+        $result = $commanModel->updateExoticIndiaOrderStatus([
+            'orderid' => $orderval['order_number'],
+            'level' => 'item',
+            'order_status' => $adminId,
+            'size' => trim((string) ($orderval['size'] ?? '')),
+            'color' => trim((string) ($orderval['color'] ?? '')),
+            'itemcode' => trim((string) ($orderval['item_code'] ?? '')),
+        ]);
+
+        return array_merge([
+            'attempted' => true,
+            'skipped' => false,
+            'order_id' => $orderId,
+            'order_number' => (string) ($orderval['order_number'] ?? ''),
+            'item_code' => (string) ($orderval['item_code'] ?? ''),
+        ], is_array($result) ? $result : [
+            'success' => false,
+            'http_code' => 0,
+            'message' => 'Unexpected API response.',
+            'raw' => (string) $result,
+        ]);
     }
 }

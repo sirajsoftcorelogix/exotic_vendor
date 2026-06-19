@@ -149,10 +149,6 @@ class Tables {
         return null;
     }
     public function updateExoticIndiaOrderStatus($apidata) {
-        // This is a placeholder function. Implement the actual API call here.
-        //print_r($new_status);
-        //echo "Updating Exotic India order status for order ID: " . $order_id . "\n";
-        // For example, you might use cURL or any HTTP client to send a request to the Exotic India API.
         $url = "https://www.exoticindia.com/vendor-api/order/modify";
         $postData = [
             'makeRequestOf' => 'vendors-orderjson',
@@ -169,24 +165,76 @@ class Tables {
             'Content-Type: application/x-www-form-urlencoded'
         ];
 
-        // Initialize cURL
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_POST, true);
-
         curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         $response = curl_exec($ch);
-        
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
-        if ($error) {
-            // Handle cURL error
-            //echo "cURL Error: " . $error;
-            return  "cURL Error: " . $error;
+
+        return $this->parseExoticIndiaOrderModifyResponse($httpCode, (string) $response, $error);
+    }
+
+    /**
+     * @return array{success:bool,http_code:int,message:string,raw:string}
+     */
+    private function parseExoticIndiaOrderModifyResponse(int $httpCode, string $raw, string $curlError): array
+    {
+        if ($curlError !== '') {
+            return [
+                'success' => false,
+                'http_code' => $httpCode,
+                'message' => 'Connection error: ' . $curlError,
+                'raw' => $raw,
+            ];
         }
-        return $response;
+
+        $message = '';
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            foreach (['message', 'error', 'msg', 'status_message', 'statusMessage'] as $key) {
+                if (!empty($decoded[$key])) {
+                    $message = trim((string) $decoded[$key]);
+                    break;
+                }
+            }
+            if (array_key_exists('success', $decoded)) {
+                $val = $decoded['success'];
+                $apiOk = filter_var($val, FILTER_VALIDATE_BOOLEAN)
+                    || $val === 1
+                    || $val === '1'
+                    || strtolower((string) $val) === 'success';
+            } elseif (isset($decoded['status'])) {
+                $statusVal = strtolower(trim((string) $decoded['status']));
+                $apiOk = in_array($statusVal, ['success', 'ok', 'true', '1'], true);
+            } else {
+                $apiOk = $httpCode >= 200 && $httpCode < 300;
+            }
+        } else {
+            $trimmed = trim($raw);
+            $apiOk = $httpCode >= 200 && $httpCode < 300 && $trimmed !== '';
+            if (!$apiOk) {
+                $message = $trimmed !== '' ? substr($trimmed, 0, 500) : 'Empty response from Exotic India API.';
+            }
+        }
+
+        if (!$apiOk && $message === '') {
+            $message = 'HTTP ' . $httpCode;
+            if (trim($raw) !== '') {
+                $message .= ' — ' . substr(trim($raw), 0, 300);
+            }
+        }
+
+        return [
+            'success' => $apiOk,
+            'http_code' => $httpCode,
+            'message' => $message,
+            'raw' => $raw,
+        ];
     }
     public function get_staff_list() {
         //$sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND role_id ='4'";
