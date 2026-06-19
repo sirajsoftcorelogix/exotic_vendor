@@ -974,7 +974,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         document.getElementById('invoicePreviewContent').innerHTML = data.html;
         document.getElementById('invoicePreviewModal').classList.remove('hidden');
         document.getElementById("printInvoiceBtn").href =
-          "/?page=invoices&action=generate_pdf&invoice_id=" + invoice_id;
+          "/?page=posinvoice&action=generate_pdf&invoice_id=" + invoice_id;
 
       });
 

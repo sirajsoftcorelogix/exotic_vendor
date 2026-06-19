@@ -231,7 +231,7 @@ if ($receipt_download_filename_base === '') {
           $invoiceOrderNumber = trim((string)($order_id ?? ''));
           $invoiceId = (int)($invoice_id ?? 0);
           $invoiceDownloadUrl = $invoiceId > 0
-            ? 'index.php?page=invoices&action=generate_pdf&invoice_id=' . $invoiceId
+            ? pos_invoice_pdf_url($invoiceId)
             : trim((string)($invoice_pdf_url ?? ''));
           $invoiceCreateUrl = 'index.php?page=pos_register&action=create-invoice-from-receipt&order_number=' . rawurlencode($invoiceOrderNumber);
           $canDownloadInvoice = $isPaymentInFull && $invoiceDownloadUrl !== '';
