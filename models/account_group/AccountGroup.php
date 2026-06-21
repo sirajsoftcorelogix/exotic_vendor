@@ -172,22 +172,35 @@ class AccountGroup
      */
     public function getActiveByItemGroup(string $itemGroup): array
     {
-        $itemGroup = trim($itemGroup);
+        $itemGroup = strtolower(trim($itemGroup));
+        if ($itemGroup === 'sculpture') {
+            $itemGroup = 'sculptures';
+        }
         if ($itemGroup === '') {
             return [];
         }
 
-        $stmt = $this->conn->prepare(
-            'SELECT id, account_group_name
-             FROM account_group
-             WHERE is_active = 1
-               AND LOWER(TRIM(COALESCE(item_group, \'\'))) = LOWER(TRIM(?))
-             ORDER BY account_group_name ASC'
-        );
+        $shared = in_array($itemGroup, ['sculptures', 'homeandliving'], true);
+        if ($shared) {
+            $stmt = $this->conn->prepare(
+                'SELECT id, account_group_name FROM account_group
+                 WHERE is_active = 1
+                   AND LOWER(TRIM(COALESCE(item_group, \'\'))) IN (\'sculptures\', \'homeandliving\')
+                 ORDER BY account_group_name ASC'
+            );
+        } else {
+            $stmt = $this->conn->prepare(
+                'SELECT id, account_group_name FROM account_group
+                 WHERE is_active = 1 AND LOWER(TRIM(COALESCE(item_group, \'\'))) = ?
+                 ORDER BY account_group_name ASC'
+            );
+        }
         if (!$stmt) {
             return [];
         }
-        $stmt->bind_param('s', $itemGroup);
+        if (!$shared) {
+            $stmt->bind_param('s', $itemGroup);
+        }
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
@@ -197,7 +210,6 @@ class AccountGroup
 
     /**
      * Active account groups for an inbound group code (category.category, e.g. -4).
-     * Joins account_group.item_group to root category.name.
      *
      * @return list<array{id:int,account_group_name:string}>
      */
@@ -212,11 +224,15 @@ class AccountGroup
             'SELECT ag.id, ag.account_group_name
              FROM account_group ag
              INNER JOIN category c
-               ON LOWER(TRIM(ag.item_group)) = LOWER(TRIM(c.name))
-              AND c.parent_id = 0
-              AND c.is_active = 1
+               ON c.parent_id = 0 AND c.is_active = 1 AND c.category = ?
              WHERE ag.is_active = 1
-               AND c.category = ?
+               AND (
+                 LOWER(TRIM(ag.item_group)) = LOWER(TRIM(c.name))
+                 OR (
+                   LOWER(TRIM(c.name)) IN (\'sculptures\', \'homeandliving\')
+                   AND LOWER(TRIM(ag.item_group)) IN (\'sculptures\', \'homeandliving\')
+                 )
+               )
              ORDER BY ag.account_group_name ASC'
         );
         if (!$stmt) {
