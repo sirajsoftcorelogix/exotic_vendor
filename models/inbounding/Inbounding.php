@@ -991,6 +991,7 @@ class Inbounding {
     public function updatedesktopform($id, $data) {
         $this->ensureInboundRedirectColumn();
         $this->ensureInboundAccountsGroupColumn();
+        $this->ensureInboundBookFeeColumns();
 
         // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
@@ -1059,6 +1060,31 @@ class Inbounding {
         if ($res && $res->num_rows === 0) {
             @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN accounts_group INT NULL DEFAULT NULL AFTER group_name");
         }
+    }
+
+    private function ensureInboundBookFeeColumns(): void
+    {
+        $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE 'sourcingfee'");
+        if ($res && $res->num_rows === 0) {
+            @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN sourcingfee DECIMAL(12,2) NULL DEFAULT NULL AFTER pages");
+        }
+        $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE 'shippingfee'");
+        if ($res && $res->num_rows === 0) {
+            @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN shippingfee DECIMAL(12,2) NULL DEFAULT NULL AFTER sourcingfee");
+        }
+    }
+
+    /**
+     * Book shipping fee (INR): MAX(55, billable_kg * 110)
+     * billable_kg = ROUND(w,0) if ROUND(w,0) > w, else ROUND(w,0) + 0.5
+     */
+    public static function calculateBookShippingFee($weightKg): float
+    {
+        $weight = (float) $weightKg;
+        $rounded = round($weight, 0);
+        $billable = ($rounded - $weight) > 0 ? $rounded : $rounded + 0.5;
+
+        return max(55.0, $billable * 110.0);
     }
 
     /**

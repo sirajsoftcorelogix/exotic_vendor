@@ -938,6 +938,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 <label class="block text-xs font-bold text-[#555] mb-1">Pages</label>
                                 <input type="number" min="0" name="pages" value="<?php echo htmlspecialchars($data['form2']['pages'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
                             </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Sourcing Fee (INR)</label>
+                                <input type="text" inputmode="decimal" name="sourcingfee" id="book_sourcingfee" value="<?php echo htmlspecialchars((string) ($data['form2']['sourcingfee'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="0.00" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Shipping Fee (INR)</label>
+                                <input type="text" id="book_shippingfee_display" readonly tabindex="-1" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-gray-50 cursor-not-allowed">
+                                <input type="hidden" name="shippingfee" id="book_shippingfee" value="<?php echo htmlspecialchars((string) (Inbounding::calculateBookShippingFee($data['form2']['weight'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
                             <div id="book-meta-color-size-slot" class="contents"></div>
                         </div>
                     </div>
@@ -2844,6 +2853,29 @@ window.inboundCourierEstimate = function (heightIn, widthIn, depthIn, actualKg) 
     return { volKg, adjustedActualKg, chargeableKg, priceInr, basis, detail };
 };
 
+/** Book publish API shipping fee (INR): MAX(55, billable_kg * 110) */
+window.calculateBookShippingFee = function (weightKg) {
+    const w = parseFloat(weightKg);
+    if (isNaN(w)) {
+        return 55;
+    }
+    const rounded = Math.round(w);
+    const billable = (rounded - w) > 0 ? rounded : (rounded + 0.5);
+    return Math.max(55, billable * 110);
+};
+
+window.updateBookShippingFeeFromWeight = function () {
+    const weightInput = document.getElementById('dim_weight');
+    const hidden = document.getElementById('book_shippingfee');
+    const display = document.getElementById('book_shippingfee_display');
+    if (!hidden || !display) {
+        return;
+    }
+    const fee = window.calculateBookShippingFee(weightInput ? weightInput.value : 0);
+    hidden.value = String(fee);
+    display.value = fee.toFixed(2);
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Select Inputs
     const heightInput = document.getElementById('dim_height');
@@ -2997,6 +3029,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (detailsElement) {
             detailsElement.textContent = est.detail;
         }
+        if (typeof window.updateBookShippingFeeFromWeight === 'function') {
+            window.updateBookShippingFeeFromWeight();
+        }
     }
     // Attach Listeners
     const inputs = [heightInput, widthInput, depthInput, weightInput];
@@ -3008,6 +3043,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     // Run immediately on load
     calculateCourierPrice();
+    if (typeof window.updateBookShippingFeeFromWeight === 'function') {
+        window.updateBookShippingFeeFromWeight();
+    }
 });
 </script>
 <script>
@@ -4248,6 +4286,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (isBook) {
             bookBox.classList.remove('hidden');
+            if (typeof window.updateBookShippingFeeFromWeight === 'function') {
+                window.updateBookShippingFeeFromWeight();
+            }
             if (addVarBtn) addVarBtn.style.display = 'none';
             if (variantSelect) {
                 variantSelect.value = 'N';
