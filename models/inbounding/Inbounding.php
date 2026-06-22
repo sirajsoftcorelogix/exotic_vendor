@@ -822,7 +822,7 @@ class Inbounding {
         LEFT JOIN material AS m ON vi.material_code = m.id
         WHERE vi.id = $id";
         $result = $this->conn->query($sql);
-        $inbounding = $result ? $result->fetch_assoc() : [];
+        $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
 
         // 2. Helper lists: only columns used by desktopform (smaller rows / less mysqld work than SELECT *)
         $r = $this->conn->query("SELECT id, name FROM `vp_users` ORDER BY name ASC");

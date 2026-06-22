@@ -44,10 +44,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <style>
-    html, body {
-        height: 100%;
-        overflow: hidden;
-    }
+    /* Do not lock html/body overflow — it breaks the app shell flex scroll (main appears blank). */
     .draggable-item {
         user-select: none;
     }
@@ -2191,8 +2188,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const wrapperInput  = document.getElementById('wrapper_input');
     const fixedInput    = document.getElementById('fixed_item_code_input'); 
     const selectElement = document.getElementById('item_code_select');
-    const existingCode  = document.getElementById('existing_item_code').value;
-    const originalStatus = document.getElementById('original_variant_status').value;
+    const existingCodeEl = document.getElementById('existing_item_code');
+    const originalStatusEl = document.getElementById('original_variant_status');
+    const existingCode  = existingCodeEl ? existingCodeEl.value : '';
+    const originalStatus = originalStatusEl ? originalStatusEl.value : '';
     // --- INITIALIZE TOM SELECT FOR PARENT ITEM (skip if already initialized, e.g. hot reload / duplicate scripts) ---
     let tomSelectInstance = null;
     if (selectElement) {
@@ -2253,13 +2252,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
     }
-    variantSelect.addEventListener('change', function() {
-        toggleVariantFields(this.value);
-        if(this.value === 'N' && tomSelectInstance) {
-            tomSelectInstance.clear();
-        }
-    });
+    if (variantSelect) {
+        variantSelect.addEventListener('change', function() {
+            toggleVariantFields(this.value);
+            if(this.value === 'N' && tomSelectInstance) {
+                tomSelectInstance.clear();
+            }
+        });
+    }
     // --- FORM VALIDATION ---
+    if (formElement) {
     formElement.addEventListener('submit', function(e) {
         // 1. Auto-Gen Cleanup
         if(variantSelect.value === 'N' && fixedInput.value === "Auto-generated on Save") {
@@ -2278,12 +2280,15 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+    }
     // --- INITIAL LOAD CHECK ---
-    if(variantSelect.value) {
-        toggleVariantFields(variantSelect.value);
-    } else {
-        fixedInput.disabled = true;
-        if (selectElement) selectElement.disabled = true;
+    if (variantSelect) {
+        if(variantSelect.value) {
+            toggleVariantFields(variantSelect.value);
+        } else {
+            if (fixedInput) fixedInput.disabled = true;
+            if (selectElement) selectElement.disabled = true;
+        }
     }
 });
 </script>
@@ -3079,7 +3084,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.swal2-container').forEach(function (el) { el.remove(); });
         document.body.classList.remove('swal2-shown', 'swal2-height-auto');
         document.body.style.removeProperty('padding-right');
-        document.body.style.overflow = 'hidden';
+        document.body.style.removeProperty('overflow');
         var ga = document.getElementById('global-alert');
         if (ga) {
             ga.style.display = 'none';
@@ -3813,6 +3818,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let newVariationCounter = 0;
     const container = document.getElementById('variations-container');
     const template = document.getElementById('variation-template');
+    if (!container || !template) {
+        return;
+    }
     // 1. ADD NEW VARIATION FUNCTION
     window.addNewVariation = function() { 
         const newId = 'new_' + newVariationCounter;
@@ -4211,8 +4219,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if(groupSelect) {
         groupSelect.addEventListener('change', toggleAllSizeFields); // Uses TomSelect change event if native
     }
-    if(document.getElementById('group_select').tomselect) {
-        document.getElementById('group_select').tomselect.on('change', toggleAllSizeFields);
+    const groupSelectForSize = document.getElementById('group_select');
+    if (groupSelectForSize && groupSelectForSize.tomselect) {
+        groupSelectForSize.tomselect.on('change', toggleAllSizeFields);
     }
     // Listen to Checkbox Changes (Delegation for dynamic lists)
     document.body.addEventListener('change', function(e) {
