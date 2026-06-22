@@ -8,7 +8,7 @@
 </button>
 
 <!-- Floating Sidebar -->
-<aside id="sidebar" class="w-64 bg-white flex flex-col flex-shrink-0 rounded-[11px] border border-gray-200 shadow-sm overflow-hidden m-4">
+<aside id="sidebar" class="w-64 bg-white flex flex-col flex-shrink-0 rounded-[11px] border border-gray-200 shadow-sm overflow-hidden h-full max-h-full">
         <!-- Header -->
         <div class="h-16 flex items-center justify-between px-4 flex-shrink-0 border-b border-gray-100">
             <!-- Logo -->
