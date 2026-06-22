@@ -11,6 +11,8 @@
  *
  * Files: logs/inbound_profiler/ (or EXOTIC_INBOUND_PROFILER_DIR)
  * Database: vp_inbound_profiler_logs (auto-created on first write)
+ *
+ * Logged actions: getdesktopform page load, updatedesktopform saves, publish, and slow list loads.
  */
 
 if (!defined('INBOUND_PROFILER_ENABLED')) {
@@ -465,6 +467,7 @@ function inbound_profiler_finish(string $runId, string $status = 'ok', array $ex
     $action = (string) ($run['action'] ?? 'unknown');
 
     $alwaysLog = in_array($action, [
+        'getdesktopform',
         'inbound_product_publish',
         'updatedesktopform',
         'syncVendorReferenceCache',
