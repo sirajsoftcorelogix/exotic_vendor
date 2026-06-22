@@ -749,6 +749,31 @@ WHERE i.pos_flag = 1
     }
 
     /**
+     * @return array{list: float, disc: float}
+     */
+    private function posInvoiceResolveLineUnitPretax(array $item, int $index, array $lineItemsMeta): array
+    {
+        $discUnitPretax = (float)($item['unit_price'] ?? 0);
+        $listUnitPretax = $discUnitPretax;
+        $lineMeta = $this->posInvoiceLineMetaForItem($item, $index, $lineItemsMeta);
+        if (is_array($lineMeta)) {
+            if ((float)($lineMeta['discounted_unit_pretax'] ?? 0) > 0) {
+                $discUnitPretax = (float)$lineMeta['discounted_unit_pretax'];
+            }
+            if ((float)($lineMeta['list_unit_pretax'] ?? 0) > 0) {
+                $listUnitPretax = (float)$lineMeta['list_unit_pretax'];
+            }
+        }
+
+        return ['list' => $listUnitPretax, 'disc' => $discUnitPretax];
+    }
+
+    private function posInvoiceLineHasUnitDiscount(float $listUnitPretax, float $discUnitPretax): bool
+    {
+        return $listUnitPretax - $discUnitPretax > 0.001;
+    }
+
+    /**
      * When stored line meta has list = discounted, rebuild list pretax from summary discounts.
      *
      * @param list<array<string, mixed>> $items
@@ -1006,8 +1031,15 @@ WHERE i.pos_flag = 1
         $stmt->close();
     }
 
-    private function posInvoiceSummaryLabelRow(string $label, float $amount, string $note = '', bool $isGrand = false): string
-    {
+    private function posInvoiceSummaryLabelRow(
+        string $label,
+        float $amount,
+        string $note = '',
+        bool $isGrand = false,
+        int $colCount = 13
+    ): string {
+        $colCount = max(3, $colCount);
+        $labelSpan = $colCount - 2;
         $noteHtml = $note !== ''
             ? '<br><span style="font-size:11px;font-weight:normal;color:#555;">' . htmlspecialchars($note) . '</span>'
             : '';
@@ -1017,7 +1049,7 @@ WHERE i.pos_flag = 1
 
         return '
                     <tr style="background:' . $bg . ';' . $borderTop . '">
-                        <td colspan="11" class="right" style="text-align:right;padding:8px 10px;border:1px solid #ddd;">'
+                        <td colspan="' . $labelSpan . '" class="right" style="text-align:right;padding:8px 10px;border:1px solid #ddd;">'
                             . '<span style="' . $weight . '">' . htmlspecialchars($label) . '</span>' . $noteHtml .
                         '</td>
                         <td colspan="2" class="right" style="text-align:right;padding:8px 10px;border:1px solid #ddd;' . $weight . '">'
@@ -1046,8 +1078,12 @@ WHERE i.pos_flag = 1
         return $name !== '' ? 'Coupon (' . $name . ')' : 'Coupon';
     }
 
-    private function buildPosInvoiceAmountSummaryRows(array $posMeta, float $grandTotal, float $taxAmount): string
-    {
+    private function buildPosInvoiceAmountSummaryRows(
+        array $posMeta,
+        float $grandTotal,
+        float $taxAmount,
+        int $colCount = 13
+    ): string {
         $subInclGst = round((float)($posMeta['subtotal_goods'] ?? 0), 2);
         if ($subInclGst <= 0 && $grandTotal > 0) {
             $subInclGst = $grandTotal;
@@ -1074,19 +1110,23 @@ WHERE i.pos_flag = 1
 
         $rows = '
                     <tr style="background:#ffffff;">
-                        <td colspan="13" style="text-align:left;padding:14px 8px 6px;border:none;border-top:2px solid #000;">
+                        <td colspan="' . $colCount . '" style="text-align:left;padding:14px 8px 6px;border:none;border-top:2px solid #000;">
                             <span style="font-size:13px;font-weight:bold;letter-spacing:0.08em;text-transform:uppercase;color:#333;">Summary</span>
                         </td>
                     </tr>';
 
-        $rows .= $this->posInvoiceSummaryLabelRow('Sub total (incl. GST)', $subInclGst);
-        $rows .= $this->posInvoiceSummaryLabelRow('Line Discount', $line);
+        $rows .= $this->posInvoiceSummaryLabelRow('Sub total (incl. GST)', $subInclGst, '', false, $colCount);
+        if ($line > 0.001) {
+            $rows .= $this->posInvoiceSummaryLabelRow('Line Discount', $line, '', false, $colCount);
+        }
 
         if ($cash > 0) {
             $rows .= $this->posInvoiceSummaryLabelRow(
                 $this->posInvoiceCustomDiscountLabel($posMeta),
                 $cash,
-                $absorbedNote
+                $absorbedNote,
+                false,
+                $colCount
             );
         }
 
@@ -1094,16 +1134,18 @@ WHERE i.pos_flag = 1
             $rows .= $this->posInvoiceSummaryLabelRow(
                 $this->posInvoiceCouponLabel($posMeta),
                 $coupon,
-                $absorbedNote
+                $absorbedNote,
+                false,
+                $colCount
             );
         }
 
         if ($gift > 0) {
-            $rows .= $this->posInvoiceSummaryLabelRow('Gift Voucher', $gift, $absorbedNote);
+            $rows .= $this->posInvoiceSummaryLabelRow('Gift Voucher', $gift, $absorbedNote, false, $colCount);
         }
 
-        $rows .= $this->posInvoiceSummaryLabelRow('GST Total', $gst);
-        $rows .= $this->posInvoiceSummaryLabelRow('GRAND Total', $grandTotal, '', true);
+        $rows .= $this->posInvoiceSummaryLabelRow('GST Total', $gst, '', false, $colCount);
+        $rows .= $this->posInvoiceSummaryLabelRow('GRAND Total', $grandTotal, '', true, $colCount);
 
         return $rows;
     }
@@ -1128,6 +1170,21 @@ WHERE i.pos_flag = 1
             $this->applyPosListPriceFallbackFromDiscountMeta($lineItemsMeta, $items, $posDiscountMeta);
         }
         $usePosItemLayout = !empty($lineItemsMeta) || !empty($invoice['pos_flag']);
+        $showDiscPriceColumn = false;
+        $posTableColCount = 13;
+        if ($usePosItemLayout && (($invoice['status'] ?? '') !== 'proforma')) {
+            foreach ($items as $scanIdx => $scanItem) {
+                $unitPrices = $this->posInvoiceResolveLineUnitPretax($scanItem, $scanIdx, $lineItemsMeta);
+                if ($this->posInvoiceLineHasUnitDiscount($unitPrices['list'], $unitPrices['disc'])) {
+                    $showDiscPriceColumn = true;
+                    break;
+                }
+            }
+            $posTableColCount = $showDiscPriceColumn ? 13 : 12;
+        }
+        $tableColCount = ($usePosItemLayout && (($invoice['status'] ?? '') !== 'proforma'))
+            ? $posTableColCount
+            : 13;
 
         // Build item rows
         foreach ($items as $idx => $item) {
@@ -1156,17 +1213,9 @@ WHERE i.pos_flag = 1
             $totalCgstAmt += $item['cgst'];
             $totalIgstAmt += $item['igst'];
 
-            $discUnitPretax = (float)($item['unit_price'] ?? 0);
-            $listUnitPretax = $discUnitPretax;
-            $lineMeta = $this->posInvoiceLineMetaForItem($item, $idx, $lineItemsMeta);
-            if (is_array($lineMeta)) {
-                if ((float)($lineMeta['discounted_unit_pretax'] ?? 0) > 0) {
-                    $discUnitPretax = (float)$lineMeta['discounted_unit_pretax'];
-                }
-                if ((float)($lineMeta['list_unit_pretax'] ?? 0) > 0) {
-                    $listUnitPretax = (float)$lineMeta['list_unit_pretax'];
-                }
-            }
+            $unitPrices = $this->posInvoiceResolveLineUnitPretax($item, $idx, $lineItemsMeta);
+            $discUnitPretax = $unitPrices['disc'];
+            $listUnitPretax = $unitPrices['list'];
             $rateBase = $discUnitPretax > 0 ? $discUnitPretax : (float)($item['unit_price'] ?? 0);
 
             if ($item['igst'] > 0) {
@@ -1187,13 +1236,16 @@ WHERE i.pos_flag = 1
                     $descHtml .= '<br><span style="font-size:12px;color:#444;">HSN: '
                         . htmlspecialchars($hsnCode) . '</span>';
                 }
+                $listPriceCell = '<td class="right">' . number_format($listUnitPretax, 2) . '</td>';
+                $discPriceCell = $showDiscPriceColumn
+                    ? '<td class="right">' . number_format($discUnitPretax, 2) . '</td>'
+                    : '';
                 $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
                         <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
                         <td class="desc">' . $descHtml . '</td>
-                        <td class="right">' . number_format($listUnitPretax, 2) . '</td>
-                        <td class="right">' . number_format($discUnitPretax, 2) . '</td>
+                        ' . $listPriceCell . $discPriceCell . '
                         <td>' . $item['quantity'] . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
                         <td class="right">' . number_format($item['sgst'], 2) . '</td>
@@ -1227,14 +1279,16 @@ WHERE i.pos_flag = 1
         if (count($items) < 3) {
             // Add empty rows to maintain table height
             $rowsToAdd = 3 - count($items);
+            $emptyPriceCells = $showDiscPriceColumn
+                ? '<td>&nbsp;</td><td>&nbsp;</td>'
+                : '<td>&nbsp;</td>';
             for ($i = 0; $i < $rowsToAdd; $i++) {
                 $itemsrows .= '
                     <tr>
                         <td>&nbsp;</td>
                         <td>&nbsp;</td>
                         <td class="desc">&nbsp;</td>
-                        <td>&nbsp;</td>
-                        <td>&nbsp;</td>
+                        ' . $emptyPriceCells . '
                         <td class="right">&nbsp;</td>
                         <td class="right">&nbsp;</td>
                         <td class="right">&nbsp;</td>
@@ -1267,10 +1321,14 @@ WHERE i.pos_flag = 1
         $summaryTaxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
 
         // Add row for tax amount totals (below each SGST/CGST/IGST column)
+        $posTotalExtraEmpty = ($usePosItemLayout && $showDiscPriceColumn)
+            ? '<td ></td>'
+            : '';
         $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
                         <td colspan="4" class="right bold">Total:</td>
                         <td class="right bold">' . $totalQuantity . '</td>
+                        ' . $posTotalExtraEmpty . '
                         <td ></td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalSgstAmt, 2) . '</td>
@@ -1283,7 +1341,12 @@ WHERE i.pos_flag = 1
         ';
 
 
-        $amountSummary = $this->buildPosInvoiceAmountSummaryRows($posDiscountMeta, $summaryGrandTotal, $summaryTaxAmount);
+        $amountSummary = $this->buildPosInvoiceAmountSummaryRows(
+            $posDiscountMeta,
+            $summaryGrandTotal,
+            $summaryTaxAmount,
+            $tableColCount
+        );
         if ($amountSummary !== '') {
             $summaryrows .= $amountSummary;
             $totalAmount = $summaryGrandTotal;
@@ -1300,7 +1363,7 @@ WHERE i.pos_flag = 1
 
             $summaryrows .= '
                     <tr style="background: #f0f0f0; border-top: 2px solid #000;">
-                        <td colspan="12" class="right bold" style="text-align: right;">Grand Total:</td>                      
+                        <td colspan="' . ($tableColCount - 1) . '" class="right bold" style="text-align: right;">Grand Total:</td>                      
                         <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($totalAmount, 2) . '</td>
                     </tr>
         ';
@@ -1331,11 +1394,11 @@ WHERE i.pos_flag = 1
 
             $summaryrows .= '
                 <tr style="background: #f9f9f9;">
-                    <td colspan="13" style="padding: 20px;" class="right bold">' . htmlspecialchars($exchangeText) . '</td>
+                    <td colspan="' . $tableColCount . '" style="padding: 20px;" class="right bold">' . htmlspecialchars($exchangeText) . '</td>
                     
                 </tr>
                 <tr style="background: #f9f9f9;">
-                    <td colspan="12" class="right bold" style="text-align: right;">Converted Amount (INR)</td>
+                    <td colspan="' . ($tableColCount - 1) . '" class="right bold" style="text-align: right;">Converted Amount (INR)</td>
                     <td class="right bold">' . number_format($convertedAmount, 2) . '</td>
                 </tr>';
         }
@@ -1375,11 +1438,20 @@ WHERE i.pos_flag = 1
 
         $temphtml = file_get_contents($templatePath);
         if ($usePosItemLayout && ($invoice['status'] ?? '') !== 'proforma') {
-            $temphtml = str_replace(
-                "<th>HSN</th>\n        <th>Qty</th>\n        <th>Price</th>",
-                "<th>List Price</th>\n        <th>Disc. Price</th>\n        <th>Qty</th>",
-                $temphtml
-            );
+            if ($showDiscPriceColumn) {
+                $temphtml = str_replace(
+                    "<th>HSN</th>\n        <th>Qty</th>\n        <th>Price</th>",
+                    "<th>List Price</th>\n        <th>Disc. Price</th>\n        <th>Qty</th>",
+                    $temphtml
+                );
+            } else {
+                $temphtml = str_replace(
+                    "<th>HSN</th>\n        <th>Qty</th>\n        <th>Price</th>",
+                    "<th>Price</th>\n        <th>Qty</th>",
+                    $temphtml
+                );
+                $temphtml = str_replace('<th colspan="6"></th>', '<th colspan="5"></th>', $temphtml);
+            }
         }
 
         // Replace placeholders
