@@ -1467,6 +1467,8 @@ class InboundingController {
             'cover_type' => trim((string)($_POST['cover_type'] ?? '')),
             'edition' => trim((string)($_POST['edition'] ?? '')),
             'publication_date' => trim((string)($_POST['publication_date'] ?? '')) ?: null,
+            'sourcingfee' => trim((string) ($_POST['sourcingfee'] ?? '')) === '' ? null : (float) $_POST['sourcingfee'],
+            'shippingfee' => Inbounding::calculateBookShippingFee((float) ($_POST['weight'] ?? 0)),
         ];
         
         // 4. Update Main Record
@@ -2154,6 +2156,15 @@ class InboundingController {
             if ($pubDate !== '' && $pubDate !== '0000-00-00') {
                 $API_data['publication_date'] = $pubDate;
             }
+            $sourcingFee = trim((string) ($d['sourcingfee'] ?? ''));
+            if ($sourcingFee !== '') {
+                $API_data['sourcingfee'] = (float) $sourcingFee;
+            }
+            $shippingFee = $d['shippingfee'] ?? null;
+            if ($shippingFee === null || $shippingFee === '') {
+                $shippingFee = Inbounding::calculateBookShippingFee($d['weight'] ?? 0);
+            }
+            $API_data['shippingfee'] = (float) $shippingFee;
         }
         $API_data['snippet_description'] = $d['snippet_description'] ?? '';
         // $API_data['creator'] = $data['data']['received_by_user_id'];
