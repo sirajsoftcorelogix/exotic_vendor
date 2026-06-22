@@ -1321,16 +1321,15 @@ WHERE i.pos_flag = 1
         $summaryTaxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
 
         // Add row for tax amount totals (below each SGST/CGST/IGST column)
-        $posTotalExtraEmpty = ($usePosItemLayout && $showDiscPriceColumn)
-            ? '<td ></td>'
+        $posTotalDiscEmpty = ($usePosItemLayout && $showDiscPriceColumn)
+            ? '<td></td>'
             : '';
         $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
                         <td colspan="4" class="right bold">Total:</td>
+                        ' . $posTotalDiscEmpty . '
                         <td class="right bold">' . $totalQuantity . '</td>
-                        ' . $posTotalExtraEmpty . '
-                        <td ></td>
-                        <td class="right bold"></td>
+                        <td></td>
                         <td class="right bold">' . number_format($totalSgstAmt, 2) . '</td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
