@@ -1878,7 +1878,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
+        <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-4">
             <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
                 <button type="button" onclick="handlePublishClick()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
@@ -2040,6 +2040,9 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     document.querySelectorAll('.desktop-form-modal').forEach(function (el) {
         el.hidden = true;
         el.classList.remove('is-open');
+        if (el.parentElement !== document.body) {
+            document.body.appendChild(el);
+        }
     });
 })();
 </script>

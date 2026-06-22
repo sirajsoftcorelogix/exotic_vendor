@@ -7,7 +7,7 @@ $loginUser = getloginUser();
 global $domain, $root_path, $page, $action, $conn;
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full overflow-hidden">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -38,16 +38,16 @@ global $domain, $root_path, $page, $action, $conn;
 	<!-- Select2 JS -->
 	<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 </head>
-<body class="bg-gray-100">
-<div class="flex h-screen ">
+<body class="bg-gray-100 h-full overflow-hidden">
+<div class="flex h-full min-h-0 overflow-hidden p-4 gap-4 box-border">
 <!-- Header Component -->
 <!-- Updated with bottom border -->
 
 <?php include 'views/layouts/left_menu.php'; ?>
-<div class="flex-1 flex flex-col overflow-hidden min-h-0">
+<div class="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
 	<?php require_once 'header.php'; ?>
 	<!-- End Top Navbar -->
-	<main class="flex-1 min-h-0 overflow-x-hidden overflow-y-auto bg-gray-100">
+	<main class="flex-1 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto bg-gray-100 overscroll-y-contain">
 	<?= $content ?? '' ?>
 	</main>
 	
