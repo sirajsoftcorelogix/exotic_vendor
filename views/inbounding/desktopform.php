@@ -947,7 +947,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">Shipping Fee (INR)</label>
-                                <input type="text" id="book_shippingfee_display" readonly tabindex="-1" value="<?php echo htmlspecialchars(number_format($book_shipping_fee_initial, 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-gray-50 cursor-not-allowed">
+                                <input type="text" id="book_shippingfee_display" readonly tabindex="-1" value="<?php echo htmlspecialchars(number_format($book_shipping_fee_initial, 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-gray-500 bg-gray-100 cursor-not-allowed focus:outline-none">
                                 <input type="hidden" name="shippingfee" id="book_shippingfee" value="<?php echo htmlspecialchars((string) $book_shipping_fee_initial, ENT_QUOTES, 'UTF-8'); ?>">
                             </div>
                             <div id="book-meta-color-size-slot" class="contents"></div>
