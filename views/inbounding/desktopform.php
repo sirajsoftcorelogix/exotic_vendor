@@ -301,6 +301,12 @@ $publication_date_raw = trim((string) ($data['form2']['publication_date'] ?? '')
 $saved_publication_date = ($publication_date_raw !== '' && $publication_date_raw !== '0000-00-00')
     ? date('Y-m-d', strtotime($publication_date_raw))
     : '';
+$book_shipping_fee_min = defined('BOOK_SHIPPING_FEE_MIN_INR') ? (float) BOOK_SHIPPING_FEE_MIN_INR : 55.0;
+$book_shipping_fee_rate = defined('BOOK_SHIPPING_FEE_RATE_PER_KG') ? (float) BOOK_SHIPPING_FEE_RATE_PER_KG : 110.0;
+$book_shipping_fee_initial = function_exists('book_shipping_fee_inr')
+    ? book_shipping_fee_inr($data['form2']['weight'] ?? 0)
+    : $book_shipping_fee_min;
+$saved_sourcingfee = trim((string) ($data['form2']['sourcingfee'] ?? ''));
 function renderSizeField($fieldName, $currentValue, $isClothing, $options, $customClass = "") {
     $html = '';
     if ($isClothing) {
@@ -940,12 +946,12 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">Sourcing Fee (INR)</label>
-                                <input type="text" inputmode="decimal" name="sourcingfee" id="book_sourcingfee" value="<?php echo htmlspecialchars((string) ($data['form2']['sourcingfee'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="0.00" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                                <input type="text" inputmode="decimal" name="sourcingfee" id="book_sourcingfee" value="<?php echo htmlspecialchars($saved_sourcingfee, ENT_QUOTES, 'UTF-8'); ?>" placeholder="0.00" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">Shipping Fee (INR)</label>
-                                <input type="text" id="book_shippingfee_display" readonly tabindex="-1" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-gray-50 cursor-not-allowed">
-                                <input type="hidden" name="shippingfee" id="book_shippingfee" value="<?php echo htmlspecialchars((string) (Inbounding::calculateBookShippingFee($data['form2']['weight'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?>">
+                                <input type="text" id="book_shippingfee_display" readonly tabindex="-1" value="<?php echo htmlspecialchars(number_format($book_shipping_fee_initial, 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-gray-50 cursor-not-allowed">
+                                <input type="hidden" name="shippingfee" id="book_shippingfee" value="<?php echo htmlspecialchars((string) $book_shipping_fee_initial, ENT_QUOTES, 'UTF-8'); ?>">
                             </div>
                             <div id="book-meta-color-size-slot" class="contents"></div>
                         </div>
@@ -2853,9 +2859,9 @@ window.inboundCourierEstimate = function (heightIn, widthIn, depthIn, actualKg) 
     return { volKg, adjustedActualKg, chargeableKg, priceInr, basis, detail };
 };
 
-/** Book publish API shipping fee — rates from init.php */
-window.bookShippingFeeMin = <?php echo json_encode((float) (defined('BOOK_SHIPPING_FEE_MIN_INR') ? BOOK_SHIPPING_FEE_MIN_INR : 55)); ?>;
-window.bookShippingFeeRate = <?php echo json_encode((float) (defined('BOOK_SHIPPING_FEE_RATE_PER_KG') ? BOOK_SHIPPING_FEE_RATE_PER_KG : 110)); ?>;
+/** Book publish API shipping fee — rates from init.php (set in view PHP preamble) */
+window.bookShippingFeeMin = <?php echo json_encode($book_shipping_fee_min); ?>;
+window.bookShippingFeeRate = <?php echo json_encode($book_shipping_fee_rate); ?>;
 window.calculateBookShippingFee = function (weightKg) {
     const w = parseFloat(weightKg);
     const minFee = window.bookShippingFeeMin ?? 55;

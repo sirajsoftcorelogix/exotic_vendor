@@ -1067,13 +1067,7 @@ class Inbounding {
      */
     public static function calculateBookShippingFee($weightKg): float
     {
-        $min = defined('BOOK_SHIPPING_FEE_MIN_INR') ? (float) BOOK_SHIPPING_FEE_MIN_INR : 55.0;
-        $rate = defined('BOOK_SHIPPING_FEE_RATE_PER_KG') ? (float) BOOK_SHIPPING_FEE_RATE_PER_KG : 110.0;
-        $weight = (float) $weightKg;
-        $rounded = round($weight, 0);
-        $billable = ($rounded - $weight) > 0 ? $rounded : $rounded + 0.5;
-
-        return max($min, $billable * $rate);
+        return book_shipping_fee_inr($weightKg);
     }
 
     /**
