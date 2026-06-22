@@ -4,6 +4,7 @@ require_once 'models/vendor/VendorReferenceCache.php';
 require_once 'models/account_group/AccountGroup.php';
 require_once 'controllers/ProductsController.php';
 require_once __DIR__ . '/../helpers/inbound_profiler.php';
+require_once __DIR__ . '/../helpers/inbound_filter_dropdown_cache.php';
 
 $inboundingModel = new Inbounding($conn);
 
@@ -64,8 +65,8 @@ class InboundingController {
             'total_records' => (int) ($pt_data['totalRecords'] ?? 0),
         ]);
         
-        // 4. Fetch Dynamic Dropdown Data (The function we just updated)
-        $dropdowns = $inboundingModel->getFilterDropdowns();
+        // 4. Fetch Dynamic Dropdown Data (cookie-cached ~5 min)
+        $dropdowns = inbound_filter_dropdowns_get($inboundingModel);
         inbound_profiler_step($prof, 'getFilterDropdowns');
         $alluser_list = $inboundingModel->getAllActiveUsers();
         inbound_profiler_step($prof, 'getAllActiveUsers');

@@ -194,19 +194,7 @@ class Inbounding {
         // Fetch Data (Added JOIN and specific SELECT)
         // We select vi.* (all inbound data) AND c.display_name as 'group_name_display'
         // (I used 'group_name_display' to avoid conflict, or you can overwrite 'group_name' if you prefer)
-        $sql = "SELECT vi.*, c.display_name as group_name_display,
-                (SELECT ii.file_name
-                 FROM item_images ii
-                 WHERE ii.item_id = vi.id
-                   AND TRIM(COALESCE(ii.file_name, '')) <> ''
-                 ORDER BY
-                   CASE
-                     WHEN ii.variation_id IS NULL OR ii.variation_id IN (-1, 0, '-1', '') THEN 0
-                     ELSE 1
-                   END,
-                   ii.display_order ASC,
-                   ii.id ASC
-                 LIMIT 1) AS _list_gallery_file
+        $sql = "SELECT vi.*, c.display_name as group_name_display
                 FROM vp_inbound as vi
                 LEFT JOIN category as c ON vi.group_name = c.category
                 $whereSql 
@@ -215,32 +203,35 @@ class Inbounding {
                 
         $result = $this->conn->query($sql);
 
-        $data = [];
-        while ($row = $result->fetch_assoc()) {
-            $current_id = (int)$row['id'];
-            
-            // If you want the main 'group_name' key to be the human readable name, uncomment this:
-            // $row['group_name'] = $row['group_name_display']; 
+        $rowsById = [];
+        $itemIds = [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $current_id = (int) $row['id'];
+                $itemIds[] = $current_id;
+                $rowsById[$current_id] = $row;
+            }
+            $result->free();
+        }
 
-            $gf = trim((string) ($row['_list_gallery_file'] ?? ''));
+        $galleryFiles = $this->getListGalleryFilesByItemIds($itemIds);
+        $logsByItemId = $this->getInboundLogsByItemIds($itemIds);
+
+        $data = [];
+        foreach ($itemIds as $current_id) {
+            $row = $rowsById[$current_id];
+
+            // If you want the main 'group_name' key to be the human readable name, uncomment this:
+            // $row['group_name'] = $row['group_name_display'];
+
+            $gf = trim((string) ($galleryFiles[$current_id] ?? ''));
             if ($gf !== '') {
-                $row['list_product_thumb_path'] = 'uploads/itm_img/' . $row['_list_gallery_file'];
+                $row['list_product_thumb_path'] = 'uploads/itm_img/' . $gf;
             } else {
                 $row['list_product_thumb_path'] = (string) ($row['product_photo'] ?? '');
             }
-            unset($row['_list_gallery_file']);
 
-            // Fetch logs
-            $log_sql = "SELECT il.*, u.name FROM inbound_logs as il LEFT JOIN vp_users as u on il.userid_log=u.id WHERE il.i_id = $current_id";
-            $log_result = $this->conn->query($log_sql);
-            
-            $logs = [];
-            if ($log_result) {
-                while ($log_row = $log_result->fetch_assoc()) {
-                    $logs[] = $log_row;
-                }
-            }
-            $row['stat_logs'] = $logs;
+            $row['stat_logs'] = $logsByItemId[$current_id] ?? [];
             $data[] = $row;
         }
 
@@ -252,6 +243,82 @@ class Inbounding {
             'totalRecords' => $totalRecords,
             'search'       => $search
         ];
+    }
+
+    /**
+     * List-page thumbnail: first non-empty gallery file per item (base images before variations).
+     *
+     * @param int[] $itemIds
+     * @return array<int, string> item_id => file_name
+     */
+    private function getListGalleryFilesByItemIds(array $itemIds): array
+    {
+        $itemIds = array_values(array_unique(array_filter(array_map('intval', $itemIds))));
+        if ($itemIds === []) {
+            return [];
+        }
+
+        $idList = implode(',', $itemIds);
+        $sql = "SELECT item_id, file_name, variation_id, display_order, id
+                FROM item_images
+                WHERE item_id IN ($idList)
+                  AND TRIM(COALESCE(file_name, '')) <> ''
+                ORDER BY item_id,
+                  CASE
+                    WHEN variation_id IS NULL OR variation_id IN (-1, 0, '-1', '') THEN 0
+                    ELSE 1
+                  END,
+                  display_order ASC,
+                  id ASC";
+
+        $result = $this->conn->query($sql);
+        $map = [];
+        if ($result) {
+            while ($img = $result->fetch_assoc()) {
+                $itemId = (int) $img['item_id'];
+                if (!isset($map[$itemId])) {
+                    $map[$itemId] = (string) $img['file_name'];
+                }
+            }
+            $result->free();
+        }
+
+        return $map;
+    }
+
+    /**
+     * Inbound status logs for list page, grouped by inbound id.
+     *
+     * @param int[] $itemIds
+     * @return array<int, array<int, array<string, mixed>>>
+     */
+    private function getInboundLogsByItemIds(array $itemIds): array
+    {
+        $itemIds = array_values(array_unique(array_filter(array_map('intval', $itemIds))));
+        if ($itemIds === []) {
+            return [];
+        }
+
+        $idList = implode(',', $itemIds);
+        $sql = "SELECT il.*, u.name
+                FROM inbound_logs il
+                LEFT JOIN vp_users u ON il.userid_log = u.id
+                WHERE il.i_id IN ($idList)";
+
+        $result = $this->conn->query($sql);
+        $grouped = [];
+        if ($result) {
+            while ($logRow = $result->fetch_assoc()) {
+                $itemId = (int) $logRow['i_id'];
+                if (!isset($grouped[$itemId])) {
+                    $grouped[$itemId] = [];
+                }
+                $grouped[$itemId][] = $logRow;
+            }
+            $result->free();
+        }
+
+        return $grouped;
     }
 
     // --- NEW HELPER FOR DROPDOWNS ---
