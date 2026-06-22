@@ -822,7 +822,7 @@ class Inbounding {
         LEFT JOIN material AS m ON vi.material_code = m.id
         WHERE vi.id = $id";
         $result = $this->conn->query($sql);
-        $inbounding = $result ? $result->fetch_assoc() : [];
+        $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
 
         // 2. Helper lists: only columns used by desktopform (smaller rows / less mysqld work than SELECT *)
         $r = $this->conn->query("SELECT id, name FROM `vp_users` ORDER BY name ASC");
@@ -1067,13 +1067,7 @@ class Inbounding {
      */
     public static function calculateBookShippingFee($weightKg): float
     {
-        $min = defined('BOOK_SHIPPING_FEE_MIN_INR') ? (float) BOOK_SHIPPING_FEE_MIN_INR : 55.0;
-        $rate = defined('BOOK_SHIPPING_FEE_RATE_PER_KG') ? (float) BOOK_SHIPPING_FEE_RATE_PER_KG : 110.0;
-        $weight = (float) $weightKg;
-        $rounded = round($weight, 0);
-        $billable = ($rounded - $weight) > 0 ? $rounded : $rounded + 0.5;
-
-        return max($min, $billable * $rate);
+        return book_shipping_fee_inr($weightKg);
     }
 
     /**
