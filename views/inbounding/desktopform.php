@@ -2853,15 +2853,19 @@ window.inboundCourierEstimate = function (heightIn, widthIn, depthIn, actualKg) 
     return { volKg, adjustedActualKg, chargeableKg, priceInr, basis, detail };
 };
 
-/** Book publish API shipping fee (INR): MAX(55, billable_kg * 110) */
+/** Book publish API shipping fee — rates from init.php */
+window.bookShippingFeeMin = <?php echo json_encode((float) (defined('BOOK_SHIPPING_FEE_MIN_INR') ? BOOK_SHIPPING_FEE_MIN_INR : 55)); ?>;
+window.bookShippingFeeRate = <?php echo json_encode((float) (defined('BOOK_SHIPPING_FEE_RATE_PER_KG') ? BOOK_SHIPPING_FEE_RATE_PER_KG : 110)); ?>;
 window.calculateBookShippingFee = function (weightKg) {
     const w = parseFloat(weightKg);
+    const minFee = window.bookShippingFeeMin ?? 55;
+    const rate = window.bookShippingFeeRate ?? 110;
     if (isNaN(w)) {
-        return 55;
+        return minFee;
     }
     const rounded = Math.round(w);
     const billable = (rounded - w) > 0 ? rounded : (rounded + 0.5);
-    return Math.max(55, billable * 110);
+    return Math.max(minFee, billable * rate);
 };
 
 window.updateBookShippingFeeFromWeight = function () {
