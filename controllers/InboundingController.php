@@ -300,20 +300,30 @@ class InboundingController {
     public function getdesktopform() {
         is_login();
         global $inboundingModel, $conn;
-        $id = $_GET['id'] ?? 0;
-        $data = array();
+        $id = (int) ($_GET['id'] ?? 0);
+        $prof = inbound_profiler_start('getdesktopform', ['inbound_id' => $id]);
+
         $data = $inboundingModel->getform2data($id);
+        inbound_profiler_step($prof, 'getform2data');
+
         try {
             $vendorApis = $this->vendorReferenceCache()->getDesktopformRefs(false);
         } catch (Throwable $e) {
             error_log('desktopform vendor refs: ' . $e->getMessage());
             $vendorApis = ['gecolormaps' => false, 'optionals_data' => false];
         }
+        inbound_profiler_step($prof, 'getDesktopformRefs');
+
         $data['form2']['gecolormaps'] = $vendorApis['gecolormaps'];
         $data['form2']['optionals_data'] = $vendorApis['optionals_data'];
         $data['form2']['permanently_available'] = ((int) ($data['form2']['permanently_available'] ?? 0) === 1) ? 1 : 0;
         $groupName = trim((string) ($data['form2']['group_name'] ?? ''));
         $itemGroupSlug = $inboundingModel->resolveItemGroupSlugFromGroupName($groupName);
+        inbound_profiler_step($prof, 'resolveItemGroupSlug', [
+            'group_name' => $groupName,
+            'item_group_slug' => $itemGroupSlug,
+        ]);
+
         $accountGroupModel = new AccountGroup($conn);
         if ($groupName !== '') {
             $data['account_groups'] = $accountGroupModel->getActiveByGroupCategoryCode($groupName);
@@ -322,10 +332,21 @@ class InboundingController {
         } else {
             $data['account_groups'] = [];
         }
+        inbound_profiler_step($prof, 'getAccountGroups', [
+            'count' => count($data['account_groups'] ?? []),
+        ]);
+
         $data['item_group_slug'] = $itemGroupSlug;
         $data['images'] = $inboundingModel->getitem_imgs($id);
+        inbound_profiler_step($prof, 'getitem_imgs', [
+            'count' => count($data['images'] ?? []),
+        ]);
+
         $data['markup_list'] = $inboundingModel->getMarkupData();
+        inbound_profiler_step($prof, 'getMarkupData');
+
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
+        inbound_profiler_finish($prof, 'ok');
     }
 
     private function vendorReferenceCache(): VendorReferenceCache
