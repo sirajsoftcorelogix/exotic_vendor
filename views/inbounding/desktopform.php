@@ -1373,8 +1373,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
 
                     <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Accounts Group</label>
-                        <select id="accounts_group_select" name="accounts_group" placeholder="Select Accounts Group..." autocomplete="off">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Accounts Group <span class="text-red-500">*</span></label>
+                        <select id="accounts_group_select" name="accounts_group" placeholder="Select Accounts Group..." autocomplete="off" required>
                             <option value="">Select Accounts Group...</option>
                             <?php foreach ($account_groups as $agRow): 
                                 $agId = (int) ($agRow['id'] ?? 0);
@@ -3521,6 +3521,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
         if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
         if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
+        if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
         if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
         if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
         if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
@@ -4911,6 +4912,7 @@ function validateAndSubmit(actionType) {
     const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
     if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
     if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
+    if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
     if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
     if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
     if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
