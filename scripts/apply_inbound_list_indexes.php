@@ -79,10 +79,17 @@ $indexes = [
   ['table' => 'vp_inbound', 'name' => 'idx_vp_inbound_marketplace', 'columns' => 'Marketplace', 'reason' => 'in-house filter'],
 ];
 
-function inbound_index_exists(mysqli $conn, string $table, string $indexName): bool
+/** @var list<string> */
+$allowedTables = ['inbound_logs', 'item_images', 'vp_inbound'];
+
+function inbound_index_exists(mysqli $conn, string $table, string $indexName, string $schema): bool
 {
-    $stmt = $conn->prepare('SHOW INDEX FROM `' . str_replace('`', '', $table) . '` WHERE Key_name = ?');
-    $stmt->bind_param('s', $indexName);
+    $stmt = $conn->prepare(
+        'SELECT 1 FROM information_schema.statistics
+         WHERE table_schema = ? AND table_name = ? AND index_name = ?
+         LIMIT 1'
+    );
+    $stmt->bind_param('sss', $schema, $table, $indexName);
     $stmt->execute();
     $res = $stmt->get_result();
     $exists = $res && $res->num_rows > 0;
@@ -93,10 +100,18 @@ function inbound_index_exists(mysqli $conn, string $table, string $indexName): b
     return $exists;
 }
 
-function inbound_table_exists(mysqli $conn, string $table): bool
+function inbound_table_exists(mysqli $conn, string $table, string $schema, array $allowedTables): bool
 {
-    $stmt = $conn->prepare('SHOW TABLES LIKE ?');
-    $stmt->bind_param('s', $table);
+    if (!in_array($table, $allowedTables, true)) {
+        return false;
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT 1 FROM information_schema.tables
+         WHERE table_schema = ? AND table_name = ?
+         LIMIT 1'
+    );
+    $stmt->bind_param('ss', $schema, $table);
     $stmt->execute();
     $res = $stmt->get_result();
     $exists = $res && $res->num_rows > 0;
@@ -106,6 +121,8 @@ function inbound_table_exists(mysqli $conn, string $table): bool
     $stmt->close();
     return $exists;
 }
+
+$dbSchema = (string) $dbCfg['name'];
 
 echo "Inbound list performance indexes\n";
 echo "Mode: " . ($verifyOnly ? 'verify' : ($execute ? 'execute' : 'dry-run')) . "\n\n";
@@ -121,13 +138,13 @@ foreach ($indexes as $idx) {
     $columns = $idx['columns'];
     $reason = $idx['reason'];
 
-    if (!inbound_table_exists($conn, $table)) {
+    if (!inbound_table_exists($conn, $table, $dbSchema, $allowedTables)) {
         echo "[MISSING TABLE] $table — cannot add $name\n";
         $errors++;
         continue;
     }
 
-    if (inbound_index_exists($conn, $table, $name)) {
+    if (inbound_index_exists($conn, $table, $name, $dbSchema)) {
         echo "[OK]      $table.$name ($columns)\n";
         $skipped++;
         continue;
@@ -153,8 +170,8 @@ echo "\nSummary: existing/skipped=$skipped, missing=" . ($execute ? "created=$cr
 
 if ($verifyOnly || $execute) {
     echo "\n--- SHOW INDEX ---\n";
-    foreach (['inbound_logs', 'item_images', 'vp_inbound'] as $table) {
-        if (!inbound_table_exists($conn, $table)) {
+    foreach ($allowedTables as $table) {
+        if (!inbound_table_exists($conn, $table, $dbSchema, $allowedTables)) {
             continue;
         }
         echo "\n$table:\n";
