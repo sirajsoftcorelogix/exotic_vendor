@@ -517,6 +517,38 @@ function updateRoles()
 		exit;
 	}
 }
+/**
+ * Product detail CP field: Administrator (role_id 1) and Inbound Executive only.
+ */
+function canAccessProductCp(): bool
+{
+	if (!isset($_SESSION['user']['role_id'])) {
+		return false;
+	}
+	$roleId = (int) $_SESSION['user']['role_id'];
+	if ($roleId === 1) {
+		return true;
+	}
+	global $conn;
+	if (!$conn) {
+		return false;
+	}
+	$stmt = $conn->prepare('SELECT role_name FROM vp_roles WHERE id = ? AND is_active = 1 LIMIT 1');
+	if (!$stmt) {
+		return false;
+	}
+	$stmt->bind_param('i', $roleId);
+	$stmt->execute();
+	$result = $stmt->get_result();
+	$row = $result ? $result->fetch_assoc() : null;
+	$stmt->close();
+	if (!$row) {
+		return false;
+	}
+	$roleName = strtolower(trim((string) ($row['role_name'] ?? '')));
+	return $roleName === 'inbound executive' || $roleName === 'administrator';
+}
+
 function hasPermission($user_id, $module, $action)
 {
 	if ($_SESSION["user"]["role_id"] == 1) { // Admin has all permissions
