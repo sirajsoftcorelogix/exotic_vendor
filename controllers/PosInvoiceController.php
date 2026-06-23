@@ -61,11 +61,14 @@ class PosInvoiceController
     i.invoice_date,
     i.status,
     i.total_amount,
+    i.warehouse_id,
 
     o.order_number,
     o.payment_type,
 
     c.name AS customer_name,
+
+    COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
 
     IFNULL((
         SELECT SUM(pp.payment_amount)
@@ -88,6 +91,9 @@ LEFT JOIN vp_order_info o
 
 LEFT JOIN vp_customers c 
     ON c.id = i.customer_id
+
+LEFT JOIN exotic_address ea
+    ON ea.id = i.warehouse_id
 
 WHERE i.pos_flag = 1";
 
