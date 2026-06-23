@@ -185,6 +185,7 @@
     $isBookProduct = strpos($groupNameLower, 'book') !== false;
     $authorRaw = trim((string)($products['author'] ?? ''));
     $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+    $canAccessCp = function_exists('canAccessProductCp') && canAccessProductCp();
     $publishedVal = (int)($products['published'] ?? 0);
     $publishedText = $publishedVal === 1 ? 'Published' : 'Unpublished';
     $addedOnRaw = trim((string)($products['date_first_added'] ?? ''));
@@ -208,6 +209,7 @@
     $permanentDiscountFmt = number_format((float)($products['permanent_discount'] ?? 0), 2, '.', ',');
     $discountGlobalFmt = number_format((float)($products['discount_global'] ?? 0), 2, '.', ',');
     $discountIndiaFmt = number_format((float)($products['discount_india'] ?? 0), 2, '.', ',');
+    $cpFormatted = number_format((float)($products['cp'] ?? 0), 2, '.', ',');
     $lengthUnitRaw = trim((string)($products['length_unit'] ?? ''));
     $weightUnitRaw = trim((string)($products['product_weight_unit'] ?? ''));
     $linearNum = static function ($v): ?string {
@@ -611,7 +613,16 @@
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
           <span class="text-gray-700"><i class="fas fa-flag px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Discount India</span><span class="font-semibold text-gray-900"><?php echo htmlspecialchars($discountIndiaFmt, ENT_QUOTES, 'UTF-8'); ?>%</span>
         </div>
-        
+        <?php if ($canAccessCp): ?>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100 relative">
+          <span class="text-gray-700"><i class="fas fa-coins px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>CP</span>
+          <span id="cpDisplay" class="font-semibold text-gray-900" style="margin-right: 12px;">₹<?php echo htmlspecialchars($cpFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+          <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-emerald-700" onclick="openCpModal()" title="Edit CP">
+            <i class="fas fa-pencil-alt text-[10px]"></i>
+          </button>
+        </div>
+        <?php endif; ?>
+
         <hr class="border-t">
         <div class="text-xs text-gray-500 mt-2 text-center">
           HSN: <?php echo htmlspecialchars($products['hsn'] ?? ''); ?> | GST: <?php echo htmlspecialchars($products['gst'] ?? ''); ?>%
@@ -971,6 +982,30 @@
         </div>
     </div>
 </div>
+<?php if ($canAccessCp): ?>
+<div id="cpModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="closeCpModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">CP (Cost Price)</h2>
+        <p class="text-sm text-gray-500 mb-4">Update local DB and sync this variant to storefront Product API.</p>
+        <div>
+            <label for="input_cp" class="block text-sm font-medium text-gray-600 mb-1">Amount (INR)</label>
+            <input
+                type="number"
+                id="input_cp"
+                min="0"
+                step="0.01"
+                value="<?php echo htmlspecialchars(number_format((float)($products['cp'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closeCpModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitCpUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 <?php if ($isAdminUser): ?>
 <div id="publishedStatusModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
     <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
@@ -1834,6 +1869,81 @@ function openUsdPriceModal() {
 
 function closeUsdPriceModal() {
     document.getElementById('usdPriceModal').classList.add('hidden');
+}
+
+function openCpModal() {
+    var modal = document.getElementById('cpModal');
+    var input = document.getElementById('input_cp');
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+    fetch('index.php?page=products&action=get_cp_snapshot&product_id=' + encodeURIComponent(<?php echo json_encode((int)($products['id'] ?? 0)); ?>), {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        if (res && res.success) {
+            if (input && res.cp !== undefined) {
+                input.value = Number(res.cp).toFixed(2);
+            }
+        } else if (res && res.message) {
+            showProfileStatusModal(res.message, 'error', false);
+        }
+    })
+    .catch(function () {
+        showProfileStatusModal('Could not load fresh CP data.', 'error', false);
+    });
+}
+
+function closeCpModal() {
+    var modal = document.getElementById('cpModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+function submitCpUpdate() {
+    const input = document.getElementById('input_cp');
+    const raw = input ? String(input.value || '').trim() : '';
+    const value = parseFloat(raw);
+    if (raw === '' || Number.isNaN(value) || value < 0) {
+        showProfileStatusModal('Please enter a valid non-negative CP.', 'error', false);
+        return;
+    }
+
+    fetch('index.php?page=products&action=update_cp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+            cp: value
+        })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        if (res && res.success) {
+            closeCpModal();
+            var disp = document.getElementById('cpDisplay');
+            if (disp) {
+                disp.textContent = '₹' + Number(value).toLocaleString('en-IN', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+            var msg = res.message ? res.message : 'CP updated.';
+            if (res.vendor_sync && res.vendor_sync.success === false && res.vendor_sync.message) {
+                showProfileStatusModal(msg, 'error', false);
+            } else {
+                showProfileStatusModal(msg, 'success', true);
+            }
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Update failed.', 'error', false);
+        }
+    })
+    .catch(function () {
+        showProfileStatusModal('An error occurred while updating CP.', 'error', false);
+    });
 }
 
 function submitUsdPriceUpdate() {

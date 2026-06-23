@@ -798,6 +798,16 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->getUsdPriceSnapshot();
                 break;
+            case 'update_cp':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateCp();
+                break;
+            case 'get_cp_snapshot':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->getCpSnapshot();
+                break;
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
