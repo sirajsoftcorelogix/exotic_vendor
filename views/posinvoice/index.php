@@ -68,6 +68,7 @@
                         <th class="p-3 text-left">Date</th>
                         <th class="p-3 text-left">Order</th>
                         <th class="p-3 text-left">Invoice</th>
+                        <th class="p-3 text-left">Store / Warehouse</th>
                         <th class="p-3 text-left">Customer</th>
                         <th class="p-3 text-left">Amount</th>
                         <th class="p-3 text-left">Paid</th>
@@ -175,7 +176,7 @@
 
                 if (!data.length) {
                     html = `<tr>
-<td colspan="9" class="p-6 text-center text-gray-400">
+<td colspan="11" class="p-6 text-center text-gray-400">
 No invoices
 </td>
 </tr>`;
@@ -237,6 +238,7 @@ stroke-linejoin="round"/>
 <td class="p-3">${i.invoice_date ?? ''}</td>
 <td class="p-3">${i.order_number ?? ''}</td>
 <td class="p-3">${invoiceCell}</td>
+<td class="p-3 text-gray-700">${i.warehouse_name ?? ''}</td>
 <td class="p-3">${i.customer_name ?? ''}</td>
 
 <td class="p-3 font-semibold">₹ ${i.total_amount}</td>
