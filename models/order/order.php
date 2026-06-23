@@ -228,9 +228,9 @@ class Order
             $sortDir = strtoupper($filters['sort']);
             //agent assignment date desc
             if (!empty($filters['agent'])) {
-                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date {$sortDir}, vp_orders.id {$sortDir}";
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date {$sortDir}, vp_orders.order_number {$sortDir}";
             } else {
-                $sql .= " ORDER BY vp_orders.order_date {$sortDir}, vp_orders.id {$sortDir}";
+                $sql .= " ORDER BY vp_orders.order_date {$sortDir}, vp_orders.order_number {$sortDir}";
             }
         } else if (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_desc') {
             $sql .= " ORDER BY vp_orders.esd DESC";
@@ -247,9 +247,9 @@ class Order
         } else {
             //agent assignment date desc
             if (!empty($filters['agent'])) {
-                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC, vp_orders.id DESC"; // Default sort order
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC, vp_orders.order_number DESC"; // Default sort order
             } else {
-                $sql .= " ORDER BY vp_orders.order_date DESC, vp_orders.id DESC"; // Default sort order
+                $sql .= " ORDER BY vp_orders.order_date DESC, vp_orders.order_number DESC"; // Default sort order
             }
         }
 
@@ -446,7 +446,7 @@ class Order
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             $sortDir = strtoupper($filters['sort']);
-            $sql .= " ORDER BY order_date {$sortDir}, vp_orders.id {$sortDir}";
+            $sql .= " ORDER BY order_date {$sortDir}, vp_orders.order_number {$sortDir}";
         } else if (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_desc') {
             $sql .= " ORDER BY vp_orders.esd DESC";
         } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
@@ -460,7 +460,7 @@ class Order
         } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
             $sql .= " ORDER BY vp_orders.updated_at ASC";
         } else {
-            $sql .= " ORDER BY order_date DESC, vp_orders.id DESC"; // Default sort order
+            $sql .= " ORDER BY order_date DESC, vp_orders.order_number DESC"; // Default sort order
         }
 
         $stmt = $this->db->prepare($sql);
