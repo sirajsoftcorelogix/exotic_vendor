@@ -2219,7 +2219,7 @@ class InboundingController {
         }
         $accountGroupName = $inboundingModel->resolveAccountGroupApiValue($d);
         if ($accountGroupName !== '') {
-            $API_data['account_group'] = $accountGroupName;
+            $API_data['accounts_group'] = $accountGroupName;
         }
         $vendorApiId = (int) preg_replace('/\D/', '', (string) ($d['vendor_code'] ?? ''));
         $API_data['discrete_vendors'][0]['vendor'] = $vendorApiId;

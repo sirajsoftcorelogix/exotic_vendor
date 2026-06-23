@@ -772,7 +772,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span>
                         </div>
                     </div>
-                    <div class="w-full min-w-0">
+                    <div class="w-full min-w-0 non-book-cp-mrp-field<?= $is_book_initial ? ' hidden' : '' ?>" data-book-hide-field="cp">
                         <label class="block text-xs font-bold text-[#555] mb-1">CP:</label>
                         <div class="relative w-full">
                             <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['cp'] ?? '') ?>" name="cp">
@@ -786,7 +786,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                         </div>
                     </div>
-                    <div class="w-full min-w-0">
+                    <div class="w-full min-w-0 non-book-cp-mrp-field<?= $is_book_initial ? ' hidden' : '' ?>" data-book-hide-field="price_india_mrp">
                         <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
                         <div class="relative w-full">
                             <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['price_india_mrp'] ?? '') ?>" name="price_india_mrp">
@@ -1057,7 +1057,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 <?php echo renderSizeField("variations[{$var['id']}][size]", $var['size'], $is_clothing_initial, $sizeOptions); ?>
                             </div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['quantity'] ?? $var['quantity_received'] ?? '0') ?>" name="variations[<?= $var['id'] ?>][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+                            <div class="w-full min-w-0 non-book-cp-mrp-field<?= $is_book_initial ? ' hidden' : '' ?>"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                             <div class="w-full min-w-0">
                                 <label class="block text-xs font-bold text-[#555] mb-1">Price India:</label>
                                 <div class="relative w-full">
@@ -1067,7 +1067,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                                 </div>
                             </div>
-                            <div class="w-full min-w-0">
+                            <div class="w-full min-w-0 non-book-cp-mrp-field<?= $is_book_initial ? ' hidden' : '' ?>">
                                 <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
                                 <div class="relative w-full">
                                     <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
@@ -1172,7 +1172,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </select>
                 </div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="0" name="variations[INDEX][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+                <div class="w-full min-w-0 non-book-cp-mrp-field"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                 <div class="w-full min-w-0">
                     <label class="block text-xs font-bold text-[#555] mb-1">Price India:</label>
                     <div class="relative w-full">
@@ -1181,7 +1181,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                     </div>
                 </div>
-                <div class="w-full min-w-0">
+                <div class="w-full min-w-0 non-book-cp-mrp-field">
                     <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
                     <div class="relative w-full">
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
@@ -3597,9 +3597,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
         if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
-        if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+        if (!isBookGroup) {
+            if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+            if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+        }
         if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
         if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
 
@@ -3628,9 +3630,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
             if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
-            if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+            if (!isBookGroup) {
+                if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
+                if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+            }
             if (isInvalidPrice(getCardVal('usd_price'))) errors.push(`${cardTitle}: 'USD Price' must be greater than 0.`);
             if (!getCardVal('hsn_code')) errors.push(`${cardTitle}: 'HSN Code' is required.`);
 
@@ -4302,6 +4306,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const addVarBtn = document.querySelector('button[onclick*="addNewVariation"]');
 
         const isBook = isBookSelected();
+        document.querySelectorAll('.non-book-cp-mrp-field').forEach(function (el) {
+            el.classList.toggle('hidden', isBook);
+        });
         relocateBookColorSizeFields(isBook);
         if (materialField) {
             materialField.classList.toggle('hidden', isBook);
@@ -5000,9 +5007,11 @@ function validateAndSubmit(actionType) {
         }
     }
     // UPDATED: Check for 0.00
-    if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
     if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
-    if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+    if (!isBookGroupSave) {
+        if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+        if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+    }
     if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
     
     if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
@@ -5037,9 +5046,11 @@ function validateAndSubmit(actionType) {
             }
         }
         // UPDATED: Check for 0.00 inside variations
-        if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
         if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
-        if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+        if (!isBookGroupSave) {
+            if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
+            if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+        }
         if (isInvalidPrice(getCardVal('usd_price'))) errors.push(`${cardTitle}: 'USD Price' must be greater than 0.`);
 
         if (!getCardVal('hsn_code')) errors.push(`${cardTitle}: 'HSN Code' is required.`);
