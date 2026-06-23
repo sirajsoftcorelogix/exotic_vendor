@@ -62,8 +62,6 @@
                             </div>
                             <p class="item-meta mt-0">Item Code: <?php echo $item['item_code']; ?></p>
                             <p class="item-meta mt-0">Quantity: <?php echo $item['quantity']; ?></p>
-                            <p class="vendor-text mt-2"><strong class="vendor-title">Vendor :</strong> <span
-                                    class="vendor-name"><?php echo $item['vendor']; ?></span></p>
                             <div class="flex justify-between items-center mt-3">
                                 <div class="status-box flex items-center justify-center">
                                     <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
@@ -130,9 +128,6 @@
                         <div>
                             <p><span class="section-title">Marketplace : </span><span
                                     class="section-value"><?php echo $item['marketplace_vendor']; ?></span></p>
-                        </div>
-                        <div>
-                            <p><span class="section-title">Vendor : </span><span class="section-value"><?php echo $item['vendor']; ?></span></p>
                         </div>
                     </div>
                     <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">

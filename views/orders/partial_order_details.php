@@ -52,7 +52,6 @@ $odSectionHead = static function (string $label): void {
                             <p class="text-xs text-gray-500 truncate"><?php echo htmlspecialchars((string)($item['groupname'] ?? '')); ?> / <?php echo htmlspecialchars((string)($item['subcategories'] ?? '')); ?></p>
                             <h3 class="item-title text-sm sm:text-[15px] leading-snug mt-0.5 line-clamp-3"><?php echo htmlspecialchars((string)($item['title'] ?? '')); ?></h3>
                             <p class="item-meta mt-1">Code: <?php echo htmlspecialchars((string)($item['item_code'] ?? '')); ?> · Qty <?php echo htmlspecialchars((string)($item['quantity'] ?? '')); ?></p>
-                            <p class="vendor-text mt-1 text-xs sm:text-[13px]"><strong class="vendor-title">Vendor:</strong> <span class="vendor-name"><?php echo htmlspecialchars((string)($item['vendor'] ?? '')); ?></span></p>
                             <div class="flex flex-wrap gap-2 items-center mt-2.5">
                                 <div class="status-box flex items-center justify-center px-2">
                                     <span class="status-text text-xs"><?php echo htmlspecialchars((string)($statusList[$item['status']] ?? 'Unknown')); ?></span>
@@ -97,9 +96,6 @@ $odSectionHead = static function (string $label): void {
                             <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
                                     <p><span class="section-title text-gray-600">Marketplace</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['marketplace_vendor'] ?? '')); ?></span></p>
-                                </div>
-                                <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
-                                    <p><span class="section-title text-gray-600">Vendor</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['vendor'] ?? '')); ?></span></p>
                                 </div>
                             </div>
                         </div>
