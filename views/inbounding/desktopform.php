@@ -3572,11 +3572,11 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         // --- 1. GENERAL FIELDS ---
+        const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
         if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
         if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
         if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
         if (!isBookGroup && !getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
-        const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
         if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
         if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
         if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
@@ -4994,11 +4994,11 @@ function validateAndSubmit(actionType) {
     };
 
     // --- 1. GENERAL FIELDS VALIDATION ---
+    const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
     if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
     if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
     if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
     if (!isBookGroupSave && !getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
-    const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
     if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
     if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
     if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
