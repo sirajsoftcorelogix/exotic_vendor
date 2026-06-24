@@ -12,6 +12,21 @@ $commanModel = new Tables($conn);
 class PosInvoiceController
 {
 
+    private function isPosInvoiceAdminUser(): bool
+    {
+        return isset($_SESSION['user']['role_id']) && (int) $_SESSION['user']['role_id'] === 1;
+    }
+
+    private function getSessionWarehouseId(): int
+    {
+        $warehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $warehouseId = (int) $_SESSION['user']['warehouse_id'];
+        }
+
+        return $warehouseId;
+    }
+
     /* ===============================
        PAGE LOAD
     =============================== */
@@ -37,7 +52,7 @@ class PosInvoiceController
 
         is_login();
 
-        $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        $isAdminUser = $this->isPosInvoiceAdminUser();
 
         $sql = "
     SELECT 
@@ -46,11 +61,14 @@ class PosInvoiceController
     i.invoice_date,
     i.status,
     i.total_amount,
+    i.warehouse_id,
 
     o.order_number,
     o.payment_type,
 
     c.name AS customer_name,
+
+    COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
 
     IFNULL((
         SELECT SUM(pp.payment_amount)
@@ -74,8 +92,16 @@ LEFT JOIN vp_order_info o
 LEFT JOIN vp_customers c 
     ON c.id = i.customer_id
 
-WHERE i.pos_flag = 1
-  AND i.warehouse_id = " . $warehouseId;
+LEFT JOIN exotic_address ea
+    ON ea.id = i.warehouse_id
+
+WHERE i.pos_flag = 1";
+
+        // Staff: restrict to their warehouse/store. Admin: no warehouse filter (all invoices).
+        if (!$isAdminUser) {
+            $warehouseId = $this->getSessionWarehouseId();
+            $sql .= ' AND i.warehouse_id = ' . $warehouseId;
+        }
 
         if (!empty($_GET['order_number'])) {
             $sql .= " AND o.order_number LIKE '%" . $conn->real_escape_string($_GET['order_number']) . "%'";
@@ -182,8 +208,8 @@ WHERE i.pos_flag = 1
             return;
         }
 
-        $warehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
-        if ($warehouseId > 0 && (int) ($invoice['warehouse_id'] ?? 0) !== $warehouseId) {
+        $warehouseId = $this->getSessionWarehouseId();
+        if (!$this->isPosInvoiceAdminUser() && $warehouseId > 0 && (int) ($invoice['warehouse_id'] ?? 0) !== $warehouseId) {
             http_response_code(403);
             echo json_encode(['success' => false, 'message' => 'Invoice not found in your warehouse.']);
             return;

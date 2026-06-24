@@ -29,7 +29,7 @@ $queryBase = [
                     Author <span class="text-amber-800">Listing</span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-                    Manage author names for inbounding book metadata. Add, edit, and delete sync with Exotic India (<code class="text-xs bg-amber-50 px-1 rounded">vendorcreate</code>, <code class="text-xs bg-amber-50 px-1 rounded">vendormodify</code>, <code class="text-xs bg-amber-50 px-1 rounded">vendordelete</code>).
+                    Manage author names for inbounding book metadata. Add, edit, and delete sync with Exotic India.
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">

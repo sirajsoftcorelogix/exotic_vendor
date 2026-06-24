@@ -143,6 +143,7 @@
 <div class="container mx-auto pr-4 pt-2">
     <?php
 
+    $showOrderVendorName = function_exists('canViewOrderVendorName') && canViewOrderVendorName();
     $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
     $page = $page < 1 ? 1 : $page;
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 50
@@ -493,6 +494,7 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
+                    <?php if ($showOrderVendorName): ?>
                     <div class="relative">
                         <label for="vendor_autocomplete" class="block text-sm font-medium text-gray-600 mb-1">Vendor</label>
                         <input
@@ -505,6 +507,7 @@
                         <input type="hidden" name="vendor_id" id="vendor_id" value="<?php echo isset($_GET['vendor_id']) ? htmlspecialchars($_GET['vendor_id']) : ''; ?>">
                         <div id="vendor_suggestions" class="absolute left-0 right-0 mt-1 z-50 bg-white border rounded-md shadow-lg max-h-48 overflow-auto " style="display:none; top:100%;"></div>
                     </div>
+                    <?php endif; ?>
                     <!-- Min/Max Amount -->
                     <!-- <div class="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2 flex items-end gap-2">
                     <div class="w-1/2">
@@ -944,8 +947,10 @@
 
                                                 <span class="heading-typography ">Order ID</span>
                                                 <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
+                                                <?php if ($showOrderVendorName): ?>
                                                 <span class="heading-typography">Vendor Name</span>
-                                                <p>: <span class="data-typography"><?= $order['vendor'] ?></span></p>
+                                                <p>: <span class="data-typography"><?= htmlspecialchars((string)($order['vendor_name'] ?? $order['vendor'] ?? 'N/A'), ENT_QUOTES, 'UTF-8') ?></span></p>
+                                                <?php endif; ?>
                                                 <?php if (!empty($order['author'])) { ?>
                                                     <span class="heading-typography">Author</span>
                                                     <p>: <span class="data-typography"><?= $order['author'] ?? 'N/A' ?></span></p>
@@ -1497,7 +1502,10 @@
                 <p class="ml-6 text-sm text-gray-600 space-y-1">
                     <strong>Order Number:</strong> <span id="status_order_number"></span><br>
                     <strong>Item Code:</strong> <span id="status_item_code"></span><br>
-                    <strong>Vendor Name:</strong> <span id="status_vendor_name"></span><br><br>
+                    <?php if ($showOrderVendorName): ?>
+                    <strong>Vendor Name:</strong> <span id="status_vendor_name"></span><br>
+                    <?php endif; ?>
+                    <br>
                     <span id="status_category"></span> /
                     <span id="status_sub_category"></span><br>
                     <span id="status_item" class="font-bold"></span><br>
@@ -2089,7 +2097,9 @@
         document.getElementById('orderStatus').value = orderData.status || '';
         document.getElementById('status_order_number').textContent = orderData.order_number || 'N/A';
         document.getElementById('status_item_code').textContent = orderData.item_code || 'N/A';
-        document.getElementById('status_vendor_name').textContent = orderData.vendor_name || 'N/A';
+        <?php if ($showOrderVendorName): ?>
+        document.getElementById('status_vendor_name').textContent = orderData.vendor_name || orderData.vendor || 'N/A';
+        <?php endif; ?>
         document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
         document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
         document.getElementById('status_item').textContent = orderData.title || 'N/A';
@@ -2374,6 +2384,7 @@
             submitButton.textContent = submitButtonText;
         });
     });
+    <?php if ($showOrderVendorName): ?>
     //vendor auto complete
     document.getElementById('vendor_autocomplete').addEventListener('input', function() {
         const query = this.value;
@@ -2418,6 +2429,7 @@
                 }
             });
     });
+    <?php endif; ?>
     //advanced multiselect Initialize Select2 for status 
     document.addEventListener('DOMContentLoaded', function() {
         const statusSelect = document.querySelector('.advanced-multiselect');

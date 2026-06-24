@@ -50,6 +50,41 @@ class Order
         return $data;
     }
 
+    /**
+     * Sort order list: primary sort column, then order_number (groups line items), then id.
+     * No extra subquery/join — uses indexed vp_orders columns only.
+     */
+    private function buildOrderListSortSql(array $filters): string
+    {
+        $sort = strtolower((string) ($filters['sort'] ?? 'desc'));
+
+        if (in_array($sort, ['asc', 'desc'], true)) {
+            $sortDir = strtoupper($sort);
+            return " ORDER BY vp_orders.order_date {$sortDir}, vp_orders.order_number {$sortDir}, vp_orders.id ASC";
+        }
+
+        if ($sort === 'ship_by_date_desc') {
+            return ' ORDER BY vp_orders.esd DESC, vp_orders.order_number DESC, vp_orders.id ASC';
+        }
+        if ($sort === 'ship_by_date_asc') {
+            return ' ORDER BY vp_orders.esd ASC, vp_orders.order_number ASC, vp_orders.id ASC';
+        }
+        if ($sort === 'agent_assign_date_desc') {
+            return ' ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_number DESC, vp_orders.id ASC';
+        }
+        if ($sort === 'agent_assign_date_asc') {
+            return ' ORDER BY vp_orders.agent_assign_date ASC, vp_orders.order_number ASC, vp_orders.id ASC';
+        }
+        if ($sort === 'cancel_date_desc') {
+            return ' ORDER BY vp_orders.updated_at DESC, vp_orders.order_number DESC, vp_orders.id ASC';
+        }
+        if ($sort === 'cancel_date_asc') {
+            return ' ORDER BY vp_orders.updated_at ASC, vp_orders.order_number ASC, vp_orders.id ASC';
+        }
+
+        return ' ORDER BY vp_orders.order_date DESC, vp_orders.order_number DESC, vp_orders.id ASC';
+    }
+
     public function getAllOrders($filters = [], $limit = 50, $offset = 0)
     {
 
@@ -223,34 +258,7 @@ class Order
             $sql .= " AND vp_orders.status = 'cancelled'";
         }
 
-        // Add sorting based on filter
-        if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
-            //agent assignment date desc
-            if (!empty($filters['agent'])) {
-                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date " . strtoupper($filters['sort']);
-            } else {
-                $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
-            }
-        } else if (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_desc') {
-            $sql .= " ORDER BY vp_orders.esd DESC";
-        } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
-            $sql .= " ORDER BY vp_orders.esd ASC";
-        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_desc') {
-            $sql .= " ORDER BY vp_orders.agent_assign_date DESC";
-        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_asc') {
-            $sql .= " ORDER BY vp_orders.agent_assign_date ASC";
-        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
-            $sql .= " ORDER BY vp_orders.updated_at DESC";
-        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
-            $sql .= " ORDER BY vp_orders.updated_at ASC";
-        } else {
-            //agent assignment date desc
-            if (!empty($filters['agent'])) {
-                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC"; // Default sort order
-            } else {
-                $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
-            }
-        }
+        $sql .= $this->buildOrderListSortSql($filters);
 
         //ship_by_date_desc 	esd        
 
@@ -441,24 +449,6 @@ class Order
             $sql .= " AND vp_orders.status = 'cancelled'";
         } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
             $sql .= " AND vp_orders.status = 'cancelled'";
-        }
-        // Add sorting based on filter
-        if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
-            $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
-        } else if (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_desc') {
-            $sql .= " ORDER BY vp_orders.esd DESC";
-        } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
-            $sql .= " ORDER BY vp_orders.esd ASC";
-        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_desc') {
-            $sql .= " ORDER BY vp_orders.agent_assign_date DESC";
-        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_asc') {
-            $sql .= " ORDER BY vp_orders.agent_assign_date ASC";
-        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
-            $sql .= " ORDER BY vp_orders.updated_at DESC";
-        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
-            $sql .= " ORDER BY vp_orders.updated_at ASC";
-        } else {
-            $sql .= " ORDER BY order_date DESC"; // Default sort order
         }
 
         $stmt = $this->db->prepare($sql);

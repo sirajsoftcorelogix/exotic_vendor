@@ -254,6 +254,8 @@ if (!$is_clothing_initial && !empty($data['category']) && !empty($saved_group_id
     }
 }
 
+$desktopform_req_star = '<span class="text-red-500" aria-hidden="true">*</span>';
+
 // --- Book fields prefill (Author/Publisher names for TomSelect) ---
 $selected_author_options = [];
 $selected_publisher_id = $data['form2']['publisher'] ?? '';
@@ -641,7 +643,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
                     <?php } ?>
                     <div class="flex flex-col">
-                        <label class="text-xs font-bold text-[#333] mb-1.5">Added On</label>
+                        <label class="text-xs font-bold text-[#333] mb-1.5">Added On<?php echo $desktopform_req_star; ?></label>
                         <?php 
                             // 1. Determine the value in standard Y-m-d format first
                             if (!empty($data['form2']['added_date']) && $data['form2']['added_date'] != "0000-00-00") {
@@ -709,7 +711,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </h4>
             </div>
             <div class="w-full mb-5 min-w-0">
-                <label class="block text-xs font-bold text-[#555] mb-1">Gallery photos:</label>
+                <label class="block text-xs font-bold text-[#555] mb-1">Gallery photos:<?php echo $desktopform_req_star; ?></label>
                 <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Gallery order is managed from the Item Photos page. Use <strong>&times;</strong> on a card to remove that image from the product (deletes file on save).</p>
                 <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[140px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="-1" data-gallery-label="Main item">
                     <?php 
@@ -766,28 +768,28 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <?php echo renderSizeField('size', $currentSize, $is_clothing_initial, $sizeOptions); ?>
                     </div>
                     <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label>
+                        <label id="main-quantity-label" class="block text-xs font-bold text-[#555] mb-1">Quantity:<span class="qty-req-star text-red-500" aria-hidden="true" style="display:none">*</span></label>
                         <div class="relative w-full">
                             <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['quantity_received'] ?? '1') ?>" name="quantity_received">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span>
                         </div>
                     </div>
-                    <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">CP:</label>
+                    <div class="w-full min-w-0 non-book-cp-mrp-field<?= $is_book_initial ? ' hidden' : '' ?>" data-book-hide-field="cp">
+                        <label class="block text-xs font-bold text-[#555] mb-1">CP:<?php echo $desktopform_req_star; ?></label>
                         <div class="relative w-full">
                             <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['cp'] ?? '') ?>" name="cp">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                         </div>
                     </div>
                     <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Price India:</label>
+                        <label class="block text-xs font-bold text-[#555] mb-1">Price India:<?php echo $desktopform_req_star; ?></label>
                         <div class="relative w-full">
                             <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['price_india'] ?? '') ?>" name="price_india">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                         </div>
                     </div>
-                    <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
+                    <div class="w-full min-w-0 non-book-cp-mrp-field<?= $is_book_initial ? ' hidden' : '' ?>" data-book-hide-field="price_india_mrp">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:<?php echo $desktopform_req_star; ?></label>
                         <div class="relative w-full">
                             <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['price_india_mrp'] ?? '') ?>" name="price_india_mrp">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
@@ -795,20 +797,20 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
                     
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:<?php echo $desktopform_req_star; ?></label>
                         <div class="relative flex items-center w-full">
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['usd_price'] ?? '') ?>" name="usd_price">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">USD</span>
                         </div>
                     </div>
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">HSN Code:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">HSN Code:<?php echo $desktopform_req_star; ?></label>
                         <div class="relative flex items-center w-full">
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['hsn_code'] ?? '') ?>" name="hsn_code">
                         </div>
                     </div>
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">GST:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">GST:<?php echo $desktopform_req_star; ?></label>
                         <div class="relative flex items-center w-full">
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? 0) ?>" name="gst_rate">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">%</span>
@@ -1032,7 +1034,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </div>
                         
                         <div class="grow min-w-0">
-                            <label class="block text-xs font-bold text-[#555] mb-1">Gallery Photos:</label>
+                            <label class="block text-xs font-bold text-[#555] mb-1">Gallery Photos:<?php echo $desktopform_req_star; ?></label>
                             <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Gallery order is managed from the Item Photos page. Use <strong>&times;</strong> on a card to remove that image (deletes file on save).</p>
                             <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[100px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="<?= htmlspecialchars((string)$var['id']) ?>" data-gallery-label="<?= htmlspecialchars('Variation: ' . trim(($var['color'] ?? '') . ' / ' . ($var['size'] ?? '')), ENT_QUOTES) ?>">
                                 <?php 
@@ -1057,9 +1059,9 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 <?php echo renderSizeField("variations[{$var['id']}][size]", $var['size'], $is_clothing_initial, $sizeOptions); ?>
                             </div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['quantity'] ?? $var['quantity_received'] ?? '0') ?>" name="variations[<?= $var['id'] ?>][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+                            <div class="w-full min-w-0 non-book-cp-mrp-field<?= $is_book_initial ? ' hidden' : '' ?>"><label class="block text-xs font-bold text-[#555] mb-1">CP:<?php echo $desktopform_req_star; ?></label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                             <div class="w-full min-w-0">
-                                <label class="block text-xs font-bold text-[#555] mb-1">Price India:</label>
+                                <label class="block text-xs font-bold text-[#555] mb-1">Price India:<?php echo $desktopform_req_star; ?></label>
                                 <div class="relative w-full">
                                     <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
                                            value="<?= htmlspecialchars($var['price_india'] ?? '') ?>" 
@@ -1067,8 +1069,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                                 </div>
                             </div>
-                            <div class="w-full min-w-0">
-                                <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
+                            <div class="w-full min-w-0 non-book-cp-mrp-field<?= $is_book_initial ? ' hidden' : '' ?>">
+                                <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:<?php echo $desktopform_req_star; ?></label>
                                 <div class="relative w-full">
                                     <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
                                            value="<?= htmlspecialchars($var['price_india_mrp'] ?? '') ?>" 
@@ -1077,7 +1079,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 </div>
                             </div>
                             <div class="flex-1">
-                                <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:</label>
+                                <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:<?php echo $desktopform_req_star; ?></label>
                                 <div class="relative flex items-center w-full">
                                     <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
                                            value="<?= htmlspecialchars($var['usd_price'] ?? '') ?>" 
@@ -1085,8 +1087,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">USD</span>
                                 </div>
                             </div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['hsn_code'] ?? '') ?>" name="variations[<?= $var['id'] ?>][hsn_code]"></div></div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? 0) ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:<?php echo $desktopform_req_star; ?></label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['hsn_code'] ?? '') ?>" name="variations[<?= $var['id'] ?>][hsn_code]"></div></div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:<?php echo $desktopform_req_star; ?></label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? 0) ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">UPC:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['upc'] ?? '') ?>" name="variations[<?= $var['id'] ?>][upc]"></div></div>
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
                             
@@ -1172,17 +1174,17 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </select>
                 </div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="0" name="variations[INDEX][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+                <div class="w-full min-w-0 non-book-cp-mrp-field"><label class="block text-xs font-bold text-[#555] mb-1">CP:<?php echo $desktopform_req_star; ?></label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                 <div class="w-full min-w-0">
-                    <label class="block text-xs font-bold text-[#555] mb-1">Price India:</label>
+                    <label class="block text-xs font-bold text-[#555] mb-1">Price India:<?php echo $desktopform_req_star; ?></label>
                     <div class="relative w-full">
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
                                name="variations[INDEX][price_india]">
                         <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                     </div>
                 </div>
-                <div class="w-full min-w-0">
-                    <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
+                <div class="w-full min-w-0 non-book-cp-mrp-field">
+                    <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:<?php echo $desktopform_req_star; ?></label>
                     <div class="relative w-full">
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
                                name="variations[INDEX][price_india_mrp]">
@@ -1190,15 +1192,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
                 </div>
                 <div class="w-full min-w-0">
-                    <label class="block text-xs font-bold text-[#555] mb-1">USD Price:</label>
+                    <label class="block text-xs font-bold text-[#555] mb-1">USD Price:<?php echo $desktopform_req_star; ?></label>
                     <div class="relative w-full">
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
                                name="variations[INDEX][usd_price]">
                         <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">USD</span>
                     </div>
                 </div>
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][hsn_code]"></div></div>
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:<?php echo $desktopform_req_star; ?></label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][hsn_code]"></div></div>
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:<?php echo $desktopform_req_star; ?></label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">UPC:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][upc]"></div></div>
                 <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
                     <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
@@ -1268,7 +1270,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </span>
                     </div>
                     <div class="flex flex-col mb-4">
-                        <span class="text-[11px] font-bold text-[#222] mb-[3px]">Received by:</span>
+                        <span class="text-[11px] font-bold text-[#222] mb-[3px]">Received by:<?php echo $desktopform_req_star; ?></span>
                         <select id="received_by_select" name="received_by_user_id" placeholder="Select User...">
                             <option value="">Select User</option>
                             <?php foreach ($data['user'] as $value1) { 
@@ -1281,7 +1283,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </select>
                     </div>
                     <div class="flex flex-col">
-                        <span class="text-[11px] font-bold text-[#222] mb-[3px]">Feeded By:</span>
+                        <span class="text-[11px] font-bold text-[#222] mb-[3px]">Feeded By:<?php echo $desktopform_req_star; ?></span>
                         <select id="updated_by_select" name="updated_by_user_id" placeholder="Select User...">
                             <option value="">Select User</option>
                             <?php 
@@ -1351,7 +1353,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                     <div class="w-full min-w-0" id="material-code-field">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Material:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Material:<?php echo $desktopform_req_star; ?></label>
                         <div class="flex gap-2 items-center w-full">
                             <div class="flex-1 w-full min-w-0"> 
                                 <select id="material_select" name="material_code" placeholder="Select Material..." autocomplete="off">
@@ -1370,7 +1372,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
 
                     <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Group <span class="text-red-500">*</span></label>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Group <?php echo $desktopform_req_star; ?></label>
                         <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off" required>
                             <option value="">Select Group...</option>
                             <?php foreach($rootCategories as $group): 
@@ -1385,7 +1387,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
 
                     <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Accounts Group <span class="text-red-500">*</span></label>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Accounts Group <?php echo $desktopform_req_star; ?></label>
                         <select id="accounts_group_select" name="accounts_group" placeholder="Select Accounts Group..." autocomplete="off" required>
                             <option value="">Select Accounts Group...</option>
                             <?php foreach ($account_groups as $agRow): 
@@ -1403,7 +1405,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <div class="flex flex-col md:flex-row gap-5 items-stretch">
                     
                     <div class="w-full md:w-1/3 flex flex-col">
-                        <label class="block text-xs font-bold text-[#222] mb-1">Category:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Category:<?php echo $desktopform_req_star; ?></label>
                         <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
                             <div class="p-1 border-b border-gray-200 bg-gray-50">
                                 <input type="text" id="main_cat_search" placeholder="Search..." 
@@ -1532,7 +1534,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Terms</legend>
                 <div>
-                    <label class="block text-xs font-bold text-[#222] mb-1">Enter Search Terms:</label>
+                    <label class="block text-xs font-bold text-[#222] mb-1">Enter Search Terms:<?php echo $desktopform_req_star; ?></label>
                     <input type="text" name="search_term" 
                            value="<?= htmlspecialchars($data['form2']['search_term'] ?? '') ?>" 
                            placeholder="Type search terms..." 
@@ -1550,7 +1552,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="product_title" value="<?= htmlspecialchars($data['form2']['product_title'] ?? '') ?>">
                 </div>
                 <div class="mb-[15px]">
-                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:</label>
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:<?php echo $desktopform_req_star; ?></label>
                     <textarea 
                         id="keywords_input" 
                         name="key_words"
@@ -1679,7 +1681,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </div>
                         <div class="w-full">
                             <div class="flex items-center gap-1.5 mb-[5px]">
-                                <label class="text-xs font-bold text-[#222]" for="vendor_code">Vendor:</label>
+                                <label class="text-xs font-bold text-[#222]" for="vendor_code">Vendor:<span class="vendor-req-star text-red-500<?= $is_book_initial ? ' hidden' : '' ?>" aria-hidden="true">*</span></label>
                                 <?php
                                 $btnId = 'vendor-cache-sync-btn';
                                 $title = 'Refresh vendors from catalog';
@@ -1807,7 +1809,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </div>
                     </div>
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Marketplace Vendor:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Marketplace Vendor:<?php echo $desktopform_req_star; ?></label>
                         <div class="relative w-full">
                             <input type="text" name="marketplace" 
                                    value="<?php 
@@ -3570,11 +3572,11 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         // --- 1. GENERAL FIELDS ---
+        const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
         if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
         if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
         if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
-        if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
-        const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+        if (!isBookGroup && !getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
         if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
         if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
         if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
@@ -3597,9 +3599,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
         if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
-        if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+        if (!isBookGroup) {
+            if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+            if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+        }
         if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
         if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
 
@@ -3628,9 +3632,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
             if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
-            if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+            if (!isBookGroup) {
+                if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
+                if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+            }
             if (isInvalidPrice(getCardVal('usd_price'))) errors.push(`${cardTitle}: 'USD Price' must be greater than 0.`);
             if (!getCardVal('hsn_code')) errors.push(`${cardTitle}: 'HSN Code' is required.`);
 
@@ -3985,7 +3991,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     const lbl = document.createElement('label');
                     lbl.className = 'block text-xs font-bold text-[#555] mb-1';
-                    lbl.textContent = 'Gallery Photos:';
+                    lbl.innerHTML = 'Gallery Photos:<span class="text-red-500" aria-hidden="true">*</span>';
 
                     const note = document.createElement('p');
                     note.className = 'text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl';
@@ -4302,6 +4308,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const addVarBtn = document.querySelector('button[onclick*="addNewVariation"]');
 
         const isBook = isBookSelected();
+        document.querySelectorAll('.non-book-cp-mrp-field').forEach(function (el) {
+            el.classList.toggle('hidden', isBook);
+        });
+        document.querySelectorAll('.vendor-req-star').forEach(function (el) {
+            el.classList.toggle('hidden', isBook);
+        });
         relocateBookColorSizeFields(isBook);
         if (materialField) {
             materialField.classList.toggle('hidden', isBook);
@@ -4324,6 +4336,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 variantSelect.disabled = false;
             }
         }
+    }
+
+    function updateQuantityRequiredStar() {
+        const mpInput = document.querySelector('input[name="marketplace"]');
+        const star = document.querySelector('.qty-req-star');
+        if (!mpInput || !star) return;
+        star.style.display = (mpInput.value || '').trim() === '' ? '' : 'none';
+    }
+
+    const marketplaceInput = document.querySelector('input[name="marketplace"]');
+    if (marketplaceInput) {
+        marketplaceInput.addEventListener('input', updateQuantityRequiredStar);
+        marketplaceInput.addEventListener('change', updateQuantityRequiredStar);
+        updateQuantityRequiredStar();
     }
 
     const groupSelect = document.getElementById('group_select');
@@ -4968,11 +4994,11 @@ function validateAndSubmit(actionType) {
     };
 
     // --- 1. GENERAL FIELDS VALIDATION ---
+    const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
     if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
     if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
     if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
-    if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
-    const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+    if (!isBookGroupSave && !getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
     if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
     if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
     if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
@@ -5000,9 +5026,11 @@ function validateAndSubmit(actionType) {
         }
     }
     // UPDATED: Check for 0.00
-    if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
     if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
-    if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+    if (!isBookGroupSave) {
+        if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+        if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+    }
     if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
     
     if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
@@ -5037,9 +5065,11 @@ function validateAndSubmit(actionType) {
             }
         }
         // UPDATED: Check for 0.00 inside variations
-        if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
         if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
-        if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+        if (!isBookGroupSave) {
+            if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
+            if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+        }
         if (isInvalidPrice(getCardVal('usd_price'))) errors.push(`${cardTitle}: 'USD Price' must be greater than 0.`);
 
         if (!getCardVal('hsn_code')) errors.push(`${cardTitle}: 'HSN Code' is required.`);

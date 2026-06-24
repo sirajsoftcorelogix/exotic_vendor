@@ -4987,6 +4987,124 @@ class ProductsController
         exit;
     }
 
+    public function updateCp()
+    {
+        is_login();
+        if (!canAccessProductCp()) {
+            if (ob_get_length()) {
+                ob_clean();
+            }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'You do not have permission to update CP.']);
+            exit;
+        }
+
+        global $productModel;
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            if (!is_array($data) || empty($data['product_id'])) {
+                throw new Exception('Invalid data received');
+            }
+            $productId = (int) $data['product_id'];
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+            if (!array_key_exists('cp', $data) || $data['cp'] === '' || !is_numeric($data['cp'])) {
+                throw new Exception('CP must be numeric');
+            }
+            $newVal = (float) $data['cp'];
+            if ($newVal < 0) {
+                throw new Exception('CP cannot be negative');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+            $current = (float) ($product['cp'] ?? 0);
+            if (abs($current - $newVal) < 0.00001) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'No change.',
+                    'cp' => round($newVal, 2),
+                    'vendor_sync' => ['success' => true, 'message' => 'Skipped (already set).'],
+                ]);
+                exit;
+            }
+
+            $ok = $productModel->setProductCp($productId, $newVal);
+            if (!$ok) {
+                throw new Exception('Could not update CP');
+            }
+
+            $fresh = $productModel->getProduct($productId);
+            $vendorSync = $fresh ? $productModel->syncCpToVendorFrontend($fresh, $newVal) : [
+                'success' => false,
+                'message' => 'Updated locally but could not reload product for vendor sync.',
+            ];
+
+            $message = 'CP updated.';
+            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+                $message .= ' ' . $vendorSync['message'];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'cp' => round($newVal, 2),
+                'vendor_sync' => $vendorSync,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function getCpSnapshot()
+    {
+        is_login();
+        if (!canAccessProductCp()) {
+            if (ob_get_length()) {
+                ob_clean();
+            }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'You do not have permission to view CP.']);
+            exit;
+        }
+
+        global $productModel;
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $productId = isset($_GET['product_id']) ? (int) $_GET['product_id'] : 0;
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+
+            echo json_encode([
+                'success' => true,
+                'cp' => round((float) ($product['cp'] ?? 0), 2),
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     /**
      * Set permanently_available on frontend via vendor product/modify API.
      */
