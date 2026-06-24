@@ -722,7 +722,7 @@ class OrdersAPIController
                     throw new Exception('Database error: Unable to prepare statement');
                 }
             }
-
+            echo $sql;
             if (!empty($startDate) && !empty($endDate)) {
                 $stmt->bind_param('ssii', $startDate, $endDate, $limit, $offset);
             } elseif (!empty($startDate)) {
