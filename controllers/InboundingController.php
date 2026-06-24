@@ -1489,8 +1489,8 @@ class InboundingController {
             'cover_type' => trim((string)($_POST['cover_type'] ?? '')),
             'edition' => trim((string)($_POST['edition'] ?? '')),
             'publication_date' => trim((string)($_POST['publication_date'] ?? '')) ?: null,
-            'sourcingfee' => trim((string) ($_POST['sourcingfee'] ?? '')) === '' ? null : (float) $_POST['sourcingfee'],
-            'shippingfee' => Inbounding::calculateBookShippingFee((float) ($_POST['weight'] ?? 0)),
+            'sourcingfee' => trim((string) ($_POST['sourcingfee'] ?? '')) === '' ? null : round((float) $_POST['sourcingfee'], 2),
+            'shippingfee' => round(Inbounding::calculateBookShippingFee((float) ($_POST['weight'] ?? 0)), 2),
         ];
         
         // 4. Update Main Record
@@ -2180,13 +2180,13 @@ class InboundingController {
             }
             $sourcingFee = trim((string) ($d['sourcingfee'] ?? ''));
             if ($sourcingFee !== '') {
-                $API_data['sourcingfee'] = (float) $sourcingFee;
+                $API_data['sourcingfee'] = round((float) $sourcingFee, 2);
             }
             $shippingFee = $d['shippingfee'] ?? null;
             if ($shippingFee === null || $shippingFee === '') {
                 $shippingFee = Inbounding::calculateBookShippingFee($d['weight'] ?? 0);
             }
-            $API_data['shippingfee'] = (float) $shippingFee;
+            $API_data['shippingfee'] = round((float) $shippingFee, 2);
         }
         $API_data['snippet_description'] = $d['snippet_description'] ?? '';
         // $API_data['creator'] = $data['data']['received_by_user_id'];

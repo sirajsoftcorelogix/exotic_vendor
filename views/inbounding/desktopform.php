@@ -2881,7 +2881,7 @@ window.calculateBookShippingFee = function (weightKg) {
     }
     const rounded = Math.round(w);
     const billable = (rounded - w) > 0 ? rounded : (rounded + 0.5);
-    return Math.max(minFee, billable * rate);
+    return Math.round(Math.max(minFee, billable * rate) * 100) / 100;
 };
 
 window.updateBookShippingFeeFromWeight = function () {
@@ -2892,7 +2892,7 @@ window.updateBookShippingFeeFromWeight = function () {
         return;
     }
     const fee = window.calculateBookShippingFee(weightInput ? weightInput.value : 0);
-    hidden.value = String(fee);
+    hidden.value = fee.toFixed(2);
     display.value = fee.toFixed(2);
 };
 
