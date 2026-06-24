@@ -877,6 +877,7 @@ class Inbounding {
     public function getform2data($id) {
         $id = (int)$id;
         $this->ensureInboundAccountsGroupColumn();
+        $this->ensureInboundBookLanguageColumns();
 
         // 1. Get Main Inbound Data
         // $sql = "SELECT vi.*, vv.vendor_name FROM vp_inbound AS vi LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id WHERE vi.id = $id";
@@ -1058,6 +1059,7 @@ class Inbounding {
     public function updatedesktopform($id, $data) {
         $this->ensureInboundRedirectColumn();
         $this->ensureInboundAccountsGroupColumn();
+        $this->ensureInboundBookLanguageColumns();
 
         // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
@@ -1125,6 +1127,26 @@ class Inbounding {
         $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE 'accounts_group'");
         if ($res && $res->num_rows === 0) {
             @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN accounts_group INT NULL DEFAULT NULL AFTER group_name");
+        }
+    }
+
+    private function ensureInboundBookLanguageColumns(): void
+    {
+        $columns = [
+            'original_languages' => "VARCHAR(500) NULL DEFAULT NULL AFTER language",
+            'translation_languages' => "VARCHAR(500) NULL DEFAULT NULL AFTER original_languages",
+            'transliteration_languages' => "VARCHAR(500) NULL DEFAULT NULL AFTER translation_languages",
+            'commentary_languages' => "VARCHAR(500) NULL DEFAULT NULL AFTER transliteration_languages",
+            'word_meaning_languages' => "VARCHAR(500) NULL DEFAULT NULL AFTER commentary_languages",
+            'explanation_languages' => "VARCHAR(500) NULL DEFAULT NULL AFTER word_meaning_languages",
+            'script_languages' => "VARCHAR(500) NULL DEFAULT NULL AFTER explanation_languages",
+        ];
+
+        foreach ($columns as $column => $definition) {
+            $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE '" . $this->conn->real_escape_string($column) . "'");
+            if ($res && $res->num_rows === 0) {
+                @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN $column $definition");
+            }
         }
     }
 
