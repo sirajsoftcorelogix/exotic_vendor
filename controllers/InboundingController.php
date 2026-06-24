@@ -345,6 +345,18 @@ class InboundingController {
         $data['markup_list'] = $inboundingModel->getMarkupData();
         inbound_profiler_step($prof, 'getMarkupData');
 
+        require_once __DIR__ . '/../models/languages/Language.php';
+        $languageModel = new Language($conn);
+        $data['book_languages'] = $languageModel->getActiveLanguages();
+        $roleIdCsvMap = [];
+        foreach (Language::inboundLanguageFieldKeys() as $languageFieldKey) {
+            $roleIdCsvMap[$languageFieldKey] = trim((string) ($data['form2'][$languageFieldKey] ?? ''));
+        }
+        $data['formatted_book_language'] = $languageModel->buildFormattedBookLanguage($roleIdCsvMap);
+        inbound_profiler_step($prof, 'getBookLanguages', [
+            'count' => count($data['book_languages'] ?? []),
+        ]);
+
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
         inbound_profiler_finish($prof, 'ok');
     }
@@ -1288,7 +1300,7 @@ class InboundingController {
         }
     }
     public function updatedesktopform() {
-        global $inboundingModel;
+        global $inboundingModel, $conn;
         $id = (int) ($_GET['id'] ?? 0);
         $prof = inbound_profiler_start('updatedesktopform', ['inbound_id' => $id]);
         // 1. Setup & Checks
@@ -1484,7 +1496,6 @@ class InboundingController {
             'edited_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['edited_by'] ?? ''),
             'publisher'=> trim((string)($_POST['publisher'] ?? '')) === '' ? null : (int) $_POST['publisher'],
             'isbn'     => $_POST['isbn'] ?? '',
-            'language' => $_POST['language'] ?? '',
             'pages'    => trim((string)($_POST['pages'] ?? '')) === '' ? null : (int) $_POST['pages'],
             'cover_type' => trim((string)($_POST['cover_type'] ?? '')),
             'edition' => trim((string)($_POST['edition'] ?? '')),
@@ -1492,6 +1503,18 @@ class InboundingController {
             'sourcingfee' => trim((string) ($_POST['sourcingfee'] ?? '')) === '' ? null : round((float) $_POST['sourcingfee'], 2),
             'shippingfee' => round(Inbounding::calculateBookShippingFee((float) ($_POST['weight'] ?? 0)), 2),
         ];
+
+        require_once __DIR__ . '/../models/languages/Language.php';
+        require_once __DIR__ . '/../helpers/book_language_formatter.php';
+        $languageModel = new Language($conn);
+        $roleIdCsvMap = [];
+        foreach (BookLanguageFormatter::orderedRoleKeys() as $languageField) {
+            $normalized = $languageModel->normalizeIdCsv($_POST[$languageField] ?? '');
+            $data[$languageField] = $normalized === '' ? null : $normalized;
+            $roleIdCsvMap[$languageField] = $normalized;
+        }
+        $formattedLanguage = $languageModel->buildFormattedBookLanguage($roleIdCsvMap);
+        $data['language'] = $formattedLanguage !== '' ? $formattedLanguage : null;
         
         // 4. Update Main Record
         $result = $inboundingModel->updatedesktopform($id, $data);

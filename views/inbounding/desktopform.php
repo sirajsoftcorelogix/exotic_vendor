@@ -306,6 +306,17 @@ $book_shipping_fee_initial = function_exists('book_shipping_fee_inr')
     ? book_shipping_fee_inr($data['form2']['weight'] ?? 0)
     : $book_shipping_fee_min;
 $saved_sourcingfee = trim((string) ($data['form2']['sourcingfee'] ?? ''));
+require_once __DIR__ . '/../../helpers/book_language_formatter.php';
+$book_language_options = $book_languages ?? [];
+$book_language_field_defs = BookLanguageFormatter::uiFieldDefinitions();
+$book_language_name_map = [];
+foreach ($book_language_options as $langOpt) {
+    $langId = (int) ($langOpt['id'] ?? 0);
+    if ($langId > 0) {
+        $book_language_name_map[$langId] = (string) ($langOpt['language_name'] ?? '');
+    }
+}
+$saved_combined_language = trim((string) ($formatted_book_language ?? $data['form2']['language'] ?? ''));
 function renderSizeField($fieldName, $currentValue, $isClothing, $options, $customClass = "") {
     $html = '';
     if ($isClothing) {
@@ -935,9 +946,50 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 <label class="block text-xs font-bold text-[#555] mb-1">Publication Date</label>
                                 <input type="date" name="publication_date" value="<?php echo htmlspecialchars($saved_publication_date); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
                             </div>
+                            <?php foreach ($book_language_field_defs as $langFieldDef): ?>
+                                <?php
+                                $langFieldKey = $langFieldDef['key'];
+                                $langFieldLabel = $langFieldDef['label'];
+                                $savedLangCsv = trim((string) ($data['form2'][$langFieldKey] ?? ''));
+                                $savedLangIds = array_values(array_filter(array_map('intval', explode(',', $savedLangCsv))));
+                                ?>
+                                <div>
+                                    <label class="block text-xs font-bold text-[#555] mb-1"><?php echo htmlspecialchars($langFieldLabel); ?></label>
+                                    <input type="hidden"
+                                        name="<?php echo htmlspecialchars($langFieldKey); ?>"
+                                        id="<?php echo htmlspecialchars($langFieldKey); ?>_value"
+                                        value="<?php echo htmlspecialchars($savedLangCsv, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <select id="<?php echo htmlspecialchars($langFieldKey); ?>_select"
+                                        class="book-language-select w-full"
+                                        multiple
+                                        autocomplete="off"
+                                        data-field-key="<?php echo htmlspecialchars($langFieldKey); ?>">
+                                        <?php foreach ($book_language_options as $langOpt): ?>
+                                            <?php
+                                            $langOptId = (int) ($langOpt['id'] ?? 0);
+                                            if ($langOptId <= 0) {
+                                                continue;
+                                            }
+                                            $langOptName = (string) ($langOpt['language_name'] ?? '');
+                                            $langOptIso = (string) ($langOpt['iso'] ?? '');
+                                            ?>
+                                            <option value="<?php echo $langOptId; ?>" <?php echo in_array($langOptId, $savedLangIds, true) ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($langOptName . ($langOptIso !== '' ? ' (' . strtoupper($langOptIso) . ')' : '')); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php endforeach; ?>
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">Language</label>
-                                <input type="text" name="language" value="<?php echo htmlspecialchars($data['form2']['language'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                                <input type="text"
+                                    id="book_language_display"
+                                    readonly
+                                    tabindex="-1"
+                                    autocomplete="off"
+                                    value="<?php echo htmlspecialchars($saved_combined_language, ENT_QUOTES, 'UTF-8'); ?>"
+                                    class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-gray-600 bg-gray-100 cursor-not-allowed focus:outline-none"
+                                    title="Auto-generated from selected language roles">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">Pages</label>
@@ -2297,6 +2349,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+<?php require __DIR__ . '/partials/book_language_formatter_script.php'; ?>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const commonConfig = {
@@ -2434,11 +2487,84 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        const bookLanguageFieldKeys = <?php echo json_encode(BookLanguageFormatter::orderedRoleKeys(), JSON_UNESCAPED_UNICODE); ?>;
+        const bookLanguageNameMap = <?php echo json_encode($book_language_name_map, JSON_UNESCAPED_UNICODE); ?>;
+        const bookLanguageTomSelects = {};
+
+        function syncBookLanguageHiddenValue(ts, fieldKey) {
+            const hidden = document.getElementById(fieldKey + '_value');
+            if (!hidden || !ts) return;
+            let vals = ts.getValue();
+            if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+            hidden.value = vals.filter(Boolean).join(',');
+        }
+
+        function collectBookLanguageRoleSelections() {
+            const roleIdLists = {};
+            bookLanguageFieldKeys.forEach(function (fieldKey) {
+                const ts = bookLanguageTomSelects[fieldKey];
+                let vals = ts ? ts.getValue() : [];
+                if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+                roleIdLists[fieldKey] = vals
+                    .map(function (id) { return parseInt(id, 10); })
+                    .filter(function (id) { return id > 0; });
+            });
+            return roleIdLists;
+        }
+
+        function updateFormattedBookLanguageDisplay() {
+            const display = document.getElementById('book_language_display');
+            if (!display || !window.BookLanguageFormatter) return;
+            display.value = window.BookLanguageFormatter.formatFromRoleSelections(
+                collectBookLanguageRoleSelections(),
+                bookLanguageNameMap
+            );
+        }
+
+        function initBookLanguageSelect(fieldKey) {
+            const selectEl = document.getElementById(fieldKey + '_select');
+            if (!selectEl || typeof window.safeTomSelect !== 'function') return;
+            const ts = window.safeTomSelect(selectEl, {
+                plugins: ['remove_button'],
+                placeholder: 'Select languages...',
+                maxItems: null,
+                hideSelected: true,
+                closeAfterSelect: false,
+                create: false,
+                persist: true,
+                onChange: function () {
+                    syncBookLanguageHiddenValue(this, fieldKey);
+                    updateFormattedBookLanguageDisplay();
+                },
+                onItemAdd: function () {
+                    this.setTextboxValue('');
+                    syncBookLanguageHiddenValue(this, fieldKey);
+                    updateFormattedBookLanguageDisplay();
+                },
+                onItemRemove: function () {
+                    syncBookLanguageHiddenValue(this, fieldKey);
+                    updateFormattedBookLanguageDisplay();
+                }
+            });
+            if (ts) {
+                bookLanguageTomSelects[fieldKey] = ts;
+                syncBookLanguageHiddenValue(ts, fieldKey);
+            }
+        }
+
+        bookLanguageFieldKeys.forEach(initBookLanguageSelect);
+        updateFormattedBookLanguageDisplay();
+
         const desktopInboundForm = document.getElementById('inboundForm') || document.querySelector('form[method="post"]');
         if (desktopInboundForm) {
             desktopInboundForm.addEventListener('submit', function () {
                 if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
                 if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
+                bookLanguageFieldKeys.forEach(function (fieldKey) {
+                    const ts = bookLanguageTomSelects[fieldKey];
+                    if (ts) syncBookLanguageHiddenValue(ts, fieldKey);
+                });
+                updateFormattedBookLanguageDisplay();
             });
         }
 

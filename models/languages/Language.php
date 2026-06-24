@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../../helpers/book_language_formatter.php';
+
 class Language
 {
     private $conn;
@@ -285,5 +287,137 @@ class Language
             }
         }
         return $rows;
+    }
+
+    /** @return list<int> */
+    public function parseIdCsv(?string $raw): array
+    {
+        if ($raw === null || trim($raw) === '') {
+            return [];
+        }
+
+        $ids = [];
+        foreach (explode(',', $raw) as $part) {
+            $id = (int) trim($part);
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+
+        return array_values($ids);
+    }
+
+    public function normalizeIdCsv(?string $raw): string
+    {
+        $ids = $this->parseIdCsv($raw);
+        if ($ids === []) {
+            return '';
+        }
+
+        return implode(',', $ids);
+    }
+
+    public function resolveNamesFromIdCsv(?string $idCsv): string
+    {
+        $ids = $this->parseIdCsv($idCsv);
+        if ($ids === []) {
+            return '';
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $types = str_repeat('i', count($ids));
+        $sql = "SELECT id, language_name FROM book_languages WHERE id IN ($placeholders) AND active = 1";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param($types, ...$ids);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $nameById = [];
+        while ($row = $result->fetch_assoc()) {
+            $nameById[(int) $row['id']] = trim((string) ($row['language_name'] ?? ''));
+        }
+        $stmt->close();
+
+        $names = [];
+        foreach ($ids as $id) {
+            if (!empty($nameById[$id])) {
+                $names[] = $nameById[$id];
+            }
+        }
+
+        return implode(', ', $names);
+    }
+
+    /**
+     * @param list<int> $ids
+     * @return array<int, string>
+     */
+    public function resolveNameMapByIds(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static function ($id) {
+            return $id > 0;
+        })));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $types = str_repeat('i', count($ids));
+        $sql = "SELECT id, language_name FROM book_languages WHERE id IN ($placeholders) AND active = 1";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param($types, ...$ids);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $nameById = [];
+        while ($row = $result->fetch_assoc()) {
+            $nameById[(int) $row['id']] = trim((string) ($row['language_name'] ?? ''));
+        }
+        $stmt->close();
+
+        return $nameById;
+    }
+
+    /**
+     * @param array<string, string|null> $roleIdCsvByKey
+     */
+    public function buildFormattedBookLanguage(array $roleIdCsvByKey): string
+    {
+        $allIds = [];
+        foreach (BookLanguageFormatter::orderedRoleKeys() as $key) {
+            foreach (self::parseIdCsv($roleIdCsvByKey[$key] ?? '') as $id) {
+                $allIds[$id] = $id;
+            }
+        }
+
+        $nameById = $this->resolveNameMapByIds(array_values($allIds));
+
+        return BookLanguageFormatter::formatFromRoleIdCsv($roleIdCsvByKey, $nameById);
+    }
+
+    /**
+     * @param list<string|null> $idCsvList
+     * @deprecated Use buildFormattedBookLanguage() with keyed role map.
+     */
+    public function buildCombinedLanguageNames(array $idCsvList): string
+    {
+        $roleIdCsvByKey = [];
+        $keys = self::inboundLanguageFieldKeys();
+        foreach ($keys as $index => $key) {
+            $roleIdCsvByKey[$key] = $idCsvList[$index] ?? '';
+        }
+
+        return $this->buildFormattedBookLanguage($roleIdCsvByKey);
+    }
+
+    /** @return list<string> */
+    public static function inboundLanguageFieldKeys(): array
+    {
+        return BookLanguageFormatter::orderedRoleKeys();
     }
 }
