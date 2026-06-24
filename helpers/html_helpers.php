@@ -71,7 +71,7 @@ function book_shipping_fee_inr($weightKg): float
 	$rounded = round($weight, 0);
 	$billable = ($rounded - $weight) > 0 ? $rounded : $rounded + 0.5;
 
-	return max($min, $billable * $rate);
+	return round(max($min, $billable * $rate), 2);
 }
 
 function print_array($data)
