@@ -39,8 +39,7 @@ class OrdersAPIController
         if (!$token && isset($_POST['api_token'])) {
             $token = trim($_POST['api_token']);
         }
-        print_r($token);
-        print_r($this->isValidToken($token));
+
         // If no token found
         if (!$token) {
             return false;
@@ -723,7 +722,7 @@ class OrdersAPIController
                     throw new Exception('Database error: Unable to prepare statement');
                 }
             }
-            //echo $sql;
+            
             if (!empty($startDate) && !empty($endDate)) {
                 $stmt->bind_param('ssii', $startDate, $endDate, $limit, $offset);
             } elseif (!empty($startDate)) {
@@ -736,7 +735,7 @@ class OrdersAPIController
 
             $stmt->execute();
             $result = $stmt->get_result();
-
+            print_r($result);
             $vouchers = [];
             if ($result && $result->num_rows > 0) {
                 while ($invoice = $result->fetch_assoc()) {
