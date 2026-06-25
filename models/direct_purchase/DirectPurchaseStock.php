@@ -221,7 +221,7 @@ final class DirectPurchaseStock
             );
 
             if ($productId > 0) {
-                self::syncProductLocalStock($conn, $productId, (int) round($running));
+                self::syncProductPhysicalStock($conn, $productId, (int) round($running));
             }
         }
 
@@ -293,7 +293,7 @@ final class DirectPurchaseStock
             );
 
             if ($productId > 0) {
-                self::syncProductLocalStock($conn, $productId, (int) round($running));
+                self::syncProductPhysicalStock($conn, $productId, (int) round($running));
             }
         }
 
@@ -412,12 +412,12 @@ final class DirectPurchaseStock
         return trim((string) ($row['address_title'] ?? ''));
     }
 
-    private static function syncProductLocalStock(\mysqli $conn, int $productId, int $runningStock): void
+    private static function syncProductPhysicalStock(\mysqli $conn, int $productId, int $runningStock): void
     {
         if ($productId <= 0) {
             return;
         }
-        $stmt = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
+        $stmt = $conn->prepare('UPDATE vp_products SET physical_stock = ? WHERE id = ?');
         if (!$stmt) {
             return;
         }
