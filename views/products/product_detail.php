@@ -418,17 +418,7 @@
           <div class="bg-blue-100 text-blue-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
             <i class="fas fa-box-open"></i>
           </div>
-        </div>
-        <!-- Physical Stock (warehouse) -->
-        <div class="flex items-center justify-between border border-amber-100 bg-amber-50/50 rounded-lg p-3 relative">
-          <div>
-            <p class="text-sm text-gray-500">Physical Stock</p>
-            <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['physical_stock'] ?? '0'); ?></p>
-          </div>
-          <div class="bg-amber-100 text-amber-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
-            <i class="fas fa-box-open"></i>
-          </div>
-          <button class="absolute top-0 right-1 text-gray-500 hover:text-amber-600" onclick="openStockModal()">
+          <button class="absolute top-0 right-1 text-gray-500 hover:text-blue-600" onclick="openStockModal()">
             <i class="fas fa-edit text-sm"></i>
           </button>
         </div>
@@ -1047,7 +1037,7 @@
     <div class="mb-6">
       <h2 class="text-xl font-semibold text-gray-800">Stock Adjustment</h2>
       <p class="text-sm text-gray-500 mt-1">
-        Adjust warehouse physical stock for the selected warehouse and location
+        Adjust product inventory for selected warehouse and location
       </p>
     </div>
 
