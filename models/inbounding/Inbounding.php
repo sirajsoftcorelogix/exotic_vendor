@@ -2187,34 +2187,22 @@ class Inbounding {
 
         return $main_inbound;
     }
-    public function insert_stock_data($data = []) {
+    /**
+     * Record warehouse IN movements and update physical_stock — called only from inbound publish success.
+     *
+     * @param array<int, array<string, mixed>> $data Rows from stock_data()
+     * @param int $inboundId vp_inbound.id (movement ref_id + idempotency key)
+     * @return array{success:bool,message:string,applied:int,skipped:int,errors:list<string>}
+     */
+    public function insert_stock_data($data = [], int $inboundId = 0)
+    {
         if (empty($data) || !is_array($data)) {
-            return false;
+            return ['success' => false, 'message' => 'No stock rows', 'applied' => 0, 'skipped' => 0, 'errors' => []];
         }
-        $itemCodeColumn = $this->resolveVpStockMovementsItemCodeColumn();
-        $itemCodeColumnSql = '`' . str_replace('`', '``', $itemCodeColumn) . '`';
-        $sql = "INSERT INTO vp_stock_movements (
-                    product_id, 
-                    sku, 
-                    {$itemCodeColumnSql}, 
-                    size, 
-                    color, 
-                    warehouse_id, 
-                    location,
-                    movement_type, 
-                    quantity, 
-                    running_stock, 
-                    ref_type, 
-                    ref_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-        $stmt = $this->conn->prepare($sql);
+        require_once __DIR__ . '/../product/product.php';
+        $productModel = new product($this->conn);
 
-        // 2. Define static defaults
-        $movement_type = 'IN';
-        $ref_type      = 'INBOUND';
-        $ref_id        = '0';
-        // Warehouse from inbound form (first row = parent record): use for default location label
         $inboundWarehouseId = isset($data[0]['ware_house_code']) ? (int)$data[0]['ware_house_code'] : 0;
         if ($inboundWarehouseId <= 0) {
             $inboundWarehouseId = 1;
@@ -2233,26 +2221,37 @@ class Inbounding {
             $addrStmt0->close();
         }
 
-        // Bind types for INSERT (same every row): i, s×4, i, s×2, i×2, s, s — ref_id is varchar in vp_stock_movements
-        $movementBindTypes = 'i' . str_repeat('s', 4) . 'i' . str_repeat('s', 2) . str_repeat('i', 2) . 's' . 's';
+        $refId = $inboundId > 0 ? (string)$inboundId : '0';
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        $applied = 0;
+        $skipped = 0;
+        $errors = [];
 
-        // 3. Loop through your data array
+        $dupStmt = null;
+        if ($inboundId > 0) {
+            $dupStmt = $this->conn->prepare(
+                "SELECT id FROM vp_stock_movements
+                 WHERE product_id = ? AND movement_type = 'IN' AND ref_type = 'INBOUND' AND ref_id = ?
+                 LIMIT 1"
+            );
+        }
+
         foreach ($data as $row) {
-            // Mapping array keys to variables
-            $product_id   = isset($row['product_id']) ? (int)$row['product_id'] : 0;
-            $sku          = $row['sku'] ?? '';
-            $size         = $row['size'] ?? '';
-            $color        = $row['color'] ?? '';
+            $product_id = isset($row['product_id']) ? (int)$row['product_id'] : 0;
+            $sku = trim((string)($row['sku'] ?? ''));
+            $size = trim((string)($row['size'] ?? ''));
+            $color = trim((string)($row['color'] ?? ''));
             $warehouse_id = isset($row['ware_house_code']) ? (int)$row['ware_house_code'] : 0;
             if ($warehouse_id <= 0) {
                 $warehouse_id = $inboundWarehouseId;
             }
-            $quantity     = isset($row['quantity_received']) ? (int)$row['quantity_received'] : 0;
-            $running      = $quantity; // Per your requirement
+            $quantity = isset($row['quantity_received']) ? (int)$row['quantity_received'] : 0;
+            if ($quantity <= 0) {
+                continue;
+            }
 
             $item_code = trim((string)(($row['Item_code'] ?? $row['item_code'] ?? '')));
 
-            // Recover missing product_id using SKU/item code.
             if ($product_id <= 0 && $sku !== '') {
                 $product_id = (int)$this->getProductBysku($sku);
             }
@@ -2260,43 +2259,73 @@ class Inbounding {
                 $product_id = (int)$this->getProductByItemcode($item_code);
             }
             if ($product_id <= 0) {
-                error_log("Skipping stock movement row: missing product_id for sku={$sku}, item_code={$item_code}");
+                $errors[] = "Missing product_id for sku={$sku}, item_code={$item_code}";
                 continue;
             }
 
             if ($item_code === '') {
                 $item_code = $this->getItemCodeByProductId($product_id);
             }
-            // vp_stock_movements.item_code is nullable — still insert when missing
 
-            // Prefer store location from inbound (same as form); fallback to warehouse address title
+            if ($dupStmt) {
+                $dupStmt->bind_param('is', $product_id, $refId);
+                $dupStmt->execute();
+                $dupRes = $dupStmt->get_result();
+                if ($dupRes && $dupRes->num_rows > 0) {
+                    $skipped++;
+                    continue;
+                }
+            }
+
             $storeLoc = trim((string)($row['store_location'] ?? ''));
             $location = $storeLoc !== '' ? $storeLoc : $defaultLocationLabel;
 
-            // 4. Bind parameters
-            $stmt->bind_param(
-                $movementBindTypes,
-                $product_id,
-                $sku,
-                $item_code,
-                $size,
-                $color,
-                $warehouse_id,
-                $location,
-                $movement_type,
-                $quantity,
-                $running,
-                $ref_type,
-                $ref_id
-            );
+            $result = $productModel->insertStockMovement([
+                'product_id' => $product_id,
+                'sku' => $sku,
+                'item_code' => $item_code,
+                'size' => $size,
+                'color' => $color,
+                'warehouse_id' => $warehouse_id,
+                'location' => $location,
+                'movement_type' => 'IN',
+                'quantity' => $quantity,
+                'user_id' => $userId,
+                'reason' => 'Inbound publish #' . $refId,
+                'ref_type' => 'INBOUND',
+                'ref_id' => $refId,
+            ]);
 
-            // 5. Execute for each row
-            if (!$stmt->execute()) {
-                error_log("Failed to insert stock movement: " . $stmt->error);
+            if (!empty($result['success'])) {
+                $applied++;
+            } else {
+                $errors[] = 'Product ' . $product_id . ': ' . ($result['message'] ?? 'movement failed');
             }
         }
-        $stmt->close();
-        return true;
+
+        if ($dupStmt) {
+            $dupStmt->close();
+        }
+
+        if (count($errors) > 0) {
+            return [
+                'success' => false,
+                'message' => implode('; ', $errors),
+                'applied' => $applied,
+                'skipped' => $skipped,
+                'errors' => $errors,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => $applied > 0
+                ? "Recorded {$applied} inbound stock movement(s)"
+                : ($skipped > 0 ? 'Stock already recorded for this publish' : 'No quantities to receive'),
+            'applied' => $applied,
+            'skipped' => $skipped,
+            'errors' => [],
+        ];
     }
 }
 ?>

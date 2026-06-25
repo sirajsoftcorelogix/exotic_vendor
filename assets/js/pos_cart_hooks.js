@@ -652,21 +652,35 @@
     return null;
   }
 
-  function lineLocalStockQty(row) {
-    var n = pickNumber(row, ['local_stock', 'localStock', 'stock_qty', 'stockQty']);
+  function lineWarehouseStockQty(row) {
+    var n = pickNumber(row, [
+      'warehouse_stock',
+      'warehouseStock',
+      'stock_qty',
+      'stockQty',
+      'physical_stock',
+      'physicalStock',
+      'running_stock',
+      'runningStock'
+    ]);
     return n == null || isNaN(n) ? null : n;
+  }
+
+  /** Warehouse / store stock for POS warnings (not website local_stock). */
+  function lineLocalStockQty(row) {
+    return lineWarehouseStockQty(row);
   }
 
   function getLocalStockWarnings(cartData) {
     var items = getCartItems(cartData || {});
     var warnings = [];
     items.forEach(function (row) {
-      var localStock = lineLocalStockQty(row);
-      if (localStock == null) {
+      var warehouseStock = lineWarehouseStockQty(row);
+      if (warehouseStock == null) {
         return;
       }
       var qty = lineQty(row);
-      if (qty <= localStock) {
+      if (qty <= warehouseStock) {
         return;
       }
       var code = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
@@ -675,8 +689,9 @@
         code: code,
         title: title,
         quantity: qty,
-        local_stock: localStock,
-        shortage: Math.max(0, qty - localStock)
+        warehouse_stock: warehouseStock,
+        local_stock: warehouseStock,
+        shortage: Math.max(0, qty - warehouseStock)
       });
     });
     return warnings;
@@ -693,12 +708,12 @@
     return String(x);
   }
 
-  function localStockProceedPrompt(localStock) {
-    return 'Local Stock = ' + formatLocalStockQty(localStock) + ', Proceed?';
+  function localStockProceedPrompt(stockQty) {
+    return 'Warehouse stock = ' + formatLocalStockQty(stockQty) + ', Proceed?';
   }
 
-  function localStockAckLabel(localStock) {
-    return 'Local Stock = ' + formatLocalStockQty(localStock);
+  function localStockAckLabel(stockQty) {
+    return 'Warehouse stock = ' + formatLocalStockQty(stockQty);
   }
 
   function localStockConfirmSignature(ref, qty, localStock) {
@@ -840,6 +855,7 @@
         code: String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim(),
         title: lineTitle(row),
         quantity: qty,
+        warehouse_stock: localStock,
         local_stock: localStock
       });
     });
@@ -858,9 +874,9 @@
       return '';
     }
     if (warnings.length === 1) {
-      return localStockProceedPrompt(warnings[0].local_stock) + ' (Y / N in cart)';
+      return localStockProceedPrompt(warnings[0].warehouse_stock || warnings[0].local_stock) + ' (Y / N in cart)';
     }
-    return warnings.length + ' items need local stock confirmation in cart (Y / N)';
+    return warnings.length + ' items need warehouse stock confirmation in cart (Y / N)';
   }
 
   function lineTitle(row) {

@@ -27,6 +27,36 @@ class PosInvoiceController
         return $warehouseId;
     }
 
+    /**
+     * POS store warehouse: POST override → payment record → session/user warehouse.
+     */
+    private function resolvePosInvoiceWarehouseId(?string $orderNumber = null): int
+    {
+        $fromPost = (int)($_POST['warehouse_id'] ?? 0);
+        if ($fromPost > 0) {
+            return $fromPost;
+        }
+
+        $orderNumber = trim((string)$orderNumber);
+        if ($orderNumber !== '') {
+            global $conn;
+            $stmt = $conn->prepare(
+                'SELECT warehouse_id FROM pos_payments WHERE order_number = ? AND warehouse_id > 0 ORDER BY id DESC LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('s', $orderNumber);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($row && (int)($row['warehouse_id'] ?? 0) > 0) {
+                    return (int)$row['warehouse_id'];
+                }
+            }
+        }
+
+        return $this->getSessionWarehouseId();
+    }
+
     /* ===============================
        PAGE LOAD
     =============================== */
@@ -240,7 +270,12 @@ WHERE i.pos_flag = 1";
             }
 
             $stockModel = new Stock($conn);
-            $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
+            $invoiceWarehouseId = (int)($invoice['warehouse_id'] ?? 0);
+            $stockRestore = $stockModel->restoreStockByInvoiceId(
+                $invoiceId,
+                $invoiceWarehouseId > 0 ? $invoiceWarehouseId : null,
+                true
+            );
             if (empty($stockRestore['success'])) {
                 http_response_code(500);
                 echo json_encode([
@@ -347,55 +382,89 @@ WHERE i.pos_flag = 1";
     }
 
 
+    private function finalizePosProformaInvoice(int $invoiceId): array
+    {
+        global $invoiceModel;
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        $warehouseId = (int)($invoice['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = $this->getSessionWarehouseId();
+        }
+        require_once __DIR__ . '/InvoicesController.php';
+        $invCtrl = new InvoicesController();
+        return $invCtrl->finalizeProformaInvoice(
+            $invoiceId,
+            true,
+            $warehouseId > 0 ? $warehouseId : null
+        );
+    }
+
     public function create_from_payment()
     {
-        global $conn;
+        is_login();
+        header('Content-Type: application/json');
 
-        $data = json_decode(file_get_contents("php://input"), true);
-        $paymentId = (int)$data['payment_id'];
+        global $conn, $invoiceModel;
 
-        $payment = $conn->query("
-        SELECT * FROM pos_payments WHERE id = $paymentId
-    ")->fetch_assoc();
-
-        if (!$payment) {
-            echo json_encode(["success" => false]);
+        $data = json_decode(file_get_contents('php://input'), true);
+        $paymentId = (int)($data['payment_id'] ?? 0);
+        if ($paymentId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Missing payment_id']);
             exit;
         }
 
-        $orderNumber = (string)($payment['order_number'] ?? '');
+        $stmt = $conn->prepare('SELECT * FROM pos_payments WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            echo json_encode(['success' => false, 'message' => 'Database error']);
+            exit;
+        }
+        $stmt->bind_param('i', $paymentId);
+        $stmt->execute();
+        $payment = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
 
-        // ✅ FIND EXISTING INVOICE
-        $invoice = $conn->query("
-        SELECT * FROM vp_invoices 
-        WHERE order_number = '" . $conn->real_escape_string($orderNumber) . "'
-        LIMIT 1
-    ")->fetch_assoc();
+        if (!$payment) {
+            echo json_encode(['success' => false, 'message' => 'Payment not found']);
+            exit;
+        }
 
-        if ($invoice) {
+        $orderNumber = trim((string)($payment['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing on payment']);
+            exit;
+        }
 
-            // ✅ UPDATE STATUS ONLY (NO NEW INSERT)
-            if ($payment['payment_stage'] === 'final') {
+        $stage = strtolower(trim((string)($payment['payment_stage'] ?? 'final')));
+        $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
 
-                $conn->query("
-                UPDATE vp_invoices 
-                SET status = 'final'
-                WHERE id = " . $invoice['id'] . "
-            ");
+        if ($stage === 'final') {
+            if ($existing && strtolower(trim((string)($existing['status'] ?? ''))) === 'proforma') {
+                echo json_encode($this->finalizePosProformaInvoice((int)$existing['id']));
+                exit;
             }
+            if ($existing) {
+                echo json_encode([
+                    'success' => true,
+                    'invoice_id' => (int)$existing['id'],
+                    'invoice_number' => $existing['invoice_number'] ?? '',
+                ]);
+                exit;
+            }
+            echo json_encode($this->createAutoInvoiceForOrder($orderNumber));
+            exit;
+        }
 
+        if ($existing) {
             echo json_encode([
-                "success" => true,
-                "invoice_id" => $invoice['id']
+                'success' => true,
+                'invoice_id' => (int)$existing['id'],
+                'invoice_number' => $existing['invoice_number'] ?? '',
             ]);
             exit;
         }
 
-        // ❗ fallback (rare)
-        echo json_encode([
-            "success" => false,
-            "message" => "Invoice not found for update"
-        ]);
+        echo json_encode($this->createAutoInvoiceForOrder($orderNumber));
+        exit;
     }
     /* ===============================
        GET SINGLE
@@ -1526,6 +1595,24 @@ WHERE i.pos_flag = 1";
 
         $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
         if ($existing) {
+            $existingStatus = strtolower(trim((string)($existing['status'] ?? '')));
+            $paymentStage = 'final';
+            $stmtPay = $conn->prepare(
+                'SELECT payment_stage FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+            );
+            if ($stmtPay) {
+                $stmtPay->bind_param('s', $orderNumber);
+                $stmtPay->execute();
+                $payment = $stmtPay->get_result()->fetch_assoc();
+                $stmtPay->close();
+                if (is_array($payment) && isset($payment['payment_stage'])) {
+                    $paymentStage = (string)$payment['payment_stage'];
+                }
+            }
+            $wantFinal = strtolower(trim($paymentStage)) === 'final';
+            if ($wantFinal && $existingStatus === 'proforma') {
+                return $this->finalizePosProformaInvoice((int)$existing['id']);
+            }
             return [
                 'success' => true,
                 'invoice_id' => (int)$existing['id'],
@@ -1794,6 +1881,48 @@ WHERE i.pos_flag = 1";
         }
         $invoice_number = (string) $invoiceNumberResult['invoice_number'];
 
+        $firstOrderNumber = trim((string)($order_numbers[0] ?? ''));
+        $warehouseId = $this->resolvePosInvoiceWarehouseId($firstOrderNumber !== '' ? $firstOrderNumber : null);
+        if ($warehouseId <= 0) {
+            return ['success' => false, 'message' => 'No warehouse selected. Set your POS store before creating an invoice.'];
+        }
+
+        $invoiceStatus = strtolower(trim((string)($_POST['status'] ?? 'final')));
+        if ($invoiceStatus === 'final') {
+            require_once __DIR__ . '/../models/order/stock.php';
+            $productModelForStock = new product($conn);
+            $prospectiveLines = [];
+            foreach ($order_numbers as $idx => $order_number) {
+                $quantity = isset($quantities[$idx]) ? (int)$quantities[$idx] : 0;
+                if ($quantity <= 0) {
+                    continue;
+                }
+                $itemCode = isset($item_codes[$idx]) ? trim($item_codes[$idx]) : '';
+                $prospectiveLines[] = [
+                    'product_id' => $productModelForStock->getProductIdForInvoiceLine((string)$order_number, $itemCode),
+                    'quantity' => $quantity,
+                    'item_code' => $itemCode,
+                    'order_number' => (string)$order_number,
+                ];
+            }
+            if ($prospectiveLines !== []) {
+                $stockModel = new Stock($conn);
+                $validation = $stockModel->validateStockAvailabilityForLines(
+                    $prospectiveLines,
+                    $warehouseId,
+                    true
+                );
+                if (empty($validation['success'])) {
+                    return [
+                        'success' => false,
+                        'message' => $validation['message'] ?? 'Insufficient warehouse stock for invoice',
+                        'error_type' => 'insufficient_stock',
+                        'issues' => $validation['issues'] ?? [],
+                    ];
+                }
+            }
+        }
+
         // Create invoice header
         $isInternational = ($firstCurrency && $firstCurrency !== 'INR') ? 1 : 0;
         $invoiceData = [
@@ -1808,7 +1937,9 @@ WHERE i.pos_flag = 1";
             'total_amount' => $total_amount,
             'status' => isset($_POST['status']) ? trim($_POST['status']) : 'final',
             'created_by' => $_SESSION['user']['id'] ?? 0,
-            'created_at' => date('Y-m-d H:i:s')
+            'created_at' => date('Y-m-d H:i:s'),
+            'warehouse_id' => $warehouseId,
+            'pos_flag' => 1,
         ];
         if ($currency[0] && $currency[0] !== 'INR') {
             $currencyRecord = $this->getCurrencyByCode($currency[0]);
@@ -1902,7 +2033,24 @@ WHERE i.pos_flag = 1";
         //call irisirp api to generate irn
         //$this->generateIrnForInvoice($invoiceId);
 
-        // Update order status to invoiced
+        $stockDeduction = ['success' => true, 'message' => 'Skipped (not final invoice)', 'applied' => 0];
+        if ($invoiceStatus === 'final') {
+            require_once __DIR__ . '/../models/order/stock.php';
+            $stockModel = new Stock($conn);
+            $stockDeduction = $stockModel->updateStockByInvoiceId((int)$invoiceId, $warehouseId, true);
+            if (empty($stockDeduction['success'])) {
+                $invoiceModel->deleteInvoice($invoiceId);
+                unset($_SESSION['invoice_items']);
+                return [
+                    'success' => false,
+                    'message' => $stockDeduction['message'] ?? 'Insufficient warehouse stock for invoice',
+                    'error_type' => 'insufficient_stock',
+                    'stock_deduction' => $stockDeduction,
+                ];
+            }
+        }
+
+        // Update order status to invoiced (after successful stock deduction for final invoices)
         foreach ($order_numbers as $order_number) {
             $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
         }
@@ -1917,6 +2065,7 @@ WHERE i.pos_flag = 1";
             'invoice_number' => $invoice_number,
             'items_created' => $itemCreated,
             'items_failed' => $itemsFailed,
+            'stock_deduction' => $stockDeduction,
         ];
     }
     private function getCurrencyByCode($code)

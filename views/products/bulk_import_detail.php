@@ -96,8 +96,8 @@
           <tr>
             <th class="px-3 py-2 text-left">#</th>
             <th class="px-3 py-2 text-left">SKU</th>
-            <th class="px-3 py-2 text-right" title="Quantity from import file; when empty, opening stock uses product local stock">Qty</th>
-            <th class="px-3 py-2 text-right" title="Matched product local_stock (used when file qty is empty)">Local stock</th>
+            <th class="px-3 py-2 text-right" title="Quantity from import file; when empty, opening stock uses matched product physical stock">Qty</th>
+            <th class="px-3 py-2 text-right" title="Matched product physical_stock (warehouse total; used when file qty is empty)">Physical stock</th>
             <th class="px-3 py-2 text-left">Location</th>
             <th class="px-3 py-2 text-left">Status</th>
             <th class="px-3 py-2 text-left">Attempts</th>
@@ -135,7 +135,7 @@
                 </td>
                 <td class="px-3 py-2 text-right tabular-nums"><?= (int)($r['opening_qty'] ?? 0) ?></td>
                 <td class="px-3 py-2 text-right tabular-nums text-gray-700"><?php
-                  $pls = $r['product_local_stock'] ?? '';
+                  $pls = $r['product_physical_stock'] ?? ($r['product_local_stock'] ?? '');
                   echo ($pls !== '' && $pls !== null) ? (string)(int)$pls : '—';
                 ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($r['stock_location'] ?? '') ?></td>

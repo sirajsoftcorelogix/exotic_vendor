@@ -5,6 +5,7 @@ require_once 'models/order/purchaseOrder.php';
 require_once 'models/order/purchaseOrderItem.php';
 require_once 'models/comman/tables.php';
 require_once 'models/user/user.php';
+require_once 'models/product/product.php';
 $grnModel = new grn($conn);
 $purchaseOrderModel = new PurchaseOrder($conn);
 $purchaseOrderItemsModel = new PurchaseOrderItem($conn);
@@ -104,38 +105,60 @@ class GrnsController {
         // Begin DB transaction
         try {
             $conn->begin_transaction();
-
-           
+            $productModel = new product($conn);
+            $sessionUserId = (int)($_SESSION['user']['id'] ?? 0);
 
             // Fetch PO items to update stock
             //$poItems = $purchaseOrderItemsModel->getPurchaseOrderItemByIdNew($poId);
             $poItems = $purchaseOrderItemsModel->getPurchaseOrderItemFromProduct($poId);
 
-            // Prepare statements for stock and movements
-            //$selectStockSql = "SELECT id, current_stock FROM vp_stock WHERE item_code = ? AND COALESCE(size,'') = COALESCE(?, '') AND COALESCE(color,'') = COALESCE(?, '') AND warehouse_id = ? LIMIT 1";
-            $selectStockSql = "SELECT id, current_stock FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1";
-            $selectStockStmt = $conn->prepare($selectStockSql);
+            $warehouseId = (int)$warehouseId;
+            $locationLabel = '';
+            if ($warehouseId > 0) {
+                $locStmt = $conn->prepare('SELECT address_title FROM exotic_address WHERE id = ? LIMIT 1');
+                if ($locStmt) {
+                    $locStmt->bind_param('i', $warehouseId);
+                    if ($locStmt->execute()) {
+                        $locRow = $locStmt->get_result()->fetch_assoc();
+                        $locationLabel = trim((string)($locRow['address_title'] ?? ''));
+                    }
+                    $locStmt->close();
+                }
+            }
 
-            $updateStockSql = "UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?";
-            $updateStockStmt = $conn->prepare($updateStockSql);
-
-            $insertStockSql = "INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)";
-            $insertStockStmt = $conn->prepare($insertStockSql);
-
-            $insertMovementSql = "INSERT INTO vp_stock_movements (product_id, sku, warehouse_id, movement_type, quantity, running_stock, ref_type, ref_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-            $insertMovementStmt = $conn->prepare($insertMovementSql);
+            $resolveProductIdStmt = $conn->prepare('SELECT id, item_code FROM vp_products WHERE sku = ? LIMIT 1');
 
             foreach ($poItems as $index => $item) {
-                $qtyReceived = isset($qtyReceivedArr[$index]) ? floatval($qtyReceivedArr[$index]) : 0;
-                if ($qtyReceived <= 0) continue; // nothing to receive for this item
-                //$warehouseId = isset($warehouseIdArr[$index]) ? intval($warehouseIdArr[$index]) : 0;
+                $qtyReceived = isset($qtyReceivedArr[$index]) ? (float)$qtyReceivedArr[$index] : 0;
+                if ($qtyReceived <= 0) {
+                    continue;
+                }
                 $itemCode = $item['item_code'] ?? $item['order_number'] ?? '';
-                $size = $item['size'] ?? '';
-                $color = $item['color'] ?? '';
-                $productId = isset($item['product_id']) && $item['product_id'] !== '' ? intval($item['product_id']) : null;
-                $sku = $_POST['sku'][$index] ?? '';
-                 // create GRN
-                $data = [];
+                $size = (string)($item['size'] ?? '');
+                $color = (string)($item['color'] ?? '');
+                $productId = isset($item['product_id']) && $item['product_id'] !== ''
+                    ? (int)$item['product_id']
+                    : 0;
+                $sku = trim((string)($_POST['sku'][$index] ?? $item['sku'] ?? ''));
+                if ($sku === '') {
+                    throw new Exception('SKU is required for GRN line: ' . $itemCode);
+                }
+
+                if ($productId <= 0 && $resolveProductIdStmt) {
+                    $resolveProductIdStmt->bind_param('s', $sku);
+                    $resolveProductIdStmt->execute();
+                    $prodRow = $resolveProductIdStmt->get_result()->fetch_assoc();
+                    if ($prodRow) {
+                        $productId = (int)($prodRow['id'] ?? 0);
+                        if ($itemCode === '') {
+                            $itemCode = (string)($prodRow['item_code'] ?? '');
+                        }
+                    }
+                }
+                if ($productId <= 0) {
+                    throw new Exception('Product not found for SKU: ' . $sku);
+                }
+
                 $data = [
                     'po_id' => $poId,
                     'po_number' => $_POST['po_number'] ?? '',
@@ -151,39 +174,29 @@ class GrnsController {
                 if ($grnId === false) {
                     throw new Exception('Failed to create GRN');
                 }
-                // ensure select statement prepared
-                $selectStockStmt->bind_param('si', $sku, $warehouseId);
-                $selectStockStmt->execute();
-                $res = $selectStockStmt->get_result();
-                $runningStock = 0;
-                if ($row = $res->fetch_assoc()) {
-                    $stockId = $row['id'];
-                    $currentStock = floatval($row['current_stock']);
-                    $runningStock = $currentStock + $qtyReceived;
-                    // update stock
-                    $updateStockStmt->bind_param('dii', $runningStock, $grnId, $stockId);
-                    if (!$updateStockStmt->execute()) {
-                        throw new Exception('Failed to update vp_stock for item ' . $itemCode);
-                    }
-                } else {
-                    // insert stock record
-                    $runningStock = $qtyReceived;
-                    
-                    $insertStockStmt->bind_param('sidi', $sku, $warehouseId, $runningStock, $grnId);
-                    if (!$insertStockStmt->execute()) {
-                        throw new Exception('Failed to insert vp_stock for item ' . $sku);
-                    }
-                    $stockId = $conn->insert_id;
-                }
 
-                // insert stock movement (IN)
-                $movementType = 'IN';
-                $pidBind = $productId ? $productId : 0;
-                $refType = 'GRN';
-                $insertMovementStmt->bind_param('isissdsd', $pidBind, $sku, $warehouseId, $movementType, $qtyReceived, $runningStock, $refType, $grnId);
-                if (!$insertMovementStmt->execute()) {
-                    throw new Exception('Failed to insert vp_stock_movements for item ' . $sku);
+                $movementResult = $productModel->insertStockMovement([
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => (string)$itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'warehouse_id' => $warehouseId,
+                    'location' => $locationLabel,
+                    'movement_type' => 'IN',
+                    'quantity' => (int)round($qtyReceived),
+                    'user_id' => $sessionUserId,
+                    'reason' => 'GRN #' . $grnId,
+                    'ref_type' => 'GRN',
+                    'ref_id' => (string)$grnId,
+                ], false);
+                if (empty($movementResult['success'])) {
+                    throw new Exception($movementResult['message'] ?? ('Failed to record stock movement for SKU ' . $sku));
                 }
+            }
+
+            if ($resolveProductIdStmt) {
+                $resolveProductIdStmt->close();
             }
 
             // Optionally update purchase order status to received 

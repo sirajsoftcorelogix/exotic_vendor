@@ -525,6 +525,9 @@ switch ($page) {
             case 'CreateAutoFromOrder':
                 $controller->create_auto_from_order();
                 break;
+            case 'create_proforma':
+                $controller->create_proforma();
+                break;
             case 'generateAlankitIrnForInvoice':
                 $invoice_id = $_GET['invoice_id'] ?? null;
                 if ($invoice_id) {
