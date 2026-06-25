@@ -142,9 +142,9 @@ if (empty($transferOrderNo)) {
                                 </td>
                                 <td class="px-4 py-3 border-b border-gray-200">
                                     <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Available</div>
-                                    <div class="bg-gray-100 px-2 py-1 rounded text-xs text-gray-700 mb-2"><?php echo htmlspecialchars($product['physical_stock'] ?? 0); ?></div>
+                                    <div class="bg-gray-100 px-2 py-1 rounded text-xs text-gray-700 mb-2"><?php echo htmlspecialchars($product['local_stock'] ?? 0); ?></div>
                                     <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Transfer</div>
-                                    <input type="number" name="transfer_qty[]" min="1" max="<?php echo htmlspecialchars($product['physical_stock'] ?? 0); ?>" data-available="<?php echo htmlspecialchars($product['physical_stock'] ?? 0); ?>" value="<?php echo htmlspecialchars($product['transfer_qty'] ?? 0); ?>" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
+                                    <input type="number" name="transfer_qty[]" min="1" max="<?php echo htmlspecialchars($product['local_stock'] ?? 0); ?>" data-available="<?php echo htmlspecialchars($product['local_stock'] ?? 0); ?>" value="<?php echo htmlspecialchars($product['transfer_qty'] ?? 0); ?>" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
                                 </td>
                                 <td class="px-4 py-3 border-b border-gray-200">
                                     <textarea name="item_notes[]" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-y min-h-[60px]"><?php echo htmlspecialchars($product['item_notes'] ?? ''); ?></textarea>
@@ -726,9 +726,9 @@ if (empty($transferOrderNo)) {
             </td>
             <td class="px-4 py-3 border-b border-gray-200">
                 <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Available</div>
-                <div class="bg-gray-100 px-2 py-1 rounded text-xs text-gray-700 mb-2">${parseInt(product.physical_stock ?? product.stock ?? 0)}</div>
+                <div class="bg-gray-100 px-2 py-1 rounded text-xs text-gray-700 mb-2">${parseInt(product.local_stock ?? product.stock ?? 0)}</div>
                 <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Transfer</div>
-                <input type="number" name="transfer_qty[]" min="1" max="${parseInt(product.physical_stock ?? product.stock ?? 0)}" data-available="${parseInt(product.physical_stock ?? product.stock ?? 0)}" value="1" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
+                <input type="number" name="transfer_qty[]" min="1" max="${parseInt(product.local_stock ?? product.stock ?? 0)}" data-available="${parseInt(product.local_stock ?? product.stock ?? 0)}" value="1" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
             </td>
             <td class="px-4 py-3 border-b border-gray-200">
                 <textarea name="item_notes[]" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-y min-h-[60px]"></textarea>
@@ -785,7 +785,7 @@ if (empty($transferOrderNo)) {
         addItemSearchResult.innerHTML = '';
 
         for (const prod of products) {
-            const stock = parseInt(prod.physical_stock ?? prod.stock ?? 0, 10);
+            const stock = parseInt(prod.local_stock ?? prod.stock ?? 0, 10);
             const img = prod.image ? prod.image : 'https://via.placeholder.com/60x80?text=No+Image';
             const card = document.createElement('div');
             card.className = 'bg-gray-50 border border-gray-200 p-3 rounded-lg flex gap-3 items-center justify-between';

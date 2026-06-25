@@ -2530,7 +2530,7 @@ class ProductsController
             $ins->close();
         }
 
-        $updL = $conn->prepare('UPDATE vp_products SET physical_stock = ? WHERE id = ?');
+        $updL = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
         if (!$updL) {
             $conn->rollback();
             return 'Could not prepare product stock update.';
@@ -2540,7 +2540,7 @@ class ProductsController
             $err = $updL->error;
             $updL->close();
             $conn->rollback();
-            return 'Product physical_stock update failed: ' . $err;
+            return 'Product local_stock update failed: ' . $err;
         }
         $updL->close();
 
@@ -2669,7 +2669,7 @@ class ProductsController
             }
         }
 
-        $upd = $conn->prepare('UPDATE vp_products SET physical_stock = ? WHERE id = ?');
+        $upd = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
         if (!$upd) {
             $conn->rollback();
             return 'Could not prepare product stock update.';
@@ -2679,7 +2679,7 @@ class ProductsController
             $err = $upd->error;
             $upd->close();
             $conn->rollback();
-            return 'Product physical_stock update failed: ' . $err;
+            return 'Product local_stock update failed: ' . $err;
         }
         $upd->close();
 
@@ -2889,7 +2889,7 @@ class ProductsController
             exit;
         }
 
-        // Collect affected product_ids before deleting movements so we can recalculate physical_stock,
+        // Collect affected product_ids before deleting movements so we can recalculate local_stock,
         // and collect products that were created by this job so we can delete them.
         $prodIds = [];
         $createdProductIds = [];
@@ -2969,9 +2969,9 @@ class ProductsController
             $delProdStmt->close();
         }
 
-        // Recalculate physical_stock for affected products based on latest remaining movement.
+        // Recalculate local_stock for affected products based on latest remaining movement.
         $recalcStmt = $conn->prepare("SELECT running_stock FROM vp_stock_movements WHERE product_id = ? ORDER BY id DESC LIMIT 1");
-        $updStmt = $conn->prepare("UPDATE vp_products SET physical_stock = ? WHERE id = ?");
+        $updStmt = $conn->prepare("UPDATE vp_products SET local_stock = ? WHERE id = ?");
         if ($recalcStmt && $updStmt) {
             foreach (array_keys($prodIds) as $pid) {
                 $pid = (int)$pid;
@@ -4276,12 +4276,12 @@ class ProductsController
 
             $sku = trim((string)($order['sku'] ?? ''));
             $itemCode = trim((string)($order['item_code'] ?? ''));
-            $physicalStock = (float)($order['physical_stock'] ?? 0);
+            $localStock = (float)($order['local_stock'] ?? 0);
             $costPrice = (float)($order['cost_price'] ?? 0);
 
-            $order['stock_value'] = $physicalStock * $costPrice;
+            $order['stock_value'] = $localStock * $costPrice;
             $order['committed_stock'] = $sku !== '' ? (int)$commanModel->getCommittedStockBySku($sku) : 0;
-            $order['available_stock'] = $physicalStock - (float)$order['committed_stock'];
+            $order['available_stock'] = $localStock - (float)$order['committed_stock'];
             $order['in_purchase_list'] = $sku !== '' ? $commanModel->isInPurchaseList($sku) : [];
             $order['vendors'] = $itemCode !== '' ? $productModel->getVendorByItemCode($itemCode) : [];
             $order['stock_history'] = $productModel->enrichStockHistoryRowsForLedger(
