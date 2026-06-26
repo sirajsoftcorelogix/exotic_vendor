@@ -2200,15 +2200,6 @@ class InboundingController {
             if ($pubDate !== '' && $pubDate !== '0000-00-00') {
                 $API_data['publication_date'] = $pubDate;
             }
-            $sourcingFee = trim((string) ($d['sourcingfee'] ?? ''));
-            if ($sourcingFee !== '') {
-                $API_data['sourcingfee'] = round((float) $sourcingFee, 2);
-            }
-            $shippingFee = $d['shippingfee'] ?? null;
-            if ($shippingFee === null || $shippingFee === '') {
-                $shippingFee = Inbounding::calculateBookShippingFee($d['weight'] ?? 0);
-            }
-            $API_data['shippingfee'] = round((float) $shippingFee, 2);
         }
         $API_data['snippet_description'] = $d['snippet_description'] ?? '';
         // $API_data['creator'] = $data['data']['received_by_user_id'];
@@ -2381,6 +2372,26 @@ class InboundingController {
                 $stock_price_temp[$i]['item_level'] = 'variation'; // Change item level from 'parent' to 'variation'
                 $stock_price_temp[$i]['size'] = $d['size'] ?? '';
                 $stock_price_temp[$i]['color'] = $d['color'] ?? '';
+            }
+        }
+
+        // Book fees belong on item_stock_price rows, not top-level product fields.
+        if ($d['groupname'] == 'book') {
+            $sourcingFee = trim((string) ($d['sourcingfee'] ?? ''));
+            $shippingFee = $d['shippingfee'] ?? null;
+            if ($shippingFee === null || $shippingFee === '') {
+                $shippingFee = Inbounding::calculateBookShippingFee($d['weight'] ?? 0);
+            }
+            $shippingFee = round((float) $shippingFee, 2);
+            foreach ($stock_price_temp as $idx => $entry) {
+                $itemLevel = $entry['item_level'] ?? '';
+                if ($itemLevel !== 'standalone' && $itemLevel !== 'parent') {
+                    continue;
+                }
+                if ($sourcingFee !== '') {
+                    $stock_price_temp[$idx]['sourcingfee'] = round((float) $sourcingFee, 2);
+                }
+                $stock_price_temp[$idx]['shippingfee'] = $shippingFee;
             }
         }
 
@@ -2559,7 +2570,7 @@ class InboundingController {
             
             // insert stock moment
             $stoc_data = $inboundingModel->stock_data($id);
-            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
+            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data, (int)$id);
             inbound_profiler_step($prof, 'insert_stock_data');
             
             // === LOG SUCCESS ===

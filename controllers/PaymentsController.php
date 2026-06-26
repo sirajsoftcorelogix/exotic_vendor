@@ -461,58 +461,24 @@ WHERE 1=1
         }
         $newPaymentId = $insertRes['payment_id'];
 
-        /* 🔥 FINAL PAYMENT → UPDATE INVOICE */
+        $invoiceResult = null;
         if ($stage === 'final') {
-
-            $order_number_safe = $conn->real_escape_string($orderNumberStr);
-
-            $inv = $conn->query("
-            SELECT id 
-            FROM vp_invoices 
-            WHERE order_number = '$order_number_safe'
-            ORDER BY id DESC 
-            LIMIT 1
-        ")->fetch_assoc();
-
-            if ($inv) {
-                $conn->query("
-                UPDATE vp_invoices
-                SET status = 'final',
-                    invoice_date = NOW()
-                WHERE id = {$inv['id']}
-            ");
-            }
+            require_once __DIR__ . '/InvoicesController.php';
+            $invCtrl = new InvoicesController();
+            $invoiceResult = $invCtrl->ensureInvoiceForOrderNumber($orderNumberStr, 'final');
+        } elseif (in_array($stage, ['partial', 'advance'], true)) {
+            require_once __DIR__ . '/InvoicesController.php';
+            $invCtrl = new InvoicesController();
+            $invoiceResult = $invCtrl->ensureInvoiceForOrderNumber($orderNumberStr, 'proforma');
         }
 
-        /* ================= FINAL PAYMENT → UPDATE INVOICE DATE ================= */
-
-        //     if ($stage === 'final') {
-
-        //         // get invoice id for this order
-        //         $inv = $conn->query("
-        //     SELECT id 
-        //     FROM vp_invoices 
-        //     WHERE order_id = $order_id 
-        //     ORDER BY id DESC 
-        //     LIMIT 1
-        // ")->fetch_assoc();
-
-        //         if ($inv) {
-
-        //             $conn->query("
-        //         UPDATE vp_invoices
-        //         SET invoice_date = NOW(),
-        //             status = 'final'
-        //         WHERE id = {$inv['id']}
-        //     ");
-        //         }
-        //     }
         echo json_encode([
             'success' => true,
             'receipt_number' => $receiptNumber,
             'payment_id' => $newPaymentId,
             'order_amount' => $insertRes['order_amount'] ?? null,
             'pending_amount' => $insertRes['pending_amount'] ?? null,
+            'invoice' => $invoiceResult,
         ]);
         exit;
     }
@@ -590,9 +556,76 @@ WHERE 1=1
 
         $stmt->execute();
 
-        echo json_encode(["success" => true]);
+        $invoiceResult = null;
+        if ($stage === 'final' && $conn) {
+            $orderNumberStr = '';
+            $payRowStmt = $conn->prepare('SELECT order_number FROM pos_payments WHERE id = ? LIMIT 1');
+            if ($payRowStmt) {
+                $payRowStmt->bind_param('i', $id);
+                $payRowStmt->execute();
+                $payRow = $payRowStmt->get_result()->fetch_assoc();
+                $payRowStmt->close();
+                $orderNumberStr = trim((string)($payRow['order_number'] ?? ''));
+            }
+            if ($orderNumberStr !== '') {
+                require_once __DIR__ . '/InvoicesController.php';
+                $invCtrl = new InvoicesController();
+                $invoiceResult = $invCtrl->ensureInvoiceForOrderNumber($orderNumberStr, 'final');
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'invoice' => $invoiceResult,
+        ]);
         exit;
     }
+
+    public function create_from_payment()
+    {
+        is_login();
+        header('Content-Type: application/json');
+
+        global $conn;
+
+        $data = json_decode(file_get_contents('php://input'), true);
+        $paymentId = (int)($data['payment_id'] ?? 0);
+        if ($paymentId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Missing payment_id']);
+            exit;
+        }
+
+        $stmt = $conn->prepare('SELECT * FROM pos_payments WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            echo json_encode(['success' => false, 'message' => 'Database error']);
+            exit;
+        }
+        $stmt->bind_param('i', $paymentId);
+        $stmt->execute();
+        $payment = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$payment) {
+            echo json_encode(['success' => false, 'message' => 'Payment not found']);
+            exit;
+        }
+
+        $orderNumber = trim((string)($payment['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing on payment']);
+            exit;
+        }
+
+        $stage = strtolower(trim((string)($payment['payment_stage'] ?? 'final')));
+        $targetStatus = ($stage === 'final') ? 'final' : 'proforma';
+
+        require_once __DIR__ . '/InvoicesController.php';
+        $invCtrl = new InvoicesController();
+        $result = $invCtrl->ensureInvoiceForOrderNumber($orderNumber, $targetStatus);
+        echo json_encode($result);
+        exit;
+    }
+
     public function get_single_payment()
     {
 

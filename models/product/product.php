@@ -454,18 +454,9 @@ class product
             $v = $this->db->real_escape_string((string) $filters['color']);
             $search .= "AND vp_products.color like '%" . $v . "%'";
         }
-        if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
-            $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
-        }
+        $search .= $this->appendProductCatalogStockFilters($filters);
         if (isset($filters['permanently_available']) && $filters['permanently_available'] !== '') {
             $search .= "AND vp_products.permanently_available = " . ((int)$filters['permanently_available'] ? 1 : 0);
-        }
-        if (isset($filters['low_stock']) && $filters['low_stock'] !== '') {
-            if ((int)$filters['low_stock'] === 1) {
-                $search .= "AND vp_products.local_stock <= IFNULL(vp_products.min_stock, 0)";
-            } else {
-                $search .= "AND vp_products.local_stock > IFNULL(vp_products.min_stock, 0)";
-            }
         }
         if (!empty($filters['marketplace'])) {
             $mp = $this->db->real_escape_string((string) $filters['marketplace']);
@@ -493,6 +484,33 @@ class product
 
         return $rows;
     }
+
+    /**
+     * Exact stock qty and low-stock filters use warehouse physical_stock (not website local_stock).
+     */
+    private function appendProductCatalogStockFilters(array $filters): string
+    {
+        $search = '';
+        $stockExact = null;
+        if (isset($filters['physical_stock']) && $filters['physical_stock'] !== '') {
+            $stockExact = (int)$filters['physical_stock'];
+        } elseif (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
+            $stockExact = (int)$filters['local_stock'];
+        }
+        if ($stockExact !== null) {
+            $search .= 'AND IFNULL(vp_products.physical_stock, 0) = ' . $stockExact;
+        }
+        if (isset($filters['low_stock']) && $filters['low_stock'] !== '') {
+            if ((int)$filters['low_stock'] === 1) {
+                $search .= 'AND IFNULL(vp_products.physical_stock, 0) <= IFNULL(vp_products.min_stock, 0)';
+            } else {
+                $search .= 'AND IFNULL(vp_products.physical_stock, 0) > IFNULL(vp_products.min_stock, 0)';
+            }
+        }
+
+        return $search;
+    }
+
     public function countAllProducts($filters = [])
     {
         $search = "";
@@ -524,18 +542,9 @@ class product
             $v = $this->db->real_escape_string((string) $filters['color']);
             $search .= "AND vp_products.color like '%" . $v . "%'";
         }
-        if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
-            $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
-        }
+        $search .= $this->appendProductCatalogStockFilters($filters);
         if (isset($filters['permanently_available']) && $filters['permanently_available'] !== '') {
             $search .= "AND vp_products.permanently_available = " . ((int)$filters['permanently_available'] ? 1 : 0);
-        }
-        if (isset($filters['low_stock']) && $filters['low_stock'] !== '') {
-            if ((int)$filters['low_stock'] === 1) {
-                $search .= "AND vp_products.local_stock <= IFNULL(vp_products.min_stock, 0)";
-            } else {
-                $search .= "AND vp_products.local_stock > IFNULL(vp_products.min_stock, 0)";
-            }
         }
         if (!empty($filters['marketplace'])) {
             $mp = $this->db->real_escape_string((string) $filters['marketplace']);
@@ -3596,38 +3605,240 @@ class product
         return $rows;
     }
 
-    public function insertStockMovement($data)
+    /**
+     * Total on-hand across all warehouses: sum of latest running_stock per warehouse_id.
+     */
+    public function getTotalPhysicalStockAcrossWarehouses(int $product_id): int
     {
-        $this->db->begin_transaction();
+        $product_id = (int)$product_id;
+        if ($product_id <= 0) {
+            return 0;
+        }
+        $sql = "
+            SELECT COALESCE(SUM(sm.running_stock), 0) AS total_stock
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT warehouse_id, product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE product_id = ?
+                GROUP BY warehouse_id, product_id
+            ) latest ON sm.warehouse_id = latest.warehouse_id
+                AND sm.product_id = latest.product_id
+                AND sm.id = latest.max_id
+            WHERE sm.product_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('ii', $product_id, $product_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $total = (int)round((float)($row['total_stock'] ?? 0));
+
+        return max(0, $total);
+    }
+
+    /**
+     * vp_products.physical_stock = total stock across all warehouses (not a single location).
+     */
+    public function syncPhysicalStockTotalFromWarehouses(int $product_id): int
+    {
+        $product_id = (int)$product_id;
+        if ($product_id <= 0) {
+            return 0;
+        }
+        $total = $this->getTotalPhysicalStockAcrossWarehouses($product_id);
+        $stmt = $this->db->prepare('UPDATE vp_products SET physical_stock = ? WHERE id = ?');
+        if ($stmt) {
+            $stmt->bind_param('ii', $total, $product_id);
+            $stmt->execute();
+            $stmt->close();
+        }
+
+        return $total;
+    }
+
+    /**
+     * Latest per-warehouse balance from the movement ledger (source of truth).
+     */
+    public function getLatestRunningStockForSkuWarehouse(string $sku, int $warehouse_id): float
+    {
+        $sku = trim($sku);
+        if ($sku === '' || $warehouse_id <= 0) {
+            return 0.0;
+        }
+        $stmt = $this->db->prepare(
+            'SELECT running_stock FROM vp_stock_movements
+             WHERE sku = ? AND warehouse_id = ?
+             ORDER BY id DESC LIMIT 1'
+        );
+        if (!$stmt) {
+            return 0.0;
+        }
+        $stmt->bind_param('si', $sku, $warehouse_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return isset($row['running_stock']) ? (float)$row['running_stock'] : 0.0;
+    }
+
+    /**
+     * Keep vp_stock.current_stock aligned with latest movement running_stock for sku + warehouse.
+     */
+    public function syncVpStockRowFromLatestMovement(string $sku, int $warehouse_id, ?int $last_trans_id = null): void
+    {
+        $sku = trim($sku);
+        if ($sku === '' || $warehouse_id <= 0) {
+            return;
+        }
+        $qty = $this->getLatestRunningStockForSkuWarehouse($sku, $warehouse_id);
+        if ($qty < 0) {
+            $qty = 0.0;
+        }
+
+        $sel = $this->db->prepare('SELECT id FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1');
+        if (!$sel) {
+            return;
+        }
+        $sel->bind_param('si', $sku, $warehouse_id);
+        $sel->execute();
+        $existing = $sel->get_result()->fetch_assoc();
+        $sel->close();
+
+        if ($existing) {
+            $stockId = (int)($existing['id'] ?? 0);
+            if ($last_trans_id !== null && $last_trans_id > 0) {
+                $upd = $this->db->prepare('UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?');
+                if ($upd) {
+                    $upd->bind_param('dii', $qty, $last_trans_id, $stockId);
+                    $upd->execute();
+                    $upd->close();
+                }
+            } else {
+                $upd = $this->db->prepare('UPDATE vp_stock SET current_stock = ? WHERE id = ?');
+                if ($upd) {
+                    $upd->bind_param('di', $qty, $stockId);
+                    $upd->execute();
+                    $upd->close();
+                }
+            }
+            return;
+        }
+
+        $transId = ($last_trans_id !== null && $last_trans_id > 0) ? $last_trans_id : 0;
+        $ins = $this->db->prepare(
+            'INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)'
+        );
+        if ($ins) {
+            $ins->bind_param('sidi', $sku, $warehouse_id, $qty, $transId);
+            $ins->execute();
+            $ins->close();
+        }
+    }
+
+    /**
+     * After a movement: sync vp_stock row (per warehouse) and physical_stock (all warehouses).
+     */
+    public function syncDerivedStockStores(int $product_id, string $sku, int $warehouse_id, ?int $last_trans_id = null): void
+    {
+        if ($warehouse_id > 0 && trim($sku) !== '') {
+            $this->syncVpStockRowFromLatestMovement($sku, $warehouse_id, $last_trans_id);
+        }
+        if ($product_id > 0) {
+            $this->syncPhysicalStockTotalFromWarehouses($product_id);
+        }
+    }
+
+    /**
+     * Resync vp_stock (all warehouses) and physical_stock for one product from the movement ledger.
+     */
+    public function syncAllDerivedStoresForProduct(int $product_id): void
+    {
+        $product_id = (int)$product_id;
+        if ($product_id <= 0) {
+            return;
+        }
+        $stmt = $this->db->prepare(
+            'SELECT DISTINCT sku, warehouse_id FROM vp_stock_movements
+             WHERE product_id = ? AND sku IS NOT NULL AND TRIM(sku) <> \'\' AND warehouse_id > 0'
+        );
+        if ($stmt) {
+            $stmt->bind_param('i', $product_id);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($res && ($row = $res->fetch_assoc())) {
+                $sku = trim((string)($row['sku'] ?? ''));
+                $wh = (int)($row['warehouse_id'] ?? 0);
+                if ($sku !== '' && $wh > 0) {
+                    $this->syncVpStockRowFromLatestMovement($sku, $wh);
+                }
+            }
+            $stmt->close();
+        }
+        $this->syncPhysicalStockTotalFromWarehouses($product_id);
+    }
+
+    public function insertStockMovement($data, bool $manageTransaction = true)
+    {
+        if ($manageTransaction) {
+            $this->db->begin_transaction();
+        }
         try {
-            // 1. Get current warehouse stock from vp_products for calculation
-            $stmt = $this->db->prepare("SELECT physical_stock FROM vp_products WHERE id = ?");
+            $stmt = $this->db->prepare('SELECT id FROM vp_products WHERE id = ? LIMIT 1');
             $stmt->bind_param('i', $data['product_id']);
             $stmt->execute();
             $res = $stmt->get_result();
             $product = $res->fetch_assoc();
+            $stmt->close();
 
-            if (!$product) throw new Exception("Product not found");
-
-            $current_stock = (int)$product['physical_stock'];
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
             $adj_qty = (int)$data['quantity'];
+            $movement_type = strtoupper(trim((string)($data['movement_type'] ?? 'OUT')));
+            $isInbound = in_array($movement_type, ['IN', 'TRANSFER_IN', 'OPENING_STOCK'], true);
+            $warehouse_id = (int)($data['warehouse_id'] ?? 0);
+            $sku = (string)($data['sku'] ?? '');
 
-            // 2. Calculate New Stock
-            if ($data['movement_type'] === 'IN' || $data['movement_type'] === 'TRANSFER_IN') {
-                $new_stock = $current_stock + $adj_qty;
-            } else {
-                $new_stock = $current_stock - $adj_qty;
+            // Per-warehouse running_stock chain on the movement row.
+            $running_stock = $isInbound ? $adj_qty : 0;
+            $lastRunning = 0;
+            if ($warehouse_id > 0 && $sku !== '') {
+                $whStmt = $this->db->prepare(
+                    'SELECT running_stock FROM vp_stock_movements
+                     WHERE sku = ? AND warehouse_id = ?
+                     ORDER BY id DESC LIMIT 1'
+                );
+                if ($whStmt) {
+                    $whStmt->bind_param('si', $sku, $warehouse_id);
+                    $whStmt->execute();
+                    $whRes = $whStmt->get_result();
+                    $whRow = $whRes ? $whRes->fetch_assoc() : null;
+                    $whStmt->close();
+                    if ($whRow) {
+                        $lastRunning = (int)($whRow['running_stock'] ?? 0);
+                    }
+                }
+            } elseif (!$isInbound && (int)($data['product_id'] ?? 0) > 0) {
+                $lastRunning = $this->getTotalPhysicalStockAcrossWarehouses((int)$data['product_id']);
             }
 
-            // 3. Update physical_stock in vp_products (online local_stock is not changed here)
-            $updateSql = "UPDATE vp_products SET physical_stock = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateSql);
-            $updateStmt->bind_param('ii', $new_stock, $data['product_id']);
-            if (!$updateStmt->execute()) {
-                throw new Exception("Failed to update master stock: " . $this->db->error);
+            $strictStockCheck = !array_key_exists('strict_stock_check', $data) || !empty($data['strict_stock_check']);
+            if (!$isInbound && $strictStockCheck && $adj_qty > $lastRunning) {
+                throw new Exception(
+                    'Insufficient stock: available ' . $lastRunning . ', requested ' . $adj_qty
+                );
             }
 
-            // 4. Insert into vp_stock_movements (History)
+            if ($warehouse_id > 0 && $sku !== '') {
+                $running_stock = $isInbound ? $lastRunning + $adj_qty : max(0, $lastRunning - $adj_qty);
+            } elseif (!$isInbound) {
+                $running_stock = max(0, $lastRunning - $adj_qty);
+            }
+
+            // Insert into vp_stock_movements (History)
             $insertSql = "INSERT INTO vp_stock_movements (
                         product_id, sku, item_code, size, color, 
                         warehouse_id, location, movement_type, 
@@ -3655,7 +3866,7 @@ class product
                 $data['location'],
                 $data['movement_type'],
                 $adj_qty,
-                $new_stock,
+                $running_stock,
                 $updatedByUser,
                 $ref_type,
                 $ref_id,
@@ -3666,12 +3877,27 @@ class product
                 throw new Exception("Failed to record history: " . $this->db->error);
             }
 
+            $refIdForTrans = 0;
+            if (array_key_exists('ref_id', $data) && is_numeric($data['ref_id']) && (int)$data['ref_id'] > 0) {
+                $refIdForTrans = (int)$data['ref_id'];
+            }
+            $this->syncDerivedStockStores(
+                (int)$data['product_id'],
+                $sku,
+                $warehouse_id,
+                $refIdForTrans > 0 ? $refIdForTrans : null
+            );
+
             // If everything is fine, commit changes
-            $this->db->commit();
+            if ($manageTransaction) {
+                $this->db->commit();
+            }
             return ['success' => true, 'message' => 'Stock updated and history recorded.'];
         } catch (Exception $e) {
             // Rollback if any step fails
-            $this->db->rollback();
+            if ($manageTransaction) {
+                $this->db->rollback();
+            }
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }

@@ -5,6 +5,7 @@ require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/product/product.php';
 require_once __DIR__ . '/../helpers/international_invoice_defaults.php';
+require_once __DIR__ . '/../models/order/stock.php';
 
 $invoiceModel = new Invoice($conn);
 $ordersModel = new Order($conn);
@@ -134,8 +135,14 @@ class InvoicesController
     public function createPost()
     {
         is_login();
-        global $invoiceModel, $ordersModel, $commanModel, $conn;
         header('Content-Type: application/json');
+        echo json_encode($this->createPostInternal());
+        exit;
+    }
+
+    private function createPostInternal(): array
+    {
+        global $invoiceModel, $ordersModel, $commanModel, $conn;
         //print_r($_POST);
         //exit;
         // Validate form inputs
@@ -161,25 +168,63 @@ class InvoicesController
         $box_no = isset($_POST['box_no']) && is_array($_POST['box_no']) ? $_POST['box_no'] : [];
 
         if ($customer_id <= 0 || empty($order_numbers)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
-            exit;
+            return ['success' => false, 'message' => 'Invalid parameters'];
         }
         //validate if a non-cancelled invoice already exists for same order_number
         foreach ($order_numbers as $order_number) {
             $existingInvoice = $invoiceModel->getActiveInvoiceForOrderNumber($order_number);
             if ($existingInvoice) {
-                echo json_encode(['success' => false, 'message' => "Invoice already exists for Order Number: $order_number"]);
-                exit;
+                return ['success' => false, 'message' => "Invoice already exists for Order Number: $order_number"];
             }
         }
         //validate currency same for all items
         $firstCurrency = $currency[0] ?? '';
         foreach ($currency as $curr) {
             if ($curr !== $firstCurrency) {
-                echo json_encode(['success' => false, 'message' => 'All items must have the same currency']);
-                exit;
+                return ['success' => false, 'message' => 'All items must have the same currency'];
             }
         }
+
+        $invoiceStatus = strtolower(trim((string)($_POST['status'] ?? 'final')));
+        if ($invoiceStatus === 'final') {
+            require_once __DIR__ . '/../models/order/stock.php';
+            $productModelForStock = new product($conn);
+            $prospectiveLines = [];
+            foreach ($order_numbers as $idx => $order_number) {
+                $quantity = isset($quantities[$idx]) ? (int)$quantities[$idx] : 0;
+                if ($quantity <= 0) {
+                    continue;
+                }
+                $itemCode = isset($item_codes[$idx]) ? trim($item_codes[$idx]) : '';
+                $prospectiveLines[] = [
+                    'product_id' => $productModelForStock->getProductIdForInvoiceLine((string)$order_number, $itemCode),
+                    'quantity' => $quantity,
+                    'item_code' => $itemCode,
+                    'order_number' => (string)$order_number,
+                ];
+            }
+            if ($prospectiveLines !== []) {
+                $warehouseIdForStock = (int)($_POST['warehouse_id'] ?? $_SESSION['warehouse_id'] ?? 0);
+                if ($warehouseIdForStock <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+                    $warehouseIdForStock = (int)$_SESSION['user']['warehouse_id'];
+                }
+                $stockModel = new Stock($conn);
+                $validation = $stockModel->validateStockAvailabilityForLines(
+                    $prospectiveLines,
+                    $warehouseIdForStock > 0 ? $warehouseIdForStock : null,
+                    false
+                );
+                if (empty($validation['success'])) {
+                    return [
+                        'success' => false,
+                        'message' => $validation['message'] ?? 'Insufficient stock for invoice',
+                        'error_type' => 'insufficient_stock',
+                        'issues' => $validation['issues'] ?? [],
+                    ];
+                }
+            }
+        }
+
         // Generate invoice number from global_settings
         $globalSettings = $commanModel->getRecordById('global_settings', 1);
         $invoice_prefix = is_array($globalSettings) ? (string)($globalSettings['invoice_prefix'] ?? 'INV') : 'INV';
@@ -226,8 +271,7 @@ class InvoicesController
         $invoiceId = $invoiceModel->createInvoice($invoiceData);
 
         if (!$invoiceId) {
-            echo json_encode(['success' => false, 'message' => 'Failed to create invoice']);
-            exit;
+            return ['success' => false, 'message' => 'Failed to create invoice'];
         }
 
         // Create invoice items
@@ -343,7 +387,24 @@ class InvoicesController
         //call irisirp api to generate irn
         //$this->generateIrnForInvoice($invoiceId);
 
-        // Update order status to invoiced
+        $stockDeduction = ['success' => true, 'message' => 'Skipped (not final invoice)', 'applied' => 0];
+        if ($invoiceStatus === 'final') {
+            require_once __DIR__ . '/../models/order/stock.php';
+            $stockModel = new Stock($conn);
+            $stockDeduction = $stockModel->updateStockByInvoiceId((int)$invoiceId);
+            if (empty($stockDeduction['success'])) {
+                $invoiceModel->deleteInvoice($invoiceId);
+                unset($_SESSION['invoice_items']);
+                return [
+                    'success' => false,
+                    'message' => $stockDeduction['message'] ?? 'Insufficient stock for invoice',
+                    'error_type' => 'insufficient_stock',
+                    'stock_deduction' => $stockDeduction,
+                ];
+            }
+        }
+
+        // Update order status to invoiced (after successful stock deduction for final invoices)
         foreach ($order_numbers as $order_number) {
             $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
         }
@@ -351,17 +412,17 @@ class InvoicesController
         // Clear session
         unset($_SESSION['invoice_items']);
 
-        echo json_encode([
+        return [
             'success' => true,
             'message' => "Invoice created with $itemCreated items",
             'invoice_id' => $invoiceId,
             'invoice_number' => $invoice_number,
             'items_created' => $itemCreated,
             'items_failed' => $itemsFailed,
+            'stock_deduction' => $stockDeduction,
             'irn_generated' => $irn ?? false,
             'irn_error_message' => $irnErrorMessage ?? ''
-        ]);
-        exit;
+        ];
     }
 
     public function regenerateIrn()
@@ -1257,6 +1318,23 @@ class InvoicesController
             global $commanModel;
 
             $previewData = json_decode(file_get_contents('php://input'), true);
+            if (!is_array($previewData)) {
+                $previewData = [];
+            }
+
+            global $invoiceModel;
+            $invoiceIdPreview = (int)($previewData['invoice_id'] ?? 0);
+            if ($invoiceIdPreview > 0) {
+                $invoice = $invoiceModel->getInvoiceById($invoiceIdPreview);
+                if (!$invoice) {
+                    echo json_encode(['success' => false, 'message' => 'Invoice not found']);
+                    exit;
+                }
+                $items = $invoiceModel->getInvoiceItems($invoiceIdPreview);
+                $html = $this->generateInvoiceHtml($invoice, $items, 'preview');
+                echo json_encode(['success' => true, 'html' => $html, 'invoice_id' => $invoiceIdPreview]);
+                exit;
+            }
 
             $orderNumber = $previewData['orderid'] ?? null;
             // echo '<pre>';
@@ -1455,113 +1533,270 @@ class InvoicesController
         global $commanModel;
         return $commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
     }
-    public function create_auto_from_order_bk()
+    /**
+     * Create or return invoice for an order. Proforma never deducts stock.
+     * Final upgrades an existing proforma (stock on upgrade) or creates a new final invoice.
+     */
+    public function ensureInvoiceForOrderNumber(string $orderNumber, string $targetStatus): array
+    {
+        global $invoiceModel;
+
+        $orderNumber = trim($orderNumber);
+        $targetStatus = strtolower(trim($targetStatus));
+        if ($orderNumber === '') {
+            return ['success' => false, 'message' => 'Order number missing'];
+        }
+        if (!in_array($targetStatus, ['proforma', 'final'], true)) {
+            return ['success' => false, 'message' => 'Invalid invoice status'];
+        }
+
+        $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
+        if ($existing) {
+            $invoiceId = (int)($existing['id'] ?? 0);
+            $currentStatus = strtolower(trim((string)($existing['status'] ?? '')));
+
+            if ($targetStatus === 'proforma') {
+                return [
+                    'success' => true,
+                    'invoice_id' => $invoiceId,
+                    'invoice_number' => $existing['invoice_number'] ?? '',
+                    'message' => 'Invoice already exists',
+                    'upgraded' => false,
+                ];
+            }
+
+            if ($currentStatus === 'final') {
+                return [
+                    'success' => true,
+                    'invoice_id' => $invoiceId,
+                    'invoice_number' => $existing['invoice_number'] ?? '',
+                    'message' => 'Final invoice already exists',
+                    'upgraded' => false,
+                ];
+            }
+
+            if ($currentStatus === 'proforma') {
+                return $this->finalizeProformaInvoice($invoiceId);
+            }
+
+            return [
+                'success' => true,
+                'invoice_id' => $invoiceId,
+                'invoice_number' => $existing['invoice_number'] ?? '',
+                'message' => 'Invoice already exists',
+                'upgraded' => false,
+            ];
+        }
+
+        $populateError = $this->populatePostForOrderInvoice($orderNumber, $targetStatus);
+        if ($populateError !== null) {
+            return $populateError;
+        }
+
+        $result = $this->createPostInternal();
+        $result['upgraded'] = false;
+        return $result;
+    }
+
+    /**
+     * Upgrade proforma → final and deduct physical stock (idempotent per invoice line).
+     */
+    public function finalizeProformaInvoice(int $invoiceId, bool $warehouseOnly = false, ?int $warehouseId = null): array
+    {
+        global $invoiceModel, $conn;
+
+        $invoiceId = (int)$invoiceId;
+        if ($invoiceId <= 0) {
+            return ['success' => false, 'message' => 'Invalid invoice id'];
+        }
+
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            return ['success' => false, 'message' => 'Invoice not found'];
+        }
+
+        $currentStatus = strtolower(trim((string)($invoice['status'] ?? '')));
+        if ($currentStatus === 'final') {
+            return [
+                'success' => true,
+                'invoice_id' => $invoiceId,
+                'invoice_number' => $invoice['invoice_number'] ?? '',
+                'message' => 'Invoice is already final',
+                'upgraded' => false,
+            ];
+        }
+        if ($currentStatus !== 'proforma') {
+            return ['success' => false, 'message' => 'Only proforma invoices can be finalized (current: ' . $currentStatus . ')'];
+        }
+
+        $wh = $warehouseId !== null && (int)$warehouseId > 0
+            ? (int)$warehouseId
+            : (int)($invoice['warehouse_id'] ?? 0);
+        $stockModel = new Stock($conn);
+        $validation = $stockModel->validateStockAvailabilityForInvoiceId(
+            $invoiceId,
+            $wh > 0 ? $wh : null,
+            $warehouseOnly
+        );
+        if (empty($validation['success'])) {
+            return [
+                'success' => false,
+                'message' => $validation['message'] ?? 'Insufficient stock for invoice',
+                'error_type' => 'insufficient_stock',
+                'issues' => $validation['issues'] ?? [],
+            ];
+        }
+
+        $conn->begin_transaction();
+        try {
+            if (!$invoiceModel->updateInvoiceStatus($invoiceId, 'final')) {
+                throw new Exception('Failed to update invoice status');
+            }
+            $dateStmt = $conn->prepare('UPDATE vp_invoices SET invoice_date = CURDATE() WHERE id = ?');
+            if ($dateStmt) {
+                $dateStmt->bind_param('i', $invoiceId);
+                $dateStmt->execute();
+                $dateStmt->close();
+            }
+
+            $stockDeduction = $stockModel->updateStockByInvoiceId($invoiceId, $wh > 0 ? $wh : null, $warehouseOnly);
+            if (empty($stockDeduction['success'])) {
+                throw new Exception($stockDeduction['message'] ?? 'Physical stock was not reduced');
+            }
+            $conn->commit();
+        } catch (Exception $e) {
+            $conn->rollback();
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_type' => 'insufficient_stock',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'invoice_id' => $invoiceId,
+            'invoice_number' => $invoice['invoice_number'] ?? '',
+            'message' => 'Proforma upgraded to final invoice',
+            'upgraded' => true,
+            'stock_deduction' => $stockDeduction,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null Error payload, or null when $_POST is ready for createPostInternal()
+     */
+    private function populatePostForOrderInvoice(string $orderNumber, string $status): ?array
+    {
+        global $conn;
+
+        $sql = 'SELECT * FROM vp_orders WHERE order_number = ?';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Database error loading order'];
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows === 0) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Order not found'];
+        }
+
+        $items = [];
+        while ($row = $result->fetch_assoc()) {
+            $items[] = $row;
+        }
+        $stmt->close();
+
+        $stmt2 = $conn->prepare('SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if (!$stmt2) {
+            return ['success' => false, 'message' => 'Database error loading order info'];
+        }
+        $stmt2->bind_param('s', $orderNumber);
+        $stmt2->execute();
+        $info = $stmt2->get_result()->fetch_assoc();
+        $stmt2->close();
+
+        if (empty($info['id'])) {
+            return ['success' => false, 'message' => 'Order address not found'];
+        }
+
+        $_POST = [
+            'invoice_date' => date('Y-m-d'),
+            'customer_id' => $items[0]['customer_id'],
+            'vp_order_info_id' => $info['id'],
+            'status' => $status,
+            'subtotal' => 0,
+            'tax_amount' => 0,
+            'discount_amount' => 0,
+            'total_amount' => 0,
+        ];
+
+        foreach ($items as $it) {
+            $_POST['order_number'][] = $it['order_number'];
+            $_POST['item_code'][] = $it['item_code'];
+            $_POST['item_name'][] = $it['title'];
+            $_POST['hsn'][] = $it['hsn'];
+            $_POST['quantity'][] = $it['quantity'];
+
+            $qty = max(1, (int)$it['quantity']);
+            $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $qty;
+
+            $_POST['unit_price'][] = $unit;
+            $_POST['tax_rate'][] = $it['gst'];
+            $_POST['cgst'][] = $it['gst'] / 2;
+            $_POST['sgst'][] = $it['gst'] / 2;
+            $_POST['igst'][] = 0;
+            $_POST['box_no'][] = '';
+            $_POST['currency'][] = $it['currency'];
+
+            $_POST['subtotal'] += $unit * $qty;
+            $_POST['tax_amount'] += ($unit * $qty) * ($it['gst'] / 100);
+        }
+
+        $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
+
+        return null;
+    }
+
+    public function create_proforma()
     {
         is_login();
         header('Content-Type: application/json');
 
-        try {
-
-            global $conn, $invoiceModel;
-
-            $input = json_decode(file_get_contents('php://input'), true);
-            $orderNumber = $input['orderid'] ?? null;
-
-            if (!$orderNumber) {
-                echo json_encode(['success' => false, 'message' => 'Order number missing']);
-                exit;
-            }
-
-            // skip auto-create only if a non-cancelled invoice already exists
-            $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
-            if ($existing) {
-                echo json_encode(['success' => true]);
-                exit;
-            }
-
-            // ===== GET ORDER ITEMS DIRECT =====
-            $sql = "SELECT * FROM vp_orders WHERE order_number = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("s", $orderNumber);
-            $stmt->execute();
-            $result = $stmt->get_result();
-
-            if ($result->num_rows == 0) {
-                echo json_encode(['success' => false, 'message' => 'Order not found']);
-                exit;
-            }
-
-            $items = [];
-            while ($row = $result->fetch_assoc()) {
-                $items[] = $row;
-            }
-
-            // ===== GET ADDRESS INFO =====
-            $sql2 = "SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1";
-            $stmt2 = $conn->prepare($sql2);
-            $stmt2->bind_param("s", $orderNumber);
-            $stmt2->execute();
-            $info = $stmt2->get_result()->fetch_assoc();
-
-            if (!$info) {
-                echo json_encode(['success' => false, 'message' => 'Order address not found']);
-                exit;
-            }
-
-            // ===== BUILD POST LIKE MANUAL CREATE =====
-            $_POST = [
-                'invoice_date' => date('Y-m-d'),
-                'customer_id' => $items[0]['customer_id'],
-                'vp_order_info_id' => $info['id'],
-                'status' => 'final',
-                'subtotal' => 0,
-                'tax_amount' => 0,
-                'discount_amount' => 0,
-                'total_amount' => 0
-            ];
-
-            foreach ($items as $i => $it) {
-
-                $_POST['order_number'][] = $it['order_number'];
-                $_POST['item_code'][] = $it['item_code'];
-                $_POST['item_name'][] = $it['title'];
-                $_POST['hsn'][] = $it['hsn'];
-                $_POST['quantity'][] = $it['quantity'];
-
-                $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $it['quantity'];
-
-                $_POST['unit_price'][] = $unit;
-                $_POST['tax_rate'][] = $it['gst'];
-
-                $_POST['cgst'][] = $it['gst'] / 2;
-                $_POST['sgst'][] = $it['gst'] / 2;
-                $_POST['igst'][] = 0;
-
-                $_POST['box_no'][] = '';
-
-                $_POST['currency'][] = $it['currency'];
-
-                $_POST['subtotal'] += $unit * $it['quantity'];
-                $_POST['tax_amount'] += ($unit * $it['quantity']) * ($it['gst'] / 100);
-            }
-
-            $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
-
-            // ===== CALL EXISTING CREATE =====
-            return $this->createPost();
-        } catch (Exception $e) {
-
-            echo json_encode([
-                'success' => false,
-                'message' => $e->getMessage()
-            ]);
+        $input = json_decode(file_get_contents('php://input'), true);
+        $orderNumber = is_array($input) ? ($input['orderid'] ?? null) : null;
+        if (!$orderNumber) {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
             exit;
         }
+
+        echo json_encode($this->ensureInvoiceForOrderNumber((string)$orderNumber, 'proforma'));
+        exit;
     }
 
+    public function create_auto_from_order()
+    {
+        is_login();
+        header('Content-Type: application/json');
 
+        $input = json_decode(file_get_contents('php://input'), true);
+        $orderNumber = is_array($input) ? ($input['orderid'] ?? null) : null;
+        if (!$orderNumber) {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
+            exit;
+        }
 
+        echo json_encode($this->ensureInvoiceForOrderNumber((string)$orderNumber, 'final'));
+        exit;
+    }
 
+    /** @deprecated Use create_auto_from_order() */
+    public function create_auto_from_order_bk()
+    {
+        $this->create_auto_from_order();
+    }
 
     /**
      * Download invoice(s) as Busy XML

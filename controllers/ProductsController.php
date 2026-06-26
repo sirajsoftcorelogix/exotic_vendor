@@ -46,8 +46,10 @@ class ProductsController
         if (!empty($_GET['color'])) {
             $filters['color'] = trim($_GET['color']);
         }
-        if (isset($_GET['local_stock']) && $_GET['local_stock'] !== '') {
-            $filters['local_stock'] = (int)$_GET['local_stock'];
+        if (isset($_GET['physical_stock']) && $_GET['physical_stock'] !== '') {
+            $filters['physical_stock'] = (int)$_GET['physical_stock'];
+        } elseif (isset($_GET['local_stock']) && $_GET['local_stock'] !== '') {
+            $filters['physical_stock'] = (int)$_GET['local_stock'];
         }
         if (!empty($_GET['marketplace'])) {
             $filters['marketplace'] = trim($_GET['marketplace']);
@@ -1487,7 +1489,7 @@ class ProductsController
             foreach ($rows as &$r0) {
                 $r0['product_sku'] = '';
                 $r0['product_id'] = '';
-                $r0['product_local_stock'] = '';
+                $r0['product_physical_stock'] = '';
             }
             unset($r0);
             return $rows;
@@ -1499,7 +1501,7 @@ class ProductsController
         for ($i = 0, $n = count($codeList); $i < $n; $i += $chunkSize) {
             $chunk = array_slice($codeList, $i, $chunkSize);
             $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-            $sql = "SELECT p.id, p.sku, p.item_code, IFNULL(p.local_stock, 0) AS local_stock,
+            $sql = "SELECT p.id, p.sku, p.item_code, IFNULL(p.physical_stock, 0) AS physical_stock,
                         IFNULL(NULLIF(TRIM(p.color), ''), '') AS norm_color,
                         IFNULL(NULLIF(TRIM(p.size), ''), '') AS norm_size
                     FROM vp_products p
@@ -1530,7 +1532,7 @@ class ProductsController
                     $bestByKey[$key] = [
                         'id' => $pid,
                         'sku' => (string)($pr['sku'] ?? ''),
-                        'local_stock' => (int)($pr['local_stock'] ?? 0),
+                        'physical_stock' => (int)($pr['physical_stock'] ?? 0),
                     ];
                 }
             }
@@ -1541,7 +1543,7 @@ class ProductsController
         for ($i = 0, $n = count($skuList); $i < $n; $i += $chunkSize) {
             $chunk = array_slice($skuList, $i, $chunkSize);
             $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-            $sql = "SELECT p.id, p.sku, IFNULL(p.local_stock, 0) AS local_stock
+            $sql = "SELECT p.id, p.sku, IFNULL(p.physical_stock, 0) AS physical_stock
                     FROM vp_products p
                     WHERE p.sku IN ($placeholders)";
             $stmt = $conn->prepare($sql);
@@ -1566,7 +1568,7 @@ class ProductsController
                     $bestBySku[$psku] = [
                         'id' => $pid,
                         'sku' => (string)($pr['sku'] ?? ''),
-                        'local_stock' => (int)($pr['local_stock'] ?? 0),
+                        'physical_stock' => (int)($pr['physical_stock'] ?? 0),
                     ];
                 }
             }
@@ -1582,16 +1584,16 @@ class ProductsController
             if (isset($bestByKey[$key])) {
                 $r['product_id'] = (string)$bestByKey[$key]['id'];
                 $r['product_sku'] = $bestByKey[$key]['sku'];
-                $r['product_local_stock'] = (string)(int)($bestByKey[$key]['local_stock'] ?? 0);
+                $r['product_physical_stock'] = (string)(int)($bestByKey[$key]['physical_stock'] ?? 0);
             } elseif (($r['import_sku'] ?? '') !== '' && isset($bestBySku[strtoupper(trim((string)$r['import_sku']))])) {
                 $bySku = $bestBySku[strtoupper(trim((string)$r['import_sku']))];
                 $r['product_id'] = (string)$bySku['id'];
                 $r['product_sku'] = $bySku['sku'];
-                $r['product_local_stock'] = (string)(int)($bySku['local_stock'] ?? 0);
+                $r['product_physical_stock'] = (string)(int)($bySku['physical_stock'] ?? 0);
             } else {
                 $r['product_id'] = '';
                 $r['product_sku'] = '';
-                $r['product_local_stock'] = '';
+                $r['product_physical_stock'] = '';
             }
         }
         unset($r);
@@ -2418,11 +2420,19 @@ class ProductsController
             $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
             if (!$ins2->execute()) {
                 error_log('recordVendorApiImportOpeningStock: fallback insert failed ' . $ins2->error);
+            } else {
+                require_once __DIR__ . '/../models/product/product.php';
+                $productSync = new product($conn);
+                $productSync->syncDerivedStockStores($productId, $sku, $warehouseId);
             }
             $ins2->close();
             return;
         }
         $ins->close();
+
+        require_once __DIR__ . '/../models/product/product.php';
+        $productSync = new product($conn);
+        $productSync->syncDerivedStockStores($productId, $sku, $warehouseId);
     }
 
     /**
@@ -2530,19 +2540,9 @@ class ProductsController
             $ins->close();
         }
 
-        $updL = $conn->prepare('UPDATE vp_products SET physical_stock = ? WHERE id = ?');
-        if (!$updL) {
-            $conn->rollback();
-            return 'Could not prepare product stock update.';
-        }
-        $updL->bind_param('ii', $runningStock, $productId);
-        if (!$updL->execute()) {
-            $err = $updL->error;
-            $updL->close();
-            $conn->rollback();
-            return 'Product physical_stock update failed: ' . $err;
-        }
-        $updL->close();
+        require_once __DIR__ . '/../models/product/product.php';
+        $productSync = new product($conn);
+        $productSync->syncDerivedStockStores($productId, $sku, $warehouseId);
 
         if (!$conn->commit()) {
             return 'Could not commit stock movement transaction.';
@@ -2551,9 +2551,6 @@ class ProductsController
     }
 
     /**
-     * For ReUpload/API refetch:
-     * - If no prior movement exists for this product+warehouse+variant, create OPENING_STOCK at target qty.
-     * - If prior movement exists, create IN/OUT adjustment so latest running stock becomes target qty.
      * @return string|null Error message, or null on success
      */
     private function bulkImportApplyRefetchStock(
@@ -2669,19 +2666,9 @@ class ProductsController
             }
         }
 
-        $upd = $conn->prepare('UPDATE vp_products SET physical_stock = ? WHERE id = ?');
-        if (!$upd) {
-            $conn->rollback();
-            return 'Could not prepare product stock update.';
-        }
-        $upd->bind_param('ii', $targetQty, $productId);
-        if (!$upd->execute()) {
-            $err = $upd->error;
-            $upd->close();
-            $conn->rollback();
-            return 'Product physical_stock update failed: ' . $err;
-        }
-        $upd->close();
+        require_once __DIR__ . '/../models/product/product.php';
+        $productSync = new product($conn);
+        $productSync->syncDerivedStockStores($productId, $sku, $warehouseId);
 
         if (!$conn->commit()) {
             return 'Could not commit stock update transaction.';
@@ -2969,25 +2956,11 @@ class ProductsController
             $delProdStmt->close();
         }
 
-        // Recalculate physical_stock for affected products based on latest remaining movement.
-        $recalcStmt = $conn->prepare("SELECT running_stock FROM vp_stock_movements WHERE product_id = ? ORDER BY id DESC LIMIT 1");
-        $updStmt = $conn->prepare("UPDATE vp_products SET physical_stock = ? WHERE id = ?");
-        if ($recalcStmt && $updStmt) {
-            foreach (array_keys($prodIds) as $pid) {
-                $pid = (int)$pid;
-                $recalcStmt->bind_param('i', $pid);
-                $recalcStmt->execute();
-                $row = $recalcStmt->get_result()->fetch_assoc();
-                $stock = $row ? (int)($row['running_stock'] ?? 0) : 0;
-                $updStmt->bind_param('ii', $stock, $pid);
-                $updStmt->execute();
-            }
-        }
-        if ($recalcStmt) {
-            $recalcStmt->close();
-        }
-        if ($updStmt) {
-            $updStmt->close();
+        // Recalculate physical_stock and vp_stock from movement ledger.
+        require_once __DIR__ . '/../models/product/product.php';
+        $productSync = new product($conn);
+        foreach (array_keys($prodIds) as $pid) {
+            $productSync->syncAllDerivedStoresForProduct((int)$pid);
         }
 
         // Delete job (cascade deletes items).
@@ -3189,7 +3162,7 @@ class ProductsController
                             $up->close();
                         }
                     }
-                    // No qty in file: local_stock already synced via updateProductFromApi in importApiCall.
+                    // No qty in file: website local_stock may sync via updateProductFromApi; warehouse stock is via movements.
                     if ($fileQty <= 0) {
                         $stmtS = $conn->prepare("UPDATE product_import_items SET status='success', error_message=NULL, processed_at=NOW() WHERE id=?");
                         $stmtS->bind_param('i', $id);
@@ -4481,29 +4454,13 @@ class ProductsController
                 'update_by_user' => $sessionUserId,
                 'movement_type' => $data['type'],
                 'warehouse_id'  => $data['warehouse_id'],
-                'location'      => $data['location']
+                'location'      => $data['location'],
+                'strict_stock_check' => false,
             ];
 
             $result = $productModel->insertStockMovement($insertData);
 
-            // Push latest stock to frontend/vendor API after local stock adjustment succeeds.
-            if (!empty($result['success'])) {
-                $freshProduct = $productModel->getProduct($insertData['product_id']);
-                if ($freshProduct) {
-                    $vendorSync = $this->syncProductStockToVendorFrontend($freshProduct, $insertData);
-                    $result['vendor_sync'] = $vendorSync;
-                    if (empty($vendorSync['success'])) {
-                        $existingMessage = isset($result['message']) ? (string)$result['message'] : 'Stock updated.';
-                        $syncMessage = isset($vendorSync['message']) ? (string)$vendorSync['message'] : 'Vendor sync failed.';
-                        $result['message'] = $existingMessage . ' ' . $syncMessage;
-                    }
-                } else {
-                    $result['vendor_sync'] = [
-                        'success' => false,
-                        'message' => 'Stock updated locally, but could not reload product for vendor sync.'
-                    ];
-                }
-            }
+            // Manual adjust updates physical_stock / warehouse movements only — not website local_stock.
 
             echo json_encode($result);
         } catch (Exception $e) {
@@ -4535,75 +4492,6 @@ class ProductsController
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
         exit;
-    }
-
-    /**
-     * Update frontend stock using vendor product/modify API.
-     */
-    private function syncProductStockToVendorFrontend(array $product, array $movement): array
-    {
-        $itemCode = trim((string)($product['item_code'] ?? ''));
-        if ($itemCode === '') {
-            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
-        }
-
-        $size = trim((string)($product['size'] ?? ''));
-        $color = trim((string)($product['color'] ?? ''));
-        $qty = (int)($movement['quantity'] ?? 0);
-        $movementType = strtoupper(trim((string)($movement['movement_type'] ?? '')));
-        $positiveTypes = ['IN', 'TRANSFER_IN', 'OPENING_STOCK'];
-        $signedDelta = in_array($movementType, $positiveTypes, true) ? $qty : (-1 * $qty);
-
-        $url = 'https://www.exoticindia.com/vendor-api/product/modify'
-            . '?itemcode=' . urlencode($itemCode)
-            . '&size=' . urlencode($size)
-            . '&color=' . urlencode($color);
-
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Content-Type: application/x-www-form-urlencoded',
-        ];
-        $postData = [
-            'local_stock_delta' => $signedDelta,
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        $response = curl_exec($ch);
-        $curlErr = curl_error($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($response === false) {
-            return ['success' => false, 'message' => 'Vendor API request failed: ' . $curlErr];
-        }
-
-        $decoded = json_decode($response, true);
-        if (!is_array($decoded)) {
-            return [
-                'success' => ($httpCode >= 200 && $httpCode < 300),
-                'message' => ($httpCode >= 200 && $httpCode < 300)
-                    ? 'Vendor stock sync completed.'
-                    : 'Vendor API returned non-JSON response.',
-                'http_code' => $httpCode,
-                'raw_response' => $response,
-            ];
-        }
-
-        $apiSuccess = isset($decoded['success']) ? (bool)$decoded['success'] : ($httpCode >= 200 && $httpCode < 300);
-        return [
-            'success' => $apiSuccess,
-            'message' => $decoded['message'] ?? ($apiSuccess ? 'Vendor stock sync completed.' : 'Vendor stock sync failed.'),
-            'http_code' => $httpCode,
-            'response' => $decoded,
-        ];
     }
 
     public function updateStockLimits()

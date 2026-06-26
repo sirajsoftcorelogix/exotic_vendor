@@ -41,7 +41,13 @@ class POSInvoice
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
-        $warehouse_id = (int)($_SESSION['warehouse_id'] ?? 0);
+        $warehouse_id = (int)($data['warehouse_id'] ?? 0);
+        if ($warehouse_id <= 0) {
+            $warehouse_id = (int)($_SESSION['warehouse_id'] ?? 0);
+            if ($warehouse_id <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+                $warehouse_id = (int)$_SESSION['user']['warehouse_id'];
+            }
+        }
         $pos_flag = (int)($data['pos_flag'] ?? 1);
         $customer_id = (int)($data['customer_id'] ?? 0);
         $vp_order_info_id = (int)($data['vp_order_info_id'] ?? 0);

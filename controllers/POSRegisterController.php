@@ -543,10 +543,78 @@ class POSRegisterController
     }
 
     /**
-     * @return list<array{code:string,title:string,quantity:float,local_stock:float,shortage:float}>
+     * Sum warehouse running_stock (or physical_stock when no warehouse) for a cart line code.
+     */
+    private function resolveWarehouseStockQtyForCode($conn, string $code, int $warehouseId): float
+    {
+        if ($code === '' || !$conn) {
+            return 0.0;
+        }
+        $ids = $this->resolveVpProductIdsForStockLookup($conn, $code);
+        if ($ids === []) {
+            return 0.0;
+        }
+        if ($warehouseId > 0) {
+            $avail = 0.0;
+            foreach ($ids as $pid) {
+                $avail += $this->getWarehouseStockForProductId($conn, $pid, $warehouseId);
+            }
+            return $avail;
+        }
+        require_once __DIR__ . '/../models/product/product.php';
+        $productModel = new Product($conn);
+        $total = 0.0;
+        foreach ($ids as $pid) {
+            $total += $productModel->getTotalPhysicalStockAcrossWarehouses($pid);
+        }
+        return $total;
+    }
+
+    /**
+     * Attach warehouse running_stock to each cart line (POS store), not website local_stock.
+     *
+     * @param array<string, mixed> $cartData
+     * @return array<string, mixed>
+     */
+    private function enrichCartDataWithWarehouseStock(array $cartData): array
+    {
+        global $conn;
+        if (!$conn) {
+            return $cartData;
+        }
+        $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        foreach (['cartitems', 'cart_items', 'items', 'lines'] as $key) {
+            if (!isset($cartData[$key]) || !is_array($cartData[$key])) {
+                continue;
+            }
+            foreach ($cartData[$key] as $i => $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $code = trim((string)($row['code'] ?? $row['item_code'] ?? $row['sku'] ?? ''));
+                if ($code === '') {
+                    continue;
+                }
+                $ids = $this->resolveVpProductIdsForStockLookup($conn, $code);
+                if ($ids === []) {
+                    continue;
+                }
+                $stockQty = $this->resolveWarehouseStockQtyForCode($conn, $code, $warehouseId);
+                $cartData[$key][$i]['stock_qty'] = $stockQty;
+                $cartData[$key][$i]['warehouse_stock'] = $stockQty;
+                $cartData[$key][$i]['_warehouse_stock_enriched'] = true;
+            }
+        }
+        return $cartData;
+    }
+
+    /**
+     * @return list<array{code:string,title:string,quantity:float,warehouse_stock:float,local_stock:float,shortage:float}>
      */
     private function detectLocalStockWarningsFromCart(array $cartData): array
     {
+        global $conn;
+        $cartData = $this->enrichCartDataWithWarehouseStock($cartData);
         $items = $cartData['cartitems'] ?? $cartData['cart_items'] ?? $cartData['items'] ?? $cartData['lines'] ?? [];
         if (!is_array($items)) {
             return [];
@@ -554,23 +622,28 @@ class POSRegisterController
 
         $warnings = [];
         foreach ($items as $row) {
-            if (!is_array($row) || !array_key_exists('local_stock', $row)) {
+            if (!is_array($row)) {
                 continue;
             }
             $qty = (float)($row['quantity'] ?? $row['qty'] ?? $row['prqt'] ?? 1);
             if ($qty <= 0) {
                 $qty = 1;
             }
-            $localStock = (float)str_replace(',', '', (string)($row['local_stock'] ?? 0));
-            if ($qty <= $localStock) {
+            $code = trim((string)($row['code'] ?? $row['item_code'] ?? $row['sku'] ?? ''));
+            if ($code === '' || !$conn || empty($row['_warehouse_stock_enriched'])) {
+                continue;
+            }
+            $warehouseStock = (float)($row['warehouse_stock'] ?? $row['stock_qty'] ?? 0);
+            if ($qty <= $warehouseStock) {
                 continue;
             }
             $warnings[] = [
-                'code' => trim((string)($row['code'] ?? $row['item_code'] ?? $row['sku'] ?? '')),
+                'code' => $code,
                 'title' => trim((string)($row['name'] ?? $row['title'] ?? $row['product_name'] ?? 'Item')),
                 'quantity' => $qty,
-                'local_stock' => $localStock,
-                'shortage' => max(0, $qty - $localStock),
+                'warehouse_stock' => $warehouseStock,
+                'local_stock' => $warehouseStock,
+                'shortage' => max(0, $qty - $warehouseStock),
             ];
         }
 
@@ -583,13 +656,13 @@ class POSRegisterController
             return $note;
         }
 
-        $lines = ['Local Stock Warning'];
+        $lines = ['Warehouse stock warning'];
         foreach ($warnings as $w) {
             $label = trim((string)($w['code'] ?? '')) !== ''
                 ? trim((string)$w['code'])
                 : trim((string)($w['title'] ?? 'Item'));
-            $local = (float)($w['local_stock'] ?? 0);
-            $lines[] = $label . ' — Local Stock = ' . $local . ', Proceed Y';
+            $stock = (float)($w['warehouse_stock'] ?? $w['local_stock'] ?? 0);
+            $lines[] = $label . ' — Warehouse stock = ' . $stock . ', Proceed Y';
         }
 
         $block = implode("\n", $lines);
@@ -2163,14 +2236,18 @@ class POSRegisterController
             case 'retrieve':
                 // Same discount / gift query + header as add/modifyqty so cart totals reflect applied coupon.
                 $ctx = $this->exoticCartDiscountContext();
-                $this->emitCartApiResponse($this->exotic_api_call(
+                $retrieveRes = $this->exotic_api_call(
                     '/cart/retrieve',
                     'GET',
                     $ctx['query'],
                     null,
                     null,
                     $ctx['extraHeaders']
-                ));
+                );
+                if ($this->isExoticCartSuccess($retrieveRes) && is_array($retrieveRes['data'] ?? null)) {
+                    $retrieveRes['data'] = $this->enrichCartDataWithWarehouseStock($retrieveRes['data']);
+                }
+                $this->emitCartApiResponse($retrieveRes);
                 return;
 
             case 'add':

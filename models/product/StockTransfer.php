@@ -399,7 +399,7 @@ class StockTransfer
 
         $currentStock = $lastRunningStock;
         $productExists = false;
-        $prodStmt = $this->db->prepare("SELECT physical_stock FROM vp_products WHERE id = ?");
+        $prodStmt = $this->db->prepare('SELECT id FROM vp_products WHERE id = ? LIMIT 1');
         if ($prodStmt) {
             $prodStmt->bind_param('i', $product_id);
             $prodStmt->execute();
@@ -407,7 +407,6 @@ class StockTransfer
             $prodRow = $prodRes->fetch_assoc();
             if ($prodRow) {
                 $productExists = true;
-                $currentStock = (int)$prodRow['physical_stock'];
             }
             $prodStmt->close();
         }
@@ -420,12 +419,11 @@ class StockTransfer
                 $runningStock = $lastRunningStock + $quantity;
             }
         } else {
-            // Fallback to product physical_stock (or zero) when no movement history exists for this SKU/warehouse
-            $base = $productExists ? $currentStock : 0;
+            // New warehouse ledger for this SKU: start from zero (physical_stock is all-warehouse total).
             if ($movement_type === 'TRANSFER_OUT') {
-                $runningStock = $base - $quantity;
+                $runningStock = 0;
             } else {
-                $runningStock = $base + $quantity;
+                $runningStock = $quantity;
             }
         }
 
@@ -444,15 +442,17 @@ class StockTransfer
         }
         $stmt->close();
 
-        // If product exists, keep physical_stock in sync
+        // physical_stock + vp_stock derived from movement ledger
         if ($productExists) {
-            $updateSql = "UPDATE vp_products SET physical_stock = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateSql);
-            if ($updateStmt) {
-                $updateStmt->bind_param('ii', $runningStock, $product_id);
-                $updateStmt->execute();
-                $updateStmt->close();
-            }
+            require_once __DIR__ . '/product.php';
+            $productModel = new product($this->db);
+            $refIdInt = is_numeric($ref_id) ? (int)$ref_id : 0;
+            $productModel->syncDerivedStockStores(
+                (int)$product_id,
+                $sku,
+                (int)$warehouse_id,
+                $refIdInt > 0 ? $refIdInt : null
+            );
         }
 
         return true;
@@ -672,26 +672,28 @@ class StockTransfer
 
     private function syncProductPhysicalStockFromLatestMovement(int $product_id): void
     {
-        $last = 0;
-        $stmt = $this->db->prepare(
-            'SELECT running_stock FROM vp_stock_movements WHERE product_id = ? ORDER BY id DESC LIMIT 1'
+        if ($product_id <= 0) {
+            return;
+        }
+        require_once __DIR__ . '/product.php';
+        $productModel = new product($this->db);
+        $skuStmt = $this->db->prepare(
+            'SELECT DISTINCT sku, warehouse_id FROM vp_stock_movements WHERE product_id = ? AND sku IS NOT NULL AND TRIM(sku) <> \'\' AND warehouse_id > 0'
         );
-        if ($stmt) {
-            $stmt->bind_param('i', $product_id);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            $r = $res ? $res->fetch_assoc() : null;
-            $stmt->close();
-            if ($r) {
-                $last = (int)($r['running_stock'] ?? 0);
+        if ($skuStmt) {
+            $skuStmt->bind_param('i', $product_id);
+            $skuStmt->execute();
+            $skuRes = $skuStmt->get_result();
+            while ($skuRes && ($row = $skuRes->fetch_assoc())) {
+                $sku = trim((string)($row['sku'] ?? ''));
+                $wh = (int)($row['warehouse_id'] ?? 0);
+                if ($sku !== '' && $wh > 0) {
+                    $productModel->syncVpStockRowFromLatestMovement($sku, $wh);
+                }
             }
+            $skuStmt->close();
         }
-        $up = $this->db->prepare('UPDATE vp_products SET physical_stock = ? WHERE id = ?');
-        if ($up) {
-            $up->bind_param('ii', $last, $product_id);
-            $up->execute();
-            $up->close();
-        }
+        $productModel->syncPhysicalStockTotalFromWarehouses($product_id);
     }
 
     /**
@@ -3004,31 +3006,36 @@ class StockTransfer
     }
 
     /**
-     * Update product physical_stock based on the latest movement for this SKU.
+     * Set vp_products.physical_stock and vp_stock rows from movement ledger.
      */
-    private function syncProductPhysicalStock(string $sku, int $productId)
+    private function syncProductPhysicalStock(string $sku, int $productId, ?int $warehouseId = null)
     {
-        $stockQuery = "SELECT running_stock FROM vp_stock_movements WHERE sku = ? ORDER BY id DESC LIMIT 1";
-        $stmt = $this->db->prepare($stockQuery);
-        if (!$stmt) {
+        if ($productId <= 0) {
             return;
         }
-        $stmt->bind_param('s', $sku);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $row = $res->fetch_assoc();
-        $stmt->close();
-
-        if ($row && isset($row['running_stock'])) {
-            $updateProductSql = "UPDATE vp_products SET physical_stock = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateProductSql);
-            if ($updateStmt) {
-                $runningStock = (int)$row['running_stock'];
-                $updateStmt->bind_param('ii', $runningStock, $productId);
-                $updateStmt->execute();
-                $updateStmt->close();
+        require_once __DIR__ . '/product.php';
+        $productModel = new product($this->db);
+        $sku = trim($sku);
+        if ($warehouseId !== null && $warehouseId > 0 && $sku !== '') {
+            $productModel->syncVpStockRowFromLatestMovement($sku, $warehouseId);
+        } elseif ($sku !== '') {
+            $whStmt = $this->db->prepare(
+                'SELECT DISTINCT warehouse_id FROM vp_stock_movements WHERE sku = ? AND warehouse_id > 0'
+            );
+            if ($whStmt) {
+                $whStmt->bind_param('s', $sku);
+                $whStmt->execute();
+                $whRes = $whStmt->get_result();
+                while ($whRes && ($whRow = $whRes->fetch_assoc())) {
+                    $wh = (int)($whRow['warehouse_id'] ?? 0);
+                    if ($wh > 0) {
+                        $productModel->syncVpStockRowFromLatestMovement($sku, $wh);
+                    }
+                }
+                $whStmt->close();
             }
         }
+        $productModel->syncPhysicalStockTotalFromWarehouses($productId);
     }
 
     public function createTransferGrn($data)

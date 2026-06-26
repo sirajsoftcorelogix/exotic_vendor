@@ -1393,11 +1393,23 @@ class DispatchController {
 
         global $dispatchModel;
         global $commanModel;
+        global $invoiceModel;
+        global $conn;
         $invoiceId = intval($input['invoice_id']);
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Invoice not found']);
+            return;
+        }
+        $invStatus = strtolower(trim((string)($invoice['status'] ?? '')));
+        if ($invStatus === 'cancelled') {
+            echo json_encode(['success' => true, 'message' => 'Invoice already cancelled']);
+            return;
+        }
         //shipment id from dispatch record
         $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
 
-        global $conn;
         try {
             foreach ($dispatchRecords as $record) {
                 $shiprocketOrderId = $record['shiprocket_order_id'];
@@ -1405,7 +1417,6 @@ class DispatchController {
                     // Cancel shipment via Shiprocket API
                     $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
                     //print_array($response);
-                    $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                     if (!$response['success']) {
                         //throw new Exception("Failed to cancel shiprocket order ID: " . $shiprocketOrderId);
                         echo json_encode(['success' => false, 'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error')]);
@@ -1413,9 +1424,7 @@ class DispatchController {
                         //echo json_encode($response);
                         //continue; // skip to next record
                     }
-                    // Update dispatch record to mark as cancelled
-                    //$dispatchModel->updateDispatchStatus($record['id'], 'cancelled');
-                    //$commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
+                    $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                 }
             }
             $stockModel = new Stock($conn);
@@ -1424,14 +1433,15 @@ class DispatchController {
                 http_response_code(500);
                 echo json_encode([
                     'success' => false,
-                    'message' => 'Dispatch updated but stock could not be restored: ' . ($stockRestore['message'] ?? 'unknown'),
+                    'message' => 'Dispatch cancelled but stock could not be restored: ' . ($stockRestore['message'] ?? 'unknown'),
                     'stock_restore' => $stockRestore,
                 ]);
                 return;
             }
+            $invoiceModel->updateInvoiceStatus($invoiceId, 'cancelled');
             echo json_encode([
                 'success' => true,
-                'message' => 'Dispatch cancelled successfully',
+                'message' => 'Dispatch and invoice cancelled successfully',
                 'stock_restore' => $stockRestore,
             ]);
         } catch (Exception $e) {
@@ -1801,7 +1811,7 @@ class DispatchController {
      * Bulk create invoices and dispatch records from bulk dispatch form
      */
     public function bulkCreateInvoicesDispatch() {
-        global $invoiceModel, $dispatchModel, $ordersModel, $commanModel;
+        global $invoiceModel, $dispatchModel, $ordersModel, $commanModel, $conn;
         is_login();
 
         ob_start();
@@ -1834,8 +1844,10 @@ class DispatchController {
         try {
             require_once __DIR__ . '/../helpers/dispatch/shipping_address_validation.php';
             require_once __DIR__ . '/../helpers/invoice_number_resolver.php';
+            require_once __DIR__ . '/../models/product/product.php';
 
-            global $conn;
+            $productModel = new Product($conn);
+            $stockModel = new Stock($conn);
             $batchCustomInvoiceNumbers = [];
 
             // Process each order
@@ -1904,6 +1916,30 @@ class DispatchController {
                     $batchCustomInvoiceNumbers[] = $customInvoiceNumber;
                 }
 
+                $prospectiveLines = [];
+                foreach ($orders as $order) {
+                    $quantity = (int)($order['quantity'] ?? 0);
+                    if ($quantity <= 0) {
+                        continue;
+                    }
+                    $prospectiveLines[] = [
+                        'product_id' => $productModel->getProductIdForInvoiceLine(
+                            (string)$order_number,
+                            (string)($order['item_code'] ?? '')
+                        ),
+                        'quantity' => $quantity,
+                        'item_code' => (string)($order['item_code'] ?? ''),
+                        'order_number' => $order_number,
+                    ];
+                }
+                if ($prospectiveLines !== []) {
+                    $validation = $stockModel->validateStockAvailabilityForLines($prospectiveLines, null, false);
+                    if (empty($validation['success'])) {
+                        $errors[] = 'Order #' . $order_number . ': ' . ($validation['message'] ?? 'Insufficient stock');
+                        continue;
+                    }
+                }
+
                 $invoiceData = [
                     'invoice_number' => $invoice_number,
                     'invoice_date' => date('Y-m-d'),
@@ -1968,8 +2004,19 @@ class DispatchController {
                         'image_url' => '',
                         'groupname' => $order['groupname'] ?? ''
                     ];
+                    $itemData['product_id'] = $productModel->getProductIdForInvoiceLine(
+                        (string)$order_number,
+                        (string)($order['item_code'] ?? '')
+                    );
 
                     $invoiceModel->createInvoiceItem($itemData);
+                }
+
+                $stockDeduction = $stockModel->updateStockByInvoiceId((int)$invoiceId);
+                if (empty($stockDeduction['success'])) {
+                    $invoiceModel->deleteInvoice((int)$invoiceId);
+                    $errors[] = 'Order #' . $order_number . ': ' . ($stockDeduction['message'] ?? 'physical stock deduction failed');
+                    continue;
                 }
 
                 $created_invoices[] = [
@@ -1978,13 +2025,14 @@ class DispatchController {
                     'order_number' => $order_number,
                     'customer_id' => $customer_id,
                     'customer_name' => $customer_name,
-                    'total_amount' => $total_amount
+                    'total_amount' => $total_amount,
+                    'stock_deduction' => $stockDeduction,
                 ];
                 
                 // Update order status to invoiced
                 foreach ($orders as $item) {  
                     $ordersModel->updateOrderById($item['id'], ['invoice_id' => $invoiceId]);
-                }    
+                }
                 //$ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
                        
                 // Create dispatch records for each box

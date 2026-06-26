@@ -82,7 +82,7 @@
                         <input type="text" value="<?= htmlspecialchars($_GET['sku'] ?? '') ?>" name="sku" id="sku" placeholder="SKU" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <div>
-                        <label for="low_stock" class="block text-sm font-medium text-gray-600 mb-1">Low Stock</label>
+                        <label for="low_stock" class="block text-sm font-medium text-gray-600 mb-1" title="Physical stock at or below min stock">Low Stock</label>
                         <select id="low_stock" name="low_stock" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                             <option value="">-Select-</option>
                             <option value="1" <?= (isset($_GET['low_stock']) && $_GET['low_stock'] === '1') ? 'selected' : '' ?>>Yes</option>
@@ -106,8 +106,8 @@
                         <input type="text" value="<?= htmlspecialchars($_GET['color'] ?? '') ?>" name="color" id="color" placeholder="Color" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <div>
-                        <label for="local_stock" class="block text-sm font-medium text-gray-600 mb-1">Local Stock</label>
-                        <input type="number" value="<?= htmlspecialchars($_GET['local_stock'] ?? '') ?>" name="local_stock" id="local_stock" placeholder="Local Stock" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <label for="physical_stock" class="block text-sm font-medium text-gray-600 mb-1">Physical Stock</label>
+                        <input type="number" value="<?= htmlspecialchars($_GET['physical_stock'] ?? $_GET['local_stock'] ?? '') ?>" name="physical_stock" id="physical_stock" placeholder="Physical Stock" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <div>
                         <label for="marketplace" class="block text-sm font-medium text-gray-600 mb-1">Marketplace</label>
@@ -273,7 +273,15 @@
                                 <!-- Inventory Overview -->
                                 <td class="px-6 py-4 whitespace-nowrap align-top">
                                     <div class="flex flex-col space-y-1">
-                                        <span class="typo-sf-column">Local Stock : <?php echo $product['local_stock']; ?></span>
+                                        <?php
+                                            $physStock = (int)($product['physical_stock'] ?? 0);
+                                            $minStock = (int)($product['min_stock'] ?? 0);
+                                            $isLowStock = $minStock > 0 && $physStock <= $minStock;
+                                        ?>
+                                        <span class="typo-sf-column<?= $isLowStock ? ' text-red-600 font-semibold' : '' ?>" title="<?= $isLowStock ? 'Physical stock at or below min stock' : '' ?>">Physical Stock : <?php echo $physStock; ?></span>
+                                        <?php if ($isLowStock): ?>
+                                            <span class="text-xs text-red-600">Low stock (min <?php echo $minStock; ?>)</span>
+                                        <?php endif; ?>
                                         <div class="typo-sf-column">
                                             FBA (US): <span class="text-healthy"><?php echo $product['fba_us']; ?></span>
                                         </div>

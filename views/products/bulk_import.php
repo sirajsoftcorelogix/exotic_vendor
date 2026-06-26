@@ -348,7 +348,7 @@
       btn.addEventListener('click', async function() {
         const jobId = parseInt(btn.getAttribute('data-job-id') || '0', 10);
         if (!jobId) return;
-        if (!confirm('Revert this import?\n\nThis will:\n- Delete opening stock movements created by this job\n- Recalculate local stock for affected products\n- Delete the job and its rows\n- Delete the uploaded file (if stored)\n\nContinue?')) return;
+        if (!confirm('Revert this import?\n\nThis will:\n- Delete opening stock movements created by this job\n- Recalculate physical stock for affected products\n- Delete the job and its rows\n- Delete the uploaded file (if stored)\n\nContinue?')) return;
         showProgress('Reverting import…', 'Deleting movements and cleaning up.');
         try {
           const data = await fetchJson('?page=products&action=bulk_import_revert', {
