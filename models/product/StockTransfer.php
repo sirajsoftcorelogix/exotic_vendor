@@ -952,15 +952,15 @@ class StockTransfer
         if ($stockRow && isset($stockRow['running_stock'])) {
             $availableStock = (int)$stockRow['running_stock'];
         } else {
-            // If no stock movement exists, use product local stock as initial baseline.
-            $prodStmt = $this->db->prepare("SELECT local_stock FROM vp_products WHERE sku = ? LIMIT 1");
+            // If no stock movement exists, use product physical stock as initial baseline.
+            $prodStmt = $this->db->prepare("SELECT physical_stock FROM vp_products WHERE sku = ? LIMIT 1");
             if ($prodStmt) {
                 $prodStmt->bind_param('s', $sku);
                 $prodStmt->execute();
                 $prodResult = $prodStmt->get_result();
                 $prodRow = $prodResult->fetch_assoc();
                 $prodStmt->close();
-                $availableStock = $prodRow ? (int)$prodRow['local_stock'] : 0;
+                $availableStock = $prodRow ? (int)$prodRow['physical_stock'] : 0;
             }
         }
 
@@ -2648,7 +2648,7 @@ class StockTransfer
             $skuList = array_keys($skus);
             if (!empty($skuList)) {
                 $placeholders = implode(',', array_fill(0, count($skuList), '?'));
-                $prodSql = "SELECT sku, image, title, local_stock, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, material
+                $prodSql = "SELECT sku, image, title, physical_stock, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, material
                             FROM vp_products
                             WHERE sku IN ($placeholders)";
                 $prodStmt = $this->db->prepare($prodSql);
@@ -2925,7 +2925,7 @@ class StockTransfer
                             }
                         }
 
-                        // Keep product local_stock in sync (use latest running_stock for this SKU)
+                        // Keep product physical_stock in sync (use latest running_stock for this SKU)
                         $this->syncProductPhysicalStock($sku, $productId);
                     }
 
@@ -2933,7 +2933,7 @@ class StockTransfer
                     unset($existingMovements[$key]);
                 } else {
                     // New item: insert a new movement
-                    // Re-use insertStockMovement which handles running_stock and local_stock
+                    // Re-use insertStockMovement which handles running_stock and physical_stock
                     $productQuery = "SELECT title, location, size, color FROM vp_products WHERE id = ? LIMIT 1";
                     $pstmt = $this->db->prepare($productQuery);
                     if ($pstmt) {

@@ -2876,7 +2876,7 @@ class ProductsController
             exit;
         }
 
-        // Collect affected product_ids before deleting movements so we can recalculate local_stock,
+        // Collect affected product_ids before deleting movements so we can recalculate physical_stock,
         // and collect products that were created by this job so we can delete them.
         $prodIds = [];
         $createdProductIds = [];
@@ -4249,12 +4249,12 @@ class ProductsController
 
             $sku = trim((string)($order['sku'] ?? ''));
             $itemCode = trim((string)($order['item_code'] ?? ''));
-            $localStock = (float)($order['local_stock'] ?? 0);
+            $physicalStock = (float)($order['physical_stock'] ?? 0);
             $costPrice = (float)($order['cost_price'] ?? 0);
 
-            $order['stock_value'] = $localStock * $costPrice;
+            $order['stock_value'] = $physicalStock * $costPrice;
             $order['committed_stock'] = $sku !== '' ? (int)$commanModel->getCommittedStockBySku($sku) : 0;
-            $order['available_stock'] = $localStock - (float)$order['committed_stock'];
+            $order['available_stock'] = $physicalStock - (float)$order['committed_stock'];
             $order['in_purchase_list'] = $sku !== '' ? $commanModel->isInPurchaseList($sku) : [];
             $order['vendors'] = $itemCode !== '' ? $productModel->getVendorByItemCode($itemCode) : [];
             $order['stock_history'] = $productModel->enrichStockHistoryRowsForLedger(

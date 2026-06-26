@@ -18,6 +18,7 @@ class product
         }
         return isset($this->vpProductsCols[$col]);
     }
+
     private function normalizeIntValue($value, $default = 0)
     {
         if ($value === null) return (int)$default;
@@ -80,7 +81,7 @@ class product
             }
         }
         foreach ([
-            'local_stock', 'fba_in', 'fba_us', 'permanently_available', 'numsold', 'numsold_india',
+            'local_stock', 'physical_stock', 'fba_in', 'fba_us', 'permanently_available', 'numsold', 'numsold_india',
             'numsold_global', 'india_net_qty', 'usblock', 'indiablock', 'topurchase', 'backorder_percent',
             'backorder_weeks', 'amazon_sold', 'amazon_leadtime',
         ] as $key) {
@@ -859,6 +860,8 @@ class product
         $updatedCount = 0;
         // Default: never overwrite vp_products.local_stock from API; pass preserve_local_stock => false to sync stock from API.
         $preserveLocalStock = !array_key_exists('preserve_local_stock', $options) || !empty($options['preserve_local_stock']);
+        // Default: API refresh must not write vp_stock_movements (manual adjust / GRN / inbound handle ledger).
+        $recordStockMovements = !empty($options['record_stock_movements']);
         // print_array($productData);
         // exit;
         $vendorMapSynced = 0;
@@ -1019,7 +1022,7 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
-                        if ($existingBase && isset($existingBase['id'])) {
+                        if ($recordStockMovements && $existingBase && isset($existingBase['id'])) {
                             $this->applyApiRefreshStockAdjustments(
                                 (int)$existingBase['id'],
                                 (string)$sku,
@@ -1280,7 +1283,7 @@ class product
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
-                                if ($existingBase && isset($existingBase['id'])) {
+                                if ($recordStockMovements && $existingBase && isset($existingBase['id'])) {
                                     $this->applyApiRefreshStockAdjustments(
                                         (int)$existingBase['id'],
                                         (string)$sku,
@@ -3793,7 +3796,6 @@ class product
             if (!$product) {
                 throw new Exception('Product not found');
             }
-
             $adj_qty = (int)$data['quantity'];
             $movement_type = strtoupper(trim((string)($data['movement_type'] ?? 'OUT')));
             $isInbound = in_array($movement_type, ['IN', 'TRANSFER_IN', 'OPENING_STOCK'], true);
