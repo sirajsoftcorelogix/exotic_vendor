@@ -2179,6 +2179,7 @@ class InboundingController {
         }
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
+
             $API_data['creator'] = $inboundingModel->buildBookCreatorApiValue(
                 $d['author'] ?? '',
                 $d['edited_by'] ?? ''
