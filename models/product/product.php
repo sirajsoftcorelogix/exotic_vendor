@@ -1434,8 +1434,11 @@ class product
             return;
         }
 
+        require_once __DIR__ . '/StockMovement.php';
+
         $size = trim($size);
         $color = trim($color);
+        $apiLocalStock = max(0, (int) $apiLocalStock);
         $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn();
         $safeItemCol = '`' . str_replace('`', '``', $itemCodeCol) . '`';
 
@@ -1457,97 +1460,63 @@ class product
         $latestRow = $latest->get_result()->fetch_assoc();
         $latest->close();
 
-        $warehouseId = (int)($latestRow['warehouse_id'] ?? 1);
+        $warehouseId = (int) ($latestRow['warehouse_id'] ?? 1);
         if ($warehouseId <= 0) {
             $warehouseId = 1;
         }
-        $location = trim((string)($latestRow['location'] ?? ''));
+        $location = trim((string) ($latestRow['location'] ?? ''));
         if ($location === '') {
             $location = 'API refresh';
         }
 
+        $refId = 'api_refresh:' . date('YmdHis');
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        $reason = 'Stock adjusted from API refresh';
+        $movementBase = [
+            'product_id' => $productId,
+            'sku' => $sku,
+            'item_code' => $itemCode,
+            'size' => $size,
+            'color' => $color,
+            'warehouse_id' => $warehouseId,
+            'location' => $location,
+            'ref_type' => 'API_REFRESH',
+            'ref_id' => $refId,
+            'reason' => $reason,
+            'update_by_user' => $userId,
+            'strict_stock_check' => false,
+        ];
+
         if (!$latestRow) {
-            $this->insertApiRefreshMovement(
-                $productId,
-                $sku,
-                $itemCode,
-                $size,
-                $color,
-                $warehouseId,
-                $location,
-                'OPENING_STOCK',
-                0,
-                0,
-                'API_REFRESH_BASELINE',
-                'Opening stock baseline created during API refresh'
-            );
-            $currentStock = 0;
-        } else {
-            $currentStock = (int)($latestRow['running_stock'] ?? 0);
-        }
-
-        $targetDelta = $apiLocalStock - $currentStock;
-        if ($targetDelta !== 0) {
-            $this->insertApiRefreshMovement(
-                $productId,
-                $sku,
-                $itemCode,
-                $size,
-                $color,
-                $warehouseId,
-                $location,
-                ($targetDelta > 0 ? 'IN' : 'OUT'),
-                abs($targetDelta),
-                $apiLocalStock,
-                'API_REFRESH',
-                'Stock adjusted from API refresh'
-            );
-        }
-    }
-
-    private function insertApiRefreshMovement(
-        int $productId,
-        string $sku,
-        string $itemCode,
-        string $size,
-        string $color,
-        int $warehouseId,
-        string $location,
-        string $movementType,
-        int $quantity,
-        int $runningStock,
-        string $refType,
-        string $reason
-    ): void {
-        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn();
-        $safeItemCol = '`' . str_replace('`', '``', $itemCodeCol) . '`';
-        $stmt = $this->db->prepare("INSERT INTO vp_stock_movements
-            (product_id, sku, {$safeItemCol}, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        if (!$stmt) {
+            if ($apiLocalStock <= 0) {
+                return;
+            }
+            try {
+                StockMovement::insert($this->db, array_merge($movementBase, [
+                    'movement_type' => 'OPENING_STOCK',
+                    'quantity' => $apiLocalStock,
+                ]));
+            } catch (\Throwable $e) {
+                error_log('applyApiRefreshStockAdjustments opening: ' . $e->getMessage());
+            }
             return;
         }
-        $refId = 'api_refresh:' . date('YmdHis');
-        $userId = (int)($_SESSION['user']['id'] ?? 0);
-        $stmt->bind_param(
-            'issssissiisssi',
-            $productId,
-            $sku,
-            $itemCode,
-            $size,
-            $color,
-            $warehouseId,
-            $location,
-            $movementType,
-            $quantity,
-            $runningStock,
-            $refType,
-            $refId,
-            $reason,
-            $userId
-        );
-        $stmt->execute();
-        $stmt->close();
+
+        $currentStock = (int) ($latestRow['running_stock'] ?? 0);
+        $targetDelta = $apiLocalStock - $currentStock;
+        if ($targetDelta === 0) {
+            StockMovement::syncProductPhysicalStock($this->db, $productId);
+            return;
+        }
+
+        try {
+            StockMovement::insert($this->db, array_merge($movementBase, [
+                'movement_type' => ($targetDelta > 0 ? 'IN' : 'OUT'),
+                'quantity' => abs($targetDelta),
+            ]));
+        } catch (\Throwable $e) {
+            error_log('applyApiRefreshStockAdjustments delta: ' . $e->getMessage());
+        }
     }
     /**
      * Resolve a catalog row by item code and variant dimensions. Supports:
@@ -3521,6 +3490,13 @@ class product
                 'ledger_type' => 'Bulk Product Import',
                 'icon' => 'fa-cloud-upload-alt',
                 'text_color_class' => 'text-teal-600',
+            ];
+        }
+        if (($mt === 'OPENING_STOCK' || $mt === 'IN' || $mt === 'OUT') && ($rt === 'API_REFRESH' || $rt === 'API_REFRESH_BASELINE')) {
+            return [
+                'ledger_type' => 'API refresh',
+                'icon' => 'fa-sync-alt',
+                'text_color_class' => $mt === 'OUT' ? 'text-red-600' : 'text-teal-600',
             ];
         }
         if ($mt === 'OPENING_STOCK') {
