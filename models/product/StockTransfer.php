@@ -234,6 +234,7 @@ class StockTransfer
             if (!$stmt->execute()) {
                 throw new Exception('Execute error: ' . $stmt->error);
             }
+            $transferId = (int) $this->db->insert_id;
             $stmt->close();
             
             // 2. Insert items and create stock movements
@@ -312,7 +313,8 @@ class StockTransfer
             return [
                 'success' => true,
                 'message' => 'Stock transfer created successfully',
-                'transfer_order_no' => $transfer_order_no
+                'transfer_order_no' => $transfer_order_no,
+                'transfer_id' => $transferId,
             ];
             
         } catch (Exception $e) {
@@ -343,117 +345,25 @@ class StockTransfer
      */
     private function insertStockMovement($product_id, $sku, $item_code, $warehouse_id, $location, $size, $color, $movement_type, $quantity, $user_id, $ref_type, $reason, $ref_id = '')
     {
-        // Get last running_stock for this specific SKU and warehouse
-        $lastStockQuery = "SELECT running_stock FROM vp_stock_movements 
-                           WHERE sku = ? AND warehouse_id = ? 
-                           ORDER BY id DESC LIMIT 1";
-        
-        $lstmt = $this->db->prepare($lastStockQuery);
-        if (!$lstmt) {
-            throw new Exception('Prepare error: ' . $this->db->error);
-        }
-        
-        $lstmt->bind_param('si', $sku, $warehouse_id);
-        $lstmt->execute();
-        $result = $lstmt->get_result();
-        $lastRow = $result->fetch_assoc();
-        $lstmt->close();
-        
-        // If no warehouse-specific history, fallback to last SKU-based history for overall running stock sanity check.
-        if (!$lastRow) {
-            $fallbackSql = "SELECT running_stock, warehouse_id FROM vp_stock_movements WHERE sku = ? ORDER BY id DESC LIMIT 1";
-            $fallbackStmt = $this->db->prepare($fallbackSql);
-            if ($fallbackStmt) {
-                $fallbackStmt->bind_param('s', $sku);
-                $fallbackStmt->execute();
-                $fallbackRes = $fallbackStmt->get_result();
-                $fallbackRow = $fallbackRes ? $fallbackRes->fetch_assoc() : null;
-                $fallbackStmt->close();
+        require_once __DIR__ . '/StockMovement.php';
 
-                if ($fallbackRow) {
-                    $lastRow = $fallbackRow;
-                }
-            }
-        }
-
-        $lastRunningStock = $lastRow ? (int)$lastRow['running_stock'] : 0;
-
-        // Fallback: if you're receiving inventory and the global SKU stock is higher than this warehouse, use global stock.
-        $globalStock = 0;
-        $globalSql = "SELECT running_stock FROM vp_stock_movements WHERE sku = ? ORDER BY id DESC LIMIT 1";
-        $globalStmt = $this->db->prepare($globalSql);
-        if ($globalStmt) {
-            $globalStmt->bind_param('s', $sku);
-            $globalStmt->execute();
-            $globalRes = $globalStmt->get_result();
-            $globalRow = $globalRes ? $globalRes->fetch_assoc() : null;
-            $globalStmt->close();
-            if ($globalRow) {
-                $globalStock = (int)$globalRow['running_stock'];
-            }
-        }
-
-        if ($movement_type === 'TRANSFER_IN' && $globalStock > $lastRunningStock) {
-            $lastRunningStock = $globalStock;
-        }
-
-        $currentStock = $lastRunningStock;
-        $productExists = false;
-        $prodStmt = $this->db->prepare("SELECT local_stock FROM vp_products WHERE id = ?");
-        if ($prodStmt) {
-            $prodStmt->bind_param('i', $product_id);
-            $prodStmt->execute();
-            $prodRes = $prodStmt->get_result();
-            $prodRow = $prodRes->fetch_assoc();
-            if ($prodRow) {
-                $productExists = true;
-                $currentStock = (int)$prodRow['local_stock'];
-            }
-            $prodStmt->close();
-        }
-
-        if ($lastRow) {
-            // Consistent chaining from the last movement in this SKU+warehouse context
-            if ($movement_type === 'TRANSFER_OUT') {
-                $runningStock = $lastRunningStock - $quantity;
-            } else {
-                $runningStock = $lastRunningStock + $quantity;
-            }
-        } else {
-            // Fallback to product local_stock (or zero) when no movement history exists for this SKU/warehouse
-            $base = $productExists ? $currentStock : 0;
-            if ($movement_type === 'TRANSFER_OUT') {
-                $runningStock = $base - $quantity;
-            } else {
-                $runningStock = $base + $quantity;
-            }
-        }
-
-        $insertMovementSQL = "INSERT INTO vp_stock_movements 
-            (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, update_by_user, ref_type, ref_id, reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        $stmt = $this->db->prepare($insertMovementSQL);
-        if (!$stmt) {
-            throw new Exception('Prepare error: ' . $this->db->error);
-        }
-        
-        $stmt->bind_param('issssissiiisss', $product_id, $sku, $item_code, $size, $color, $warehouse_id, $location, $movement_type, $quantity, $runningStock, $user_id, $ref_type, $ref_id, $reason);
-        if (!$stmt->execute()) {
-            throw new Exception('Execute error: ' . $stmt->error);
-        }
-        $stmt->close();
-
-        // If product exists, keep local_stock in sync
-        if ($productExists) {
-            $updateSql = "UPDATE vp_products SET local_stock = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateSql);
-            if ($updateStmt) {
-                $updateStmt->bind_param('ii', $runningStock, $product_id);
-                $updateStmt->execute();
-                $updateStmt->close();
-            }
-        }
+        StockMovement::insert($this->db, [
+            'product_id' => (int) $product_id,
+            'sku' => (string) $sku,
+            'item_code' => (string) $item_code,
+            'size' => (string) $size,
+            'color' => (string) $color,
+            'warehouse_id' => (int) $warehouse_id,
+            'location' => (string) $location,
+            'movement_type' => (string) $movement_type,
+            'quantity' => (float) $quantity,
+            'ref_type' => (string) $ref_type,
+            'ref_id' => (string) $ref_id,
+            'reason' => (string) $reason,
+            'update_by_user' => (int) $user_id,
+            'sync_physical_stock' => false,
+            'strict_stock_check' => strtoupper(trim((string) $movement_type)) === 'TRANSFER_OUT',
+        ]);
 
         return true;
     }
@@ -3004,31 +2914,11 @@ class StockTransfer
     }
 
     /**
-     * Update product local_stock based on the latest movement for this SKU.
+     * Transfers must not change website local_stock — warehouse ledger only.
      */
     private function syncProductLocalStock(string $sku, int $productId)
     {
-        $stockQuery = "SELECT running_stock FROM vp_stock_movements WHERE sku = ? ORDER BY id DESC LIMIT 1";
-        $stmt = $this->db->prepare($stockQuery);
-        if (!$stmt) {
-            return;
-        }
-        $stmt->bind_param('s', $sku);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $row = $res->fetch_assoc();
-        $stmt->close();
-
-        if ($row && isset($row['running_stock'])) {
-            $updateProductSql = "UPDATE vp_products SET local_stock = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateProductSql);
-            if ($updateStmt) {
-                $runningStock = (int)$row['running_stock'];
-                $updateStmt->bind_param('ii', $runningStock, $productId);
-                $updateStmt->execute();
-                $updateStmt->close();
-            }
-        }
+        return;
     }
 
     public function createTransferGrn($data)

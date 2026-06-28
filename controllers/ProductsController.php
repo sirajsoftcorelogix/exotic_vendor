@@ -5424,7 +5424,9 @@ class ProductsController
                 'warehouse' => $warehouse
             ];
 
-            $history = $productModel->getFilteredStockHistory($filters, $limit, $offset);
+            $history = $productModel->enrichStockHistoryRowsForLedger(
+                $productModel->getFilteredStockHistory($filters, $limit, $offset)
+            );
             $total = $productModel->getFilteredStockHistoryCount($filters);
 
             // Format the response

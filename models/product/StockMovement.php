@@ -7,6 +7,29 @@ final class StockMovement
 {
     public const INBOUND_TYPES = ['IN', 'TRANSFER_IN', 'OPENING_STOCK'];
 
+    /** Movement types shown in ledger "Stock In" column */
+    public const STOCK_IN_DISPLAY_TYPES = ['IN', 'OPENING_STOCK', 'TRANSFER_IN'];
+
+    /** Movement types shown in ledger "Stock Out" column */
+    public const STOCK_OUT_DISPLAY_TYPES = ['OUT', 'TRANSFER_OUT'];
+
+    public static function isTransferMovement(string $movementType): bool
+    {
+        $type = strtoupper(trim($movementType));
+
+        return $type === 'TRANSFER_IN' || $type === 'TRANSFER_OUT';
+    }
+
+    public static function isStockInDisplayType(string $movementType): bool
+    {
+        return in_array(strtoupper(trim($movementType)), self::STOCK_IN_DISPLAY_TYPES, true);
+    }
+
+    public static function isStockOutDisplayType(string $movementType): bool
+    {
+        return in_array(strtoupper(trim($movementType)), self::STOCK_OUT_DISPLAY_TYPES, true);
+    }
+
     public static function isInbound(string $movementType): bool
     {
         return in_array(strtoupper(trim($movementType)), self::INBOUND_TYPES, true);
@@ -64,6 +87,47 @@ final class StockMovement
         $stmt->close();
 
         return max(0, (int) ($row['total_stock'] ?? 0));
+    }
+
+    /**
+     * Qty dispatched but not yet GRN-received at destination — keeps product physical total stable during transfer.
+     */
+    public static function getInTransitQtyForProduct(\mysqli $conn, int $productId): int
+    {
+        $productId = (int) $productId;
+        if ($productId <= 0) {
+            return 0;
+        }
+        $sql = '
+            SELECT COALESCE(SUM(GREATEST(0, ist.transfer_qty - COALESCE(gr.received_qty, 0))), 0) AS in_transit
+            FROM vp_item_stock_transfer ist
+            INNER JOIN vp_stock_transfer st ON st.transfer_order_no = ist.transfer_order_no
+            LEFT JOIN (
+                SELECT transfer_id, sku, SUM(qty_received) AS received_qty
+                FROM vp_stock_transfer_grns
+                GROUP BY transfer_id, sku
+            ) gr ON gr.transfer_id = st.id AND gr.sku = ist.sku
+            WHERE ist.product_id = ?
+              AND ist.transfer_qty > COALESCE(gr.received_qty, 0)';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('i', $productId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return max(0, (int) ($row['in_transit'] ?? 0));
+    }
+
+    /**
+     * Warehouse on-hand + in-transit transfer qty (total physical inventory for a product).
+     */
+    public static function getPhysicalStockTotalIncludingInTransit(\mysqli $conn, int $productId): int
+    {
+        return self::getPhysicalStockTotalFromMovements($conn, $productId)
+            + self::getInTransitQtyForProduct($conn, $productId);
     }
 
     /**
@@ -188,7 +252,7 @@ final class StockMovement
 
         $syncPhysical = array_key_exists('sync_physical_stock', $data)
             ? !empty($data['sync_physical_stock'])
-            : ($productId > 0);
+            : ($productId > 0 && !self::isTransferMovement($movementType));
         if ($syncPhysical && $productId > 0) {
             self::syncProductPhysicalStock($conn, $productId);
         }
@@ -202,7 +266,7 @@ final class StockMovement
         if ($productId <= 0) {
             return;
         }
-        $physicalTotal = self::getPhysicalStockTotalFromMovements($conn, $productId);
+        $physicalTotal = self::getPhysicalStockTotalIncludingInTransit($conn, $productId);
         $stmt = $conn->prepare('UPDATE vp_products SET physical_stock = ? WHERE id = ?');
         if (!$stmt) {
             return;

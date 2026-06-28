@@ -864,8 +864,8 @@
                 <i class="fas <?php echo htmlspecialchars($dispIcon); ?>"></i>
                 <?php echo htmlspecialchars($dispLabel); ?>
               </td>
-              <td class="p-2 border"><?php echo htmlspecialchars(in_array(($history['movement_type'] ?? ''), ['IN','OPENING_STOCK'], true) ? $history['quantity'] : ''); ?></td>
-              <td class="p-2 border"><?php echo htmlspecialchars($history['movement_type'] == 'OUT' ? $history['quantity'] : ''); ?></td>
+              <td class="p-2 border"><?php echo htmlspecialchars($history['stock_in_qty'] ?? (in_array($mt, ['IN', 'OPENING_STOCK', 'TRANSFER_IN'], true) ? ($history['quantity'] ?? '') : '')); ?></td>
+              <td class="p-2 border"><?php echo htmlspecialchars($history['stock_out_qty'] ?? (in_array($mt, ['OUT', 'TRANSFER_OUT'], true) ? ($history['quantity'] ?? '') : '')); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['running_stock'] ?? '0'); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['warehouse_name'] ?? ''); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['location'] ?? ''); ?></td>
@@ -1671,8 +1671,8 @@ function closeImagePopup() {
                   <i class="fas ${history.icon}"></i>
                   ${history.type}
                 </td>
-                <td class="p-2 border">${(history.movement_type === 'IN' || history.movement_type === 'OPENING_STOCK') ? history.quantity : ''}</td>
-                <td class="p-2 border">${history.movement_type === 'OUT' ? history.quantity : ''}</td>
+                <td class="p-2 border">${history.stock_in_qty ?? ((history.movement_type === 'IN' || history.movement_type === 'OPENING_STOCK' || history.movement_type === 'TRANSFER_IN') ? history.quantity : '')}</td>
+                <td class="p-2 border">${history.stock_out_qty ?? ((history.movement_type === 'OUT' || history.movement_type === 'TRANSFER_OUT') ? history.quantity : '')}</td>
                 <td class="p-2 border">${history.running_stock || '0'}</td>
                 <td class="p-2 border">${history.warehouse_name || ''}</td>
                 <td class="p-2 border">${history.location || ''}</td>

@@ -3582,11 +3582,17 @@ class product
      */
     public function enrichStockHistoryRowsForLedger(array $rows): array
     {
+        require_once __DIR__ . '/StockMovement.php';
+
         foreach ($rows as &$r) {
             $d = $this->getStockLedgerDisplayForMovement($r);
             $r['ledger_type'] = $d['ledger_type'];
             $r['ledger_icon'] = $d['icon'];
             $r['ledger_color_class'] = $d['text_color_class'];
+            $mt = strtoupper(trim((string) ($r['movement_type'] ?? '')));
+            $qty = (int) ($r['quantity'] ?? 0);
+            $r['stock_in_qty'] = StockMovement::isStockInDisplayType($mt) ? $qty : '';
+            $r['stock_out_qty'] = StockMovement::isStockOutDisplayType($mt) ? $qty : '';
         }
         unset($r);
 
@@ -3600,7 +3606,7 @@ class product
     {
         require_once __DIR__ . '/StockMovement.php';
 
-        return StockMovement::getPhysicalStockTotalFromMovements($this->db, $product_id);
+        return StockMovement::getPhysicalStockTotalIncludingInTransit($this->db, $product_id);
     }
 
     public function insertStockMovement($data)
