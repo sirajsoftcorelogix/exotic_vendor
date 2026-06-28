@@ -848,6 +848,7 @@ class ProductsController
             return $respond(['success' => false, 'message' => 'Maximum 50 SKUs allowed.', 'timing' => $importTiming(count($codes))]);
         }
         $codesCount = count($codes);
+        $applyImportStockFromLocal = !$internalCall;
 
         //exit;
         $created = 0;
@@ -1017,25 +1018,39 @@ class ProductsController
 
                 if ($existing) {
                     $ok = $productModel->updateProduct($existing['id'], $item);
-                    if ($ok) $updated++;
-                    else $failed[] = $code;
+                    if ($ok) {
+                        $updated++;
+                        if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
+                            $this->applyQuickImportStockFromLocalStock(
+                                $conn,
+                                (string) $item['item_code'],
+                                trim((string) ($item['sku'] ?? '')),
+                                trim((string) ($item['size'] ?? '')),
+                                trim((string) ($item['color'] ?? '')),
+                                (int) ($item['local_stock'] ?? 0)
+                            );
+                        }
+                    } else {
+                        $failed[] = $code;
+                    }
                 } else {
                     $id = $productModel->createProduct($item);
                     if ($id) {
                         $created++;
-                        $createdIdsByCode[$code][] = (int)$id;
-                        if (isset($conn) && $conn instanceof mysqli) {
-                            $this->recordVendorApiImportOpeningStock(
+                        $createdIdsByCode[$code][] = (int) $id;
+                        if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
+                            $this->applyQuickImportStockFromLocalStock(
                                 $conn,
-                                (int)$id,
-                                trim((string)($item['sku'] ?? '')),
-                                (string)($item['item_code'] ?? ''),
-                                trim((string)($item['size'] ?? '')),
-                                trim((string)($item['color'] ?? '')),
-                                (int)($item['local_stock'] ?? 0)
+                                (string) ($item['item_code'] ?? ''),
+                                trim((string) ($item['sku'] ?? '')),
+                                trim((string) ($item['size'] ?? '')),
+                                trim((string) ($item['color'] ?? '')),
+                                (int) ($item['local_stock'] ?? 0)
                             );
                         }
-                    } else $failed[] = $code;
+                    } else {
+                        $failed[] = $code;
+                    }
                 }
 
                 $productModel->syncProductVendorMapFromApiItem($code, $apiItem);
@@ -1099,25 +1114,39 @@ class ProductsController
                         $existingVar = $productModel->findByItemCodeSizeColor($variantItem['item_code'], $variantItem['size'], $variantItem['color']);
                         if ($existingVar) {
                             $ok = $productModel->updateProduct($existingVar['id'], $variantItem);
-                            if ($ok) $updated++;
-                            else $failed[] = $variantItem['item_code'];
+                            if ($ok) {
+                                $updated++;
+                                if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
+                                    $this->applyQuickImportStockFromLocalStock(
+                                        $conn,
+                                        (string) $variantItem['item_code'],
+                                        trim((string) ($variantItem['sku'] ?? '')),
+                                        trim((string) ($variantItem['size'] ?? '')),
+                                        trim((string) ($variantItem['color'] ?? '')),
+                                        (int) ($variantItem['local_stock'] ?? 0)
+                                    );
+                                }
+                            } else {
+                                $failed[] = $variantItem['item_code'];
+                            }
                         } else {
                             $id = $productModel->createProduct($variantItem);
                             if ($id) {
                                 $created++;
-                                $createdIdsByCode[$variantItem['item_code']][] = (int)$id;
-                                if (isset($conn) && $conn instanceof mysqli) {
-                                    $this->recordVendorApiImportOpeningStock(
+                                $createdIdsByCode[$variantItem['item_code']][] = (int) $id;
+                                if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
+                                    $this->applyQuickImportStockFromLocalStock(
                                         $conn,
-                                        (int)$id,
-                                        trim((string)($variantItem['sku'] ?? '')),
-                                        (string)($variantItem['item_code'] ?? ''),
-                                        trim((string)($variantItem['size'] ?? '')),
-                                        trim((string)($variantItem['color'] ?? '')),
-                                        (int)($variantItem['local_stock'] ?? 0)
+                                        (string) ($variantItem['item_code'] ?? ''),
+                                        trim((string) ($variantItem['sku'] ?? '')),
+                                        trim((string) ($variantItem['size'] ?? '')),
+                                        trim((string) ($variantItem['color'] ?? '')),
+                                        (int) ($variantItem['local_stock'] ?? 0)
                                     );
                                 }
-                            } else $failed[] = $variantItem['item_code'];
+                            } else {
+                                $failed[] = $variantItem['item_code'];
+                            }
                         }
                     }
                 }
@@ -2572,60 +2601,55 @@ class ProductsController
     }
 
     /**
-     * OPENING_STOCK when a product is first created via vendor API import (single-mode).
+     * Products list import: set warehouse stock from API local_stock (same logic as bulk import file qty).
      */
-    private function recordVendorApiImportOpeningStock(
+    private function applyQuickImportStockFromLocalStock(
         mysqli $conn,
-        int $productId,
-        string $sku,
         string $itemCode,
-        string $size,
-        string $color,
-        int $qty
+        string $importSku,
+        string $importSize,
+        string $importColor,
+        int $localStock
     ): void {
-        if ($productId <= 0 || $qty <= 0) {
+        $localStock = max(0, (int) $localStock);
+        if ($localStock <= 0 || trim($itemCode) === '') {
             return;
         }
-        $sku = trim($sku);
-        if ($sku === '') {
-            return;
-        }
+
         $warehouseId = $this->resolveDefaultImportWarehouseId($conn);
         if ($warehouseId <= 0) {
             return;
         }
-        $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
-        $reason = 'Opening stock from product bulk import';
+
         $userId = 0;
         if (session_status() !== PHP_SESSION_ACTIVE) {
             @session_start();
         }
         if (!empty($_SESSION['user']['id'])) {
-            $userId = (int)$_SESSION['user']['id'];
+            $userId = (int) $_SESSION['user']['id'];
         }
 
-        $this->ensureVpStockMovementsOpeningStockEnum($conn);
+        $stockLoc = $this->getWarehouseLocationLabel($conn, $warehouseId);
+        $importSku = trim($importSku);
+        if ($importSku === '') {
+            $importSku = $this->buildBulkImportAutoSku($itemCode, $importSize, $importColor);
+        }
 
-        require_once __DIR__ . '/../models/product/StockMovement.php';
-        try {
-            StockMovement::insert($conn, [
-                'product_id' => $productId,
-                'sku' => $sku,
-                'item_code' => $itemCode,
-                'size' => trim($size),
-                'color' => trim($color),
-                'warehouse_id' => $warehouseId,
-                'location' => $loc,
-                'movement_type' => 'OPENING_STOCK',
-                'quantity' => $qty,
-                'ref_type' => 'BULK_IMPORT',
-                'ref_id' => 'product:' . $productId,
-                'reason' => $reason,
-                'update_by_user' => $userId,
-                'strict_stock_check' => false,
-            ]);
-        } catch (\Throwable $e) {
-            error_log('recordVendorApiImportOpeningStock: ' . $e->getMessage());
+        $err = $this->bulkImportApplyStockTarget(
+            $conn,
+            0,
+            $warehouseId,
+            $itemCode,
+            $importSku,
+            $importSize,
+            $importColor,
+            $localStock,
+            $stockLoc,
+            $userId,
+            'Product import stock from local_stock'
+        );
+        if ($err !== null) {
+            error_log('applyQuickImportStockFromLocalStock ' . $itemCode . ': ' . $err);
         }
     }
 
