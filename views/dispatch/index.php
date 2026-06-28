@@ -486,7 +486,9 @@
                     <?php endif; ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
+                    <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
+                    <?php endif; ?>
                   </div>
                 </div>
                 <div></div>
@@ -1276,8 +1278,20 @@ if (bulkPrintBtn) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ invoice_id: invoiceId })
         })
-        .then(res => res.json())
+        .then(async res => {
+            const text = await res.text();
+            try {
+                return text ? JSON.parse(text) : null;
+            } catch (parseErr) {
+                console.error('Cancel invoice JSON parse failed:', text);
+                throw new Error('Invalid server response');
+            }
+        })
         .then(data => {
+            if (!data) {
+                alert('Error: Empty server response');
+                return;
+            }
             if (data.success) {
                 showAlert('Invoice cancellation initiated successfully. Reloading...', 'success');
                 location.reload();

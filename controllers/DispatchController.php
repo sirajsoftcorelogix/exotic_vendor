@@ -19,6 +19,18 @@ $dispatchModel = new Dispatch($conn);
 $ordersModel = new Order($conn);
 
 class DispatchController {
+    private function emitJsonResponse(array $payload, int $statusCode = 200): void
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        http_response_code($statusCode);
+        header('Content-Type: application/json; charset=UTF-8');
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        echo $json !== false ? $json : '{"success":false,"message":"Response encode failed"}';
+        exit;
+    }
+
     /**
      * @param array<string, mixed> $payload
      * @param array<int, array<string, mixed>> $sources
@@ -1377,24 +1389,18 @@ class DispatchController {
     }
     
     public function cancelDispatch() {
-        header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            return;
+            $this->emitJsonResponse(['success' => false, 'message' => 'Method not allowed'], 405);
         }
 
         $input = json_decode(file_get_contents('php://input'), true);
         if (!isset($input['invoice_id'])) {
-            http_response_code(400);
-            echo json_encode(['success' => false, 'message' => 'Missing invoice_id']);
-            return;
+            $this->emitJsonResponse(['success' => false, 'message' => 'Missing invoice_id'], 400);
         }
 
         global $dispatchModel;
         global $commanModel;
         $invoiceId = intval($input['invoice_id']);
-        //shipment id from dispatch record
         $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
 
         global $conn;
@@ -1402,41 +1408,32 @@ class DispatchController {
             foreach ($dispatchRecords as $record) {
                 $shiprocketOrderId = $record['shiprocket_order_id'];
                 if ($shiprocketOrderId) {
-                    // Cancel shipment via Shiprocket API
                     $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
-                    //print_array($response);
                     $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                     if (!$response['success']) {
-                        //throw new Exception("Failed to cancel shiprocket order ID: " . $shiprocketOrderId);
-                        echo json_encode(['success' => false, 'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error')]);
-                        exit();
-                        //echo json_encode($response);
-                        //continue; // skip to next record
+                        $this->emitJsonResponse([
+                            'success' => false,
+                            'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error'),
+                        ]);
                     }
-                    // Update dispatch record to mark as cancelled
-                    //$dispatchModel->updateDispatchStatus($record['id'], 'cancelled');
-                    //$commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                 }
             }
             $stockModel = new Stock($conn);
             $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
             if (empty($stockRestore['success'])) {
-                http_response_code(500);
-                echo json_encode([
+                $this->emitJsonResponse([
                     'success' => false,
                     'message' => 'Dispatch updated but stock could not be restored: ' . ($stockRestore['message'] ?? 'unknown'),
                     'stock_restore' => $stockRestore,
-                ]);
-                return;
+                ], 500);
             }
-            echo json_encode([
+            $this->emitJsonResponse([
                 'success' => true,
                 'message' => 'Dispatch cancelled successfully',
                 'stock_restore' => $stockRestore,
             ]);
         } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Error cancelling dispatch: ' . $e->getMessage()]);
+            $this->emitJsonResponse(['success' => false, 'message' => 'Error cancelling dispatch: ' . $e->getMessage()], 500);
         }
     }
     public function getDispatchDetails() {
@@ -1631,18 +1628,13 @@ class DispatchController {
         echo json_encode(['success' => true, 'results' => $results]);
     }
     public function cancelInvoice() {
-        header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            return;
+            $this->emitJsonResponse(['success' => false, 'message' => 'Method not allowed'], 405);
         }
 
         $input = json_decode(file_get_contents('php://input'), true);
         if (!isset($input['invoice_id'])) {
-            http_response_code(400);
-            echo json_encode(['success' => false, 'message' => 'Missing invoice_id']);
-            return;
+            $this->emitJsonResponse(['success' => false, 'message' => 'Missing invoice_id'], 400);
         }
 
         global $dispatchModel;
@@ -1652,58 +1644,48 @@ class DispatchController {
         $invoiceId = intval($input['invoice_id']);
         $invoice = $invoiceModel->getInvoiceById($invoiceId);
         if (!$invoice) {
-            http_response_code(404);
-            echo json_encode(['success' => false, 'message' => 'Invoice not found']);
-            return;
+            $this->emitJsonResponse(['success' => false, 'message' => 'Invoice not found'], 404);
         }
         $invStatus = strtolower(trim((string)($invoice['status'] ?? '')));
         if ($invStatus === 'cancelled') {
-            echo json_encode(['success' => true, 'message' => 'Invoice already cancelled']);
-            return;
+            $this->emitJsonResponse(['success' => true, 'message' => 'Invoice already cancelled']);
         }
-        //shipment id from dispatch record
+
         $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
 
         try {
             foreach ($dispatchRecords as $record) {
                 $shiprocketOrderId = $record['shiprocket_order_id'];
                 if ($shiprocketOrderId) {
-                    // Cancel shipment via Shiprocket API
                     $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
-                    //print_array($response);
                     if (!$response['success']) {
-                        //throw new Exception("Failed to cancel shiprocket order ID: " . $shiprocketOrderId);
-                        echo json_encode(['success' => false, 'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error')]);
-                        exit();
-                        //echo json_encode($response);
-                        //continue; // skip to next record
+                        $this->emitJsonResponse([
+                            'success' => false,
+                            'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error'),
+                        ]);
                     }
-                    // Update dispatch record to mark as cancelled
-                    //$dispatchModel->updateDispatchStatus($record['id'], 'cancelled');
                     $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                 }
             }
+
             $stockModel = new Stock($conn);
             $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
             if (empty($stockRestore['success'])) {
-                http_response_code(500);
-                echo json_encode([
+                $this->emitJsonResponse([
                     'success' => false,
                     'message' => 'Shipment cancelled but stock could not be restored: ' . ($stockRestore['message'] ?? 'unknown'),
                     'stock_restore' => $stockRestore,
-                ]);
-                return;
+                ], 500);
             }
-            //update invoice status to cancelled
+
             $invoiceModel->updateInvoiceStatus($invoiceId, 'cancelled');
-            echo json_encode([
+            $this->emitJsonResponse([
                 'success' => true,
                 'message' => 'Invoice cancelled successfully',
                 'stock_restore' => $stockRestore,
             ]);
         } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Error cancelling invoice: ' . $e->getMessage()]);
+            $this->emitJsonResponse(['success' => false, 'message' => 'Error cancelling invoice: ' . $e->getMessage()], 500);
         }
     }
     public function bulkDispatch(){
