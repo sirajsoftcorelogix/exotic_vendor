@@ -3384,7 +3384,7 @@ class StockTransfer
         $summary = $this->fetchInTransitRow($summarySql, $filter['params'], $filter['types']);
 
         $partialSql = "
-            SELECT COUNT(DISTINCT st.id) AS partial_transfers
+            SELECT COUNT(*) AS partial_transfers
             FROM (
                 SELECT st.id,
                        SUM(ist.transfer_qty) AS sent_qty,
