@@ -405,18 +405,19 @@
   </div> -->
   <!-- Inventory -->
   <?php
-  $invCard = 'flex items-center justify-between gap-2 min-w-0 min-h-[4.25rem] sm:min-h-[4.5rem] border rounded-lg p-2.5 sm:p-3 relative';
+  $invCard = 'flex items-center justify-between gap-2 w-full min-w-[11.5rem] min-h-[4.25rem] sm:min-h-[4.5rem] border rounded-lg p-2.5 sm:p-3 relative';
   $invBody = 'min-w-0 flex-1 pr-0.5';
   $invLbl = 'text-xs sm:text-sm text-gray-500 leading-snug';
   $invVal = 'text-base sm:text-lg font-semibold leading-tight tabular-nums';
   $invIco = 'shrink-0 h-7 w-7 sm:h-8 sm:w-8 rounded-md flex items-center justify-center text-xs sm:text-sm';
   $invEdit = 'absolute top-1 right-1 sm:top-1.5 sm:right-1.5 p-1 min-w-[1.75rem] min-h-[1.75rem] inline-flex items-center justify-center rounded-md hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-amber-400/60';
+  $invGrid = 'grid gap-2 sm:gap-3 grid-cols-[repeat(auto-fill,minmax(11.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))]';
   ?>
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
   <div class="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3 sm:space-y-4 lg:col-span-2 min-w-0">
     <h3 class="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base"><i class="fas fa-boxes text-amber-600"></i>Inventory</h3>
       <!-- Stock metrics -->
-      <div class="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3">
+      <div class="<?php echo $invGrid; ?>">
         <!-- Local Stock -->
         <div class="<?php echo $invCard; ?> border-blue-100 bg-blue-50/50">
           <div class="<?php echo $invBody; ?>">
@@ -471,7 +472,7 @@
           href="<?php echo base_url('?page=purchase_orders&action=list&exclude_completed=1&item_code=' . rawurlencode((string)($products['item_code'] ?? ''))); ?>"
           target="_blank"
           rel="noopener noreferrer"
-          class="<?php echo $invCard; ?> border-orange-100 bg-orange-50/50 hover:bg-orange-100/60 transition min-[420px]:col-span-2 md:col-span-1"
+          class="<?php echo $invCard; ?> border-orange-100 bg-orange-50/50 hover:bg-orange-100/60 transition"
           title="View non-completed purchase orders for this product"
         >
           <div class="<?php echo $invBody; ?>">
@@ -484,7 +485,7 @@
         </a>
       </div>
       <!-- Product metrics -->
-     <div class="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 mt-2 sm:mt-3">
+     <div class="<?php echo $invGrid; ?> mt-2 sm:mt-3">
           <div class="<?php echo $invCard; ?> border-gray-200 bg-white">
             <div class="<?php echo $invBody; ?>">
               <p class="<?php echo $invLbl; ?>">Number Sold</p>
@@ -521,7 +522,7 @@
             </button>
           </div>
 
-          <div class="<?php echo $invCard; ?> border-emerald-100 bg-emerald-50 pr-6 sm:pr-7 min-[420px]:col-span-2 md:col-span-1">
+          <div class="<?php echo $invCard; ?> border-emerald-100 bg-emerald-50 pr-6 sm:pr-7">
             <div class="<?php echo $invBody; ?>">
               <p class="<?php echo $invLbl; ?>"><span class="sm:hidden">Perm. Available</span><span class="hidden sm:inline">Permanently Available</span></p>
               <p id="permaAvailableDisplay" class="<?php echo $invVal; ?> text-emerald-700"><?php echo htmlspecialchars($permanentlyAvailableText); ?></p>
@@ -544,7 +545,7 @@
             </div>
           </div>
 
-          <div class="<?php echo $invCard; ?> border-cyan-100 bg-cyan-50 min-[420px]:col-span-2 md:col-span-1 xl:col-span-1">
+          <div class="<?php echo $invCard; ?> border-cyan-100 bg-cyan-50">
             <div class="<?php echo $invBody; ?>">
               <p class="<?php echo $invLbl; ?>"><span class="sm:hidden">In-stock Lead</span><span class="hidden sm:inline">Instock Leadtime</span></p>
               <p class="<?php echo $invVal; ?> text-cyan-700"><?php echo htmlspecialchars((string)($products['instock_leadtime'] ?? '0')); ?></p>
