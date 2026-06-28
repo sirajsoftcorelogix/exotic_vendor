@@ -3516,6 +3516,13 @@ class product
                 'text_color_class' => 'text-amber-600',
             ];
         }
+        if ($mt === 'OPENING_STOCK' && $rt === 'BULK_IMPORT') {
+            return [
+                'ledger_type' => 'Bulk Product Import',
+                'icon' => 'fa-cloud-upload-alt',
+                'text_color_class' => 'text-teal-600',
+            ];
+        }
         if ($mt === 'OPENING_STOCK') {
             return [
                 'ledger_type' => 'Opening stock',
@@ -3561,7 +3568,7 @@ class product
         }
         if ($mt === 'IN' && $rt === 'BULK_IMPORT') {
             return [
-                'ledger_type' => 'Bulk import',
+                'ledger_type' => 'Bulk Product Import',
                 'icon' => 'fa-cloud-upload-alt',
                 'text_color_class' => 'text-teal-600',
             ];

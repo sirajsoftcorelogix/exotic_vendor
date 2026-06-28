@@ -2595,8 +2595,7 @@ class ProductsController
             return;
         }
         $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
-        $reason = 'Opening stock from vendor API import';
-        $refType = 'VendorImport';
+        $reason = 'Opening stock from product bulk import';
         $userId = 0;
         if (session_status() !== PHP_SESSION_ACTIVE) {
             @session_start();
@@ -2606,68 +2605,69 @@ class ProductsController
         }
 
         $this->ensureVpStockMovementsOpeningStockEnum($conn);
-        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
 
-        $ins = $conn->prepare("INSERT INTO vp_stock_movements
-            (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
-        if (!$ins) {
-            error_log('recordVendorApiImportOpeningStock: prepare failed ' . $conn->error);
-            return;
+        require_once __DIR__ . '/../models/product/StockMovement.php';
+        try {
+            StockMovement::insert($conn, [
+                'product_id' => $productId,
+                'sku' => $sku,
+                'item_code' => $itemCode,
+                'size' => trim($size),
+                'color' => trim($color),
+                'warehouse_id' => $warehouseId,
+                'location' => $loc,
+                'movement_type' => 'OPENING_STOCK',
+                'quantity' => $qty,
+                'ref_type' => 'BULK_IMPORT',
+                'ref_id' => 'product:' . $productId,
+                'reason' => $reason,
+                'update_by_user' => $userId,
+                'strict_stock_check' => false,
+            ]);
+        } catch (\Throwable $e) {
+            error_log('recordVendorApiImportOpeningStock: ' . $e->getMessage());
         }
-        $runningStock = $qty;
-        $ins->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-        if (!$ins->execute()) {
-            $msg = $ins->error;
-            $ins->close();
-            $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
-                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
-            if (!$ins2) {
-                error_log('recordVendorApiImportOpeningStock: insert failed ' . $msg);
-                return;
-            }
-            $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-            if (!$ins2->execute()) {
-                error_log('recordVendorApiImportOpeningStock: fallback insert failed ' . $ins2->error);
-            }
-            $ins2->close();
-            return;
-        }
-        $ins->close();
     }
 
     /**
+     * Set warehouse stock from bulk import qty (same value as local_stock), via central movement ledger + physical_stock sync.
+     *
      * @return string|null Error message, or null on success
      */
-    private function bulkImportApplyOpeningStock(
+    private function bulkImportApplyStockTarget(
         mysqli $conn,
+        int $importItemId,
         int $warehouseId,
         string $itemCode,
         string $importSku,
         string $importSize,
         string $importColor,
-        int $openingQty,
+        int $targetQty,
         string $stockLocation,
-        int $userId
+        int $userId,
+        string $reason = 'Bulk import stock'
     ): ?string {
-        if ($openingQty <= 0) {
+        require_once __DIR__ . '/../models/product/StockMovement.php';
+
+        $targetQty = max(0, (int) $targetQty);
+        if ($targetQty <= 0) {
             return null;
         }
         if ($warehouseId <= 0) {
-            return 'Warehouse is required for opening stock.';
+            return 'Warehouse is required for stock update.';
         }
+
         $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku, $importSize, $importColor);
         if (!$product) {
             return 'Product not found for stock movement (item_code/SKU/size/color).';
         }
 
-        $productId = (int)($product['id'] ?? 0);
+        $productId = (int) ($product['id'] ?? 0);
         if ($productId <= 0) {
             return 'Invalid product id for stock movement.';
         }
-        // Prefer canonical SKU from vp_products; fallback to import/derived SKU when blank.
-        $sku = trim((string)($product['sku'] ?? ''));
+
+        $sku = trim((string) ($product['sku'] ?? ''));
         if ($sku === '') {
             $sku = trim($importSku);
         }
@@ -2677,95 +2677,142 @@ class ProductsController
         if ($sku === '') {
             return 'SKU is missing for stock movement.';
         }
+
         $size = trim($importSize);
         $color = trim($importColor);
         $loc = trim($stockLocation);
         if ($loc === '') {
             $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
         }
-        $qty = max(0, (int)$openingQty);
-        $runningStock = $qty;
-        $reason = 'Migration From Egreen';
-        $refType = 'Egreen';
+
+        $refType = 'BULK_IMPORT';
+        $refId = $importItemId > 0 ? ('import_item:' . $importItemId) : ('bulk:' . $productId);
         $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
 
-        // Re-import: remove prior bulk opening lines for this variant/warehouse, then insert a fresh movement.
         if (!$conn->begin_transaction()) {
             return 'Could not start transaction for stock movement.';
         }
-        $del = $conn->prepare("DELETE FROM vp_stock_movements
-            WHERE product_id = ? AND warehouse_id = ? AND `{$itemCodeCol}` = ?
-              AND movement_type = 'OPENING_STOCK' AND ref_type = 'Egreen'
-              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
-              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?");
-        if (!$del) {
-            $conn->rollback();
-            return 'Could not prepare stock movement delete (refresh).';
-        }
-        $del->bind_param('iisss', $productId, $warehouseId, $itemCode, $size, $color);
-        if (!$del->execute()) {
-            $msg = $del->error;
-            $del->close();
-            $conn->rollback();
-            return 'Stock movement delete failed: ' . $msg;
-        }
-        $del->close();
 
-        $ins = $conn->prepare("INSERT INTO vp_stock_movements
-            (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
-        if (!$ins) {
-            $conn->rollback();
-            return 'Could not prepare stock movement insert.';
-        }
-        $ins->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-        if (!$ins->execute()) {
-            $msg = $ins->error;
-            $ins->close();
-            // Fallback only for schemas where ref_id is NOT NULL.
-            $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
-                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
-            if (!$ins2) {
-                $conn->rollback();
-                return 'Stock movement insert failed: ' . $msg;
+        try {
+            if ($importItemId > 0) {
+                $delBulk = $conn->prepare('DELETE FROM vp_stock_movements WHERE ref_type = ? AND ref_id = ?');
+                if ($delBulk) {
+                    $delBulk->bind_param('ss', $refType, $refId);
+                    $delBulk->execute();
+                    $delBulk->close();
+                }
             }
-            $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-            if (!$ins2->execute()) {
-                $msg2 = $ins2->error;
-                $ins2->close();
-                $conn->rollback();
-                return 'Stock movement insert failed: ' . $msg2;
-            }
-            $ins2->close();
-        } else {
-            $ins->close();
-        }
 
-        $updL = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
-        if (!$updL) {
-            $conn->rollback();
-            return 'Could not prepare product stock update.';
-        }
-        $updL->bind_param('ii', $runningStock, $productId);
-        if (!$updL->execute()) {
-            $err = $updL->error;
+            $delLegacy = $conn->prepare("DELETE FROM vp_stock_movements
+                WHERE product_id = ? AND warehouse_id = ? AND `{$itemCodeCol}` = ?
+                  AND movement_type = 'OPENING_STOCK' AND ref_type IN ('Egreen', 'EgreenRefetch')
+                  AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
+                  AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?");
+            if ($delLegacy) {
+                $delLegacy->bind_param('iisss', $productId, $warehouseId, $itemCode, $size, $color);
+                $delLegacy->execute();
+                $delLegacy->close();
+            }
+
+            $current = (int) StockMovement::getLastRunningStock($conn, $sku, $warehouseId);
+            $delta = $targetQty - $current;
+
+            if ($delta > 0) {
+                $movementType = $current <= 0 ? 'OPENING_STOCK' : 'IN';
+                $movementQty = $current <= 0 ? $targetQty : $delta;
+                StockMovement::insert($conn, [
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'warehouse_id' => $warehouseId,
+                    'location' => $loc,
+                    'movement_type' => $movementType,
+                    'quantity' => $movementQty,
+                    'ref_type' => $refType,
+                    'ref_id' => $refId,
+                    'reason' => $reason,
+                    'update_by_user' => $userId,
+                    'strict_stock_check' => false,
+                ]);
+            } elseif ($delta < 0) {
+                StockMovement::insert($conn, [
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'warehouse_id' => $warehouseId,
+                    'location' => $loc,
+                    'movement_type' => 'OUT',
+                    'quantity' => abs($delta),
+                    'ref_type' => $refType,
+                    'ref_id' => $refId,
+                    'reason' => $reason,
+                    'update_by_user' => $userId,
+                    'strict_stock_check' => false,
+                ]);
+            } else {
+                StockMovement::syncProductPhysicalStock($conn, $productId);
+            }
+
+            $updL = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
+            if (!$updL) {
+                throw new \RuntimeException('Could not prepare product stock update.');
+            }
+            $updL->bind_param('ii', $targetQty, $productId);
+            if (!$updL->execute()) {
+                $err = $updL->error;
+                $updL->close();
+                throw new \RuntimeException('Product local_stock update failed: ' . $err);
+            }
             $updL->close();
-            $conn->rollback();
-            return 'Product local_stock update failed: ' . $err;
-        }
-        $updL->close();
 
-        if (!$conn->commit()) {
-            return 'Could not commit stock movement transaction.';
+            if (!$conn->commit()) {
+                return 'Could not commit stock movement transaction.';
+            }
+
+            return null;
+        } catch (\Throwable $e) {
+            $conn->rollback();
+            return $e->getMessage();
         }
-        return null;
     }
 
     /**
-     * For ReUpload/API refetch:
-     * - If no prior movement exists for this product+warehouse+variant, create OPENING_STOCK at target qty.
-     * - If prior movement exists, create IN/OUT adjustment so latest running stock becomes target qty.
+     * @return string|null Error message, or null on success
+     */
+    private function bulkImportApplyOpeningStock(
+        mysqli $conn,
+        int $importItemId,
+        int $warehouseId,
+        string $itemCode,
+        string $importSku,
+        string $importSize,
+        string $importColor,
+        int $openingQty,
+        string $stockLocation,
+        int $userId
+    ): ?string {
+        return $this->bulkImportApplyStockTarget(
+            $conn,
+            $importItemId,
+            $warehouseId,
+            $itemCode,
+            $importSku,
+            $importSize,
+            $importColor,
+            $openingQty,
+            $stockLocation,
+            $userId,
+            'Bulk import opening stock'
+        );
+    }
+
+    /**
+     * For ReUpload/API refetch — same stock target logic as opening import.
+     *
      * @return string|null Error message, or null on success
      */
     private function bulkImportApplyRefetchStock(
@@ -2780,125 +2827,19 @@ class ProductsController
         int $userId,
         int $importItemId
     ): ?string {
-        if ($warehouseId <= 0) {
-            return 'Warehouse is required for stock update.';
-        }
-        $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku, $importSize, $importColor);
-        if (!$product) {
-            return 'Product not found for stock update (item_code/SKU/size/color).';
-        }
-        $productId = (int)($product['id'] ?? 0);
-        if ($productId <= 0) {
-            return 'Invalid product id for stock update.';
-        }
-
-        // Prefer canonical SKU from vp_products; fallback to import/derived SKU when blank.
-        $sku = trim((string)($product['sku'] ?? ''));
-        if ($sku === '') {
-            $sku = trim($importSku);
-        }
-        if ($sku === '') {
-            $sku = $this->buildBulkImportAutoSku($itemCode, $importSize, $importColor);
-        }
-        if ($sku === '') {
-            return 'SKU is missing for stock update.';
-        }
-        $size = trim($importSize);
-        $color = trim($importColor);
-        $loc = trim($stockLocation);
-        if ($loc === '') {
-            $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
-        }
-        $targetQty = max(0, (int)$targetQty);
-        $refType = 'EgreenRefetch';
-        $refId = 'import_item:' . (int)$importItemId;
-        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
-
-        if (!$conn->begin_transaction()) {
-            return 'Could not start transaction for stock update.';
-        }
-
-        $latestStmt = $conn->prepare("SELECT running_stock
-            FROM vp_stock_movements
-            WHERE product_id = ? AND warehouse_id = ? AND `{$itemCodeCol}` = ?
-              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
-              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
-            ORDER BY id DESC
-            LIMIT 1");
-        if (!$latestStmt) {
-            $conn->rollback();
-            return 'Could not prepare stock read query.';
-        }
-        $latestStmt->bind_param('iisss', $productId, $warehouseId, $itemCode, $size, $color);
-        if (!$latestStmt->execute()) {
-            $err = $latestStmt->error;
-            $latestStmt->close();
-            $conn->rollback();
-            return 'Could not read latest stock movement: ' . $err;
-        }
-        $latestRow = $latestStmt->get_result()->fetch_assoc();
-        $latestStmt->close();
-
-        if (!$latestRow) {
-            $reason = 'Opening stock set from API ReUpload';
-            $ins = $conn->prepare("INSERT INTO vp_stock_movements
-                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, ?, ?, ?)");
-            if (!$ins) {
-                $conn->rollback();
-                return 'Could not prepare opening stock insert.';
-            }
-            $ins->bind_param('issssisiisssi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $targetQty, $targetQty, $refType, $refId, $reason, $userId);
-            if (!$ins->execute()) {
-                $err = $ins->error;
-                $ins->close();
-                $conn->rollback();
-                return 'Opening stock insert failed: ' . $err;
-            }
-            $ins->close();
-        } else {
-            $current = (int)($latestRow['running_stock'] ?? 0);
-            $delta = $targetQty - $current;
-            if ($delta !== 0) {
-                $movementType = $delta > 0 ? 'IN' : 'OUT';
-                $qty = abs($delta);
-                $reason = 'Stock adjusted from API ReUpload';
-                $insAdj = $conn->prepare("INSERT INTO vp_stock_movements
-                    (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                if (!$insAdj) {
-                    $conn->rollback();
-                    return 'Could not prepare adjustment insert.';
-                }
-                $insAdj->bind_param('issssissiisssi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $movementType, $qty, $targetQty, $refType, $refId, $reason, $userId);
-                if (!$insAdj->execute()) {
-                    $err = $insAdj->error;
-                    $insAdj->close();
-                    $conn->rollback();
-                    return 'Adjustment insert failed: ' . $err;
-                }
-                $insAdj->close();
-            }
-        }
-
-        $upd = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
-        if (!$upd) {
-            $conn->rollback();
-            return 'Could not prepare product stock update.';
-        }
-        $upd->bind_param('ii', $targetQty, $productId);
-        if (!$upd->execute()) {
-            $err = $upd->error;
-            $upd->close();
-            $conn->rollback();
-            return 'Product local_stock update failed: ' . $err;
-        }
-        $upd->close();
-
-        if (!$conn->commit()) {
-            return 'Could not commit stock update transaction.';
-        }
-        return null;
+        return $this->bulkImportApplyStockTarget(
+            $conn,
+            $importItemId,
+            $warehouseId,
+            $itemCode,
+            $importSku,
+            $importSize,
+            $importColor,
+            $targetQty,
+            $stockLocation,
+            $userId,
+            'Bulk import stock from API ReUpload'
+        );
     }
 
     private function bulkImportUploadErrorMessage(int $code): string
@@ -3181,7 +3122,8 @@ class ProductsController
             $delProdStmt->close();
         }
 
-        // Recalculate local_stock for affected products based on latest remaining movement.
+        // Recalculate local_stock and physical_stock for affected products from movement ledger.
+        require_once __DIR__ . '/../models/product/StockMovement.php';
         $recalcStmt = $conn->prepare("SELECT running_stock FROM vp_stock_movements WHERE product_id = ? ORDER BY id DESC LIMIT 1");
         $updStmt = $conn->prepare("UPDATE vp_products SET local_stock = ? WHERE id = ?");
         if ($recalcStmt && $updStmt) {
@@ -3193,6 +3135,7 @@ class ProductsController
                 $stock = $row ? (int)($row['running_stock'] ?? 0) : 0;
                 $updStmt->bind_param('ii', $stock, $pid);
                 $updStmt->execute();
+                StockMovement::syncProductPhysicalStock($conn, $pid);
             }
         }
         if ($recalcStmt) {
@@ -3401,8 +3344,31 @@ class ProductsController
                             $up->close();
                         }
                     }
-                    // No qty in file: local_stock already synced via updateProductFromApi in importApiCall.
+                    // No qty in file: use local_stock from API/product row for warehouse movement + physical_stock.
                     if ($fileQty <= 0) {
+                        $productRow = $this->findProductRowForBulkImportStock($conn, (string)$code, $impSku, $isz, $ico);
+                        $localQty = $productRow ? max(0, (int)($productRow['local_stock'] ?? 0)) : 0;
+                        if ($localQty > 0 && $jobWarehouseId > 0) {
+                            $openErr = $this->bulkImportApplyOpeningStock(
+                                $conn,
+                                (int)$id,
+                                $jobWarehouseId,
+                                (string)$code,
+                                $impSku,
+                                $isz,
+                                $ico,
+                                $localQty,
+                                $stockLoc,
+                                $batchUserId
+                            );
+                            if ($openErr !== null) {
+                                $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                                $stmtF->bind_param('si', $openErr, $id);
+                                $stmtF->execute();
+                                $stmtF->close();
+                                continue;
+                            }
+                        }
                         $stmtS = $conn->prepare("UPDATE product_import_items SET status='success', error_message=NULL, processed_at=NOW() WHERE id=?");
                         $stmtS->bind_param('i', $id);
                         $stmtS->execute();
@@ -3411,6 +3377,7 @@ class ProductsController
                     }
                     $openErr = $this->bulkImportApplyOpeningStock(
                         $conn,
+                        (int)$id,
                         $jobWarehouseId,
                         (string)$code,
                         $impSku,
