@@ -3514,7 +3514,14 @@ class product
                 'text_color_class' => $mt === 'IN' ? 'text-green-600' : 'text-red-600',
             ];
         }
-        if ($mt === 'IN' && $rt === 'GRN') {
+        if ($mt === 'TRANSFER_IN' && $rt === 'GRN') {
+            return [
+                'ledger_type' => 'Transfer GRN',
+                'icon' => 'fa-exchange-alt',
+                'text_color_class' => 'text-blue-600',
+            ];
+        }
+        if ($mt === 'IN' && ($rt === 'GRN' || $rt === 'PURCHASE_GRN')) {
             return [
                 'ledger_type' => 'Purchase (GRN)',
                 'icon' => 'fa-arrow-up',

@@ -35,6 +35,10 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                 </p>
             </div>
             <div class="flex shrink-0 flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 lg:pl-2 xl:pl-6 w-full sm:w-auto">
+                <a href="?page=products&action=in_transit" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:py-3 rounded-xl border border-sky-200 bg-sky-50 text-sky-800 text-sm font-semibold shadow-sm hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
+                    <i class="fas fa-truck-loading text-xs" aria-hidden="true"></i>
+                    In transit
+                </a>
                 <a href="?page=products&action=stock_transfer" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:py-3 rounded-xl border border-gray-200/90 bg-white text-gray-700 text-sm font-semibold shadow-sm hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
                     <i class="fas fa-history text-xs text-amber-700" aria-hidden="true"></i>
                     Transfer history

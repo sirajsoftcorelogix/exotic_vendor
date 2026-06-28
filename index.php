@@ -847,6 +847,12 @@ switch ($page) {
             case 'stock_transfer':
                 $controller->stock_transfer_list();
                 break;
+            case 'in_transit':
+                $controller->in_transit_list();
+                break;
+            case 'in_transit_export':
+                $controller->in_transit_export();
+                break;
             case 'stock_transfer_delete':
                 $controller->stock_transfer_delete();
                 break;

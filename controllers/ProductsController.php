@@ -143,6 +143,218 @@ class ProductsController
         renderTemplate('views/products/stock_transfer_list.php', $data, 'Stock Transfer Log');
     }
 
+    /**
+     * @return array{filters: array<string,mixed>, user_warehouse_id: int, is_admin: bool}
+     */
+    private function buildInTransitRequestFilters(): array
+    {
+        $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+        $userWh = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($userWh <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $userWh = (int)$_SESSION['user']['warehouse_id'];
+        }
+
+        $direction = strtolower(trim((string)($_GET['direction'] ?? '')));
+        if ($direction === '' && !$isAdminUser && $userWh > 0) {
+            $direction = 'incoming';
+        }
+
+        $filters = [
+            'search' => trim((string)($_GET['search'] ?? '')),
+            'from_warehouse' => isset($_GET['from_warehouse']) ? (int)$_GET['from_warehouse'] : 0,
+            'to_warehouse' => isset($_GET['to_warehouse']) ? (int)$_GET['to_warehouse'] : 0,
+            'direction' => $direction,
+            'receipt_state' => strtolower(trim((string)($_GET['receipt_state'] ?? 'any'))),
+            'dispatched_from' => trim((string)($_GET['dispatched_from'] ?? '')),
+            'dispatched_to' => trim((string)($_GET['dispatched_to'] ?? '')),
+            'age_min_days' => isset($_GET['aged_only']) && (int)$_GET['aged_only'] === 1 ? 14 : 0,
+        ];
+
+        if (!$isAdminUser) {
+            $filters['user_warehouse_scope'] = $userWh;
+        }
+
+        return [
+            'filters' => $filters,
+            'user_warehouse_id' => $userWh,
+            'is_admin' => $isAdminUser,
+        ];
+    }
+
+    public function in_transit_list()
+    {
+        is_login();
+        global $conn;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        if ($page_no < 1) {
+            $page_no = 1;
+        }
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+        $limit = in_array($limit, [10, 25, 50, 100], true) ? $limit : 50;
+        $offset = ($page_no - 1) * $limit;
+
+        $view = strtolower(trim((string)($_GET['view'] ?? 'item')));
+        if (!in_array($view, ['item', 'transfer'], true)) {
+            $view = 'item';
+        }
+
+        $sort = strtolower(trim((string)($_GET['sort'] ?? 'oldest_dispatch')));
+        if (!in_array($sort, ['oldest_dispatch', 'pending_qty_desc', 'item_code_asc', 'newest_dispatch'], true)) {
+            $sort = 'oldest_dispatch';
+        }
+        if ($view === 'item' && $sort === 'newest_dispatch') {
+            $sort = 'oldest_dispatch';
+        }
+        if ($view === 'transfer' && $sort === 'item_code_asc') {
+            $sort = 'oldest_dispatch';
+        }
+
+        $request = $this->buildInTransitRequestFilters();
+        $filters = $request['filters'];
+
+        if ($view === 'transfer') {
+            $listData = $stockTransferModel->listInTransitTransfers($limit, $offset, $filters, $sort);
+            $items = [];
+            $breakdown = [];
+        } else {
+            $listData = $stockTransferModel->listInTransitItemsAggregated($limit, $offset, $filters, $sort);
+            $items = $listData['records'];
+            $itemKeys = array_values(array_filter(array_map(static function (array $row): string {
+                return (string)($row['item_key'] ?? '');
+            }, $items)));
+            $breakdown = $stockTransferModel->getInTransitBreakdownByItemKeys($itemKeys, $filters);
+        }
+
+        $summary = $stockTransferModel->getInTransitSummary($filters);
+
+        $users = [];
+        $userResult = mysqli_query($conn, 'SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC');
+        if ($userResult) {
+            while ($row = mysqli_fetch_assoc($userResult)) {
+                $users[] = $row;
+            }
+        }
+
+        $warehouses = [];
+        $warehouseResult = mysqli_query($conn, 'SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC');
+        if ($warehouseResult) {
+            while ($row = mysqli_fetch_assoc($warehouseResult)) {
+                $warehouses[] = $row;
+            }
+        }
+
+        renderTemplate('views/products/in_transit.php', [
+            'view' => $view,
+            'records' => $listData['records'],
+            'breakdown' => $breakdown,
+            'summary' => $summary,
+            'page_no' => $page_no,
+            'total_records' => $listData['total'],
+            'limit' => $limit,
+            'filters' => $filters,
+            'sort' => $sort,
+            'users' => $users,
+            'warehouses' => $warehouses,
+            'user_warehouse_id' => $request['user_warehouse_id'],
+            'is_admin' => $request['is_admin'],
+        ], 'In Transit Inventory');
+    }
+
+    public function in_transit_export()
+    {
+        is_login();
+        global $conn;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $view = strtolower(trim((string)($_GET['view'] ?? 'item')));
+        $sort = strtolower(trim((string)($_GET['sort'] ?? 'oldest_dispatch')));
+        $request = $this->buildInTransitRequestFilters();
+        $filters = $request['filters'];
+
+        $filename = 'in_transit_' . date('Y-m-d_His') . '.csv';
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        echo "\xEF\xBB\xBF";
+
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            exit;
+        }
+
+        if ($view === 'transfer') {
+            $rows = $stockTransferModel->listInTransitTransfers(50000, 0, $filters, $sort)['records'];
+            fputcsv($out, [
+                'Transfer Order',
+                'Dispatch Date',
+                'Days In Transit',
+                'Source',
+                'Destination',
+                'Pending Lines',
+                'Sent Qty',
+                'Received Qty',
+                'Pending Qty',
+                'Receipt Status',
+                'Requested By',
+                'Dispatched By',
+            ]);
+            foreach ($rows as $row) {
+                fputcsv($out, [
+                    $row['transfer_order_no'] ?? '',
+                    $row['dispatch_date'] ?? '',
+                    $row['days_in_transit'] ?? 0,
+                    $row['source_name'] ?? '',
+                    $row['dest_name'] ?? '',
+                    $row['pending_line_count'] ?? 0,
+                    $row['sent_qty'] ?? 0,
+                    $row['received_qty'] ?? 0,
+                    $row['pending_qty'] ?? 0,
+                    $row['receipt_status'] ?? '',
+                    $row['requested_by_name'] ?? '',
+                    $row['dispatch_by_name'] ?? '',
+                ]);
+            }
+        } else {
+            $rows = $stockTransferModel->listInTransitLinesForExport($filters, $sort);
+            fputcsv($out, [
+                'Item Code',
+                'SKU',
+                'Product Title',
+                'Transfer Order',
+                'Source',
+                'Destination',
+                'Sent Qty',
+                'Received Qty',
+                'Pending Qty',
+                'Dispatch Date',
+                'Days In Transit',
+            ]);
+            foreach ($rows as $row) {
+                fputcsv($out, [
+                    $row['item_code'] ?? '',
+                    $row['sku'] ?? '',
+                    $row['product_title'] ?? '',
+                    $row['transfer_order_no'] ?? '',
+                    $row['source_name'] ?? '',
+                    $row['dest_name'] ?? '',
+                    $row['sent_qty'] ?? 0,
+                    $row['received_qty'] ?? 0,
+                    $row['pending_qty'] ?? 0,
+                    $row['dispatch_date'] ?? '',
+                    $row['days_in_transit'] ?? 0,
+                ]);
+            }
+        }
+
+        fclose($out);
+        exit;
+    }
+
     public function stock_transfer_delete()
     {
         is_login();

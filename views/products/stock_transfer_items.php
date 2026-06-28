@@ -13,6 +13,11 @@ $receiptStatus = isset($transfer_receipt_status) ? (string) $transfer_receipt_st
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <div class="mb-6">
+        <a href="?page=products&action=in_transit"
+            class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-800 shadow-sm hover:bg-sky-100 hover:border-sky-300 transition">
+            <i class="fas fa-truck-loading text-xs text-sky-600" aria-hidden="true"></i>
+            In transit inventory
+        </a>
         <a href="?page=products&action=stock_transfer"
             class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition">
             <i class="fas fa-arrow-left text-xs text-gray-500" aria-hidden="true"></i>
