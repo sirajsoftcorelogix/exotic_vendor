@@ -154,10 +154,18 @@ class User
     }
     public function insert($data)
     {
+        $name = trim((string) ($data['name'] ?? ''));
+        $email = trim((string) ($data['email'] ?? ''));
+        $phone = trim((string) ($data['phone'] ?? ''));
+        $password = (string) ($data['password'] ?? '');
+        $role = (int) ($data['role'] ?? 0);
+        $isActive = (int) ($data['is_active'] ?? 1);
+        $warehouseId = (int) ($data['warehouse_id'] ?? 0);
+
         // Check if email already exists
         $checkSql = "SELECT id FROM vp_users WHERE email = ?";
         $checkStmt = $this->db->prepare($checkSql);
-        $checkStmt->bind_param('s', $data['email']);
+        $checkStmt->bind_param('s', $email);
         $checkStmt->execute();
         $checkStmt->store_result();
         if ($checkStmt->num_rows > 0) {
@@ -165,11 +173,14 @@ class User
         }
         $checkStmt->close();
 
+        if ($password === '') {
+            return ['success' => false, 'message' => 'Password is required for new users.'];
+        }
+
         $sql = "INSERT INTO vp_users (name, email, phone, password, role_id, warehouse_id, is_active) VALUES (?, ?, ?, ?, ?, ?,?)";
         $stmt = $this->db->prepare($sql);
-        $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-        $warehouse_id = !empty($data['warehouse_id']) ? $data['warehouse_id'] : NULL;
-        $stmt->bind_param('ssssiii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $warehouse_id, $data['is_active']);
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+        $stmt->bind_param('ssssiii', $name, $email, $phone, $hashedPassword, $role, $warehouseId, $isActive);
         if ($stmt->execute()) {
             $user_id = $this->db->insert_id;
             // Add vendor teams
@@ -185,10 +196,19 @@ class User
     }
     public function update($id, $data)
     {
+        $id = (int) $id;
+        $name = trim((string) ($data['name'] ?? ''));
+        $email = trim((string) ($data['email'] ?? ''));
+        $phone = trim((string) ($data['phone'] ?? ''));
+        $role = (int) ($data['role'] ?? 0);
+        $isActive = (int) ($data['is_active'] ?? 0);
+        $warehouseId = (int) ($data['warehouse_id'] ?? 0);
+        $password = (string) ($data['password'] ?? '');
+
         // Check if email already exists for another user
         $checkSql = "SELECT id FROM vp_users WHERE email = ? AND id != ?";
         $checkStmt = $this->db->prepare($checkSql);
-        $checkStmt->bind_param('si', $data['email'], $id);
+        $checkStmt->bind_param('si', $email, $id);
         $checkStmt->execute();
         $checkStmt->store_result();
         if ($checkStmt->num_rows > 0) {
@@ -196,15 +216,15 @@ class User
         }
         $checkStmt->close();
 
-        if (!empty($data['password'])) {
+        if ($password !== '') {
             $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role_id = ?, is_active = ?, warehouse_id = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
-            $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-            $stmt->bind_param('ssssiiii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active'], $data['warehouse_id'], $id);
+            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            $stmt->bind_param('ssssiiii', $name, $email, $phone, $hashedPassword, $role, $isActive, $warehouseId, $id);
         } else {
             $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, role_id = ?, is_active = ?, warehouse_id = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('sssiiii', $data['name'], $data['email'], $data['phone'], $data['role'], $data['is_active'], $data['warehouse_id'], $id);
+            $stmt->bind_param('sssiiii', $name, $email, $phone, $role, $isActive, $warehouseId, $id);
         }
         if ($stmt->execute()) {
             // Add vendor teams
@@ -239,7 +259,11 @@ class User
         $sql = "INSERT INTO vp_user_team_mapping (user_id, team_id) VALUES (?, ?)";
         $stmt = $this->db->prepare($sql);
         foreach ($teamIds as $tm_id) {
-            $stmt->bind_param('ii', $user_id, $tm_id);
+            $teamId = (int) $tm_id;
+            if ($teamId <= 0) {
+                continue;
+            }
+            $stmt->bind_param('ii', $user_id, $teamId);
             $stmt->execute();
         }
         $stmt->close();
@@ -259,16 +283,20 @@ class User
     }
     public function updateUserPriofile($id, $data)
     {
+        $id = (int) $id;
+        $name = trim((string) ($data['name'] ?? ''));
+        $phone = trim((string) ($data['phone'] ?? ''));
+        $password = (string) ($data['password'] ?? '');
 
-        if (!empty($data['password'])) {
+        if ($password !== '') {
             $sql = "UPDATE vp_users SET name = ?, phone = ?, password = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
-            $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-            $stmt->bind_param('sssi', $data['name'], $data['phone'], $hashedPassword, $id);
+            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            $stmt->bind_param('sssi', $name, $phone, $hashedPassword, $id);
         } else {
             $sql = "UPDATE vp_users SET name = ?, phone = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('ssi', $data['name'], $data['phone'], $id);
+            $stmt->bind_param('ssi', $name, $phone, $id);
         }
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Your profile updated successfully.'];
