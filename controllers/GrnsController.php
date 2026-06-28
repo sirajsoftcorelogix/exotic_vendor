@@ -6,6 +6,7 @@ require_once 'models/order/purchaseOrderItem.php';
 require_once 'models/comman/tables.php';
 require_once 'models/user/user.php';
 require_once 'models/grns/PoGrnStock.php';
+require_once 'models/product/product.php';
 $grnModel = new grn($conn);
 $purchaseOrderModel = new PurchaseOrder($conn);
 $purchaseOrderItemsModel = new PurchaseOrderItem($conn);
@@ -115,6 +116,7 @@ class GrnsController {
 
             $poItems = $purchaseOrderItemsModel->getPurchaseOrderItemFromProduct($poId);
             $lastGrnId = 0;
+            $vendorSyncLines = [];
 
             foreach ($poItems as $index => $item) {
                 $qtyReceived = isset($qtyReceivedArr[$index]) ? (float) $qtyReceivedArr[$index] : 0;
@@ -154,6 +156,13 @@ class GrnsController {
                     'size' => $size,
                     'color' => $color,
                 ], $userId, $poNumber);
+
+                $vendorSyncLines[] = [
+                    'item_code' => $itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'qty' => $qtyReceived,
+                ];
             }
 
             if ($lastGrnId <= 0) {
@@ -189,7 +198,13 @@ class GrnsController {
             }
 
             header('Content-Type: application/json');
-            echo json_encode(['success' => true, 'grn_id' => $lastGrnId]);
+            $productModel = new product($conn);
+            $vendorNote = $this->syncPoGrnLocalStockToVendor($vendorSyncLines, $productModel);
+            $response = ['success' => true, 'grn_id' => $lastGrnId];
+            if ($vendorNote !== '') {
+                $response['vendor_sync_warning'] = $vendorNote;
+            }
+            echo json_encode($response);
             return;
 
         } catch (Exception $e) {
@@ -282,6 +297,61 @@ class GrnsController {
         echo $qrPng;
         exit;
 
+    }
+
+    /**
+     * Push local_stock_delta to vendor API for PO GRN receipt lines.
+     *
+     * @param list<array{item_code:string,size:string,color:string,qty:float}> $receiptLines
+     */
+    private function syncPoGrnLocalStockToVendor(array $receiptLines, product $productModel): string
+    {
+        $byVariant = [];
+        foreach ($receiptLines as $line) {
+            $itemCode = trim((string) ($line['item_code'] ?? ''));
+            $size = trim((string) ($line['size'] ?? ''));
+            $color = trim((string) ($line['color'] ?? ''));
+            $qty = (float) ($line['qty'] ?? 0);
+            if ($itemCode === '' || $qty <= 0) {
+                continue;
+            }
+            $key = strtolower($itemCode) . '|' . $size . '|' . $color;
+            if (!isset($byVariant[$key])) {
+                $byVariant[$key] = [
+                    'item_code' => $itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'qty' => 0.0,
+                ];
+            }
+            $byVariant[$key]['qty'] += $qty;
+        }
+
+        $failures = [];
+        foreach ($byVariant as $variant) {
+            $delta = (int) round((float) ($variant['qty'] ?? 0));
+            if ($delta <= 0) {
+                continue;
+            }
+            $result = $productModel->applyLocalStockDeltaAndRefreshFromVendorApi(
+                $variant['item_code'],
+                $delta,
+                $variant['size'],
+                $variant['color']
+            );
+            if (empty($result['success'])) {
+                $failures[] = $variant['item_code'] . ' — ' . trim((string) ($result['message'] ?? 'vendor local stock sync failed'));
+            }
+        }
+
+        if ($failures === []) {
+            return '';
+        }
+
+        $shown = array_slice($failures, 0, 3);
+        $suffix = count($failures) > 3 ? ' (and ' . (count($failures) - 3) . ' more)' : '';
+
+        return 'Vendor local stock update issue: ' . implode('; ', $shown) . $suffix . '.';
     }
 }
 ?>

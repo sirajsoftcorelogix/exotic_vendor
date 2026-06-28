@@ -869,10 +869,10 @@ class product
     }
 
     /**
-     * Push local_stock_delta to vendor product/modify, then refresh local_stock in DB from product/fetch.
+     * Push local_stock_delta to vendor product/modify only (does not change vp_products.local_stock).
      * Does not create stock movements or change physical_stock.
      *
-     * @return array{success:bool,message?:string,updated_count?:int,vendor_sync?:array}
+     * @return array{success:bool,message?:string,vendor_sync?:array,http_code?:int,response?:array}
      */
     public function applyLocalStockDeltaAndRefreshFromVendorApi(
         string $itemCode,
@@ -888,6 +888,9 @@ class product
         $size = trim($size);
         $color = trim($color);
         $localStockDelta = (int) $localStockDelta;
+        if ($localStockDelta === 0) {
+            return ['success' => true, 'message' => 'No local_stock_delta to apply.'];
+        }
 
         $product = [
             'item_code' => $itemCode,
@@ -899,24 +902,18 @@ class product
             $product = $row;
         }
 
-        $vendorSync = null;
-        if ($localStockDelta !== 0) {
-            $vendorSync = $this->syncCpToVendorFrontend($product, 0.0, (float) $localStockDelta);
-            if (empty($vendorSync['success'])) {
-                return [
-                    'success' => false,
-                    'message' => (string) ($vendorSync['message'] ?? 'Vendor local_stock_delta sync failed.'),
-                    'vendor_sync' => $vendorSync,
-                ];
-            }
+        $vendorSync = $this->syncCpToVendorFrontend($product, 0.0, (float) $localStockDelta);
+        if (empty($vendorSync['success'])) {
+            return [
+                'success' => false,
+                'message' => (string) ($vendorSync['message'] ?? 'Vendor local_stock_delta sync failed.'),
+                'vendor_sync' => $vendorSync,
+            ];
         }
 
-        $refresh = $this->refreshLocalStockFromVendorApi($itemCode);
-        if (!empty($vendorSync)) {
-            $refresh['vendor_sync'] = $vendorSync;
-        }
+        $vendorSync['vendor_sync'] = $vendorSync;
 
-        return $refresh;
+        return $vendorSync;
     }
 
     /** Set accounts_group on all rows for an item code from the vendor product/fetch master row. */

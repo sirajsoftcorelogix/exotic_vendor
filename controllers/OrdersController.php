@@ -2284,8 +2284,8 @@ class OrdersController
     }
 
     /**
-     * On order cancel: push local_stock_delta to vendor API (+qty restores website stock), then fetch latest local_stock.
-     * Does not update physical_stock or stock movements.
+     * On order cancel: push local_stock_delta to vendor API (+qty restores website stock).
+     * Does not update vp_products.local_stock, physical_stock, or stock movements.
      */
     private function syncLocalStockFromVendorApiForOrder(array $orderRow): void
     {
