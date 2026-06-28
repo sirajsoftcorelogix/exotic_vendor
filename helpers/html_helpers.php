@@ -962,3 +962,27 @@ function getGroupnameByCategory($category)
 	}
 	return null;
 }
+
+/**
+ * Build SKU from item_code, size, and color when no explicit SKU is stored.
+ * Matches ProductsController::buildBulkImportAutoSku().
+ */
+function buildAutoSkuFromItemVariant(string $itemCode, string $size = '', string $color = ''): string
+{
+	$itemCode = trim($itemCode);
+	$size = trim($size);
+	$color = trim($color);
+	if ($itemCode === '') {
+		return '';
+	}
+	if ($size !== '' && $color !== '') {
+		return $itemCode . '-' . $size . '-' . $color;
+	}
+	if ($size !== '' && $color === '') {
+		return $itemCode . '-' . $size;
+	}
+	if ($size === '' && $color !== '') {
+		return $itemCode . '--' . $color;
+	}
+	return $itemCode;
+}
