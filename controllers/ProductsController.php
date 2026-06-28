@@ -4486,29 +4486,13 @@ class ProductsController
                 'update_by_user' => $sessionUserId,
                 'movement_type' => $data['type'],
                 'warehouse_id'  => $data['warehouse_id'],
-                'location'      => $data['location']
+                'location'      => $data['location'],
+                'strict_stock_check' => false,
             ];
 
             $result = $productModel->insertStockMovement($insertData);
 
-            // Push latest stock to frontend/vendor API after local stock adjustment succeeds.
-            if (!empty($result['success'])) {
-                $freshProduct = $productModel->getProduct($insertData['product_id']);
-                if ($freshProduct) {
-                    $vendorSync = $this->syncProductStockToVendorFrontend($freshProduct, $insertData);
-                    $result['vendor_sync'] = $vendorSync;
-                    if (empty($vendorSync['success'])) {
-                        $existingMessage = isset($result['message']) ? (string)$result['message'] : 'Stock updated.';
-                        $syncMessage = isset($vendorSync['message']) ? (string)$vendorSync['message'] : 'Vendor sync failed.';
-                        $result['message'] = $existingMessage . ' ' . $syncMessage;
-                    }
-                } else {
-                    $result['vendor_sync'] = [
-                        'success' => false,
-                        'message' => 'Stock updated locally, but could not reload product for vendor sync.'
-                    ];
-                }
-            }
+            // Manual adjust updates physical_stock / warehouse movements only — not website local_stock or vendor API.
 
             echo json_encode($result);
         } catch (Exception $e) {

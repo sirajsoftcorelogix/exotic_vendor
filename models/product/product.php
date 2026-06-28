@@ -3630,38 +3630,64 @@ class product
     {
         $this->db->begin_transaction();
         try {
-            // 1. Get current stock from vp_products for calculation
-            $stmt = $this->db->prepare("SELECT local_stock FROM vp_products WHERE id = ?");
+            $stmt = $this->db->prepare('SELECT id FROM vp_products WHERE id = ? LIMIT 1');
             $stmt->bind_param('i', $data['product_id']);
             $stmt->execute();
             $res = $stmt->get_result();
             $product = $res->fetch_assoc();
+            $stmt->close();
 
-            if (!$product) throw new Exception("Product not found");
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
 
-            $current_stock = (int)$product['local_stock'];
             $adj_qty = (int)$data['quantity'];
+            $movement_type = strtoupper(trim((string)($data['movement_type'] ?? 'OUT')));
+            $isInbound = in_array($movement_type, ['IN', 'TRANSFER_IN', 'OPENING_STOCK'], true);
+            $warehouse_id = (int)($data['warehouse_id'] ?? 0);
+            $sku = (string)($data['sku'] ?? '');
+            $product_id = (int)$data['product_id'];
 
-            // 2. Calculate New Stock
-            if ($data['movement_type'] === 'IN' || $data['movement_type'] === 'TRANSFER_IN') {
-                $new_stock = $current_stock + $adj_qty;
-            } else {
-                $new_stock = $current_stock - $adj_qty;
+            // Per-warehouse running_stock chain on the movement row.
+            $running_stock = $isInbound ? $adj_qty : 0;
+            $lastRunning = 0;
+            if ($warehouse_id > 0 && $sku !== '') {
+                $whStmt = $this->db->prepare(
+                    'SELECT running_stock FROM vp_stock_movements
+                     WHERE sku = ? AND warehouse_id = ?
+                     ORDER BY id DESC LIMIT 1'
+                );
+                if ($whStmt) {
+                    $whStmt->bind_param('si', $sku, $warehouse_id);
+                    $whStmt->execute();
+                    $whRes = $whStmt->get_result();
+                    $whRow = $whRes ? $whRes->fetch_assoc() : null;
+                    $whStmt->close();
+                    if ($whRow) {
+                        $lastRunning = (int)($whRow['running_stock'] ?? 0);
+                    }
+                }
+            } elseif (!$isInbound && $product_id > 0) {
+                $lastRunning = $this->getPhysicalStockTotalFromMovements($product_id);
             }
 
-            // 3. Update local_stock in vp_products table
-            $updateSql = "UPDATE vp_products SET local_stock = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateSql);
-            $updateStmt->bind_param('ii', $new_stock, $data['product_id']);
-            if (!$updateStmt->execute()) {
-                throw new Exception("Failed to update master stock: " . $this->db->error);
+            $strictStockCheck = !array_key_exists('strict_stock_check', $data) || !empty($data['strict_stock_check']);
+            if (!$isInbound && $strictStockCheck && $adj_qty > $lastRunning) {
+                throw new Exception(
+                    'Insufficient stock: available ' . $lastRunning . ', requested ' . $adj_qty
+                );
             }
 
-            // 4. Insert into vp_stock_movements (History)
+            if ($warehouse_id > 0 && $sku !== '') {
+                $running_stock = $isInbound ? $lastRunning + $adj_qty : max(0, $lastRunning - $adj_qty);
+            } elseif (!$isInbound) {
+                $running_stock = max(0, $lastRunning - $adj_qty);
+            }
+
             $insertSql = "INSERT INTO vp_stock_movements (
-                        product_id, sku, item_code, size, color, 
-                        warehouse_id, location, movement_type, 
-                        quantity, running_stock, update_by_user, 
+                        product_id, sku, item_code, size, color,
+                        warehouse_id, location, movement_type,
+                        quantity, running_stock, update_by_user,
                         ref_type, ref_id, reason, created_at, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
 
@@ -3685,7 +3711,7 @@ class product
                 $data['location'],
                 $data['movement_type'],
                 $adj_qty,
-                $new_stock,
+                $running_stock,
                 $updatedByUser,
                 $ref_type,
                 $ref_id,
@@ -3693,14 +3719,26 @@ class product
             );
 
             if (!$insertStmt->execute()) {
-                throw new Exception("Failed to record history: " . $this->db->error);
+                throw new Exception('Failed to record history: ' . $this->db->error);
             }
+            $insertStmt->close();
 
-            // If everything is fine, commit changes
+            // Sync vp_products.physical_stock from movement ledger; do not touch local_stock (website/API stock).
+            $physicalTotal = $this->getPhysicalStockTotalFromMovements($product_id);
+            $updateSql = 'UPDATE vp_products SET physical_stock = ? WHERE id = ?';
+            $updateStmt = $this->db->prepare($updateSql);
+            if (!$updateStmt) {
+                throw new Exception('Failed to prepare physical_stock update: ' . $this->db->error);
+            }
+            $updateStmt->bind_param('ii', $physicalTotal, $product_id);
+            if (!$updateStmt->execute()) {
+                throw new Exception('Failed to update physical_stock: ' . $this->db->error);
+            }
+            $updateStmt->close();
+
             $this->db->commit();
             return ['success' => true, 'message' => 'Stock updated and history recorded.'];
         } catch (Exception $e) {
-            // Rollback if any step fails
             $this->db->rollback();
             return ['success' => false, 'message' => $e->getMessage()];
         }
