@@ -465,6 +465,8 @@
                     <?php
                       $needsRetry = false;
                       $reDispatch = false;
+                      $canCancelDispatch = false;
+                      $invoiceCancelled = strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled';
                       if (!empty($invoice_dispatch[$invoice['id']])) {
                         foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
                           if (empty($dispatch['awb_code'])) {
@@ -473,6 +475,15 @@
                           }
                           if (strtolower($dispatch['shipment_status'] ?? '') === 'cancelled' || strtolower($dispatch['shipment_status'] ?? '') === 'cancellation requested') {
                             $reDispatch = true;
+                          }
+                        }
+                        if (!$invoiceCancelled) {
+                          foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                            $shipStatus = strtolower(trim((string)($dispatch['shipment_status'] ?? '')));
+                            if ($shipStatus !== 'cancelled' && $shipStatus !== 'cancellation requested') {
+                              $canCancelDispatch = true;
+                              break;
+                            }
                           }
                         }
                       }
@@ -484,7 +495,9 @@
                     <?php if ($reDispatch): ?>
                       <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="reDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Re-Dispatch</button>
                     <?php endif; ?>
+                    <?php if ($canCancelDispatch): ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
+                    <?php endif; ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
                     <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
