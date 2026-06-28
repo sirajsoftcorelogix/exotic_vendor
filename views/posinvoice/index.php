@@ -277,7 +277,20 @@ ${deleteBtn}
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ invoice_id: invoiceId })
             })
-            .then(res => res.json())
+            .then(async res => {
+                const text = await res.text();
+                let data = null;
+                try {
+                    data = text ? JSON.parse(text) : null;
+                } catch (parseErr) {
+                    console.error('Cancel invoice JSON parse failed:', text);
+                    throw new Error('Invalid server response');
+                }
+                if (!data) {
+                    throw new Error('Empty server response');
+                }
+                return data;
+            })
             .then(data => {
                 if (data.success) {
                     if (typeof showAlert === 'function') {

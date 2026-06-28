@@ -166,25 +166,32 @@ WHERE i.pos_flag = 1";
         exit;
     }
 
+    private function emitJsonResponse(array $payload, int $statusCode = 200): void
+    {
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+        http_response_code($statusCode);
+        header('Content-Type: application/json; charset=UTF-8');
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        echo $json !== false ? $json : '{"success":false,"message":"Response encode failed"}';
+        exit;
+    }
+
     /**
      * Cancel POS invoice: cancel linked shipments (if any), restore stock, mark invoice cancelled.
      */
     public function cancelInvoice(): void
     {
-        header('Content-Type: application/json');
         is_login();
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            return;
+            $this->emitJsonResponse(['success' => false, 'message' => 'Method not allowed'], 405);
         }
 
         $input = json_decode(file_get_contents('php://input'), true);
         if (!is_array($input) || empty($input['invoice_id'])) {
-            http_response_code(400);
-            echo json_encode(['success' => false, 'message' => 'Missing invoice_id']);
-            return;
+            $this->emitJsonResponse(['success' => false, 'message' => 'Missing invoice_id'], 400);
         }
 
         global $conn, $invoiceModel, $commanModel;
@@ -197,28 +204,21 @@ WHERE i.pos_flag = 1";
         $invoice = $invoiceModel->getInvoiceById($invoiceId);
 
         if (!$invoice) {
-            http_response_code(404);
-            echo json_encode(['success' => false, 'message' => 'Invoice not found']);
-            return;
+            $this->emitJsonResponse(['success' => false, 'message' => 'Invoice not found'], 404);
         }
 
         if ((int) ($invoice['pos_flag'] ?? 0) !== 1) {
-            http_response_code(403);
-            echo json_encode(['success' => false, 'message' => 'Only POS invoices can be cancelled from this screen.']);
-            return;
+            $this->emitJsonResponse(['success' => false, 'message' => 'Only POS invoices can be cancelled from this screen.'], 403);
         }
 
         $warehouseId = $this->getSessionWarehouseId();
         if (!$this->isPosInvoiceAdminUser() && $warehouseId > 0 && (int) ($invoice['warehouse_id'] ?? 0) !== $warehouseId) {
-            http_response_code(403);
-            echo json_encode(['success' => false, 'message' => 'Invoice not found in your warehouse.']);
-            return;
+            $this->emitJsonResponse(['success' => false, 'message' => 'Invoice not found in your warehouse.'], 403);
         }
 
         $invStatus = strtolower(trim((string) ($invoice['status'] ?? '')));
         if ($invStatus === 'cancelled') {
-            echo json_encode(['success' => true, 'message' => 'Invoice already cancelled']);
-            return;
+            $this->emitJsonResponse(['success' => true, 'message' => 'Invoice already cancelled']);
         }
 
         $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
@@ -229,11 +229,10 @@ WHERE i.pos_flag = 1";
                 if ($shiprocketOrderId) {
                     $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
                     if (empty($response['success'])) {
-                        echo json_encode([
+                        $this->emitJsonResponse([
                             'success' => false,
                             'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error'),
                         ]);
-                        return;
                     }
                     $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                 }
@@ -242,25 +241,168 @@ WHERE i.pos_flag = 1";
             $stockModel = new Stock($conn);
             $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
             if (empty($stockRestore['success'])) {
-                http_response_code(500);
-                echo json_encode([
+                $this->emitJsonResponse([
                     'success' => false,
                     'message' => 'Shipment cancelled but stock could not be restored: ' . ($stockRestore['message'] ?? 'unknown'),
                     'stock_restore' => $stockRestore,
-                ]);
-                return;
+                ], 500);
+            }
+
+            $orderCancelMeta = ['message' => ''];
+            try {
+                $orderCancelMeta = $this->markPosInvoiceOrdersCancelled($conn, $invoiceId);
+            } catch (\Throwable $orderSyncEx) {
+                error_log('[POS invoice cancel order sync] ' . $orderSyncEx->getMessage());
+                $orderCancelMeta = [
+                    'order_numbers' => [],
+                    'local_updated' => 0,
+                    'api_called' => 0,
+                    'api_failed' => 0,
+                    'message' => 'Invoice cancelled but order status sync failed: ' . $orderSyncEx->getMessage(),
+                ];
             }
 
             $invoiceModel->updateInvoiceStatus($invoiceId, 'cancelled');
-            echo json_encode([
+            $this->emitJsonResponse([
                 'success' => true,
                 'message' => 'Invoice cancelled successfully',
                 'stock_restore' => $stockRestore,
+                'order_cancel_sync' => $orderCancelMeta,
             ]);
         } catch (\Throwable $e) {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Error cancelling invoice: ' . $e->getMessage()]);
+            $this->emitJsonResponse(['success' => false, 'message' => 'Error cancelling invoice: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * When a POS invoice is cancelled, mark linked vp_orders as cancelled (mirrors checkout shipped sync).
+     *
+     * @return array{order_numbers: list<string>, local_updated: int, api_called: int, api_failed: int, message: string}
+     */
+    private function markPosInvoiceOrdersCancelled(\mysqli $conn, int $invoiceId): array
+    {
+        global $commanModel;
+
+        $result = [
+            'order_numbers' => [],
+            'local_updated' => 0,
+            'api_called' => 0,
+            'api_failed' => 0,
+            'message' => '',
+        ];
+
+        $invoiceId = (int) $invoiceId;
+        if ($invoiceId <= 0) {
+            $result['message'] = 'Invalid invoice id for order cancel sync.';
+            return $result;
+        }
+
+        $orderStmt = $conn->prepare(
+            "SELECT DISTINCT order_number FROM vp_invoice_items
+             WHERE invoice_id = ? AND order_number IS NOT NULL AND TRIM(order_number) != ''"
+        );
+        if (!$orderStmt) {
+            $result['message'] = 'Could not load invoice order numbers.';
+            return $result;
+        }
+        $orderStmt->bind_param('i', $invoiceId);
+        $orderStmt->execute();
+        $orderRes = $orderStmt->get_result();
+        $orderNumbers = [];
+        while ($row = $orderRes->fetch_assoc()) {
+            $on = trim((string) ($row['order_number'] ?? ''));
+            if ($on !== '') {
+                $orderNumbers[] = $on;
+            }
+        }
+        $orderStmt->close();
+        $orderNumbers = array_values(array_unique($orderNumbers));
+        $result['order_numbers'] = $orderNumbers;
+
+        if ($orderNumbers === []) {
+            $result['message'] = 'No linked POS orders found for this invoice.';
+            return $result;
+        }
+
+        $statusRow = $commanModel->getExoticIndiaOrderStatusCode('cancelled');
+        $adminId = (int) ($statusRow['admin_id'] ?? 0);
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        $changeDate = date('Y-m-d H:i:s');
+
+        $lineStmt = $conn->prepare('SELECT id, item_code, size, color FROM vp_orders WHERE order_number = ? ORDER BY id ASC');
+        $updStmt = $conn->prepare(
+            "UPDATE vp_orders SET status = 'cancelled', invoice_id = NULL WHERE order_number = ? AND invoice_id = ?"
+        );
+        if (!$lineStmt || !$updStmt) {
+            $result['message'] = 'Could not prepare POS order cancel update.';
+            return $result;
+        }
+
+        foreach ($orderNumbers as $orderNumber) {
+            $lineStmt->bind_param('s', $orderNumber);
+            $lineStmt->execute();
+            $lines = $lineStmt->get_result()->fetch_all(MYSQLI_ASSOC) ?: [];
+
+            foreach ($lines as $line) {
+                $apiRes = null;
+                if ($adminId > 0) {
+                    $apiRes = $commanModel->updateExoticIndiaOrderStatus([
+                        'orderid' => $orderNumber,
+                        'level' => 'item',
+                        'order_status' => $adminId,
+                        'itemcode' => trim((string) ($line['item_code'] ?? '')),
+                        'size' => trim((string) ($line['size'] ?? '')),
+                        'color' => trim((string) ($line['color'] ?? '')),
+                    ]);
+                    ++$result['api_called'];
+                    if (empty($apiRes['success'])) {
+                        ++$result['api_failed'];
+                        error_log('[POS invoice cancel status API] Order ' . $orderNumber . ' item ' . (string) ($line['id'] ?? '') . ': ' . (string) ($apiRes['message'] ?? 'failed'));
+                    }
+                }
+
+                $orderLineId = (int) ($line['id'] ?? 0);
+                if ($orderLineId > 0) {
+                    $apiResponseLog = '';
+                    if ($adminId > 0 && is_array($apiRes)) {
+                        $apiResponseLog = json_encode([
+                            'success' => !empty($apiRes['success']),
+                            'http_code' => (int) ($apiRes['http_code'] ?? 0),
+                            'message' => (string) ($apiRes['message'] ?? ''),
+                        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '';
+                    }
+                    try {
+                        $commanModel->add_order_status_log([
+                            'order_id' => $orderLineId,
+                            'status' => 'Status: cancelled (POS invoice cancelled)',
+                            'changed_by' => $userId,
+                            'api_response' => $apiResponseLog,
+                            'change_date' => $changeDate,
+                        ]);
+                    } catch (\Throwable $logEx) {
+                        error_log('[POS invoice cancel status log] order ' . $orderLineId . ': ' . $logEx->getMessage());
+                    }
+                }
+            }
+
+            $updStmt->bind_param('si', $orderNumber, $invoiceId);
+            if ($updStmt->execute()) {
+                $result['local_updated'] += (int) $updStmt->affected_rows;
+            }
+        }
+
+        $lineStmt->close();
+        $updStmt->close();
+
+        if ($result['api_failed'] > 0) {
+            $result['message'] = 'Orders marked cancelled locally, but Exotic cancel status API failed for ' . $result['api_failed'] . ' item(s).';
+        } elseif ($result['local_updated'] <= 0) {
+            $result['message'] = 'No local POS order rows were updated (order may already be cancelled or unlinked).';
+        } else {
+            $result['message'] = 'Linked POS orders marked cancelled locally' . ($adminId > 0 ? ' and on Exotic.' : '.');
+        }
+
+        return $result;
     }
 
     /* ===============================
