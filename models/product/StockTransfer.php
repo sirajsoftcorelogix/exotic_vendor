@@ -108,12 +108,40 @@ class StockTransfer
                 continue;
             }
             $ic = trim((string)($row['item_code'] ?? ''));
+            $sku = trim((string)($row['sku'] ?? ''));
             $sz = trim((string)($row['size'] ?? ''));
             $cl = trim((string)($row['color'] ?? ''));
             $qty = isset($row['quantity']) ? (int)$row['quantity'] : 0;
-            if ($ic === '' || $qty <= 0) {
+            if (($ic === '' && $sku === '') || $qty <= 0) {
                 continue;
             }
+
+            if ($ic === '' && $sku !== '') {
+                $resolved = $this->resolveProductForTransferItem([
+                    'product_id' => 0,
+                    'sku' => $sku,
+                    'item_code' => '',
+                    'size' => $sz,
+                    'color' => $cl,
+                ]);
+                if (!$resolved) {
+                    $notFound[] = [
+                        'item_code' => $sku,
+                        'size' => $sz,
+                        'color' => $cl,
+                        'quantity' => $qty,
+                    ];
+                    continue;
+                }
+                $ic = (string)($resolved['item_code'] ?? $ic);
+                if ($sz === '') {
+                    $sz = (string)($resolved['size'] ?? '');
+                }
+                if ($cl === '') {
+                    $cl = (string)($resolved['color'] ?? '');
+                }
+            }
+
             $k = strtolower($ic) . "\x1e" . $sz . "\x1e" . $cl;
             if (!isset($merged[$k])) {
                 $merged[$k] = ['item_code' => $ic, 'size' => $sz, 'color' => $cl, 'qty' => 0];
@@ -122,7 +150,7 @@ class StockTransfer
         }
 
         if ($merged === []) {
-            return ['items' => [], 'errors' => ['No valid rows. Each row needs ItemCode and a positive Quantity.']];
+            return ['items' => [], 'errors' => ['No valid rows. Each row needs ItemCode (or SKU) and a positive Quantity.']];
         }
 
         $items = [];
@@ -234,6 +262,7 @@ class StockTransfer
             if (!$stmt->execute()) {
                 throw new Exception('Execute error: ' . $stmt->error);
             }
+            $transferId = (int) $this->db->insert_id;
             $stmt->close();
             
             // 2. Insert items and create stock movements
@@ -312,7 +341,8 @@ class StockTransfer
             return [
                 'success' => true,
                 'message' => 'Stock transfer created successfully',
-                'transfer_order_no' => $transfer_order_no
+                'transfer_order_no' => $transfer_order_no,
+                'transfer_id' => $transferId,
             ];
             
         } catch (Exception $e) {
@@ -343,117 +373,25 @@ class StockTransfer
      */
     private function insertStockMovement($product_id, $sku, $item_code, $warehouse_id, $location, $size, $color, $movement_type, $quantity, $user_id, $ref_type, $reason, $ref_id = '')
     {
-        // Get last running_stock for this specific SKU and warehouse
-        $lastStockQuery = "SELECT running_stock FROM vp_stock_movements 
-                           WHERE sku = ? AND warehouse_id = ? 
-                           ORDER BY id DESC LIMIT 1";
-        
-        $lstmt = $this->db->prepare($lastStockQuery);
-        if (!$lstmt) {
-            throw new Exception('Prepare error: ' . $this->db->error);
-        }
-        
-        $lstmt->bind_param('si', $sku, $warehouse_id);
-        $lstmt->execute();
-        $result = $lstmt->get_result();
-        $lastRow = $result->fetch_assoc();
-        $lstmt->close();
-        
-        // If no warehouse-specific history, fallback to last SKU-based history for overall running stock sanity check.
-        if (!$lastRow) {
-            $fallbackSql = "SELECT running_stock, warehouse_id FROM vp_stock_movements WHERE sku = ? ORDER BY id DESC LIMIT 1";
-            $fallbackStmt = $this->db->prepare($fallbackSql);
-            if ($fallbackStmt) {
-                $fallbackStmt->bind_param('s', $sku);
-                $fallbackStmt->execute();
-                $fallbackRes = $fallbackStmt->get_result();
-                $fallbackRow = $fallbackRes ? $fallbackRes->fetch_assoc() : null;
-                $fallbackStmt->close();
+        require_once __DIR__ . '/StockMovement.php';
 
-                if ($fallbackRow) {
-                    $lastRow = $fallbackRow;
-                }
-            }
-        }
-
-        $lastRunningStock = $lastRow ? (int)$lastRow['running_stock'] : 0;
-
-        // Fallback: if you're receiving inventory and the global SKU stock is higher than this warehouse, use global stock.
-        $globalStock = 0;
-        $globalSql = "SELECT running_stock FROM vp_stock_movements WHERE sku = ? ORDER BY id DESC LIMIT 1";
-        $globalStmt = $this->db->prepare($globalSql);
-        if ($globalStmt) {
-            $globalStmt->bind_param('s', $sku);
-            $globalStmt->execute();
-            $globalRes = $globalStmt->get_result();
-            $globalRow = $globalRes ? $globalRes->fetch_assoc() : null;
-            $globalStmt->close();
-            if ($globalRow) {
-                $globalStock = (int)$globalRow['running_stock'];
-            }
-        }
-
-        if ($movement_type === 'TRANSFER_IN' && $globalStock > $lastRunningStock) {
-            $lastRunningStock = $globalStock;
-        }
-
-        $currentStock = $lastRunningStock;
-        $productExists = false;
-        $prodStmt = $this->db->prepare("SELECT local_stock FROM vp_products WHERE id = ?");
-        if ($prodStmt) {
-            $prodStmt->bind_param('i', $product_id);
-            $prodStmt->execute();
-            $prodRes = $prodStmt->get_result();
-            $prodRow = $prodRes->fetch_assoc();
-            if ($prodRow) {
-                $productExists = true;
-                $currentStock = (int)$prodRow['local_stock'];
-            }
-            $prodStmt->close();
-        }
-
-        if ($lastRow) {
-            // Consistent chaining from the last movement in this SKU+warehouse context
-            if ($movement_type === 'TRANSFER_OUT') {
-                $runningStock = $lastRunningStock - $quantity;
-            } else {
-                $runningStock = $lastRunningStock + $quantity;
-            }
-        } else {
-            // Fallback to product local_stock (or zero) when no movement history exists for this SKU/warehouse
-            $base = $productExists ? $currentStock : 0;
-            if ($movement_type === 'TRANSFER_OUT') {
-                $runningStock = $base - $quantity;
-            } else {
-                $runningStock = $base + $quantity;
-            }
-        }
-
-        $insertMovementSQL = "INSERT INTO vp_stock_movements 
-            (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, update_by_user, ref_type, ref_id, reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        $stmt = $this->db->prepare($insertMovementSQL);
-        if (!$stmt) {
-            throw new Exception('Prepare error: ' . $this->db->error);
-        }
-        
-        $stmt->bind_param('issssissiiisss', $product_id, $sku, $item_code, $size, $color, $warehouse_id, $location, $movement_type, $quantity, $runningStock, $user_id, $ref_type, $ref_id, $reason);
-        if (!$stmt->execute()) {
-            throw new Exception('Execute error: ' . $stmt->error);
-        }
-        $stmt->close();
-
-        // If product exists, keep local_stock in sync
-        if ($productExists) {
-            $updateSql = "UPDATE vp_products SET local_stock = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateSql);
-            if ($updateStmt) {
-                $updateStmt->bind_param('ii', $runningStock, $product_id);
-                $updateStmt->execute();
-                $updateStmt->close();
-            }
-        }
+        StockMovement::insert($this->db, [
+            'product_id' => (int) $product_id,
+            'sku' => (string) $sku,
+            'item_code' => (string) $item_code,
+            'size' => (string) $size,
+            'color' => (string) $color,
+            'warehouse_id' => (int) $warehouse_id,
+            'location' => (string) $location,
+            'movement_type' => (string) $movement_type,
+            'quantity' => (float) $quantity,
+            'ref_type' => (string) $ref_type,
+            'ref_id' => (string) $ref_id,
+            'reason' => (string) $reason,
+            'update_by_user' => (int) $user_id,
+            'sync_physical_stock' => false,
+            'strict_stock_check' => strtoupper(trim((string) $movement_type)) === 'TRANSFER_OUT',
+        ]);
 
         return true;
     }
@@ -3004,31 +2942,11 @@ class StockTransfer
     }
 
     /**
-     * Update product local_stock based on the latest movement for this SKU.
+     * Transfers must not change website local_stock — warehouse ledger only.
      */
     private function syncProductLocalStock(string $sku, int $productId)
     {
-        $stockQuery = "SELECT running_stock FROM vp_stock_movements WHERE sku = ? ORDER BY id DESC LIMIT 1";
-        $stmt = $this->db->prepare($stockQuery);
-        if (!$stmt) {
-            return;
-        }
-        $stmt->bind_param('s', $sku);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $row = $res->fetch_assoc();
-        $stmt->close();
-
-        if ($row && isset($row['running_stock'])) {
-            $updateProductSql = "UPDATE vp_products SET local_stock = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateProductSql);
-            if ($updateStmt) {
-                $runningStock = (int)$row['running_stock'];
-                $updateStmt->bind_param('ii', $runningStock, $productId);
-                $updateStmt->execute();
-                $updateStmt->close();
-            }
-        }
+        return;
     }
 
     public function createTransferGrn($data)
@@ -3336,6 +3254,551 @@ class StockTransfer
             $this->db->rollback();
             return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
         }
+    }
+
+    /**
+     * SQL expression: qty received for one transfer line (GRN match by sku or item_code).
+     */
+    private function inTransitReceivedQtyExpr(string $lineAlias = 'ist', string $transferAlias = 'st'): string
+    {
+        $sku = $lineAlias . '.sku';
+        $itemCode = $lineAlias . '.item_code';
+        $transferId = $transferAlias . '.id';
+
+        return "COALESCE((
+            SELECT SUM(g.qty_received)
+            FROM vp_stock_transfer_grns g
+            WHERE g.transfer_id = {$transferId}
+              AND (
+                  (NULLIF(TRIM(IFNULL({$sku}, '')), '') IS NOT NULL AND g.sku = {$sku})
+                  OR (
+                      NULLIF(TRIM(IFNULL({$sku}, '')), '') IS NULL
+                      AND NULLIF(TRIM(IFNULL({$itemCode}, '')), '') IS NOT NULL
+                      AND g.item_code = {$itemCode}
+                  )
+              )
+        ), 0)";
+    }
+
+    /**
+     * Stable grouping key for in-transit item aggregation.
+     */
+    private function inTransitItemKeyExpr(string $lineAlias = 'ist'): string
+    {
+        $productId = $lineAlias . '.product_id';
+        $sku = $lineAlias . '.sku';
+        $itemCode = $lineAlias . '.item_code';
+
+        return "CASE
+            WHEN {$productId} > 0 THEN CONCAT('p:', {$productId})
+            WHEN NULLIF(TRIM(IFNULL({$sku}, '')), '') IS NOT NULL THEN CONCAT('s:', TRIM({$sku}))
+            ELSE CONCAT('c:', TRIM({$itemCode}))
+        END";
+    }
+
+    /**
+     * @return array{where: string, params: list<mixed>, types: string}
+     */
+    private function buildInTransitFilters(array $filters, string $lineAlias = 'ist', string $transferAlias = 'st'): array
+    {
+        $whereClauses = [];
+        $params = [];
+        $types = '';
+
+        $receivedExpr = $this->inTransitReceivedQtyExpr($lineAlias, $transferAlias);
+        $whereClauses[] = "GREATEST(0, {$lineAlias}.transfer_qty - ({$receivedExpr})) > 0";
+
+        $search = trim((string)($filters['search'] ?? ''));
+        if ($search !== '') {
+            $whereClauses[] = "(
+                {$lineAlias}.sku LIKE ?
+                OR {$lineAlias}.item_code LIKE ?
+                OR {$transferAlias}.transfer_order_no LIKE ?
+                OR p.title LIKE ?
+            )";
+            $like = '%' . $search . '%';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $types .= 'ssss';
+        }
+
+        if (!empty($filters['from_warehouse'])) {
+            $whereClauses[] = "{$transferAlias}.from_warehouse = ?";
+            $params[] = (int)$filters['from_warehouse'];
+            $types .= 'i';
+        }
+        if (!empty($filters['to_warehouse'])) {
+            $whereClauses[] = "{$transferAlias}.to_warehouse = ?";
+            $params[] = (int)$filters['to_warehouse'];
+            $types .= 'i';
+        }
+
+        $direction = strtolower(trim((string)($filters['direction'] ?? '')));
+        $scopeWh = (int)($filters['user_warehouse_scope'] ?? 0);
+        if ($direction === 'incoming' && $scopeWh > 0) {
+            $whereClauses[] = "{$transferAlias}.to_warehouse = ?";
+            $params[] = $scopeWh;
+            $types .= 'i';
+        } elseif ($direction === 'outgoing' && $scopeWh > 0) {
+            $whereClauses[] = "{$transferAlias}.from_warehouse = ?";
+            $params[] = $scopeWh;
+            $types .= 'i';
+        } elseif (array_key_exists('user_warehouse_scope', $filters)) {
+            $uw = (int)$filters['user_warehouse_scope'];
+            if ($uw > 0) {
+                $whereClauses[] = "({$transferAlias}.from_warehouse = ? OR {$transferAlias}.to_warehouse = ?)";
+                $params[] = $uw;
+                $params[] = $uw;
+                $types .= 'ii';
+            } else {
+                $whereClauses[] = '1 = 0';
+            }
+        }
+
+        $receiptState = strtolower(trim((string)($filters['receipt_state'] ?? 'any')));
+        if ($receiptState === 'none') {
+            $whereClauses[] = "({$receivedExpr}) = 0";
+        } elseif ($receiptState === 'partial') {
+            $whereClauses[] = "({$receivedExpr}) > 0 AND ({$receivedExpr}) < {$lineAlias}.transfer_qty";
+        }
+
+        if (!empty($filters['dispatched_from'])) {
+            $whereClauses[] = "{$transferAlias}.dispatch_date >= ?";
+            $params[] = $filters['dispatched_from'];
+            $types .= 's';
+        }
+        if (!empty($filters['dispatched_to'])) {
+            $whereClauses[] = "{$transferAlias}.dispatch_date <= ?";
+            $params[] = $filters['dispatched_to'];
+            $types .= 's';
+        }
+
+        $ageMinDays = isset($filters['age_min_days']) ? (int)$filters['age_min_days'] : 0;
+        if ($ageMinDays > 0) {
+            $whereClauses[] = "{$transferAlias}.dispatch_date IS NOT NULL AND {$transferAlias}.dispatch_date <= DATE_SUB(CURDATE(), INTERVAL ? DAY)";
+            $params[] = $ageMinDays;
+            $types .= 'i';
+        }
+
+        return [
+            'where' => ' WHERE ' . implode(' AND ', $whereClauses),
+            'params' => $params,
+            'types' => $types,
+        ];
+    }
+
+    /**
+     * @return array{pending_units: int, open_transfers: int, partial_transfers: int, aged_14_plus: int, by_destination: list<array{warehouse_id: int, warehouse_name: string, pending_qty: int}>}
+     */
+    public function getInTransitSummary(array $filters = []): array
+    {
+        $receivedExpr = $this->inTransitReceivedQtyExpr('ist', 'st');
+        $pendingExpr = "GREATEST(0, ist.transfer_qty - ({$receivedExpr}))";
+        $filter = $this->buildInTransitFilters($filters);
+
+        $baseFrom = "
+            FROM vp_item_stock_transfer ist
+            INNER JOIN vp_stock_transfer st ON st.transfer_order_no = ist.transfer_order_no
+            LEFT JOIN vp_products p ON p.id = ist.product_id
+            {$filter['where']}";
+
+        $summarySql = "
+            SELECT
+                COALESCE(SUM({$pendingExpr}), 0) AS pending_units,
+                COUNT(DISTINCT st.id) AS open_transfers
+            {$baseFrom}";
+        $summary = $this->fetchInTransitRow($summarySql, $filter['params'], $filter['types']);
+
+        $partialSql = "
+            SELECT COUNT(*) AS partial_transfers
+            FROM (
+                SELECT st.id,
+                       SUM(ist.transfer_qty) AS sent_qty,
+                       SUM({$receivedExpr}) AS received_qty
+                FROM vp_item_stock_transfer ist
+                INNER JOIN vp_stock_transfer st ON st.transfer_order_no = ist.transfer_order_no
+                LEFT JOIN vp_products p ON p.id = ist.product_id
+                {$filter['where']}
+                GROUP BY st.id
+                HAVING received_qty > 0 AND received_qty < sent_qty
+            ) partial_rows";
+        $partialRow = $this->fetchInTransitRow($partialSql, $filter['params'], $filter['types']);
+
+        $agedFilters = $filters;
+        $agedFilters['age_min_days'] = 14;
+        $agedFilter = $this->buildInTransitFilters($agedFilters);
+        $agedSql = "
+            SELECT COUNT(DISTINCT st.id) AS aged_14_plus
+            FROM vp_item_stock_transfer ist
+            INNER JOIN vp_stock_transfer st ON st.transfer_order_no = ist.transfer_order_no
+            LEFT JOIN vp_products p ON p.id = ist.product_id
+            {$agedFilter['where']}";
+        $agedRow = $this->fetchInTransitRow($agedSql, $agedFilter['params'], $agedFilter['types']);
+
+        $destSql = "
+            SELECT st.to_warehouse AS warehouse_id,
+                   COALESCE(d.address_title, CONCAT('Warehouse #', st.to_warehouse)) AS warehouse_name,
+                   COALESCE(SUM({$pendingExpr}), 0) AS pending_qty
+            FROM vp_item_stock_transfer ist
+            INNER JOIN vp_stock_transfer st ON st.transfer_order_no = ist.transfer_order_no
+            LEFT JOIN vp_products p ON p.id = ist.product_id
+            LEFT JOIN exotic_address d ON d.id = st.to_warehouse
+            {$filter['where']}
+            GROUP BY st.to_warehouse, d.address_title
+            HAVING pending_qty > 0
+            ORDER BY pending_qty DESC, warehouse_name ASC
+            LIMIT 8";
+        $byDestination = $this->fetchInTransitRows($destSql, $filter['params'], $filter['types']);
+
+        return [
+            'pending_units' => (int)($summary['pending_units'] ?? 0),
+            'open_transfers' => (int)($summary['open_transfers'] ?? 0),
+            'partial_transfers' => (int)($partialRow['partial_transfers'] ?? 0),
+            'aged_14_plus' => (int)($agedRow['aged_14_plus'] ?? 0),
+            'by_destination' => array_map(static function (array $row): array {
+                return [
+                    'warehouse_id' => (int)($row['warehouse_id'] ?? 0),
+                    'warehouse_name' => (string)($row['warehouse_name'] ?? ''),
+                    'pending_qty' => (int)($row['pending_qty'] ?? 0),
+                ];
+            }, $byDestination),
+        ];
+    }
+
+    /**
+     * @return array{records: list<array<string,mixed>>, total: int}
+     */
+    public function listInTransitItemsAggregated(int $limit = 50, int $offset = 0, array $filters = [], string $sort = 'oldest_dispatch'): array
+    {
+        $limit = max(1, min(200, $limit));
+        $offset = max(0, $offset);
+        $receivedExpr = $this->inTransitReceivedQtyExpr('ist', 'st');
+        $pendingExpr = "GREATEST(0, ist.transfer_qty - ({$receivedExpr}))";
+        $itemKeyExpr = $this->inTransitItemKeyExpr('ist');
+        $filter = $this->buildInTransitFilters($filters);
+
+        $baseFrom = "
+            FROM vp_item_stock_transfer ist
+            INNER JOIN vp_stock_transfer st ON st.transfer_order_no = ist.transfer_order_no
+            LEFT JOIN vp_products p ON p.id = ist.product_id
+            LEFT JOIN exotic_address f ON f.id = st.from_warehouse
+            LEFT JOIN exotic_address d ON d.id = st.to_warehouse
+            {$filter['where']}";
+
+        $countSql = "SELECT COUNT(DISTINCT {$itemKeyExpr}) AS total {$baseFrom}";
+        $countRow = $this->fetchInTransitRow($countSql, $filter['params'], $filter['types']);
+        $total = (int)($countRow['total'] ?? 0);
+
+        $orderBy = match ($sort) {
+            'pending_qty_desc' => 'pending_qty DESC, oldest_dispatch ASC, item_code ASC',
+            'item_code_asc' => 'item_code ASC, sku ASC, pending_qty DESC',
+            default => 'oldest_dispatch ASC, pending_qty DESC, item_code ASC',
+        };
+
+        $sql = "
+            SELECT
+                {$itemKeyExpr} AS item_key,
+                MAX(ist.product_id) AS product_id,
+                MAX(NULLIF(TRIM(ist.sku), '')) AS sku,
+                MAX(NULLIF(TRIM(ist.item_code), '')) AS item_code,
+                MAX(NULLIF(TRIM(p.title), '')) AS product_title,
+                SUM(ist.transfer_qty) AS total_sent,
+                SUM({$receivedExpr}) AS total_received,
+                SUM({$pendingExpr}) AS pending_qty,
+                COUNT(DISTINCT st.id) AS transfer_count,
+                MIN(st.dispatch_date) AS oldest_dispatch,
+                MAX(st.dispatch_date) AS newest_dispatch,
+                COUNT(DISTINCT CONCAT(st.from_warehouse, '-', st.to_warehouse)) AS route_count,
+                SUBSTRING_INDEX(
+                    GROUP_CONCAT(
+                        DISTINCT CONCAT(
+                            COALESCE(f.address_title, '—'),
+                            ' → ',
+                            COALESCE(d.address_title, '—')
+                        )
+                        ORDER BY st.dispatch_date ASC
+                        SEPARATOR '||'
+                    ),
+                    '||',
+                    2
+                ) AS route_preview_raw
+            {$baseFrom}
+            GROUP BY item_key
+            ORDER BY {$orderBy}
+            LIMIT ? OFFSET ?";
+
+        $params = $filter['params'];
+        $types = $filter['types'] . 'ii';
+        $params[] = $limit;
+        $params[] = $offset;
+
+        $records = $this->fetchInTransitRows($sql, $params, $types);
+        foreach ($records as &$row) {
+            $previewRaw = (string)($row['route_preview_raw'] ?? '');
+            $row['route_preview'] = $previewRaw !== ''
+                ? array_values(array_filter(explode('||', $previewRaw), static fn ($s) => $s !== ''))
+                : [];
+            $row['pending_qty'] = (int)($row['pending_qty'] ?? 0);
+            $row['total_sent'] = (int)($row['total_sent'] ?? 0);
+            $row['total_received'] = (int)($row['total_received'] ?? 0);
+            $row['transfer_count'] = (int)($row['transfer_count'] ?? 0);
+            $row['route_count'] = (int)($row['route_count'] ?? 0);
+            $dispatch = $row['oldest_dispatch'] ?? null;
+            $row['days_in_transit'] = $dispatch
+                ? max(0, (int)((new DateTimeImmutable((string)$dispatch))->diff(new DateTimeImmutable('today'))->days))
+                : 0;
+        }
+        unset($row);
+
+        return ['records' => $records, 'total' => $total];
+    }
+
+    /**
+     * Transfer breakdown rows for item keys shown on the current page.
+     *
+     * @param list<string> $itemKeys
+     * @return array<string, list<array<string,mixed>>>
+     */
+    public function getInTransitBreakdownByItemKeys(array $itemKeys, array $filters = []): array
+    {
+        $itemKeys = array_values(array_filter(array_map('strval', $itemKeys), static fn ($k) => $k !== ''));
+        if ($itemKeys === []) {
+            return [];
+        }
+
+        $receivedExpr = $this->inTransitReceivedQtyExpr('ist', 'st');
+        $pendingExpr = "GREATEST(0, ist.transfer_qty - ({$receivedExpr}))";
+        $itemKeyExpr = $this->inTransitItemKeyExpr('ist');
+        $filter = $this->buildInTransitFilters($filters);
+
+        $placeholders = implode(',', array_fill(0, count($itemKeys), '?'));
+        $sql = "
+            SELECT
+                {$itemKeyExpr} AS item_key,
+                st.id AS transfer_id,
+                st.transfer_order_no,
+                st.dispatch_date,
+                st.from_warehouse,
+                st.to_warehouse,
+                COALESCE(f.address_title, '—') AS source_name,
+                COALESCE(d.address_title, '—') AS dest_name,
+                ist.transfer_qty AS sent_qty,
+                ({$receivedExpr}) AS received_qty,
+                {$pendingExpr} AS pending_qty
+            FROM vp_item_stock_transfer ist
+            INNER JOIN vp_stock_transfer st ON st.transfer_order_no = ist.transfer_order_no
+            LEFT JOIN vp_products p ON p.id = ist.product_id
+            LEFT JOIN exotic_address f ON f.id = st.from_warehouse
+            LEFT JOIN exotic_address d ON d.id = st.to_warehouse
+            {$filter['where']}
+              AND {$itemKeyExpr} IN ({$placeholders})
+            HAVING pending_qty > 0
+            ORDER BY item_key ASC, st.dispatch_date ASC, st.id ASC";
+
+        $params = array_merge($filter['params'], $itemKeys);
+        $types = $filter['types'] . str_repeat('s', count($itemKeys));
+        $rows = $this->fetchInTransitRows($sql, $params, $types);
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $key = (string)($row['item_key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $dispatch = $row['dispatch_date'] ?? null;
+            $row['days_in_transit'] = $dispatch
+                ? max(0, (int)((new DateTimeImmutable((string)$dispatch))->diff(new DateTimeImmutable('today'))->days))
+                : 0;
+            $row['pending_qty'] = (int)($row['pending_qty'] ?? 0);
+            $grouped[$key][] = $row;
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * @return array{records: list<array<string,mixed>>, total: int}
+     */
+    public function listInTransitTransfers(int $limit = 50, int $offset = 0, array $filters = [], string $sort = 'oldest_dispatch'): array
+    {
+        $limit = max(1, min(200, $limit));
+        $offset = max(0, $offset);
+        $receivedExpr = $this->inTransitReceivedQtyExpr('ist', 'st');
+        $pendingExpr = "GREATEST(0, ist.transfer_qty - ({$receivedExpr}))";
+        $filter = $this->buildInTransitFilters($filters);
+
+        $pendingSubquery = "
+            SELECT
+                st.id AS transfer_id,
+                COUNT(*) AS pending_line_count,
+                SUM(ist.transfer_qty) AS sent_qty,
+                SUM({$receivedExpr}) AS received_qty,
+                SUM({$pendingExpr}) AS pending_qty,
+                MIN(st.dispatch_date) AS oldest_dispatch
+            FROM vp_item_stock_transfer ist
+            INNER JOIN vp_stock_transfer st ON st.transfer_order_no = ist.transfer_order_no
+            LEFT JOIN vp_products p ON p.id = ist.product_id
+            {$filter['where']}
+            GROUP BY st.id
+            HAVING pending_qty > 0";
+
+        $countSql = "SELECT COUNT(*) AS total FROM ({$pendingSubquery}) pending_t";
+        $countRow = $this->fetchInTransitRow($countSql, $filter['params'], $filter['types']);
+        $total = (int)($countRow['total'] ?? 0);
+
+        $orderBy = match ($sort) {
+            'pending_qty_desc' => 'pending_t.pending_qty DESC, pending_t.oldest_dispatch ASC',
+            'newest_dispatch' => 'pending_t.oldest_dispatch DESC, pending_t.pending_qty DESC',
+            default => 'pending_t.oldest_dispatch ASC, pending_t.pending_qty DESC',
+        };
+
+        $sql = "
+            SELECT
+                t.*,
+                f.address_title AS source_name,
+                d.address_title AS dest_name,
+                ru.name AS requested_by_name,
+                du.name AS dispatch_by_name,
+                pending_t.pending_line_count,
+                pending_t.sent_qty,
+                pending_t.received_qty,
+                pending_t.pending_qty,
+                pending_t.oldest_dispatch AS dispatch_date_sort,
+                CASE
+                    WHEN pending_t.received_qty <= 0 THEN 'none'
+                    WHEN pending_t.received_qty < pending_t.sent_qty THEN 'partial'
+                    ELSE 'full'
+                END AS receipt_status,
+                CASE
+                    WHEN t.dispatch_date IS NULL THEN 0
+                    ELSE GREATEST(0, DATEDIFF(CURDATE(), t.dispatch_date))
+                END AS days_in_transit,
+                COALESCE(grn_agg.grn_count, 0) AS grn_count
+            FROM ({$pendingSubquery}) pending_t
+            INNER JOIN vp_stock_transfer t ON t.id = pending_t.transfer_id
+            LEFT JOIN exotic_address f ON f.id = t.from_warehouse
+            LEFT JOIN exotic_address d ON d.id = t.to_warehouse
+            LEFT JOIN vp_users ru ON ru.id = t.requested_by
+            LEFT JOIN vp_users du ON du.id = t.dispatch_by
+            LEFT JOIN (
+                SELECT transfer_id, COUNT(*) AS grn_count
+                FROM vp_stock_transfer_grns
+                GROUP BY transfer_id
+            ) grn_agg ON grn_agg.transfer_id = t.id
+            ORDER BY {$orderBy}
+            LIMIT ? OFFSET ?";
+
+        $params = $filter['params'];
+        $types = $filter['types'] . 'ii';
+        $params[] = $limit;
+        $params[] = $offset;
+
+        $records = $this->fetchInTransitRows($sql, $params, $types);
+        foreach ($records as &$row) {
+            $sent = (int)($row['sent_qty'] ?? 0);
+            $received = (int)($row['received_qty'] ?? 0);
+            $row['received_percent'] = $sent > 0 ? (int)round(($received / $sent) * 100) : 0;
+            $row['pending_qty'] = (int)($row['pending_qty'] ?? 0);
+            $row['pending_line_count'] = (int)($row['pending_line_count'] ?? 0);
+            $row['grn_count'] = (int)($row['grn_count'] ?? 0);
+            $row['days_in_transit'] = (int)($row['days_in_transit'] ?? 0);
+        }
+        unset($row);
+
+        return ['records' => $records, 'total' => $total];
+    }
+
+    /**
+     * Flat line-level rows for CSV export.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function listInTransitLinesForExport(array $filters = [], string $sort = 'oldest_dispatch'): array
+    {
+        $receivedExpr = $this->inTransitReceivedQtyExpr('ist', 'st');
+        $pendingExpr = "GREATEST(0, ist.transfer_qty - ({$receivedExpr}))";
+        $filter = $this->buildInTransitFilters($filters);
+
+        $orderBy = match ($sort) {
+            'pending_qty_desc' => 'pending_qty DESC, st.dispatch_date ASC, ist.item_code ASC',
+            'item_code_asc' => 'ist.item_code ASC, ist.sku ASC, st.dispatch_date ASC',
+            default => 'st.dispatch_date ASC, pending_qty DESC, ist.item_code ASC',
+        };
+
+        $sql = "
+            SELECT
+                ist.item_code,
+                ist.sku,
+                COALESCE(NULLIF(TRIM(p.title), ''), '') AS product_title,
+                st.transfer_order_no,
+                st.id AS transfer_id,
+                COALESCE(f.address_title, '—') AS source_name,
+                COALESCE(d.address_title, '—') AS dest_name,
+                ist.transfer_qty AS sent_qty,
+                ({$receivedExpr}) AS received_qty,
+                {$pendingExpr} AS pending_qty,
+                st.dispatch_date,
+                CASE
+                    WHEN st.dispatch_date IS NULL THEN 0
+                    ELSE GREATEST(0, DATEDIFF(CURDATE(), st.dispatch_date))
+                END AS days_in_transit
+            FROM vp_item_stock_transfer ist
+            INNER JOIN vp_stock_transfer st ON st.transfer_order_no = ist.transfer_order_no
+            LEFT JOIN vp_products p ON p.id = ist.product_id
+            LEFT JOIN exotic_address f ON f.id = st.from_warehouse
+            LEFT JOIN exotic_address d ON d.id = st.to_warehouse
+            {$filter['where']}
+            HAVING pending_qty > 0
+            ORDER BY {$orderBy}
+            LIMIT 50000";
+
+        return $this->fetchInTransitRows($sql, $filter['params'], $filter['types']);
+    }
+
+    /**
+     * @param list<mixed> $params
+     * @return array<string,mixed>
+     */
+    private function fetchInTransitRow(string $sql, array $params, string $types): array
+    {
+        $rows = $this->fetchInTransitRows($sql, $params, $types);
+
+        return $rows[0] ?? [];
+    }
+
+    /**
+     * @param list<mixed> $params
+     * @return list<array<string,mixed>>
+     */
+    private function fetchInTransitRows(string $sql, array $params, string $types): array
+    {
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception('Prepare error: ' . $this->db->error);
+        }
+
+        if ($params !== []) {
+            $bind = array_merge([$types], $params);
+            $refs = [];
+            foreach ($bind as $key => $value) {
+                $refs[$key] = &$bind[$key];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $refs);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $rows[] = $row;
+            }
+        }
+        $stmt->close();
+
+        return $rows;
     }
 }
 

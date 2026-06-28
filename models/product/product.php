@@ -828,6 +828,94 @@ class product
         return is_array($decoded) ? $decoded : null;
     }
 
+    /**
+     * Pull latest local_stock from vendor product/fetch and update vp_products only.
+     * Does not create stock movements or change physical_stock.
+     *
+     * @return array{success:bool,message?:string,updated_count?:int}
+     */
+    public function refreshLocalStockFromVendorApi(string $itemCode): array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Item code is required.'];
+        }
+
+        $payload = $this->fetchVendorProductApiPayload($itemCode);
+        if (!$payload) {
+            return ['success' => false, 'message' => 'Failed to fetch product from vendor API.'];
+        }
+
+        $productRows = self::normalizeVendorProductFetchItems($payload);
+        if ($productRows === []) {
+            return ['success' => false, 'message' => 'No product rows in vendor API response.'];
+        }
+
+        $bulkConnection = $this->beginBulkProductUpdateConnection();
+        try {
+            $result = $this->updateProductFromApi($productRows, [
+                'preserve_local_stock' => false,
+                'sync_physical_stock' => false,
+            ]);
+        } finally {
+            $this->endBulkProductUpdateConnection($bulkConnection);
+        }
+
+        if (!is_array($result)) {
+            return ['success' => false, 'message' => 'Product update failed.'];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Push local_stock_delta to vendor product/modify only (does not change vp_products.local_stock).
+     * Does not create stock movements or change physical_stock.
+     *
+     * @return array{success:bool,message?:string,vendor_sync?:array,http_code?:int,response?:array}
+     */
+    public function applyLocalStockDeltaAndRefreshFromVendorApi(
+        string $itemCode,
+        int $localStockDelta,
+        string $size = '',
+        string $color = ''
+    ): array {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Item code is required.'];
+        }
+
+        $size = trim($size);
+        $color = trim($color);
+        $localStockDelta = (int) $localStockDelta;
+        if ($localStockDelta === 0) {
+            return ['success' => true, 'message' => 'No local_stock_delta to apply.'];
+        }
+
+        $product = [
+            'item_code' => $itemCode,
+            'size' => $size,
+            'color' => $color,
+        ];
+        $row = $this->findByItemCodeSizeColor($itemCode, $size, $color);
+        if (is_array($row)) {
+            $product = $row;
+        }
+
+        $vendorSync = $this->syncCpToVendorFrontend($product, 0.0, (float) $localStockDelta);
+        if (empty($vendorSync['success'])) {
+            return [
+                'success' => false,
+                'message' => (string) ($vendorSync['message'] ?? 'Vendor local_stock_delta sync failed.'),
+                'vendor_sync' => $vendorSync,
+            ];
+        }
+
+        $vendorSync['vendor_sync'] = $vendorSync;
+
+        return $vendorSync;
+    }
+
     /** Set accounts_group on all rows for an item code from the vendor product/fetch master row. */
     public function syncAccountsGroupFromApiItem(string $itemCode, array $apiItem): void
     {
@@ -850,6 +938,7 @@ class product
         $updatedCount = 0;
         // Default: never overwrite vp_products.local_stock from API; pass preserve_local_stock => false to sync stock from API.
         $preserveLocalStock = !array_key_exists('preserve_local_stock', $options) || !empty($options['preserve_local_stock']);
+        $syncPhysicalStock = !array_key_exists('sync_physical_stock', $options) || !empty($options['sync_physical_stock']);
         // print_array($productData);
         // exit;
         $vendorMapSynced = 0;
@@ -1010,14 +1099,14 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
-                        if ($existingBase && isset($existingBase['id'])) {
-                            $this->applyApiRefreshStockAdjustments(
-                                (int)$existingBase['id'],
-                                (string)$sku,
-                                (string)$product['itemcode'],
-                                (string)$size,
-                                (string)$color,
-                                (int)$localStock
+                        if (!$preserveLocalStock && $syncPhysicalStock) {
+                            $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
+                                $existingBase,
+                                (string) $sku,
+                                (string) $product['itemcode'],
+                                (string) $size,
+                                (string) $color,
+                                (int) $localStock
                             );
                         }
                     }
@@ -1271,14 +1360,14 @@ class product
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
-                                if ($existingBase && isset($existingBase['id'])) {
-                                    $this->applyApiRefreshStockAdjustments(
-                                        (int)$existingBase['id'],
-                                        (string)$sku,
-                                        (string)$product['itemcode'],
-                                        (string)$size,
-                                        (string)$color,
-                                        (int)$localStock
+                                if (!$preserveLocalStock && $syncPhysicalStock) {
+                                    $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
+                                        $existingBase,
+                                        (string) $sku,
+                                        (string) $product['itemcode'],
+                                        (string) $size,
+                                        (string) $color,
+                                        (int) $localStock
                                     );
                                 }
                             }
@@ -1422,133 +1511,98 @@ class product
         return $this->stockMovementItemCodeColumn;
     }
 
-    private function applyApiRefreshStockAdjustments(
-        int $productId,
+    /**
+     * When API refresh updates local_stock, seed warehouse stock only for products that have
+     * never had physical stock or movement history (physical_stock = 0 and no ledger rows).
+     */
+    private function maybeSeedPhysicalStockOnLocalStockApiUpdate(
+        ?array $existingBase,
         string $sku,
         string $itemCode,
         string $size,
         string $color,
-        int $apiLocalStock
+        int $localStock
     ): void {
-        if ($productId <= 0 || $itemCode === '') {
+        if (!$existingBase || empty($existingBase['id']) || $localStock <= 0) {
             return;
         }
 
-        $size = trim($size);
-        $color = trim($color);
-        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn();
-        $safeItemCol = '`' . str_replace('`', '``', $itemCodeCol) . '`';
+        $productId = (int) $existingBase['id'];
 
-        $latest = $this->db->prepare("SELECT running_stock, warehouse_id, location
-            FROM vp_stock_movements
-            WHERE product_id = ? AND {$safeItemCol} = ?
-              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
-              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
-            ORDER BY id DESC
-            LIMIT 1");
-        if (!$latest) {
+        require_once __DIR__ . '/StockMovement.php';
+        if (!StockMovement::isPhysicalStockUninitialized($this->db, $productId)) {
             return;
         }
-        $latest->bind_param('isss', $productId, $itemCode, $size, $color);
-        if (!$latest->execute()) {
-            $latest->close();
-            return;
-        }
-        $latestRow = $latest->get_result()->fetch_assoc();
-        $latest->close();
 
-        $warehouseId = (int)($latestRow['warehouse_id'] ?? 1);
+        $warehouseId = $this->resolveDefaultWarehouseIdForStock();
         if ($warehouseId <= 0) {
             $warehouseId = 1;
         }
-        $location = trim((string)($latestRow['location'] ?? ''));
-        if ($location === '') {
-            $location = 'API refresh';
-        }
 
-        if (!$latestRow) {
-            $this->insertApiRefreshMovement(
-                $productId,
-                $sku,
-                $itemCode,
-                $size,
-                $color,
-                $warehouseId,
-                $location,
-                'OPENING_STOCK',
-                0,
-                0,
-                'API_REFRESH_BASELINE',
-                'Opening stock baseline created during API refresh'
-            );
-            $currentStock = 0;
-        } else {
-            $currentStock = (int)($latestRow['running_stock'] ?? 0);
+        $sku = trim($sku);
+        if ($sku === '') {
+            $sku = trim($itemCode);
         }
-
-        $targetDelta = $apiLocalStock - $currentStock;
-        if ($targetDelta !== 0) {
-            $this->insertApiRefreshMovement(
-                $productId,
-                $sku,
-                $itemCode,
-                $size,
-                $color,
-                $warehouseId,
-                $location,
-                ($targetDelta > 0 ? 'IN' : 'OUT'),
-                abs($targetDelta),
-                $apiLocalStock,
-                'API_REFRESH',
-                'Stock adjusted from API refresh'
-            );
-        }
-    }
-
-    private function insertApiRefreshMovement(
-        int $productId,
-        string $sku,
-        string $itemCode,
-        string $size,
-        string $color,
-        int $warehouseId,
-        string $location,
-        string $movementType,
-        int $quantity,
-        int $runningStock,
-        string $refType,
-        string $reason
-    ): void {
-        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn();
-        $safeItemCol = '`' . str_replace('`', '``', $itemCodeCol) . '`';
-        $stmt = $this->db->prepare("INSERT INTO vp_stock_movements
-            (product_id, sku, {$safeItemCol}, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        if (!$stmt) {
+        if ($sku === '') {
             return;
         }
+
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
+        }
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
         $refId = 'api_refresh:' . date('YmdHis');
-        $userId = (int)($_SESSION['user']['id'] ?? 0);
-        $stmt->bind_param(
-            'issssissiisssi',
-            $productId,
-            $sku,
-            $itemCode,
-            $size,
-            $color,
-            $warehouseId,
-            $location,
-            $movementType,
-            $quantity,
-            $runningStock,
-            $refType,
-            $refId,
-            $reason,
-            $userId
-        );
-        $stmt->execute();
-        $stmt->close();
+
+        try {
+            StockMovement::insert($this->db, [
+                'product_id' => $productId,
+                'sku' => $sku,
+                'item_code' => $itemCode,
+                'size' => trim($size),
+                'color' => trim($color),
+                'warehouse_id' => $warehouseId,
+                'location' => 'API refresh',
+                'movement_type' => 'OPENING_STOCK',
+                'quantity' => $localStock,
+                'ref_type' => 'API_REFRESH',
+                'ref_id' => $refId,
+                'reason' => 'Opening stock from API local stock sync',
+                'update_by_user' => $userId,
+                'strict_stock_check' => false,
+            ]);
+        } catch (\Throwable $e) {
+            error_log('maybeSeedPhysicalStockOnLocalStockApiUpdate: ' . $e->getMessage());
+        }
     }
+
+    private function resolveDefaultWarehouseIdForStock(): int
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
+        }
+        $wid = (int) ($_SESSION['warehouse_id'] ?? 0);
+        if ($wid <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $wid = (int) $_SESSION['user']['warehouse_id'];
+        }
+        if ($wid > 0) {
+            $chk = $this->db->prepare('SELECT id FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1');
+            if ($chk) {
+                $chk->bind_param('i', $wid);
+                if ($chk->execute() && $chk->get_result()->fetch_assoc()) {
+                    $chk->close();
+                    return $wid;
+                }
+                $chk->close();
+            }
+        }
+        $r = $this->db->query('SELECT id FROM exotic_address WHERE is_active = 1 ORDER BY id ASC LIMIT 1');
+        if ($r && ($row = $r->fetch_assoc())) {
+            return (int) $row['id'];
+        }
+
+        return 0;
+    }
+
     /**
      * Resolve a catalog row by item code and variant dimensions. Supports:
      * (1) item code only — empty size & color; (2) color-only; (3) size-only; (4) size + color.
@@ -1926,20 +1980,51 @@ class product
 
     /**
      * Resolve vp_products.id for an invoice line using vp_orders (order_number + item_code).
+     * When size/color are supplied, they are used to match the correct variant.
      */
-    public function getProductIdForInvoiceLine(string $orderNumber, string $itemCode): int
+    public function getProductIdForInvoiceLine(string $orderNumber, string $itemCode, ?string $size = null, ?string $color = null): int
     {
         $orderNumber = trim($orderNumber);
         $itemCode = trim($itemCode);
-        if ($orderNumber === '' || $itemCode === '') {
+        if ($itemCode === '') {
             return 0;
         }
-        $sql = "SELECT item_code, sku, size, color FROM vp_orders WHERE order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) {
+
+        $sizeProvided = $size !== null;
+        $colorProvided = $color !== null;
+        $sizeNorm = trim((string)($size ?? ''));
+        $colorNorm = trim((string)($color ?? ''));
+
+        if ($sizeProvided || $colorProvided) {
+            $match = $this->findByItemCodeSizeColor($itemCode, $sizeNorm, $colorNorm);
+            if (!empty($match['id'])) {
+                return (int)$match['id'];
+            }
+        }
+
+        if ($orderNumber === '') {
             return 0;
         }
-        $stmt->bind_param('ss', $orderNumber, $itemCode);
+
+        if ($sizeProvided || $colorProvided) {
+            $sql = "SELECT item_code, sku, size, color FROM vp_orders
+                WHERE order_number = ? AND item_code = ?
+                AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
+                AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
+                ORDER BY id ASC LIMIT 1";
+            $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                return 0;
+            }
+            $stmt->bind_param('ssss', $orderNumber, $itemCode, $sizeNorm, $colorNorm);
+        } else {
+            $sql = "SELECT item_code, sku, size, color FROM vp_orders WHERE order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1";
+            $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                return 0;
+            }
+            $stmt->bind_param('ss', $orderNumber, $itemCode);
+        }
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -3485,6 +3570,20 @@ class product
                 'text_color_class' => 'text-amber-600',
             ];
         }
+        if ($mt === 'OPENING_STOCK' && $rt === 'BULK_IMPORT') {
+            return [
+                'ledger_type' => 'Bulk Product Import',
+                'icon' => 'fa-cloud-upload-alt',
+                'text_color_class' => 'text-teal-600',
+            ];
+        }
+        if (($mt === 'OPENING_STOCK' || $mt === 'IN' || $mt === 'OUT') && ($rt === 'API_REFRESH' || $rt === 'API_REFRESH_BASELINE')) {
+            return [
+                'ledger_type' => 'API refresh',
+                'icon' => 'fa-sync-alt',
+                'text_color_class' => $mt === 'OUT' ? 'text-red-600' : 'text-teal-600',
+            ];
+        }
         if ($mt === 'OPENING_STOCK') {
             return [
                 'ledger_type' => 'Opening stock',
@@ -3514,7 +3613,14 @@ class product
                 'text_color_class' => $mt === 'IN' ? 'text-green-600' : 'text-red-600',
             ];
         }
-        if ($mt === 'IN' && $rt === 'GRN') {
+        if ($mt === 'TRANSFER_IN' && $rt === 'GRN') {
+            return [
+                'ledger_type' => 'Transfer GRN',
+                'icon' => 'fa-exchange-alt',
+                'text_color_class' => 'text-blue-600',
+            ];
+        }
+        if ($mt === 'IN' && ($rt === 'GRN' || $rt === 'PURCHASE_GRN')) {
             return [
                 'ledger_type' => 'Purchase (GRN)',
                 'icon' => 'fa-arrow-up',
@@ -3523,7 +3629,7 @@ class product
         }
         if ($mt === 'IN' && $rt === 'BULK_IMPORT') {
             return [
-                'ledger_type' => 'Bulk import',
+                'ledger_type' => 'Bulk Product Import',
                 'icon' => 'fa-cloud-upload-alt',
                 'text_color_class' => 'text-teal-600',
             ];
@@ -3582,92 +3688,55 @@ class product
      */
     public function enrichStockHistoryRowsForLedger(array $rows): array
     {
+        require_once __DIR__ . '/StockMovement.php';
+
         foreach ($rows as &$r) {
             $d = $this->getStockLedgerDisplayForMovement($r);
             $r['ledger_type'] = $d['ledger_type'];
             $r['ledger_icon'] = $d['icon'];
             $r['ledger_color_class'] = $d['text_color_class'];
+            $mt = strtoupper(trim((string) ($r['movement_type'] ?? '')));
+            $qty = (int) ($r['quantity'] ?? 0);
+            $r['stock_in_qty'] = StockMovement::isStockInDisplayType($mt) ? $qty : '';
+            $r['stock_out_qty'] = StockMovement::isStockOutDisplayType($mt) ? $qty : '';
         }
         unset($r);
 
         return $rows;
     }
 
+    /**
+     * Warehouse on-hand total: sum of latest running_stock per warehouse from the movement ledger.
+     */
+    public function getPhysicalStockTotalFromMovements(int $product_id): int
+    {
+        require_once __DIR__ . '/StockMovement.php';
+
+        return StockMovement::getPhysicalStockTotalIncludingInTransit($this->db, $product_id);
+    }
+
     public function insertStockMovement($data)
     {
+        require_once __DIR__ . '/StockMovement.php';
+
         $this->db->begin_transaction();
         try {
-            // 1. Get current stock from vp_products for calculation
-            $stmt = $this->db->prepare("SELECT local_stock FROM vp_products WHERE id = ?");
+            $stmt = $this->db->prepare('SELECT id FROM vp_products WHERE id = ? LIMIT 1');
             $stmt->bind_param('i', $data['product_id']);
             $stmt->execute();
             $res = $stmt->get_result();
             $product = $res->fetch_assoc();
+            $stmt->close();
 
-            if (!$product) throw new Exception("Product not found");
-
-            $current_stock = (int)$product['local_stock'];
-            $adj_qty = (int)$data['quantity'];
-
-            // 2. Calculate New Stock
-            if ($data['movement_type'] === 'IN' || $data['movement_type'] === 'TRANSFER_IN') {
-                $new_stock = $current_stock + $adj_qty;
-            } else {
-                $new_stock = $current_stock - $adj_qty;
+            if (!$product) {
+                throw new Exception('Product not found');
             }
 
-            // 3. Update local_stock in vp_products table
-            $updateSql = "UPDATE vp_products SET local_stock = ? WHERE id = ?";
-            $updateStmt = $this->db->prepare($updateSql);
-            $updateStmt->bind_param('ii', $new_stock, $data['product_id']);
-            if (!$updateStmt->execute()) {
-                throw new Exception("Failed to update master stock: " . $this->db->error);
-            }
+            StockMovement::insert($this->db, $data);
 
-            // 4. Insert into vp_stock_movements (History)
-            $insertSql = "INSERT INTO vp_stock_movements (
-                        product_id, sku, item_code, size, color, 
-                        warehouse_id, location, movement_type, 
-                        quantity, running_stock, update_by_user, 
-                        ref_type, ref_id, reason, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
-
-            $insertStmt = $this->db->prepare($insertSql);
-            $ref_type = isset($data['ref_type']) && $data['ref_type'] !== ''
-                ? (string)$data['ref_type']
-                : 'MANUAL';
-            $ref_id = array_key_exists('ref_id', $data) ? (string)$data['ref_id'] : '0';
-            $updatedByUser = isset($data['update_by_user'])
-                ? (int)$data['update_by_user']
-                : (isset($data['user_id']) ? (int)$data['user_id'] : 0);
-
-            $insertStmt->bind_param(
-                'isssssssiiisss',
-                $data['product_id'],
-                $data['sku'],
-                $data['item_code'],
-                $data['size'],
-                $data['color'],
-                $data['warehouse_id'],
-                $data['location'],
-                $data['movement_type'],
-                $adj_qty,
-                $new_stock,
-                $updatedByUser,
-                $ref_type,
-                $ref_id,
-                $data['reason']
-            );
-
-            if (!$insertStmt->execute()) {
-                throw new Exception("Failed to record history: " . $this->db->error);
-            }
-
-            // If everything is fine, commit changes
             $this->db->commit();
             return ['success' => true, 'message' => 'Stock updated and history recorded.'];
         } catch (Exception $e) {
-            // Rollback if any step fails
             $this->db->rollback();
             return ['success' => false, 'message' => $e->getMessage()];
         }

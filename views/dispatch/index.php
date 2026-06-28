@@ -207,26 +207,31 @@
                     <?php else: ?>
                       <p class="text-blue-600 font-semibold"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></p>
                     <?php endif; ?>
-                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>                 
-                    </div>
-                    <div>
-<?php
-                    // build order links only if order_number is set (avoid duplicates)
-                    $orderLinks = [];
-                    $seen = [];
+                    <?php
+                    $orderNumbers = [];
                     foreach ($invoice['items'] ?? [] as $item) {
                         $num = trim((string)($item['order_number'] ?? ''));
-                        if ($num === '' || isset($seen[$num])) {
-                            continue;
+                        if ($num !== '') {
+                            $orderNumbers[$num] = true;
                         }
-                        $seen[$num] = true;
-                        $orderLinks[] = '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($num)) . '">' . htmlspecialchars($num) . '</a>';
                     }
-                    if (!empty($orderLinks)): ?>
-                    <p class="text-xs text-gray-500">Order No.</p>
-                    <p class="text-blue-600 font-semibold"><?php echo implode('<br>', $orderLinks); ?></p>
-                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
+                    foreach ($invoice_dispatch[$invoice['id']] ?? [] as $dispatch) {
+                        $num = trim((string)($dispatch['order_number'] ?? ''));
+                        if ($num !== '') {
+                            $orderNumbers[$num] = true;
+                        }
+                    }
+                    if (!empty($orderNumbers)):
+                        $orderLinks = [];
+                        foreach (array_keys($orderNumbers) as $num) {
+                            $orderLinks[] = '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . urlencode($num)) . '" class="text-blue-600 hover:underline">' . htmlspecialchars($num) . '</a>';
+                        }
+                    ?>
+                    <p class="text-xs text-gray-500 mt-1">Order No.</p>
+                    <p class="text-sm text-blue-600 font-medium leading-snug"><?php echo implode('<br>', $orderLinks); ?></p>
                     <?php endif; ?>
+                    <p class="text-xs text-gray-500 mt-1"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>                 
+                    </div>
 
                     <!-- <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
                     <p class="text-blue-600 font-semibold">
@@ -241,7 +246,6 @@
                         // }
                         //echo implode(' | ', $shiprocketOrderIds);
                       ?></p>   -->
-                  </div>
                   </div>
                   
                 </div>
@@ -465,6 +469,8 @@
                     <?php
                       $needsRetry = false;
                       $reDispatch = false;
+                      $canCancelDispatch = false;
+                      $invoiceCancelled = strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled';
                       if (!empty($invoice_dispatch[$invoice['id']])) {
                         foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
                           if (empty($dispatch['awb_code'])) {
@@ -473,6 +479,15 @@
                           }
                           if (strtolower($dispatch['shipment_status'] ?? '') === 'cancelled' || strtolower($dispatch['shipment_status'] ?? '') === 'cancellation requested') {
                             $reDispatch = true;
+                          }
+                        }
+                        if (!$invoiceCancelled) {
+                          foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                            $shipStatus = strtolower(trim((string)($dispatch['shipment_status'] ?? '')));
+                            if ($shipStatus !== 'cancelled' && $shipStatus !== 'cancellation requested') {
+                              $canCancelDispatch = true;
+                              break;
+                            }
                           }
                         }
                       }
@@ -484,9 +499,13 @@
                     <?php if ($reDispatch): ?>
                       <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="reDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Re-Dispatch</button>
                     <?php endif; ?>
+                    <?php if ($canCancelDispatch): ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
+                    <?php endif; ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
+                    <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
+                    <?php endif; ?>
                   </div>
                 </div>
                 <div></div>
@@ -1276,8 +1295,20 @@ if (bulkPrintBtn) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ invoice_id: invoiceId })
         })
-        .then(res => res.json())
+        .then(async res => {
+            const text = await res.text();
+            try {
+                return text ? JSON.parse(text) : null;
+            } catch (parseErr) {
+                console.error('Cancel invoice JSON parse failed:', text);
+                throw new Error('Invalid server response');
+            }
+        })
         .then(data => {
+            if (!data) {
+                alert('Error: Empty server response');
+                return;
+            }
             if (data.success) {
                 showAlert('Invoice cancellation initiated successfully. Reloading...', 'success');
                 location.reload();

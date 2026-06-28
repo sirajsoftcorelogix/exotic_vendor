@@ -798,6 +798,7 @@ class DirectPurchaseController
         }
 
         $directPurchaseModel->markItemVendorQtySynced($itemId);
+
         echo json_encode([
             'success' => true,
             'message' => 'Qty synced to vendor API.',
@@ -1135,7 +1136,14 @@ class DirectPurchaseController
 
         try {
             $directPurchaseReturnModel->insertReturn($header, $returnLines);
-            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Purchase return saved and stock updated.'];
+            global $conn;
+            $productModel = new product($conn);
+            $vendorNote = $this->syncDirectPurchaseReturnLocalStockToVendor($returnLines, $itemsById, $productModel);
+            $flashText = 'Purchase return saved and stock updated.';
+            if ($vendorNote !== '') {
+                $flashText .= ' ' . $vendorNote;
+            }
+            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => $flashText];
         } catch (Throwable $e) {
             error_log('DirectPurchase returnSave: ' . $e->getMessage());
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not save return. ' . $e->getMessage()];
@@ -1300,6 +1308,7 @@ class DirectPurchaseController
             $oldQty = (float) ($previous['qty'] ?? 0);
             $stockDelta = $isEdit ? ($newQty - $oldQty) : $newQty;
             $cost = (float) ($current['cost'] ?? 0);
+            $line = is_array($current) ? $current : $previous;
 
             if ($cost <= 0 && abs($stockDelta) < 0.0001) {
                 if (
@@ -1319,7 +1328,6 @@ class DirectPurchaseController
                 continue;
             }
 
-            $line = is_array($current) ? $current : $previous;
             if (!is_array($line)) {
                 continue;
             }
@@ -1483,5 +1491,62 @@ class DirectPurchaseController
             'qty' => $qty,
             'cost' => $cost,
         ]);
+    }
+
+    /**
+     * Push negative local_stock_delta to vendor API for purchase return lines.
+     *
+     * @param list<array<string, mixed>> $returnLines
+     * @param array<int, array<string, mixed>> $itemsById
+     */
+    private function syncDirectPurchaseReturnLocalStockToVendor(
+        array $returnLines,
+        array $itemsById,
+        product $productModel
+    ): string {
+        $byVariant = [];
+        foreach ($returnLines as $returnLine) {
+            $itemId = (int) ($returnLine['direct_purchase_item_id'] ?? 0);
+            $returnQty = (float) ($returnLine['return_qty'] ?? 0);
+            if ($itemId <= 0 || $returnQty <= 0 || !isset($itemsById[$itemId])) {
+                continue;
+            }
+            $variant = $this->resolveDirectPurchaseVariant($itemsById[$itemId], $productModel);
+            if ($variant === null) {
+                continue;
+            }
+            $key = $variant['key'];
+            if (!isset($byVariant[$key])) {
+                $byVariant[$key] = $variant;
+                $byVariant[$key]['return_qty'] = 0.0;
+            }
+            $byVariant[$key]['return_qty'] += $returnQty;
+        }
+
+        $failures = [];
+        foreach ($byVariant as $variant) {
+            $delta = -(int) round((float) ($variant['return_qty'] ?? 0));
+            if ($delta === 0) {
+                continue;
+            }
+            $result = $productModel->applyLocalStockDeltaAndRefreshFromVendorApi(
+                $variant['item_code'],
+                $delta,
+                $variant['size'],
+                $variant['color']
+            );
+            if (empty($result['success'])) {
+                $failures[] = $variant['item_code'] . ' — ' . trim((string) ($result['message'] ?? 'vendor local stock sync failed'));
+            }
+        }
+
+        if ($failures === []) {
+            return '';
+        }
+
+        $shown = array_slice($failures, 0, 3);
+        $suffix = count($failures) > 3 ? ' (and ' . (count($failures) - 3) . ' more)' : '';
+
+        return 'Vendor local stock update issue: ' . implode('; ', $shown) . $suffix . '.';
     }
 }

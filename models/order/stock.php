@@ -47,30 +47,37 @@ class Stock {
     /**
      * Decrement stock for each invoice line that has product_id set (after invoice is saved).
      */
+    /**
+     * Deduct physical stock when a final invoice is created (skipped for proforma).
+     */
+    public function applyInvoiceStockOnCreate(int $invoice_id, string $status = 'final') {
+        if (strtolower(trim($status)) === 'proforma') {
+            return ['success' => true, 'message' => 'Proforma invoice — stock not deducted', 'applied' => 0, 'skipped_lines' => 0];
+        }
+        return $this->updateStockByInvoiceId($invoice_id);
+    }
+
     public function updateStockByInvoiceId(int $invoice_id) {
         $invoice_id = (int)$invoice_id;
         if ($invoice_id <= 0) {
             return ['success' => false, 'message' => 'Invalid invoice id'];
         }
-        $sql = "SELECT product_id, quantity FROM vp_invoice_items WHERE invoice_id = ?";
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) {
-            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+
+        $refStr = (string)$invoice_id;
+        $dupStmt = $this->conn->prepare(
+            "SELECT id FROM vp_stock_movements WHERE ref_type = 'INVOICE' AND ref_id = ? AND product_id = ? LIMIT 1"
+        );
+        if (!$dupStmt) {
+            return ['success' => false, 'message' => 'Prepare failed (dup check): ' . $this->conn->error];
         }
-        $stmt->bind_param('i', $invoice_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if (!$result) {
-            $stmt->close();
-            return ['success' => false, 'message' => 'Query failed'];
-        }
+
         $errors = [];
         $skipped = 0;
         $applied = 0;
         $linesWithQty = 0;
-        while ($row = $result->fetch_assoc()) {
-            $prodId = (int)($row['product_id'] ?? 0);
-            $qty = (int) round((float)($row['quantity'] ?? 0));
+        foreach ($this->fetchInvoiceStockLines($invoice_id) as $line) {
+            $prodId = (int)($line['product_id'] ?? 0);
+            $qty = (int)($line['quantity'] ?? 0);
             if ($qty <= 0) {
                 continue;
             }
@@ -79,14 +86,22 @@ class Stock {
                 $skipped++;
                 continue;
             }
-            $res = $this->reduceStock($prodId, $qty, (string)$invoice_id, 'INVOICE');
+            $dupStmt->bind_param('si', $refStr, $prodId);
+            $dupStmt->execute();
+            $dupRes = $dupStmt->get_result();
+            if ($dupRes && $dupRes->num_rows > 0) {
+                $skipped++;
+                continue;
+            }
+            $res = $this->reduceStock($prodId, $qty, $refStr, 'INVOICE');
             if (empty($res['success'])) {
                 $errors[] = "Product $prodId: " . ($res['message'] ?? 'error');
             } else {
                 $applied++;
             }
         }
-        $stmt->close();
+        $dupStmt->close();
+
         if (count($errors)) {
             return ['success' => false, 'message' => implode('; ', $errors), 'applied' => $applied, 'skipped_lines' => $skipped];
         }
@@ -98,7 +113,6 @@ class Stock {
 
     /**
      * Reverse invoice stock deductions: one IN movement per line (ref_type INVOICE_CANCEL).
-     * Only runs when a matching OUT movement exists for this invoice (ref_type INVOICE); otherwise the line is skipped.
      * Idempotent per product_id + invoice id for INVOICE_CANCEL rows.
      */
     public function restoreStockByInvoiceId(int $invoice_id) {
@@ -106,60 +120,52 @@ class Stock {
         if ($invoice_id <= 0) {
             return ['success' => false, 'message' => 'Invalid invoice id'];
         }
-        $sql = "SELECT product_id, quantity FROM vp_invoice_items WHERE invoice_id = ?";
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) {
-            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
-        }
-        $stmt->bind_param('i', $invoice_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if (!$result) {
-            $stmt->close();
-            return ['success' => false, 'message' => 'Query failed'];
-        }
+
         $refStr = (string)$invoice_id;
         $errors = [];
         $applied = 0;
         $skipped = 0;
+        $skippedAlreadyRestored = 0;
+        $skippedNoPriorOut = 0;
+        $linesWithQty = 0;
+        $linesResolvable = 0;
+
         $dupStmt = $this->conn->prepare(
             "SELECT id FROM vp_stock_movements WHERE ref_type = 'INVOICE_CANCEL' AND ref_id = ? AND product_id = ? LIMIT 1"
         );
         if (!$dupStmt) {
-            $stmt->close();
             return ['success' => false, 'message' => 'Prepare failed (dup check): ' . $this->conn->error];
         }
-        $priorOutStmt = $this->conn->prepare(
-            "SELECT id FROM vp_stock_movements WHERE product_id = ? AND movement_type = 'OUT' AND ref_type = 'INVOICE' AND ref_id = ? LIMIT 1"
-        );
-        if (!$priorOutStmt) {
-            $dupStmt->close();
-            $stmt->close();
-            return ['success' => false, 'message' => 'Prepare failed (prior OUT check): ' . $this->conn->error];
-        }
-        while ($row = $result->fetch_assoc()) {
-            $prodId = (int)($row['product_id'] ?? 0);
-            $qty = (int) round((float)($row['quantity'] ?? 0));
+
+        foreach ($this->fetchInvoiceStockLines($invoice_id) as $line) {
+            $prodId = (int)($line['product_id'] ?? 0);
+            $qty = (int)($line['quantity'] ?? 0);
+            $orderNumber = trim((string)($line['order_number'] ?? ''));
             if ($qty <= 0) {
                 continue;
             }
+            $linesWithQty++;
             if ($prodId <= 0) {
+                $skipped++;
                 continue;
             }
+            $linesResolvable++;
+
             $dupStmt->bind_param('si', $refStr, $prodId);
             $dupStmt->execute();
             $dupRes = $dupStmt->get_result();
             if ($dupRes && $dupRes->num_rows > 0) {
                 $skipped++;
+                $skippedAlreadyRestored++;
                 continue;
             }
-            $priorOutStmt->bind_param('is', $prodId, $refStr);
-            $priorOutStmt->execute();
-            $priorOutRes = $priorOutStmt->get_result();
-            if (!$priorOutRes || $priorOutRes->num_rows < 1) {
+
+            if (!$this->hasPriorInvoiceStockOut($prodId, $invoice_id, $orderNumber)) {
                 $skipped++;
+                $skippedNoPriorOut++;
                 continue;
             }
+
             $res = $this->addStockMovement($prodId, $qty, 'IN', $invoice_id, 'INVOICE_CANCEL');
             if (empty($res['success'])) {
                 $errors[] = "Product $prodId: " . ($res['message'] ?? 'error');
@@ -168,12 +174,141 @@ class Stock {
             }
         }
         $dupStmt->close();
-        $priorOutStmt->close();
-        $stmt->close();
+
         if (count($errors)) {
             return ['success' => false, 'message' => implode('; ', $errors), 'applied' => $applied, 'skipped_lines' => $skipped];
         }
+        if ($linesResolvable > 0 && $applied === 0 && $skippedNoPriorOut > 0) {
+            return [
+                'success' => false,
+                'message' => 'Stock not restored: no matching invoice OUT movement found (stock may not have been deducted when invoice was created).',
+                'applied' => 0,
+                'skipped_lines' => $skipped,
+            ];
+        }
+        if ($applied === 0 && $skippedAlreadyRestored > 0 && $skippedNoPriorOut === 0) {
+            return [
+                'success' => true,
+                'message' => 'Stock already restored for this invoice',
+                'applied' => 0,
+                'skipped_lines' => $skipped,
+            ];
+        }
         return ['success' => true, 'message' => 'Stock restored for invoice', 'applied' => $applied, 'skipped_lines' => $skipped];
+    }
+
+    /**
+     * @return list<array{product_id:int,quantity:int,order_number:string,item_code:string,size:string,color:string}>
+     */
+    private function fetchInvoiceStockLines(int $invoice_id): array
+    {
+        $invoice_id = (int) $invoice_id;
+        if ($invoice_id <= 0) {
+            return [];
+        }
+
+        $sql = 'SELECT id, product_id, quantity, order_number, item_code FROM vp_invoice_items WHERE invoice_id = ?';
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $invoice_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        if ($rows === []) {
+            return [];
+        }
+
+        $productModel = new product($this->conn);
+        $orderByInvoiceStmt = $this->conn->prepare(
+            'SELECT size, color FROM vp_orders WHERE invoice_id = ? AND order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1'
+        );
+        $orderByNumberStmt = $this->conn->prepare(
+            'SELECT size, color FROM vp_orders WHERE order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1'
+        );
+
+        $lines = [];
+        foreach ($rows as $row) {
+            $orderNumber = trim((string)($row['order_number'] ?? ''));
+            $itemCode = trim((string)($row['item_code'] ?? ''));
+            $size = '';
+            $color = '';
+
+            if ($orderByInvoiceStmt && $orderNumber !== '' && $itemCode !== '') {
+                $orderByInvoiceStmt->bind_param('iss', $invoice_id, $orderNumber, $itemCode);
+                $orderByInvoiceStmt->execute();
+                $orderRow = $orderByInvoiceStmt->get_result()->fetch_assoc();
+                if ($orderRow) {
+                    $size = trim((string)($orderRow['size'] ?? ''));
+                    $color = trim((string)($orderRow['color'] ?? ''));
+                }
+            }
+            if ($size === '' && $color === '' && $orderByNumberStmt && $orderNumber !== '' && $itemCode !== '') {
+                $orderByNumberStmt->bind_param('ss', $orderNumber, $itemCode);
+                $orderByNumberStmt->execute();
+                $orderRow = $orderByNumberStmt->get_result()->fetch_assoc();
+                if ($orderRow) {
+                    $size = trim((string)($orderRow['size'] ?? ''));
+                    $color = trim((string)($orderRow['color'] ?? ''));
+                }
+            }
+
+            $prodId = (int)($row['product_id'] ?? 0);
+            if ($prodId <= 0 && $orderNumber !== '' && $itemCode !== '') {
+                $prodId = $productModel->getProductIdForInvoiceLine($orderNumber, $itemCode, $size, $color);
+            }
+
+            $lines[] = [
+                'product_id' => $prodId,
+                'quantity' => (int) round((float)($row['quantity'] ?? 0)),
+                'order_number' => $orderNumber,
+                'item_code' => $itemCode,
+                'size' => $size,
+                'color' => $color,
+            ];
+        }
+
+        if ($orderByInvoiceStmt) {
+            $orderByInvoiceStmt->close();
+        }
+        if ($orderByNumberStmt) {
+            $orderByNumberStmt->close();
+        }
+
+        return $lines;
+    }
+
+    private function hasPriorInvoiceStockOut(int $productId, int $invoiceId, string $orderNumber): bool
+    {
+        $productId = (int) $productId;
+        $invoiceId = (int) $invoiceId;
+        $orderNumber = trim($orderNumber);
+        if ($productId <= 0) {
+            return false;
+        }
+
+        $invoiceRef = (string) $invoiceId;
+        $stmt = $this->conn->prepare(
+            "SELECT id FROM vp_stock_movements
+             WHERE product_id = ? AND movement_type = 'OUT'
+             AND (
+                 (ref_type = 'INVOICE' AND ref_id = ?)
+                 OR (ref_type = 'ORDER' AND ref_id = ?)
+             )
+             LIMIT 1"
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('iss', $productId, $invoiceRef, $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return !empty($row);
     }
 
     /**
@@ -204,6 +339,10 @@ class Stock {
         }
         $refIdStr = $reference_id !== null && $reference_id !== '' ? (string)$reference_id : '0';
         $wh = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($refTypeResolved === 'INVOICE' || $refTypeResolved === 'INVOICE_CANCEL') {
+            $wh = $this->resolveWarehouseIdForInvoice((int)$refIdStr);
+        }
+        $location = $wh > 0 ? $this->warehouseLocationLabel($wh) : '';
         $reason = 'Stock movement';
         if ($movementTypeNormalized === 'OUT' && $refTypeResolved === 'INVOICE') {
             $reason = 'Invoice #' . $refIdStr;
@@ -220,8 +359,9 @@ class Stock {
             'size' => $prod['size'],
             'color' => $prod['color'],
             'warehouse_id' => $wh,
-            'location' => '',
+            'location' => $location,
             'movement_type' => $movementTypeNormalized,
+            'strict_stock_check' => true,
             'quantity' => $quantity,
             'user_id' => $_SESSION['user']['id'] ?? 0,
             'reason' => $reason,
@@ -229,8 +369,41 @@ class Stock {
             'ref_id' => $refIdStr,
         ];
 
-        $productModel = new Product($this->conn);
+        $productModel = new product($this->conn);
         return $productModel->insertStockMovement($data);
+    }
+
+    private function resolveWarehouseIdForInvoice(int $invoiceId): int
+    {
+        if ($invoiceId > 0) {
+            $stmt = $this->conn->prepare('SELECT warehouse_id FROM vp_invoices WHERE id = ? LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $invoiceId);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($row && (int)($row['warehouse_id'] ?? 0) > 0) {
+                    return (int)$row['warehouse_id'];
+                }
+            }
+        }
+        return (int)($_SESSION['warehouse_id'] ?? 0);
+    }
+
+    private function warehouseLocationLabel(int $warehouseId): string
+    {
+        if ($warehouseId <= 0) {
+            return '';
+        }
+        $stmt = $this->conn->prepare('SELECT address_title FROM exotic_address WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('i', $warehouseId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return trim((string)($row['address_title'] ?? ''));
     }
 
     /**

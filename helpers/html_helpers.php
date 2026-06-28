@@ -1,4 +1,21 @@
 <?php
+
+if (!function_exists('vendorJsonResponse')) {
+    /**
+     * Clean output buffers and return JSON (avoids broken JSON from ob_start / warnings).
+     */
+    function vendorJsonResponse(array $payload, int $httpCode = 200): void
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        http_response_code($httpCode);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+}
+
 function is_login()
 {
 	global $domain;
@@ -944,4 +961,28 @@ function getGroupnameByCategory($category)
 		return $row['name'];
 	}
 	return null;
+}
+
+/**
+ * Build SKU from item_code, size, and color when no explicit SKU is stored.
+ * Matches ProductsController::buildBulkImportAutoSku().
+ */
+function buildAutoSkuFromItemVariant(string $itemCode, string $size = '', string $color = ''): string
+{
+	$itemCode = trim($itemCode);
+	$size = trim($size);
+	$color = trim($color);
+	if ($itemCode === '') {
+		return '';
+	}
+	if ($size !== '' && $color !== '') {
+		return $itemCode . '-' . $size . '-' . $color;
+	}
+	if ($size !== '' && $color === '') {
+		return $itemCode . '-' . $size;
+	}
+	if ($size === '' && $color !== '') {
+		return $itemCode . '--' . $color;
+	}
+	return $itemCode;
 }

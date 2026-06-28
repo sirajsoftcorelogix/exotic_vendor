@@ -405,17 +405,34 @@ class UsersController
     {
         is_login();
         global $usersModel;
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            vendorJsonResponse(['success' => false, 'message' => 'Invalid request method.']);
+        }
+
+        try {
             $data = $_POST;
-            if (isset($data['id']) && $data['id'] > 0) {
-                $result = $usersModel->update($data['id'], $data);
+            if (isset($data['team']) && !is_array($data['team'])) {
+                $data['team'] = [$data['team']];
+            }
+
+            if (isset($data['id']) && (int) $data['id'] > 0) {
+                $result = $usersModel->update((int) $data['id'], $data);
             } else {
-                $data['id'] = 0; // Ensure id is set for insert
                 $result = $usersModel->insert($data);
             }
-            echo json_encode($result);
+
+            if (!is_array($result)) {
+                vendorJsonResponse(['success' => false, 'message' => 'Unexpected server response while saving user.']);
+            }
+
+            vendorJsonResponse($result);
+        } catch (Throwable $e) {
+            vendorJsonResponse([
+                'success' => false,
+                'message' => 'Save failed: ' . $e->getMessage(),
+            ]);
         }
-        exit;
     }
     function checkPasswords($password, $confirmPassword)
     {
@@ -468,11 +485,9 @@ class UsersController
     public function delete()
     {
         global $usersModel;
-        $id = $_POST['id'] ?? 0;
+        $id = (int) ($_POST['id'] ?? 0);
         $result = $usersModel->delete($id);
-
-        echo json_encode($result);
-        exit;
+        vendorJsonResponse($result);
     }
     public function getUserDetails()
     {
@@ -480,17 +495,12 @@ class UsersController
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
             $user = $usersModel->getUserById($id);
-            $user['teamIds'] = $usersModel->getUserTeams($id);
-            // echo '<pre>'; print_r($user); exit;
             if ($user) {
-
-                echo json_encode($user);
-            } else {
-                echo json_encode(['status' => 'error', 'message' => 'User not found.']);
+                $user['teamIds'] = $usersModel->getUserTeams($id);
+                vendorJsonResponse($user);
             }
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Invalid user ID.']);
+            vendorJsonResponse(['status' => 'error', 'message' => 'User not found.']);
         }
-        exit;
+        vendorJsonResponse(['status' => 'error', 'message' => 'Invalid user ID.']);
     }
 }

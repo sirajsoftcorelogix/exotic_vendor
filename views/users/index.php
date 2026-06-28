@@ -256,7 +256,7 @@
                                 <label for="team" class="text-sm font-medium text-gray-700">Warehouses:</label>
                                 <select class="form-input w-full bg-white mt-1 advanced-multiselect"
                                     name="warehouse_id">
-                                    <!-- <option value="">All Warehouses</option> -->
+                                    <option value="">Select Warehouse</option>
                                     <?php foreach ($warehouses_list as $wh): ?>
                                         <option value="<?php echo $wh['id']; ?>"><?php echo $wh['address_title']; ?></option>
                                     <?php endforeach; ?>
@@ -355,6 +355,7 @@
                                     <div>
                                         <label for="editWarehouse" class="text-sm font-medium text-gray-700">Warehouse:</label>
                                         <select id="editWarehouse" name="warehouse_id" class="form-input w-full bg-white mt-1">
+                                            <option value="">Select Warehouse</option>
                                             <?php foreach ($warehouses_list as $wh): ?>
                                                 <option value="<?php echo $wh['id']; ?>">
                                                     <?php echo $wh['address_title']; ?>
@@ -402,6 +403,53 @@
     const cancelVendorBtn = document.getElementById('cancel-vendor-btn');
     const closeVendorPopupBtn = document.getElementById('close-vendor-popup-btn');
 
+    async function parseJsonResponse(response) {
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch (error) {
+            console.error('Non-JSON response from server:', text);
+            throw new Error('Server returned an invalid response. Please check the console for details.');
+        }
+    }
+
+    function showUserFormMessage(msgBoxId, data, isSuccess) {
+        const msgBox = document.getElementById(msgBoxId);
+        if (!msgBox) {
+            return;
+        }
+        const message = data && data.message ? data.message : (isSuccess ? 'Saved successfully.' : 'Could not save user.');
+        msgBox.innerHTML = isSuccess
+            ? `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">✅ ${message}</div>`
+            : `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">❌ ${message}</div>`;
+    }
+
+    async function submitUserForm(form, msgBoxId) {
+        const msgBox = document.getElementById(msgBoxId);
+        if (msgBox) {
+            msgBox.textContent = '';
+        }
+
+        const response = await fetch('index.php?page=users&action=addUser', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin',
+            body: new FormData(form)
+        });
+
+        const data = await parseJsonResponse(response);
+        showUserFormMessage(msgBoxId, data, !!data.success);
+
+        if (data.success) {
+            setTimeout(() => {
+                window.location.href = 'index.php?page=users&action=list';
+            }, 1000);
+        }
+    }
+
     function openVendorPopup() {
         popupWrapper.classList.remove('hidden');
         setTimeout(() => {
@@ -425,33 +473,9 @@
 
     document.getElementById('addUserForm').onsubmit = function(e) {
         e.preventDefault();
-        var form = new FormData(this);
-        var params = new URLSearchParams(form).toString();
-        var msgDiv = document.getElementById('addUserMsg');
-        msgDiv.textContent = '';
-        fetch('?page=users&action=addUser', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: params
-            })
-            .then(r => r.json())
-            .then(data => {
-                const msgBox = document.getElementById("addUserMsg");
-                if (data.success) {
-                    msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
-                    ✅ ${data.message}
-                </div>`;
-                } else {
-                    msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
-                    ❌ ${data.message}
-                </div>`;
-                }
-                setTimeout(() => {
-                    location.reload();
-                }, 1000); // refresh after 1 sec
-            });
+        submitUserForm(this, 'addUserMsg').catch(function(error) {
+            showUserFormMessage('addUserMsg', { message: error.message || 'Request failed.' }, false);
+        });
     };
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -549,8 +573,14 @@
     const closeVendorPopupBtnEdit = document.getElementById('close-vendor-popup-btn-edit');
 
     function openEditModal(id) {
-        fetch("?page=users&action=userDetails&id=" + id)
-            .then(res => res.json())
+        fetch("index.php?page=users&action=userDetails&id=" + id, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin'
+        })
+            .then(parseJsonResponse)
             .then(user => {
                 if (user.status === "error") {
                     alert(user.message);
@@ -564,8 +594,11 @@
                 document.getElementById("editRole").value = user.role_id;
                 document.getElementById("editTeam").value = user.team_id;
                 document.getElementById("editIs_active").value = user.is_active;
-                //$('#editWarehouse').val(user.warehouse_id).trigger('change');
-                console.log(user.warehouse_name);
+
+                const warehouseSelect = document.getElementById("editWarehouse");
+                if (warehouseSelect) {
+                    warehouseSelect.value = user.warehouse_id ? String(user.warehouse_id) : '';
+                }
 
                 const teamSelect = document.getElementById("editTeam");
                 
@@ -581,21 +614,23 @@
                 });
 
                 // Initialize Select2
-                $(document).ready(function() {
-                    $('#editTeam').select2({
-                        placeholder: "Select Teams",
-                        allowClear: true,
-                        width: '400',
-                        closeOnSelect: false
-                    });
+                if ($('#editTeam').data('select2')) {
+                    $('#editTeam').select2('destroy');
+                }
+                $('#editTeam').select2({
+                    placeholder: "Select Teams",
+                    allowClear: true,
+                    width: '400',
+                    closeOnSelect: false
                 });
 
                 popupWrapperEdit.classList.remove('hidden');
                 setTimeout(() => {
                     modalSliderEdit.classList.remove('translate-x-full');
-                     const warehouseSelect = document.getElementById("editWarehouse");
-                warehouseSelect.value = String(user.warehouse_id);
                 }, 10);
+            })
+            .catch(function(error) {
+                alert(error.message || 'Could not load user details.');
             });
     }
 
@@ -608,32 +643,9 @@
 
     document.getElementById('editUserForm').onsubmit = function(e) {
         e.preventDefault();
-        var form = new FormData(this);
-        var params = new URLSearchParams(form).toString();
-        fetch('?page=users&action=addUser', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: params
-            })
-            .then(r => r.json())
-            .then(data => {
-                var msgBox = document.getElementById('editUserMsg');
-                msgBox.innerHTML = '';
-                if (data.success) {
-                    msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
-                                    ✅ ${data.message}
-                </div>`;
-                } else {
-                    msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
-                    ❌ ${data.message}
-                </div>`;
-                }
-                setTimeout(() => {
-                    window.location.href = '?page=users&action=list';
-                }, 1000); // redirect after 1 sec
-            });
+        submitUserForm(this, 'editUserMsg').catch(function(error) {
+            showUserFormMessage('editUserMsg', { message: error.message || 'Request failed.' }, false);
+        });
     };
     $(document).ready(function() {
         $('#team').select2({

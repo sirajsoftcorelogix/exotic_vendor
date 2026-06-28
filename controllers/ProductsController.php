@@ -143,6 +143,218 @@ class ProductsController
         renderTemplate('views/products/stock_transfer_list.php', $data, 'Stock Transfer Log');
     }
 
+    /**
+     * @return array{filters: array<string,mixed>, user_warehouse_id: int, is_admin: bool}
+     */
+    private function buildInTransitRequestFilters(): array
+    {
+        $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+        $userWh = (int)($_SESSION['warehouse_id'] ?? 0);
+        if ($userWh <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $userWh = (int)$_SESSION['user']['warehouse_id'];
+        }
+
+        $direction = strtolower(trim((string)($_GET['direction'] ?? '')));
+        if ($direction === '' && !$isAdminUser && $userWh > 0) {
+            $direction = 'incoming';
+        }
+
+        $filters = [
+            'search' => trim((string)($_GET['search'] ?? '')),
+            'from_warehouse' => isset($_GET['from_warehouse']) ? (int)$_GET['from_warehouse'] : 0,
+            'to_warehouse' => isset($_GET['to_warehouse']) ? (int)$_GET['to_warehouse'] : 0,
+            'direction' => $direction,
+            'receipt_state' => strtolower(trim((string)($_GET['receipt_state'] ?? 'any'))),
+            'dispatched_from' => trim((string)($_GET['dispatched_from'] ?? '')),
+            'dispatched_to' => trim((string)($_GET['dispatched_to'] ?? '')),
+            'age_min_days' => isset($_GET['aged_only']) && (int)$_GET['aged_only'] === 1 ? 14 : 0,
+        ];
+
+        if (!$isAdminUser) {
+            $filters['user_warehouse_scope'] = $userWh;
+        }
+
+        return [
+            'filters' => $filters,
+            'user_warehouse_id' => $userWh,
+            'is_admin' => $isAdminUser,
+        ];
+    }
+
+    public function in_transit_list()
+    {
+        is_login();
+        global $conn;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        if ($page_no < 1) {
+            $page_no = 1;
+        }
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+        $limit = in_array($limit, [10, 25, 50, 100], true) ? $limit : 50;
+        $offset = ($page_no - 1) * $limit;
+
+        $view = strtolower(trim((string)($_GET['view'] ?? 'item')));
+        if (!in_array($view, ['item', 'transfer'], true)) {
+            $view = 'item';
+        }
+
+        $sort = strtolower(trim((string)($_GET['sort'] ?? 'oldest_dispatch')));
+        if (!in_array($sort, ['oldest_dispatch', 'pending_qty_desc', 'item_code_asc', 'newest_dispatch'], true)) {
+            $sort = 'oldest_dispatch';
+        }
+        if ($view === 'item' && $sort === 'newest_dispatch') {
+            $sort = 'oldest_dispatch';
+        }
+        if ($view === 'transfer' && $sort === 'item_code_asc') {
+            $sort = 'oldest_dispatch';
+        }
+
+        $request = $this->buildInTransitRequestFilters();
+        $filters = $request['filters'];
+
+        if ($view === 'transfer') {
+            $listData = $stockTransferModel->listInTransitTransfers($limit, $offset, $filters, $sort);
+            $items = [];
+            $breakdown = [];
+        } else {
+            $listData = $stockTransferModel->listInTransitItemsAggregated($limit, $offset, $filters, $sort);
+            $items = $listData['records'];
+            $itemKeys = array_values(array_filter(array_map(static function (array $row): string {
+                return (string)($row['item_key'] ?? '');
+            }, $items)));
+            $breakdown = $stockTransferModel->getInTransitBreakdownByItemKeys($itemKeys, $filters);
+        }
+
+        $summary = $stockTransferModel->getInTransitSummary($filters);
+
+        $users = [];
+        $userResult = mysqli_query($conn, 'SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC');
+        if ($userResult) {
+            while ($row = mysqli_fetch_assoc($userResult)) {
+                $users[] = $row;
+            }
+        }
+
+        $warehouses = [];
+        $warehouseResult = mysqli_query($conn, 'SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC');
+        if ($warehouseResult) {
+            while ($row = mysqli_fetch_assoc($warehouseResult)) {
+                $warehouses[] = $row;
+            }
+        }
+
+        renderTemplate('views/products/in_transit.php', [
+            'view' => $view,
+            'records' => $listData['records'],
+            'breakdown' => $breakdown,
+            'summary' => $summary,
+            'page_no' => $page_no,
+            'total_records' => $listData['total'],
+            'limit' => $limit,
+            'filters' => $filters,
+            'sort' => $sort,
+            'users' => $users,
+            'warehouses' => $warehouses,
+            'user_warehouse_id' => $request['user_warehouse_id'],
+            'is_admin' => $request['is_admin'],
+        ], 'In Transit Inventory');
+    }
+
+    public function in_transit_export()
+    {
+        is_login();
+        global $conn;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $view = strtolower(trim((string)($_GET['view'] ?? 'item')));
+        $sort = strtolower(trim((string)($_GET['sort'] ?? 'oldest_dispatch')));
+        $request = $this->buildInTransitRequestFilters();
+        $filters = $request['filters'];
+
+        $filename = 'in_transit_' . date('Y-m-d_His') . '.csv';
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        echo "\xEF\xBB\xBF";
+
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            exit;
+        }
+
+        if ($view === 'transfer') {
+            $rows = $stockTransferModel->listInTransitTransfers(50000, 0, $filters, $sort)['records'];
+            fputcsv($out, [
+                'Transfer Order',
+                'Dispatch Date',
+                'Days In Transit',
+                'Source',
+                'Destination',
+                'Pending Lines',
+                'Sent Qty',
+                'Received Qty',
+                'Pending Qty',
+                'Receipt Status',
+                'Requested By',
+                'Dispatched By',
+            ]);
+            foreach ($rows as $row) {
+                fputcsv($out, [
+                    $row['transfer_order_no'] ?? '',
+                    $row['dispatch_date'] ?? '',
+                    $row['days_in_transit'] ?? 0,
+                    $row['source_name'] ?? '',
+                    $row['dest_name'] ?? '',
+                    $row['pending_line_count'] ?? 0,
+                    $row['sent_qty'] ?? 0,
+                    $row['received_qty'] ?? 0,
+                    $row['pending_qty'] ?? 0,
+                    $row['receipt_status'] ?? '',
+                    $row['requested_by_name'] ?? '',
+                    $row['dispatch_by_name'] ?? '',
+                ]);
+            }
+        } else {
+            $rows = $stockTransferModel->listInTransitLinesForExport($filters, $sort);
+            fputcsv($out, [
+                'Item Code',
+                'SKU',
+                'Product Title',
+                'Transfer Order',
+                'Source',
+                'Destination',
+                'Sent Qty',
+                'Received Qty',
+                'Pending Qty',
+                'Dispatch Date',
+                'Days In Transit',
+            ]);
+            foreach ($rows as $row) {
+                fputcsv($out, [
+                    $row['item_code'] ?? '',
+                    $row['sku'] ?? '',
+                    $row['product_title'] ?? '',
+                    $row['transfer_order_no'] ?? '',
+                    $row['source_name'] ?? '',
+                    $row['dest_name'] ?? '',
+                    $row['sent_qty'] ?? 0,
+                    $row['received_qty'] ?? 0,
+                    $row['pending_qty'] ?? 0,
+                    $row['dispatch_date'] ?? '',
+                    $row['days_in_transit'] ?? 0,
+                ]);
+            }
+        }
+
+        fclose($out);
+        exit;
+    }
+
     public function stock_transfer_delete()
     {
         is_login();
@@ -636,6 +848,7 @@ class ProductsController
             return $respond(['success' => false, 'message' => 'Maximum 50 SKUs allowed.', 'timing' => $importTiming(count($codes))]);
         }
         $codesCount = count($codes);
+        $applyImportStockFromLocal = !$internalCall;
 
         //exit;
         $created = 0;
@@ -805,25 +1018,39 @@ class ProductsController
 
                 if ($existing) {
                     $ok = $productModel->updateProduct($existing['id'], $item);
-                    if ($ok) $updated++;
-                    else $failed[] = $code;
+                    if ($ok) {
+                        $updated++;
+                        if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
+                            $this->applyQuickImportStockFromLocalStock(
+                                $conn,
+                                (string) $item['item_code'],
+                                trim((string) ($item['sku'] ?? '')),
+                                trim((string) ($item['size'] ?? '')),
+                                trim((string) ($item['color'] ?? '')),
+                                (int) ($item['local_stock'] ?? 0)
+                            );
+                        }
+                    } else {
+                        $failed[] = $code;
+                    }
                 } else {
                     $id = $productModel->createProduct($item);
                     if ($id) {
                         $created++;
-                        $createdIdsByCode[$code][] = (int)$id;
-                        if (isset($conn) && $conn instanceof mysqli) {
-                            $this->recordVendorApiImportOpeningStock(
+                        $createdIdsByCode[$code][] = (int) $id;
+                        if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
+                            $this->applyQuickImportStockFromLocalStock(
                                 $conn,
-                                (int)$id,
-                                trim((string)($item['sku'] ?? '')),
-                                (string)($item['item_code'] ?? ''),
-                                trim((string)($item['size'] ?? '')),
-                                trim((string)($item['color'] ?? '')),
-                                (int)($item['local_stock'] ?? 0)
+                                (string) ($item['item_code'] ?? ''),
+                                trim((string) ($item['sku'] ?? '')),
+                                trim((string) ($item['size'] ?? '')),
+                                trim((string) ($item['color'] ?? '')),
+                                (int) ($item['local_stock'] ?? 0)
                             );
                         }
-                    } else $failed[] = $code;
+                    } else {
+                        $failed[] = $code;
+                    }
                 }
 
                 $productModel->syncProductVendorMapFromApiItem($code, $apiItem);
@@ -887,25 +1114,39 @@ class ProductsController
                         $existingVar = $productModel->findByItemCodeSizeColor($variantItem['item_code'], $variantItem['size'], $variantItem['color']);
                         if ($existingVar) {
                             $ok = $productModel->updateProduct($existingVar['id'], $variantItem);
-                            if ($ok) $updated++;
-                            else $failed[] = $variantItem['item_code'];
+                            if ($ok) {
+                                $updated++;
+                                if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
+                                    $this->applyQuickImportStockFromLocalStock(
+                                        $conn,
+                                        (string) $variantItem['item_code'],
+                                        trim((string) ($variantItem['sku'] ?? '')),
+                                        trim((string) ($variantItem['size'] ?? '')),
+                                        trim((string) ($variantItem['color'] ?? '')),
+                                        (int) ($variantItem['local_stock'] ?? 0)
+                                    );
+                                }
+                            } else {
+                                $failed[] = $variantItem['item_code'];
+                            }
                         } else {
                             $id = $productModel->createProduct($variantItem);
                             if ($id) {
                                 $created++;
-                                $createdIdsByCode[$variantItem['item_code']][] = (int)$id;
-                                if (isset($conn) && $conn instanceof mysqli) {
-                                    $this->recordVendorApiImportOpeningStock(
+                                $createdIdsByCode[$variantItem['item_code']][] = (int) $id;
+                                if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
+                                    $this->applyQuickImportStockFromLocalStock(
                                         $conn,
-                                        (int)$id,
-                                        trim((string)($variantItem['sku'] ?? '')),
-                                        (string)($variantItem['item_code'] ?? ''),
-                                        trim((string)($variantItem['size'] ?? '')),
-                                        trim((string)($variantItem['color'] ?? '')),
-                                        (int)($variantItem['local_stock'] ?? 0)
+                                        (string) ($variantItem['item_code'] ?? ''),
+                                        trim((string) ($variantItem['sku'] ?? '')),
+                                        trim((string) ($variantItem['size'] ?? '')),
+                                        trim((string) ($variantItem['color'] ?? '')),
+                                        (int) ($variantItem['local_stock'] ?? 0)
                                     );
                                 }
-                            } else $failed[] = $variantItem['item_code'];
+                            } else {
+                                $failed[] = $variantItem['item_code'];
+                            }
                         }
                     }
                 }
@@ -2360,102 +2601,97 @@ class ProductsController
     }
 
     /**
-     * OPENING_STOCK when a product is first created via vendor API import (single-mode).
+     * Products list import: set warehouse stock from API local_stock (same logic as bulk import file qty).
      */
-    private function recordVendorApiImportOpeningStock(
+    private function applyQuickImportStockFromLocalStock(
         mysqli $conn,
-        int $productId,
-        string $sku,
         string $itemCode,
-        string $size,
-        string $color,
-        int $qty
+        string $importSku,
+        string $importSize,
+        string $importColor,
+        int $localStock
     ): void {
-        if ($productId <= 0 || $qty <= 0) {
+        $localStock = max(0, (int) $localStock);
+        if ($localStock <= 0 || trim($itemCode) === '') {
             return;
         }
-        $sku = trim($sku);
-        if ($sku === '') {
-            return;
-        }
+
         $warehouseId = $this->resolveDefaultImportWarehouseId($conn);
         if ($warehouseId <= 0) {
             return;
         }
-        $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
-        $reason = 'Opening stock from vendor API import';
-        $refType = 'VendorImport';
+
         $userId = 0;
         if (session_status() !== PHP_SESSION_ACTIVE) {
             @session_start();
         }
         if (!empty($_SESSION['user']['id'])) {
-            $userId = (int)$_SESSION['user']['id'];
+            $userId = (int) $_SESSION['user']['id'];
         }
 
-        $this->ensureVpStockMovementsOpeningStockEnum($conn);
-        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
+        $stockLoc = $this->getWarehouseLocationLabel($conn, $warehouseId);
+        $importSku = trim($importSku);
+        if ($importSku === '') {
+            $importSku = $this->buildBulkImportAutoSku($itemCode, $importSize, $importColor);
+        }
 
-        $ins = $conn->prepare("INSERT INTO vp_stock_movements
-            (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
-        if (!$ins) {
-            error_log('recordVendorApiImportOpeningStock: prepare failed ' . $conn->error);
-            return;
+        $err = $this->bulkImportApplyStockTarget(
+            $conn,
+            0,
+            $warehouseId,
+            $itemCode,
+            $importSku,
+            $importSize,
+            $importColor,
+            $localStock,
+            $stockLoc,
+            $userId,
+            'Product import stock from local_stock'
+        );
+        if ($err !== null) {
+            error_log('applyQuickImportStockFromLocalStock ' . $itemCode . ': ' . $err);
         }
-        $runningStock = $qty;
-        $ins->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-        if (!$ins->execute()) {
-            $msg = $ins->error;
-            $ins->close();
-            $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
-                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
-            if (!$ins2) {
-                error_log('recordVendorApiImportOpeningStock: insert failed ' . $msg);
-                return;
-            }
-            $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-            if (!$ins2->execute()) {
-                error_log('recordVendorApiImportOpeningStock: fallback insert failed ' . $ins2->error);
-            }
-            $ins2->close();
-            return;
-        }
-        $ins->close();
     }
 
     /**
+     * Set warehouse stock from bulk import qty (same value as local_stock), via central movement ledger + physical_stock sync.
+     *
      * @return string|null Error message, or null on success
      */
-    private function bulkImportApplyOpeningStock(
+    private function bulkImportApplyStockTarget(
         mysqli $conn,
+        int $importItemId,
         int $warehouseId,
         string $itemCode,
         string $importSku,
         string $importSize,
         string $importColor,
-        int $openingQty,
+        int $targetQty,
         string $stockLocation,
-        int $userId
+        int $userId,
+        string $reason = 'Bulk import stock'
     ): ?string {
-        if ($openingQty <= 0) {
+        require_once __DIR__ . '/../models/product/StockMovement.php';
+
+        $targetQty = max(0, (int) $targetQty);
+        if ($targetQty <= 0) {
             return null;
         }
         if ($warehouseId <= 0) {
-            return 'Warehouse is required for opening stock.';
+            return 'Warehouse is required for stock update.';
         }
+
         $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku, $importSize, $importColor);
         if (!$product) {
             return 'Product not found for stock movement (item_code/SKU/size/color).';
         }
 
-        $productId = (int)($product['id'] ?? 0);
+        $productId = (int) ($product['id'] ?? 0);
         if ($productId <= 0) {
             return 'Invalid product id for stock movement.';
         }
-        // Prefer canonical SKU from vp_products; fallback to import/derived SKU when blank.
-        $sku = trim((string)($product['sku'] ?? ''));
+
+        $sku = trim((string) ($product['sku'] ?? ''));
         if ($sku === '') {
             $sku = trim($importSku);
         }
@@ -2465,95 +2701,142 @@ class ProductsController
         if ($sku === '') {
             return 'SKU is missing for stock movement.';
         }
+
         $size = trim($importSize);
         $color = trim($importColor);
         $loc = trim($stockLocation);
         if ($loc === '') {
             $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
         }
-        $qty = max(0, (int)$openingQty);
-        $runningStock = $qty;
-        $reason = 'Migration From Egreen';
-        $refType = 'Egreen';
+
+        $refType = 'BULK_IMPORT';
+        $refId = $importItemId > 0 ? ('import_item:' . $importItemId) : ('bulk:' . $productId);
         $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
 
-        // Re-import: remove prior bulk opening lines for this variant/warehouse, then insert a fresh movement.
         if (!$conn->begin_transaction()) {
             return 'Could not start transaction for stock movement.';
         }
-        $del = $conn->prepare("DELETE FROM vp_stock_movements
-            WHERE product_id = ? AND warehouse_id = ? AND `{$itemCodeCol}` = ?
-              AND movement_type = 'OPENING_STOCK' AND ref_type = 'Egreen'
-              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
-              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?");
-        if (!$del) {
-            $conn->rollback();
-            return 'Could not prepare stock movement delete (refresh).';
-        }
-        $del->bind_param('iisss', $productId, $warehouseId, $itemCode, $size, $color);
-        if (!$del->execute()) {
-            $msg = $del->error;
-            $del->close();
-            $conn->rollback();
-            return 'Stock movement delete failed: ' . $msg;
-        }
-        $del->close();
 
-        $ins = $conn->prepare("INSERT INTO vp_stock_movements
-            (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
-        if (!$ins) {
-            $conn->rollback();
-            return 'Could not prepare stock movement insert.';
-        }
-        $ins->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-        if (!$ins->execute()) {
-            $msg = $ins->error;
-            $ins->close();
-            // Fallback only for schemas where ref_id is NOT NULL.
-            $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
-                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
-            if (!$ins2) {
-                $conn->rollback();
-                return 'Stock movement insert failed: ' . $msg;
+        try {
+            if ($importItemId > 0) {
+                $delBulk = $conn->prepare('DELETE FROM vp_stock_movements WHERE ref_type = ? AND ref_id = ?');
+                if ($delBulk) {
+                    $delBulk->bind_param('ss', $refType, $refId);
+                    $delBulk->execute();
+                    $delBulk->close();
+                }
             }
-            $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
-            if (!$ins2->execute()) {
-                $msg2 = $ins2->error;
-                $ins2->close();
-                $conn->rollback();
-                return 'Stock movement insert failed: ' . $msg2;
-            }
-            $ins2->close();
-        } else {
-            $ins->close();
-        }
 
-        $updL = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
-        if (!$updL) {
-            $conn->rollback();
-            return 'Could not prepare product stock update.';
-        }
-        $updL->bind_param('ii', $runningStock, $productId);
-        if (!$updL->execute()) {
-            $err = $updL->error;
+            $delLegacy = $conn->prepare("DELETE FROM vp_stock_movements
+                WHERE product_id = ? AND warehouse_id = ? AND `{$itemCodeCol}` = ?
+                  AND movement_type = 'OPENING_STOCK' AND ref_type IN ('Egreen', 'EgreenRefetch')
+                  AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
+                  AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?");
+            if ($delLegacy) {
+                $delLegacy->bind_param('iisss', $productId, $warehouseId, $itemCode, $size, $color);
+                $delLegacy->execute();
+                $delLegacy->close();
+            }
+
+            $current = (int) StockMovement::getLastRunningStock($conn, $sku, $warehouseId);
+            $delta = $targetQty - $current;
+
+            if ($delta > 0) {
+                $movementType = $current <= 0 ? 'OPENING_STOCK' : 'IN';
+                $movementQty = $current <= 0 ? $targetQty : $delta;
+                StockMovement::insert($conn, [
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'warehouse_id' => $warehouseId,
+                    'location' => $loc,
+                    'movement_type' => $movementType,
+                    'quantity' => $movementQty,
+                    'ref_type' => $refType,
+                    'ref_id' => $refId,
+                    'reason' => $reason,
+                    'update_by_user' => $userId,
+                    'strict_stock_check' => false,
+                ]);
+            } elseif ($delta < 0) {
+                StockMovement::insert($conn, [
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'warehouse_id' => $warehouseId,
+                    'location' => $loc,
+                    'movement_type' => 'OUT',
+                    'quantity' => abs($delta),
+                    'ref_type' => $refType,
+                    'ref_id' => $refId,
+                    'reason' => $reason,
+                    'update_by_user' => $userId,
+                    'strict_stock_check' => false,
+                ]);
+            } else {
+                StockMovement::syncProductPhysicalStock($conn, $productId);
+            }
+
+            $updL = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
+            if (!$updL) {
+                throw new \RuntimeException('Could not prepare product stock update.');
+            }
+            $updL->bind_param('ii', $targetQty, $productId);
+            if (!$updL->execute()) {
+                $err = $updL->error;
+                $updL->close();
+                throw new \RuntimeException('Product local_stock update failed: ' . $err);
+            }
             $updL->close();
-            $conn->rollback();
-            return 'Product local_stock update failed: ' . $err;
-        }
-        $updL->close();
 
-        if (!$conn->commit()) {
-            return 'Could not commit stock movement transaction.';
+            if (!$conn->commit()) {
+                return 'Could not commit stock movement transaction.';
+            }
+
+            return null;
+        } catch (\Throwable $e) {
+            $conn->rollback();
+            return $e->getMessage();
         }
-        return null;
     }
 
     /**
-     * For ReUpload/API refetch:
-     * - If no prior movement exists for this product+warehouse+variant, create OPENING_STOCK at target qty.
-     * - If prior movement exists, create IN/OUT adjustment so latest running stock becomes target qty.
+     * @return string|null Error message, or null on success
+     */
+    private function bulkImportApplyOpeningStock(
+        mysqli $conn,
+        int $importItemId,
+        int $warehouseId,
+        string $itemCode,
+        string $importSku,
+        string $importSize,
+        string $importColor,
+        int $openingQty,
+        string $stockLocation,
+        int $userId
+    ): ?string {
+        return $this->bulkImportApplyStockTarget(
+            $conn,
+            $importItemId,
+            $warehouseId,
+            $itemCode,
+            $importSku,
+            $importSize,
+            $importColor,
+            $openingQty,
+            $stockLocation,
+            $userId,
+            'Bulk import opening stock'
+        );
+    }
+
+    /**
+     * For ReUpload/API refetch — same stock target logic as opening import.
+     *
      * @return string|null Error message, or null on success
      */
     private function bulkImportApplyRefetchStock(
@@ -2568,125 +2851,19 @@ class ProductsController
         int $userId,
         int $importItemId
     ): ?string {
-        if ($warehouseId <= 0) {
-            return 'Warehouse is required for stock update.';
-        }
-        $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku, $importSize, $importColor);
-        if (!$product) {
-            return 'Product not found for stock update (item_code/SKU/size/color).';
-        }
-        $productId = (int)($product['id'] ?? 0);
-        if ($productId <= 0) {
-            return 'Invalid product id for stock update.';
-        }
-
-        // Prefer canonical SKU from vp_products; fallback to import/derived SKU when blank.
-        $sku = trim((string)($product['sku'] ?? ''));
-        if ($sku === '') {
-            $sku = trim($importSku);
-        }
-        if ($sku === '') {
-            $sku = $this->buildBulkImportAutoSku($itemCode, $importSize, $importColor);
-        }
-        if ($sku === '') {
-            return 'SKU is missing for stock update.';
-        }
-        $size = trim($importSize);
-        $color = trim($importColor);
-        $loc = trim($stockLocation);
-        if ($loc === '') {
-            $loc = $this->getWarehouseLocationLabel($conn, $warehouseId);
-        }
-        $targetQty = max(0, (int)$targetQty);
-        $refType = 'EgreenRefetch';
-        $refId = 'import_item:' . (int)$importItemId;
-        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn($conn);
-
-        if (!$conn->begin_transaction()) {
-            return 'Could not start transaction for stock update.';
-        }
-
-        $latestStmt = $conn->prepare("SELECT running_stock
-            FROM vp_stock_movements
-            WHERE product_id = ? AND warehouse_id = ? AND `{$itemCodeCol}` = ?
-              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
-              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
-            ORDER BY id DESC
-            LIMIT 1");
-        if (!$latestStmt) {
-            $conn->rollback();
-            return 'Could not prepare stock read query.';
-        }
-        $latestStmt->bind_param('iisss', $productId, $warehouseId, $itemCode, $size, $color);
-        if (!$latestStmt->execute()) {
-            $err = $latestStmt->error;
-            $latestStmt->close();
-            $conn->rollback();
-            return 'Could not read latest stock movement: ' . $err;
-        }
-        $latestRow = $latestStmt->get_result()->fetch_assoc();
-        $latestStmt->close();
-
-        if (!$latestRow) {
-            $reason = 'Opening stock set from API ReUpload';
-            $ins = $conn->prepare("INSERT INTO vp_stock_movements
-                (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, ?, ?, ?)");
-            if (!$ins) {
-                $conn->rollback();
-                return 'Could not prepare opening stock insert.';
-            }
-            $ins->bind_param('issssisiisssi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $targetQty, $targetQty, $refType, $refId, $reason, $userId);
-            if (!$ins->execute()) {
-                $err = $ins->error;
-                $ins->close();
-                $conn->rollback();
-                return 'Opening stock insert failed: ' . $err;
-            }
-            $ins->close();
-        } else {
-            $current = (int)($latestRow['running_stock'] ?? 0);
-            $delta = $targetQty - $current;
-            if ($delta !== 0) {
-                $movementType = $delta > 0 ? 'IN' : 'OUT';
-                $qty = abs($delta);
-                $reason = 'Stock adjusted from API ReUpload';
-                $insAdj = $conn->prepare("INSERT INTO vp_stock_movements
-                    (product_id, sku, `{$itemCodeCol}`, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                if (!$insAdj) {
-                    $conn->rollback();
-                    return 'Could not prepare adjustment insert.';
-                }
-                $insAdj->bind_param('issssissiisssi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $movementType, $qty, $targetQty, $refType, $refId, $reason, $userId);
-                if (!$insAdj->execute()) {
-                    $err = $insAdj->error;
-                    $insAdj->close();
-                    $conn->rollback();
-                    return 'Adjustment insert failed: ' . $err;
-                }
-                $insAdj->close();
-            }
-        }
-
-        $upd = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
-        if (!$upd) {
-            $conn->rollback();
-            return 'Could not prepare product stock update.';
-        }
-        $upd->bind_param('ii', $targetQty, $productId);
-        if (!$upd->execute()) {
-            $err = $upd->error;
-            $upd->close();
-            $conn->rollback();
-            return 'Product local_stock update failed: ' . $err;
-        }
-        $upd->close();
-
-        if (!$conn->commit()) {
-            return 'Could not commit stock update transaction.';
-        }
-        return null;
+        return $this->bulkImportApplyStockTarget(
+            $conn,
+            $importItemId,
+            $warehouseId,
+            $itemCode,
+            $importSku,
+            $importSize,
+            $importColor,
+            $targetQty,
+            $stockLocation,
+            $userId,
+            'Bulk import stock from API ReUpload'
+        );
     }
 
     private function bulkImportUploadErrorMessage(int $code): string
@@ -2969,7 +3146,8 @@ class ProductsController
             $delProdStmt->close();
         }
 
-        // Recalculate local_stock for affected products based on latest remaining movement.
+        // Recalculate local_stock and physical_stock for affected products from movement ledger.
+        require_once __DIR__ . '/../models/product/StockMovement.php';
         $recalcStmt = $conn->prepare("SELECT running_stock FROM vp_stock_movements WHERE product_id = ? ORDER BY id DESC LIMIT 1");
         $updStmt = $conn->prepare("UPDATE vp_products SET local_stock = ? WHERE id = ?");
         if ($recalcStmt && $updStmt) {
@@ -2981,6 +3159,7 @@ class ProductsController
                 $stock = $row ? (int)($row['running_stock'] ?? 0) : 0;
                 $updStmt->bind_param('ii', $stock, $pid);
                 $updStmt->execute();
+                StockMovement::syncProductPhysicalStock($conn, $pid);
             }
         }
         if ($recalcStmt) {
@@ -3189,8 +3368,31 @@ class ProductsController
                             $up->close();
                         }
                     }
-                    // No qty in file: local_stock already synced via updateProductFromApi in importApiCall.
+                    // No qty in file: use local_stock from API/product row for warehouse movement + physical_stock.
                     if ($fileQty <= 0) {
+                        $productRow = $this->findProductRowForBulkImportStock($conn, (string)$code, $impSku, $isz, $ico);
+                        $localQty = $productRow ? max(0, (int)($productRow['local_stock'] ?? 0)) : 0;
+                        if ($localQty > 0 && $jobWarehouseId > 0) {
+                            $openErr = $this->bulkImportApplyOpeningStock(
+                                $conn,
+                                (int)$id,
+                                $jobWarehouseId,
+                                (string)$code,
+                                $impSku,
+                                $isz,
+                                $ico,
+                                $localQty,
+                                $stockLoc,
+                                $batchUserId
+                            );
+                            if ($openErr !== null) {
+                                $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                                $stmtF->bind_param('si', $openErr, $id);
+                                $stmtF->execute();
+                                $stmtF->close();
+                                continue;
+                            }
+                        }
                         $stmtS = $conn->prepare("UPDATE product_import_items SET status='success', error_message=NULL, processed_at=NOW() WHERE id=?");
                         $stmtS->bind_param('i', $id);
                         $stmtS->execute();
@@ -3199,6 +3401,7 @@ class ProductsController
                     }
                     $openErr = $this->bulkImportApplyOpeningStock(
                         $conn,
+                        (int)$id,
                         $jobWarehouseId,
                         (string)$code,
                         $impSku,
@@ -4276,12 +4479,17 @@ class ProductsController
 
             $sku = trim((string)($order['sku'] ?? ''));
             $itemCode = trim((string)($order['item_code'] ?? ''));
-            $localStock = (float)($order['local_stock'] ?? 0);
+            $ledgerPhysical = (int)$productModel->getPhysicalStockTotalFromMovements((int)$id);
+            $physicalStock = $ledgerPhysical;
+            if ($physicalStock === 0 && array_key_exists('physical_stock', $order)) {
+                $physicalStock = max(0, (int)($order['physical_stock'] ?? 0));
+            }
+            $order['physical_stock'] = $physicalStock;
             $costPrice = (float)($order['cost_price'] ?? 0);
 
-            $order['stock_value'] = $localStock * $costPrice;
+            $order['stock_value'] = (float)$physicalStock * $costPrice;
             $order['committed_stock'] = $sku !== '' ? (int)$commanModel->getCommittedStockBySku($sku) : 0;
-            $order['available_stock'] = $localStock - (float)$order['committed_stock'];
+            $order['available_stock'] = (float)$physicalStock - (float)$order['committed_stock'];
             $order['in_purchase_list'] = $sku !== '' ? $commanModel->isInPurchaseList($sku) : [];
             $order['vendors'] = $itemCode !== '' ? $productModel->getVendorByItemCode($itemCode) : [];
             $order['stock_history'] = $productModel->enrichStockHistoryRowsForLedger(
@@ -4481,29 +4689,13 @@ class ProductsController
                 'update_by_user' => $sessionUserId,
                 'movement_type' => $data['type'],
                 'warehouse_id'  => $data['warehouse_id'],
-                'location'      => $data['location']
+                'location'      => $data['location'],
+                'strict_stock_check' => false,
             ];
 
             $result = $productModel->insertStockMovement($insertData);
 
-            // Push latest stock to frontend/vendor API after local stock adjustment succeeds.
-            if (!empty($result['success'])) {
-                $freshProduct = $productModel->getProduct($insertData['product_id']);
-                if ($freshProduct) {
-                    $vendorSync = $this->syncProductStockToVendorFrontend($freshProduct, $insertData);
-                    $result['vendor_sync'] = $vendorSync;
-                    if (empty($vendorSync['success'])) {
-                        $existingMessage = isset($result['message']) ? (string)$result['message'] : 'Stock updated.';
-                        $syncMessage = isset($vendorSync['message']) ? (string)$vendorSync['message'] : 'Vendor sync failed.';
-                        $result['message'] = $existingMessage . ' ' . $syncMessage;
-                    }
-                } else {
-                    $result['vendor_sync'] = [
-                        'success' => false,
-                        'message' => 'Stock updated locally, but could not reload product for vendor sync.'
-                    ];
-                }
-            }
+            // Manual adjust updates physical_stock / warehouse movements only — not website local_stock or vendor API.
 
             echo json_encode($result);
         } catch (Exception $e) {
@@ -5435,7 +5627,9 @@ class ProductsController
                 'warehouse' => $warehouse
             ];
 
-            $history = $productModel->getFilteredStockHistory($filters, $limit, $offset);
+            $history = $productModel->enrichStockHistoryRowsForLedger(
+                $productModel->getFilteredStockHistory($filters, $limit, $offset)
+            );
             $total = $productModel->getFilteredStockHistoryCount($filters);
 
             // Format the response
@@ -6417,35 +6611,11 @@ class ProductsController
             $stockTransferModel = new StockTransfer($conn);
 
             $mode = isset($_POST['bulk_mode']) ? trim((string)$_POST['bulk_mode']) : 'upload';
-            $rows = [];
-
-            if ($mode === 'grid') {
-                $raw = $_POST['bulk_rows_json'] ?? '[]';
-                $decoded = json_decode($raw, true);
-                if (!is_array($decoded)) {
-                    $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid spreadsheet grid data']);
-                }
-                foreach ($decoded as $r) {
-                    if (!is_array($r)) {
-                        continue;
-                    }
-                    $rows[] = [
-                        'item_code' => trim((string)($r['item_code'] ?? '')),
-                        'size' => trim((string)($r['size'] ?? '')),
-                        'color' => trim((string)($r['color'] ?? '')),
-                        'quantity' => isset($r['quantity']) ? (int)$r['quantity'] : 0,
-                    ];
-                }
-            } else {
-                if (empty($_FILES['bulk_file']['tmp_name']) || !is_uploaded_file($_FILES['bulk_file']['tmp_name'])) {
-                    $this->finishJsonApiResponse(['success' => false, 'message' => 'Please choose a file (.csv, .xlsx, or .xls) with columns ItemCode, Size, Color, Quantity']);
-                }
-                $parsed = $this->parseBulkTransferUpload($_FILES['bulk_file']);
-                if (!empty($parsed['error'])) {
-                    $this->finishJsonApiResponse(['success' => false, 'message' => $parsed['error']]);
-                }
-                $rows = $parsed['rows'];
+            $rowsResult = $this->collectBulkTransferInputRows($mode);
+            if (!empty($rowsResult['error'])) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => $rowsResult['error']]);
             }
+            $rows = $rowsResult['rows'];
 
             $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
             if (!empty($aggregated['not_found'])) {
@@ -6504,11 +6674,12 @@ class ProductsController
                 $this->finishJsonApiResponse(['success' => false, 'message' => 'Please select source warehouse']);
             }
 
-            $rowsRaw = $_POST['rows_json'] ?? '[]';
-            $rows = json_decode((string)$rowsRaw, true);
-            if (!is_array($rows)) {
-                $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid grid data']);
+            $mode = isset($_POST['bulk_mode']) ? trim((string)$_POST['bulk_mode']) : 'grid';
+            $rowsResult = $this->collectBulkTransferInputRows($mode);
+            if (!empty($rowsResult['error'])) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => $rowsResult['error']]);
             }
+            $rows = $rowsResult['rows'];
 
             $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
             if (!empty($aggregated['not_found'])) {
@@ -6782,6 +6953,52 @@ class ProductsController
     }
 
     /**
+     * Grid JSON or uploaded spreadsheet → normalized bulk transfer rows.
+     *
+     * @return array{rows: list<array<string,mixed>>, error?: string}
+     */
+    private function collectBulkTransferInputRows(string $mode): array
+    {
+        $mode = strtolower(trim($mode));
+        if ($mode === 'grid') {
+            $raw = $_POST['bulk_rows_json'] ?? $_POST['rows_json'] ?? '[]';
+            $decoded = json_decode((string) $raw, true);
+            if (!is_array($decoded)) {
+                return ['rows' => [], 'error' => 'Invalid spreadsheet grid data'];
+            }
+            $rows = [];
+            foreach ($decoded as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+                $rows[] = [
+                    'item_code' => trim((string) ($r['item_code'] ?? '')),
+                    'sku' => trim((string) ($r['sku'] ?? '')),
+                    'size' => trim((string) ($r['size'] ?? '')),
+                    'color' => trim((string) ($r['color'] ?? '')),
+                    'quantity' => isset($r['quantity']) ? (int) $r['quantity'] : 0,
+                ];
+            }
+
+            return ['rows' => $rows];
+        }
+
+        if (empty($_FILES['bulk_file']['tmp_name']) || !is_uploaded_file($_FILES['bulk_file']['tmp_name'])) {
+            return [
+                'rows' => [],
+                'error' => 'Please choose a file (.csv, .xlsx, or .xls) with columns ItemCode, Size, Color, Quantity',
+            ];
+        }
+
+        $parsed = $this->parseBulkTransferUpload($_FILES['bulk_file']);
+        if (!empty($parsed['error'])) {
+            return ['rows' => [], 'error' => $parsed['error']];
+        }
+
+        return ['rows' => $parsed['rows'] ?? []];
+    }
+
+    /**
      * @param array $file $_FILES entry
      * @return array{rows?: list<array<string,mixed>>, error?: string}
      */
@@ -6811,8 +7028,11 @@ class ProductsController
             $headers = str_getcsv($headerLine);
             $map = $this->mapBulkSheetHeaders($headers);
 
-            if ($map['item_code'] === null || $map['quantity'] === null) {
-                return ['error' => 'CSV must include ItemCode (or Item Code) and Quantity column headers'];
+            if ($map['item_code'] === null && $map['sku'] === null) {
+                return ['error' => 'CSV must include ItemCode (or Item Code) or SKU column headers'];
+            }
+            if ($map['quantity'] === null) {
+                return ['error' => 'CSV must include Quantity (or Qty) column header'];
             }
 
             $rows = [];
@@ -6854,11 +7074,16 @@ class ProductsController
             $headerCells = [];
             for ($ci = 1; $ci <= $colCount; $ci++) {
                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
-                $headerCells[] = (string)$sheet->getCell($colLetter . '1')->getValue();
+                $headerCells[] = $this->normalizeBulkUploadCellValue(
+                    $sheet->getCell($colLetter . '1')->getCalculatedValue()
+                );
             }
             $map = $this->mapBulkSheetHeaders($headerCells);
-            if ($map['item_code'] === null || $map['quantity'] === null) {
-                return ['error' => 'First row must include ItemCode and Quantity columns (Size and Color optional)'];
+            if ($map['item_code'] === null && $map['sku'] === null) {
+                return ['error' => 'First row must include ItemCode or SKU columns (Size and Color optional)'];
+            }
+            if ($map['quantity'] === null) {
+                return ['error' => 'First row must include Quantity column (Size and Color optional)'];
             }
 
             $rows = [];
@@ -6866,7 +7091,9 @@ class ProductsController
                 $cells = [];
                 for ($ci = 1; $ci <= $colCount; $ci++) {
                     $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
-                    $cells[$ci - 1] = $sheet->getCell($colLetter . $r)->getValue();
+                    $cells[$ci - 1] = $this->normalizeBulkUploadCellValue(
+                        $sheet->getCell($colLetter . $r)->getCalculatedValue()
+                    );
                 }
                 $row = $this->bulkRowFromCells($cells, $map);
                 if ($row !== null) {
@@ -6894,7 +7121,7 @@ class ProductsController
             return $s;
         };
 
-        $map = ['item_code' => null, 'size' => null, 'color' => null, 'quantity' => null];
+        $map = ['item_code' => null, 'sku' => null, 'size' => null, 'color' => null, 'quantity' => null];
         foreach ($headers as $idx => $h) {
             $n = $norm($h);
             if ($n === '') {
@@ -6902,6 +7129,8 @@ class ProductsController
             }
             if (in_array($n, ['itemcode', 'item code', 'product code', 'productcode'], true)) {
                 $map['item_code'] = $idx;
+            } elseif ($n === 'sku') {
+                $map['sku'] = $idx;
             } elseif ($n === 'size') {
                 $map['size'] = $idx;
             } elseif (in_array($n, ['color', 'colour'], true)) {
@@ -6916,26 +7145,28 @@ class ProductsController
 
     /**
      * @param array<int,mixed> $cells
-     * @param array{item_code: ?int, size: ?int, color: ?int, quantity: ?int} $map
-     * @return ?array{item_code: string, size: string, color: string, quantity: int}
+     * @param array{item_code: ?int, sku: ?int, size: ?int, color: ?int, quantity: ?int} $map
+     * @return ?array{item_code: string, sku: string, size: string, color: string, quantity: int}
      */
     private function bulkRowFromCells(array $cells, array $map): ?array
     {
-        $get = static function ($i) use ($cells) {
+        $controller = $this;
+        $get = static function ($i) use ($cells, $controller) {
             if ($i === null) {
                 return '';
             }
 
-            return isset($cells[$i]) ? trim((string)$cells[$i]) : '';
+            return $controller->normalizeBulkUploadCellValue($cells[$i] ?? '');
         };
 
-        $ic = $get($map['item_code']);
+        $ic = $map['item_code'] !== null ? $get($map['item_code']) : '';
+        $sku = $map['sku'] !== null ? $get($map['sku']) : '';
         $qtyRaw = $get($map['quantity']);
-        $qty = (int)preg_replace('/[^\d-]/', '', (string)$qtyRaw);
-        if ($ic === '' && $qty <= 0) {
+        $qty = (int) preg_replace('/[^\d-]/', '', (string) $qtyRaw);
+        if ($ic === '' && $sku === '' && $qty <= 0) {
             return null;
         }
-        if ($ic === '') {
+        if ($ic === '' && $sku === '') {
             return null;
         }
         if ($qty <= 0) {
@@ -6944,10 +7175,37 @@ class ProductsController
 
         return [
             'item_code' => $ic,
+            'sku' => $sku,
             'size' => $map['size'] !== null ? $get($map['size']) : '',
             'color' => $map['color'] !== null ? $get($map['color']) : '',
             'quantity' => $qty,
         ];
+    }
+
+    private function normalizeBulkUploadCellValue($value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (is_object($value)) {
+            if (method_exists($value, '__toString')) {
+                return trim((string) $value);
+            }
+
+            return '';
+        }
+        if (is_int($value)) {
+            return (string) $value;
+        }
+        if (is_float($value)) {
+            if (abs($value - round($value)) < 1e-9) {
+                return (string) (int) round($value);
+            }
+
+            return rtrim(rtrim(sprintf('%.10F', $value), '0'), '.');
+        }
+
+        return trim((string) $value);
     }
 
     /**

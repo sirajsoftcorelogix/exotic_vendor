@@ -70,7 +70,12 @@ $formatStatusLabel = static function (string $status): string {
                     Review moves between locations, edit open transfers, and record GRNs against transfer orders—all in one place.
                 </p>
             </div>
-            <div class="flex shrink-0 lg:pl-4 lg:self-center">
+            <div class="flex shrink-0 lg:pl-4 lg:self-center gap-2">
+                <a href="?page=products&action=in_transit"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border border-sky-200 bg-white text-sky-800 text-sm font-semibold shadow-sm hover:bg-sky-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
+                    <i class="fas fa-truck-loading text-xs opacity-95" aria-hidden="true"></i>
+                    In transit
+                </a>
                 <a href="?page=products&action=transfer_stock_bulk"
                     class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap w-full sm:w-auto">
                     <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>

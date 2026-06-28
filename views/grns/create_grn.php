@@ -273,6 +273,9 @@
             .then(response => response.json())  
             .then(data => {
                 if (data.success) {
+                    if (data.vendor_sync_warning) {
+                        alert('GRN saved. ' + data.vendor_sync_warning);
+                    }
                     //alert("GRN created successfully!");
                     //const successPopup = document.getElementById('successPopup');
                     //successPopup.classList.remove('hidden');

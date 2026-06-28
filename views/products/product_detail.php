@@ -404,21 +404,40 @@
     </div>
   </div> -->
   <!-- Inventory -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-  <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-4 col-span-2">
-    <h3 class="font-semibold text-gray-800 flex items-center gap-2"><i class="fas fa-boxes text-amber-600"></i>Inventory</h3>
-      <!-- Stats -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+  <?php
+  $invCard = 'flex items-center justify-between gap-2 w-full min-w-[11.5rem] min-h-[4.25rem] sm:min-h-[4.5rem] border rounded-lg p-2.5 sm:p-3 relative';
+  $invBody = 'min-w-0 flex-1 pr-0.5';
+  $invLbl = 'text-xs sm:text-sm text-gray-500 leading-snug';
+  $invVal = 'text-base sm:text-lg font-semibold leading-tight tabular-nums';
+  $invIco = 'shrink-0 h-7 w-7 sm:h-8 sm:w-8 rounded-md flex items-center justify-center text-xs sm:text-sm';
+  $invEdit = 'absolute top-1 right-1 sm:top-1.5 sm:right-1.5 p-1 min-w-[1.75rem] min-h-[1.75rem] inline-flex items-center justify-center rounded-md hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-amber-400/60';
+  $invGrid = 'grid gap-2 sm:gap-3 grid-cols-[repeat(auto-fill,minmax(11.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))]';
+  ?>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+  <div class="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3 sm:space-y-4 lg:col-span-2 min-w-0">
+    <h3 class="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base"><i class="fas fa-boxes text-amber-600"></i>Inventory</h3>
+      <!-- Inventory stat cards (single grid — all cards flow together) -->
+      <div class="<?php echo $invGrid; ?>">
         <!-- Local Stock -->
-        <div class="flex items-center justify-between border border-blue-100 bg-blue-50/50 rounded-lg p-3 relative">
-          <div>
-            <p class="text-sm text-gray-500">Local Stock</p>
-            <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
+        <div class="<?php echo $invCard; ?> border-blue-100 bg-blue-50/50">
+          <div class="<?php echo $invBody; ?>">
+            <p class="<?php echo $invLbl; ?>">Local Stock</p>
+            <p class="<?php echo $invVal; ?>"><?php echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
           </div>
-          <div class="bg-blue-100 text-blue-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+          <div class="<?php echo $invIco; ?> bg-blue-100 text-blue-600">
             <i class="fas fa-box-open"></i>
           </div>
-          <button class="absolute top-0 right-1 text-gray-500 hover:text-blue-600" onclick="openStockModal()">
+        </div>
+        <!-- Physical Stock (warehouse) -->
+        <div class="<?php echo $invCard; ?> border-amber-100 bg-amber-50/50 pr-6 sm:pr-7" title="Total on-hand stock across all warehouses">
+          <div class="<?php echo $invBody; ?>">
+            <p class="<?php echo $invLbl; ?>">Physical Stock</p>
+            <p id="productPhysicalStock" class="<?php echo $invVal; ?>"><?php echo htmlspecialchars($products['physical_stock'] ?? '0'); ?></p>
+          </div>
+          <div class="<?php echo $invIco; ?> bg-amber-100 text-amber-600">
+            <i class="fas fa-warehouse"></i>
+          </div>
+          <button type="button" class="<?php echo $invEdit; ?> text-gray-500 hover:text-amber-600" onclick="openStockModal()" title="Adjust warehouse stock" aria-label="Adjust warehouse stock">
             <i class="fas fa-edit text-sm"></i>
           </button>
         </div>
@@ -427,24 +446,24 @@
           href="<?php echo base_url('?page=orders&action=list&options=unshipped&sku=' . rawurlencode((string)($products['sku'] ?? '')) . '&item_code=' . rawurlencode((string)($products['item_code'] ?? ''))); ?>"
           target="_blank"
           rel="noopener noreferrer"
-          class="flex items-center justify-between border border-purple-100 bg-purple-50/50 rounded-lg p-3 hover:bg-purple-100/60 transition"
+          class="<?php echo $invCard; ?> border-purple-100 bg-purple-50/50 hover:bg-purple-100/60 transition"
           title="View unshipped orders for this product"
         >
-          <div>
-            <p class="text-sm text-gray-500 leading-tight">Pending Orders</p>
-            <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['committed_stock'] ?? '0'); ?></p>
+          <div class="<?php echo $invBody; ?>">
+            <p class="<?php echo $invLbl; ?>">Pending Orders</p>
+            <p class="<?php echo $invVal; ?>"><?php echo htmlspecialchars($products['committed_stock'] ?? '0'); ?></p>
           </div>
-          <div class="bg-purple-100 text-purple-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+          <div class="<?php echo $invIco; ?> bg-purple-100 text-purple-600">
             <i class="fas fa-link"></i>
           </div>
         </a>
         <!-- Available -->
-        <div class="flex items-center justify-between border border-green-100 bg-green-50/50 rounded-lg p-3">
-          <div>
-            <p class="text-sm text-gray-500">Available</p>
-            <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['available_stock'] ?? '0'); ?></p>
+        <div class="<?php echo $invCard; ?> border-green-100 bg-green-50/50">
+          <div class="<?php echo $invBody; ?>">
+            <p class="<?php echo $invLbl; ?>">Available</p>
+            <p class="<?php echo $invVal; ?>"><?php echo htmlspecialchars($products['available_stock'] ?? '0'); ?></p>
           </div>
-          <div class="bg-green-100 text-green-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+          <div class="<?php echo $invIco; ?> bg-green-100 text-green-600">
             <i class="fas fa-check-circle"></i>
           </div>
         </div>
@@ -453,92 +472,89 @@
           href="<?php echo base_url('?page=purchase_orders&action=list&exclude_completed=1&item_code=' . rawurlencode((string)($products['item_code'] ?? ''))); ?>"
           target="_blank"
           rel="noopener noreferrer"
-          class="flex items-center justify-between border border-orange-100 bg-orange-50/50 rounded-lg p-3 hover:bg-orange-100/60 transition"
+          class="<?php echo $invCard; ?> border-orange-100 bg-orange-50/50 hover:bg-orange-100/60 transition"
           title="View non-completed purchase orders for this product"
         >
-          <div>
-            <p class="text-sm text-gray-500">In Purchase</p>
-            <p class="text-lg font-semibold leading-tight"><?php echo count($products['in_purchase_list']); ?></p>
+          <div class="<?php echo $invBody; ?>">
+            <p class="<?php echo $invLbl; ?>">In Purchase</p>
+            <p class="<?php echo $invVal; ?>"><?php echo count($products['in_purchase_list']); ?></p>
           </div>
-          <div class="bg-orange-100 text-orange-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+          <div class="<?php echo $invIco; ?> bg-orange-100 text-orange-600">
             <i class="fas fa-shopping-cart"></i>
           </div>
         </a>
-      </div>
-      <!-- Number Sold -->
-     <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2.5">
-          <div class="flex items-center justify-between border border-gray-200 rounded-lg p-3 bg-white">
-            <div>
-              <p class="text-sm text-gray-500">Number Sold</p>
-              <p class="text-lg font-semibold leading-tight"><?php echo htmlspecialchars($products['numsold'] ?? '0'); ?></p>
+          <div class="<?php echo $invCard; ?> border-gray-200 bg-white">
+            <div class="<?php echo $invBody; ?>">
+              <p class="<?php echo $invLbl; ?>">Number Sold</p>
+              <p class="<?php echo $invVal; ?>"><?php echo htmlspecialchars($products['numsold'] ?? '0'); ?></p>
             </div>
-            <div class="bg-gray-100 text-gray-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+            <div class="<?php echo $invIco; ?> bg-gray-100 text-gray-600">
               <i class="fas fa-chart-line"></i>
             </div>
           </div>
 
-          <div class="flex items-center justify-between border border-red-100 rounded-lg p-3 bg-red-50 relative">
-            <div>
-              <p class="text-sm text-gray-500">Min Stock</p>
-              <p class="text-lg font-semibold text-red-600 leading-tight"><?php echo htmlspecialchars($products['min_stock'] ?? '0'); ?></p>
+          <div class="<?php echo $invCard; ?> border-red-100 bg-red-50 pr-6 sm:pr-7">
+            <div class="<?php echo $invBody; ?>">
+              <p class="<?php echo $invLbl; ?>">Min Stock</p>
+              <p class="<?php echo $invVal; ?> text-red-600"><?php echo htmlspecialchars($products['min_stock'] ?? '0'); ?></p>
             </div>
-            <div class="bg-red-100 text-red-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+            <div class="<?php echo $invIco; ?> bg-red-100 text-red-600">
                <i class="fas fa-bell"></i>
             </div>
-            <button class="absolute top-1 right-1 text-gray-400 hover:text-red-600" onclick="openMinMaxModal()">
+            <button type="button" class="<?php echo $invEdit; ?> text-gray-400 hover:text-red-600" onclick="openMinMaxModal()" aria-label="Edit min stock">
               <i class="fas fa-pencil-alt text-[10px]"></i>
             </button>
           </div>
 
-          <div class="flex items-center justify-between border border-blue-100 rounded-lg p-3 bg-blue-50 relative">
-            <div>
-              <p class="text-sm text-gray-500">Max Stock</p>
-              <p class="text-lg font-semibold text-blue-600 leading-tight"><?php echo htmlspecialchars($products['max_stock'] ?? '0'); ?></p>
+          <div class="<?php echo $invCard; ?> border-blue-100 bg-blue-50 pr-6 sm:pr-7">
+            <div class="<?php echo $invBody; ?>">
+              <p class="<?php echo $invLbl; ?>">Max Stock</p>
+              <p class="<?php echo $invVal; ?> text-blue-600"><?php echo htmlspecialchars($products['max_stock'] ?? '0'); ?></p>
             </div>
-            <div class="bg-blue-100 text-blue-600 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+            <div class="<?php echo $invIco; ?> bg-blue-100 text-blue-600">
                <i class="fas fa-shield-alt"></i>
             </div>
-            <button class="absolute top-1 right-1 text-gray-400 hover:text-blue-600" onclick="openMinMaxModal()">
+            <button type="button" class="<?php echo $invEdit; ?> text-gray-400 hover:text-blue-600" onclick="openMinMaxModal()" aria-label="Edit max stock">
               <i class="fas fa-pencil-alt text-[10px]"></i>
             </button>
           </div>
 
-          <div class="flex items-center justify-between border border-emerald-100 rounded-lg p-3 bg-emerald-50 relative">
-            <div>
-              <p class="text-sm text-gray-500">Permanently Available</p>
-              <p id="permaAvailableDisplay" class="text-lg font-semibold text-emerald-700 leading-tight"><?php echo htmlspecialchars($permanentlyAvailableText); ?></p>
+          <div class="<?php echo $invCard; ?> border-emerald-100 bg-emerald-50 pr-6 sm:pr-7">
+            <div class="<?php echo $invBody; ?>">
+              <p class="<?php echo $invLbl; ?>"><span class="sm:hidden">Perm. Available</span><span class="hidden sm:inline">Permanently Available</span></p>
+              <p id="permaAvailableDisplay" class="<?php echo $invVal; ?> text-emerald-700"><?php echo htmlspecialchars($permanentlyAvailableText); ?></p>
             </div>
-            <div class="bg-emerald-100 text-emerald-700 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+            <div class="<?php echo $invIco; ?> bg-emerald-100 text-emerald-700">
                <i class="fas fa-check"></i>
             </div>
-            <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-emerald-700" onclick="openPermaAvailableModal()" title="Edit Permanently Available">
+            <button type="button" class="<?php echo $invEdit; ?> text-gray-400 hover:text-emerald-700" onclick="openPermaAvailableModal()" title="Edit Permanently Available" aria-label="Edit permanently available">
               <i class="fas fa-pencil-alt text-[10px]"></i>
             </button>
           </div>
 
-          <div class="flex items-center justify-between border border-indigo-100 rounded-lg p-3 bg-indigo-50">
-            <div>
-              <p class="text-sm text-gray-500">Leadtime</p>
-              <p class="text-lg font-semibold text-indigo-700 leading-tight"><?php echo htmlspecialchars((string)($products['leadtime'] ?? '0')); ?></p>
+          <div class="<?php echo $invCard; ?> border-indigo-100 bg-indigo-50">
+            <div class="<?php echo $invBody; ?>">
+              <p class="<?php echo $invLbl; ?>">Leadtime</p>
+              <p class="<?php echo $invVal; ?> text-indigo-700"><?php echo htmlspecialchars((string)($products['leadtime'] ?? '0')); ?></p>
             </div>
-            <div class="bg-indigo-100 text-indigo-700 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+            <div class="<?php echo $invIco; ?> bg-indigo-100 text-indigo-700">
                <i class="fas fa-hourglass-half"></i>
             </div>
           </div>
 
-          <div class="flex items-center justify-between border border-cyan-100 rounded-lg p-3 bg-cyan-50">
-            <div>
-              <p class="text-sm text-gray-500">Instock Leadtime</p>
-              <p class="text-lg font-semibold text-cyan-700 leading-tight"><?php echo htmlspecialchars((string)($products['instock_leadtime'] ?? '0')); ?></p>
+          <div class="<?php echo $invCard; ?> border-cyan-100 bg-cyan-50">
+            <div class="<?php echo $invBody; ?>">
+              <p class="<?php echo $invLbl; ?>"><span class="sm:hidden">In-stock Lead</span><span class="hidden sm:inline">Instock Leadtime</span></p>
+              <p class="<?php echo $invVal; ?> text-cyan-700"><?php echo htmlspecialchars((string)($products['instock_leadtime'] ?? '0')); ?></p>
             </div>
-            <div class="bg-cyan-100 text-cyan-700 h-8 w-8 rounded-md flex items-center justify-center text-sm">
+            <div class="<?php echo $invIco; ?> bg-cyan-100 text-cyan-700">
                <i class="fas fa-truck"></i>
             </div>
           </div>
         </div>
 
-      <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
-        <div class="px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600">
+      <div class="mt-3 sm:mt-4 border border-gray-200 rounded-lg overflow-hidden">
+        <div class="px-2.5 sm:px-3 py-2 bg-gray-50 border-b border-gray-200 text-[11px] sm:text-xs text-gray-600 leading-relaxed">
           Running stock by warehouse — same as the <a href="<?php echo htmlspecialchars(base_url('?page=pos_register&action=stock-report'), ENT_QUOTES, 'UTF-8'); ?>" class="text-amber-700 font-medium underline underline-offset-2 hover:text-amber-900" target="_blank" rel="noopener noreferrer">POS stock report</a> (latest movement balance per warehouse). Location is from that movement.
         </div>
         <div class="overflow-x-auto">
@@ -584,7 +600,7 @@
   </div>
 
   <!-- Price -->
-    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+    <div class="bg-white border border-gray-200 rounded-xl p-3 sm:p-4 shadow-sm lg:col-span-1 min-w-0">
       <h3 class="font-semibold mb-3 flex items-center gap-2 text-gray-800"><i class="fas fa-receipt text-emerald-600"></i>Price</h3>
       <div class="space-y-2.5 text-sm">
         <div class="flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100 relative">
@@ -848,8 +864,8 @@
                 <i class="fas <?php echo htmlspecialchars($dispIcon); ?>"></i>
                 <?php echo htmlspecialchars($dispLabel); ?>
               </td>
-              <td class="p-2 border"><?php echo htmlspecialchars(in_array(($history['movement_type'] ?? ''), ['IN','OPENING_STOCK'], true) ? $history['quantity'] : ''); ?></td>
-              <td class="p-2 border"><?php echo htmlspecialchars($history['movement_type'] == 'OUT' ? $history['quantity'] : ''); ?></td>
+              <td class="p-2 border"><?php echo htmlspecialchars($history['stock_in_qty'] ?? (in_array($mt, ['IN', 'OPENING_STOCK', 'TRANSFER_IN'], true) ? ($history['quantity'] ?? '') : '')); ?></td>
+              <td class="p-2 border"><?php echo htmlspecialchars($history['stock_out_qty'] ?? (in_array($mt, ['OUT', 'TRANSFER_OUT'], true) ? ($history['quantity'] ?? '') : '')); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['running_stock'] ?? '0'); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['warehouse_name'] ?? ''); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['location'] ?? ''); ?></td>
@@ -1037,7 +1053,7 @@
     <div class="mb-6">
       <h2 class="text-xl font-semibold text-gray-800">Stock Adjustment</h2>
       <p class="text-sm text-gray-500 mt-1">
-        Adjust product inventory for selected warehouse and location
+        Adjust warehouse physical stock for the selected warehouse and location
       </p>
     </div>
 
@@ -1655,8 +1671,8 @@ function closeImagePopup() {
                   <i class="fas ${history.icon}"></i>
                   ${history.type}
                 </td>
-                <td class="p-2 border">${(history.movement_type === 'IN' || history.movement_type === 'OPENING_STOCK') ? history.quantity : ''}</td>
-                <td class="p-2 border">${history.movement_type === 'OUT' ? history.quantity : ''}</td>
+                <td class="p-2 border">${history.stock_in_qty ?? ((history.movement_type === 'IN' || history.movement_type === 'OPENING_STOCK' || history.movement_type === 'TRANSFER_IN') ? history.quantity : '')}</td>
+                <td class="p-2 border">${history.stock_out_qty ?? ((history.movement_type === 'OUT' || history.movement_type === 'TRANSFER_OUT') ? history.quantity : '')}</td>
                 <td class="p-2 border">${history.running_stock || '0'}</td>
                 <td class="p-2 border">${history.warehouse_name || ''}</td>
                 <td class="p-2 border">${history.location || ''}</td>

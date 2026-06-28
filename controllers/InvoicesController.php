@@ -284,6 +284,22 @@ class InvoicesController
                 $itemsFailed[] = $order_number;
             }
         }
+
+        require_once __DIR__ . '/../models/order/stock.php';
+        $stockModel = new Stock($conn);
+        $stockResult = $stockModel->applyInvoiceStockOnCreate((int)$invoiceId, (string)($invoiceData['status'] ?? 'final'));
+        if (empty($stockResult['success'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice saved but stock update failed: ' . ($stockResult['message'] ?? 'Unknown error'),
+                'invoice_id' => $invoiceId,
+                'invoice_number' => $invoice_number,
+                'items_created' => $itemCreated,
+                'items_failed' => $itemsFailed,
+            ]);
+            exit;
+        }
+
         //save international fields
         if ($isInternational) {
             
