@@ -10,6 +10,67 @@ class User
     {
         $this->db = $db;
     }
+
+    /**
+     * Warehouse table referenced by vp_users.warehouse_id FK (test DB uses exotic_address_old).
+     */
+    private function userWarehouseTable(): string
+    {
+        static $table = null;
+        if ($table !== null) {
+            return $table;
+        }
+
+        $result = $this->db->query("SHOW TABLES LIKE 'exotic_address_old'");
+        $table = ($result && $result->num_rows > 0) ? 'exotic_address_old' : 'exotic_address';
+
+        return $table;
+    }
+
+    /**
+     * @return array{ok: bool, id: ?int, message?: string}
+     */
+    private function normalizeWarehouseId($warehouseId): array
+    {
+        $requestedId = (int) ($warehouseId ?? 0);
+        if ($requestedId <= 0) {
+            return ['ok' => true, 'id' => null];
+        }
+
+        $table = $this->userWarehouseTable();
+        $sql = "SELECT id FROM {$table} WHERE id = ? AND is_active = 1 LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [
+                'ok' => false,
+                'id' => null,
+                'message' => 'Could not validate warehouse selection.',
+            ];
+        }
+
+        $stmt->bind_param('i', $requestedId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+
+        if (!$row) {
+            return [
+                'ok' => false,
+                'id' => null,
+                'message' => 'Selected warehouse is invalid. Please choose a warehouse from the list.',
+            ];
+        }
+
+        return ['ok' => true, 'id' => $requestedId];
+    }
+
+    /** Bind value for NULLIF(?, 0) warehouse_id columns. */
+    private function warehouseBindValue(?int $warehouseId): int
+    {
+        return ($warehouseId === null || $warehouseId <= 0) ? 0 : $warehouseId;
+    }
+
     public function login($login, $password)
     {
         $sql = "SELECT * FROM vp_users WHERE (email = ? OR phone = ?) AND is_deleted = 0";
@@ -110,11 +171,12 @@ class User
     }
     public function getUserById($id)
     {
+        $warehouseTable = $this->userWarehouseTable();
         $sql = "SELECT 
                 u.*, 
                 ea.address_title AS warehouse_name
             FROM vp_users u
-            LEFT JOIN exotic_address ea 
+            LEFT JOIN {$warehouseTable} ea 
                 ON u.warehouse_id = ea.id
             WHERE u.id = ? AND u.is_deleted = 0
             LIMIT 1";
@@ -160,7 +222,11 @@ class User
         $password = (string) ($data['password'] ?? '');
         $role = (int) ($data['role'] ?? 0);
         $isActive = (int) ($data['is_active'] ?? 1);
-        $warehouseId = (int) ($data['warehouse_id'] ?? 0);
+        $warehouseCheck = $this->normalizeWarehouseId($data['warehouse_id'] ?? 0);
+        if (!$warehouseCheck['ok']) {
+            return ['success' => false, 'message' => $warehouseCheck['message'] ?? 'Invalid warehouse selected.'];
+        }
+        $warehouseBind = $this->warehouseBindValue($warehouseCheck['id']);
 
         // Check if email already exists
         $checkSql = "SELECT id FROM vp_users WHERE email = ?";
@@ -183,7 +249,7 @@ class User
             return ['success' => false, 'message' => 'Insert prepare failed: ' . $this->db->error];
         }
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-        $stmt->bind_param('ssssiii', $name, $email, $phone, $hashedPassword, $role, $warehouseId, $isActive);
+        $stmt->bind_param('ssssiii', $name, $email, $phone, $hashedPassword, $role, $warehouseBind, $isActive);
         if ($stmt->execute()) {
             $user_id = $this->db->insert_id;
             if (!empty($data['team']) && is_array($data['team'])) {
@@ -207,7 +273,11 @@ class User
         $phone = trim((string) ($data['phone'] ?? ''));
         $role = (int) ($data['role'] ?? 0);
         $isActive = (int) ($data['is_active'] ?? 0);
-        $warehouseId = (int) ($data['warehouse_id'] ?? 0);
+        $warehouseCheck = $this->normalizeWarehouseId($data['warehouse_id'] ?? 0);
+        if (!$warehouseCheck['ok']) {
+            return ['success' => false, 'message' => $warehouseCheck['message'] ?? 'Invalid warehouse selected.'];
+        }
+        $warehouseBind = $this->warehouseBindValue($warehouseCheck['id']);
         $password = (string) ($data['password'] ?? '');
 
         // Check if email already exists for another user
@@ -228,14 +298,14 @@ class User
                 return ['success' => false, 'message' => 'Update prepare failed: ' . $this->db->error];
             }
             $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-            $stmt->bind_param('ssssiiii', $name, $email, $phone, $hashedPassword, $role, $isActive, $warehouseId, $id);
+            $stmt->bind_param('ssssiiii', $name, $email, $phone, $hashedPassword, $role, $isActive, $warehouseBind, $id);
         } else {
             $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, role_id = ?, is_active = ?, warehouse_id = NULLIF(?, 0) WHERE id = ?";
             $stmt = $this->db->prepare($sql);
             if (!$stmt) {
                 return ['success' => false, 'message' => 'Update prepare failed: ' . $this->db->error];
             }
-            $stmt->bind_param('sssiiii', $name, $email, $phone, $role, $isActive, $warehouseId, $id);
+            $stmt->bind_param('sssiiii', $name, $email, $phone, $role, $isActive, $warehouseBind, $id);
         }
         if ($stmt->execute()) {
             if (array_key_exists('team', $data)) {
@@ -459,6 +529,7 @@ class User
     }
     public function getAllUsersListing($page = 1, $limit = 10, $search = '', $role_filter = '', $status_filter = '')
     {
+        $warehouseTable = $this->userWarehouseTable();
         // sanitize
         $page = (int)$page;
         if ($page < 1) $page = 1;
@@ -514,7 +585,7 @@ class User
 FROM vp_users AS vu 
 LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id 
 LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id 
-LEFT JOIN exotic_address AS ea ON vu.warehouse_id = ea.id
+LEFT JOIN {$warehouseTable} AS ea ON vu.warehouse_id = ea.id
 $where";
         $resultCount = $this->db->query($sql);
         $rowCount = $resultCount->fetch_assoc();
@@ -531,7 +602,7 @@ $where";
     FROM vp_users AS vu 
     LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id 
     LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id 
-    LEFT JOIN exotic_address AS ea ON vu.warehouse_id = ea.id
+    LEFT JOIN {$warehouseTable} AS ea ON vu.warehouse_id = ea.id
     $where 
     GROUP BY vu.id 
     LIMIT $limit OFFSET $offset;";
@@ -574,7 +645,11 @@ $where";
     }
     public function getAllWarehouses()
     {
-        $sql = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY is_default DESC, address_title ASC";
+        $warehouseTable = $this->userWarehouseTable();
+        $orderBy = ($warehouseTable === 'exotic_address')
+            ? 'is_default DESC, address_title ASC'
+            : 'address_title ASC';
+        $sql = "SELECT id, address_title FROM {$warehouseTable} WHERE is_active = 1 ORDER BY {$orderBy}";
         $result = $this->db->query($sql);
         $warehouses = [];
         if ($result) {
@@ -587,9 +662,9 @@ $where";
 
     public function getWarehouseById($id)
     {
-        
+        $warehouseTable = $this->userWarehouseTable();
         $sql = "SELECT id, address_title 
-            FROM exotic_address 
+            FROM {$warehouseTable} 
             WHERE id = ? AND is_active = 1 
             LIMIT 1";
 
@@ -597,7 +672,7 @@ $where";
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $result = $stmt->get_result();
-// echo '<pre>';print_r($stmt);exit;
-        return $result->fetch_assoc(); // returns single row
+
+        return $result->fetch_assoc();
     }
 }

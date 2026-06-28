@@ -256,7 +256,7 @@
                                 <label for="team" class="text-sm font-medium text-gray-700">Warehouses:</label>
                                 <select class="form-input w-full bg-white mt-1 advanced-multiselect"
                                     name="warehouse_id">
-                                    <!-- <option value="">All Warehouses</option> -->
+                                    <option value="">Select Warehouse</option>
                                     <?php foreach ($warehouses_list as $wh): ?>
                                         <option value="<?php echo $wh['id']; ?>"><?php echo $wh['address_title']; ?></option>
                                     <?php endforeach; ?>
@@ -355,6 +355,7 @@
                                     <div>
                                         <label for="editWarehouse" class="text-sm font-medium text-gray-700">Warehouse:</label>
                                         <select id="editWarehouse" name="warehouse_id" class="form-input w-full bg-white mt-1">
+                                            <option value="">Select Warehouse</option>
                                             <?php foreach ($warehouses_list as $wh): ?>
                                                 <option value="<?php echo $wh['id']; ?>">
                                                     <?php echo $wh['address_title']; ?>
