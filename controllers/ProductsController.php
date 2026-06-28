@@ -4276,12 +4276,17 @@ class ProductsController
 
             $sku = trim((string)($order['sku'] ?? ''));
             $itemCode = trim((string)($order['item_code'] ?? ''));
-            $localStock = (float)($order['local_stock'] ?? 0);
+            $ledgerPhysical = (int)$productModel->getPhysicalStockTotalFromMovements((int)$id);
+            $physicalStock = $ledgerPhysical;
+            if ($physicalStock === 0 && array_key_exists('physical_stock', $order)) {
+                $physicalStock = max(0, (int)($order['physical_stock'] ?? 0));
+            }
+            $order['physical_stock'] = $physicalStock;
             $costPrice = (float)($order['cost_price'] ?? 0);
 
-            $order['stock_value'] = $localStock * $costPrice;
+            $order['stock_value'] = (float)$physicalStock * $costPrice;
             $order['committed_stock'] = $sku !== '' ? (int)$commanModel->getCommittedStockBySku($sku) : 0;
-            $order['available_stock'] = $localStock - (float)$order['committed_stock'];
+            $order['available_stock'] = (float)$physicalStock - (float)$order['committed_stock'];
             $order['in_purchase_list'] = $sku !== '' ? $commanModel->isInPurchaseList($sku) : [];
             $order['vendors'] = $itemCode !== '' ? $productModel->getVendorByItemCode($itemCode) : [];
             $order['stock_history'] = $productModel->enrichStockHistoryRowsForLedger(

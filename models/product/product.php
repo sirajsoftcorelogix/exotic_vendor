@@ -3593,6 +3593,39 @@ class product
         return $rows;
     }
 
+    /**
+     * Warehouse on-hand total: sum of latest running_stock per warehouse from the movement ledger.
+     */
+    public function getPhysicalStockTotalFromMovements(int $product_id): int
+    {
+        $product_id = (int)$product_id;
+        if ($product_id <= 0) {
+            return 0;
+        }
+        $sql = "
+            SELECT COALESCE(SUM(sm.running_stock), 0) AS total_stock
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT warehouse_id, product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE product_id = ?
+                GROUP BY warehouse_id, product_id
+            ) latest ON sm.warehouse_id = latest.warehouse_id
+                AND sm.product_id = latest.product_id
+                AND sm.id = latest.max_id
+            WHERE sm.product_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('ii', $product_id, $product_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return max(0, (int)($row['total_stock'] ?? 0));
+    }
+
     public function insertStockMovement($data)
     {
         $this->db->begin_transaction();
