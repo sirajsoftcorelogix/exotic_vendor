@@ -1403,7 +1403,23 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         const fd = new FormData();
         fd.append('from_warehouse', String(fromWarehouse || ''));
         fd.append('transfer_id', String(transferId || 0));
+        fd.append('bulk_mode', 'grid');
         fd.append('rows_json', JSON.stringify(rows || []));
+        fd.append('bulk_rows_json', JSON.stringify(rows || []));
+        return fetch(apiUrl('validate_transfer_stock_bulk_preview'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            body: fd
+        }).then(function (r) { return parseFetchJsonResponse(r); });
+    }
+
+    function validateBulkUploadPreview(fromWarehouse, transferId, file) {
+        const fd = new FormData();
+        fd.append('from_warehouse', String(fromWarehouse || ''));
+        fd.append('transfer_id', String(transferId || 0));
+        fd.append('bulk_mode', 'upload');
+        fd.append('bulk_file', file);
         return fetch(apiUrl('validate_transfer_stock_bulk_preview'), {
             method: 'POST',
             credentials: 'same-origin',
@@ -1453,8 +1469,20 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         } else {
             document.getElementById('bulk_rows_json').value = '[]';
             fd.set('bulk_rows_json', '[]');
+            fd.set('bulk_mode', 'upload');
             if (!bulkFile.files || !bulkFile.files.length) {
                 showTransferNotice('Please choose a spreadsheet file, or switch to the grid tab.');
+                return;
+            }
+
+            try {
+                const preview = await validateBulkUploadPreview(fromSel.value, bulkEditTransferId, bulkFile.files[0]);
+                if (!preview || preview.success !== true) {
+                    showBulkTransferValidationError(preview);
+                    return;
+                }
+            } catch (err) {
+                showFetchErrorNotice(err, 'Validation Error');
                 return;
             }
         }

@@ -6620,35 +6620,11 @@ class ProductsController
             $stockTransferModel = new StockTransfer($conn);
 
             $mode = isset($_POST['bulk_mode']) ? trim((string)$_POST['bulk_mode']) : 'upload';
-            $rows = [];
-
-            if ($mode === 'grid') {
-                $raw = $_POST['bulk_rows_json'] ?? '[]';
-                $decoded = json_decode($raw, true);
-                if (!is_array($decoded)) {
-                    $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid spreadsheet grid data']);
-                }
-                foreach ($decoded as $r) {
-                    if (!is_array($r)) {
-                        continue;
-                    }
-                    $rows[] = [
-                        'item_code' => trim((string)($r['item_code'] ?? '')),
-                        'size' => trim((string)($r['size'] ?? '')),
-                        'color' => trim((string)($r['color'] ?? '')),
-                        'quantity' => isset($r['quantity']) ? (int)$r['quantity'] : 0,
-                    ];
-                }
-            } else {
-                if (empty($_FILES['bulk_file']['tmp_name']) || !is_uploaded_file($_FILES['bulk_file']['tmp_name'])) {
-                    $this->finishJsonApiResponse(['success' => false, 'message' => 'Please choose a file (.csv, .xlsx, or .xls) with columns ItemCode, Size, Color, Quantity']);
-                }
-                $parsed = $this->parseBulkTransferUpload($_FILES['bulk_file']);
-                if (!empty($parsed['error'])) {
-                    $this->finishJsonApiResponse(['success' => false, 'message' => $parsed['error']]);
-                }
-                $rows = $parsed['rows'];
+            $rowsResult = $this->collectBulkTransferInputRows($mode);
+            if (!empty($rowsResult['error'])) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => $rowsResult['error']]);
             }
+            $rows = $rowsResult['rows'];
 
             $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
             if (!empty($aggregated['not_found'])) {
@@ -6707,11 +6683,12 @@ class ProductsController
                 $this->finishJsonApiResponse(['success' => false, 'message' => 'Please select source warehouse']);
             }
 
-            $rowsRaw = $_POST['rows_json'] ?? '[]';
-            $rows = json_decode((string)$rowsRaw, true);
-            if (!is_array($rows)) {
-                $this->finishJsonApiResponse(['success' => false, 'message' => 'Invalid grid data']);
+            $mode = isset($_POST['bulk_mode']) ? trim((string)$_POST['bulk_mode']) : 'grid';
+            $rowsResult = $this->collectBulkTransferInputRows($mode);
+            if (!empty($rowsResult['error'])) {
+                $this->finishJsonApiResponse(['success' => false, 'message' => $rowsResult['error']]);
             }
+            $rows = $rowsResult['rows'];
 
             $aggregated = $stockTransferModel->aggregateBulkVariantRows($rows);
             if (!empty($aggregated['not_found'])) {
@@ -6985,6 +6962,52 @@ class ProductsController
     }
 
     /**
+     * Grid JSON or uploaded spreadsheet → normalized bulk transfer rows.
+     *
+     * @return array{rows: list<array<string,mixed>>, error?: string}
+     */
+    private function collectBulkTransferInputRows(string $mode): array
+    {
+        $mode = strtolower(trim($mode));
+        if ($mode === 'grid') {
+            $raw = $_POST['bulk_rows_json'] ?? $_POST['rows_json'] ?? '[]';
+            $decoded = json_decode((string) $raw, true);
+            if (!is_array($decoded)) {
+                return ['rows' => [], 'error' => 'Invalid spreadsheet grid data'];
+            }
+            $rows = [];
+            foreach ($decoded as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+                $rows[] = [
+                    'item_code' => trim((string) ($r['item_code'] ?? '')),
+                    'sku' => trim((string) ($r['sku'] ?? '')),
+                    'size' => trim((string) ($r['size'] ?? '')),
+                    'color' => trim((string) ($r['color'] ?? '')),
+                    'quantity' => isset($r['quantity']) ? (int) $r['quantity'] : 0,
+                ];
+            }
+
+            return ['rows' => $rows];
+        }
+
+        if (empty($_FILES['bulk_file']['tmp_name']) || !is_uploaded_file($_FILES['bulk_file']['tmp_name'])) {
+            return [
+                'rows' => [],
+                'error' => 'Please choose a file (.csv, .xlsx, or .xls) with columns ItemCode, Size, Color, Quantity',
+            ];
+        }
+
+        $parsed = $this->parseBulkTransferUpload($_FILES['bulk_file']);
+        if (!empty($parsed['error'])) {
+            return ['rows' => [], 'error' => $parsed['error']];
+        }
+
+        return ['rows' => $parsed['rows'] ?? []];
+    }
+
+    /**
      * @param array $file $_FILES entry
      * @return array{rows?: list<array<string,mixed>>, error?: string}
      */
@@ -7014,8 +7037,11 @@ class ProductsController
             $headers = str_getcsv($headerLine);
             $map = $this->mapBulkSheetHeaders($headers);
 
-            if ($map['item_code'] === null || $map['quantity'] === null) {
-                return ['error' => 'CSV must include ItemCode (or Item Code) and Quantity column headers'];
+            if ($map['item_code'] === null && $map['sku'] === null) {
+                return ['error' => 'CSV must include ItemCode (or Item Code) or SKU column headers'];
+            }
+            if ($map['quantity'] === null) {
+                return ['error' => 'CSV must include Quantity (or Qty) column header'];
             }
 
             $rows = [];
@@ -7057,11 +7083,16 @@ class ProductsController
             $headerCells = [];
             for ($ci = 1; $ci <= $colCount; $ci++) {
                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
-                $headerCells[] = (string)$sheet->getCell($colLetter . '1')->getValue();
+                $headerCells[] = $this->normalizeBulkUploadCellValue(
+                    $sheet->getCell($colLetter . '1')->getCalculatedValue()
+                );
             }
             $map = $this->mapBulkSheetHeaders($headerCells);
-            if ($map['item_code'] === null || $map['quantity'] === null) {
-                return ['error' => 'First row must include ItemCode and Quantity columns (Size and Color optional)'];
+            if ($map['item_code'] === null && $map['sku'] === null) {
+                return ['error' => 'First row must include ItemCode or SKU columns (Size and Color optional)'];
+            }
+            if ($map['quantity'] === null) {
+                return ['error' => 'First row must include Quantity column (Size and Color optional)'];
             }
 
             $rows = [];
@@ -7069,7 +7100,9 @@ class ProductsController
                 $cells = [];
                 for ($ci = 1; $ci <= $colCount; $ci++) {
                     $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci);
-                    $cells[$ci - 1] = $sheet->getCell($colLetter . $r)->getValue();
+                    $cells[$ci - 1] = $this->normalizeBulkUploadCellValue(
+                        $sheet->getCell($colLetter . $r)->getCalculatedValue()
+                    );
                 }
                 $row = $this->bulkRowFromCells($cells, $map);
                 if ($row !== null) {
@@ -7097,7 +7130,7 @@ class ProductsController
             return $s;
         };
 
-        $map = ['item_code' => null, 'size' => null, 'color' => null, 'quantity' => null];
+        $map = ['item_code' => null, 'sku' => null, 'size' => null, 'color' => null, 'quantity' => null];
         foreach ($headers as $idx => $h) {
             $n = $norm($h);
             if ($n === '') {
@@ -7105,6 +7138,8 @@ class ProductsController
             }
             if (in_array($n, ['itemcode', 'item code', 'product code', 'productcode'], true)) {
                 $map['item_code'] = $idx;
+            } elseif ($n === 'sku') {
+                $map['sku'] = $idx;
             } elseif ($n === 'size') {
                 $map['size'] = $idx;
             } elseif (in_array($n, ['color', 'colour'], true)) {
@@ -7119,26 +7154,28 @@ class ProductsController
 
     /**
      * @param array<int,mixed> $cells
-     * @param array{item_code: ?int, size: ?int, color: ?int, quantity: ?int} $map
-     * @return ?array{item_code: string, size: string, color: string, quantity: int}
+     * @param array{item_code: ?int, sku: ?int, size: ?int, color: ?int, quantity: ?int} $map
+     * @return ?array{item_code: string, sku: string, size: string, color: string, quantity: int}
      */
     private function bulkRowFromCells(array $cells, array $map): ?array
     {
-        $get = static function ($i) use ($cells) {
+        $controller = $this;
+        $get = static function ($i) use ($cells, $controller) {
             if ($i === null) {
                 return '';
             }
 
-            return isset($cells[$i]) ? trim((string)$cells[$i]) : '';
+            return $controller->normalizeBulkUploadCellValue($cells[$i] ?? '');
         };
 
-        $ic = $get($map['item_code']);
+        $ic = $map['item_code'] !== null ? $get($map['item_code']) : '';
+        $sku = $map['sku'] !== null ? $get($map['sku']) : '';
         $qtyRaw = $get($map['quantity']);
-        $qty = (int)preg_replace('/[^\d-]/', '', (string)$qtyRaw);
-        if ($ic === '' && $qty <= 0) {
+        $qty = (int) preg_replace('/[^\d-]/', '', (string) $qtyRaw);
+        if ($ic === '' && $sku === '' && $qty <= 0) {
             return null;
         }
-        if ($ic === '') {
+        if ($ic === '' && $sku === '') {
             return null;
         }
         if ($qty <= 0) {
@@ -7147,10 +7184,37 @@ class ProductsController
 
         return [
             'item_code' => $ic,
+            'sku' => $sku,
             'size' => $map['size'] !== null ? $get($map['size']) : '',
             'color' => $map['color'] !== null ? $get($map['color']) : '',
             'quantity' => $qty,
         ];
+    }
+
+    private function normalizeBulkUploadCellValue($value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (is_object($value)) {
+            if (method_exists($value, '__toString')) {
+                return trim((string) $value);
+            }
+
+            return '';
+        }
+        if (is_int($value)) {
+            return (string) $value;
+        }
+        if (is_float($value)) {
+            if (abs($value - round($value)) < 1e-9) {
+                return (string) (int) round($value);
+            }
+
+            return rtrim(rtrim(sprintf('%.10F', $value), '0'), '.');
+        }
+
+        return trim((string) $value);
     }
 
     /**

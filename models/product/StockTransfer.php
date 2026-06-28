@@ -108,12 +108,40 @@ class StockTransfer
                 continue;
             }
             $ic = trim((string)($row['item_code'] ?? ''));
+            $sku = trim((string)($row['sku'] ?? ''));
             $sz = trim((string)($row['size'] ?? ''));
             $cl = trim((string)($row['color'] ?? ''));
             $qty = isset($row['quantity']) ? (int)$row['quantity'] : 0;
-            if ($ic === '' || $qty <= 0) {
+            if (($ic === '' && $sku === '') || $qty <= 0) {
                 continue;
             }
+
+            if ($ic === '' && $sku !== '') {
+                $resolved = $this->resolveProductForTransferItem([
+                    'product_id' => 0,
+                    'sku' => $sku,
+                    'item_code' => '',
+                    'size' => $sz,
+                    'color' => $cl,
+                ]);
+                if (!$resolved) {
+                    $notFound[] = [
+                        'item_code' => $sku,
+                        'size' => $sz,
+                        'color' => $cl,
+                        'quantity' => $qty,
+                    ];
+                    continue;
+                }
+                $ic = (string)($resolved['item_code'] ?? $ic);
+                if ($sz === '') {
+                    $sz = (string)($resolved['size'] ?? '');
+                }
+                if ($cl === '') {
+                    $cl = (string)($resolved['color'] ?? '');
+                }
+            }
+
             $k = strtolower($ic) . "\x1e" . $sz . "\x1e" . $cl;
             if (!isset($merged[$k])) {
                 $merged[$k] = ['item_code' => $ic, 'size' => $sz, 'color' => $cl, 'qty' => 0];
@@ -122,7 +150,7 @@ class StockTransfer
         }
 
         if ($merged === []) {
-            return ['items' => [], 'errors' => ['No valid rows. Each row needs ItemCode and a positive Quantity.']];
+            return ['items' => [], 'errors' => ['No valid rows. Each row needs ItemCode (or SKU) and a positive Quantity.']];
         }
 
         $items = [];
