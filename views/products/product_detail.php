@@ -416,7 +416,7 @@
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
   <div class="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3 sm:space-y-4 lg:col-span-2 min-w-0">
     <h3 class="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base"><i class="fas fa-boxes text-amber-600"></i>Inventory</h3>
-      <!-- Stock metrics -->
+      <!-- Inventory stat cards (single grid — all cards flow together) -->
       <div class="<?php echo $invGrid; ?>">
         <!-- Local Stock -->
         <div class="<?php echo $invCard; ?> border-blue-100 bg-blue-50/50">
@@ -483,9 +483,6 @@
             <i class="fas fa-shopping-cart"></i>
           </div>
         </a>
-      </div>
-      <!-- Product metrics -->
-     <div class="<?php echo $invGrid; ?> mt-2 sm:mt-3">
           <div class="<?php echo $invCard; ?> border-gray-200 bg-white">
             <div class="<?php echo $invBody; ?>">
               <p class="<?php echo $invLbl; ?>">Number Sold</p>
