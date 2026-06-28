@@ -12,19 +12,136 @@ class User
     }
 
     /**
-     * Warehouse table referenced by vp_users.warehouse_id FK (test DB uses exotic_address_old).
+     * Canonical warehouse table (stock transfers, locations, POS, user assignments).
      */
     private function userWarehouseTable(): string
     {
-        static $table = null;
-        if ($table !== null) {
-            return $table;
+        return 'exotic_address';
+    }
+
+    private function legacyWarehouseTableExists(): bool
+    {
+        static $exists = null;
+        if ($exists !== null) {
+            return $exists;
         }
 
         $result = $this->db->query("SHOW TABLES LIKE 'exotic_address_old'");
-        $table = ($result && $result->num_rows > 0) ? 'exotic_address_old' : 'exotic_address';
+        $exists = ($result && $result->num_rows > 0);
 
-        return $table;
+        return $exists;
+    }
+
+    /**
+     * Map a stored warehouse_id to exotic_address.id (handles legacy exotic_address_old ids).
+     */
+    public function resolveWarehouseIdToCanonical(int $warehouseId): ?int
+    {
+        if ($warehouseId <= 0) {
+            return null;
+        }
+
+        $sql = 'SELECT id FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $warehouseId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        if ($row) {
+            return $warehouseId;
+        }
+
+        if (!$this->legacyWarehouseTableExists()) {
+            return null;
+        }
+
+        $legacySql = 'SELECT address_title FROM exotic_address_old WHERE id = ? LIMIT 1';
+        $legacyStmt = $this->db->prepare($legacySql);
+        if (!$legacyStmt) {
+            return null;
+        }
+        $legacyStmt->bind_param('i', $warehouseId);
+        $legacyStmt->execute();
+        $legacyResult = $legacyStmt->get_result();
+        $legacyRow = $legacyResult ? $legacyResult->fetch_assoc() : null;
+        $legacyStmt->close();
+        if (!$legacyRow) {
+            return null;
+        }
+
+        $title = trim((string) ($legacyRow['address_title'] ?? ''));
+        if ($title === '') {
+            return null;
+        }
+
+        $matchSql = 'SELECT id FROM exotic_address WHERE address_title = ? AND is_active = 1 LIMIT 1';
+        $matchStmt = $this->db->prepare($matchSql);
+        if (!$matchStmt) {
+            return null;
+        }
+        $matchStmt->bind_param('s', $title);
+        $matchStmt->execute();
+        $matchResult = $matchStmt->get_result();
+        $matchRow = $matchResult ? $matchResult->fetch_assoc() : null;
+        $matchStmt->close();
+
+        return $matchRow ? (int) $matchRow['id'] : null;
+    }
+
+    /**
+     * All vp_users.warehouse_id values that refer to the same location as the canonical id.
+     *
+     * @return list<int>
+     */
+    private function warehouseIdsEquivalentTo(int $canonicalWarehouseId): array
+    {
+        $canonicalWarehouseId = (int) $canonicalWarehouseId;
+        if ($canonicalWarehouseId <= 0) {
+            return [];
+        }
+
+        $ids = [$canonicalWarehouseId];
+
+        $sql = 'SELECT address_title FROM exotic_address WHERE id = ? LIMIT 1';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return $ids;
+        }
+        $stmt->bind_param('i', $canonicalWarehouseId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        if (!$row || !$this->legacyWarehouseTableExists()) {
+            return $ids;
+        }
+
+        $title = trim((string) ($row['address_title'] ?? ''));
+        if ($title === '') {
+            return $ids;
+        }
+
+        $legacySql = 'SELECT id FROM exotic_address_old WHERE address_title = ?';
+        $legacyStmt = $this->db->prepare($legacySql);
+        if (!$legacyStmt) {
+            return $ids;
+        }
+        $legacyStmt->bind_param('s', $title);
+        $legacyStmt->execute();
+        $legacyResult = $legacyStmt->get_result();
+        while ($legacyResult && ($legacyRow = $legacyResult->fetch_assoc())) {
+            $legacyId = (int) ($legacyRow['id'] ?? 0);
+            if ($legacyId > 0) {
+                $ids[] = $legacyId;
+            }
+        }
+        $legacyStmt->close();
+
+        return array_values(array_unique($ids));
     }
 
     /**
@@ -172,12 +289,18 @@ class User
     public function getUserById($id)
     {
         $warehouseTable = $this->userWarehouseTable();
+        $legacyJoin = $this->legacyWarehouseTableExists()
+            ? ' LEFT JOIN exotic_address_old eao ON u.warehouse_id = eao.id'
+            : '';
+        $warehouseNameExpr = $this->legacyWarehouseTableExists()
+            ? 'COALESCE(ea.address_title, eao.address_title)'
+            : 'ea.address_title';
         $sql = "SELECT 
                 u.*, 
-                ea.address_title AS warehouse_name
+                {$warehouseNameExpr} AS warehouse_name
             FROM vp_users u
             LEFT JOIN {$warehouseTable} ea 
-                ON u.warehouse_id = ea.id
+                ON u.warehouse_id = ea.id{$legacyJoin}
             WHERE u.id = ? AND u.is_deleted = 0
             LIMIT 1";
 
@@ -185,8 +308,20 @@ class User
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $result = $stmt->get_result();
+        $user = $result ? $result->fetch_assoc() : null;
+        if (!$user) {
+            return null;
+        }
 
-        return $result->fetch_assoc();
+        $storedWarehouseId = (int) ($user['warehouse_id'] ?? 0);
+        if ($storedWarehouseId > 0) {
+            $canonicalId = $this->resolveWarehouseIdToCanonical($storedWarehouseId);
+            if ($canonicalId !== null) {
+                $user['warehouse_id'] = $canonicalId;
+            }
+        }
+
+        return $user;
     }
     public function updatePassword($userId, $newPassword)
     {
@@ -494,18 +629,29 @@ class User
      */
     public function getActiveUsersByWarehouseId($warehouseId)
     {
-        $warehouseId = (int)$warehouseId;
+        $warehouseId = (int) $warehouseId;
         if ($warehouseId <= 0) {
             return [];
         }
-        $sql = "SELECT id, name FROM vp_users WHERE warehouse_id = ? AND is_active = 1 AND is_deleted = 0 ORDER BY name ASC";
+
+        $warehouseIds = $this->warehouseIdsEquivalentTo($warehouseId);
+        if ($warehouseIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($warehouseIds), '?'));
+        $types = str_repeat('i', count($warehouseIds));
+        $sql = "SELECT id, name FROM vp_users WHERE warehouse_id IN ({$placeholders}) AND is_active = 1 AND is_deleted = 0 ORDER BY name ASC";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('i', $warehouseId);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param($types, ...$warehouseIds);
         $stmt->execute();
         $result = $stmt->get_result();
         $users = [];
-        while ($row = $result->fetch_assoc()) {
-            $users[(int)$row['id']] = $row['name'];
+        while ($result && ($row = $result->fetch_assoc())) {
+            $users[(int) $row['id']] = $row['name'];
         }
         $stmt->close();
         return $users;
@@ -513,14 +659,26 @@ class User
 
     public function userIsActiveAtWarehouse($userId, $warehouseId)
     {
-        $userId = (int)$userId;
-        $warehouseId = (int)$warehouseId;
+        $userId = (int) $userId;
+        $warehouseId = (int) $warehouseId;
         if ($userId <= 0 || $warehouseId <= 0) {
             return false;
         }
-        $sql = "SELECT id FROM vp_users WHERE id = ? AND warehouse_id = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1";
+
+        $warehouseIds = $this->warehouseIdsEquivalentTo($warehouseId);
+        if ($warehouseIds === []) {
+            return false;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($warehouseIds), '?'));
+        $types = 'i' . str_repeat('i', count($warehouseIds));
+        $params = array_merge([$userId], $warehouseIds);
+        $sql = "SELECT id FROM vp_users WHERE id = ? AND warehouse_id IN ({$placeholders}) AND is_active = 1 AND is_deleted = 0 LIMIT 1";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ii', $userId, $warehouseId);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param($types, ...$params);
         $stmt->execute();
         $result = $stmt->get_result();
         $ok = $result && $result->num_rows > 0;
@@ -581,11 +739,18 @@ class User
         }
         // total records
         // $sql = "SELECT COUNT(DISTINCT vu.id) AS total FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where";
+        $legacyJoin = $this->legacyWarehouseTableExists()
+            ? ' LEFT JOIN exotic_address_old AS eao ON vu.warehouse_id = eao.id'
+            : '';
+        $warehouseNameExpr = $this->legacyWarehouseTableExists()
+            ? 'COALESCE(ea.address_title, eao.address_title)'
+            : 'ea.address_title';
+
         $sql = "SELECT COUNT(DISTINCT vu.id) AS total 
 FROM vp_users AS vu 
 LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id 
 LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id 
-LEFT JOIN {$warehouseTable} AS ea ON vu.warehouse_id = ea.id
+LEFT JOIN {$warehouseTable} AS ea ON vu.warehouse_id = ea.id{$legacyJoin}
 $where";
         $resultCount = $this->db->query($sql);
         $rowCount = $resultCount->fetch_assoc();
@@ -597,12 +762,12 @@ $where";
         // $sql = "SELECT vu.*, GROUP_CONCAT(vt.team_name SEPARATOR ', ') AS team_names FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where GROUP BY vu.id LIMIT $limit OFFSET $offset;";
        $sql = "SELECT 
         vu.*, 
-        ea.address_title AS warehouse_name,
+        {$warehouseNameExpr} AS warehouse_name,
         GROUP_CONCAT(vt.team_name SEPARATOR ', ') AS team_names 
     FROM vp_users AS vu 
     LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id 
     LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id 
-    LEFT JOIN {$warehouseTable} AS ea ON vu.warehouse_id = ea.id
+    LEFT JOIN {$warehouseTable} AS ea ON vu.warehouse_id = ea.id{$legacyJoin}
     $where 
     GROUP BY vu.id 
     LIMIT $limit OFFSET $offset;";
