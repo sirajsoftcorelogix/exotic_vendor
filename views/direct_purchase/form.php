@@ -1477,6 +1477,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     }
 
     function recalcRow(tr) {
+        if (!tr) return;
         var cost = parseNum(tr.querySelector('.dp-cost'));
         var qty = parseNum(tr.querySelector('.dp-qty'));
         var rate = parseNum(tr.querySelector('.dp-rate'));
@@ -1667,15 +1668,16 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     function bindRow(tr) {
         ['.dp-cost', '.dp-qty', '.dp-rate'].forEach(function (sel) {
             var el = tr.querySelector(sel);
-            if (el) el.addEventListener('input', function () {
+            if (!el) return;
+            var fn = function () {
                 recalcRow(tr);
-                if (sel === '.dp-qty') {
-                    dpMarkVendorQtyUnsynced(tr);
-                }
-            });
+                if (sel === '.dp-qty') dpMarkVendorQtyUnsynced(tr);
+            };
+            el.addEventListener('input', fn);
+            el.addEventListener('change', fn);
         });
         var lineTot = tr.querySelector('.dp-line-total');
-        if (lineTot) lineTot.addEventListener('input', function () { recalcInvoiceTotals(); });
+        if (lineTot) lineTot.addEventListener('input', recalcInvoiceTotals);
         var rm = tr.querySelector('.dp-remove');
         if (rm) rm.addEventListener('click', function () {
             var body = document.getElementById('line-items-body');
