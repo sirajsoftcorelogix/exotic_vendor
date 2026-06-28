@@ -5,6 +5,7 @@ require_once 'models/order/purchaseOrder.php';
 require_once 'models/order/purchaseOrderItem.php';
 require_once 'models/comman/tables.php';
 require_once 'models/user/user.php';
+require_once 'models/product/StockMovement.php';
 $grnModel = new grn($conn);
 $purchaseOrderModel = new PurchaseOrder($conn);
 $purchaseOrderItemsModel = new PurchaseOrderItem($conn);
@@ -122,9 +123,6 @@ class GrnsController {
             $insertStockSql = "INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)";
             $insertStockStmt = $conn->prepare($insertStockSql);
 
-            $insertMovementSql = "INSERT INTO vp_stock_movements (product_id, sku, warehouse_id, movement_type, quantity, running_stock, ref_type, ref_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-            $insertMovementStmt = $conn->prepare($insertMovementSql);
-
             foreach ($poItems as $index => $item) {
                 $qtyReceived = isset($qtyReceivedArr[$index]) ? floatval($qtyReceivedArr[$index]) : 0;
                 if ($qtyReceived <= 0) continue; // nothing to receive for this item
@@ -151,38 +149,40 @@ class GrnsController {
                 if ($grnId === false) {
                     throw new Exception('Failed to create GRN');
                 }
-                // ensure select statement prepared
+
+                $userId = (int) ($_POST['received_by'] ?? $_SESSION['user']['id'] ?? 0);
+                $movement = StockMovement::insert($conn, [
+                    'product_id' => (int) ($productId ?? 0),
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'warehouse_id' => (int) $warehouseId,
+                    'location' => '',
+                    'movement_type' => 'IN',
+                    'quantity' => $qtyReceived,
+                    'ref_type' => 'GRN',
+                    'ref_id' => (string) $grnId,
+                    'update_by_user' => $userId,
+                    'reason' => 'GRN receipt',
+                    'strict_stock_check' => false,
+                ]);
+                $runningStock = $movement['running_stock'];
+
                 $selectStockStmt->bind_param('si', $sku, $warehouseId);
                 $selectStockStmt->execute();
                 $res = $selectStockStmt->get_result();
-                $runningStock = 0;
                 if ($row = $res->fetch_assoc()) {
                     $stockId = $row['id'];
-                    $currentStock = floatval($row['current_stock']);
-                    $runningStock = $currentStock + $qtyReceived;
-                    // update stock
                     $updateStockStmt->bind_param('dii', $runningStock, $grnId, $stockId);
                     if (!$updateStockStmt->execute()) {
                         throw new Exception('Failed to update vp_stock for item ' . $itemCode);
                     }
                 } else {
-                    // insert stock record
-                    $runningStock = $qtyReceived;
-                    
                     $insertStockStmt->bind_param('sidi', $sku, $warehouseId, $runningStock, $grnId);
                     if (!$insertStockStmt->execute()) {
                         throw new Exception('Failed to insert vp_stock for item ' . $sku);
                     }
-                    $stockId = $conn->insert_id;
-                }
-
-                // insert stock movement (IN)
-                $movementType = 'IN';
-                $pidBind = $productId ? $productId : 0;
-                $refType = 'GRN';
-                $insertMovementStmt->bind_param('isissdsd', $pidBind, $sku, $warehouseId, $movementType, $qtyReceived, $runningStock, $refType, $grnId);
-                if (!$insertMovementStmt->execute()) {
-                    throw new Exception('Failed to insert vp_stock_movements for item ' . $sku);
                 }
             }
 

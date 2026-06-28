@@ -3598,36 +3598,15 @@ class product
      */
     public function getPhysicalStockTotalFromMovements(int $product_id): int
     {
-        $product_id = (int)$product_id;
-        if ($product_id <= 0) {
-            return 0;
-        }
-        $sql = "
-            SELECT COALESCE(SUM(sm.running_stock), 0) AS total_stock
-            FROM vp_stock_movements sm
-            INNER JOIN (
-                SELECT warehouse_id, product_id, MAX(id) AS max_id
-                FROM vp_stock_movements
-                WHERE product_id = ?
-                GROUP BY warehouse_id, product_id
-            ) latest ON sm.warehouse_id = latest.warehouse_id
-                AND sm.product_id = latest.product_id
-                AND sm.id = latest.max_id
-            WHERE sm.product_id = ?";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) {
-            return 0;
-        }
-        $stmt->bind_param('ii', $product_id, $product_id);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
+        require_once __DIR__ . '/StockMovement.php';
 
-        return max(0, (int)($row['total_stock'] ?? 0));
+        return StockMovement::getPhysicalStockTotalFromMovements($this->db, $product_id);
     }
 
     public function insertStockMovement($data)
     {
+        require_once __DIR__ . '/StockMovement.php';
+
         $this->db->begin_transaction();
         try {
             $stmt = $this->db->prepare('SELECT id FROM vp_products WHERE id = ? LIMIT 1');
@@ -3641,100 +3620,7 @@ class product
                 throw new Exception('Product not found');
             }
 
-            $adj_qty = (int)$data['quantity'];
-            $movement_type = strtoupper(trim((string)($data['movement_type'] ?? 'OUT')));
-            $isInbound = in_array($movement_type, ['IN', 'TRANSFER_IN', 'OPENING_STOCK'], true);
-            $warehouse_id = (int)($data['warehouse_id'] ?? 0);
-            $sku = (string)($data['sku'] ?? '');
-            $product_id = (int)$data['product_id'];
-
-            // Per-warehouse running_stock chain on the movement row.
-            $running_stock = $isInbound ? $adj_qty : 0;
-            $lastRunning = 0;
-            if ($warehouse_id > 0 && $sku !== '') {
-                $whStmt = $this->db->prepare(
-                    'SELECT running_stock FROM vp_stock_movements
-                     WHERE sku = ? AND warehouse_id = ?
-                     ORDER BY id DESC LIMIT 1'
-                );
-                if ($whStmt) {
-                    $whStmt->bind_param('si', $sku, $warehouse_id);
-                    $whStmt->execute();
-                    $whRes = $whStmt->get_result();
-                    $whRow = $whRes ? $whRes->fetch_assoc() : null;
-                    $whStmt->close();
-                    if ($whRow) {
-                        $lastRunning = (int)($whRow['running_stock'] ?? 0);
-                    }
-                }
-            } elseif (!$isInbound && $product_id > 0) {
-                $lastRunning = $this->getPhysicalStockTotalFromMovements($product_id);
-            }
-
-            $strictStockCheck = !array_key_exists('strict_stock_check', $data) || !empty($data['strict_stock_check']);
-            if (!$isInbound && $strictStockCheck && $adj_qty > $lastRunning) {
-                throw new Exception(
-                    'Insufficient stock: available ' . $lastRunning . ', requested ' . $adj_qty
-                );
-            }
-
-            if ($warehouse_id > 0 && $sku !== '') {
-                $running_stock = $isInbound ? $lastRunning + $adj_qty : max(0, $lastRunning - $adj_qty);
-            } elseif (!$isInbound) {
-                $running_stock = max(0, $lastRunning - $adj_qty);
-            }
-
-            $insertSql = "INSERT INTO vp_stock_movements (
-                        product_id, sku, item_code, size, color,
-                        warehouse_id, location, movement_type,
-                        quantity, running_stock, update_by_user,
-                        ref_type, ref_id, reason, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
-
-            $insertStmt = $this->db->prepare($insertSql);
-            $ref_type = isset($data['ref_type']) && $data['ref_type'] !== ''
-                ? (string)$data['ref_type']
-                : 'MANUAL';
-            $ref_id = array_key_exists('ref_id', $data) ? (string)$data['ref_id'] : '0';
-            $updatedByUser = isset($data['update_by_user'])
-                ? (int)$data['update_by_user']
-                : (isset($data['user_id']) ? (int)$data['user_id'] : 0);
-
-            $insertStmt->bind_param(
-                'isssssssiiisss',
-                $data['product_id'],
-                $data['sku'],
-                $data['item_code'],
-                $data['size'],
-                $data['color'],
-                $data['warehouse_id'],
-                $data['location'],
-                $data['movement_type'],
-                $adj_qty,
-                $running_stock,
-                $updatedByUser,
-                $ref_type,
-                $ref_id,
-                $data['reason']
-            );
-
-            if (!$insertStmt->execute()) {
-                throw new Exception('Failed to record history: ' . $this->db->error);
-            }
-            $insertStmt->close();
-
-            // Sync vp_products.physical_stock from movement ledger; do not touch local_stock (website/API stock).
-            $physicalTotal = $this->getPhysicalStockTotalFromMovements($product_id);
-            $updateSql = 'UPDATE vp_products SET physical_stock = ? WHERE id = ?';
-            $updateStmt = $this->db->prepare($updateSql);
-            if (!$updateStmt) {
-                throw new Exception('Failed to prepare physical_stock update: ' . $this->db->error);
-            }
-            $updateStmt->bind_param('ii', $physicalTotal, $product_id);
-            if (!$updateStmt->execute()) {
-                throw new Exception('Failed to update physical_stock: ' . $this->db->error);
-            }
-            $updateStmt->close();
+            StockMovement::insert($this->db, $data);
 
             $this->db->commit();
             return ['success' => true, 'message' => 'Stock updated and history recorded.'];
