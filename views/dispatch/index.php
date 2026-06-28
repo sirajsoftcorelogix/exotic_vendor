@@ -207,26 +207,31 @@
                     <?php else: ?>
                       <p class="text-blue-600 font-semibold"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></p>
                     <?php endif; ?>
-                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>                 
-                    </div>
-                    <div>
-<?php
-                    // build order links only if order_number is set (avoid duplicates)
-                    $orderLinks = [];
-                    $seen = [];
+                    <?php
+                    $orderNumbers = [];
                     foreach ($invoice['items'] ?? [] as $item) {
                         $num = trim((string)($item['order_number'] ?? ''));
-                        if ($num === '' || isset($seen[$num])) {
-                            continue;
+                        if ($num !== '') {
+                            $orderNumbers[$num] = true;
                         }
-                        $seen[$num] = true;
-                        $orderLinks[] = '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($num)) . '">' . htmlspecialchars($num) . '</a>';
                     }
-                    if (!empty($orderLinks)): ?>
-                    <p class="text-xs text-gray-500">Order No.</p>
-                    <p class="text-blue-600 font-semibold"><?php echo implode('<br>', $orderLinks); ?></p>
-                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
+                    foreach ($invoice_dispatch[$invoice['id']] ?? [] as $dispatch) {
+                        $num = trim((string)($dispatch['order_number'] ?? ''));
+                        if ($num !== '') {
+                            $orderNumbers[$num] = true;
+                        }
+                    }
+                    if (!empty($orderNumbers)):
+                        $orderLinks = [];
+                        foreach (array_keys($orderNumbers) as $num) {
+                            $orderLinks[] = '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . urlencode($num)) . '" class="text-blue-600 hover:underline">' . htmlspecialchars($num) . '</a>';
+                        }
+                    ?>
+                    <p class="text-xs text-gray-500 mt-1">Order No.</p>
+                    <p class="text-sm text-blue-600 font-medium leading-snug"><?php echo implode('<br>', $orderLinks); ?></p>
                     <?php endif; ?>
+                    <p class="text-xs text-gray-500 mt-1"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>                 
+                    </div>
 
                     <!-- <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
                     <p class="text-blue-600 font-semibold">
@@ -241,7 +246,6 @@
                         // }
                         //echo implode(' | ', $shiprocketOrderIds);
                       ?></p>   -->
-                  </div>
                   </div>
                   
                 </div>
