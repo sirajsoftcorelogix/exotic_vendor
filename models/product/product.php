@@ -828,6 +828,97 @@ class product
         return is_array($decoded) ? $decoded : null;
     }
 
+    /**
+     * Pull latest local_stock from vendor product/fetch and update vp_products only.
+     * Does not create stock movements or change physical_stock.
+     *
+     * @return array{success:bool,message?:string,updated_count?:int}
+     */
+    public function refreshLocalStockFromVendorApi(string $itemCode): array
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Item code is required.'];
+        }
+
+        $payload = $this->fetchVendorProductApiPayload($itemCode);
+        if (!$payload) {
+            return ['success' => false, 'message' => 'Failed to fetch product from vendor API.'];
+        }
+
+        $productRows = self::normalizeVendorProductFetchItems($payload);
+        if ($productRows === []) {
+            return ['success' => false, 'message' => 'No product rows in vendor API response.'];
+        }
+
+        $bulkConnection = $this->beginBulkProductUpdateConnection();
+        try {
+            $result = $this->updateProductFromApi($productRows, [
+                'preserve_local_stock' => false,
+                'sync_physical_stock' => false,
+            ]);
+        } finally {
+            $this->endBulkProductUpdateConnection($bulkConnection);
+        }
+
+        if (!is_array($result)) {
+            return ['success' => false, 'message' => 'Product update failed.'];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Push local_stock_delta to vendor product/modify, then refresh local_stock in DB from product/fetch.
+     * Does not create stock movements or change physical_stock.
+     *
+     * @return array{success:bool,message?:string,updated_count?:int,vendor_sync?:array}
+     */
+    public function applyLocalStockDeltaAndRefreshFromVendorApi(
+        string $itemCode,
+        int $localStockDelta,
+        string $size = '',
+        string $color = ''
+    ): array {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Item code is required.'];
+        }
+
+        $size = trim($size);
+        $color = trim($color);
+        $localStockDelta = (int) $localStockDelta;
+
+        $product = [
+            'item_code' => $itemCode,
+            'size' => $size,
+            'color' => $color,
+        ];
+        $row = $this->findByItemCodeSizeColor($itemCode, $size, $color);
+        if (is_array($row)) {
+            $product = $row;
+        }
+
+        $vendorSync = null;
+        if ($localStockDelta !== 0) {
+            $vendorSync = $this->syncCpToVendorFrontend($product, 0.0, (float) $localStockDelta);
+            if (empty($vendorSync['success'])) {
+                return [
+                    'success' => false,
+                    'message' => (string) ($vendorSync['message'] ?? 'Vendor local_stock_delta sync failed.'),
+                    'vendor_sync' => $vendorSync,
+                ];
+            }
+        }
+
+        $refresh = $this->refreshLocalStockFromVendorApi($itemCode);
+        if (!empty($vendorSync)) {
+            $refresh['vendor_sync'] = $vendorSync;
+        }
+
+        return $refresh;
+    }
+
     /** Set accounts_group on all rows for an item code from the vendor product/fetch master row. */
     public function syncAccountsGroupFromApiItem(string $itemCode, array $apiItem): void
     {
@@ -850,6 +941,7 @@ class product
         $updatedCount = 0;
         // Default: never overwrite vp_products.local_stock from API; pass preserve_local_stock => false to sync stock from API.
         $preserveLocalStock = !array_key_exists('preserve_local_stock', $options) || !empty($options['preserve_local_stock']);
+        $syncPhysicalStock = !array_key_exists('sync_physical_stock', $options) || !empty($options['sync_physical_stock']);
         // print_array($productData);
         // exit;
         $vendorMapSynced = 0;
@@ -1010,7 +1102,7 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
-                        if (!$preserveLocalStock) {
+                        if (!$preserveLocalStock && $syncPhysicalStock) {
                             $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
                                 $existingBase,
                                 (string) $sku,
@@ -1271,7 +1363,7 @@ class product
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
-                                if (!$preserveLocalStock) {
+                                if (!$preserveLocalStock && $syncPhysicalStock) {
                                     $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
                                         $existingBase,
                                         (string) $sku,
@@ -1439,12 +1531,11 @@ class product
         }
 
         $productId = (int) $existingBase['id'];
-        $physicalStock = (int) ($existingBase['physical_stock'] ?? 0);
-        if ($physicalStock !== 0 || $this->productHasStockMovements($productId)) {
-            return;
-        }
 
         require_once __DIR__ . '/StockMovement.php';
+        if (!StockMovement::isPhysicalStockUninitialized($this->db, $productId)) {
+            return;
+        }
 
         $warehouseId = $this->resolveDefaultWarehouseIdForStock();
         if ($warehouseId <= 0) {
@@ -1485,23 +1576,6 @@ class product
         } catch (\Throwable $e) {
             error_log('maybeSeedPhysicalStockOnLocalStockApiUpdate: ' . $e->getMessage());
         }
-    }
-
-    private function productHasStockMovements(int $productId): bool
-    {
-        if ($productId <= 0) {
-            return true;
-        }
-        $stmt = $this->db->prepare('SELECT 1 FROM vp_stock_movements WHERE product_id = ? LIMIT 1');
-        if (!$stmt) {
-            return true;
-        }
-        $stmt->bind_param('i', $productId);
-        $stmt->execute();
-        $has = (bool) $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        return $has;
     }
 
     private function resolveDefaultWarehouseIdForStock(): int

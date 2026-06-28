@@ -131,6 +131,42 @@ final class StockMovement
     }
 
     /**
+     * Physical stock may be initialized from website local_stock only when the product has
+     * never had warehouse stock: physical_stock is 0 and vp_stock_movements has no rows.
+     */
+    public static function isPhysicalStockUninitialized(\mysqli $conn, int $productId): bool
+    {
+        $productId = (int) $productId;
+        if ($productId <= 0) {
+            return false;
+        }
+
+        $stmt = $conn->prepare('SELECT physical_stock FROM vp_products WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('i', $productId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$row || (int) ($row['physical_stock'] ?? 0) !== 0) {
+            return false;
+        }
+
+        $mov = $conn->prepare('SELECT 1 FROM vp_stock_movements WHERE product_id = ? LIMIT 1');
+        if (!$mov) {
+            return false;
+        }
+        $mov->bind_param('i', $productId);
+        $mov->execute();
+        $hasMovement = (bool) $mov->get_result()->fetch_assoc();
+        $mov->close();
+
+        return !$hasMovement;
+    }
+
+    /**
      * @param array{strict_stock_check?: bool, product_id?: int} $options
      * @return array{running_stock: float, last_running: float}
      */
@@ -200,6 +236,19 @@ final class StockMovement
             ? (int) $data['update_by_user']
             : (isset($data['user_id']) ? (int) $data['user_id'] : 0);
 
+        $refTypeUpper = strtoupper(trim($refType));
+        $movementTypeUpper = strtoupper(trim($movementType));
+        if (
+            $productId > 0
+            && $refTypeUpper === 'API_REFRESH'
+            && $movementTypeUpper === 'OPENING_STOCK'
+            && !self::isPhysicalStockUninitialized($conn, $productId)
+        ) {
+            throw new \RuntimeException(
+                'Physical stock cannot be initialized from API refresh: product already has warehouse stock or movement history.'
+            );
+        }
+
         $options = [
             'strict_stock_check' => $data['strict_stock_check'] ?? true,
         ];
@@ -260,10 +309,20 @@ final class StockMovement
         return ['running_stock' => $runningStock, 'movement_id' => $movementId];
     }
 
-    public static function syncProductPhysicalStock(\mysqli $conn, int $productId): void
+    /**
+     * Sync vp_products.physical_stock from the movement ledger (+ in-transit).
+     * Optional only_if_uninitialized: skip when product already has physical_stock or movements
+     * (used to block local-stock-only flows from altering warehouse stock).
+     *
+     * @param array{only_if_uninitialized?: bool} $options
+     */
+    public static function syncProductPhysicalStock(\mysqli $conn, int $productId, array $options = []): void
     {
         $productId = (int) $productId;
         if ($productId <= 0) {
+            return;
+        }
+        if (!empty($options['only_if_uninitialized']) && !self::isPhysicalStockUninitialized($conn, $productId)) {
             return;
         }
         $physicalTotal = self::getPhysicalStockTotalIncludingInTransit($conn, $productId);

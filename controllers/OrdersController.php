@@ -847,6 +847,12 @@ class OrdersController
                 if ($new_status != $_POST['previousStatus']) {
                     $commanModel->add_order_status_log($logData);
                 }
+                if ($this->isCancelledOrderStatus($new_status)
+                    && !$this->isCancelledOrderStatus((string) $previous_status)
+                    && is_array($orderval)
+                ) {
+                    $this->syncLocalStockFromVendorApiForOrder($orderval);
+                }
                 if ($agent_id != $previous_agent) {
                     //log agent change
                     $agentLogData = [
@@ -1516,6 +1522,19 @@ class OrdersController
             //print_array($_POST);
             //exit;
             if (!empty($order_ids) && !empty($new_status)) {
+                $ordersToSyncLocalStock = [];
+                if ($this->isCancelledOrderStatus($new_status)) {
+                    foreach ($order_ids as $oid) {
+                        $oid = (int) $oid;
+                        if ($oid <= 0) {
+                            continue;
+                        }
+                        $row = $ordersModel->getOrderById($oid);
+                        if (is_array($row) && !$this->isCancelledOrderStatus((string) ($row['status'] ?? ''))) {
+                            $ordersToSyncLocalStock[] = $row;
+                        }
+                    }
+                }
                 $result = $ordersModel->updateStatusBulk($order_ids, $new_status);
                 //log status change for each order
                 foreach ($order_ids as $oid) {
@@ -1549,6 +1568,9 @@ class OrdersController
                     }
                 }
                 if ($result) {
+                    foreach ($ordersToSyncLocalStock as $orderRow) {
+                        $this->syncLocalStockFromVendorApiForOrder($orderRow);
+                    }
                     //session poitem array clean
 
                     echo json_encode($result);
@@ -2254,6 +2276,59 @@ class OrdersController
             'result' => $result
         ]);
         exit;
+    }
+
+    private function isCancelledOrderStatus(string $status): bool
+    {
+        return strtolower(trim($status)) === 'cancelled';
+    }
+
+    /**
+     * On order cancel: push local_stock_delta to vendor API (+qty restores website stock), then fetch latest local_stock.
+     * Does not update physical_stock or stock movements.
+     */
+    private function syncLocalStockFromVendorApiForOrder(array $orderRow): void
+    {
+        $itemCode = trim((string) ($orderRow['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return;
+        }
+
+        $size = trim((string) ($orderRow['size'] ?? ''));
+        $color = trim((string) ($orderRow['color'] ?? ''));
+        $localStockDelta = (int) ($orderRow['quantity'] ?? 0);
+        if ($localStockDelta <= 0) {
+            $localStockDelta = 0;
+        }
+
+        global $productModel;
+        try {
+            $result = $productModel->applyLocalStockDeltaAndRefreshFromVendorApi(
+                $itemCode,
+                $localStockDelta,
+                $size,
+                $color
+            );
+            if (empty($result['success'])) {
+                error_log(
+                    'Order cancel local stock sync failed for item '
+                    . $itemCode
+                    . ' (order '
+                    . trim((string) ($orderRow['order_number'] ?? ''))
+                    . '): '
+                    . (string) ($result['message'] ?? 'unknown error')
+                );
+            }
+        } catch (\Throwable $e) {
+            error_log(
+                'Order cancel local stock sync failed for item '
+                . $itemCode
+                . ' (order '
+                . trim((string) ($orderRow['order_number'] ?? ''))
+                . '): '
+                . $e->getMessage()
+            );
+        }
     }
     
 }
