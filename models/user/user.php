@@ -177,15 +177,20 @@ class User
             return ['success' => false, 'message' => 'Password is required for new users.'];
         }
 
-        $sql = "INSERT INTO vp_users (name, email, phone, password, role_id, warehouse_id, is_active) VALUES (?, ?, ?, ?, ?, ?,?)";
+        $sql = "INSERT INTO vp_users (name, email, phone, password, role_id, warehouse_id, is_active) VALUES (?, ?, ?, ?, ?, NULLIF(?, 0), ?)";
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Insert prepare failed: ' . $this->db->error];
+        }
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
         $stmt->bind_param('ssssiii', $name, $email, $phone, $hashedPassword, $role, $warehouseId, $isActive);
         if ($stmt->execute()) {
             $user_id = $this->db->insert_id;
-            // Add vendor teams
             if (!empty($data['team']) && is_array($data['team'])) {
                 $tm_status = $this->addUserTeams($user_id, $data['team']);
+                if (empty($tm_status['success'])) {
+                    return $tm_status;
+                }
             }
             return ['success' => true, 'message' => 'User added successfully.'];
         }
@@ -217,19 +222,27 @@ class User
         $checkStmt->close();
 
         if ($password !== '') {
-            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role_id = ?, is_active = ?, warehouse_id = ? WHERE id = ?";
+            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role_id = ?, is_active = ?, warehouse_id = NULLIF(?, 0) WHERE id = ?";
             $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                return ['success' => false, 'message' => 'Update prepare failed: ' . $this->db->error];
+            }
             $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
             $stmt->bind_param('ssssiiii', $name, $email, $phone, $hashedPassword, $role, $isActive, $warehouseId, $id);
         } else {
-            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, role_id = ?, is_active = ?, warehouse_id = ? WHERE id = ?";
+            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, role_id = ?, is_active = ?, warehouse_id = NULLIF(?, 0) WHERE id = ?";
             $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                return ['success' => false, 'message' => 'Update prepare failed: ' . $this->db->error];
+            }
             $stmt->bind_param('sssiiii', $name, $email, $phone, $role, $isActive, $warehouseId, $id);
         }
         if ($stmt->execute()) {
-            // Add vendor teams
-            if (!empty($data['team']) && is_array($data['team'])) {
-                $tm_status = $this->addUserTeams($id, $data['team']);
+            if (array_key_exists('team', $data)) {
+                $tm_status = $this->addUserTeams($id, is_array($data['team']) ? $data['team'] : [$data['team']]);
+                if (empty($tm_status['success'])) {
+                    return $tm_status;
+                }
             }
             return ['success' => true, 'message' => 'User updated successfully.'];
         }
@@ -240,33 +253,51 @@ class User
     }
     public function addUserTeams($user_id, $teamIds)
     {
-        if (empty($user_id)) {
+        $userId = (int) $user_id;
+        if ($userId <= 0) {
             return ['success' => false, 'message' => 'User ID is required.'];
         }
 
-        if (empty($teamIds) || !is_array($teamIds)) {
-            return ['success' => false, 'message' => 'Teams is required and must be an array.'];
+        if (!is_array($teamIds)) {
+            $teamIds = [$teamIds];
         }
 
-        // Delete previous categories for this vendor
+        $teamIds = array_values(array_filter(array_map('intval', $teamIds), static function ($teamId) {
+            return $teamId > 0;
+        }));
+
         $deleteSql = "DELETE FROM vp_user_team_mapping WHERE user_id = ?";
         $deleteStmt = $this->db->prepare($deleteSql);
-        $deleteStmt->bind_param('i', $user_id);
-        $deleteStmt->execute();
+        if (!$deleteStmt) {
+            return ['success' => false, 'message' => 'Team delete prepare failed: ' . $this->db->error];
+        }
+        $deleteStmt->bind_param('i', $userId);
+        if (!$deleteStmt->execute()) {
+            $error = $deleteStmt->error;
+            $deleteStmt->close();
+            return ['success' => false, 'message' => 'Team delete failed: ' . $error];
+        }
         $deleteStmt->close();
 
-        // Insert new categories
-        $sql = "INSERT INTO vp_user_team_mapping (user_id, team_id) VALUES (?, ?)";
-        $stmt = $this->db->prepare($sql);
-        foreach ($teamIds as $tm_id) {
-            $teamId = (int) $tm_id;
-            if ($teamId <= 0) {
-                continue;
-            }
-            $stmt->bind_param('ii', $user_id, $teamId);
-            $stmt->execute();
+        if ($teamIds === []) {
+            return ['success' => true, 'message' => 'Teams updated successfully.'];
         }
-        $stmt->close();
+
+        $insertSql = "INSERT INTO vp_user_team_mapping (user_id, team_id) VALUES (?, ?)";
+        foreach ($teamIds as $teamId) {
+            $insertStmt = $this->db->prepare($insertSql);
+            if (!$insertStmt) {
+                return ['success' => false, 'message' => 'Team insert prepare failed: ' . $this->db->error];
+            }
+            $insertStmt->bind_param('ii', $userId, $teamId);
+            if (!$insertStmt->execute()) {
+                $error = $insertStmt->error;
+                $insertStmt->close();
+                return ['success' => false, 'message' => 'Team insert failed: ' . $error];
+            }
+            $insertStmt->close();
+        }
+
         return ['success' => true, 'message' => 'Teams updated successfully.'];
     }
     public function getUserTeams($u_id)

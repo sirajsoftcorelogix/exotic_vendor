@@ -405,17 +405,34 @@ class UsersController
     {
         is_login();
         global $usersModel;
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             vendorJsonResponse(['success' => false, 'message' => 'Invalid request method.']);
         }
 
-        $data = $_POST;
-        if (isset($data['id']) && (int) $data['id'] > 0) {
-            $result = $usersModel->update((int) $data['id'], $data);
-        } else {
-            $result = $usersModel->insert($data);
+        try {
+            $data = $_POST;
+            if (isset($data['team']) && !is_array($data['team'])) {
+                $data['team'] = [$data['team']];
+            }
+
+            if (isset($data['id']) && (int) $data['id'] > 0) {
+                $result = $usersModel->update((int) $data['id'], $data);
+            } else {
+                $result = $usersModel->insert($data);
+            }
+
+            if (!is_array($result)) {
+                vendorJsonResponse(['success' => false, 'message' => 'Unexpected server response while saving user.']);
+            }
+
+            vendorJsonResponse($result);
+        } catch (Throwable $e) {
+            vendorJsonResponse([
+                'success' => false,
+                'message' => 'Save failed: ' . $e->getMessage(),
+            ]);
         }
-        vendorJsonResponse($result);
     }
     function checkPasswords($password, $confirmPassword)
     {

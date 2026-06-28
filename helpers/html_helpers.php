@@ -1,4 +1,21 @@
 <?php
+
+if (!function_exists('vendorJsonResponse')) {
+    /**
+     * Clean output buffers and return JSON (avoids broken JSON from ob_start / warnings).
+     */
+    function vendorJsonResponse(array $payload, int $httpCode = 200): void
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        http_response_code($httpCode);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+}
+
 function is_login()
 {
 	global $domain;

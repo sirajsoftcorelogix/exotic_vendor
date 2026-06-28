@@ -53,19 +53,23 @@ if (isset($data['user']['id'])) {
     </div>
 </div>
 <script>
-  document.getElementById('addUserForm').onsubmit = function(e) {
+  document.getElementById('addUserForm').onsubmit = async function(e) {
     e.preventDefault();
-    var form = new FormData(this);
-    var params = new URLSearchParams(form).toString();
-    fetch('?page=users&action=addUser', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: params
-    })
-    .then(r => r.json())
-    .then(data => {
-      var msgBox = document.getElementById('addUserMsg');
-      msgBox.innerHTML = '';
+    const form = this;
+    const msgBox = document.getElementById('addUserMsg');
+    msgBox.textContent = '';
+    try {
+      const response = await fetch('index.php?page=users&action=addUser', {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json'
+        },
+        credentials: 'same-origin',
+        body: new FormData(form)
+      });
+      const text = await response.text();
+      const data = JSON.parse(text);
       if (data.success) {
         msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
                             ✅ ${data.message}
@@ -76,9 +80,14 @@ if (isset($data['user']['id'])) {
         </div>`;
       }
       setTimeout(() => {
-        window.location.href = '?page=users&action=list';
-      }, 1000); // redirect after 1 sec
-    });
+        window.location.href = 'index.php?page=users&action=list';
+      }, 1000);
+    } catch (error) {
+      console.error('Save user failed:', error);
+      msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
+          ❌ Could not save user. Please check the browser console for details.
+      </div>`;
+    }
   };
 </script>
 <?php 
