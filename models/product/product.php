@@ -1010,14 +1010,14 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
-                        if ($existingBase && isset($existingBase['id'])) {
-                            $this->applyApiRefreshStockAdjustments(
-                                (int)$existingBase['id'],
-                                (string)$sku,
-                                (string)$product['itemcode'],
-                                (string)$size,
-                                (string)$color,
-                                (int)$localStock
+                        if (!$preserveLocalStock) {
+                            $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
+                                $existingBase,
+                                (string) $sku,
+                                (string) $product['itemcode'],
+                                (string) $size,
+                                (string) $color,
+                                (int) $localStock
                             );
                         }
                     }
@@ -1271,14 +1271,14 @@ class product
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
-                                if ($existingBase && isset($existingBase['id'])) {
-                                    $this->applyApiRefreshStockAdjustments(
-                                        (int)$existingBase['id'],
-                                        (string)$sku,
-                                        (string)$product['itemcode'],
-                                        (string)$size,
-                                        (string)$color,
-                                        (int)$localStock
+                                if (!$preserveLocalStock) {
+                                    $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
+                                        $existingBase,
+                                        (string) $sku,
+                                        (string) $product['itemcode'],
+                                        (string) $size,
+                                        (string) $color,
+                                        (int) $localStock
                                     );
                                 }
                             }
@@ -1422,102 +1422,116 @@ class product
         return $this->stockMovementItemCodeColumn;
     }
 
-    private function applyApiRefreshStockAdjustments(
-        int $productId,
+    /**
+     * When API refresh updates local_stock, seed warehouse stock only for products that have
+     * never had physical stock or movement history (physical_stock = 0 and no ledger rows).
+     */
+    private function maybeSeedPhysicalStockOnLocalStockApiUpdate(
+        ?array $existingBase,
         string $sku,
         string $itemCode,
         string $size,
         string $color,
-        int $apiLocalStock
+        int $localStock
     ): void {
-        if ($productId <= 0 || $itemCode === '') {
+        if (!$existingBase || empty($existingBase['id']) || $localStock <= 0) {
+            return;
+        }
+
+        $productId = (int) $existingBase['id'];
+        $physicalStock = (int) ($existingBase['physical_stock'] ?? 0);
+        if ($physicalStock !== 0 || $this->productHasStockMovements($productId)) {
             return;
         }
 
         require_once __DIR__ . '/StockMovement.php';
 
-        $size = trim($size);
-        $color = trim($color);
-        $apiLocalStock = max(0, (int) $apiLocalStock);
-        $itemCodeCol = $this->resolveVpStockMovementsItemCodeColumn();
-        $safeItemCol = '`' . str_replace('`', '``', $itemCodeCol) . '`';
-
-        $latest = $this->db->prepare("SELECT running_stock, warehouse_id, location
-            FROM vp_stock_movements
-            WHERE product_id = ? AND {$safeItemCol} = ?
-              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
-              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
-            ORDER BY id DESC
-            LIMIT 1");
-        if (!$latest) {
-            return;
-        }
-        $latest->bind_param('isss', $productId, $itemCode, $size, $color);
-        if (!$latest->execute()) {
-            $latest->close();
-            return;
-        }
-        $latestRow = $latest->get_result()->fetch_assoc();
-        $latest->close();
-
-        $warehouseId = (int) ($latestRow['warehouse_id'] ?? 1);
+        $warehouseId = $this->resolveDefaultWarehouseIdForStock();
         if ($warehouseId <= 0) {
             $warehouseId = 1;
         }
-        $location = trim((string) ($latestRow['location'] ?? ''));
-        if ($location === '') {
-            $location = 'API refresh';
+
+        $sku = trim($sku);
+        if ($sku === '') {
+            $sku = trim($itemCode);
+        }
+        if ($sku === '') {
+            return;
         }
 
-        $refId = 'api_refresh:' . date('YmdHis');
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
+        }
         $userId = (int) ($_SESSION['user']['id'] ?? 0);
-        $reason = 'Stock adjusted from API refresh';
-        $movementBase = [
-            'product_id' => $productId,
-            'sku' => $sku,
-            'item_code' => $itemCode,
-            'size' => $size,
-            'color' => $color,
-            'warehouse_id' => $warehouseId,
-            'location' => $location,
-            'ref_type' => 'API_REFRESH',
-            'ref_id' => $refId,
-            'reason' => $reason,
-            'update_by_user' => $userId,
-            'strict_stock_check' => false,
-        ];
-
-        if (!$latestRow) {
-            if ($apiLocalStock <= 0) {
-                return;
-            }
-            try {
-                StockMovement::insert($this->db, array_merge($movementBase, [
-                    'movement_type' => 'OPENING_STOCK',
-                    'quantity' => $apiLocalStock,
-                ]));
-            } catch (\Throwable $e) {
-                error_log('applyApiRefreshStockAdjustments opening: ' . $e->getMessage());
-            }
-            return;
-        }
-
-        $currentStock = (int) ($latestRow['running_stock'] ?? 0);
-        $targetDelta = $apiLocalStock - $currentStock;
-        if ($targetDelta === 0) {
-            StockMovement::syncProductPhysicalStock($this->db, $productId);
-            return;
-        }
+        $refId = 'api_refresh:' . date('YmdHis');
 
         try {
-            StockMovement::insert($this->db, array_merge($movementBase, [
-                'movement_type' => ($targetDelta > 0 ? 'IN' : 'OUT'),
-                'quantity' => abs($targetDelta),
-            ]));
+            StockMovement::insert($this->db, [
+                'product_id' => $productId,
+                'sku' => $sku,
+                'item_code' => $itemCode,
+                'size' => trim($size),
+                'color' => trim($color),
+                'warehouse_id' => $warehouseId,
+                'location' => 'API refresh',
+                'movement_type' => 'OPENING_STOCK',
+                'quantity' => $localStock,
+                'ref_type' => 'API_REFRESH',
+                'ref_id' => $refId,
+                'reason' => 'Opening stock from API local stock sync',
+                'update_by_user' => $userId,
+                'strict_stock_check' => false,
+            ]);
         } catch (\Throwable $e) {
-            error_log('applyApiRefreshStockAdjustments delta: ' . $e->getMessage());
+            error_log('maybeSeedPhysicalStockOnLocalStockApiUpdate: ' . $e->getMessage());
         }
     }
+
+    private function productHasStockMovements(int $productId): bool
+    {
+        if ($productId <= 0) {
+            return true;
+        }
+        $stmt = $this->db->prepare('SELECT 1 FROM vp_stock_movements WHERE product_id = ? LIMIT 1');
+        if (!$stmt) {
+            return true;
+        }
+        $stmt->bind_param('i', $productId);
+        $stmt->execute();
+        $has = (bool) $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $has;
+    }
+
+    private function resolveDefaultWarehouseIdForStock(): int
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
+        }
+        $wid = (int) ($_SESSION['warehouse_id'] ?? 0);
+        if ($wid <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $wid = (int) $_SESSION['user']['warehouse_id'];
+        }
+        if ($wid > 0) {
+            $chk = $this->db->prepare('SELECT id FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1');
+            if ($chk) {
+                $chk->bind_param('i', $wid);
+                if ($chk->execute() && $chk->get_result()->fetch_assoc()) {
+                    $chk->close();
+                    return $wid;
+                }
+                $chk->close();
+            }
+        }
+        $r = $this->db->query('SELECT id FROM exotic_address WHERE is_active = 1 ORDER BY id ASC LIMIT 1');
+        if ($r && ($row = $r->fetch_assoc())) {
+            return (int) $row['id'];
+        }
+
+        return 0;
+    }
+
     /**
      * Resolve a catalog row by item code and variant dimensions. Supports:
      * (1) item code only — empty size & color; (2) color-only; (3) size-only; (4) size + color.
