@@ -1926,20 +1926,51 @@ class product
 
     /**
      * Resolve vp_products.id for an invoice line using vp_orders (order_number + item_code).
+     * When size/color are supplied, they are used to match the correct variant.
      */
-    public function getProductIdForInvoiceLine(string $orderNumber, string $itemCode): int
+    public function getProductIdForInvoiceLine(string $orderNumber, string $itemCode, ?string $size = null, ?string $color = null): int
     {
         $orderNumber = trim($orderNumber);
         $itemCode = trim($itemCode);
-        if ($orderNumber === '' || $itemCode === '') {
+        if ($itemCode === '') {
             return 0;
         }
-        $sql = "SELECT item_code, sku, size, color FROM vp_orders WHERE order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) {
+
+        $sizeProvided = $size !== null;
+        $colorProvided = $color !== null;
+        $sizeNorm = trim((string)($size ?? ''));
+        $colorNorm = trim((string)($color ?? ''));
+
+        if ($sizeProvided || $colorProvided) {
+            $match = $this->findByItemCodeSizeColor($itemCode, $sizeNorm, $colorNorm);
+            if (!empty($match['id'])) {
+                return (int)$match['id'];
+            }
+        }
+
+        if ($orderNumber === '') {
             return 0;
         }
-        $stmt->bind_param('ss', $orderNumber, $itemCode);
+
+        if ($sizeProvided || $colorProvided) {
+            $sql = "SELECT item_code, sku, size, color FROM vp_orders
+                WHERE order_number = ? AND item_code = ?
+                AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
+                AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
+                ORDER BY id ASC LIMIT 1";
+            $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                return 0;
+            }
+            $stmt->bind_param('ssss', $orderNumber, $itemCode, $sizeNorm, $colorNorm);
+        } else {
+            $sql = "SELECT item_code, sku, size, color FROM vp_orders WHERE order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1";
+            $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                return 0;
+            }
+            $stmt->bind_param('ss', $orderNumber, $itemCode);
+        }
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();

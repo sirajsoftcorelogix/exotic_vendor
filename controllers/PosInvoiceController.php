@@ -1882,6 +1882,21 @@ WHERE i.pos_flag = 1";
                 $itemsFailed[] = $order_number;
             }
         }
+
+        require_once __DIR__ . '/../models/order/stock.php';
+        $stockModel = new Stock($conn);
+        $stockResult = $stockModel->applyInvoiceStockOnCreate((int)$invoiceId, (string)($invoiceData['status'] ?? 'final'));
+        if (empty($stockResult['success'])) {
+            return [
+                'success' => false,
+                'message' => 'Invoice saved but stock update failed: ' . ($stockResult['message'] ?? 'Unknown error'),
+                'invoice_id' => $invoiceId,
+                'invoice_number' => $invoice_number,
+                'items_created' => $itemCreated,
+                'items_failed' => $itemsFailed,
+            ];
+        }
+
         //save international fields
         if ($isInternational) {
             $internationalData = [

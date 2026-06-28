@@ -1837,6 +1837,8 @@ class DispatchController {
 
             global $conn;
             $batchCustomInvoiceNumbers = [];
+            require_once __DIR__ . '/../models/product/product.php';
+            $productModel = new product($conn);
 
             // Process each order
             foreach ($input['orders'] as $orderData) {
@@ -1968,8 +1970,22 @@ class DispatchController {
                         'image_url' => '',
                         'groupname' => $order['groupname'] ?? ''
                     ];
+                    $itemData['product_id'] = $productModel->getProductIdForInvoiceLine(
+                        (string)$order_number,
+                        (string)($itemData['item_code'] ?? ''),
+                        (string)($order['size'] ?? ''),
+                        (string)($order['color'] ?? '')
+                    );
 
                     $invoiceModel->createInvoiceItem($itemData);
+                }
+
+                require_once __DIR__ . '/../models/order/stock.php';
+                $stockModel = new Stock($conn);
+                $stockResult = $stockModel->applyInvoiceStockOnCreate((int)$invoiceId, 'final');
+                if (empty($stockResult['success'])) {
+                    $errors[] = 'Order #' . $order_number . ': stock update failed — ' . ($stockResult['message'] ?? 'Unknown error');
+                    continue;
                 }
 
                 $created_invoices[] = [
