@@ -8214,13 +8214,30 @@ class ProductsController
         }
 
         $totalGroups = count($groups);
+        $completedGroups = (int) $s['done'];
+        $page = max(1, (int) $s['page']);
+        $inGroupFraction = 0.0;
+        if (empty($s['finished']) && $completedGroups < $totalGroups) {
+            if ($page > 1) {
+                $inGroupFraction = ($page - 1) / $page;
+            } elseif ((int) $s['seen'] > 0) {
+                $inGroupFraction = 0.05;
+            }
+        }
+        $progressPercent = 100;
+        if (empty($s['finished'])) {
+            $progressPercent = $totalGroups > 0
+                ? (int) min(99, round((($completedGroups + $inGroupFraction) / $totalGroups) * 100))
+                : 0;
+        }
+
         echo json_encode([
             'success' => true,
             'finished' => !empty($s['finished']),
             'should_continue' => empty($s['finished']),
             'message' => $message !== '' ? $message : 'Processing…',
             'current_group' => $groups[$s['gi']] ?? '',
-            'progress_percent' => $totalGroups > 0 ? (int) round(($s['done'] / $totalGroups) * 100) : 0,
+            'progress_percent' => $progressPercent,
             'stats' => $s,
         ], JSON_UNESCAPED_UNICODE);
         exit;
