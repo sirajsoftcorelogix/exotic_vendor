@@ -422,16 +422,18 @@
                             <div class="mt-2">
                                 <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
                                 <div id="groupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
-                                    <?php foreach($groupnameList as $key => $value): ?>
+                                    <?php foreach($groupnameList as $groupSlug): ?>
                                         <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="groupname[]" value="<?php echo htmlspecialchars($value); ?>">
-                                            <span><?php echo htmlspecialchars(ucfirst($value)); ?></span>
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="groupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
+                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
                                         </label>
                                     <?php endforeach; ?>
                                 </div>
+                                <span id="addGroupnameMsg" class="text-sm text-red-500"></span>
+                                <p class="mt-1 text-xs text-gray-500">Required for Exotic India API sync. Select at least one group.</p>
                             </div>
                             <div class="mt-2">
-                                <label for="addWebpage" class="text-sm font-medium text-gray-700">Webpage</label>
+                                <label for="addWebpage" class="text-sm font-medium text-gray-700">Webpage <span class="text-red-500">*</span></label>
                                 <div class="mt-1 flex items-center gap-2">
                                     <input type="hidden" name="addWebpage" value="0">
                                     <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="addWebpage" id="addWebpage" value="1" checked>
@@ -651,16 +653,18 @@
                             <div class="mt-2">
                                 <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
                                 <div id="editGroupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
-                                    <?php foreach($groupnameList as $key => $value): ?>
+                                    <?php foreach($groupnameList as $groupSlug): ?>
                                         <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editGroupname[]" value="<?php echo htmlspecialchars($value); ?>">
-                                            <span><?php echo htmlspecialchars(ucfirst($value)); ?></span>
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="editGroupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
+                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
                                         </label>
                                     <?php endforeach; ?>
                                 </div>
+                                <span id="editGroupnameMsg" class="text-sm text-red-500"></span>
+                                <p class="mt-1 text-xs text-gray-500">Required for Exotic India API sync. Select at least one group.</p>
                             </div>
                             <div class="mt-2">
-                                <label for="editWebpage" class="text-sm font-medium text-gray-700">Webpage</label>
+                                <label for="editWebpage" class="text-sm font-medium text-gray-700">Webpage <span class="text-red-500">*</span></label>
                                 <div class="mt-1 flex items-center gap-2">
                                     <input type="hidden" name="editWebpage" value="0">
                                     <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editWebpage" id="editWebpage" value="1" checked>
@@ -1112,8 +1116,71 @@
         return vendorNameExists || phoneExists || emailExists;
     }
 
+    const VENDOR_API_ALLOWED_GROUPS = <?php echo json_encode(array_values($groupnameList), JSON_UNESCAPED_UNICODE); ?>;
+
+    function getSelectedVendorGroups(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return [];
+        return Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
+            .map(function (cb) { return String(cb.value || '').trim(); })
+            .filter(Boolean);
+    }
+
+    function validateVendorApiFormFields(isEdit) {
+        const nameInput = document.getElementById(isEdit ? 'editVendorName' : 'addVendorName');
+        const nameMsg = document.getElementById(isEdit ? 'editVendorNameMsg' : 'addVendorNameMsg');
+        const groupMsg = document.getElementById(isEdit ? 'editGroupnameMsg' : 'addGroupnameMsg');
+        const groupContainerId = isEdit ? 'editGroupname' : 'groupname';
+        let ok = true;
+
+        const name = nameInput ? nameInput.value.trim() : '';
+        if (!name) {
+            if (nameMsg) nameMsg.textContent = 'Vendor name is required.';
+            ok = false;
+        } else if (nameMsg && !vendorDuplicateBlocked(isEdit)) {
+            nameMsg.textContent = '';
+        }
+
+        const groups = getSelectedVendorGroups(groupContainerId);
+        if (groups.length === 0) {
+            if (groupMsg) groupMsg.textContent = 'Select at least one group name.';
+            ok = false;
+        } else {
+            const allowed = new Set(VENDOR_API_ALLOWED_GROUPS.map(function (g) { return String(g).toLowerCase(); }));
+            const invalid = groups.filter(function (g) { return !allowed.has(g.toLowerCase()); });
+            if (invalid.length > 0) {
+                if (groupMsg) groupMsg.textContent = 'Invalid group: ' + invalid.join(', ') + '.';
+                ok = false;
+            } else if (groupMsg) {
+                groupMsg.textContent = '';
+            }
+        }
+
+        return ok;
+    }
+
+    function bindVendorGroupCheckboxValidation(containerId, msgId) {
+        const container = document.getElementById(containerId);
+        const msgEl = document.getElementById(msgId);
+        if (!container) return;
+        container.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                if (getSelectedVendorGroups(containerId).length > 0 && msgEl) {
+                    msgEl.textContent = '';
+                }
+            });
+        });
+    }
+
+    bindVendorGroupCheckboxValidation('groupname', 'addGroupnameMsg');
+    bindVendorGroupCheckboxValidation('editGroupname', 'editGroupnameMsg');
+
     const addForm = document.getElementById('addVendorForm');
     addForm.addEventListener('submit', (e) => {
+        if (!validateVendorApiFormFields(false)) {
+            e.preventDefault();
+            return;
+        }
         if (vendorDuplicateBlocked(false)) {
             e.preventDefault();
             alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
@@ -1392,6 +1459,9 @@
 
     document.getElementById('addVendorForm').onsubmit = function(e) {
         e.preventDefault();
+        if (!validateVendorApiFormFields(false)) {
+            return;
+        }
         if (vendorDuplicateBlocked(false)) {
             alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
             return;
@@ -1625,6 +1695,9 @@
 
     document.getElementById('editUserForm').onsubmit = function(e) {
         e.preventDefault();
+        if (!validateVendorApiFormFields(true)) {
+            return;
+        }
         if (vendorDuplicateBlocked(true)) {
             alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
             return;
