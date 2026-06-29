@@ -37,6 +37,8 @@
         </div>
     </div>
 
+    <div class="hidden text-sm font-bold mb-4" id="messageDiv" role="status"><?php echo $_SESSION["mapping_message"] ?? ""; unset($_SESSION["mapping_message"]); ?></div>
+
     <!-- Filters -->
     <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
         <div class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 border-b border-amber-100/80">
@@ -140,7 +142,6 @@
                     </div>
                 </div>
             </div>
-            <div class="text-sm font-bold text-green-600 mb-4" id="messageDiv"><?php echo $_SESSION["mapping_message"] ?? ""; unset($_SESSION["mapping_message"]); ?></div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-left">
                     <thead>
@@ -845,14 +846,44 @@
 <script>
     const myDiv = document.getElementById('messageDiv');
     const VENDOR_FLASH_KEY = 'vendor_list_flash_message';
-    function persistVendorFlash(message, isSuccess) {
+    const VENDOR_FLASH_BANNER_CLASSES = [
+        'text-green-600', 'text-red-600',
+        'bg-green-50', 'bg-red-50',
+        'border', 'border-green-200', 'border-red-200',
+        'rounded-lg', 'px-4', 'py-3', 'shadow-sm'
+    ];
+
+    function persistVendorFlash(message, isSuccess, persistent) {
         try {
             localStorage.setItem(VENDOR_FLASH_KEY, JSON.stringify({
                 message: String(message || ''),
-                isSuccess: !!isSuccess
+                isSuccess: !!isSuccess,
+                persistent: persistent !== undefined ? !!persistent : !isSuccess
             }));
         } catch (e) {}
     }
+
+    function parseVendorApiResponse(data) {
+        let apiSuccess = true;
+        let apiErrorMessage = '';
+        if (!data || !data.api_response) {
+            return { apiSuccess, apiErrorMessage };
+        }
+        try {
+            const apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
+            apiSuccess = !!(apiData && apiData.success === true);
+            if (!apiSuccess && apiData && apiData.message) {
+                apiErrorMessage = String(apiData.message);
+            }
+        } catch (e) {
+            apiSuccess = false;
+        }
+        if (!apiSuccess && !apiErrorMessage) {
+            apiErrorMessage = 'Vendor API sync failed.';
+        }
+        return { apiSuccess, apiErrorMessage };
+    }
+
     function showPersistedVendorFlashIfAny() {
         try {
             const raw = localStorage.getItem(VENDOR_FLASH_KEY);
@@ -860,21 +891,45 @@
             localStorage.removeItem(VENDOR_FLASH_KEY);
             const payload = JSON.parse(raw);
             if (payload && payload.message) {
-                showVendorTopMessage(payload.message, !!payload.isSuccess);
+                const persistent = payload.persistent !== undefined ? !!payload.persistent : !payload.isSuccess;
+                showVendorTopMessage(payload.message, !!payload.isSuccess, { persistent });
             }
         } catch (e) {}
     }
-    function showVendorTopMessage(message, isSuccess) {
+
+    function showVendorTopMessage(message, isSuccess, options) {
         if (!myDiv) return;
-        myDiv.classList.remove('text-green-600', 'text-red-600');
+        options = options || {};
+        const persistent = options.persistent !== undefined ? !!options.persistent : !isSuccess;
+        myDiv.classList.remove('hidden', ...VENDOR_FLASH_BANNER_CLASSES);
         myDiv.classList.add(isSuccess ? 'text-green-600' : 'text-red-600');
+        myDiv.classList.add(isSuccess ? 'bg-green-50' : 'bg-red-50');
+        myDiv.classList.add('border', isSuccess ? 'border-green-200' : 'border-red-200', 'rounded-lg', 'px-4', 'py-3', 'shadow-sm');
         myDiv.textContent = message || '';
+        myDiv.setAttribute('role', isSuccess ? 'status' : 'alert');
+        if (persistent) {
+            myDiv.dataset.persistent = '1';
+        } else {
+            delete myDiv.dataset.persistent;
+        }
+        myDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+
+    function reloadVendorListWithFlash(message, isSuccess) {
+        persistVendorFlash(message, isSuccess, !isSuccess);
+        window.location.reload();
+    }
+
     function redirectToVendorListWithFlash(message, isSuccess) {
-        persistVendorFlash(message, isSuccess);
+        persistVendorFlash(message, isSuccess, !isSuccess);
         window.location.href = '?page=vendors&action=list';
     }
+
     showPersistedVendorFlashIfAny();
+    if (myDiv && myDiv.textContent.trim() !== '') {
+        const isError = myDiv.classList.contains('text-red-600');
+        showVendorTopMessage(myDiv.textContent.trim(), !isError, { persistent: isError });
+    }
 
     const syncVendorsApiBtn = document.getElementById('sync-vendors-api-btn');
     if (syncVendorsApiBtn) {
@@ -904,13 +959,11 @@
                     return;
                 }
                 const errMsg = (data && data.message) ? data.message : 'Vendor sync failed.';
-                showVendorTopMessage(errMsg, false);
-                redirectToVendorListWithFlash(errMsg, false);
+                reloadVendorListWithFlash(errMsg, false);
             })
             .catch(function () {
                 const errMsg = 'Vendor sync request failed. Please try again.';
-                showVendorTopMessage(errMsg, false);
-                redirectToVendorListWithFlash(errMsg, false);
+                reloadVendorListWithFlash(errMsg, false);
             })
             .finally(function () {
                 syncVendorsApiBtn.dataset.loading = '0';
@@ -920,13 +973,17 @@
         });
     }
 
-    // Clear the div after 5000 milliseconds (5 seconds)
+    // Auto-clear only transient success banners (errors stay until page reload/navigation)
     if (myDiv) {
         setTimeout(() => {
-            if (myDiv.innerHTML.trim() !== '') {
-                myDiv.innerHTML = '';
+            if (myDiv.dataset.persistent === '1') return;
+            if (myDiv.textContent.trim() !== '') {
+                myDiv.textContent = '';
+                myDiv.classList.add('hidden');
+                myDiv.classList.remove(...VENDOR_FLASH_BANNER_CLASSES);
+                delete myDiv.dataset.persistent;
             }
-        }, 3000);
+        }, 8000);
     }
 
     // Function to limit input to six digits
@@ -1349,41 +1406,26 @@
         .then(r => r.json())
         .then(data => {
             const msgBox = document.getElementById("addVendorMsg");
-            msgBox.innerHTML = '';
-            if (data.success) {
+            if (msgBox) msgBox.innerHTML = '';
+            if (!data.success) {
+                reloadVendorListWithFlash(data.message || 'Add vendor failed.', false);
+                return;
+            }
+            const { apiSuccess, apiErrorMessage } = parseVendorApiResponse(data);
+            if (!apiSuccess && data.api_response) {
+                reloadVendorListWithFlash(apiErrorMessage, false);
+                return;
+            }
+            if (msgBox) {
                 msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
                     ✅ ${data.message}
                 </div>`;
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                
-                // Parse API response if it exists
-                let apiSuccess = false;
-                if (data.api_response) {
-                    try {
-                        let apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
-                        apiSuccess = apiData.success === true;
-                    } catch (e) {
-                        apiSuccess = false;
-                    }
-                }
-                
-                if (!apiSuccess && data.api_response) {
-                    let apiErrorMessage = 'Vendor API sync failed after add.';
-                    try {
-                        const parsed = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
-                        apiErrorMessage = (parsed && parsed.message) ? parsed.message : apiErrorMessage;
-                    } catch (e) {}
-                    redirectToVendorListWithFlash(apiErrorMessage, false);
-                    return;
-                }
-                
-                setTimeout(() => {
-                    location.reload();
-                }, 1500); // refresh after 1 sec
-            } else {
-                redirectToVendorListWithFlash(data.message || 'Add vendor failed.', false);
             }
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
         });
     };
 
@@ -1597,41 +1639,26 @@
         .then(r => r.json())
         .then(data => {
             var msgBox = document.getElementById('editVendorMsg');
-            msgBox.innerHTML = '';
-            if (data.success) {
+            if (msgBox) msgBox.innerHTML = '';
+            if (!data.success) {
+                reloadVendorListWithFlash(data.message || 'Edit vendor failed.', false);
+                return;
+            }
+            const { apiSuccess, apiErrorMessage } = parseVendorApiResponse(data);
+            if (!apiSuccess && data.api_response) {
+                reloadVendorListWithFlash(apiErrorMessage, false);
+                return;
+            }
+            if (msgBox) {
                 msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
                                     ✅ ${data.message}
                 </div>`;
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                
-                // Parse API response if it exists
-                let apiSuccess = false;
-                if (data.api_response) {
-                    try {
-                        let apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
-                        apiSuccess = apiData.success === true;
-                    } catch (e) {
-                        apiSuccess = false;
-                    }
-                }
-                
-                if (!apiSuccess && data.api_response) {
-                    let apiErrorMessage = 'Vendor API sync failed after edit.';
-                    try {
-                        const parsed = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
-                        apiErrorMessage = (parsed && parsed.message) ? parsed.message : apiErrorMessage;
-                    } catch (e) {}
-                    redirectToVendorListWithFlash(apiErrorMessage, false);
-                    return;
-                }
-                
-                setTimeout(() => {
-                    window.location.href = '?page=vendors&action=list';
-                }, 1000); // redirect after 1 sec
-            } else {
-                redirectToVendorListWithFlash(data.message || 'Edit vendor failed.', false);
             }
+            setTimeout(() => {
+                window.location.href = '?page=vendors&action=list';
+            }, 1000);
         });
     };
 
