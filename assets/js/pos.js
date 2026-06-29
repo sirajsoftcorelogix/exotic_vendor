@@ -847,6 +847,10 @@ data-code="${lookupCode}">
     resetAndLoad();
   });
 
+  $('#sortBy').on('change', function () {
+    resetAndLoad();
+  });
+
   $('#resetFilterBtn').on('click', function () {
     $('#sortBy').val('');
     $('#minPrice').val('');

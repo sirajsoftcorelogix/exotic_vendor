@@ -1197,12 +1197,13 @@ class POSRegisterController
 
         switch ($sortBy) {
             case 'price_low_high':
-                $orderColumn = 'price_india';
+                // GST-inclusive sell price (matches grid display), not ex-GST price_india alone.
+                $orderColumn = 'price';
                 $orderDir = 'asc';
                 break;
 
             case 'price_high_low':
-                $orderColumn = 'price_india';
+                $orderColumn = 'price';
                 $orderDir = 'desc';
                 break;
 
@@ -1241,6 +1242,7 @@ class POSRegisterController
             $rows = array_slice($rows, 0, (int)$perPage);
         }
         $rows = $this->enrichPosProductListPricesFromApi($rows);
+        $rows = $this->sortPosProductListRows($rows, $sortBy);
         $hasMore = ((int)$pageNo * (int)$perPage) < $totalFiltered;
         $totalPages = $perPage > 0 ? (int)ceil($totalFiltered / (int)$perPage) : 1;
 
@@ -1481,6 +1483,31 @@ class POSRegisterController
             unset($row['price_india'], $row['gst']);
         }
         unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * Re-sort current page after API price enrich (DB ORDER BY misses rows with price_india = 0).
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function sortPosProductListRows(array $rows, string $sortBy): array
+    {
+        if (!in_array($sortBy, ['price_low_high', 'price_high_low'], true)) {
+            return $rows;
+        }
+        $desc = $sortBy === 'price_high_low';
+        usort($rows, static function (array $a, array $b) use ($desc): int {
+            $pa = (float)($a['price'] ?? 0);
+            $pb = (float)($b['price'] ?? 0);
+            if ($pa !== $pb) {
+                return $desc ? ($pb <=> $pa) : ($pa <=> $pb);
+            }
+
+            return strcasecmp((string)($a['title'] ?? ''), (string)($b['title'] ?? ''));
+        });
 
         return $rows;
     }
