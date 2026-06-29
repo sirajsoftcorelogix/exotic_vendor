@@ -994,7 +994,9 @@ class ProductsController
                 $item['sourcingfee'] = isset($apiItem['sourcingfee']) ? (float)$apiItem['sourcingfee'] : 0.0;
                 $item['price'] = $usdList;
                 $item['price_india'] = isset($apiItem['price_india']) ? (float)$apiItem['price_india'] : 0.0;
-                $item['price_india_suggested'] = isset($apiItem['price_india_suggested']) ? (float)$apiItem['price_india_suggested'] : 0.0;
+                if (array_key_exists('price_india_suggested', $apiItem)) {
+                    $item['price_india_suggested'] = (float)$apiItem['price_india_suggested'];
+                }
                 $item['mrp_india'] = isset($apiItem['mrp_india']) ? (float)$apiItem['mrp_india'] : 0.0;
                 $item['permanent_discount'] = isset($apiItem['permanent_discount']) ? (float)$apiItem['permanent_discount'] : 0.0;
                 $item['discount_global'] = isset($apiItem['discount_global']) ? (float)$apiItem['discount_global'] : 0.0;
@@ -1020,6 +1022,12 @@ class ProductsController
                     $ok = $productModel->updateProduct($existing['id'], $item);
                     if ($ok) {
                         $updated++;
+                        $productModel->syncPriceIndiaSuggestedFromApiRow(
+                            (string) $item['item_code'],
+                            (string) ($item['size'] ?? ''),
+                            (string) ($item['color'] ?? ''),
+                            $apiItem
+                        );
                         if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
                             $this->applyQuickImportStockFromLocalStock(
                                 $conn,
@@ -1037,6 +1045,12 @@ class ProductsController
                     $id = $productModel->createProduct($item);
                     if ($id) {
                         $created++;
+                        $productModel->syncPriceIndiaSuggestedFromApiRow(
+                            (string) $item['item_code'],
+                            (string) ($item['size'] ?? ''),
+                            (string) ($item['color'] ?? ''),
+                            $apiItem
+                        );
                         $createdIdsByCode[$code][] = (int) $id;
                         if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
                             $this->applyQuickImportStockFromLocalStock(
@@ -1103,7 +1117,11 @@ class ProductsController
                         $variantItem['sourcingfee'] = isset($variant['sourcingfee']) ? (float)$variant['sourcingfee'] : 0.0;
                         $variantItem['price'] = $usdVar;
                         $variantItem['price_india'] = isset($variant['price_india']) ? (float)$variant['price_india'] : 0.0;
-                        $variantItem['price_india_suggested'] = isset($variant['price_india_suggested']) ? (float)$variant['price_india_suggested'] : 0.0;
+                        if (array_key_exists('price_india_suggested', $variant)) {
+                            $variantItem['price_india_suggested'] = (float)$variant['price_india_suggested'];
+                        } elseif (array_key_exists('price_india_suggested', $apiItem)) {
+                            $variantItem['price_india_suggested'] = (float)$apiItem['price_india_suggested'];
+                        }
                         $variantItem['mrp_india'] = isset($variant['mrp_india']) ? (float)$variant['mrp_india'] : 0.0;
                         $variantItem['permanent_discount'] = isset($variant['permanent_discount']) ? (float)$variant['permanent_discount'] : 0.0;
                         $variantItem['discount_global'] = isset($variant['discount_global']) ? (float)$variant['discount_global'] : 0.0;
@@ -1116,6 +1134,12 @@ class ProductsController
                             $ok = $productModel->updateProduct($existingVar['id'], $variantItem);
                             if ($ok) {
                                 $updated++;
+                                $productModel->syncPriceIndiaSuggestedFromApiRow(
+                                    (string) $variantItem['item_code'],
+                                    (string) ($variantItem['size'] ?? ''),
+                                    (string) ($variantItem['color'] ?? ''),
+                                    array_merge($apiItem, $variant)
+                                );
                                 if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
                                     $this->applyQuickImportStockFromLocalStock(
                                         $conn,
@@ -1133,6 +1157,12 @@ class ProductsController
                             $id = $productModel->createProduct($variantItem);
                             if ($id) {
                                 $created++;
+                                $productModel->syncPriceIndiaSuggestedFromApiRow(
+                                    (string) $variantItem['item_code'],
+                                    (string) ($variantItem['size'] ?? ''),
+                                    (string) ($variantItem['color'] ?? ''),
+                                    array_merge($apiItem, $variant)
+                                );
                                 $createdIdsByCode[$variantItem['item_code']][] = (int) $id;
                                 if ($applyImportStockFromLocal && isset($conn) && $conn instanceof mysqli) {
                                     $this->applyQuickImportStockFromLocalStock(
@@ -7505,6 +7535,7 @@ class ProductsController
                 'description' => 'string',
                 'price' => 'float',
                 'price_india' => 'float',
+                'price_india_suggested' => 'float',
                 'gst' => 'string',
                 'editGroupName' => ['db' => 'groupname', 'type' => 'string'],
                 'vendor' => 'string',
@@ -7530,7 +7561,6 @@ class ProductsController
                 'colormap' => 'string',
                 'flex_status' => 'string',
                 'vendor_us' => 'string',
-                'price_india_suggested' => 'float',
                 'mrp_india' => 'float',
                 'permanent_discount' => 'int',
                 'discount_global' => 'float',
