@@ -137,10 +137,18 @@ class pos
         $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
 
         $orderExpr = 'p.' . $orderColumn;
+        $orderSuffix = $orderDir;
         if ($orderColumn === 'stock_qty') {
             $orderExpr = 'sm.running_stock';
         } elseif ($orderColumn === 'price') {
-            $orderExpr = $sellPriceExpr;
+            // GST-inclusive list price; deprioritize rows missing DB price_india (filled via API after query).
+            $hasIndiaPrice = "CASE WHEN COALESCE(NULLIF(p.price_india, 0), 0) > 0 THEN 0 ELSE 1 END";
+            if ($orderDir === 'ASC') {
+                $orderExpr = "{$hasIndiaPrice} ASC, {$sellPriceExpr} ASC";
+            } else {
+                $orderExpr = "{$hasIndiaPrice} ASC, {$sellPriceExpr} DESC";
+            }
+            $orderSuffix = '';
         } elseif ($orderColumn === 'price_india') {
             // POS sorting: India base price (ex-GST), not GST-inclusive display price
             $orderExpr = $baseSell;
@@ -192,7 +200,7 @@ class pos
         {$sellPriceExpr} AS price
     $stockFrom
     $where
-    ORDER BY $orderExpr $orderDir, p.id ASC
+    ORDER BY $orderExpr $orderSuffix, p.id ASC
     LIMIT ?, ?
     ";
 
