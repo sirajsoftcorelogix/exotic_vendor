@@ -235,23 +235,7 @@ class AccountGroup
                )
              ORDER BY ag.account_group_name ASC'
         );
-        $stmt = $this->conn->prepare(
-            'SELECT ag.id, ag.account_group_name
-            FROM account_group ag
-            INNER JOIN category c
-                ON c.parent_id = 0
-            AND c.is_active = 1
-            AND c.category = ?
-            WHERE ag.is_active = 1
-            AND (
-                TRIM(ag.item_group) COLLATE utf8mb4_unicode_ci =
-                TRIM(c.name) COLLATE utf8mb4_unicode_ci
-                OR (
-                    TRIM(c.name) COLLATE utf8mb4_unicode_ci IN  (\'sculptures\', \'homeandliving\')
-                    AND TRIM(ag.item_group) COLLATE utf8mb4_unicode_ci IN (\'sculptures\', \'homeandliving\')
-            )
-            ORDER BY ag.account_group_name ASC'
-        );
+       
         if (!$stmt) {
             return [];
         }
