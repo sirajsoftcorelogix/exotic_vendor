@@ -251,7 +251,7 @@ AND (
         AND TRIM(ag.item_group) COLLATE utf8mb4_unicode_ci IN ('sculptures', 'homeandliving')
     )
 )
-ORDER BY ag.account_group_name ASC;'
+ORDER BY ag.account_group_name ASC'
         );
         if (!$stmt) {
             return [];
