@@ -15,7 +15,7 @@
         <span id="pct">0%</span>
       </div>
       <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-        <div id="bar" class="bg-amber-600 h-4 text-xs text-white text-center leading-4" style="width:0%">0%</div>
+        <div id="bar" class="bg-amber-600 h-4 text-xs text-white text-center leading-4 transition-all duration-300" style="width:0%">0%</div>
       </div>
     </div>
 
@@ -27,6 +27,7 @@
 
     <div class="flex gap-2">
       <button type="button" id="startBtn" class="px-4 py-2 bg-green-600 text-white rounded text-sm font-semibold hover:bg-green-700">Start</button>
+      <button type="button" id="stopBtn" class="hidden px-4 py-2 bg-red-600 text-white rounded text-sm font-semibold hover:bg-red-700">Stop</button>
       <button type="button" id="resetBtn" class="px-4 py-2 bg-gray-600 text-white rounded text-sm font-semibold hover:bg-gray-700">Reset</button>
     </div>
   </div>
@@ -34,6 +35,14 @@
 <script>
 (function () {
   let running = false;
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+
+  function setRunningState(isRunning) {
+    running = isRunning;
+    startBtn.classList.toggle('hidden', isRunning);
+    stopBtn.classList.toggle('hidden', !isRunning);
+  }
 
   function log(msg) {
     const el = document.getElementById('log');
@@ -48,7 +57,7 @@
     document.getElementById('created').textContent = s.created || 0;
     document.getElementById('failed').textContent = s.failed || 0;
     document.getElementById('curGroup').textContent = data.current_group || '—';
-    const p = data.progress_percent || 0;
+    const p = Math.min(100, Math.max(0, Number(data.progress_percent) || 0));
     document.getElementById('pct').textContent = p + '%';
     const bar = document.getElementById('bar');
     bar.style.width = p + '%';
@@ -70,26 +79,36 @@
     const data = await batch();
     apply(data);
     if (!data.success || data.finished || !data.should_continue) {
-      running = false;
+      setRunningState(false);
       if (data.finished) log('Finished.');
       return;
     }
     setTimeout(loop, 400);
   }
 
-  document.getElementById('startBtn').addEventListener('click', function () {
-    running = true;
+  startBtn.addEventListener('click', function () {
+    setRunningState(true);
     log('Started…');
     loop();
   });
 
+  stopBtn.addEventListener('click', function () {
+    setRunningState(false);
+    log('Stopped. Click Start to continue.');
+  });
+
   document.getElementById('resetBtn').addEventListener('click', async function () {
-    running = false;
+    setRunningState(false);
     const fd = new FormData();
     fd.append('reset', '1');
-    const data = await batch(fd);
+    await batch(fd);
     document.getElementById('log').innerHTML = '';
-    apply({ stats: { seen: 0, skipped: 0, created: 0, failed: 0 }, progress_percent: 0, message: 'Reset.' });
+    apply({
+      stats: { seen: 0, skipped: 0, created: 0, failed: 0 },
+      progress_percent: 0,
+      current_group: '',
+      message: 'Reset.'
+    });
   });
 })();
 </script>
