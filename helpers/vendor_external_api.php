@@ -4,6 +4,59 @@
  * Exotic India vendor-api/product endpoints: vendorcreate, vendormodify, vendordelete.
  */
 
+/** @return string[] Lowercase group slugs accepted by vendorcreate / vendormodify */
+function vendor_external_api_allowed_groupnames(): array
+{
+    return ['textiles', 'paintings', 'sculptures', 'jewelry', 'homeandliving', 'book'];
+}
+
+/**
+ * @param mixed $raw POST groupname (array or CSV string)
+ */
+function vendor_external_api_normalize_groupnames_csv($raw): string
+{
+    if (is_array($raw)) {
+        $groups = array_values(array_unique(array_filter(array_map('trim', $raw), static function ($v) {
+            return $v !== '';
+        })));
+
+        return implode(',', $groups);
+    }
+
+    return trim((string) $raw);
+}
+
+/**
+ * @return array{success:false,message:string}|null
+ */
+function vendor_external_api_validate_vendor_fields(string $name, string $groupsCsv): ?array
+{
+    if (trim($name) === '') {
+        return ['success' => false, 'message' => 'Vendor name is required.'];
+    }
+
+    $groupsCsv = trim($groupsCsv);
+    if ($groupsCsv === '') {
+        return ['success' => false, 'message' => 'Group name is required. Select at least one group.'];
+    }
+
+    $allowed = array_flip(vendor_external_api_allowed_groupnames());
+    foreach (explode(',', $groupsCsv) as $group) {
+        $key = strtolower(trim($group));
+        if ($key === '') {
+            continue;
+        }
+        if (!isset($allowed[$key])) {
+            return [
+                'success' => false,
+                'message' => 'Invalid group name "' . trim($group) . '". Allowed groups: ' . implode(', ', vendor_external_api_allowed_groupnames()) . '.',
+            ];
+        }
+    }
+
+    return null;
+}
+
 function vendor_external_api_base_url(): string
 {
     return 'https://www.exoticindia.com/vendor-api/product/';

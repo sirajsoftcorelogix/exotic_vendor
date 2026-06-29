@@ -35,8 +35,8 @@ class VendorsController {
         $countryList = $countryModel->getAllCountries();
         $stateList = $stateModel->getAllStates(105); // India ID = 105
         $teamList = $teamModel->getAllTeams();
-        $groupnameList = getCategoryFromTable();
-        
+        $groupnameList = vendor_external_api_allowed_groupnames();
+
         $data = [
             'vendors' => $vendors_data["vendors"],
             'page_no' => $page_no,
@@ -65,6 +65,12 @@ class VendorsController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = $_POST;
             $id = isset($data['id']) ? (int)$data['id'] : 0;
+            $isEdit = $id > 0;
+            $apiFieldError = $this->validateVendorApiFormData($data, $isEdit);
+            if ($apiFieldError !== null) {
+                echo json_encode($apiFieldError);
+                exit;
+            }
             if ($id > 0) {
                 $result = $vendorsModel->updateVendor($id, $data);
                 if (isset($result['success']) && $result['success'] === true) {
@@ -107,15 +113,22 @@ class VendorsController {
 
     private function normalizeVendorGroupsCsv($raw): string
     {
-        if (is_array($raw)) {
-            $groups = array_values(array_unique(array_filter(array_map('trim', $raw), static function ($v) {
-                return $v !== '';
-            })));
+        return vendor_external_api_normalize_groupnames_csv($raw);
+    }
 
-            return implode(',', $groups);
-        }
+    /**
+     * @return array{success:false,message:string}|null
+     */
+    private function validateVendorApiFormData(array $data, bool $isEdit): ?array
+    {
+        $name = $isEdit
+            ? trim((string) ($data['editVendorName'] ?? ''))
+            : trim((string) ($data['addVendorName'] ?? ''));
 
-        return trim((string) $raw);
+        $groupsRaw = $isEdit ? ($data['editGroupname'] ?? '') : ($data['groupname'] ?? '');
+        $groups = $this->normalizeVendorGroupsCsv($groupsRaw);
+
+        return vendor_external_api_validate_vendor_fields($name, $groups);
     }
 
     /**
