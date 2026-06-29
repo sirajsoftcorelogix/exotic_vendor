@@ -610,6 +610,12 @@ switch ($page) {
             case 'import_api_call':
                 $controller->importApiCall();
                 break;
+            case 'group_api_import':
+                $controller->groupApiImport();
+                break;
+            case 'group_api_import_batch':
+                $controller->groupApiImportBatch();
+                break;
             case 'bulk_import':
                 $controller->bulkImportScreen();
                 break;

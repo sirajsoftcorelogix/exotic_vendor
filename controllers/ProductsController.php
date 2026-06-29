@@ -8094,4 +8094,135 @@ class ProductsController
             ]);
         }
     }
+
+    public function groupApiImport()
+    {
+        is_login();
+        require_once __DIR__ . '/../helpers/vendor_external_api.php';
+        renderTemplate('views/products/group_api_import.php', [
+            'groups' => vendor_external_api_allowed_groupnames(),
+        ], 'Import missing products from API');
+    }
+
+    public function groupApiImportBatch()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=UTF-8');
+        set_time_limit(300);
+
+        require_once __DIR__ . '/../helpers/exotic_india_api.php';
+        require_once __DIR__ . '/../helpers/vendor_external_api.php';
+        global $conn;
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $key = 'group_api_import';
+        if (!empty($_POST['reset'])) {
+            unset($_SESSION[$key]);
+        }
+
+        if (!isset($_SESSION[$key])) {
+            $_SESSION[$key] = [
+                'groups' => vendor_external_api_allowed_groupnames(),
+                'gi' => 0,
+                'page' => 1,
+                'queue' => [],
+                'seen' => 0,
+                'skipped' => 0,
+                'created' => 0,
+                'failed' => 0,
+                'done' => 0,
+                'finished' => false,
+            ];
+        }
+
+        $s = &$_SESSION[$key];
+        $groups = $s['groups'];
+        $message = '';
+
+        if (!empty($s['finished'])) {
+            echo json_encode(['success' => true, 'finished' => true, 'message' => 'Done. Reset to run again.', 'stats' => $s]);
+            exit;
+        }
+
+        if ($s['queue'] === [] && $s['gi'] < count($groups)) {
+            $group = $groups[$s['gi']];
+            $page = (int) $s['page'];
+            $api = exotic_india_api_group_fetch($group, $page, 500);
+            if (empty($api['success'])) {
+                echo json_encode(['success' => false, 'message' => $api['message'] ?? 'API error', 'stats' => $s]);
+                exit;
+            }
+
+            $codes = [];
+            foreach ((array) ($api['data'] ?? []) as $row) {
+                if (is_string($row) && trim($row) !== '') {
+                    $codes[] = trim($row);
+                }
+            }
+            $codes = array_values(array_unique($codes));
+            $s['seen'] += count($codes);
+
+            $existing = [];
+            if ($codes !== [] && $conn instanceof mysqli) {
+                foreach (array_chunk($codes, 500) as $chunk) {
+                    $ph = implode(',', array_fill(0, count($chunk), '?'));
+                    $stmt = $conn->prepare('SELECT DISTINCT item_code FROM vp_products WHERE item_code IN (' . $ph . ')');
+                    if ($stmt) {
+                        $stmt->bind_param(str_repeat('s', count($chunk)), ...$chunk);
+                        $stmt->execute();
+                        $res = $stmt->get_result();
+                        while ($row = $res->fetch_assoc()) {
+                            $existing[strtoupper(trim((string) $row['item_code']))] = true;
+                        }
+                        $stmt->close();
+                    }
+                }
+            }
+
+            $missing = [];
+            foreach ($codes as $code) {
+                if (!isset($existing[strtoupper($code)])) {
+                    $missing[] = $code;
+                }
+            }
+            $s['skipped'] += count($codes) - count($missing);
+            $s['queue'] = $missing;
+            $message = $group . ' p' . $page . ': ' . count($codes) . ' codes, ' . count($missing) . ' new';
+
+            if (count($codes) < 500) {
+                $s['done']++;
+                $s['gi']++;
+                $s['page'] = 1;
+            } else {
+                $s['page'] = $page + 1;
+            }
+        }
+
+        if ($s['queue'] !== []) {
+            $batch = array_splice($s['queue'], 0, 50);
+            $result = $this->importApiCall($batch);
+            $s['created'] += (int) ($result['created'] ?? 0);
+            $s['failed'] += count($result['failed'] ?? []);
+            $message = ($message !== '' ? $message . '. ' : '') . 'Imported ' . count($batch);
+        }
+
+        if ($s['queue'] === [] && $s['gi'] >= count($groups)) {
+            $s['finished'] = true;
+        }
+
+        $totalGroups = count($groups);
+        echo json_encode([
+            'success' => true,
+            'finished' => !empty($s['finished']),
+            'should_continue' => empty($s['finished']),
+            'message' => $message !== '' ? $message : 'Processing…',
+            'current_group' => $groups[$s['gi']] ?? '',
+            'progress_percent' => $totalGroups > 0 ? (int) round(($s['done'] / $totalGroups) * 100) : 0,
+            'stats' => $s,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 }
