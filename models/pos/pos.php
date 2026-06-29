@@ -18,6 +18,14 @@ class pos
         return " AND LOWER(TRIM(IFNULL({$col}, ''))) <> 'parent' ";
     }
 
+    /**
+     * India sell price base (ex-GST) for POS — price_india only (never global USD itemprice/finalprice).
+     */
+    private function sqlPosIndiaSellBaseExpr(string $tableAlias = 'p'): string
+    {
+        return "COALESCE(NULLIF({$tableAlias}.price_india, 0), 0)";
+    }
+
     // old method (still usable if needed somewhere else)
     public function getProducts()
     {
@@ -84,8 +92,8 @@ class pos
             $types .= "sss";
         }
 
-        // List price: India base × (1 + GST%) when vp_products.gst is set
-        $baseSell = 'IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice)';
+        // List price: India base × (1 + GST%) — do not use global itemprice (USD) when India price is empty.
+        $baseSell = $this->sqlPosIndiaSellBaseExpr('p');
         $sellPriceExpr = "({$baseSell} * (1 + IFNULL(p.gst, 0) / 100))";
         if ($minPrice !== '') {
             $where .= " AND {$sellPriceExpr} >= ? ";
@@ -134,8 +142,8 @@ class pos
         } elseif ($orderColumn === 'price') {
             $orderExpr = $sellPriceExpr;
         } elseif ($orderColumn === 'price_india') {
-            // POS sorting requirement: use India base price (not GST-inclusive display price)
-            $orderExpr = 'IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice)';
+            // POS sorting: India base price (ex-GST), not GST-inclusive display price
+            $orderExpr = $baseSell;
         }
 
         $stockFrom = "
@@ -177,9 +185,11 @@ class pos
         p.length_unit,
         p.cost_price,
         p.item_level,
+        p.price_india,
+        p.gst,
         sm.running_stock AS stock_qty,
         sm.location AS warehouse_location,
-        (IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) * (1 + IFNULL(p.gst, 0) / 100)) AS price
+        {$sellPriceExpr} AS price
     $stockFrom
     $where
     ORDER BY $orderExpr $orderDir, p.id ASC
@@ -427,7 +437,7 @@ class pos
                 p.size,
                 p.color,
                 p.image,
-                (IF(IFNULL(p.price_india, 0) > 0, p.price_india, p.itemprice) * (1 + IFNULL(p.gst, 0) / 100)) AS sell_price,
+                ({$this->sqlPosIndiaSellBaseExpr('p')} * (1 + IFNULL(p.gst, 0) / 100)) AS sell_price,
                 p.cost_price,
                 sm.running_stock AS stock_qty,
                 sm.location AS location

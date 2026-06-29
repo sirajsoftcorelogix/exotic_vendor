@@ -2291,7 +2291,9 @@ class InboundingController {
         $stock_price_temp[0]['vendor_us'] = '0';
         $stock_price_temp[0]['price'] = (int)($d['usd_price'] ?? 0);
         $stock_price_temp[0]['price_india'] = (int)($d['price_india'] ?? 0);
-        $stock_price_temp[0]['price_india_suggested'] = (int)($d['price_india'] ?? 0);
+        if (array_key_exists('price_india_suggested', $d)) {
+            $stock_price_temp[0]['price_india_suggested'] = (int)$d['price_india_suggested'];
+        }
         $stock_price_temp[0]['mrp_india'] = (int)($d['price_india_mrp'] ?? 0);
         $stock_price_temp[0]['gst'] = $d['gst_rate'] ?? '';
         $stock_price_temp[0]['permanent_discount'] = (string) ((int) ($d['permanent_discount'] ?? 0));
@@ -2344,7 +2346,11 @@ class InboundingController {
                 $stock_price_temp[$i]['vendor_us'] = '0';
                 $stock_price_temp[$i]['price'] = (int)($value['usd_price'] ?? 0);
                 $stock_price_temp[$i]['price_india'] = (int)($value['price_india'] ?? 0);
-                $stock_price_temp[$i]['price_india_suggested'] = (int)($d['price_india'] ?? 0);
+                if (array_key_exists('price_india_suggested', $value)) {
+                    $stock_price_temp[$i]['price_india_suggested'] = (int)$value['price_india_suggested'];
+                } elseif (array_key_exists('price_india_suggested', $d)) {
+                    $stock_price_temp[$i]['price_india_suggested'] = (int)$d['price_india_suggested'];
+                }
                 $stock_price_temp[$i]['mrp_india'] = (int)($value['price_india_mrp'] ?? 0);
                 $stock_price_temp[$i]['gst'] = $value['gst_rate'] ?? '';
                 $stock_price_temp[$i]['permanent_discount'] = (string) ((int) ($d['permanent_discount'] ?? 0));

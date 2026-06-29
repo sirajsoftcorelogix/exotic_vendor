@@ -1240,6 +1240,7 @@ class POSRegisterController
         if (count($rows) > (int)$perPage) {
             $rows = array_slice($rows, 0, (int)$perPage);
         }
+        $rows = $this->enrichPosProductListPricesFromApi($rows);
         $hasMore = ((int)$pageNo * (int)$perPage) < $totalFiltered;
         $totalPages = $perPage > 0 ? (int)ceil($totalFiltered / (int)$perPage) : 1;
 
@@ -1424,7 +1425,7 @@ class POSRegisterController
         if ($fromApi > 0) {
             return $fromApi;
         }
-        foreach (['price_india', 'price_india_suggested', 'finalprice', 'itemprice'] as $k) {
+        foreach (['price_india', 'finalprice', 'itemprice'] as $k) {
             if (empty($dbRow[$k])) {
                 continue;
             }
@@ -1438,24 +1439,176 @@ class POSRegisterController
     }
 
     /**
-     * Base unit (₹) for POS product modal: prefer local vp_products price_india / price_india_suggested
-     * (treated as ex-GST), then fall back to mergeSellingPrice (API + DB). Upstream /product/code
+     * Base unit (₹) for POS product modal: prefer local vp_products.price_india (ex-GST),
+     * then fall back to mergeSellingPrice (API + DB). Upstream /product/code
      * prices are often already GST-inclusive; using them as input to applyGstInclusiveToUnitPrice
      * double-applied tax (wrong display: (base + GST) * (1 + GST%)).
      */
     private function mergePosProductSellingBaseExGst(array $apiData, array $dbRow): float
     {
-        foreach (['price_india', 'price_india_suggested'] as $k) {
-            if (empty($dbRow[$k])) {
-                continue;
-            }
-            $f = (float)$dbRow[$k];
+        if (!empty($dbRow['price_india'])) {
+            $f = (float)$dbRow['price_india'];
             if ($f > 0) {
                 return $f;
             }
         }
 
         return $this->mergeSellingPrice($apiData, $dbRow);
+    }
+
+    private function posProductListLookupCode(array $row): string
+    {
+        $sku = trim((string)($row['sku'] ?? ''));
+        if ($sku !== '') {
+            return $sku;
+        }
+
+        return trim((string)($row['item_code'] ?? ''));
+    }
+
+    private function posDbRowHasIndiaSellBase(array $row): bool
+    {
+        return (float)($row['price_india'] ?? 0) > 0;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function stripPosProductListInternalFields(array $rows): array
+    {
+        foreach ($rows as &$row) {
+            unset($row['price_india'], $row['gst']);
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * Fill missing list prices from /product/code (same source as POS product modal).
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function enrichPosProductListPricesFromApi(array $rows): array
+    {
+        $codesByIndex = [];
+        foreach ($rows as $i => $row) {
+            if ($this->posDbRowHasIndiaSellBase($row)) {
+                continue;
+            }
+            $code = $this->posProductListLookupCode($row);
+            if ($code === '') {
+                continue;
+            }
+            $codesByIndex[$i] = $code;
+        }
+
+        if ($codesByIndex !== []) {
+            $apiByCode = $this->fetchPosProductCodeApiBatch(array_values(array_unique($codesByIndex)));
+            foreach ($codesByIndex as $i => $code) {
+                $apiData = $apiByCode[$code] ?? null;
+                if (!is_array($apiData) || $apiData === []) {
+                    continue;
+                }
+                $dbRow = $rows[$i];
+                $base = $this->mergePosProductSellingBaseExGst($apiData, $dbRow);
+                if ($base <= 0) {
+                    continue;
+                }
+                $rows[$i]['price'] = $this->applyGstInclusiveToUnitPrice($base, $dbRow, $apiData);
+            }
+        }
+
+        return $this->stripPosProductListInternalFields($rows);
+    }
+
+    /**
+     * @param list<string> $codes
+     * @return array<string, array<string, mixed>>
+     */
+    private function fetchPosProductCodeApiBatch(array $codes): array
+    {
+        $codes = array_values(array_unique(array_filter(array_map(static function ($c) {
+            return trim((string)$c);
+        }, $codes))));
+        if ($codes === []) {
+            return [];
+        }
+
+        $headers = $this->buildExoticPosApiRequestHeaders();
+        $baseUrl = 'https://www.exoticindia.com/api/product/code';
+        $out = [];
+
+        foreach (array_chunk($codes, 16) as $chunk) {
+            $mh = curl_multi_init();
+            if ($mh === false) {
+                continue;
+            }
+            $handles = [];
+            foreach ($chunk as $code) {
+                $ch = curl_init($baseUrl . '?' . http_build_query(['code' => $code]));
+                if ($ch === false) {
+                    continue;
+                }
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                curl_multi_add_handle($mh, $ch);
+                $handles[$code] = $ch;
+            }
+
+            $running = null;
+            do {
+                $status = curl_multi_exec($mh, $running);
+                if ($running > 0) {
+                    curl_multi_select($mh, 0.5);
+                }
+            } while ($running > 0 && $status === CURLM_OK);
+
+            foreach ($handles as $code => $ch) {
+                $raw = (string)curl_multi_getcontent($ch);
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) {
+                    $out[$code] = $this->unwrapProductApiResponse($decoded);
+                }
+                curl_multi_remove_handle($mh, $ch);
+                curl_close($ch);
+            }
+            curl_multi_close($mh);
+        }
+
+        return $out;
+    }
+
+    /** @return list<string> */
+    private function buildExoticPosApiRequestHeaders(): array
+    {
+        $deviceId = $this->resolveApiDeviceId();
+        $headers = [
+            'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
+            'x-api-deviceid: ' . $deviceId,
+            'x-api-appplayerid: POS-Web-Terminal',
+            'x-api-countrycode: IN',
+            'x-api-euid:' . (string)($_SESSION['x_api_euid'] ?? ''),
+            'User-Agent: ExoticPOS',
+        ];
+        if (!empty($_SESSION['x_api_jwt'])) {
+            $headers[] = 'x-api-jwt:' . (string)$_SESSION['x_api_jwt'];
+        }
+        if (!empty($_SESSION['x_api_browsehistory'])) {
+            $headers[] = 'x-api-browsehistory:' . (string)$_SESSION['x_api_browsehistory'];
+        }
+        if (!empty($_SESSION['x_api_etd'])) {
+            $headers[] = 'x-api-etd:' . (string)$_SESSION['x_api_etd'];
+        }
+        if (!empty($_SESSION['x_api_etd_pincode'])) {
+            $headers[] = 'x-api-etd-pincode:' . (string)$_SESSION['x_api_etd_pincode'];
+        }
+
+        return $headers;
     }
 
     /**
@@ -1467,7 +1620,7 @@ class POSRegisterController
             return 0.0;
         }
         $stmt = $conn->prepare(
-            'SELECT price_india, price_india_suggested, finalprice, itemprice, gst
+            'SELECT price_india, finalprice, itemprice, gst
              FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?)'
             . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
         );
@@ -1481,7 +1634,7 @@ class POSRegisterController
         if (!$row) {
             return 0.0;
         }
-        foreach (['price_india', 'price_india_suggested', 'finalprice', 'itemprice'] as $k) {
+        foreach (['price_india', 'finalprice', 'itemprice'] as $k) {
             $f = (float)($row[$k] ?? 0);
             if ($f > 0) {
                 return $this->applyGstInclusiveToUnitPrice($f, $row, []);
@@ -1834,7 +1987,7 @@ class POSRegisterController
         if (!empty($conn)) {
             $stmt = $conn->prepare(
                 'SELECT id, item_code, sku, title, image, material, size, color, hsn, gst,
-                        price_india, price_india_suggested, itemprice, finalprice, mrp_india,
+                        price_india, itemprice, finalprice, mrp_india,
                         product_weight, product_weight_unit,
                         prod_height, prod_width, prod_length, length_unit, item_level
                  FROM vp_products WHERE is_active = 1

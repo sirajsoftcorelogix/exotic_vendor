@@ -111,6 +111,41 @@ class product
         return $row;
     }
 
+    /**
+     * Vendor product/fetch may return price_india_suggested; persist only when the column exists.
+     */
+    public function syncPriceIndiaSuggestedFromApiRow(
+        string $itemCode,
+        string $size,
+        string $color,
+        array $apiRow
+    ): void {
+        if (!$this->vpProductsHasColumn('price_india_suggested')) {
+            return;
+        }
+        if (!array_key_exists('price_india_suggested', $apiRow)) {
+            return;
+        }
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return;
+        }
+        $val = $this->apiFormFloat($apiRow['price_india_suggested']);
+        $sql = "UPDATE vp_products SET price_india_suggested = ?
+                WHERE item_code = ?
+                  AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
+                  AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+        $size = (string) $size;
+        $color = (string) $color;
+        $stmt->bind_param('dsss', $val, $itemCode, $size, $color);
+        $stmt->execute();
+        $stmt->close();
+    }
+
     /** @var string|null Cached vp_products TABLE_COLLATION (e.g. utf8mb4_unicode_ci). */
     private $vpProductsTableCollation = null;
 
@@ -957,7 +992,7 @@ class product
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($product['size'] ?? ''), (string)($product['color'] ?? ''));
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
+                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
                     $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
@@ -990,7 +1025,6 @@ class product
                     $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
                     $price = self::vendorApiUsdPrice($product);
                     $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
-                    $price_india_suggested = isset($product['price_india_suggested']) ? (float)$product['price_india_suggested'] : 0.0;
                     $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
                     $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                     $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
@@ -1030,7 +1064,7 @@ class product
                     $youtube_links = isset($product['youtube_links']) ? $product['youtube_links'] : '';
                     $sketchfab_links = isset($product['sketchfab_links']) ? $product['sketchfab_links'] : '';
                     $dimensions = isset($product['dimensions']) ? $product['dimensions'] : '';
-                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
+                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
                     $stmt->bind_param(
                         $bt,
                         $asin,
@@ -1051,7 +1085,6 @@ class product
                         $sourcingfee,
                         $price,
                         $price_india,
-                        $price_india_suggested,
                         $mrp_india,
                         $permanent_discount,
                         $discount_global,
@@ -1099,6 +1132,12 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
+                        $this->syncPriceIndiaSuggestedFromApiRow(
+                            (string) $product['itemcode'],
+                            (string) $size,
+                            (string) $color,
+                            $product
+                        );
                         if (!$preserveLocalStock && $syncPhysicalStock) {
                             $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
                                 $existingBase,
@@ -1151,7 +1190,6 @@ class product
                                 'sourcingfee' => (float)$sourcingfee,
                                 'price' => (float)$price,
                                 'price_india' => (float)$price_india,
-                                'price_india_suggested' => (float)$price_india_suggested,
                                 'mrp_india' => (float)$mrp_india,
                                 'permanent_discount' => (float)$permanent_discount,
                                 'discount_global' => (float)$discount_global,
@@ -1199,6 +1237,12 @@ class product
                             ]);
                             if ($insertId) {
                                 $updatedCount++;
+                                $this->syncPriceIndiaSuggestedFromApiRow(
+                                    (string) $product['itemcode'],
+                                    (string) $size,
+                                    (string) $color,
+                                    $product
+                                );
                             }
                         }
                     }
@@ -1212,7 +1256,7 @@ class product
                         $variation = $this->castApiProductLikeForm($variation);
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
                         $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($variation['size'] ?? ''), (string)($variation['color'] ?? ''));
-                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
+                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                         if ($stmt) {
                             // $title = isset($product['title']) ? $product['title'] : '';
                             $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
@@ -1245,7 +1289,6 @@ class product
                             $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
                             $price = self::vendorApiUsdPrice(array_merge($product, $variation));
                             $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
-                            $price_india_suggested = isset($product['price_india_suggested']) ? (float)$product['price_india_suggested'] : 0.0;
                             $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
                             $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                             $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
@@ -1292,7 +1335,7 @@ class product
                             $youtube_links = isset($variation['youtube_links']) ? $variation['youtube_links'] : (isset($product['youtube_links']) ? $product['youtube_links'] : '');
                             $sketchfab_links = isset($variation['sketchfab_links']) ? $variation['sketchfab_links'] : (isset($product['sketchfab_links']) ? $product['sketchfab_links'] : '');
                             $dimensions = isset($variation['dimensions']) ? $variation['dimensions'] : (isset($product['dimensions']) ? $product['dimensions'] : '');
-                            $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
+                            $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
                             $stmt->bind_param(
                                 $bt,
                                 $asin,
@@ -1313,7 +1356,6 @@ class product
                                 $sourcingfee,
                                 $price,
                                 $price_india,
-                                $price_india_suggested,
                                 $mrp_india,
                                 $permanent_discount,
                                 $discount_global,
@@ -1360,6 +1402,12 @@ class product
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
+                                $this->syncPriceIndiaSuggestedFromApiRow(
+                                    (string) $product['itemcode'],
+                                    (string) $size,
+                                    (string) $color,
+                                    array_merge($product, $variation)
+                                );
                                 if (!$preserveLocalStock && $syncPhysicalStock) {
                                     $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
                                         $existingBase,
@@ -1412,7 +1460,6 @@ class product
                                         'sourcingfee' => (float)$sourcingfee,
                                         'price' => (float)$price,
                                         'price_india' => (float)($variation['price_india'] ?? ($product['price_india'] ?? 0)),
-                                        'price_india_suggested' => (float)($variation['price_india_suggested'] ?? ($product['price_india_suggested'] ?? 0)),
                                         'mrp_india' => (float)($variation['mrp_india'] ?? ($product['mrp_india'] ?? 0)),
                                         'permanent_discount' => (float)($variation['permanent_discount'] ?? ($product['permanent_discount'] ?? 0)),
                                         'discount_global' => (float)($variation['discount_global'] ?? ($product['discount_global'] ?? 0)),
@@ -1460,6 +1507,12 @@ class product
                                     ]);
                                     if ($insertId) {
                                         $updatedCount++;
+                                        $this->syncPriceIndiaSuggestedFromApiRow(
+                                            (string) $product['itemcode'],
+                                            (string) $size,
+                                            (string) $color,
+                                            array_merge($product, $variation)
+                                        );
                                     }
                                 }
                             }
@@ -2098,11 +2151,11 @@ class product
         if (($data['date_first_added'] ?? '') === '') {
             $data['date_first_added'] = null;
         }
-        $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at, category, itemtype, snippet_description, india_net_qty, keywords, usblock, indiablock, hscode, date_first_added, search_term, search_category, long_description, long_description_india, aplus_content_ids, item_level, marketplace_vendor, colormap, flex_status, vendor_us, today_global, today_india, topurchase, backorder_percent, backorder_weeks, cp, usd, amazon_sold, amazon_leadtime, amazon_itemcode_alias, youtube_links, sketchfab_links, dimensions)
+        $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at, category, itemtype, snippet_description, india_net_qty, keywords, usblock, indiablock, hscode, date_first_added, search_term, search_category, long_description, long_description_india, aplus_content_ids, item_level, marketplace_vendor, colormap, flex_status, vendor_us, today_global, today_india, topurchase, backorder_percent, backorder_weeks, cp, usd, amazon_sold, amazon_leadtime, amazon_itemcode_alias, youtube_links, sketchfab_links, dimensions)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param(
-            'ssssssdddsssisssssssssssssisddddddddddsiiissssssisiissssssssssssssiiiddiissss',
+            'ssssssdddsssisssssssssssssisdddddddddsiiissssssisiissssssssssssssiiiddiissss',
             $data['item_code'],
             $data['sku'],
             $data['size'],
@@ -2135,7 +2188,6 @@ class product
             $data['sourcingfee'],
             $data['price'],
             $data['price_india'],
-            $data['price_india_suggested'],
             $data['mrp_india'],
             $data['permanent_discount'],
             $data['discount_global'],
@@ -2190,10 +2242,10 @@ class product
     {
         $data['leadtime'] = $this->normalizeIntValue($data['leadtime'] ?? null, 0);
         $data['instock_leadtime'] = $this->normalizeIntValue($data['instock_leadtime'] ?? null, 0);
-        $sql = "UPDATE vp_products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?,  groupname=?, material=?, cost_price=?, gst=?, hsn=?, description=?, asin=?, upc=?, location=?, fba_in=?, fba_us=?, leadtime=?, instock_leadtime=?, permanently_available=?, numsold=?, numsold_india=?, numsold_global=?, lastsold=?, vendor=?, shippingfee=?, sourcingfee=?, price=?, price_india=?, price_india_suggested=?, mrp_india=?, permanent_discount=?, discount_global=?, discount_india=?, product_weight=?, product_weight_unit=?, prod_height=?, prod_width=?, prod_length=?, length_unit=?, updated_at=? WHERE id = ?";
+        $sql = "UPDATE vp_products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?,  groupname=?, material=?, cost_price=?, gst=?, hsn=?, description=?, asin=?, upc=?, location=?, fba_in=?, fba_us=?, leadtime=?, instock_leadtime=?, permanently_available=?, numsold=?, numsold_india=?, numsold_global=?, lastsold=?, vendor=?, shippingfee=?, sourcingfee=?, price=?, price_india=?, mrp_india=?, permanent_discount=?, discount_global=?, discount_india=?, product_weight=?, product_weight_unit=?, prod_height=?, prod_width=?, prod_length=?, length_unit=?, updated_at=? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param(
-            'ssiddssddsssssiissiiiiisddddddddddsdddssi',
+            'ssiddssddsssssiissiiiiisdddddddddsdddssi',
             $data['title'],
             $data['image'],
             $data['local_stock'],
@@ -2222,7 +2274,6 @@ class product
             $data['sourcingfee'],
             $data['price'],
             $data['price_india'],
-            $data['price_india_suggested'],
             $data['mrp_india'],
             $data['permanent_discount'],
             $data['discount_global'],
@@ -4377,6 +4428,10 @@ class product
             'sketchfab_links' => 'sketchfab_links',
             'dimensions' => 'dimensions'
         ];
+
+        if (!$this->vpProductsHasColumn('price_india_suggested')) {
+            unset($columnMap['price_india_suggested']);
+        }
 
         foreach ($columnMap as $dataKey => $dbColumn) {
             if (isset($data[$dataKey])) {
