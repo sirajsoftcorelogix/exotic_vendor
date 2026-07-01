@@ -123,9 +123,10 @@ class DirectPurchase
 
     public function getById(int $id): ?array
     {
-        $sql = 'SELECT p.*, v.vendor_name, v.contact_name
+        $sql = 'SELECT p.*, v.vendor_name, v.contact_name, pu.name AS purchase_created_by_name
             FROM vp_direct_purchases p
             JOIN vp_vendors v ON v.id = p.vendor_id
+            LEFT JOIN vp_users pu ON pu.id = p.created_by AND pu.is_deleted = 0
             WHERE p.id = ?';
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $id);

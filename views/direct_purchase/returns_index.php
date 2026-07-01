@@ -31,6 +31,22 @@ if (!empty($_GET)) {
 }
 $pgBase = '?page=direct_purchase&action=returns&limit=' . $limit . $queryString;
 $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
+$dpFormatDate = static function ($value): string {
+    if (empty($value)) {
+        return '—';
+    }
+    return date('j M Y', strtotime((string) $value));
+};
+$dpPurchaseAddedBy = static function (array $row): string {
+    $name = trim((string) ($row['purchase_created_by_name'] ?? ''));
+    if ($name !== '') {
+        return $name;
+    }
+    if (!empty($row['purchase_created_by'])) {
+        return 'User #' . (int) $row['purchase_created_by'];
+    }
+    return '—';
+};
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
@@ -158,6 +174,9 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">#</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Invoice</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[10rem]">Vendor</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Invoice date</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Purchase added</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Purchase added by</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Return date</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap text-right">Grand total</th>
                         <th scope="col" class="w-0 px-2 py-3.5 text-center"><span class="sr-only">Actions</span></th>
@@ -166,7 +185,7 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                 <tbody class="divide-y divide-gray-100">
                     <?php if ($returns === []): ?>
                         <tr>
-                            <td colspan="6" class="px-5 py-16 text-center">
+                            <td colspan="9" class="px-5 py-16 text-center">
                                 <div class="mx-auto flex max-w-sm flex-col items-center">
                                     <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                         <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -212,7 +231,16 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                                     ?>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm text-gray-700 whitespace-nowrap">
-                                    <?= !empty($r['return_date']) ? htmlspecialchars(date('j M Y', strtotime((string) $r['return_date']))) : '—'; ?>
+                                    <?= htmlspecialchars($dpFormatDate($r['invoice_date'] ?? '')) ?>
+                                </td>
+                                <td class="px-5 py-4 align-top text-sm text-gray-700 whitespace-nowrap">
+                                    <?= htmlspecialchars($dpFormatDate($r['purchase_created_at'] ?? '')) ?>
+                                </td>
+                                <td class="px-5 py-4 align-top text-sm text-gray-800">
+                                    <?= htmlspecialchars($dpPurchaseAddedBy($r)) ?>
+                                </td>
+                                <td class="px-5 py-4 align-top text-sm text-gray-700 whitespace-nowrap">
+                                    <?= htmlspecialchars($dpFormatDate($r['return_date'] ?? '')) ?>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm text-right font-medium text-gray-900 tabular-nums">
                                     <?php
@@ -248,7 +276,7 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                                 </td>
                             </tr>
                             <tr class="bg-gray-50/50">
-                                <td colspan="6" class="px-5 py-3">
+                                <td colspan="9" class="px-5 py-3">
                                     <div class="text-xs font-semibold text-gray-600 mb-2">Returned items</div>
                                     <?php
                                     $items = $lines;
