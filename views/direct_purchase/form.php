@@ -433,7 +433,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                     <i id="dp-verify-vendor-icon" class="fas fa-clipboard-check" aria-hidden="true"></i>
                 </div>
                 <div class="min-w-0 flex-1">
-                    <h3 id="dp-verify-vendor-title" class="text-lg font-bold tracking-tight text-gray-900">Vendor verification</h3>
+                    <h3 id="dp-verify-vendor-title" class="text-lg font-bold tracking-tight text-gray-900">Price Verification</h3>
                     <p id="dp-verify-vendor-subtitle" class="mt-1 text-sm text-gray-600"></p>
                     <p id="dp-verify-vendor-message" class="mt-2 text-sm text-gray-700"></p>
                 </div>
@@ -448,7 +448,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                     <tr class="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <th class="pb-2 pr-3">Field</th>
                         <th class="pb-2 pr-3 text-right">Expected</th>
-                        <th class="pb-2 pr-3 text-right">Vendor</th>
+                        <th class="pb-2 pr-3 text-right">Admin</th>
                         <th class="pb-2 text-center">Status</th>
                     </tr>
                 </thead>
