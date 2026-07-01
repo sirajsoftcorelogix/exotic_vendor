@@ -871,8 +871,30 @@ class DirectPurchaseController
         }
 
         $productModel = new product($conn);
-        $variant = $this->resolveDirectPurchaseVariant($line, $productModel);
-        if ($variant === null) {
+        $itemCode = trim((string) ($line['item_code'] ?? ''));
+        $sku = trim((string) ($line['sku'] ?? ''));
+        $size = trim((string) ($line['size'] ?? ''));
+        $color = trim((string) ($line['color'] ?? ''));
+
+        if ($itemCode === '' && $sku !== '') {
+            $bySku = $productModel->getProductByskuExact($sku);
+            if (is_array($bySku)) {
+                if ($itemCode === '') {
+                    $itemCode = trim((string) ($bySku['item_code'] ?? ''));
+                }
+                if ($size === '') {
+                    $size = trim((string) ($bySku['size'] ?? ''));
+                }
+                if ($color === '') {
+                    $color = trim((string) ($bySku['color'] ?? ''));
+                }
+            }
+        }
+
+        if ($itemCode === '' && $sku !== '') {
+            $itemCode = $sku;
+        }
+        if ($itemCode === '') {
             echo json_encode(['success' => false, 'message' => 'Select a product or enter a SKU with a linked item code first.']);
             exit;
         }
@@ -880,25 +902,22 @@ class DirectPurchaseController
         $expectedCp = $formCost > 0 ? $formCost : (float) ($line['cost_per_item'] ?? 0);
 
         $expectedLocalStock = null;
-        $product = $productModel->resolveProductForVendorSync(
-            $variant['item_code'],
-            $variant['size'],
-            $variant['color']
-        );
+        $product = $productModel->resolveProductForVendorSync($itemCode, $size, $color);
         if (array_key_exists('local_stock', $product)) {
             $expectedLocalStock = (float) $product['local_stock'];
         }
 
         $result = $productModel->verifyVendorCpAndStockAgainstExpected(
-            $variant['item_code'],
-            $variant['size'],
-            $variant['color'],
+            $itemCode,
+            $size,
+            $color,
             $expectedCp,
-            $expectedLocalStock
+            $expectedLocalStock,
+            $sku
         );
 
         if (is_array($result)) {
-            $result['sku'] = trim((string) ($line['sku'] ?? $variant['sku'] ?? ''));
+            $result['sku'] = $sku;
         }
 
         echo json_encode($result, JSON_UNESCAPED_UNICODE);
