@@ -41,8 +41,19 @@ class DirectPurchaseController
         global $directPurchaseVendorModel;
         $vendors = $directPurchaseVendorModel->getAllVendors();
 
-        $commanModel = new Tables($conn);
-        $users = $commanModel->get_staff_list();
+        $users = [];
+        $res = $conn->query(
+            'SELECT DISTINCT p.created_by AS id, cu.name
+             FROM vp_direct_purchases p
+             LEFT JOIN vp_users cu ON cu.id = p.created_by AND cu.is_deleted = 0
+             WHERE p.created_by > 0
+             ORDER BY cu.name'
+        );
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $users[(int) $row['id']] = $row['name'] ?: ('User #' . (int) $row['id']);
+            }
+        }
 
         renderTemplate('views/direct_purchase/index.php', [
             'purchases' => $result['rows'],
