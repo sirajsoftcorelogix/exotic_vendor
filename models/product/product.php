@@ -367,6 +367,78 @@ class product
     }
 
     /**
+     * Flatten parent rows with nested variations[] into per-variant rows for matching.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    public static function expandVendorProductFetchVariants(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $variations = $row['variations'] ?? null;
+            if (!is_array($variations) || $variations === []) {
+                $clean = $row;
+                unset($clean['variations']);
+                $out[] = $clean;
+                continue;
+            }
+            $itemCode = trim((string) ($row['itemcode'] ?? $row['item_code'] ?? ''));
+            foreach ($variations as $variation) {
+                if (!is_array($variation)) {
+                    continue;
+                }
+                $merged = array_merge($row, $variation);
+                if ($itemCode !== '') {
+                    $merged['itemcode'] = $itemCode;
+                }
+                unset($merged['variations']);
+                $out[] = $merged;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private static function vendorFetchRowMatchesVariant(array $row, string $size, string $color): bool
+    {
+        $rowSize = trim((string) ($row['size'] ?? ''));
+        $rowColor = trim((string) ($row['color'] ?? ''));
+        if ($size !== '' && $rowSize !== '' && strcasecmp($rowSize, $size) !== 0) {
+            return false;
+        }
+        if ($color !== '' && $rowColor !== '' && strcasecmp($rowColor, $color) !== 0) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private static function vendorFetchRowVariantScore(array $row, string $size, string $color): int
+    {
+        $rowSize = trim((string) ($row['size'] ?? ''));
+        $rowColor = trim((string) ($row['color'] ?? ''));
+        $score = 0;
+        if ($size !== '' && $rowSize !== '' && strcasecmp($rowSize, $size) === 0) {
+            $score += 2;
+        }
+        if ($color !== '' && $rowColor !== '' && strcasecmp($rowColor, $color) === 0) {
+            $score += 2;
+        }
+
+        return $score;
+    }
+
+    /**
      * Vendor product/fetch exposes search fields under related_search, not always at top level.
      *
      * @return array{search_term:string,search_category:string}
@@ -4400,7 +4472,7 @@ class product
     /**
      * @return array<string, mixed>|null
      */
-    public function getVendorApiVariantRow(string $itemCode, string $size = '', string $color = ''): ?array
+    public function getVendorApiVariantRow(string $itemCode, string $size = '', string $color = '', string $sku = ''): ?array
     {
         $itemCode = trim($itemCode);
         if ($itemCode === '') {
@@ -4412,38 +4484,38 @@ class product
             return null;
         }
 
-        $rows = self::normalizeVendorProductFetchItems($decoded);
+        $rows = self::expandVendorProductFetchVariants(self::normalizeVendorProductFetchItems($decoded));
         if ($rows === []) {
             return null;
         }
 
         $size = trim($size);
         $color = trim($color);
-        $fallback = null;
+        $sku = trim($sku);
 
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
+        if ($sku !== '') {
+            foreach ($rows as $row) {
+                $rowSku = trim((string) ($row['sku'] ?? ''));
+                if ($rowSku !== '' && strcasecmp($rowSku, $sku) === 0) {
+                    return $row;
+                }
             }
-            $rowSize = trim((string) ($row['size'] ?? ''));
-            $rowColor = trim((string) ($row['color'] ?? ''));
-            if ($size !== '' && strcasecmp($rowSize, $size) !== 0) {
-                continue;
-            }
-            if ($color !== '' && strcasecmp($rowColor, $color) !== 0) {
-                continue;
-            }
-            if ($size === '' && $color === '' && $fallback === null) {
-                $fallback = $row;
-                continue;
-            }
-            if ($size !== '' || $color !== '') {
-                return $row;
-            }
-            $fallback = $row;
         }
 
-        return $fallback;
+        $best = null;
+        $bestScore = -1;
+        foreach ($rows as $row) {
+            if (!self::vendorFetchRowMatchesVariant($row, $size, $color)) {
+                continue;
+            }
+            $score = self::vendorFetchRowVariantScore($row, $size, $color);
+            if ($score > $bestScore) {
+                $best = $row;
+                $bestScore = $score;
+            }
+        }
+
+        return $best ?? $rows[0];
     }
 
     /**
@@ -4456,14 +4528,15 @@ class product
         string $size,
         string $color,
         float $expectedCp,
-        ?float $expectedLocalStock = null
+        ?float $expectedLocalStock = null,
+        string $sku = ''
     ): array {
         $itemCode = trim($itemCode);
         if ($itemCode === '') {
             return ['success' => false, 'message' => 'Item code is required to verify vendor data.'];
         }
 
-        $vendorRow = $this->getVendorApiVariantRow($itemCode, $size, $color);
+        $vendorRow = $this->getVendorApiVariantRow($itemCode, $size, $color, $sku);
         if ($vendorRow === null) {
             return [
                 'success' => false,
