@@ -24,11 +24,11 @@ if ($purchaseAddedBy === '') {
     $purchaseAddedBy = '—';
 }
 ?>
-<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+<div class="w-full px-4 sm:px-6 py-8">
     <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
         <div class="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" aria-hidden="true"></div>
         <div class="relative px-5 py-7 sm:px-8 sm:py-9 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
-            <div class="min-w-0 max-w-3xl">
+            <div class="min-w-0 flex-1">
                 <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
                     <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
                         <i class="fas fa-undo-alt text-[11px]" aria-hidden="true"></i>
@@ -36,19 +36,16 @@ if ($purchaseAddedBy === '') {
                     <span>Purchasing · Direct purchase</span>
                 </div>
                 <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Purchase returns</h1>
-                <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed whitespace-nowrap overflow-x-auto">
-                    Invoice <span class="font-mono font-semibold text-gray-900"><?= htmlspecialchars((string) ($purchase['invoice_number'] ?? '')) ?></span>
-                    <span class="text-gray-400 mx-1.5" aria-hidden="true">·</span>
-                    <?= htmlspecialchars((string) ($purchase['vendor_name'] ?? '')) ?>
-                    <span class="text-gray-400 mx-1.5" aria-hidden="true">·</span>
-                    <span class="font-semibold text-gray-700">Invoice date</span>
-                    <?= htmlspecialchars($dpFormatDate($purchase['invoice_date'] ?? '')) ?>
-                    <span class="text-gray-400 mx-1.5" aria-hidden="true">·</span>
-                    <span class="font-semibold text-gray-700">Purchase added</span>
-                    <?= htmlspecialchars($dpFormatDate($purchase['created_at'] ?? '')) ?>
-                    <span class="text-gray-400 mx-1.5" aria-hidden="true">·</span>
-                    <span class="font-semibold text-gray-700">Purchase added by</span>
-                    <?= htmlspecialchars($purchaseAddedBy) ?>
+                <p class="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm sm:text-base text-gray-600 leading-relaxed">
+                    <span>Invoice <span class="font-mono font-semibold text-gray-900"><?= htmlspecialchars((string) ($purchase['invoice_number'] ?? '')) ?></span></span>
+                    <span class="text-gray-400" aria-hidden="true">·</span>
+                    <span><?= htmlspecialchars((string) ($purchase['vendor_name'] ?? '')) ?></span>
+                    <span class="text-gray-400" aria-hidden="true">·</span>
+                    <span><span class="font-semibold text-gray-700">Invoice date</span> <?= htmlspecialchars($dpFormatDate($purchase['invoice_date'] ?? '')) ?></span>
+                    <span class="text-gray-400" aria-hidden="true">·</span>
+                    <span><span class="font-semibold text-gray-700">Purchase added</span> <?= htmlspecialchars($dpFormatDate($purchase['created_at'] ?? '')) ?></span>
+                    <span class="text-gray-400" aria-hidden="true">·</span>
+                    <span><span class="font-semibold text-gray-700">Purchase added by</span> <?= htmlspecialchars($purchaseAddedBy) ?></span>
                 </p>
             </div>
             <div class="flex flex-wrap gap-2 shrink-0 lg:pt-1">
