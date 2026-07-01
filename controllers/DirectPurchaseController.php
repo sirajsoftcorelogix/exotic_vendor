@@ -1015,14 +1015,8 @@ class DirectPurchaseController
         $result = $directPurchaseReturnModel->searchReturns($filters, $pageNo, $limit);
         $totalPages = $limit > 0 ? (int) ceil($result['total'] / $limit) : 1;
 
-        $returnIds = array_map(static function (array $row): int {
-            return (int) ($row['id'] ?? 0);
-        }, $result['rows']);
-        $returnItems = $directPurchaseReturnModel->getItemsGroupedByReturnIds($returnIds);
-
         renderTemplate('views/direct_purchase/returns_index.php', [
             'returns' => $result['rows'],
-            'return_items' => $returnItems,
             'total_records' => $result['total'],
             'page_no' => $pageNo,
             'total_pages' => max(1, $totalPages),
