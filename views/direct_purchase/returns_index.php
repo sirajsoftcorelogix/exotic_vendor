@@ -8,7 +8,6 @@ $totalPages = (int) ($data['total_pages'] ?? 1);
 $limit = (int) ($data['limit'] ?? 20);
 $totalRecords = (int) ($data['total_records'] ?? 0);
 $returns = $data['returns'] ?? [];
-$returnItems = $data['return_items'] ?? [];
 
 $filtersPanelOpen =
     trim((string) ($filters['search_text'] ?? '')) !== ''
@@ -206,7 +205,6 @@ $dpPurchaseAddedBy = static function (array $row): string {
                             $rowNum++;
                             $dpId = (int) ($r['direct_purchase_id'] ?? 0);
                             $returnId = (int) ($r['id'] ?? 0);
-                            $lines = $returnItems[$returnId] ?? [];
                             ?>
                             <tr class="hover:bg-amber-50/40 transition-colors">
                                 <td class="px-5 py-4 align-top text-sm text-gray-700 tabular-nums"><?= $rowNum ?></td>
@@ -273,16 +271,6 @@ $dpPurchaseAddedBy = static function (array $row): string {
                                             <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
                                         </a>
                                     </div>
-                                </td>
-                            </tr>
-                            <tr class="bg-gray-50/50">
-                                <td colspan="9" class="px-5 py-3">
-                                    <div class="text-xs font-semibold text-gray-600 mb-2">Returned items</div>
-                                    <?php
-                                    $items = $lines;
-                                    $currency = $cur;
-                                    require __DIR__ . '/_return_items_table.php';
-                                    ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
