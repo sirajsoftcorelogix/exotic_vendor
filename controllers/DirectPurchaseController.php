@@ -16,6 +16,7 @@ class DirectPurchaseController
     public function index()
     {
         is_login();
+        global $conn;
         global $directPurchaseModel;
 
         $pageNo = isset($_GET['page_no']) ? (int) $_GET['page_no'] : 1;
@@ -26,7 +27,10 @@ class DirectPurchaseController
             'search_text' => isset($_GET['search_text']) ? trim((string) $_GET['search_text']) : '',
             'invoice_date_from' => isset($_GET['invoice_date_from']) ? trim((string) $_GET['invoice_date_from']) : '',
             'invoice_date_to' => isset($_GET['invoice_date_to']) ? trim((string) $_GET['invoice_date_to']) : '',
+            'added_date_from' => isset($_GET['added_date_from']) ? trim((string) $_GET['added_date_from']) : '',
+            'added_date_to' => isset($_GET['added_date_to']) ? trim((string) $_GET['added_date_to']) : '',
             'vendor_id' => isset($_GET['vendor_id']) ? (int) $_GET['vendor_id'] : 0,
+            'created_by' => isset($_GET['created_by']) ? (int) $_GET['created_by'] : 0,
         ];
 
         $filters = $this->sanitizeDirectPurchaseListDateFilters($filters);
@@ -37,6 +41,9 @@ class DirectPurchaseController
         global $directPurchaseVendorModel;
         $vendors = $directPurchaseVendorModel->getAllVendors();
 
+        $commanModel = new Tables($conn);
+        $users = $commanModel->get_staff_list();
+
         renderTemplate('views/direct_purchase/index.php', [
             'purchases' => $result['rows'],
             'total_records' => $result['total'],
@@ -45,6 +52,7 @@ class DirectPurchaseController
             'limit' => $limit,
             'filters' => $filters,
             'vendors' => $vendors,
+            'users' => $users,
         ], 'Direct purchases');
     }
 
@@ -924,7 +932,7 @@ class DirectPurchaseController
     {
         $todayStr = $this->directPurchaseTodayYmd();
 
-        foreach (['invoice_date_from', 'invoice_date_to'] as $key) {
+        foreach (['invoice_date_from', 'invoice_date_to', 'added_date_from', 'added_date_to'] as $key) {
             $v = isset($filters[$key]) ? trim((string) $filters[$key]) : '';
             if ($v === '') {
                 $filters[$key] = '';

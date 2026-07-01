@@ -13,7 +13,10 @@ $filtersPanelOpen =
     trim((string) ($filters['search_text'] ?? '')) !== ''
     || trim((string) ($filters['invoice_date_from'] ?? '')) !== ''
     || trim((string) ($filters['invoice_date_to'] ?? '')) !== ''
-    || (isset($filters['vendor_id']) && (int) $filters['vendor_id'] > 0);
+    || trim((string) ($filters['added_date_from'] ?? '')) !== ''
+    || trim((string) ($filters['added_date_to'] ?? '')) !== ''
+    || (isset($filters['vendor_id']) && (int) $filters['vendor_id'] > 0)
+    || (isset($filters['created_by']) && (int) $filters['created_by'] > 0);
 
 $flash = $_SESSION['direct_purchase_flash'] ?? null;
 if ($flash) {
@@ -89,7 +92,7 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                 </span>
                 <div class="min-w-0">
                     <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Keyword, vendor, invoice dates, and page size.</p>
+                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Keyword, vendor, invoice dates, added dates, added by, and page size.</p>
                 </div>
             </div>
             <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
@@ -141,6 +144,29 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                         max="<?= htmlspecialchars($dpFilterDateMax) ?>"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                 </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Added from</label>
+                    <input type="date" name="added_date_from" value="<?= htmlspecialchars($filters['added_date_from'] ?? '') ?>"
+                        max="<?= htmlspecialchars($dpFilterDateMax) ?>"
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Added to</label>
+                    <input type="date" name="added_date_to" value="<?= htmlspecialchars($filters['added_date_to'] ?? '') ?>"
+                        max="<?= htmlspecialchars($dpFilterDateMax) ?>"
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Added by</label>
+                    <select name="created_by" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                        <option value="">All users</option>
+                        <?php foreach ($data['users'] ?? [] as $userId => $userName): ?>
+                            <option value="<?= (int) $userId ?>" <?= (!empty($filters['created_by']) && (int) $filters['created_by'] === (int) $userId) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars((string) $userName) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
             <div class="mt-5 flex flex-wrap items-center gap-3">
                 <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition shadow-sm">
@@ -163,6 +189,8 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Invoice</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Date</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[10rem]">Vendor</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Date added</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Added by</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap text-right">Grand total</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap text-center">File</th>
                         <th scope="col" class="w-0 px-2 py-3.5 text-center"><span class="sr-only">Actions</span></th>
@@ -171,7 +199,7 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                 <tbody class="divide-y divide-gray-100">
                     <?php if (empty($purchases)): ?>
                         <tr>
-                            <td colspan="7" class="px-5 py-16 text-center">
+                            <td colspan="9" class="px-5 py-16 text-center">
                                 <div class="mx-auto flex max-w-sm flex-col items-center">
                                     <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                         <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -211,6 +239,21 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                                         $vendorListLabel = $vendorName;
                                     }
                                     echo htmlspecialchars($vendorListLabel);
+                                    ?>
+                                </td>
+                                <td class="px-5 py-4 align-top text-sm text-gray-700 whitespace-nowrap">
+                                    <?= !empty($p['created_at']) ? htmlspecialchars(date('j M Y', strtotime((string) $p['created_at']))) : '—'; ?>
+                                </td>
+                                <td class="px-5 py-4 align-top text-sm text-gray-800">
+                                    <?php
+                                    $createdByName = trim((string) ($p['created_by_name'] ?? ''));
+                                    if ($createdByName !== '') {
+                                        echo htmlspecialchars($createdByName);
+                                    } elseif (!empty($p['created_by'])) {
+                                        echo htmlspecialchars('User #' . (int) $p['created_by']);
+                                    } else {
+                                        echo '—';
+                                    }
                                     ?>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm text-right font-medium text-gray-900 tabular-nums">

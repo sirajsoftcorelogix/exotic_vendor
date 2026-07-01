@@ -51,10 +51,25 @@ class DirectPurchase
             $types .= 's';
             $params[] = $filters['invoice_date_to'];
         }
+        if (!empty($filters['added_date_from'])) {
+            $where[] = 'DATE(p.created_at) >= ?';
+            $types .= 's';
+            $params[] = $filters['added_date_from'];
+        }
+        if (!empty($filters['added_date_to'])) {
+            $where[] = 'DATE(p.created_at) <= ?';
+            $types .= 's';
+            $params[] = $filters['added_date_to'];
+        }
         if (!empty($filters['vendor_id'])) {
             $where[] = 'p.vendor_id = ?';
             $types .= 'i';
             $params[] = (int) $filters['vendor_id'];
+        }
+        if (!empty($filters['created_by'])) {
+            $where[] = 'p.created_by = ?';
+            $types .= 'i';
+            $params[] = (int) $filters['created_by'];
         }
 
         $joinItems = '';
@@ -77,9 +92,11 @@ class DirectPurchase
         $total = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
         $stmt->close();
 
-        $listSql = "SELECT DISTINCT p.*, v.vendor_name, v.contact_name, v.vendor_id AS exotic_vendor_id
+        $listSql = "SELECT DISTINCT p.*, v.vendor_name, v.contact_name, v.vendor_id AS exotic_vendor_id,
+                cu.name AS created_by_name
             FROM vp_direct_purchases p
             JOIN vp_vendors v ON v.id = p.vendor_id
+            LEFT JOIN vp_users cu ON cu.id = p.created_by AND cu.is_deleted = 0
             $joinItems
             WHERE $whereSql
             ORDER BY p.invoice_date DESC, p.id DESC
