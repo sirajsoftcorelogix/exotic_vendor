@@ -4473,18 +4473,26 @@ class product
         }
 
         $vendorCp = (float) ($vendorRow['cp'] ?? 0);
+        $vendorPriceIndia = (float) ($vendorRow['price_india'] ?? 0);
         $vendorStock = (float) ($vendorRow['local_stock'] ?? 0);
+
+        $localRow = $this->findProductRowByVariant($itemCode, $size, $color);
+        $isBook = (is_array($localRow) && self::isBookProduct($localRow))
+            || self::isBookProduct($vendorRow);
+        $priceLabel = $isBook ? 'Price India' : 'CP (cost price)';
+        $vendorPrice = $isBook ? $vendorPriceIndia : $vendorCp;
+
         $checks = [];
         $allMatch = true;
         $anyChecked = false;
 
         if ($expectedCp > 0) {
-            $cpMatch = abs($vendorCp - $expectedCp) < 0.01;
+            $cpMatch = abs($vendorPrice - $expectedCp) < 0.01;
             $checks['cp'] = [
-                'label' => 'CP (cost price)',
+                'label' => $priceLabel,
                 'checked' => true,
                 'expected' => $expectedCp,
-                'vendor' => $vendorCp,
+                'vendor' => $vendorPrice,
                 'match' => $cpMatch,
             ];
             $anyChecked = true;
@@ -4493,12 +4501,12 @@ class product
             }
         } else {
             $checks['cp'] = [
-                'label' => 'CP (cost price)',
+                'label' => $priceLabel,
                 'checked' => false,
                 'expected' => 0.0,
-                'vendor' => $vendorCp,
+                'vendor' => $vendorPrice,
                 'match' => null,
-                'note' => 'No cost on this line to verify.',
+                'note' => $isBook ? 'No Price India on this line to verify.' : 'No cost on this line to verify.',
             ];
         }
 
@@ -4538,8 +4546,12 @@ class product
         }
 
         $message = $allMatch
-            ? 'Vendor CP and stock match expected values on exoticindia.com.'
-            : 'Vendor values on exoticindia.com do not fully match expected CP/stock.';
+            ? ($isBook
+                ? 'Vendor Price India and stock match expected values on exoticindia.com.'
+                : 'Vendor CP and stock match expected values on exoticindia.com.')
+            : ($isBook
+                ? 'Vendor values on exoticindia.com do not fully match expected Price India/stock.'
+                : 'Vendor values on exoticindia.com do not fully match expected CP/stock.');
 
         return [
             'success' => $allMatch,
@@ -4547,6 +4559,7 @@ class product
             'item_code' => $itemCode,
             'size' => trim($size),
             'color' => trim($color),
+            'is_book' => $isBook,
             'checks' => $checks,
         ];
     }
