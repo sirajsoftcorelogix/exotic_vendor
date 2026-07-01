@@ -89,7 +89,7 @@ class DirectPurchaseReturn
         $rows = [];
         if ($res) {
             while ($row = $res->fetch_assoc()) {
-                $rows[] = $row;
+                $rows[] = $this->enrichReturnLineRow($row);
             }
         }
         $stmt->close();
@@ -132,7 +132,7 @@ class DirectPurchaseReturn
             while ($row = $res->fetch_assoc()) {
                 $rid = (int) ($row['direct_purchase_return_id'] ?? 0);
                 if ($rid > 0) {
-                    $grouped[$rid][] = $row;
+                    $grouped[$rid][] = $this->enrichReturnLineRow($row);
                 }
             }
         }
@@ -406,5 +406,22 @@ class DirectPurchaseReturn
         }
 
         return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function enrichReturnLineRow(array $row): array
+    {
+        $row['product_id'] = DirectPurchaseStock::resolveProductId(
+            $this->conn,
+            (string) ($row['sku'] ?? ''),
+            (string) ($row['item_code'] ?? ''),
+            (string) ($row['color'] ?? ''),
+            (string) ($row['size'] ?? '')
+        );
+
+        return $row;
     }
 }

@@ -220,6 +220,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                             $dpVendorQtySyncedQty = isset($it['vendor_qty_synced_qty']) && $it['vendor_qty_synced_qty'] !== null
                                 ? (string) $it['vendor_qty_synced_qty']
                                 : '';
+                            $dpProductId = (int) ($it['product_id'] ?? 0);
                             ?>
                             <tr class="dp-line hover:bg-amber-50/30 transition-colors"
                                 data-dp-item-id="<?= $dpLineItemId ?>"
@@ -240,12 +241,19 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                             <input type="hidden" name="item_code[]" class="dp-h-item-code" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
                                             <input type="hidden" name="color[]" class="dp-h-color" value="<?= htmlspecialchars($it['color'] ?? '') ?>">
                                             <input type="hidden" name="size[]" class="dp-h-size" value="<?= htmlspecialchars($it['size'] ?? '') ?>">
+                                            <input type="hidden" class="dp-h-product-id" value="<?= $dpProductId ?>">
                                             <input type="hidden" name="gst_amount[]" class="dp-gst" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>">
                                             <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
                                                 class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?>"
                                                 value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
                                             <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                                         </div>
+                                        <a href="<?= $dpProductId > 0 ? ('?page=products&amp;action=detail&amp;id=' . $dpProductId) : '#' ?>"
+                                            class="dp-product-profile-link dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-amber-800 hover:bg-amber-50 hover:border-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 <?= $dpProductId > 0 ? '' : 'hidden' ?>"
+                                            target="_blank" rel="noopener noreferrer"
+                                            title="View product profile" aria-label="View product profile">
+                                            <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
+                                        </a>
                                         <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                             title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU" <?= $dpLocked ? 'disabled' : '' ?>>
                                             <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
@@ -609,11 +617,18 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                         <input type="hidden" name="item_code[]" class="dp-h-item-code" value="">
                         <input type="hidden" name="color[]" class="dp-h-color" value="">
                         <input type="hidden" name="size[]" class="dp-h-size" value="">
+                        <input type="hidden" class="dp-h-product-id" value="">
                         <input type="hidden" name="gst_amount[]" class="dp-gst" value="">
                         <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
                             class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?>" value="">
                         <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                     </div>
+                    <a href="#"
+                        class="dp-product-profile-link dp-line-action-btn shrink-0 hidden inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-amber-800 hover:bg-amber-50 hover:border-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                        target="_blank" rel="noopener noreferrer"
+                        title="View product profile" aria-label="View product profile">
+                        <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
+                    </a>
                     <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU">
                         <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
@@ -680,6 +695,28 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
         u.searchParams.set('action', 'product_search');
         u.searchParams.set('q', q);
         return u.toString();
+    }
+
+    function dpProductDetailUrl(productId) {
+        var id = parseInt(productId, 10);
+        if (!id || id <= 0) return '#';
+        return '?page=products&action=detail&id=' + encodeURIComponent(String(id));
+    }
+
+    function dpSetRowProductId(tr, productId) {
+        if (!tr) return;
+        var hid = tr.querySelector('.dp-h-product-id');
+        var id = parseInt(productId, 10);
+        if (hid) hid.value = id > 0 ? String(id) : '';
+        var link = tr.querySelector('.dp-product-profile-link');
+        if (!link) return;
+        if (id > 0) {
+            link.href = dpProductDetailUrl(id);
+            link.classList.remove('hidden');
+        } else {
+            link.href = '#';
+            link.classList.add('hidden');
+        }
     }
 
     function fetchLinePriceUrl(itemCode, sku, color, size) {
@@ -1555,6 +1592,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
         if (col) col.value = item.color != null ? String(item.color) : '';
         if (sz) sz.value = item.size != null ? String(item.size) : '';
         if (skuEl) skuEl.value = item.sku != null ? String(item.sku) : '';
+        dpSetRowProductId(tr, item.id != null ? parseInt(item.id, 10) : 0);
         var cost = tr.querySelector('.dp-cost');
         if (cost && item.cost_price != null && item.cost_price !== '') cost.value = item.cost_price;
         var hsn = tr.querySelector('input[name="hsn[]"]');
@@ -1613,6 +1651,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                     fetchAbort = null;
                 }
                 clearBox();
+                dpSetRowProductId(tr, 0);
                 return;
             }
             debounce = setTimeout(function () {
@@ -1713,6 +1752,12 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
             });
         }
         dpUpdateVendorQtySyncButton(tr);
+        dpUpdateProductProfileLink(tr);
+    }
+
+    function dpUpdateProductProfileLink(tr) {
+        var hid = tr ? tr.querySelector('.dp-h-product-id') : null;
+        dpSetRowProductId(tr, hid ? parseInt(hid.value, 10) : 0);
     }
 
     function initDpImageLightbox() {

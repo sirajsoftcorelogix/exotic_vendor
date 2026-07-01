@@ -576,6 +576,7 @@ class DirectPurchaseController
         }
         $items = $directPurchaseModel->getItems($id);
         $productModel = new product($conn);
+        require_once 'models/direct_purchase/DirectPurchaseStock.php';
         foreach ($items as &$it) {
             $img = $productModel->getImageForPurchaseLine(
                 (string) ($it['item_code'] ?? ''),
@@ -584,6 +585,13 @@ class DirectPurchaseController
                 (string) ($it['size'] ?? '')
             );
             $it['product_image'] = $img ?? '';
+            $it['product_id'] = DirectPurchaseStock::resolveProductId(
+                $conn,
+                (string) ($it['sku'] ?? ''),
+                (string) ($it['item_code'] ?? ''),
+                (string) ($it['color'] ?? ''),
+                (string) ($it['size'] ?? '')
+            );
         }
         unset($it);
         $vendors = $directPurchaseVendorModel->getAllVendors();
