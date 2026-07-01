@@ -476,6 +476,9 @@ switch ($page) {
             case 'return_list':
                 $controller->returnList();
                 break;
+            case 'returns':
+                $controller->returns();
+                break;
             case 'return_add':
                 $controller->returnAdd();
                 break;

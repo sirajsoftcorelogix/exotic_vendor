@@ -943,7 +943,7 @@ class DirectPurchaseController
     {
         $todayStr = $this->directPurchaseTodayYmd();
 
-        foreach (['invoice_date_from', 'invoice_date_to', 'added_date_from', 'added_date_to'] as $key) {
+        foreach (['invoice_date_from', 'invoice_date_to', 'added_date_from', 'added_date_to', 'return_date_from', 'return_date_to'] as $key) {
             $v = isset($filters[$key]) ? trim((string) $filters[$key]) : '';
             if ($v === '') {
                 $filters[$key] = '';
@@ -976,6 +976,38 @@ class DirectPurchaseController
         }
 
         return null;
+    }
+
+    public function returns()
+    {
+        is_login();
+        global $directPurchaseReturnModel;
+        global $directPurchaseVendorModel;
+
+        $pageNo = isset($_GET['page_no']) ? (int) $_GET['page_no'] : 1;
+        $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20;
+
+        $filters = [
+            'search_text' => isset($_GET['search_text']) ? trim((string) $_GET['search_text']) : '',
+            'return_date_from' => isset($_GET['return_date_from']) ? trim((string) $_GET['return_date_from']) : '',
+            'return_date_to' => isset($_GET['return_date_to']) ? trim((string) $_GET['return_date_to']) : '',
+            'vendor_id' => isset($_GET['vendor_id']) ? (int) $_GET['vendor_id'] : 0,
+        ];
+        $filters = $this->sanitizeDirectPurchaseListDateFilters($filters);
+
+        $result = $directPurchaseReturnModel->searchReturns($filters, $pageNo, $limit);
+        $totalPages = $limit > 0 ? (int) ceil($result['total'] / $limit) : 1;
+
+        renderTemplate('views/direct_purchase/returns_index.php', [
+            'returns' => $result['rows'],
+            'total_records' => $result['total'],
+            'page_no' => $pageNo,
+            'total_pages' => max(1, $totalPages),
+            'limit' => $limit,
+            'filters' => $filters,
+            'vendors' => $directPurchaseVendorModel->getAllVendors(),
+        ], 'Purchase returns');
     }
 
     public function returnList()
