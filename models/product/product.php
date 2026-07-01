@@ -648,7 +648,7 @@ class product
         }
         $searchTerm = '%' . $search . '%';
         $limit = max(1, min(100, (int) $limit));
-        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, gst, hsn, image FROM vp_products
+        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, cp, price_india, gst, hsn, image, groupname, itemtype, category FROM vp_products
             WHERE sku LIKE ?
             LIMIT ?';
         $stmt = $this->db->prepare($sql);
@@ -661,6 +661,7 @@ class product
         $orderItems = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
+                $isBook = self::isBookProduct($row);
                 $orderItems[] = [
                     'id' => $row['id'],
                     'sku' => $row['sku'],
@@ -668,7 +669,9 @@ class product
                     'title' => $row['title'],
                     'color' => $row['color'],
                     'size' => $row['size'],
-                    'cost_price' => $row['cost_price'],
+                    'cost_price' => $this->directPurchaseSuggestedCost($row),
+                    'price_india' => (float) ($row['price_india'] ?? 0),
+                    'is_book' => $isBook,
                     'gst' => $row['gst'],
                     'hsn' => $row['hsn'],
                     'image' => $row['image'] ?? '',
@@ -795,6 +798,15 @@ class product
             return ['success' => false, 'message' => 'Product row not found after API sync.'];
         }
 
+        if (self::isBookProduct($row)) {
+            $priceIndia = (float) ($row['price_india'] ?? 0);
+            if ($priceIndia <= 0) {
+                return ['success' => false, 'message' => 'API returned no Price India (without GST) for this book.'];
+            }
+
+            return $this->directPurchaseFetchCostResponse($row, $priceIndia, true, 0.0, $priceIndia);
+        }
+
         $cp = (float) ($row['cp'] ?? 0);
         $productId = (int) $row['id'];
         if ($cp > 0) {
@@ -815,14 +827,156 @@ class product
             return ['success' => false, 'message' => 'API returned no cost price (cp) for this product.'];
         }
 
+        return $this->directPurchaseFetchCostResponse($row, $cost, false, $cp);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function findProductRowByVariant(string $itemCode, string $size = '', string $color = ''): ?array
+    {
+        $row = $this->findByItemCodeSizeColor($itemCode, trim($size), trim($color));
+        if ($row) {
+            return $row;
+        }
+
+        return $this->findByItemCodeSizeColor($itemCode, '', '') ?: null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function resolveProductForVendorSync(string $itemCode, string $size = '', string $color = ''): array
+    {
+        $row = $this->findProductRowByVariant($itemCode, $size, $color);
+        if (is_array($row) && !empty($row['id'])) {
+            $fresh = $this->getProduct((int) $row['id']);
+            if (is_array($fresh)) {
+                return $fresh;
+            }
+        }
+
         return [
+            'item_code' => $itemCode,
+            'size' => trim($size),
+            'color' => trim($color),
+        ];
+    }
+
+    /**
+     * Persist direct-purchase cost and push one vendor product/modify call (pricing + optional stock delta).
+     *
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    public function applyDirectPurchaseLinePricingToVendor(
+        string $itemCode,
+        string $size,
+        string $color,
+        float $cost,
+        ?float $localStockDelta = null
+    ): array {
+        $row = $this->findProductRowByVariant($itemCode, $size, $color);
+        if (!$row || empty($row['id'])) {
+            return ['success' => false, 'message' => 'Product not found for vendor sync.'];
+        }
+
+        $productId = (int) $row['id'];
+        $isBook = self::isBookProduct($row);
+
+        if ($cost > 0) {
+            if ($isBook) {
+                $this->setProductPriceIndia($productId, $cost);
+            } else {
+                $this->setProductCp($productId, $cost);
+            }
+        }
+
+        $hasStockDelta = $localStockDelta !== null && abs($localStockDelta) > 0.0001;
+        if ($cost <= 0 && !$hasStockDelta) {
+            return ['success' => false, 'message' => 'Nothing to sync to vendor API.'];
+        }
+
+        $fresh = $this->getProduct($productId);
+        $product = is_array($fresh) ? $fresh : $row;
+        $isBook = self::isBookProduct($product);
+
+        return $this->syncCpToVendorFrontend(
+            $product,
+            $isBook ? 0.0 : $cost,
+            $hasStockDelta ? $localStockDelta : null,
+            $isBook && $cost > 0 ? $cost : null
+        );
+    }
+
+    /**
+     * @return array{success:bool,message:string,cost_price:float,is_book:bool,gst:float,hsn:string,cp?:float,price_india?:float}
+     */
+    private function directPurchaseFetchCostResponse(
+        array $row,
+        float $costPrice,
+        bool $isBook,
+        float $cp = 0.0,
+        ?float $priceIndia = null
+    ): array {
+        $response = [
             'success' => true,
-            'message' => 'Latest cost price fetched from API.',
-            'cost_price' => $cost,
-            'cp' => $cp,
+            'message' => $isBook
+                ? 'Latest Price India (without GST) fetched from API.'
+                : 'Latest cost price fetched from API.',
+            'cost_price' => $costPrice,
+            'is_book' => $isBook,
             'gst' => (float) ($row['gst'] ?? 0),
             'hsn' => trim((string) ($row['hsn'] ?? '')),
         ];
+        if ($isBook && $priceIndia !== null) {
+            $response['price_india'] = $priceIndia;
+        } elseif (!$isBook) {
+            $response['cp'] = $cp;
+        }
+
+        return $response;
+    }
+
+    /**
+     * Books use Price India (ex-GST) as direct-purchase cost; other items use CP / cost_price.
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function isBookProduct(array $row): bool
+    {
+        $itemtype = strtolower(trim((string) ($row['itemtype'] ?? '')));
+        if ($itemtype === 'book') {
+            return true;
+        }
+        foreach (['groupname', 'category'] as $field) {
+            $value = strtolower(trim((string) ($row[$field] ?? '')));
+            if ($value === '' || $value === '0') {
+                continue;
+            }
+            if ($value === 'book' || $value === '-8' || strpos($value, 'book') !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Suggested cost for a direct-purchase line from vp_products.
+     *
+     * @param array<string, mixed> $row
+     */
+    public function directPurchaseSuggestedCost(array $row): float
+    {
+        if (self::isBookProduct($row)) {
+            return (float) ($row['price_india'] ?? 0);
+        }
+        $cost = (float) ($row['cost_price'] ?? 0);
+        if ($cost > 0) {
+            return $cost;
+        }
+
+        return (float) ($row['cp'] ?? 0);
     }
 
     /**
@@ -4151,13 +4305,17 @@ class product
     }
 
     /**
-     * Push CP and/or local_stock_delta to exoticindia.com via vendor product/modify.
+     * Push CP, price_india, and/or local_stock_delta to exoticindia.com via vendor product/modify.
      *
      * @param array<string, mixed> $product
      * @return array{success:bool,message:string,http_code?:int,response?:array}
      */
-    public function syncCpToVendorFrontend(array $product, float $cp, ?float $localStockDelta = null): array
-    {
+    public function syncCpToVendorFrontend(
+        array $product,
+        float $cp = 0.0,
+        ?float $localStockDelta = null,
+        ?float $priceIndia = null
+    ): array {
         if (!function_exists('exotic_india_api_post')) {
             require_once __DIR__ . '/../../helpers/exotic_india_api.php';
         }
@@ -4171,6 +4329,9 @@ class product
         if ($cp > 0) {
             $postFields['cp'] = $cp;
         }
+        if ($priceIndia !== null && $priceIndia > 0) {
+            $postFields['price_india'] = (int) round($priceIndia);
+        }
         if ($localStockDelta !== null && abs($localStockDelta) > 0.0001) {
             $postFields['local_stock_delta'] = (int) round($localStockDelta);
         }
@@ -4178,6 +4339,17 @@ class product
             return ['success' => false, 'message' => 'Nothing to sync to vendor API.'];
         }
 
+        return $this->postProductModifyToVendor($product, $postFields, 'Vendor product sync failed.');
+    }
+
+    /**
+     * @param array<string, mixed> $product
+     * @param array<string, int|float|string> $postFields
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    private function postProductModifyToVendor(array $product, array $postFields, string $failureLabel): array
+    {
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
         $size = trim((string) ($product['size'] ?? ''));
         $color = trim((string) ($product['color'] ?? ''));
         $endpoint = 'product/modify'
@@ -4196,7 +4368,7 @@ class product
                 'success' => false,
                 'message' => trim((string) ($api['message'] ?? '')) !== ''
                     ? (string) $api['message']
-                    : 'Vendor product sync failed.',
+                    : $failureLabel,
                 'http_code' => (int) ($api['http_code'] ?? 0),
             ];
         }
@@ -4208,10 +4380,21 @@ class product
             'success' => $apiSuccess,
             'message' => trim((string) ($data['message'] ?? '')) !== ''
                 ? (string) $data['message']
-                : ($apiSuccess ? 'Vendor product sync completed.' : 'Vendor product sync failed.'),
+                : ($apiSuccess ? 'Vendor product sync completed.' : $failureLabel),
             'http_code' => (int) ($api['http_code'] ?? 0),
             'response' => $data,
         ];
+    }
+
+    /**
+     * Push price_india to exoticindia.com via vendor product/modify.
+     *
+     * @param array<string, mixed> $product
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    public function syncPriceIndiaToVendorFrontend(array $product, float $priceIndia): array
+    {
+        return $this->syncCpToVendorFrontend($product, 0.0, null, $priceIndia);
     }
 
     /**
