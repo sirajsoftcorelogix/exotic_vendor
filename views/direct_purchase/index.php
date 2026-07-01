@@ -197,6 +197,7 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Date added</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Added by</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap text-right">Grand total</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap text-center">Returns</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap text-center">File</th>
                         <th scope="col" class="w-0 px-2 py-3.5 text-center"><span class="sr-only">Actions</span></th>
                     </tr>
@@ -204,7 +205,7 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                 <tbody class="divide-y divide-gray-100">
                     <?php if (empty($purchases)): ?>
                         <tr>
-                            <td colspan="9" class="px-5 py-16 text-center">
+                            <td colspan="10" class="px-5 py-16 text-center">
                                 <div class="mx-auto flex max-w-sm flex-col items-center">
                                     <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                         <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -277,6 +278,22 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                                     </span>
                                 </td>
                                 <td class="px-5 py-4 align-top text-center text-sm">
+                                    <?php
+                                    $returnCount = (int) ($p['return_count'] ?? 0);
+                                    if ($returnCount > 0):
+                                        $returnLabel = $returnCount === 1 ? '1 return' : $returnCount . ' returns';
+                                        ?>
+                                        <a href="?page=direct_purchase&amp;action=return_list&amp;dp_id=<?= (int) $p['id'] ?>"
+                                            class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 hover:border-amber-300 transition"
+                                            title="<?= htmlspecialchars($returnLabel) ?>">
+                                            <i class="fas fa-undo-alt text-[10px]" aria-hidden="true"></i>
+                                            <?= htmlspecialchars((string) $returnCount) ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="text-gray-400">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="px-5 py-4 align-top text-center text-sm">
                                     <?php if (!empty($p['invoice_file'])): ?>
                                         <a href="<?= htmlspecialchars($p['invoice_file']) ?>" target="_blank" rel="noopener noreferrer"
                                             class="inline-flex items-center gap-1 text-xs font-medium text-amber-800/90 hover:text-amber-950 hover:underline underline-offset-2 decoration-amber-800/30">
@@ -296,8 +313,8 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                                             <i class="fas fa-edit text-xs" aria-hidden="true"></i>
                                         </a>
                                         <a href="?page=direct_purchase&action=return_list&amp;dp_id=<?= (int) $p['id'] ?>"
-                                            class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-white text-amber-700 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
-                                            title="Purchase returns"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded border <?= (int) ($p['return_count'] ?? 0) > 0 ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-gray-200 bg-white text-amber-700 hover:bg-amber-50' ?> focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+                                            title="<?= (int) ($p['return_count'] ?? 0) > 0 ? 'View purchase returns (' . (int) $p['return_count'] . ')' : 'Purchase returns' ?>"
                                             aria-label="Purchase returns">
                                             <i class="fas fa-undo-alt text-xs" aria-hidden="true"></i>
                                         </a>

@@ -93,7 +93,8 @@ class DirectPurchase
         $stmt->close();
 
         $listSql = "SELECT DISTINCT p.*, v.vendor_name, v.contact_name, v.vendor_id AS exotic_vendor_id,
-                cu.name AS created_by_name
+                cu.name AS created_by_name,
+                (SELECT COUNT(*) FROM vp_direct_purchase_returns dr WHERE dr.direct_purchase_id = p.id) AS return_count
             FROM vp_direct_purchases p
             JOIN vp_vendors v ON v.id = p.vendor_id
             LEFT JOIN vp_users cu ON cu.id = p.created_by AND cu.is_deleted = 0
