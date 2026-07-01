@@ -98,6 +98,50 @@ class DirectPurchaseReturn
     }
 
     /**
+     * @param array<int, int> $returnIds
+     * @return array<int, array<int, array<string, mixed>>> return_id => line rows
+     */
+    public function getItemsGroupedByReturnIds(array $returnIds): array
+    {
+        $returnIds = array_values(array_unique(array_filter(array_map('intval', $returnIds), static function (int $id): bool {
+            return $id > 0;
+        })));
+        if ($returnIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($returnIds), '?'));
+        $sql = "SELECT ri.*, i.sku, i.item_code, i.color, i.size, i.qty AS purchased_qty,
+                i.cost_per_item, i.gst_rate, i.line_total AS purchase_line_total, i.gst_amount AS purchase_gst_amount
+            FROM vp_direct_purchase_return_items ri
+            JOIN vp_direct_purchase_items i ON i.id = ri.direct_purchase_item_id
+            WHERE ri.direct_purchase_return_id IN ($placeholders)
+            ORDER BY ri.direct_purchase_return_id ASC, ri.sort_order ASC, ri.id ASC";
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $types = str_repeat('i', count($returnIds));
+        $stmt->bind_param($types, ...$returnIds);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $grouped = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $rid = (int) ($row['direct_purchase_return_id'] ?? 0);
+                if ($rid > 0) {
+                    $grouped[$rid][] = $row;
+                }
+            }
+        }
+        $stmt->close();
+
+        return $grouped;
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function listForPurchase(int $purchaseId): array

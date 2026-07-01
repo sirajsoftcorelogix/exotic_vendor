@@ -8,6 +8,7 @@ if ($flash) {
     unset($_SESSION['direct_purchase_flash']);
 }
 $dpId = (int) ($purchase['id'] ?? 0);
+$returnItems = $data['return_items'] ?? [];
 ?>
 <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
     <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
@@ -64,9 +65,11 @@ $dpId = (int) ($purchase['id'] ?? 0);
                 <?php else: ?>
                     <?php foreach ($returns as $idx => $r): ?>
                         <?php
+                        $returnId = (int) ($r['id'] ?? 0);
                         $cur = strtoupper(trim((string) ($r['currency'] ?? 'INR')));
                         $sym = dp_currency_symbol($cur);
                         $dec = dp_currency_decimals($cur);
+                        $lines = $returnItems[$returnId] ?? [];
                         ?>
                         <tr class="hover:bg-amber-50/30">
                             <td class="px-4 py-3 tabular-nums text-gray-700"><?= $idx + 1 ?></td>
@@ -76,12 +79,20 @@ $dpId = (int) ($purchase['id'] ?? 0);
                                 <span class="text-gray-500 text-xs font-normal ml-1"><?= htmlspecialchars($cur) ?></span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <a href="?page=direct_purchase&action=return_delete&amp;id=<?= (int) ($r['id'] ?? 0) ?>"
+                                <a href="?page=direct_purchase&action=return_delete&amp;id=<?= $returnId ?>"
                                     onclick="return confirm('Delete this return and reverse stock OUT movements?');"
                                     class="inline-flex h-8 w-8 items-center justify-center rounded border border-red-200 bg-white text-red-600 hover:bg-red-50"
                                     title="Delete return" aria-label="Delete return">
                                     <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
                                 </a>
+                            </td>
+                        </tr>
+                        <tr class="bg-gray-50/60">
+                            <td colspan="4" class="px-4 py-3">
+                                <div class="text-xs font-semibold text-gray-600 mb-2">Returned items</div>
+                                <?php $items = $lines;
+                                $currency = $cur;
+                                require __DIR__ . '/_return_items_table.php'; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
