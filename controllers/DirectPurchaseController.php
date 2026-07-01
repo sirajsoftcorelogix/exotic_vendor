@@ -1566,7 +1566,8 @@ class DirectPurchaseController
     }
 
     /**
-     * Push negative local_stock_delta to vendor API for purchase return lines.
+     * Push negative local_stock_delta to vendor product/modify for purchase return lines.
+     * Does not send absolute local_stock — only the delta field expected by the vendor API.
      *
      * @param list<array<string, mixed>> $returnLines
      * @param array<int, array<string, mixed>> $itemsById
@@ -1597,18 +1598,35 @@ class DirectPurchaseController
 
         $failures = [];
         foreach ($byVariant as $variant) {
-            $delta = -(int) round((float) ($variant['return_qty'] ?? 0));
-            if ($delta === 0) {
+            $localStockDelta = -(int) round((float) ($variant['return_qty'] ?? 0));
+            if ($localStockDelta === 0) {
                 continue;
             }
-            $result = $productModel->applyLocalStockDeltaAndRefreshFromVendorApi(
+
+            $row = $productModel->findByItemCodeSizeColor(
                 $variant['item_code'],
-                $delta,
                 $variant['size'],
                 $variant['color']
             );
-            if (empty($result['success'])) {
-                $failures[] = $variant['item_code'] . ' — ' . trim((string) ($result['message'] ?? 'vendor local stock sync failed'));
+            if (!$row) {
+                $row = $productModel->findByItemCodeSizeColor($variant['item_code'], '', '');
+            }
+
+            $product = [
+                'item_code' => $variant['item_code'],
+                'size' => $variant['size'],
+                'color' => $variant['color'],
+            ];
+            if (is_array($row) && !empty($row['id'])) {
+                $fresh = $productModel->getProduct((int) $row['id']);
+                if (is_array($fresh)) {
+                    $product = $fresh;
+                }
+            }
+
+            $sync = $productModel->syncCpToVendorFrontend($product, 0.0, (float) $localStockDelta);
+            if (empty($sync['success'])) {
+                $failures[] = $variant['item_code'] . ' — ' . trim((string) ($sync['message'] ?? 'vendor local_stock_delta sync failed'));
             }
         }
 
