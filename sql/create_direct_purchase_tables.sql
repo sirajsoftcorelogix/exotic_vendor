@@ -60,5 +60,6 @@ SET @dp_parent := LAST_INSERT_ID();
 INSERT INTO `modules` (`parent_id`, `module_name`, `slug`, `action`, `font_awesome_icon`, `active`, `user_id`, `sort_order`)
 VALUES
 (@dp_parent, 'List & manage purchases', 'direct_purchase', 'list', '<i class="fas fa-list mr-2"></i>', 1, 1, 1),
-(@dp_parent, 'Add purchase', 'direct_purchase', 'add', '<i class="fas fa-plus mr-2"></i>', 1, 1, 2);
+(@dp_parent, 'Add purchase', 'direct_purchase', 'add', '<i class="fas fa-plus mr-2"></i>', 1, 1, 2),
+(@dp_parent, 'Purchase returns', 'direct_purchase', 'returns', '<i class="fas fa-undo-alt mr-2"></i>', 1, 1, 3);
 */
