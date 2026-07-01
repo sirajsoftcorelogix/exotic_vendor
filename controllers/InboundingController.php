@@ -722,8 +722,8 @@ class InboundingController {
                     if (isset($_FILES['new_photos']['error'][$key]) && $_FILES['new_photos']['error'][$key] === 0) {
                         
                         $tmpName = $_FILES['new_photos']['tmp_name'][$key];
-                        $ext = pathinfo($name, PATHINFO_EXTENSION);
-                        $newName = 'img_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
+                        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+                        $newName = strtolower('img_' . $id . '_' . time() . '_' . rand(100, 999) . '.' . $ext);
                         
                         // In your JS, new_image_variation_id[] and new_captions[] are 
                         // appended to the DOM, so they will follow the same index order as new_photos[]
@@ -919,92 +919,65 @@ class InboundingController {
             exit;
         }
     }
-    private function renameImagesToItemCode($itemId, $itemCode, $currentData) {
+    private function renameImagesToItemCode($itemId, $itemCode, $currentData, ?array $bundle = null) {
         global $inboundingModel;
         $itemCode = strtolower($itemCode);
-        // 1. Setup Directories
         $mainPhotoDir = __DIR__ . '/../uploads/products/';
         $altPhotoDir  = __DIR__ . '/../uploads/itm_img/';
 
-        $itemData = $inboundingModel->getform1data($itemId);
-        $isBook = (string) ($itemData['form1']['group_name'] ?? '') === '-8';
+        $bundle = $bundle ?? $inboundingModel->getImageRenameBundle($itemId);
+        $inboundCtx = $bundle['inbound'];
+        if ($inboundCtx === []) {
+            return;
+        }
 
-        // 2. Fetch Variations from DB
-        $variations = $inboundingModel->getVariations($itemId);
-        $hasVariations = !empty($variations);
+        $isBook = (string) ($inboundCtx['group_name'] ?? '') === '-8';
+        $variations = $bundle['variations'];
+        $hasVariations = $variations !== [];
+        $useVariationNaming = $hasVariations && !$isBook;
+        $imagesByVariation = $bundle['images_by_variation'];
+        $isVariant = strtoupper(trim((string) ($currentData['is_variant'] ?? 'N'))) === 'Y';
 
-        // 3. Determine Case & Suffix Logic
-        $isVariant = ($currentData['is_variant'] === 'Y'); 
-
-        // Generate Base Name Logic
-        if (!$isVariant && !$hasVariations) {
-            // CASE 1: Simple Product -> abc1234
-            $baseName = $itemCode; 
-        } elseif (!$isVariant && $hasVariations) {
-            // CASE 2: Complex Product (Base with variations) -> abc1234-blue (use color/size from parent)
-            $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
-            $baseName = $itemCode . ($suffix ? '-' . $suffix : '');
+        if ($isBook || (!$isVariant && !$hasVariations)) {
+            $baseName = $itemCode;
         } else {
-            // CASE 3 & 4: Variation -> abc1234-color
             $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
             $baseName = $itemCode . ($suffix ? '-' . $suffix : '');
         }
 
-        // =================================================================
-        // EXECUTION A: Rename Base Images (Variation ID -1 or 0)
-        // =================================================================
-        
-        // 1. Main product photo: book uses plain itemcode (…jpg); letters a,b,c… apply to gallery only.
-        $mainPhotoPath = $itemData['form1']['product_photo'] ?? ($itemData['form2']['product_photo'] ?? '');
-        
-        if (!empty($mainPhotoPath)) {
-            $this->processRename($mainPhotoPath, $mainPhotoDir, $baseName, $itemId, 'main', $inboundingModel, $isBook);
+        $skipParentStandaloneImages = $useVariationNaming && !$isVariant;
+        $mainPhotoPath = trim((string) ($inboundCtx['product_photo'] ?? ''));
+        $hasSeparatePrimary = !$skipParentStandaloneImages && $mainPhotoPath !== '';
+
+        if ($hasSeparatePrimary) {
+            $this->processRename($mainPhotoPath, $mainPhotoDir, $baseName, $itemId, 'main', $inboundingModel, $altPhotoDir);
         }
 
-        // 2. Rename Gallery Images (book: first gallery is always …a.jpg)
-        $baseImages = $inboundingModel->get_item_images_by_variation($itemId, -1);
-        if (empty($baseImages)) {
-            $baseImages = $inboundingModel->get_item_images_by_variation($itemId, 0);
+        $baseImages = $imagesByVariation[-1] ?? [];
+        if ($baseImages !== [] && !$skipParentStandaloneImages) {
+            $this->renameGalleryImagesByDisplayOrder($baseImages, $altPhotoDir, $baseName, $inboundingModel, $isBook, $hasSeparatePrimary);
         }
 
-        if (!empty($baseImages)) {
-            $this->renameGalleryImagesByDisplayOrder(
-                $baseImages,
-                $altPhotoDir,
-                $baseName,
-                $inboundingModel,
-                $isBook,
-                0
-            );
+        if (!$useVariationNaming) {
+            return;
         }
 
-        // =================================================================
-        // EXECUTION B: Rename Variations
-        // =================================================================
-        if ($hasVariations) {
-            foreach ($variations as $var) {
-                
-                // Generate Suffix: abc1234-blue
-                $varSuffix = $this->getNamingSuffix($var['color'], $var['size']);
-                $varBaseName = $itemCode . ($varSuffix ? '-' . $varSuffix : '');
+        foreach ($variations as $var) {
+            $varId = (int) ($var['id'] ?? 0);
+            if ($varId <= 0) {
+                continue;
+            }
 
-                // 1. Variation main: book uses plain varBaseName; gallery gets …a, …b
-                if (!empty($var['variation_image'])) {
-                    $this->processRename($var['variation_image'], $mainPhotoDir, $varBaseName, $var['id'], 'variation_main', $inboundingModel, $isBook);
-                }
+            $varSuffix = $this->getNamingSuffix($var['color'], $var['size']);
+            $varBaseName = $itemCode . ($varSuffix ? '-' . $varSuffix : '');
 
-                // 2. Rename Variation Gallery Images
-                $varImages = $inboundingModel->get_item_images_by_variation($itemId, $var['id']);
-                if (!empty($varImages)) {
-                    $this->renameGalleryImagesByDisplayOrder(
-                        $varImages,
-                        $altPhotoDir,
-                        $varBaseName,
-                        $inboundingModel,
-                        $isBook,
-                        0
-                    );
-                }
+            if (!empty($var['variation_image'])) {
+                $this->processRename($var['variation_image'], $mainPhotoDir, $varBaseName, $varId, 'variation_main', $inboundingModel, $altPhotoDir);
+            }
+
+            $varImages = $imagesByVariation[$varId] ?? [];
+            if ($varImages !== []) {
+                $this->renameGalleryImagesByDisplayOrder($varImages, $altPhotoDir, $varBaseName, $inboundingModel, $isBook, !empty($var['variation_image']));
             }
         }
     }
@@ -1024,22 +997,19 @@ class InboundingController {
         return $suffix;
     }
 
-    /**
-     * Rename gallery files by display_order with collision-safe two-pass renaming.
-     */
     private function renameGalleryImagesByDisplayOrder(
         array $images,
         string $directory,
         string $baseName,
         $model,
         bool $bookMode = false,
-        int $bookStartIndex = 0
+        bool $hasSeparatePrimary = false
     ): void {
-        if (empty($images)) {
+        if ($images === []) {
             return;
         }
 
-        usort($images, function ($a, $b) {
+        usort($images, static function ($a, $b) {
             $oa = (int)($a['display_order'] ?? 0);
             $ob = (int)($b['display_order'] ?? 0);
             if ($oa === $ob) {
@@ -1050,6 +1020,7 @@ class InboundingController {
 
         $plans = [];
         $usedTargets = [];
+        $needsWork = false;
 
         foreach ($images as $idx => $img) {
             $imgId = (int)($img['id'] ?? 0);
@@ -1058,88 +1029,68 @@ class InboundingController {
                 continue;
             }
 
-            $fullOldPath = $directory . $oldFileName;
-            if (!file_exists($fullOldPath)) {
-                continue;
-            }
-
-            $origExt = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
-
-            // Book: gallery only — itemcode + a, b, c, … (main photo uses plain itemcode, no letter). Output .jpg.
             if ($bookMode) {
-                $letterOrdinal = $bookStartIndex + $idx;
-                $candidateBase = $baseName . $this->bookImageAlphabetSuffix($letterOrdinal);
-                $targetExt = 'jpg';
+                $candidateBase = $baseName . $this->bookImageAlphabetSuffix($idx);
+            } elseif ($hasSeparatePrimary) {
+                $candidateBase = $baseName . '_a' . str_pad((string) ($idx + 1), 2, '0', STR_PAD_LEFT);
             } elseif ($idx === 0) {
-                // Non-book: first gallery file matches base name; rest use _a01, _a02, …
                 $candidateBase = $baseName;
-                $targetExt = $origExt;
             } else {
-                $candidateBase = $baseName . '_a' . str_pad((string)$idx, 2, '0', STR_PAD_LEFT);
-                $targetExt = $origExt;
+                $candidateBase = $baseName . '_a' . str_pad((string) $idx, 2, '0', STR_PAD_LEFT);
             }
 
-            $candidate = $candidateBase . '.' . $targetExt;
+            $candidate = strtolower($candidateBase . '.jpg');
             $dedupe = 1;
-            while (isset($usedTargets[strtolower($candidate)])) {
-                $candidate = $candidateBase . '_d' . $dedupe . '.' . $targetExt;
+            while (isset($usedTargets[$candidate])) {
+                $candidate = strtolower($candidateBase . '_d' . $dedupe . '.jpg');
                 $dedupe++;
             }
-            $usedTargets[strtolower($candidate)] = true;
+            $usedTargets[$candidate] = true;
 
-            $plans[] = [
-                'id' => $imgId,
-                'old' => $oldFileName,
-                'oldPath' => $fullOldPath,
-                'target' => $candidate,
-                'targetPath' => $directory . $candidate,
-                'tmp' => '__tmp__' . $imgId . '_' . time() . '_' . mt_rand(1000, 9999) . '.' . $origExt,
-            ];
+            if ($oldFileName !== $candidate) {
+                $needsWork = true;
+            }
+
+            $plans[] = ['id' => $imgId, 'old' => $oldFileName, 'target' => $candidate];
         }
 
+        if (!$needsWork) {
+            return;
+        }
+
+        // Two-pass rename: move all targets to temp first so swapped names (reorder) cannot collide.
         foreach ($plans as &$plan) {
             if ($plan['old'] === $plan['target']) {
-                $plan['skipSecondPass'] = true;
                 continue;
             }
-            $tmpPath = $directory . $plan['tmp'];
-            if (@rename($plan['oldPath'], $tmpPath)) {
-                $plan['tmpPath'] = $tmpPath;
-            } else {
+            $plan['oldPath'] = $directory . $plan['old'];
+            if (!file_exists($plan['oldPath'])) {
+                $plan['failed'] = true;
+                continue;
+            }
+            $plan['targetPath'] = $directory . $plan['target'];
+            $plan['tmpPath'] = $directory . '__tmp__' . $plan['id'] . '_' . mt_rand(1000, 9999)
+                . '.' . strtolower(pathinfo($plan['old'], PATHINFO_EXTENSION));
+            if (!@rename($plan['oldPath'], $plan['tmpPath'])) {
                 $plan['failed'] = true;
             }
         }
         unset($plan);
 
         foreach ($plans as $plan) {
-            if (!empty($plan['failed'])) {
+            if (!empty($plan['failed']) || empty($plan['tmpPath'])) {
                 continue;
             }
-            if (!empty($plan['skipSecondPass'])) {
-                continue;
-            }
-            if (empty($plan['tmpPath']) || !file_exists($plan['tmpPath'])) {
-                continue;
-            }
-
-            $movedOk = false;
-            if ($bookMode) {
-                if (@rename($plan['tmpPath'], $plan['targetPath'])) {
-                    $movedOk = true;
-                } else {
-                    $movedOk = $this->writeImageFileAsJpeg($plan['tmpPath'], $plan['targetPath']);
-                }
-            } else {
-                $movedOk = (bool) @rename($plan['tmpPath'], $plan['targetPath']);
-            }
-
+            $movedOk = $this->renameImageFile($directory, basename($plan['tmpPath']), $plan['target']);
             if ($movedOk) {
-                // Force fresh mtime so ?v= cache-busting URL always changes after rename swaps.
                 @touch($plan['targetPath']);
                 $model->update_image_filename_direct($plan['id'], $plan['target']);
-                // Ensure thumb cache cannot show previous content under reused filename.
                 $this->deleteThumbnailForImagePath($plan['targetPath']);
                 $this->deleteThumbnailForImagePath($plan['oldPath']);
+                $tmpFull = $directory . basename($plan['tmpPath']);
+                if (file_exists($tmpFull)) {
+                    @unlink($tmpFull);
+                }
             } else {
                 @rename($plan['tmpPath'], $plan['oldPath']);
             }
@@ -1147,47 +1098,62 @@ class InboundingController {
     }
 
     /**
-     * Write a raster image as JPEG (book renames). Removes $sourcePath on success when different from dest.
+     * Rename image file on disk (handles case-only renames on Windows via temp hop).
      */
+    private function renameImageFile(string $directory, string $oldName, string $newName): bool
+    {
+        $oldName = basename($oldName);
+        $newName = strtolower(basename($newName));
+        if ($oldName === $newName) {
+            return is_file($directory . $newName);
+        }
+
+        $from = $directory . $oldName;
+        $to = $directory . $newName;
+        if (!is_file($from)) {
+            return is_file($to);
+        }
+        if (@rename($from, $to)) {
+            return true;
+        }
+
+        $tmp = $directory . '__tmp__' . mt_rand(10000, 99999) . '.jpg';
+        if (@rename($from, $tmp) && @rename($tmp, $to)) {
+            return true;
+        }
+
+        if ($this->writeImageFileAsJpeg($from, $to)) {
+            if (is_file($from) && $from !== $to) {
+                @unlink($from);
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    /** Write/copy as JPEG; GD only when format conversion is required. */
     private function writeImageFileAsJpeg(string $sourcePath, string $destJpgPath): bool {
         if (!is_readable($sourcePath)) {
             return false;
         }
+        $destDir = dirname($destJpgPath);
+        $destJpgPath = $destDir . DIRECTORY_SEPARATOR . strtolower(basename($destJpgPath));
         $ext = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
         if (in_array($ext, ['jpg', 'jpeg', 'jfif', 'jpe'], true)) {
-            if (@rename($sourcePath, $destJpgPath)) {
-                return true;
-            }
-            if (@copy($sourcePath, $destJpgPath)) {
-                if (realpath($sourcePath) !== realpath($destJpgPath)) {
-                    @unlink($sourcePath);
-                }
+            if (@rename($sourcePath, $destJpgPath) || @copy($sourcePath, $destJpgPath)) {
                 return true;
             }
         }
         if (!extension_loaded('gd')) {
             return false;
         }
-        $img = false;
-        switch ($ext) {
-            case 'png':
-                $img = @imagecreatefrompng($sourcePath);
-                break;
-            case 'gif':
-                $img = @imagecreatefromgif($sourcePath);
-                break;
-            case 'webp':
-                $img = function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourcePath) : false;
-                break;
-            default:
-                $img = @imagecreatefromjpeg($sourcePath);
-                if ($img === false) {
-                    $blob = @file_get_contents($sourcePath);
-                    if ($blob !== false) {
-                        $img = @imagecreatefromstring($blob);
-                    }
-                }
-        }
+        $img = match ($ext) {
+            'png' => @imagecreatefrompng($sourcePath),
+            'gif' => @imagecreatefromgif($sourcePath),
+            'webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourcePath) : false,
+            default => @imagecreatefromjpeg($sourcePath) ?: @imagecreatefromstring((string) @file_get_contents($sourcePath)),
+        };
         if ($img === false) {
             return false;
         }
@@ -1196,13 +1162,10 @@ class InboundingController {
         }
         $ok = @imagejpeg($img, $destJpgPath, 92);
         imagedestroy($img);
-        if ($ok && realpath($sourcePath) !== realpath($destJpgPath)) {
-            @unlink($sourcePath);
-        }
         return (bool) $ok;
     }
 
-    // --- HELPER 1: Suffix Logic (Color > Size) ---
+    // --- HELPER 1: Suffix Logic for non-book color/size variations (Color > Size) ---
     private function getNamingSuffix($color, $size) {
         // Priority 1: Color
         if (!empty($color)) {
@@ -1217,30 +1180,36 @@ class InboundingController {
     }
 
     // --- HELPER 2: File Renaming & DB Update ---
-    private function processRename($oldPathOrName, $directory, $newBaseName, $dbId, $type, $model, bool $bookOutputJpeg = false) {
+    private function processRename(
+        $oldPathOrName,
+        string $directory,
+        string $newBaseName,
+        $dbId,
+        string $type,
+        $model,
+        string $gallerySyncDir = ''
+    ) {
         
         // Handle input: oldPathOrName might be "uploads/products/img.jpg" or just "img.jpg"
         $oldFileName = basename($oldPathOrName);
         $fullOldPath = $directory . $oldFileName;
 
-        $ext = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
-        $finalExt = $bookOutputJpeg ? 'jpg' : $ext;
-        $finalName = $newBaseName . '.' . $finalExt;
+        $finalName = strtolower($newBaseName) . '.jpg';
         $fullNewPath = $directory . $finalName;
 
-        // If old name is already correct and file exists, nothing to do.
         if ($oldFileName === $finalName && file_exists($fullOldPath)) {
+            if ($gallerySyncDir !== '' && in_array($type, ['main', 'variation_main'], true)) {
+                $this->syncPrimaryImageToGalleryDir($fullOldPath, $gallerySyncDir, $finalName);
+            }
             return;
         }
 
-        // Collision-safe target for variation main images.
-        // Cloned variations can share same color/size so base target may already exist.
-        if ($type === 'variation_main' && file_exists($fullNewPath) && $oldFileName !== $finalName) {
-            $finalName = $newBaseName . '_v' . (int) $dbId . '.' . $finalExt;
+        if ($type === 'variation_main' && file_exists($fullNewPath) && strcasecmp($oldFileName, $finalName) !== 0) {
+            $finalName = strtolower($newBaseName) . '_v' . (int) $dbId . '.jpg';
             $fullNewPath = $directory . $finalName;
             $bump = 1;
             while (file_exists($fullNewPath) && $bump <= 10) {
-                $finalName = $newBaseName . '_v' . (int) $dbId . '_d' . $bump . '.' . $finalExt;
+                $finalName = strtolower($newBaseName) . '_v' . (int) $dbId . '_d' . $bump . '.jpg';
                 $fullNewPath = $directory . $finalName;
                 $bump++;
             }
@@ -1248,21 +1217,9 @@ class InboundingController {
 
         $renamed = false;
         if (file_exists($fullOldPath)) {
-            if ($bookOutputJpeg && $finalExt === 'jpg') {
-                if (@rename($fullOldPath, $fullNewPath)) {
-                    $renamed = true;
-                } else {
-                    $renamed = $this->writeImageFileAsJpeg($fullOldPath, $fullNewPath);
-                }
-            } else {
-                $renamed = @rename($fullOldPath, $fullNewPath);
-            }
-        } else {
-            // Shared-source fallback: if another variation already moved this file,
-            // point this record to an existing target so image doesn't break.
-            if (file_exists($fullNewPath)) {
-                $renamed = true;
-            }
+            $renamed = $this->renameImageFile($directory, $oldFileName, $finalName);
+        } elseif (file_exists($fullNewPath)) {
+            $renamed = true;
         }
 
         if ($renamed) {
@@ -1279,12 +1236,98 @@ class InboundingController {
                 $dbPath = "uploads/products/" . $finalName;
                 $model->update_variation_photo($dbId, $dbPath);
             } elseif ($type === 'gallery') {
-                // Gallery stores just filename usually, or check your logic
-                // Your current code stores just filename in item_images? 
-                // Based on "uploads/itm_img/filename" in your view, it likely stores just filename.
                 $model->update_image_filename_direct($dbId, $finalName);
             }
+
+            if ($gallerySyncDir !== '' && in_array($type, ['main', 'variation_main'], true)) {
+                $this->syncPrimaryImageToGalleryDir($fullNewPath, $gallerySyncDir, $finalName);
+            }
         }
+    }
+
+    /**
+     * Copy primary image into uploads/itm_img so vendor API image URLs share one folder.
+     */
+    private function syncPrimaryImageToGalleryDir(string $sourcePath, string $galleryDir, string $fileName): void
+    {
+        if (!is_file($sourcePath) || $fileName === '') {
+            return;
+        }
+        if (!is_dir($galleryDir) && !@mkdir($galleryDir, 0755, true)) {
+            return;
+        }
+        $destPath = rtrim($galleryDir, '/\\') . DIRECTORY_SEPARATOR . strtolower($fileName);
+        if (is_file($destPath)) {
+            $srcMtime = @filemtime($sourcePath);
+            $dstMtime = @filemtime($destPath);
+            if ($srcMtime !== false && $dstMtime !== false && $dstMtime >= $srcMtime) {
+                return;
+            }
+        }
+        if (!@copy($sourcePath, $destPath)) {
+            $this->writeImageFileAsJpeg($sourcePath, $destPath);
+        }
+    }
+
+    /**
+     * Build vendor API images[] URLs: primary first, then alternates (display_order).
+     *
+     * @return list<string>
+     */
+    private function buildApiProductImageUrls(array $d, string $siteImageBase): array
+    {
+        $imgBase = rtrim($siteImageBase, '/') . '/uploads/itm_img/';
+        $orderedFiles = [];
+
+        $primaryFile = '';
+        if (!empty($d['product_photo'])) {
+            $primaryFile = strtolower(basename((string) $d['product_photo']));
+        }
+
+        $varRows = $d['var_rows'] ?? [];
+        $hasVariations = is_array($varRows) && $varRows !== [];
+        $isVariant = strtoupper(trim((string) ($d['is_variant'] ?? 'N'))) === 'Y';
+        $isBook = strtolower(trim((string) ($d['groupname'] ?? ''))) === 'book';
+
+        if ($primaryFile === '' && $hasVariations && !$isVariant && !$isBook) {
+            $firstVarImage = trim((string) ($varRows[0]['variation_image'] ?? ''));
+            if ($firstVarImage !== '') {
+                $primaryFile = strtolower(basename($firstVarImage));
+            }
+        }
+
+        if ($primaryFile !== '') {
+            $orderedFiles[] = $primaryFile;
+        }
+
+        $galleryRows = $d['img'] ?? [];
+        if (is_array($galleryRows) && $galleryRows !== []) {
+            usort($galleryRows, static function ($a, $b) {
+                $va = (int) ($a['variation_id'] ?? -1);
+                $vb = (int) ($b['variation_id'] ?? -1);
+                if ($va !== $vb) {
+                    return $va <=> $vb;
+                }
+                $oa = (int) ($a['display_order'] ?? 0);
+                $ob = (int) ($b['display_order'] ?? 0);
+                if ($oa !== $ob) {
+                    return $oa <=> $ob;
+                }
+                return (int) ($a['id'] ?? 0) <=> (int) ($b['id'] ?? 0);
+            });
+
+            foreach ($galleryRows as $row) {
+                $fn = strtolower(basename((string) ($row['file_name'] ?? '')));
+                if ($fn === '' || in_array($fn, $orderedFiles, true)) {
+                    continue;
+                }
+                $orderedFiles[] = $fn;
+            }
+        }
+
+        return array_map(static function ($filename) use ($imgBase) {
+            return $imgBase . $filename;
+        }, $orderedFiles);
     }
 
     private function deleteThumbnailForImagePath(string $absoluteImagePath): void {
@@ -1372,7 +1415,7 @@ class InboundingController {
         $size  = trim($_POST['size'] ?? '');
         $color = trim($_POST['color'] ?? '');
 
-        // Always rename on every save so gallery filenames stay in sync with display_order.
+        // Rename when item_code is set; gallery/primary fast-path skips work if names already match.
         if (!empty($item_code)) {
             $shouldRename = true;
         }
@@ -1410,7 +1453,7 @@ class InboundingController {
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
                 $uploadDir = __DIR__ . '/../uploads/products/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                $newFileName = "MAIN_" . $id . "_" . time() . "_" . rand(100,999) . "." . $ext;
+                $newFileName = strtolower("MAIN_" . $id . "_" . time() . "_" . rand(100, 999) . "." . $ext);
                 if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
                     $mainProductPhoto = "uploads/products/" . $newFileName;
                 }
@@ -1539,7 +1582,7 @@ class InboundingController {
                  if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
                      $uploadDir = __DIR__ . '/../uploads/products/';
                      if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                     $newFileName = "VAR_" . $id . "_" . $key . "_" . time() . "_" . rand(100,999) . "." . $ext;
+                     $newFileName = strtolower("VAR_" . $id . "_" . $key . "_" . time() . "_" . rand(100, 999) . "." . $ext);
                      if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
                          $variant['photo'] = "uploads/products/" . $newFileName;
                      }
@@ -1720,7 +1763,7 @@ class InboundingController {
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
               $uploadDir = __DIR__ . '/../uploads/products/';
               if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-              $newFileName = "VAR_" . $record_id . "_" . $index . "_" . time() . "." . $ext;
+              $newFileName = strtolower("VAR_" . $record_id . "_" . $index . "_" . time() . "." . $ext);
               if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
                 $variant['photo'] = "uploads/products/" . $newFileName;
               }
@@ -2018,15 +2061,12 @@ class InboundingController {
         
         if (empty($item_code)) return;
 
-        // Prepare the naming context
         $currentDataForRename = [
-            'is_variant' => $is_variant,
+            'is_variant' => strtoupper(trim((string) $is_variant)) === 'Y' ? 'Y' : 'N',
             'color'      => $color,
             'size'       => $size
         ];
 
-        // Call your existing renaming logic
-        // This ensures that even if renaming was skipped before, it happens now
         $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
     }
 
@@ -2135,16 +2175,20 @@ class InboundingController {
             inbound_profiler_finish($prof, 'error_incomplete_data');
             exit;
         }
-        $this->ensureImagesAreRenamed(
-            $id, 
-            $data1['data']['Item_code'], 
-            $data1['data']['is_variant'], 
-            $data1['data']['color'] ?? '', 
-            $data1['data']['size'] ?? ''
+        $imageBundle = $inboundingModel->getImageRenameBundle($id);
+        $this->renameImagesToItemCode(
+            $id,
+            $data1['data']['Item_code'],
+            [
+                'is_variant' => strtoupper(trim((string) ($data1['data']['is_variant'] ?? 'N'))) === 'Y' ? 'Y' : 'N',
+                'color' => $data1['data']['color'] ?? '',
+                'size' => $data1['data']['size'] ?? '',
+            ],
+            $imageBundle
         );
         inbound_profiler_step($prof, 'ensureImagesAreRenamed');
-        $data = $inboundingModel->getpublishdata($id);
-        inbound_profiler_step($prof, 'getpublishdata_after_rename');
+        $data = $inboundingModel->refreshPublishImageFields($id, $data1, $imageBundle);
+        inbound_profiler_step($prof, 'refreshPublishImageFields');
         if (!is_array($data) || !isset($data['data']) || !is_array($data['data'])) {
             if (ob_get_length()) { ob_clean(); }
             header('Content-Type: application/json');
@@ -2405,22 +2449,13 @@ class InboundingController {
         $images_payload['image_directory'] = $img_directory;
         $images_payload['images'] = array(); // Initialize as empty ARRAY, not string
 
-        if (!empty($d['img'])) {
+        if (!empty($d['img']) || !empty($d['product_photo']) || !empty($d['var_rows'])) {
             $images_payload['image_directory'] = $d['image_directory'] ?? '';
             
-            // WARNING: __DIR__ creates a server file path (e.g., /var/www/html/...). 
-            // If you need a clickable URL for a browser, change this to your website URL.
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $httpHost = $_SERVER['HTTP_HOST'] ?? '';
             $siteImageBase = $protocol . '://' . $httpHost;
-            $imgDir = $siteImageBase . '/uploads/itm_img/'; 
-            // 1. Get the list of filenames
-            $raw_images = array_column($d['img'], 'file_name');
-
-            // 2. Concatenate $imgDir to each filename
-            $images_payload['images'] = array_map(function($filename) use ($imgDir) {
-                return $imgDir . $filename;
-            }, $raw_images);
+            $images_payload['images'] = $this->buildApiProductImageUrls($d, $siteImageBase);
         }
 
         $API_data['images'] = $images_payload;

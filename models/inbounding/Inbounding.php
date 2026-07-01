@@ -445,6 +445,7 @@ class Inbounding {
 
     // 3. Insert new image record (KEPT EXISTING)
     public function add_image($item_id, $filename, $caption = '', $order = 0, $variation_id = -1) {
+        $filename = strtolower(basename((string) $filename));
         // Added variation_id to query
         $sql = "INSERT INTO `item_images` (item_id, file_name, display_order, image_caption, variation_id) VALUES (?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
@@ -1959,7 +1960,12 @@ class Inbounding {
         if (isset($var_rows) && !empty($var_rows)) {
             $inbounding['var_rows'] = $var_rows;
         }
-        $images_sql = $this->conn->query("SELECT file_name FROM `item_images` WHERE item_id = $id");
+        $images_sql = $this->conn->query(
+            "SELECT id, file_name, display_order, variation_id
+             FROM `item_images`
+             WHERE item_id = $id
+             ORDER BY variation_id ASC, display_order ASC, id ASC"
+        );
         $img_result = $images_sql->fetch_all(MYSQLI_ASSOC);
         if ($img_result) {
             $inbounding['img'] = $img_result;
@@ -1976,7 +1982,90 @@ class Inbounding {
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
 
+    /**
+     * Inbound row + variations + gallery images (grouped) for rename/publish refresh.
+     *
+     * @return array{inbound: array, variations: list<array>, images_by_variation: array<int, list<array>>}
+     */
+    public function getImageRenameBundle(int $id): array
+    {
+        $id = (int) $id;
+        $empty = ['inbound' => [], 'variations' => [], 'images_by_variation' => []];
+        if ($id <= 0) {
+            return $empty;
+        }
+
+        $inbound = null;
+        $stmt = $this->conn->prepare(
+            'SELECT id, group_name, product_photo, is_variant, Item_code, color, size
+             FROM vp_inbound WHERE id = ? LIMIT 1'
+        );
+        if ($stmt) {
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $inbound = $stmt->get_result()->fetch_assoc() ?: null;
+            $stmt->close();
+        }
+
+        $variations = $this->getVariations($id);
+        $imagesByVariation = [];
+        $imgStmt = $this->conn->prepare(
+            'SELECT id, file_name, display_order, variation_id
+             FROM item_images WHERE item_id = ?
+             ORDER BY variation_id ASC, display_order ASC, id ASC'
+        );
+        if ($imgStmt) {
+            $imgStmt->bind_param('i', $id);
+            $imgStmt->execute();
+            foreach ($imgStmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+                $varId = (int) ($row['variation_id'] ?? -1);
+                if ($varId === 0) {
+                    $varId = -1;
+                }
+                $imagesByVariation[$varId][] = $row;
+            }
+            $imgStmt->close();
+        }
+
+        return [
+            'inbound' => $inbound ?: [],
+            'variations' => $variations,
+            'images_by_variation' => $imagesByVariation,
+        ];
+    }
+
+    /** Refresh image paths on publish payload after rename (no second full getpublishdata). */
+    public function refreshPublishImageFields(int $id, array $publishPayload, ?array $bundle = null): array
+    {
+        if (!isset($publishPayload['data']) || !is_array($publishPayload['data'])) {
+            return $publishPayload;
+        }
+
+        $bundle = $bundle ?? $this->getImageRenameBundle($id);
+        $publishPayload['data']['product_photo'] = $bundle['inbound']['product_photo'] ?? '';
+        if ($bundle['variations'] !== []) {
+            $publishPayload['data']['var_rows'] = $bundle['variations'];
+        } else {
+            unset($publishPayload['data']['var_rows']);
+        }
+
+        $flatImages = [];
+        foreach ($bundle['images_by_variation'] as $rows) {
+            foreach ($rows as $row) {
+                $flatImages[] = $row;
+            }
+        }
+        if ($flatImages !== []) {
+            $publishPayload['data']['img'] = $flatImages;
+        } else {
+            unset($publishPayload['data']['img']);
+        }
+
+        return $publishPayload;
+    }
+
     public function update_image_filename_direct($img_id, $new_name) {
+        $new_name = strtolower(basename((string) $new_name));
         $sql = "UPDATE item_images SET file_name = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("si", $new_name, $img_id);
