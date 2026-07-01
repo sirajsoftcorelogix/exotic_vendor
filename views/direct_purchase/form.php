@@ -10,7 +10,7 @@ if (empty($items)) {
     $items = [[
         'item_code' => '', 'sku' => '', 'color' => '', 'size' => '',
         'cost_per_item' => '', 'qty' => '1', 'hsn' => '', 'gst_rate' => '',
-        'unit' => '', 'gst_amount' => '', 'line_total' => '',
+        'gst_amount' => '', 'line_total' => '',
     ]];
 }
 $flash = $_SESSION['direct_purchase_flash'] ?? null;
@@ -193,20 +193,18 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                         <col class="dp-col-qty">
                         <col class="dp-col-hsn">
                         <col class="dp-col-gst">
-                        <col class="dp-col-unit">
                         <col class="dp-col-total">
                         <col class="dp-col-actions">
                     </colgroup>
                     <thead>
                         <tr class="bg-gray-100">
                             <th class="px-1 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 dp-col-img">Image</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-sku">SKU</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-cost">Cost / item</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-qty">Qty</th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-sku">SKU <span class="text-red-600" aria-hidden="true">*</span></th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-cost">Cost / item <span class="text-red-600" aria-hidden="true">*</span></th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-qty">Qty <span class="text-red-600" aria-hidden="true">*</span></th>
                             <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-hsn">HSN</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-gst">GST %</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-unit">Unit</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-total">Line total</th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-gst">GST % <span class="text-red-600" aria-hidden="true">*</span></th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-total">Line total <span class="text-red-600" aria-hidden="true">*</span></th>
                             <th class="px-1 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 dp-col-actions"></th>
                         </tr>
                     </thead>
@@ -243,7 +241,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                             <input type="hidden" name="size[]" class="dp-h-size" value="<?= htmlspecialchars($it['size'] ?? '') ?>">
                                             <input type="hidden" class="dp-h-product-id" value="<?= $dpProductId ?>">
                                             <input type="hidden" name="gst_amount[]" class="dp-gst" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>">
-                                            <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
+                                            <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…" required
                                                 class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?>"
                                                 value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
                                             <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
@@ -262,7 +260,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-cost dp-col-numeric">
                                     <div class="dp-cell-with-actions">
-                                        <input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>">
+                                        <input type="number" step="0.0001" min="0.0001" name="cost_per_item[]" required class="dp-cost dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>">
                                         <div class="dp-cost-actions shrink-0">
                                             <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API" <?= $dpLocked ? 'disabled' : '' ?>>
@@ -277,7 +275,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-qty dp-col-numeric">
                                     <div class="dp-cell-with-actions">
-                                        <input type="number" step="0.001" name="qty[]" class="dp-qty dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>">
+                                        <input type="number" step="0.001" min="0" name="qty[]" required class="dp-qty dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>">
                                         <div class="dp-cell-actions-slot">
                                         <button type="button" class="dp-sync-vendor-qty dp-line-mini-btn inline-flex items-center justify-center rounded-md border disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 <?= $dpVendorQtySynced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100' ?>"
                                             title="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : ($dpLineItemId > 0 ? 'Push qty to vendor API' : 'Save purchase first to sync qty') ?>"
@@ -289,9 +287,8 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                     </div>
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
-                                <td class="px-1 py-2 align-top dp-col-gst dp-col-numeric"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
-                                <td class="px-1 py-2 align-top dp-col-unit dp-col-numeric"><input name="unit[]" class="dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
-                                <td class="px-1 py-2 align-top dp-col-total dp-col-numeric"><input type="number" step="0.01" name="line_total[]" class="dp-line-total dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
+                                <td class="px-1 py-2 align-top dp-col-gst dp-col-numeric"><input type="number" step="0.01" min="0" name="gst_rate[]" required class="dp-rate dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
+                                <td class="px-1 py-2 align-top dp-col-total dp-col-numeric"><input type="number" step="0.01" min="0.01" name="line_total[]" required class="dp-line-total dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
                                 <td class="px-1 py-2 text-center align-top dp-col-actions">
                                     <button type="button" class="dp-remove dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
                                         <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
@@ -310,7 +307,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 </button>
             </div>
             <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                Type at least 2 characters to search products by SKU only. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest cost from the product API (updates <code class="text-[11px] bg-gray-100 px-1 rounded">vp_products</code>). Use <i class="fas fa-clipboard-check text-[10px]" aria-hidden="true"></i> to verify CP and local stock on exoticindia.com against this line and <code class="text-[11px] bg-gray-100 px-1 rounded">vp_products</code>. Line amounts recalc from cost, qty, and GST %.
+                Type at least 2 characters to search products by SKU only. Fields marked <span class="text-red-600">*</span> are required (HSN is optional). For <strong>books</strong>, Cost / item uses Price India (without GST); for other products it uses CP. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest value from the product API.
             </p>
 
             <div class="mt-6 pt-5 border-t border-gray-200">
@@ -516,9 +513,8 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
 #line-items-table col.dp-col-cost { width: 12.96%; }
 #line-items-table col.dp-col-qty { width: 14%; }
 #line-items-table col.dp-col-hsn { width: 10%; }
-#line-items-table col.dp-col-gst { width: 6%; }
-#line-items-table col.dp-col-unit { width: 8%; }
-#line-items-table col.dp-col-total { width: 12%; }
+#line-items-table col.dp-col-gst { width: 8%; }
+#line-items-table col.dp-col-total { width: 14%; }
 #line-items-table col.dp-col-actions { width: 36px; }
 #line-items-table th.dp-col-img,
 #line-items-table td.dp-col-img {
@@ -619,7 +615,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                         <input type="hidden" name="size[]" class="dp-h-size" value="">
                         <input type="hidden" class="dp-h-product-id" value="">
                         <input type="hidden" name="gst_amount[]" class="dp-gst" value="">
-                        <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
+                        <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…" required
                             class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?>" value="">
                         <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                     </div>
@@ -637,7 +633,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
             </td>
             <td class="px-1 py-2 align-top dp-col-cost dp-col-numeric">
                 <div class="dp-cell-with-actions">
-                    <input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost dp-inp-cell <?= $inpSm ?>" value="">
+                    <input type="number" step="0.0001" min="0.0001" name="cost_per_item[]" required class="dp-cost dp-inp-cell <?= $inpSm ?>" value="">
                     <div class="dp-cost-actions shrink-0">
                         <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API">
@@ -652,7 +648,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
             </td>
             <td class="px-1 py-2 align-top dp-col-qty dp-col-numeric">
                 <div class="dp-cell-with-actions">
-                    <input type="number" step="0.001" name="qty[]" class="dp-qty dp-inp-cell <?= $inpSm ?>" value="1">
+                    <input type="number" step="0.001" min="0" name="qty[]" required class="dp-qty dp-inp-cell <?= $inpSm ?>" value="">
                     <div class="dp-cell-actions-slot">
                     <button type="button" class="dp-sync-vendor-qty dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Save purchase first to sync qty" aria-label="Push qty to vendor API" disabled>
@@ -662,9 +658,8 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 </div>
             </td>
             <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell <?= $inpSm ?>" value=""></td>
-            <td class="px-1 py-2 align-top dp-col-gst dp-col-numeric"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate dp-inp-cell <?= $inpSm ?>" value=""></td>
-            <td class="px-1 py-2 align-top dp-col-unit dp-col-numeric"><input name="unit[]" class="dp-inp-cell <?= $inpSm ?>" value=""></td>
-            <td class="px-1 py-2 align-top dp-col-total dp-col-numeric"><input type="number" step="0.01" name="line_total[]" class="dp-line-total dp-inp-cell <?= $inpSm ?>" value=""></td>
+            <td class="px-1 py-2 align-top dp-col-gst dp-col-numeric"><input type="number" step="0.01" min="0" name="gst_rate[]" required class="dp-rate dp-inp-cell <?= $inpSm ?>" value=""></td>
+            <td class="px-1 py-2 align-top dp-col-total dp-col-numeric"><input type="number" step="0.01" min="0.01" name="line_total[]" required class="dp-line-total dp-inp-cell <?= $inpSm ?>" value=""></td>
             <td class="px-1 py-2 text-center align-top dp-col-actions">
                 <button type="button" class="dp-remove dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
                     <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
@@ -842,6 +837,11 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 var cost = tr.querySelector('.dp-cost');
                 if (cost && data.cost_price != null && data.cost_price !== '') {
                     cost.value = data.cost_price;
+                }
+                if (data.is_book) {
+                    tr.dataset.dpIsBook = '1';
+                } else {
+                    tr.dataset.dpIsBook = '0';
                 }
                 if (data.hsn) {
                     var hsn = tr.querySelector('input[name="hsn[]"]');
@@ -1593,8 +1593,16 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
         if (sz) sz.value = item.size != null ? String(item.size) : '';
         if (skuEl) skuEl.value = item.sku != null ? String(item.sku) : '';
         dpSetRowProductId(tr, item.id != null ? parseInt(item.id, 10) : 0);
+        tr.dataset.dpIsBook = item.is_book ? '1' : '0';
         var cost = tr.querySelector('.dp-cost');
-        if (cost && item.cost_price != null && item.cost_price !== '') cost.value = item.cost_price;
+        if (cost) {
+            var suggested = item.cost_price != null && item.cost_price !== ''
+                ? item.cost_price
+                : (item.is_book && item.price_india != null ? item.price_india : '');
+            if (suggested !== '' && suggested != null) {
+                cost.value = suggested;
+            }
+        }
         var hsn = tr.querySelector('input[name="hsn[]"]');
         if (hsn && item.hsn != null) hsn.value = String(item.hsn);
         var rate = tr.querySelector('.dp-rate');
@@ -1819,6 +1827,23 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     if (fDisc) fDisc.addEventListener('input', recalcInvoiceTotals);
     if (fRo) fRo.addEventListener('input', recalcInvoiceTotals);
     recalcInvoiceTotals();
+    var dpForm = document.getElementById('dp-form');
+    if (dpForm) {
+        dpForm.addEventListener('submit', function () {
+            document.querySelectorAll('#line-items-body tr.dp-line').forEach(function (tr) {
+                var qtyEl = tr.querySelector('.dp-qty');
+                var qty = qtyEl ? parseFloat(qtyEl.value) : 0;
+                var requireLine = !isNaN(qty) && qty > 0;
+                tr.querySelectorAll('input[name="sku[]"], input[name="cost_per_item[]"], input[name="qty[]"], input[name="gst_rate[]"], input[name="line_total[]"]').forEach(function (inp) {
+                    if (requireLine) {
+                        inp.setAttribute('required', 'required');
+                    } else {
+                        inp.removeAttribute('required');
+                    }
+                });
+            });
+        });
+    }
     var dpCurSel = document.getElementById('dp_currency');
     if (dpCurSel) {
         dpCurSel.addEventListener('change', syncSummaryCurrencySymbols);
