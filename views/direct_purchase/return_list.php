@@ -36,24 +36,20 @@ if ($purchaseAddedBy === '') {
                     <span>Purchasing · Direct purchase</span>
                 </div>
                 <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Purchase returns</h1>
-                <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed">
+                <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed whitespace-nowrap overflow-x-auto">
                     Invoice <span class="font-mono font-semibold text-gray-900"><?= htmlspecialchars((string) ($purchase['invoice_number'] ?? '')) ?></span>
-                    · <?= htmlspecialchars((string) ($purchase['vendor_name'] ?? '')) ?>
+                    <span class="text-gray-400 mx-1.5" aria-hidden="true">·</span>
+                    <?= htmlspecialchars((string) ($purchase['vendor_name'] ?? '')) ?>
+                    <span class="text-gray-400 mx-1.5" aria-hidden="true">·</span>
+                    <span class="font-semibold text-gray-700">Invoice date</span>
+                    <?= htmlspecialchars($dpFormatDate($purchase['invoice_date'] ?? '')) ?>
+                    <span class="text-gray-400 mx-1.5" aria-hidden="true">·</span>
+                    <span class="font-semibold text-gray-700">Purchase added</span>
+                    <?= htmlspecialchars($dpFormatDate($purchase['created_at'] ?? '')) ?>
+                    <span class="text-gray-400 mx-1.5" aria-hidden="true">·</span>
+                    <span class="font-semibold text-gray-700">Purchase added by</span>
+                    <?= htmlspecialchars($purchaseAddedBy) ?>
                 </p>
-                <dl class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
-                    <div class="flex items-center gap-2">
-                        <dt class="font-semibold text-gray-700">Invoice date</dt>
-                        <dd><?= htmlspecialchars($dpFormatDate($purchase['invoice_date'] ?? '')) ?></dd>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <dt class="font-semibold text-gray-700">Purchase added</dt>
-                        <dd><?= htmlspecialchars($dpFormatDate($purchase['created_at'] ?? '')) ?></dd>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <dt class="font-semibold text-gray-700">Purchase added by</dt>
-                        <dd><?= htmlspecialchars($purchaseAddedBy) ?></dd>
-                    </div>
-                </dl>
             </div>
             <div class="flex flex-wrap gap-2 shrink-0 lg:pt-1">
                 <a href="?page=direct_purchase&action=return_add&amp;dp_id=<?= $dpId ?>"
