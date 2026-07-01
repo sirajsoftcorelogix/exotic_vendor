@@ -318,13 +318,22 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                                             aria-label="Purchase returns">
                                             <i class="fas fa-undo-alt text-xs" aria-hidden="true"></i>
                                         </a>
+                                        <?php $dpReturnCount = (int) ($p['return_count'] ?? 0); ?>
+                                        <?php if ($dpReturnCount > 0): ?>
+                                            <span class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed"
+                                                title="Delete all purchase returns before deleting this purchase"
+                                                aria-label="Delete purchase disabled — linked returns exist">
+                                                <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
+                                            </span>
+                                        <?php else: ?>
                                         <a href="?page=direct_purchase&action=delete&id=<?= (int) $p['id'] ?>"
-                                            onclick="return confirm('Delete this purchase? Line items, returns, and related stock movements will be removed or reversed.');"
+                                            onclick="return confirm('Delete this purchase? Line items and related stock movements will be removed or reversed.');"
                                             class="inline-flex h-7 w-7 items-center justify-center rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1"
                                             title="Delete purchase"
                                             aria-label="Delete purchase">
                                             <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
                                         </a>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>

@@ -28,8 +28,15 @@ $dpCurrencySym = dp_currency_symbol($dpCurrencyVal);
 $dpDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
 $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
 $warehouses = $data['warehouses'] ?? [];
-$dpLocked = !empty($data['purchase_locked']);
 $dpPurchaseId = (int) ($pData['id'] ?? 0);
+$dpHasReturnedLines = false;
+foreach ($items as $dpIt) {
+    if ((float) ($dpIt['already_returned_qty'] ?? 0) > 0) {
+        $dpHasReturnedLines = true;
+        break;
+    }
+}
+$dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Header band (stock transfer style) -->
@@ -87,15 +94,15 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
         </div>
     <?php endif; ?>
 
-    <?php if ($dpLocked && $purchase): ?>
+    <?php if ($dpHasReturnedLines && $purchase): ?>
         <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 shadow-sm" role="status">
-            This purchase has returns and cannot be edited. Delete all returns for this purchase first, then you can change lines again.
+            Lines with linked purchase returns are read-only. Other lines and invoice details can still be edited.
             <a href="?page=direct_purchase&action=return_list&amp;dp_id=<?= (int) $purchase['id'] ?>"
                 class="ml-2 font-semibold text-amber-900 underline underline-offset-2 decoration-amber-700/40 hover:text-amber-950">View returns</a>
         </div>
     <?php endif; ?>
 
-    <form method="post" action="?page=direct_purchase&action=save" enctype="multipart/form-data" id="dp-form" class="space-y-6" <?= $dpLocked ? 'onsubmit="return false;"' : '' ?>>
+    <form method="post" action="?page=direct_purchase&action=save" enctype="multipart/form-data" id="dp-form" class="space-y-6">
         <?php if ($isEdit && $purchase): ?>
             <input type="hidden" name="id" value="<?= (int) $purchase['id'] ?>">
         <?php endif; ?>
@@ -126,7 +133,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Warehouse (stock) <span class="text-red-500">*</span></label>
-                    <select name="warehouse_id" id="warehouse_id" class="<?= $inp ?> bg-white" <?= $dpLocked ? 'disabled' : 'required' ?>>
+                    <select name="warehouse_id" id="warehouse_id" class="<?= $inp ?> bg-white" required>
                         <option value="">Select warehouse</option>
                         <?php foreach ($warehouses as $wh): ?>
                             <?php
@@ -141,9 +148,6 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <?php if ($dpLocked && $purchase): ?>
-                        <input type="hidden" name="warehouse_id" value="<?= (int) ($purchase['warehouse_id'] ?? 0) ?>">
-                    <?php endif; ?>
                     <p class="mt-1 text-xs text-gray-500">Goods receipt stock is posted to this warehouse (same pattern as GRN).</p>
                 </div>
                 <div>
@@ -219,9 +223,13 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                 ? (string) $it['vendor_qty_synced_qty']
                                 : '';
                             $dpProductId = (int) ($it['product_id'] ?? 0);
+                            $dpLineLocked = (float) ($it['already_returned_qty'] ?? 0) > 0;
+                            $dpLineReadonly = $dpLineLocked ? 'readonly tabindex="-1"' : '';
+                            $dpLineReadonlyClass = $dpLineLocked ? $dpReadonlyInp : '';
                             ?>
-                            <tr class="dp-line hover:bg-amber-50/30 transition-colors"
+                            <tr class="dp-line hover:bg-amber-50/30 transition-colors <?= $dpLineLocked ? 'dp-line-return-locked bg-amber-50/40' : '' ?>"
                                 data-dp-item-id="<?= $dpLineItemId ?>"
+                                data-dp-line-locked="<?= $dpLineLocked ? '1' : '0' ?>"
                                 data-vendor-qty-synced="<?= $dpVendorQtySynced ? '1' : '0' ?>"
                                 data-vendor-qty-synced-qty="<?= htmlspecialchars($dpVendorQtySyncedQty, ENT_QUOTES, 'UTF-8') ?>">
                                 <td class="px-1 py-2 align-top text-center dp-col-img">
@@ -236,14 +244,15 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                 <td class="px-1 py-2 align-top dp-col-sku">
                                     <div class="flex items-start gap-0.5">
                                         <div class="relative dp-sku-cell flex-1 min-w-0">
+                                            <input type="hidden" name="dp_line_id[]" class="dp-h-line-id" value="<?= $dpLineItemId ?>">
                                             <input type="hidden" name="item_code[]" class="dp-h-item-code" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
                                             <input type="hidden" name="color[]" class="dp-h-color" value="<?= htmlspecialchars($it['color'] ?? '') ?>">
                                             <input type="hidden" name="size[]" class="dp-h-size" value="<?= htmlspecialchars($it['size'] ?? '') ?>">
                                             <input type="hidden" class="dp-h-product-id" value="<?= $dpProductId ?>">
                                             <input type="hidden" name="gst_amount[]" class="dp-gst" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>">
                                             <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…" required
-                                                class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?>"
-                                                value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
+                                                class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?> <?= $dpLineReadonlyClass ?>"
+                                                value="<?= htmlspecialchars($it['sku'] ?? '') ?>" <?= $dpLineReadonly ?>>
                                             <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                                         </div>
                                         <a href="<?= $dpProductId > 0 ? ('?page=products&amp;action=detail&amp;id=' . $dpProductId) : '#' ?>"
@@ -253,7 +262,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                             <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
                                         </a>
                                         <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU" <?= $dpLocked ? 'disabled' : '' ?>>
+                                            title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU" <?= $dpLineLocked ? 'disabled' : '' ?>>
                                             <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
                                         </button>
                                     </div>
@@ -261,14 +270,14 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                 <td class="px-1 py-2 align-top dp-col-cost dp-col-numeric">
                                     <div class="dp-cost-wrap min-w-0">
                                         <div class="dp-cell-with-actions">
-                                            <input type="number" step="0.0001" min="0.0001" name="cost_per_item[]" required class="dp-cost dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>">
+                                            <input type="number" step="0.0001" min="0.0001" name="cost_per_item[]" required class="dp-cost dp-inp-cell <?= $inpSm ?> <?= $dpLineReadonlyClass ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>" <?= $dpLineReadonly ?>>
                                             <div class="dp-cost-actions shrink-0">
                                                 <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API" <?= $dpLocked ? 'disabled' : '' ?>>
+                                                    title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API" <?= $dpLineLocked ? 'disabled' : '' ?>>
                                                     <i class="fas fa-arrow-down" aria-hidden="true"></i>
                                                 </button>
                                                 <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com" <?= $dpLocked ? 'disabled' : '' ?>>
+                                                    title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com" <?= $dpLineLocked ? 'disabled' : '' ?>>
                                                     <i class="fas fa-clipboard-check" aria-hidden="true"></i>
                                                 </button>
                                             </div>
@@ -278,24 +287,32 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-qty dp-col-numeric">
                                     <div class="dp-cell-with-actions">
-                                        <input type="number" step="0.001" min="0" name="qty[]" required class="dp-qty dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>">
+                                        <input type="number" step="0.001" min="0" name="qty[]" required class="dp-qty dp-inp-cell <?= $inpSm ?> <?= $dpLineReadonlyClass ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>" <?= $dpLineReadonly ?>>
                                         <div class="dp-cell-actions-slot">
                                         <button type="button" class="dp-sync-vendor-qty dp-line-mini-btn inline-flex items-center justify-center rounded-md border disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 <?= $dpVendorQtySynced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100' ?>"
                                             title="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : ($dpLineItemId > 0 ? 'Push qty to vendor API' : 'Save purchase first to sync qty') ?>"
                                             aria-label="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : 'Push qty to vendor API' ?>"
-                                            <?= ($dpLocked || ($dpLineItemId <= 0 && !$dpVendorQtySynced)) ? 'disabled' : '' ?>>
+                                            <?= ($dpLineLocked || ($dpLineItemId <= 0 && !$dpVendorQtySynced)) ? 'disabled' : '' ?>>
                                             <i class="fas <?= $dpVendorQtySynced ? 'fa-check' : 'fa-cloud-upload-alt' ?>" aria-hidden="true"></i>
                                         </button>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
-                                <td class="px-1 py-2 align-top dp-col-gst dp-col-numeric"><input type="number" step="0.01" min="0" name="gst_rate[]" required class="dp-rate dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
-                                <td class="px-1 py-2 align-top dp-col-total dp-col-numeric"><input type="number" step="0.01" min="0.01" name="line_total[]" required class="dp-line-total dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
+                                <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell <?= $inpSm ?> <?= $dpLineReadonlyClass ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>" <?= $dpLineReadonly ?>></td>
+                                <td class="px-1 py-2 align-top dp-col-gst dp-col-numeric"><input type="number" step="0.01" min="0" name="gst_rate[]" required class="dp-rate dp-inp-cell <?= $inpSm ?> <?= $dpLineReadonlyClass ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>" <?= $dpLineReadonly ?>></td>
+                                <td class="px-1 py-2 align-top dp-col-total dp-col-numeric"><input type="number" step="0.01" min="0.01" name="line_total[]" required class="dp-line-total dp-inp-cell <?= $inpSm ?> <?= $dpLineReadonlyClass ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>" <?= $dpLineReadonly ?>></td>
                                 <td class="px-1 py-2 text-center align-top dp-col-actions">
+                                    <?php if ($dpLineLocked): ?>
+                                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700"
+                                            title="Linked purchase return — line cannot be edited or removed"
+                                            aria-label="Line locked due to purchase return">
+                                            <i class="fas fa-lock text-[10px]" aria-hidden="true"></i>
+                                        </span>
+                                    <?php else: ?>
                                     <button type="button" class="dp-remove dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
                                         <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
                                     </button>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -389,8 +406,8 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 class="inline-flex justify-center items-center px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 transition">
                 Cancel
             </a>
-            <button type="submit" <?= $dpLocked ? 'disabled' : '' ?>
-                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition <?= $dpLocked ? 'opacity-50 cursor-not-allowed pointer-events-none' : '' ?>">
+            <button type="submit"
+                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
                 <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
                 <?= $isEdit ? 'Update purchase' : 'Save purchase' ?>
             </button>
@@ -623,6 +640,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
             <td class="px-1 py-2 align-top dp-col-sku">
                 <div class="flex items-start gap-0.5">
                     <div class="relative dp-sku-cell flex-1 min-w-0">
+                        <input type="hidden" name="dp_line_id[]" class="dp-h-line-id" value="0">
                         <input type="hidden" name="item_code[]" class="dp-h-item-code" value="">
                         <input type="hidden" name="color[]" class="dp-h-color" value="">
                         <input type="hidden" name="size[]" class="dp-h-size" value="">
@@ -1730,36 +1748,40 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     }
 
     function bindRow(tr) {
-        ['.dp-cost', '.dp-qty', '.dp-rate'].forEach(function (sel) {
-            var el = tr.querySelector(sel);
-            if (!el) return;
-            var fn = function () {
-                recalcRow(tr);
-                if (sel === '.dp-qty') dpMarkVendorQtyUnsynced(tr);
-            };
-            el.addEventListener('input', fn);
-            el.addEventListener('change', fn);
-        });
+        var lineLocked = tr.getAttribute('data-dp-line-locked') === '1';
+        if (!lineLocked) {
+            ['.dp-cost', '.dp-qty', '.dp-rate'].forEach(function (sel) {
+                var el = tr.querySelector(sel);
+                if (!el) return;
+                var fn = function () {
+                    recalcRow(tr);
+                    if (sel === '.dp-qty') dpMarkVendorQtyUnsynced(tr);
+                };
+                el.addEventListener('input', fn);
+                el.addEventListener('change', fn);
+            });
+            var sku = tr.querySelector('.dp-sku');
+            if (sku) initSkuSearch(sku);
+        }
         var lineTot = tr.querySelector('.dp-line-total');
-        if (lineTot) lineTot.addEventListener('input', recalcInvoiceTotals);
+        if (lineTot && !lineLocked) lineTot.addEventListener('input', recalcInvoiceTotals);
         var rm = tr.querySelector('.dp-remove');
         if (rm) rm.addEventListener('click', function () {
+            if (tr.getAttribute('data-dp-line-locked') === '1') return;
             var body = document.getElementById('line-items-body');
             if (body.querySelectorAll('.dp-line').length > 1) {
                 tr.remove();
                 recalcInvoiceTotals();
             }
         });
-        var sku = tr.querySelector('.dp-sku');
-        if (sku) initSkuSearch(sku);
         var fetchBtn = tr.querySelector('.dp-fetch-price');
-        if (fetchBtn) {
+        if (fetchBtn && !lineLocked) {
             fetchBtn.addEventListener('click', function () {
                 dpFetchLatestPrice(tr, fetchBtn);
             });
         }
         var pendingBtn = tr.querySelector('.dp-fetch-pending-orders');
-        if (pendingBtn) {
+        if (pendingBtn && !lineLocked) {
             pendingBtn.addEventListener('click', function () {
                 dpFetchPendingOrders(tr, pendingBtn);
             });
