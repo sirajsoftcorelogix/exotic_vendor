@@ -1222,6 +1222,30 @@ class DirectPurchaseController
             exit;
         }
 
+        global $conn;
+        require_once 'models/direct_purchase/DirectPurchaseStock.php';
+        $stockCheckLines = [];
+        foreach ($returnLines as $returnLine) {
+            $itemId = (int) ($returnLine['direct_purchase_item_id'] ?? 0);
+            if ($itemId <= 0 || !isset($itemsById[$itemId])) {
+                continue;
+            }
+            $sku = trim((string) ($itemsById[$itemId]['sku'] ?? ''));
+            if ($sku === '') {
+                continue;
+            }
+            $stockCheckLines[] = [
+                'sku' => $sku,
+                'return_qty' => (float) ($returnLine['return_qty'] ?? 0),
+            ];
+        }
+        $stockError = DirectPurchaseStock::validateWarehouseStockForReturn($conn, $warehouseId, $stockCheckLines);
+        if ($stockError !== null) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $stockError];
+            header('Location: ?page=direct_purchase&action=return_add&dp_id=' . $dpId);
+            exit;
+        }
+
         $currency = strtoupper(trim((string) ($purchase['currency'] ?? 'INR')));
         $subtotal = max(0.0, round($sumLineTotal - $sumGst, 2));
         $pSub = (float) ($purchase['subtotal'] ?? 0);
@@ -1262,7 +1286,13 @@ class DirectPurchaseController
             $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => $flashText];
         } catch (Throwable $e) {
             error_log('DirectPurchase returnSave: ' . $e->getMessage());
-            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not save return. ' . $e->getMessage()];
+            $errorText = $e->getMessage();
+            if (stripos($errorText, 'Insufficient stock') !== false) {
+                $errorText = 'Insufficient warehouse stock. Reduce return quantity or check stock in the purchase warehouse.';
+            } else {
+                $errorText = 'Could not save return. ' . $errorText;
+            }
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $errorText];
         }
 
         header('Location: ?page=direct_purchase&action=return_list&dp_id=' . $dpId);
