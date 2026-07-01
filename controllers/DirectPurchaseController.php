@@ -696,6 +696,14 @@ class DirectPurchaseController
             $currency = 'INR';
         }
 
+        $grandTotal = (float) ($_POST['grand_total'] ?? 0);
+        if ($grandTotal <= 0) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Grand total must be greater than zero.'];
+            $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
+            header('Location: ' . $redir);
+            exit;
+        }
+
         $header = [
             'vendor_id' => $vendorId,
             'warehouse_id' => $warehouseId,
@@ -709,7 +717,7 @@ class DirectPurchaseController
             'sgst_total' => (float) ($_POST['sgst_total'] ?? 0),
             'cgst_total' => (float) ($_POST['cgst_total'] ?? 0),
             'round_off' => (float) ($_POST['round_off'] ?? 0),
-            'grand_total' => (float) ($_POST['grand_total'] ?? 0),
+            'grand_total' => $grandTotal,
             'created_by' => (int) ($_SESSION['user']['id'] ?? 0),
         ];
 
