@@ -259,18 +259,21 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                     </div>
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-cost dp-col-numeric">
-                                    <div class="dp-cell-with-actions">
-                                        <input type="number" step="0.0001" min="0.0001" name="cost_per_item[]" required class="dp-cost dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>">
-                                        <div class="dp-cost-actions shrink-0">
-                                            <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API" <?= $dpLocked ? 'disabled' : '' ?>>
-                                                <i class="fas fa-arrow-down" aria-hidden="true"></i>
-                                            </button>
-                                            <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com" <?= $dpLocked ? 'disabled' : '' ?>>
-                                                <i class="fas fa-clipboard-check" aria-hidden="true"></i>
-                                            </button>
+                                    <div class="dp-cost-wrap min-w-0">
+                                        <div class="dp-cell-with-actions">
+                                            <input type="number" step="0.0001" min="0.0001" name="cost_per_item[]" required class="dp-cost dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>">
+                                            <div class="dp-cost-actions shrink-0">
+                                                <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API" <?= $dpLocked ? 'disabled' : '' ?>>
+                                                    <i class="fas fa-arrow-down" aria-hidden="true"></i>
+                                                </button>
+                                                <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com" <?= $dpLocked ? 'disabled' : '' ?>>
+                                                    <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
                                         </div>
+                                        <p class="dp-cost-hint">Price India</p>
                                     </div>
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-qty dp-col-numeric">
@@ -572,6 +575,16 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     min-width: 1.75rem;
     flex-shrink: 0;
 }
+#line-items-table .dp-cost-hint {
+    display: none;
+    margin-top: 0.125rem;
+    font-size: 10px;
+    line-height: 1.25;
+    color: #b45309;
+}
+#line-items-table tr[data-dp-is-book="1"] .dp-cost-hint {
+    display: block;
+}
 #line-items-table .dp-col-sku .dp-sku-cell {
     min-width: 0;
     flex: 1 1 0;
@@ -599,7 +612,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
 
 <table class="hidden">
     <tbody id="line-item-template">
-        <tr class="dp-line hover:bg-amber-50/30 transition-colors" data-dp-item-id="0" data-vendor-qty-synced="0" data-vendor-qty-synced-qty="">
+        <tr class="dp-line hover:bg-amber-50/30 transition-colors" data-dp-item-id="0" data-dp-is-book="0" data-vendor-qty-synced="0" data-vendor-qty-synced-qty="">
             <td class="px-1 py-2 align-top text-center dp-col-img">
                 <button type="button" class="dp-thumb-trigger mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0 opacity-60 cursor-not-allowed shadow-sm"
                     data-full-src="" title="" aria-label="No product image">
@@ -632,18 +645,21 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 </div>
             </td>
             <td class="px-1 py-2 align-top dp-col-cost dp-col-numeric">
-                <div class="dp-cell-with-actions">
-                    <input type="number" step="0.0001" min="0.0001" name="cost_per_item[]" required class="dp-cost dp-inp-cell <?= $inpSm ?>" value="">
-                    <div class="dp-cost-actions shrink-0">
-                        <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API">
-                            <i class="fas fa-arrow-down" aria-hidden="true"></i>
-                        </button>
-                        <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com">
-                            <i class="fas fa-clipboard-check" aria-hidden="true"></i>
-                        </button>
+                <div class="dp-cost-wrap min-w-0">
+                    <div class="dp-cell-with-actions">
+                        <input type="number" step="0.0001" min="0.0001" name="cost_per_item[]" required class="dp-cost dp-inp-cell <?= $inpSm ?>" value="">
+                        <div class="dp-cost-actions shrink-0">
+                            <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API">
+                                <i class="fas fa-arrow-down" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com">
+                                <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
+                    <p class="dp-cost-hint">Price India</p>
                 </div>
             </td>
             <td class="px-1 py-2 align-top dp-col-qty dp-col-numeric">
@@ -703,6 +719,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
         var hid = tr.querySelector('.dp-h-product-id');
         var id = parseInt(productId, 10);
         if (hid) hid.value = id > 0 ? String(id) : '';
+        if (id <= 0) tr.dataset.dpIsBook = '0';
         var link = tr.querySelector('.dp-product-profile-link');
         if (!link) return;
         if (id > 0) {
