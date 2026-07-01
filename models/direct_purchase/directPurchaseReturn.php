@@ -215,11 +215,13 @@ class DirectPurchaseReturn
         $total = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
         $stmt->close();
 
-        $listSql = "SELECT r.*, p.invoice_number, p.invoice_date, p.vendor_id,
+        $listSql = "SELECT r.*, p.invoice_number, p.invoice_date, p.created_at AS purchase_created_at,
+                p.created_by AS purchase_created_by, pu.name AS purchase_created_by_name,
                 v.vendor_name, v.vendor_id AS exotic_vendor_id
             FROM vp_direct_purchase_returns r
             JOIN vp_direct_purchases p ON p.id = r.direct_purchase_id
             JOIN vp_vendors v ON v.id = p.vendor_id
+            LEFT JOIN vp_users pu ON pu.id = p.created_by AND pu.is_deleted = 0
             WHERE $whereSql
             ORDER BY r.return_date DESC, r.id DESC
             LIMIT ? OFFSET ?";
