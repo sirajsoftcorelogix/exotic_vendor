@@ -115,7 +115,7 @@ final class DirectPurchaseStock
     public static function reverseMovementsForRef(\mysqli $conn, string $refType, int $refId): void
     {
         $refIdStr = (string) $refId;
-        $sql = 'SELECT id, sku, warehouse_id, movement_type, quantity FROM vp_stock_movements
+        $sql = 'SELECT id, sku, warehouse_id, movement_type, quantity, product_id FROM vp_stock_movements
             WHERE ref_type = ? AND (ref_id = ? OR CAST(ref_id AS UNSIGNED) = ?)';
         $stmt = $conn->prepare($sql);
         if ($stmt === false) {
@@ -132,11 +132,13 @@ final class DirectPurchaseStock
         }
         $stmt->close();
 
+        $productIdsToSync = [];
         foreach ($rows as $row) {
             $sku = (string) ($row['sku'] ?? '');
             $wh = (int) ($row['warehouse_id'] ?? 0);
             $qty = (float) ($row['quantity'] ?? 0);
             $movType = (string) ($row['movement_type'] ?? '');
+            $productId = (int) ($row['product_id'] ?? 0);
             if ($sku === '' || $wh <= 0 || $qty <= 0) {
                 continue;
             }
@@ -144,6 +146,9 @@ final class DirectPurchaseStock
                 self::adjustVpStock($conn, $sku, $wh, -$qty);
             } elseif ($movType === 'OUT') {
                 self::adjustVpStock($conn, $sku, $wh, $qty);
+            }
+            if ($productId > 0) {
+                $productIdsToSync[$productId] = true;
             }
             $mid = (int) ($row['id'] ?? 0);
             if ($mid > 0) {
@@ -154,6 +159,10 @@ final class DirectPurchaseStock
                     $del->close();
                 }
             }
+        }
+
+        foreach (array_keys($productIdsToSync) as $productId) {
+            StockMovement::syncProductPhysicalStock($conn, (int) $productId);
         }
     }
 

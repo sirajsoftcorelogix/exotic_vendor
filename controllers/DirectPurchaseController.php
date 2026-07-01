@@ -1228,6 +1228,8 @@ class DirectPurchaseController
     public function returnDelete()
     {
         is_login();
+        global $conn;
+        global $directPurchaseModel;
         global $directPurchaseReturnModel;
 
         $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
@@ -1242,9 +1244,40 @@ class DirectPurchaseController
         }
         $dpId = (int) ($row['direct_purchase_id'] ?? 0);
 
+        $returnLines = [];
+        foreach ($directPurchaseReturnModel->getItems($id) as $returnItem) {
+            $itemId = (int) ($returnItem['direct_purchase_item_id'] ?? 0);
+            $returnQty = (float) ($returnItem['return_qty'] ?? 0);
+            if ($itemId <= 0 || $returnQty <= 0) {
+                continue;
+            }
+            $returnLines[] = [
+                'direct_purchase_item_id' => $itemId,
+                'return_qty' => $returnQty,
+            ];
+        }
+
+        $itemsById = [];
+        if ($dpId > 0) {
+            foreach ($directPurchaseModel->getItems($dpId) as $purchaseItem) {
+                $itemsById[(int) $purchaseItem['id']] = $purchaseItem;
+            }
+        }
+
         try {
             $directPurchaseReturnModel->deleteReturn($id);
-            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Return deleted and stock restored.'];
+            $productModel = new product($conn);
+            $vendorNote = $this->syncDirectPurchaseReturnLocalStockToVendor(
+                $returnLines,
+                $itemsById,
+                $productModel,
+                1
+            );
+            $flashText = 'Return deleted and stock restored.';
+            if ($vendorNote !== '') {
+                $flashText .= ' ' . $vendorNote;
+            }
+            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => $flashText];
         } catch (Throwable $e) {
             error_log('DirectPurchase returnDelete: ' . $e->getMessage());
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not delete return.'];
@@ -1566,17 +1599,23 @@ class DirectPurchaseController
     }
 
     /**
-     * Push negative local_stock_delta to vendor product/modify for purchase return lines.
+     * Push local_stock_delta to vendor product/modify for purchase return lines.
+     * Save uses negative delta (stock out); delete uses positive delta (stock restored).
      * Does not send absolute local_stock — only the delta field expected by the vendor API.
      *
      * @param list<array<string, mixed>> $returnLines
      * @param array<int, array<string, mixed>> $itemsById
+     * @param int $deltaSign -1 on return save, +1 on return delete
      */
     private function syncDirectPurchaseReturnLocalStockToVendor(
         array $returnLines,
         array $itemsById,
-        product $productModel
+        product $productModel,
+        int $deltaSign = -1
     ): string {
+        if ($deltaSign !== -1 && $deltaSign !== 1) {
+            $deltaSign = -1;
+        }
         $byVariant = [];
         foreach ($returnLines as $returnLine) {
             $itemId = (int) ($returnLine['direct_purchase_item_id'] ?? 0);
@@ -1598,7 +1637,7 @@ class DirectPurchaseController
 
         $failures = [];
         foreach ($byVariant as $variant) {
-            $localStockDelta = -(int) round((float) ($variant['return_qty'] ?? 0));
+            $localStockDelta = $deltaSign * (int) round((float) ($variant['return_qty'] ?? 0));
             if ($localStockDelta === 0) {
                 continue;
             }
