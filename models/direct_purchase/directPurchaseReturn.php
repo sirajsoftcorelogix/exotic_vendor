@@ -119,6 +119,89 @@ class DirectPurchaseReturn
     }
 
     /**
+     * @return array{rows: array<int, array<string, mixed>>, total: int}
+     */
+    public function searchReturns(array $filters, int $page, int $limit): array
+    {
+        $page = max(1, $page);
+        $limit = max(1, min(100, $limit));
+        $offset = ($page - 1) * $limit;
+
+        $where = ['1=1'];
+        $types = '';
+        $params = [];
+
+        if (!empty($filters['search_text'])) {
+            $where[] = '(p.invoice_number LIKE ? OR v.vendor_name LIKE ? OR v.contact_name LIKE ?)';
+            $like = '%' . $filters['search_text'] . '%';
+            $types .= 'sss';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+        if (!empty($filters['return_date_from'])) {
+            $where[] = 'r.return_date >= ?';
+            $types .= 's';
+            $params[] = $filters['return_date_from'];
+        }
+        if (!empty($filters['return_date_to'])) {
+            $where[] = 'r.return_date <= ?';
+            $types .= 's';
+            $params[] = $filters['return_date_to'];
+        }
+        if (!empty($filters['vendor_id'])) {
+            $where[] = 'p.vendor_id = ?';
+            $types .= 'i';
+            $params[] = (int) $filters['vendor_id'];
+        }
+
+        $whereSql = implode(' AND ', $where);
+
+        $countSql = "SELECT COUNT(*) AS c
+            FROM vp_direct_purchase_returns r
+            JOIN vp_direct_purchases p ON p.id = r.direct_purchase_id
+            JOIN vp_vendors v ON v.id = p.vendor_id
+            WHERE $whereSql";
+
+        $stmt = $this->conn->prepare($countSql);
+        if ($types !== '') {
+            $stmt->bind_param($types, ...$params);
+        }
+        $stmt->execute();
+        $total = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
+        $stmt->close();
+
+        $listSql = "SELECT r.*, p.invoice_number, p.invoice_date, p.vendor_id,
+                v.vendor_name, v.vendor_id AS exotic_vendor_id
+            FROM vp_direct_purchase_returns r
+            JOIN vp_direct_purchases p ON p.id = r.direct_purchase_id
+            JOIN vp_vendors v ON v.id = p.vendor_id
+            WHERE $whereSql
+            ORDER BY r.return_date DESC, r.id DESC
+            LIMIT ? OFFSET ?";
+
+        $stmt = $this->conn->prepare($listSql);
+        if ($types !== '') {
+            $typesList = $types . 'ii';
+            $paramsList = array_merge($params, [$limit, $offset]);
+            $stmt->bind_param($typesList, ...$paramsList);
+        } else {
+            $stmt->bind_param('ii', $limit, $offset);
+        }
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $rows = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $rows[] = $row;
+            }
+        }
+        $stmt->close();
+
+        return ['rows' => $rows, 'total' => $total];
+    }
+
+    /**
      * Sum of return_qty per direct_purchase_item_id for a purchase (optionally excluding one return document).
      *
      * @return array<int, float> item_id => qty
