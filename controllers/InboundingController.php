@@ -2740,14 +2740,18 @@ class InboundingController {
                 $inboundingModel->stat_logs($logData1);
             }
 
-            // import API
             $itemCode = $data['data']['Item_code'];
-            $import_response = $ProductsController->importApiCall([$itemCode]);
+
+            // Inbound publish records stock via insert_stock_data(); skip API opening-stock seed here.
+            $import_response = $ProductsController->importApiCall(
+                [$itemCode],
+                ['sync_physical_stock' => false]
+            );
             inbound_profiler_step($prof, 'importApiCall');
             
             // insert stock moment
             $stoc_data = $inboundingModel->stock_data($id);
-            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
+            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data, (int) $id);
             inbound_profiler_step($prof, 'insert_stock_data');
             
             // === LOG SUCCESS ===

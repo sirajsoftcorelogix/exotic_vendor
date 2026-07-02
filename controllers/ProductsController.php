@@ -794,12 +794,14 @@ class ProductsController
         exit;
     }
 
-    public function importApiCall($manualCodes = null)
+    public function importApiCall($manualCodes = null, array $options = [])
     {
         global $productModel;
         global $conn;
         $t0 = microtime(true);
         $internalCall = ($manualCodes !== null);
+        $syncPhysicalStockOnInternalImport = !array_key_exists('sync_physical_stock', $options)
+            || !empty($options['sync_physical_stock']);
         $importTiming = function (int $reqCodes, float $apiMs = 0.0, ?int $apiParentItems = null, ?int $dbWrites = null) use ($t0): array {
             $total = round((microtime(true) - $t0) * 1000, 2);
             $api = round($apiMs, 2);
@@ -1200,8 +1202,8 @@ class ProductsController
                 }
                 $failed[] = (string)$reqCode;
             }
-            // Same stock sync as product detail "Refresh from API → Yes"
-            if ($items !== []) {
+            // Same stock sync as product detail "Refresh from API → Yes" (optional; inbound publish skips this).
+            if ($items !== [] && $syncPhysicalStockOnInternalImport) {
                 $bulkConnection = $productModel->beginBulkProductUpdateConnection();
                 try {
                     $productModel->updateProductFromApi($items, ['preserve_local_stock' => false]);

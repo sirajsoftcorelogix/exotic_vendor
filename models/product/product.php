@@ -3918,6 +3918,13 @@ class product
                 'text_color_class' => 'text-green-600',
             ];
         }
+        if ($mt === 'IN' && $rt === 'INBOUND') {
+            return [
+                'ledger_type' => 'Inbound',
+                'icon' => 'fa-arrow-up',
+                'text_color_class' => 'text-green-600',
+            ];
+        }
         if ($mt === 'OUT' && $rt === 'DIRECT_PURCHASE_RETURN') {
             return [
                 'ledger_type' => 'Purchase return',
