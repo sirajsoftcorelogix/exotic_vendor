@@ -4727,16 +4727,6 @@ class ProductsController
 
             $result = $productModel->insertStockMovement($insertData);
 
-            if (!empty($result['success'])) {
-                $vendorSync = $this->syncProductStockToVendorFrontend($product, $insertData);
-                $result['vendor_sync'] = $vendorSync;
-                if (empty($vendorSync['success'])) {
-                    $baseMsg = (string) ($result['message'] ?? 'Stock updated and history recorded.');
-                    $result['message'] = $baseMsg . ' Warning: storefront stock sync failed — '
-                        . trim((string) ($vendorSync['message'] ?? 'Vendor API error.'));
-                }
-            }
-
             echo json_encode($result);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
@@ -4767,35 +4757,6 @@ class ProductsController
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
         exit;
-    }
-
-    /**
-     * Push local_stock_delta to vendor product/modify API (storefront stock).
-     */
-    private function syncProductStockToVendorFrontend(array $product, array $movement): array
-    {
-        global $productModel;
-
-        $itemCode = trim((string) ($product['item_code'] ?? ''));
-        if ($itemCode === '') {
-            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
-        }
-
-        $qty = (int) ($movement['quantity'] ?? 0);
-        $movementType = strtoupper(trim((string) ($movement['movement_type'] ?? '')));
-        $positiveTypes = ['IN', 'TRANSFER_IN', 'OPENING_STOCK'];
-        $signedDelta = in_array($movementType, $positiveTypes, true) ? $qty : (-1 * $qty);
-        if ($signedDelta === 0) {
-            return ['success' => true, 'message' => 'No local_stock_delta to apply.'];
-        }
-
-        $resolved = $productModel->resolveProductForVendorSync(
-            $itemCode,
-            trim((string) ($product['size'] ?? '')),
-            trim((string) ($product['color'] ?? ''))
-        );
-
-        return $productModel->syncCpToVendorFrontend($resolved, 0.0, (float) $signedDelta);
     }
 
     public function updateStockLimits()
