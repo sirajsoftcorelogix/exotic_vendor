@@ -1053,7 +1053,7 @@
     <div class="mb-6">
       <h2 class="text-xl font-semibold text-gray-800">Stock Adjustment</h2>
       <p class="text-sm text-gray-500 mt-1">
-        Adjust warehouse physical stock for the selected warehouse and location. The same quantity change is synced to the storefront via Product Update API (local_stock_delta).
+        Adjust warehouse physical stock. Storefront stock is synced via API after save.
       </p>
     </div>
 
@@ -1755,10 +1755,7 @@ function closeImagePopup() {
     })
     .then(data => {
         if (data.success) {
-            // Success Popup
-            alert('✅ Success: Stock has been updated!'); 
-            
-            // Close the modal
+            alert('✅ Success: Stock has been updated!');
             closeStockModal();
             
             // Refresh the history table immediately

@@ -1130,10 +1130,7 @@ class product
     }
 
     /**
-     * Push local_stock_delta to vendor product/modify only (does not change vp_products.local_stock).
-     * Does not create stock movements or change physical_stock.
-     *
-     * @return array{success:bool,message?:string,vendor_sync?:array,http_code?:int,response?:array}
+     * Push local_stock_delta to product/modify, then refresh local_stock from product/fetch.
      */
     public function applyLocalStockDeltaAndRefreshFromVendorApi(
         string $itemCode,
@@ -1142,39 +1139,22 @@ class product
         string $color = ''
     ): array {
         $itemCode = trim($itemCode);
-        if ($itemCode === '') {
-            return ['success' => false, 'message' => 'Item code is required.'];
+        $localStockDelta = (int) $localStockDelta;
+        if ($itemCode === '' || $localStockDelta === 0) {
+            return ['success' => true, 'message' => 'Nothing to sync.'];
         }
 
         $size = trim($size);
         $color = trim($color);
-        $localStockDelta = (int) $localStockDelta;
-        if ($localStockDelta === 0) {
-            return ['success' => true, 'message' => 'No local_stock_delta to apply.'];
-        }
-
-        $product = [
-            'item_code' => $itemCode,
-            'size' => $size,
-            'color' => $color,
-        ];
         $row = $this->findByItemCodeSizeColor($itemCode, $size, $color);
-        if (is_array($row)) {
-            $product = $row;
-        }
+        $product = is_array($row) ? $row : ['item_code' => $itemCode, 'size' => $size, 'color' => $color];
 
         $vendorSync = $this->syncCpToVendorFrontend($product, 0.0, (float) $localStockDelta);
         if (empty($vendorSync['success'])) {
-            return [
-                'success' => false,
-                'message' => (string) ($vendorSync['message'] ?? 'Vendor local_stock_delta sync failed.'),
-                'vendor_sync' => $vendorSync,
-            ];
+            return $vendorSync;
         }
 
-        $vendorSync['vendor_sync'] = $vendorSync;
-
-        return $vendorSync;
+        return $this->refreshLocalStockFromVendorApi($itemCode);
     }
 
     /** Set accounts_group on all rows for an item code from the vendor product/fetch master row. */
@@ -4019,7 +3999,29 @@ class product
             StockMovement::insert($this->db, $data);
 
             $this->db->commit();
-            return ['success' => true, 'message' => 'Stock updated and history recorded.'];
+
+            $result = ['success' => true, 'message' => 'Stock updated and history recorded.'];
+
+            if (strtoupper(trim((string) ($data['ref_type'] ?? 'MANUAL'))) === 'MANUAL') {
+                $movementType = strtoupper(trim((string) ($data['movement_type'] ?? 'OUT')));
+                $qty = (int) ($data['quantity'] ?? 0);
+                $delta = in_array($movementType, ['IN', 'TRANSFER_IN', 'OPENING_STOCK'], true) ? $qty : -$qty;
+                $itemCode = trim((string) ($data['item_code'] ?? ''));
+
+                if ($delta !== 0 && $itemCode !== '') {
+                    $apiSync = $this->applyLocalStockDeltaAndRefreshFromVendorApi(
+                        $itemCode,
+                        $delta,
+                        (string) ($data['size'] ?? ''),
+                        (string) ($data['color'] ?? '')
+                    );
+                    if (empty($apiSync['success'])) {
+                        $result['message'] .= ' Warning: ' . trim((string) ($apiSync['message'] ?? 'Storefront stock sync failed.'));
+                    }
+                }
+            }
+
+            return $result;
         } catch (Exception $e) {
             $this->db->rollback();
             return ['success' => false, 'message' => $e->getMessage()];
