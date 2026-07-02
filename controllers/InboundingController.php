@@ -2365,15 +2365,6 @@ class InboundingController {
             if ($pubDate !== '' && $pubDate !== '0000-00-00') {
                 $API_data['publication_date'] = $pubDate;
             }
-            $sourcingFee = trim((string) ($d['sourcingfee'] ?? ''));
-            if ($sourcingFee !== '') {
-                $API_data['sourcingfee'] = round((float) $sourcingFee, 2);
-            }
-            $shippingFee = $d['shippingfee'] ?? null;
-            if ($shippingFee === null || $shippingFee === '') {
-                $shippingFee = Inbounding::calculateBookShippingFee($d['weight'] ?? 0);
-            }
-            $API_data['shippingfee'] = round((float) $shippingFee, 2);
         }
         $API_data['snippet_description'] = $d['snippet_description'] ?? '';
         // $API_data['creator'] = $data['data']['received_by_user_id'];
@@ -2552,6 +2543,26 @@ class InboundingController {
                 $stock_price_temp[$i]['item_level'] = 'variation'; // Change item level from 'parent' to 'variation'
                 $stock_price_temp[$i]['size'] = $d['size'] ?? '';
                 $stock_price_temp[$i]['color'] = $d['color'] ?? '';
+            }
+        }
+
+        $bookSourcingFee = null;
+        $bookShippingFee = null;
+        if (($d['groupname'] ?? '') === 'book') {
+            $sourcingFeeRaw = trim((string) ($d['sourcingfee'] ?? ''));
+            if ($sourcingFeeRaw !== '') {
+                $bookSourcingFee = round((float) $sourcingFeeRaw, 2);
+            }
+            $shippingFeeRaw = $d['shippingfee'] ?? null;
+            if ($shippingFeeRaw === null || $shippingFeeRaw === '') {
+                $shippingFeeRaw = Inbounding::calculateBookShippingFee($d['weight'] ?? 0);
+            }
+            $bookShippingFee = round((float) $shippingFeeRaw, 2);
+            foreach ($stock_price_temp as $idx => $row) {
+                if ($bookSourcingFee !== null) {
+                    $stock_price_temp[$idx]['sourcingfee'] = $bookSourcingFee;
+                }
+                $stock_price_temp[$idx]['shippingfee'] = $bookShippingFee;
             }
         }
 
