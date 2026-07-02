@@ -72,13 +72,50 @@ function vendor_external_api_headers(): array
 }
 
 /**
+ * Attach API action, URL, request payload, and parsed/raw response for error debugging.
+ *
+ * @return array<string, mixed>
+ */
+function vendor_external_api_attach_debug(string $action, array $postData, array $result): array
+{
+    $raw = (string) ($result['raw'] ?? '');
+    $parsed = null;
+    if ($raw !== '') {
+        $decoded = json_decode($raw, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            $parsed = $decoded;
+        }
+    }
+    if ($parsed === null && !empty($result['data']) && is_array($result['data'])) {
+        $parsed = $result['data'];
+    }
+
+    $response = $parsed !== null ? $parsed : $raw;
+    if (is_string($response) && strlen($response) > 32768) {
+        $response = substr($response, 0, 32768) . '… [truncated]';
+    }
+
+    $result['api_action'] = $action;
+    $result['api_url'] = vendor_external_api_base_url() . $action;
+    $result['request'] = $postData;
+    $result['response'] = $response;
+
+    return $result;
+}
+
+/**
  * @return array{success:bool,message:string,http_code:int,vendor_id?:int,data?:array,raw?:string}
  */
 function vendor_external_api_post(string $action, array $postData): array
 {
     $action = trim($action);
     if ($action === '') {
-        return ['success' => false, 'message' => 'Vendor API action is required.', 'http_code' => 0];
+        return vendor_external_api_attach_debug('', $postData, [
+            'success' => false,
+            'message' => 'Vendor API action is required.',
+            'http_code' => 0,
+            'raw' => '',
+        ]);
     }
 
     $apiUrl = vendor_external_api_base_url() . $action;
@@ -99,40 +136,55 @@ function vendor_external_api_post(string $action, array $postData): array
     curl_close($ch);
 
     if ($raw === false) {
-        return [
+        return vendor_external_api_attach_debug($action, $postData, [
             'success' => false,
             'message' => 'Vendor API call failed: ' . $error,
             'http_code' => $httpCode,
             'raw' => '',
-        ];
+        ]);
     }
 
     $decoded = json_decode((string) $raw, true);
+    if ($decoded === null && json_last_error() !== JSON_ERROR_NONE) {
+        $snippet = trim(preg_replace('/\s+/', ' ', strip_tags((string) $raw)));
+        if (strlen($snippet) > 200) {
+            $snippet = substr($snippet, 0, 200) . '…';
+        }
+
+        return vendor_external_api_attach_debug($action, $postData, [
+            'success' => false,
+            'message' => 'Vendor API returned an invalid response'
+                . ($snippet !== '' ? ': ' . $snippet : '. Expected JSON.'),
+            'http_code' => $httpCode,
+            'raw' => (string) $raw,
+        ]);
+    }
+
     $data = is_array($decoded) ? $decoded : [];
 
     if ($httpCode >= 400) {
         $msg = !empty($data['message']) ? (string) $data['message'] : 'HTTP ' . $httpCode;
 
-        return [
+        return vendor_external_api_attach_debug($action, $postData, [
             'success' => false,
             'message' => 'Vendor API failed: ' . $msg,
             'http_code' => $httpCode,
             'data' => $data,
             'raw' => (string) $raw,
-        ];
+        ]);
     }
 
     if ((isset($data['success']) && $data['success'] === false)
         || (isset($data['status']) && strtolower((string) $data['status']) === 'error')) {
         $msg = !empty($data['message']) ? (string) $data['message'] : 'Remote API returned failure.';
 
-        return [
+        return vendor_external_api_attach_debug($action, $postData, [
             'success' => false,
             'message' => $msg,
             'http_code' => $httpCode,
             'data' => $data,
             'raw' => (string) $raw,
-        ];
+        ]);
     }
 
     $vendorId = 0;
@@ -140,14 +192,14 @@ function vendor_external_api_post(string $action, array $postData): array
         $vendorId = (int) preg_replace('/\D/', '', (string) $data['vendor_id']);
     }
 
-    return [
+    return vendor_external_api_attach_debug($action, $postData, [
         'success' => true,
         'message' => !empty($data['message']) ? (string) $data['message'] : 'Vendor API call succeeded.',
         'http_code' => $httpCode,
         'vendor_id' => $vendorId > 0 ? $vendorId : null,
         'data' => $data,
         'raw' => (string) $raw,
-    ];
+    ]);
 }
 
 /**
@@ -155,7 +207,22 @@ function vendor_external_api_post(string $action, array $postData): array
  */
 function vendor_external_api_create(array $postData): array
 {
-    return vendor_external_api_post('vendorcreate', $postData);
+    $result = vendor_external_api_post('vendorcreate', $postData);
+    if (!$result['success']) {
+        return $result;
+    }
+
+    $vendorId = (int) preg_replace('/\D/', '', (string) ($result['vendor_id'] ?? ''));
+    if ($vendorId <= 0) {
+        return array_merge($result, [
+            'success' => false,
+            'message' => 'Exotic India API did not return a Vendor ID. The vendor may already exist remotely, or the API rejected the request. Try a slightly different vendor name or contact Exotic India support.',
+        ]);
+    }
+
+    $result['vendor_id'] = $vendorId;
+
+    return $result;
 }
 
 /**
@@ -164,7 +231,12 @@ function vendor_external_api_create(array $postData): array
 function vendor_external_api_modify(array $postData): array
 {
     if (trim((string) ($postData['vendor_id'] ?? '')) === '') {
-        return ['success' => false, 'message' => 'vendor_id is required for vendormodify.', 'http_code' => 0];
+        return vendor_external_api_attach_debug('vendormodify', $postData, [
+            'success' => false,
+            'message' => 'vendor_id is required for vendormodify.',
+            'http_code' => 0,
+            'raw' => '',
+        ]);
     }
 
     return vendor_external_api_post('vendormodify', $postData);
