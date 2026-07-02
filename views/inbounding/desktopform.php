@@ -741,9 +741,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <?php if ($is_inbound_published): ?>
                 <div class="flex justify-end mb-3">
                     <button type="button"
-                            id="inboundSectionUpdateBtn"
                             data-section="item_details"
-                            class="inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                         Update on website
                     </button>
@@ -891,7 +890,17 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     
                 </div>
                 <div id="book-meta-fields" class="hidden mt-6">
-                    <div class="border border-[#ffd6b3] rounded-[5px] px-[15px] py-4 ">
+                    <div class="border border-[#ffd6b3] rounded-[5px] px-[15px] py-4" id="inbound-section-book-details">
+                        <?php if ($is_inbound_published && $is_book_initial): ?>
+                        <div class="flex justify-end mb-3">
+                            <button type="button"
+                                    data-section="book_details"
+                                    class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                Update on website
+                            </button>
+                        </div>
+                        <?php endif; ?>
                         <div class="text-[13px] font-bold text-[#333] mb-3">Book Details</div>
                         <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <div>
@@ -3400,7 +3409,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let pendingSectionUpdateKey = null;
     const inboundSectionUpdateLabels = {
-        item_details: 'Item details (dimensions, pricing & stock)'
+        item_details: 'Item details (dimensions, pricing & stock)',
+        book_details: 'Book details (author, publisher, ISBN, language, fees)'
     };
 
     function resetSectionUpdatePopup() {
@@ -3439,7 +3449,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('button[data-section]').forEach(function (btn) {
+        document.querySelectorAll('.inbound-section-update-btn[data-section]').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 const sectionKey = btn.getAttribute('data-section');
                 if (sectionKey) {
@@ -3456,6 +3466,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const form = document.getElementById('product_form');
+        if (sectionKey === 'book_details' && typeof window.updateBookShippingFeeFromWeight === 'function') {
+            window.updateBookShippingFeeFromWeight();
+        }
         syncFormTomSelectValues(form);
         const formData = new FormData(form);
         formData.set('save_action', 'draft');

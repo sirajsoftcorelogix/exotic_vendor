@@ -2863,7 +2863,10 @@ class InboundingController {
 
         $payload = inbound_api_build_section_modify_payload($inboundingModel, $id, $section);
         if ($payload === null) {
-            echo json_encode(['status' => 'error', 'message' => 'Unknown section or missing publish data.']);
+            $message = ($section === 'book_details')
+                ? 'Book details update is only available for book products.'
+                : 'Unknown section or missing publish data.';
+            echo json_encode(['status' => 'error', 'message' => $message]);
             exit;
         }
         if ($payload['fields'] === []) {
