@@ -2853,7 +2853,7 @@ class InboundingController {
         if (!$inboundingModel->isInboundPublished($id)) {
             echo json_encode([
                 'status' => 'error',
-                'message' => 'Product must be published before updating sections on the API.',
+                'message' => 'Product must be published before updating sections on the website.',
             ]);
             exit;
         }
@@ -2923,13 +2923,13 @@ class InboundingController {
             $inboundingModel->stat_logs([
                 'userid_log' => $userId,
                 'i_id' => $id,
-                'stat' => 'API Update: ' . inbound_api_section_label($section),
+                'stat' => 'Website Update: ' . inbound_api_section_label($section),
             ]);
         }
 
         echo json_encode([
             'status' => 'success',
-            'message' => inbound_api_section_label($section) . ' updated on catalog API.',
+            'message' => inbound_api_section_label($section) . ' updated on the website.',
             'section' => $section,
             'import' => $importResponse,
         ]);
