@@ -146,22 +146,23 @@ function vendor_external_api_extract_vendor_id(array $data): int
 }
 
 /**
- * vendorcreate may return vendor_id + reason when the name already exists remotely.
+ * vendorcreate returns vendor_id for both new vendors and existing duplicate names.
  */
-function vendor_external_api_is_existing_vendor_create_response(array $data): bool
+function vendor_external_api_response_is_failure(array $data): bool
 {
-    $vendorId = vendor_external_api_extract_vendor_id($data);
-    if ($vendorId <= 0) {
+    if (isset($data['status']) && strtolower((string) $data['status']) === 'error') {
+        return true;
+    }
+    if (!isset($data['success'])) {
         return false;
     }
 
-    $reason = strtolower(trim((string) ($data['reason'] ?? '')));
-    if ($reason !== '' && strpos($reason, 'already exists') !== false) {
+    $success = $data['success'];
+    if ($success === false || $success === 0 || $success === '0' || $success === 'false') {
         return true;
     }
 
-    $message = strtolower(trim((string) ($data['message'] ?? '')));
-    return $message !== '' && strpos($message, 'already exists') !== false;
+    return false;
 }
 
 /**
@@ -222,6 +223,7 @@ function vendor_external_api_post(string $action, array $postData): array
     }
 
     $data = is_array($decoded) ? $decoded : [];
+    $vendorId = vendor_external_api_extract_vendor_id($data);
 
     if ($httpCode >= 400) {
         $msg = !empty($data['message']) ? (string) $data['message'] : 'HTTP ' . $httpCode;
@@ -235,13 +237,11 @@ function vendor_external_api_post(string $action, array $postData): array
         ]);
     }
 
-    $vendorId = vendor_external_api_extract_vendor_id($data);
-    $existingVendorCreate = $action === 'vendorcreate' && vendor_external_api_is_existing_vendor_create_response($data);
-
-    if ($existingVendorCreate) {
+    // Per API spec: vendorcreate with vendor_id means created or linked to existing vendor.
+    if ($action === 'vendorcreate' && $vendorId > 0) {
         $msg = trim((string) ($data['reason'] ?? $data['message'] ?? ''));
         if ($msg === '') {
-            $msg = 'Vendor with this name already exists on Exotic India. Linked existing Vendor ID.';
+            $msg = 'Vendor synced to Exotic India.';
         }
 
         return vendor_external_api_attach_debug($action, $postData, [
@@ -254,8 +254,7 @@ function vendor_external_api_post(string $action, array $postData): array
         ]);
     }
 
-    if ((isset($data['success']) && $data['success'] === false)
-        || (isset($data['status']) && strtolower((string) $data['status']) === 'error')) {
+    if (vendor_external_api_response_is_failure($data)) {
         $msg = !empty($data['message']) ? (string) $data['message'] : (!empty($data['reason']) ? (string) $data['reason'] : 'Remote API returned failure.');
 
         return vendor_external_api_attach_debug($action, $postData, [
