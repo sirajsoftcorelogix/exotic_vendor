@@ -7,7 +7,7 @@
 /** @return list<string> */
 function inbound_api_section_keys(): array
 {
-    return ['item_details', 'book_details'];
+    return ['item_details', 'book_details', 'item_grouping'];
 }
 
 function inbound_api_section_label(string $section): string
@@ -15,6 +15,7 @@ function inbound_api_section_label(string $section): string
     $labels = [
         'item_details' => 'Item details (dimensions, pricing & stock)',
         'book_details' => 'Book details',
+        'item_grouping' => 'Item grouping (material, accounts group, categories)',
     ];
 
     return $labels[$section] ?? $section;
@@ -193,6 +194,64 @@ function inbound_api_build_book_details_modify_fields(array $d, Inbounding $mode
 }
 
 /**
+ * @param array<string, mixed> $d
+ */
+function inbound_api_build_category_modify_value(array $d): string
+{
+    $ids = [];
+    $pushCsv = static function (string $csv) use (&$ids): void {
+        foreach (explode(',', $csv) as $id) {
+            $id = trim($id);
+            if ($id !== '') {
+                $ids[] = $id;
+            }
+        }
+    };
+
+    $final = trim((string) ($d['final_cat_ids'] ?? ''));
+    if ($final !== '') {
+        $pushCsv($final);
+    } else {
+        $pushCsv(trim((string) ($d['category_code'] ?? '')));
+        $pushCsv(trim((string) ($d['sub_category_code'] ?? '')));
+        $pushCsv(trim((string) ($d['sub_sub_category_code'] ?? '')));
+    }
+
+    return implode(',', array_values(array_unique($ids)));
+}
+
+/**
+ * @param array<string, mixed> $d Row from Inbounding::getpublishdata()['data']
+ * @return array<string, string|int|float>
+ */
+function inbound_api_build_item_grouping_modify_fields(array $d, Inbounding $model): array
+{
+    $fields = [];
+    $append = static function (string $key, $value) use (&$fields): void {
+        if ($value === null) {
+            return;
+        }
+        if (is_string($value) && trim($value) === '') {
+            return;
+        }
+        $fields[$key] = $value;
+    };
+
+    $category = inbound_api_build_category_modify_value($d);
+    if ($category !== '') {
+        $fields['category'] = $category;
+    }
+
+    $append('accounts_group', $model->resolveAccountGroupApiValue($d));
+
+    if (!inbound_api_is_book_group($d)) {
+        $append('material', $d['material_name'] ?? '');
+    }
+
+    return $fields;
+}
+
+/**
  * @return array{itemcode:string,size:string,color:string,fields:array<string,mixed>,section:string}|null
  */
 function inbound_api_build_section_modify_payload(Inbounding $model, int $inboundId, string $section): ?array
@@ -216,6 +275,8 @@ function inbound_api_build_section_modify_payload(Inbounding $model, int $inboun
             return null;
         }
         $fields = inbound_api_build_book_details_modify_fields($d, $model);
+    } elseif ($section === 'item_grouping') {
+        $fields = inbound_api_build_item_grouping_modify_fields($d, $model);
     }
 
     return [
