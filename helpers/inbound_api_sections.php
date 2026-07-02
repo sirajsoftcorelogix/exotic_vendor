@@ -22,6 +22,50 @@ function inbound_api_section_label(string $section): string
 
 /**
  * @param array<string, mixed> $d Row from Inbounding::getpublishdata()['data']
+ */
+function inbound_api_is_book_group(array $d): bool
+{
+    if (strtolower(trim((string) ($d['groupname'] ?? ''))) === 'book') {
+        return true;
+    }
+
+    $groupName = trim((string) ($d['group_name'] ?? ''));
+    if ($groupName === '-8') {
+        return true;
+    }
+
+    return $groupName !== '' && stripos($groupName, 'book') !== false;
+}
+
+/**
+ * @param array<string, mixed> $d
+ */
+function inbound_api_resolve_book_language_for_modify(array $d): string
+{
+    $stored = trim((string) ($d['language'] ?? ''));
+    if ($stored !== '') {
+        return $stored;
+    }
+
+    require_once __DIR__ . '/book_language_formatter.php';
+    require_once __DIR__ . '/../models/languages/Language.php';
+    global $conn;
+
+    $roleIdCsvMap = [];
+    foreach (BookLanguageFormatter::orderedRoleKeys() as $key) {
+        $roleIdCsvMap[$key] = trim((string) ($d[$key] ?? ''));
+    }
+
+    if ($conn instanceof mysqli) {
+        $languageModel = new Language($conn);
+        return $languageModel->buildFormattedBookLanguage($roleIdCsvMap);
+    }
+
+    return '';
+}
+
+/**
+ * @param array<string, mixed> $d Row from Inbounding::getpublishdata()['data']
  * @return array<string, string|int|float>
  */
 function inbound_api_build_item_details_modify_fields(array $d): array
@@ -93,7 +137,7 @@ function inbound_api_build_item_details_modify_fields(array $d): array
  */
 function inbound_api_build_book_details_modify_fields(array $d, Inbounding $model): array
 {
-    if (($d['groupname'] ?? '') !== 'book') {
+    if (!inbound_api_is_book_group($d)) {
         return [];
     }
 
@@ -116,7 +160,7 @@ function inbound_api_build_book_details_modify_fields(array $d, Inbounding $mode
         $fields['publisher_vendor_id'] = $publisherId;
     }
 
-    $append('language', $d['language'] ?? '');
+    $append('language', inbound_api_resolve_book_language_for_modify($d));
     $append('isbn', $d['isbn'] ?? '');
 
     if (!empty($d['cover_type'])) {
@@ -168,7 +212,7 @@ function inbound_api_build_section_modify_payload(Inbounding $model, int $inboun
     if ($section === 'item_details') {
         $fields = inbound_api_build_item_details_modify_fields($d);
     } elseif ($section === 'book_details') {
-        if (($d['groupname'] ?? '') !== 'book') {
+        if (!inbound_api_is_book_group($d)) {
             return null;
         }
         $fields = inbound_api_build_book_details_modify_fields($d, $model);

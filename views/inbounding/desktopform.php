@@ -2605,16 +2605,26 @@ document.addEventListener('DOMContentLoaded', function() {
         bookLanguageFieldKeys.forEach(initBookLanguageSelect);
         updateFormattedBookLanguageDisplay();
 
-        const desktopInboundForm = document.getElementById('inboundForm') || document.querySelector('form[method="post"]');
+        const desktopInboundForm = document.getElementById('product_form');
+        window.syncInboundDesktopFormBeforeSave = function () {
+            if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
+            if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
+            bookLanguageFieldKeys.forEach(function (fieldKey) {
+                const ts = bookLanguageTomSelects[fieldKey];
+                if (ts) syncBookLanguageHiddenValue(ts, fieldKey);
+            });
+            updateFormattedBookLanguageDisplay();
+            if (desktopInboundForm) {
+                desktopInboundForm.querySelectorAll('select').forEach(function (el) {
+                    if (el.tomselect) {
+                        el.value = el.tomselect.getValue();
+                    }
+                });
+            }
+        };
         if (desktopInboundForm) {
             desktopInboundForm.addEventListener('submit', function () {
-                if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
-                if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
-                bookLanguageFieldKeys.forEach(function (fieldKey) {
-                    const ts = bookLanguageTomSelects[fieldKey];
-                    if (ts) syncBookLanguageHiddenValue(ts, fieldKey);
-                });
-                updateFormattedBookLanguageDisplay();
+                window.syncInboundDesktopFormBeforeSave();
             });
         }
 
@@ -3469,7 +3479,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (sectionKey === 'book_details' && typeof window.updateBookShippingFeeFromWeight === 'function') {
             window.updateBookShippingFeeFromWeight();
         }
-        syncFormTomSelectValues(form);
+        if (typeof window.syncInboundDesktopFormBeforeSave === 'function') {
+            window.syncInboundDesktopFormBeforeSave();
+        } else {
+            syncFormTomSelectValues(form);
+        }
         const formData = new FormData(form);
         formData.set('save_action', 'draft');
         const recordId = new URLSearchParams(window.location.search).get('id');
@@ -3489,18 +3503,34 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(form.action, {
             method: 'POST',
             body: formData,
-            redirect: 'manual'
+            credentials: 'same-origin',
+            redirect: 'manual',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
         })
         .then(function (saveResponse) {
-            if (saveResponse.type === 'opaqueredirect' || (saveResponse.status >= 300 && saveResponse.status < 400)) {
-                return;
-            }
-            if (!saveResponse.ok) {
-                throw new Error('Form save failed (HTTP ' + saveResponse.status + ').');
-            }
+            return saveResponse.text().then(function (saveText) {
+                if (saveResponse.type === 'opaqueredirect' || (saveResponse.status >= 300 && saveResponse.status < 400)) {
+                    return;
+                }
+                if (!saveResponse.ok) {
+                    throw new Error('Form save failed (HTTP ' + saveResponse.status + ').');
+                }
+                if (saveText && saveText.trim().charAt(0) === '{') {
+                    const saveData = JSON.parse(saveText.trim());
+                    if (saveData && saveData.status && saveData.status !== 'success') {
+                        throw new Error(saveData.message || 'Form save failed.');
+                    }
+                }
+            });
         })
         .then(function () {
-            return fetch('index.php?page=inbounding&action=inbound_api_section_update&id=' + encodeURIComponent(recordId) + '&section=' + encodeURIComponent(sectionKey));
+            return fetch('index.php?page=inbounding&action=inbound_api_section_update&id=' + encodeURIComponent(recordId) + '&section=' + encodeURIComponent(sectionKey), {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            });
         })
         .then(function (response) { return response.json(); })
         .then(function (data) {

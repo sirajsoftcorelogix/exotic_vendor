@@ -1799,6 +1799,18 @@ class InboundingController {
             $inboundingModel->stat_logs($logData);
 
             if ($action_clicked === 'draft') {
+                $wantsJson = (
+                    (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string) $_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+                    || (isset($_SERVER['HTTP_ACCEPT']) && stripos((string) $_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+                );
+                if ($wantsJson) {
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode(['status' => 'success', 'id' => $id, 'message' => 'Draft saved.']);
+                    exit;
+                }
                 header("location: " . base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved'));
             } else {
                 header("location: " . base_url('?page=inbounding&action=list'));
@@ -2873,6 +2885,7 @@ class InboundingController {
             echo json_encode([
                 'status' => 'error',
                 'message' => 'No fields to send for this section. Save the form and try again.',
+                'section' => $section,
             ]);
             exit;
         }
@@ -2931,6 +2944,7 @@ class InboundingController {
             'status' => 'success',
             'message' => inbound_api_section_label($section) . ' updated on the website.',
             'section' => $section,
+            'fields_sent' => array_keys($payload['fields']),
             'import' => $importResponse,
         ]);
         exit;
