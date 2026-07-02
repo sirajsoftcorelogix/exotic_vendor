@@ -1683,6 +1683,13 @@
                 alert(vendor.message);
                 return;
             }
+            editVendorNameExists = false;
+            editEmailExists = false;
+            editPhoneExists = false;
+            ['editVendorNameMsg', 'editEmailMsg', 'editPhoneMsg'].forEach(function (msgId) {
+                const el = document.getElementById(msgId);
+                if (el) el.textContent = '';
+            });
             // Populate form fields with vendor data
             document.getElementById("editVendorId").value   = vendor.id;
             document.getElementById("editVendorName").value = vendor.vendor_name;
