@@ -1424,8 +1424,18 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 }
             }
         ?>
-        <div class="mt-[15px] md:mx-5">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-item-grouping">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
+                <?php if ($is_inbound_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="item_grouping"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Grouping</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
@@ -2019,7 +2029,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         <div id="sectionUpdateConfirmIdle">
             <h3 class="text-lg font-bold mb-2 text-gray-800">Update on website</h3>
             <p id="sectionUpdateConfirmText" class="text-sm text-gray-600 mb-3">Push saved item details (dimensions, pricing, location, etc.) to the website.</p>
-            <p class="text-xs text-gray-500 mb-4">The form is saved first, then only this section is sent to the website. Quantity is not synced here yet.</p>
+            <p id="sectionUpdateConfirmNote" class="text-xs text-gray-500 mb-4 hidden"></p>
+            <p id="sectionUpdateConfirmDefaultNote" class="text-xs text-gray-500 mb-4">The form is saved first, then only this section is sent to the website. Quantity is not synced here yet.</p>
             <div class="flex flex-col gap-2 mb-4">
                 <button type="button" id="sectionUpdateConfirmBtn" onclick="triggerSectionApiUpdate()" class="w-full bg-[#6f42c1] text-white px-4 py-2.5 rounded text-sm font-semibold hover:bg-[#5a32a3] transition shadow-md">Confirm update</button>
             </div>
@@ -3420,7 +3431,11 @@ document.addEventListener('DOMContentLoaded', function() {
     let pendingSectionUpdateKey = null;
     const inboundSectionUpdateLabels = {
         item_details: 'Item details (dimensions, pricing & stock)',
-        book_details: 'Book details (author, publisher, ISBN, language, fees)'
+        book_details: 'Book details (author, publisher, ISBN, language, fees)',
+        item_grouping: 'Item grouping (material, accounts group, categories)'
+    };
+    const inboundSectionUpdateNotes = {
+        item_grouping: 'The product group (Book, Sculpture, etc.) cannot be changed on the website after publish. Material, accounts group, and category selections will sync.'
     };
 
     function resetSectionUpdatePopup() {
@@ -3441,8 +3456,23 @@ document.addEventListener('DOMContentLoaded', function() {
         resetSectionUpdatePopup();
         const label = inboundSectionUpdateLabels[pendingSectionUpdateKey] || 'This section';
         const textEl = document.getElementById('sectionUpdateConfirmText');
+        const noteEl = document.getElementById('sectionUpdateConfirmNote');
+        const defaultNoteEl = document.getElementById('sectionUpdateConfirmDefaultNote');
         if (textEl) {
             textEl.textContent = 'Push saved changes for ' + label + ' to the website?';
+        }
+        const sectionNote = inboundSectionUpdateNotes[pendingSectionUpdateKey] || '';
+        if (noteEl) {
+            if (sectionNote) {
+                noteEl.textContent = sectionNote;
+                noteEl.classList.remove('hidden');
+            } else {
+                noteEl.textContent = '';
+                noteEl.classList.add('hidden');
+            }
+        }
+        if (defaultNoteEl) {
+            defaultNoteEl.classList.toggle('hidden', !!sectionNote);
         }
         showDesktopOverlay(document.getElementById('sectionUpdateConfirmPopup'));
     }
