@@ -4727,7 +4727,15 @@ class ProductsController
 
             $result = $productModel->insertStockMovement($insertData);
 
-            // Manual adjust updates physical_stock / warehouse movements only — not website local_stock or vendor API.
+            if (!empty($result['success'])) {
+                $vendorSync = $this->syncProductStockToVendorFrontend($product, $insertData);
+                $result['vendor_sync'] = $vendorSync;
+                if (empty($vendorSync['success'])) {
+                    $baseMsg = (string) ($result['message'] ?? 'Stock updated and history recorded.');
+                    $result['message'] = $baseMsg . ' Warning: storefront stock sync failed — '
+                        . trim((string) ($vendorSync['message'] ?? 'Vendor API error.'));
+                }
+            }
 
             echo json_encode($result);
         } catch (Exception $e) {
@@ -4762,72 +4770,32 @@ class ProductsController
     }
 
     /**
-     * Update frontend stock using vendor product/modify API.
+     * Push local_stock_delta to vendor product/modify API (storefront stock).
      */
     private function syncProductStockToVendorFrontend(array $product, array $movement): array
     {
-        $itemCode = trim((string)($product['item_code'] ?? ''));
+        global $productModel;
+
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
         if ($itemCode === '') {
             return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
         }
 
-        $size = trim((string)($product['size'] ?? ''));
-        $color = trim((string)($product['color'] ?? ''));
-        $qty = (int)($movement['quantity'] ?? 0);
-        $movementType = strtoupper(trim((string)($movement['movement_type'] ?? '')));
+        $qty = (int) ($movement['quantity'] ?? 0);
+        $movementType = strtoupper(trim((string) ($movement['movement_type'] ?? '')));
         $positiveTypes = ['IN', 'TRANSFER_IN', 'OPENING_STOCK'];
         $signedDelta = in_array($movementType, $positiveTypes, true) ? $qty : (-1 * $qty);
-
-        $url = 'https://www.exoticindia.com/vendor-api/product/modify'
-            . '?itemcode=' . urlencode($itemCode)
-            . '&size=' . urlencode($size)
-            . '&color=' . urlencode($color);
-
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Content-Type: application/x-www-form-urlencoded',
-        ];
-        $postData = [
-            'local_stock_delta' => $signedDelta,
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        $response = curl_exec($ch);
-        $curlErr = curl_error($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($response === false) {
-            return ['success' => false, 'message' => 'Vendor API request failed: ' . $curlErr];
+        if ($signedDelta === 0) {
+            return ['success' => true, 'message' => 'No local_stock_delta to apply.'];
         }
 
-        $decoded = json_decode($response, true);
-        if (!is_array($decoded)) {
-            return [
-                'success' => ($httpCode >= 200 && $httpCode < 300),
-                'message' => ($httpCode >= 200 && $httpCode < 300)
-                    ? 'Vendor stock sync completed.'
-                    : 'Vendor API returned non-JSON response.',
-                'http_code' => $httpCode,
-                'raw_response' => $response,
-            ];
-        }
+        $resolved = $productModel->resolveProductForVendorSync(
+            $itemCode,
+            trim((string) ($product['size'] ?? '')),
+            trim((string) ($product['color'] ?? ''))
+        );
 
-        $apiSuccess = isset($decoded['success']) ? (bool)$decoded['success'] : ($httpCode >= 200 && $httpCode < 300);
-        return [
-            'success' => $apiSuccess,
-            'message' => $decoded['message'] ?? ($apiSuccess ? 'Vendor stock sync completed.' : 'Vendor stock sync failed.'),
-            'http_code' => $httpCode,
-            'response' => $decoded,
-        ];
+        return $productModel->syncCpToVendorFrontend($resolved, 0.0, (float) $signedDelta);
     }
 
     public function updateStockLimits()
