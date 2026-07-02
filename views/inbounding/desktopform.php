@@ -136,6 +136,10 @@
         z-index: 80 !important;
         background: rgba(0, 0, 0, 0.5) !important;
     }
+    #sectionUpdateConfirmPopup.is-open {
+        z-index: 82 !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+    }
     #printJsonPopup.is-open {
         z-index: 85 !important;
         background: rgba(0, 0, 0, 0.5) !important;
@@ -737,10 +741,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <?php if ($is_inbound_published): ?>
                 <div class="flex justify-end mb-3">
                     <button type="button"
-                            onclick="handleSectionApiUpdateClick('item_details')"
+                            id="inboundSectionUpdateBtn"
+                            data-section="item_details"
                             class="inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                        Update on API
+                        Update on website
                     </button>
                 </div>
                 <?php endif; ?>
@@ -2003,9 +2008,9 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
 <div id="sectionUpdateConfirmPopup" class="desktop-form-modal" hidden aria-hidden="true">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[420px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
         <div id="sectionUpdateConfirmIdle">
-            <h3 class="text-lg font-bold mb-2 text-gray-800">Update section on API</h3>
-            <p id="sectionUpdateConfirmText" class="text-sm text-gray-600 mb-3">Push saved item details (dimensions, pricing, location, etc.) to the catalog API.</p>
-            <p class="text-xs text-gray-500 mb-4">The form is saved first, then only this section is sent via <code class="text-[11px] bg-gray-100 px-1 rounded">product/modify</code>. Quantity is not synced here yet.</p>
+            <h3 class="text-lg font-bold mb-2 text-gray-800">Update on website</h3>
+            <p id="sectionUpdateConfirmText" class="text-sm text-gray-600 mb-3">Push saved item details (dimensions, pricing, location, etc.) to the website.</p>
+            <p class="text-xs text-gray-500 mb-4">The form is saved first, then only this section is sent to the website. Quantity is not synced here yet.</p>
             <div class="flex flex-col gap-2 mb-4">
                 <button type="button" id="sectionUpdateConfirmBtn" onclick="triggerSectionApiUpdate()" class="w-full bg-[#6f42c1] text-white px-4 py-2.5 rounded text-sm font-semibold hover:bg-[#5a32a3] transition shadow-md">Confirm update</button>
             </div>
@@ -3417,7 +3422,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const label = inboundSectionUpdateLabels[pendingSectionUpdateKey] || 'This section';
         const textEl = document.getElementById('sectionUpdateConfirmText');
         if (textEl) {
-            textEl.textContent = 'Push saved changes for ' + label + ' to the catalog API?';
+            textEl.textContent = 'Push saved changes for ' + label + ' to the website?';
         }
         showDesktopOverlay(document.getElementById('sectionUpdateConfirmPopup'));
     }
@@ -3432,6 +3437,17 @@ document.addEventListener('DOMContentLoaded', function() {
         pendingSectionUpdateKey = sectionKey;
         openSectionUpdatePopup();
     }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('button[data-section]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const sectionKey = btn.getAttribute('data-section');
+                if (sectionKey) {
+                    handleSectionApiUpdateClick(sectionKey);
+                }
+            });
+        });
+    });
 
     function triggerSectionApiUpdate() {
         const sectionKey = pendingSectionUpdateKey;
@@ -3480,13 +3496,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isSuccess) {
                 Swal.fire({
                     title: 'Updated',
-                    text: data.message || 'Section updated on catalog API.',
+                    text: data.message || 'Section updated on the website.',
                     icon: 'success'
                 }).then(function () { window.location.reload(); });
             } else {
                 Swal.fire({
                     title: 'Update failed',
-                    text: data.message || 'Could not update this section on the API.',
+                    text: data.message || 'Could not update this section on the website.',
                     icon: 'error',
                     confirmButtonColor: '#d97824'
                 });
@@ -3502,6 +3518,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    window.handleSectionApiUpdateClick = handleSectionApiUpdateClick;
+    window.openSectionUpdatePopup = openSectionUpdatePopup;
+    window.closeSectionUpdatePopup = closeSectionUpdatePopup;
+    window.triggerSectionApiUpdate = triggerSectionApiUpdate;
 
     function resetPrintJsonPopup() {
         const choose = document.getElementById('printJsonChoose');
