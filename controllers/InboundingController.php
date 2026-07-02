@@ -2343,6 +2343,10 @@ class InboundingController {
         }
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
+            $authorApiValue = implode(',', $inboundingModel->parseInboundAuthorIds($d['author'] ?? ''));
+            if ($authorApiValue !== '') {
+                $API_data['author'] = $authorApiValue;
+            }
 
             $API_data['creator'] = $inboundingModel->buildBookCreatorApiValue(
                 $d['author'] ?? '',
@@ -2350,6 +2354,7 @@ class InboundingController {
             );
             $publisherVendorId = (int) ($d['publisher'] ?? 0);
             if ($publisherVendorId > 0) {
+                $API_data['publisher'] = (string) $publisherVendorId;
                 $API_data['publisher_vendor_id'] = $publisherVendorId;
             }
             $API_data['language'] = $d['language'] ?? '';
@@ -2400,8 +2405,10 @@ class InboundingController {
             $API_data['accounts_group'] = $accountGroupName;
         }
         $vendorApiId = (int) preg_replace('/\D/', '', (string) ($d['vendor_code'] ?? ''));
-        $API_data['discrete_vendors'][0]['vendor'] = $vendorApiId;
-        $API_data['discrete_vendors'][0]['priority'] = 1;
+        if ($vendorApiId > 0) {
+            $API_data['discrete_vendors'][0]['vendor'] = $vendorApiId;
+            $API_data['discrete_vendors'][0]['priority'] = 1;
+        }
         $stock_price_temp = array();
         if (($d['is_variant'] ?? 'N') == 'N') {
             
