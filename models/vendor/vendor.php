@@ -214,7 +214,12 @@ class vendor
             return false;
         }
 
-        $sql = 'SELECT id FROM vp_vendors WHERE ' . $column . ' = ?';
+        if ($column === 'vendor_email') {
+            $sql = "SELECT id FROM vp_vendors WHERE LOWER(TRIM(vendor_email)) = LOWER(TRIM(?)) AND TRIM(COALESCE(vendor_email, '')) <> ''";
+        } else {
+            $sql = 'SELECT id FROM vp_vendors WHERE ' . $column . ' = ?';
+        }
+
         if ($excludeId !== null && $excludeId > 0) {
             $sql .= ' AND id != ? LIMIT 1';
             $stmt = $this->conn->prepare($sql);
@@ -230,6 +235,11 @@ class vendor
         $stmt->close();
 
         return $exists;
+    }
+
+    private function normalizeVendorEmail(?string $email): string
+    {
+        return strtolower(trim((string) $email));
     }
 
     public function addVendor($data)
@@ -310,10 +320,17 @@ class vendor
             return ['success' => false, 'message' => 'Invalid vendor id.'];
         }
 
+        $existingVendor = $this->getVendorById($id);
+        $editEmail = isset($data['editEmail']) ? (string) $data['editEmail'] : null;
+        if ($existingVendor && $editEmail !== null
+            && $this->normalizeVendorEmail($existingVendor['vendor_email'] ?? '') === $this->normalizeVendorEmail($editEmail)) {
+            $editEmail = null;
+        }
+
         $duplicate = $this->validateVendorUniqueness(
             isset($data['editVendorName']) ? (string) $data['editVendorName'] : null,
             isset($data['editPhone']) ? (string) $data['editPhone'] : null,
-            isset($data['editEmail']) ? (string) $data['editEmail'] : null,
+            $editEmail,
             isset($data['editGstNumber']) ? (string) $data['editGstNumber'] : null,
             isset($data['editPanNumber']) ? (string) $data['editPanNumber'] : null,
             $id
