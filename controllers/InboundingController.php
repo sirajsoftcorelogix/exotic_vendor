@@ -922,7 +922,6 @@ class InboundingController {
     private function renameImagesToItemCode($itemId, $itemCode, $currentData, ?array $bundle = null) {
         global $inboundingModel;
         $itemCode = strtolower($itemCode);
-        $mainPhotoDir = __DIR__ . '/../uploads/products/';
         $altPhotoDir  = __DIR__ . '/../uploads/itm_img/';
 
         $bundle = $bundle ?? $inboundingModel->getImageRenameBundle($itemId);
@@ -936,29 +935,20 @@ class InboundingController {
         $hasVariations = $variations !== [];
         $useVariationNaming = $hasVariations && !$isBook;
         $imagesByVariation = $bundle['images_by_variation'];
-        $isVariant = strtoupper(trim((string) ($currentData['is_variant'] ?? 'N'))) === 'Y';
 
-        if ($isBook || (!$isVariant && !$hasVariations)) {
-            $baseName = $itemCode;
-        } else {
-            $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
-            $baseName = $itemCode . ($suffix ? '-' . $suffix : '');
-        }
-
-        $skipParentStandaloneImages = $useVariationNaming && !$isVariant;
-        $mainPhotoPath = trim((string) ($inboundCtx['product_photo'] ?? ''));
-        $hasSeparatePrimary = !$skipParentStandaloneImages && $mainPhotoPath !== '';
-
-        if ($hasSeparatePrimary) {
-            $this->processRename($mainPhotoPath, $mainPhotoDir, $baseName, $itemId, 'main', $inboundingModel, $altPhotoDir);
-        }
-
-        $baseImages = $imagesByVariation[-1] ?? [];
-        if ($baseImages !== [] && !$skipParentStandaloneImages) {
-            $this->renameGalleryImagesByDisplayOrder($baseImages, $altPhotoDir, $baseName, $inboundingModel, $isBook, $hasSeparatePrimary);
-        }
-
+        // Only edited item_images in uploads/itm_img/ — never product_photo / variation_image from uploads/products/.
         if (!$useVariationNaming) {
+            $baseImages = $imagesByVariation[-1] ?? [];
+            if ($baseImages !== []) {
+                $this->renameGalleryImagesByDisplayOrder(
+                    $baseImages,
+                    $altPhotoDir,
+                    $itemCode,
+                    $inboundingModel,
+                    $isBook,
+                    false
+                );
+            }
             return;
         }
 
@@ -971,13 +961,16 @@ class InboundingController {
             $varSuffix = $this->getNamingSuffix($var['color'], $var['size']);
             $varBaseName = $itemCode . ($varSuffix ? '-' . $varSuffix : '');
 
-            if (!empty($var['variation_image'])) {
-                $this->processRename($var['variation_image'], $mainPhotoDir, $varBaseName, $varId, 'variation_main', $inboundingModel, $altPhotoDir);
-            }
-
             $varImages = $imagesByVariation[$varId] ?? [];
             if ($varImages !== []) {
-                $this->renameGalleryImagesByDisplayOrder($varImages, $altPhotoDir, $varBaseName, $inboundingModel, $isBook, !empty($var['variation_image']));
+                $this->renameGalleryImagesByDisplayOrder(
+                    $varImages,
+                    $altPhotoDir,
+                    $varBaseName,
+                    $inboundingModel,
+                    $isBook,
+                    false
+                );
             }
         }
     }
@@ -1030,7 +1023,9 @@ class InboundingController {
             }
 
             if ($bookMode) {
-                $candidateBase = $baseName . $this->bookImageAlphabetSuffix($idx);
+                $candidateBase = ($idx === 0)
+                    ? $baseName
+                    : $baseName . $this->bookImageAlphabetSuffix($idx - 1);
             } elseif ($hasSeparatePrimary) {
                 $candidateBase = $baseName . '_a' . str_pad((string) ($idx + 1), 2, '0', STR_PAD_LEFT);
             } elseif ($idx === 0) {
@@ -1270,64 +1265,169 @@ class InboundingController {
     }
 
     /**
-     * Build vendor API images[] URLs: primary first, then alternates (display_order).
+     * Build vendor API images[] URLs from edited item_images only (uploads/itm_img/).
      *
      * @return list<string>
      */
     private function buildApiProductImageUrls(array $d, string $siteImageBase): array
     {
-        $imgBase = rtrim($siteImageBase, '/') . '/uploads/itm_img/';
-        $orderedFiles = [];
-
-        $primaryFile = '';
-        if (!empty($d['product_photo'])) {
-            $primaryFile = strtolower(basename((string) $d['product_photo']));
+        $galleryRows = $d['img'] ?? [];
+        if (!is_array($galleryRows) || $galleryRows === []) {
+            return [];
         }
 
         $varRows = $d['var_rows'] ?? [];
         $hasVariations = is_array($varRows) && $varRows !== [];
         $isVariant = strtoupper(trim((string) ($d['is_variant'] ?? 'N'))) === 'Y';
         $isBook = strtolower(trim((string) ($d['groupname'] ?? ''))) === 'book';
+        $skipParentGallery = $hasVariations && !$isVariant && !$isBook;
 
-        if ($primaryFile === '' && $hasVariations && !$isVariant && !$isBook) {
-            $firstVarImage = trim((string) ($varRows[0]['variation_image'] ?? ''));
-            if ($firstVarImage !== '') {
-                $primaryFile = strtolower(basename($firstVarImage));
+        $imgBase = rtrim($siteImageBase, '/') . '/uploads/itm_img/';
+        $orderedFiles = [];
+
+        usort($galleryRows, static function ($a, $b) {
+            $va = (int) ($a['variation_id'] ?? -1);
+            $vb = (int) ($b['variation_id'] ?? -1);
+            if ($va === 0) {
+                $va = -1;
             }
-        }
-
-        if ($primaryFile !== '') {
-            $orderedFiles[] = $primaryFile;
-        }
-
-        $galleryRows = $d['img'] ?? [];
-        if (is_array($galleryRows) && $galleryRows !== []) {
-            usort($galleryRows, static function ($a, $b) {
-                $va = (int) ($a['variation_id'] ?? -1);
-                $vb = (int) ($b['variation_id'] ?? -1);
-                if ($va !== $vb) {
-                    return $va <=> $vb;
-                }
-                $oa = (int) ($a['display_order'] ?? 0);
-                $ob = (int) ($b['display_order'] ?? 0);
-                if ($oa !== $ob) {
-                    return $oa <=> $ob;
-                }
-                return (int) ($a['id'] ?? 0) <=> (int) ($b['id'] ?? 0);
-            });
-
-            foreach ($galleryRows as $row) {
-                $fn = strtolower(basename((string) ($row['file_name'] ?? '')));
-                if ($fn === '' || in_array($fn, $orderedFiles, true)) {
-                    continue;
-                }
-                $orderedFiles[] = $fn;
+            if ($vb === 0) {
+                $vb = -1;
             }
+            if ($va !== $vb) {
+                return $va <=> $vb;
+            }
+            $oa = (int) ($a['display_order'] ?? 0);
+            $ob = (int) ($b['display_order'] ?? 0);
+            if ($oa !== $ob) {
+                return $oa <=> $ob;
+            }
+            return (int) ($a['id'] ?? 0) <=> (int) ($b['id'] ?? 0);
+        });
+
+        foreach ($galleryRows as $row) {
+            $varId = (int) ($row['variation_id'] ?? -1);
+            if ($varId === 0) {
+                $varId = -1;
+            }
+            if ($skipParentGallery && $varId === -1) {
+                continue;
+            }
+
+            $fn = strtolower(basename((string) ($row['file_name'] ?? '')));
+            if ($fn === '' || in_array($fn, $orderedFiles, true)) {
+                continue;
+            }
+            if (!$this->editedImageExistsOnDisk($fn)) {
+                continue;
+            }
+            $orderedFiles[] = $fn;
         }
 
         return array_map(static function ($filename) use ($imgBase) {
             return $imgBase . $filename;
         }, $orderedFiles);
+    }
+
+    private function editedImageExistsOnDisk(string $fileName): bool
+    {
+        $fileName = strtolower(basename(trim($fileName)));
+        if ($fileName === '') {
+            return false;
+        }
+
+        return is_file(__DIR__ . '/../uploads/itm_img/' . $fileName);
+    }
+
+    /**
+     * @return array{ok:bool,message:string,missing:list<string>}
+     */
+    private function validateEditedImagesForPublish(array $bundle, array $publishRow): array
+    {
+        $imagesByVariation = $bundle['images_by_variation'] ?? [];
+        $variations = $bundle['variations'] ?? [];
+        $isBook = (string) ($bundle['inbound']['group_name'] ?? '') === '-8'
+            || strtolower(trim((string) ($publishRow['groupname'] ?? ''))) === 'book';
+        $isVariant = strtoupper(trim((string) ($publishRow['is_variant'] ?? 'N'))) === 'Y';
+        $hasVariations = is_array($variations) && $variations !== [];
+        $useVariationNaming = $hasVariations && !$isBook && !$isVariant;
+
+        $missing = [];
+
+        if ($useVariationNaming) {
+            foreach ($variations as $var) {
+                $varId = (int) ($var['id'] ?? 0);
+                if ($varId <= 0) {
+                    continue;
+                }
+                $hasFile = false;
+                foreach ($imagesByVariation[$varId] ?? [] as $row) {
+                    if ($this->editedImageExistsOnDisk((string) ($row['file_name'] ?? ''))) {
+                        $hasFile = true;
+                        break;
+                    }
+                }
+                if (!$hasFile) {
+                    $color = trim((string) ($var['color'] ?? ''));
+                    $size = trim((string) ($var['size'] ?? ''));
+                    $label = trim($color . ($color !== '' && $size !== '' ? ' / ' : '') . $size);
+                    $missing[] = $label !== '' ? $label : ('variation #' . $varId);
+                }
+            }
+        } elseif ($isVariant) {
+            if (!$this->itemHasAnyEditedImageOnDisk($imagesByVariation)) {
+                $missing[] = 'this variation';
+            }
+        } else {
+            $hasFile = false;
+            foreach ($imagesByVariation[-1] ?? [] as $row) {
+                if ($this->editedImageExistsOnDisk((string) ($row['file_name'] ?? ''))) {
+                    $hasFile = true;
+                    break;
+                }
+            }
+            if (!$hasFile) {
+                $missing[] = 'main product';
+            }
+        }
+
+        if ($missing !== []) {
+            return [
+                'ok' => false,
+                'message' => 'Publish blocked: upload edited photos via Item Photos for: '
+                    . implode(', ', $missing) . '.',
+                'missing' => $missing,
+            ];
+        }
+
+        return ['ok' => true, 'message' => '', 'missing' => []];
+    }
+
+    /** @param array<int, list<array>> $imagesByVariation */
+    private function itemHasAnyEditedImageOnDisk(array $imagesByVariation): bool
+    {
+        foreach ($imagesByVariation as $rows) {
+            foreach ($rows as $row) {
+                if ($this->editedImageExistsOnDisk((string) ($row['file_name'] ?? ''))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function publishJsonError(string $message, array $extra = []): void
+    {
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array_merge([
+            'status' => 'error',
+            'message' => $message,
+        ], $extra), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     private function deleteThumbnailForImagePath(string $absoluteImagePath): void {
@@ -2203,6 +2303,26 @@ class InboundingController {
         // --- HELPER: Get Current Date in Y-m-d format ---
         $current_date_formatted = date("Y-m-d");
         $d = $data['data'];
+
+        $editedImageCheck = $this->validateEditedImagesForPublish($imageBundle, $d);
+        if (!$editedImageCheck['ok']) {
+            $logFileData = $this->logPublishProcess([
+                'item_code' => $d['Item_code'] ?? '',
+                'inbound_id' => $id,
+                'status' => 'failed',
+                'error_type' => 'missing_edited_images',
+                'error_message' => $editedImageCheck['message'],
+                'request_data' => ['missing' => $editedImageCheck['missing']],
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown',
+            ]);
+            inbound_profiler_finish($prof, 'missing_edited_images');
+            $this->publishJsonError($editedImageCheck['message'], [
+                'inbound_id' => $id,
+                'missing_edited_images' => $editedImageCheck['missing'],
+                'log_file' => $logFileData['filename'] ?? null,
+            ]);
+        }
+
         // 1. Add all other fields FIRST (use safe defaults to prevent warnings)
         $API_data['itemcode'] = $d['Item_code'] ?? '';
         $API_data['groupname'] = $d['groupname'] ?? '';
@@ -2449,13 +2569,20 @@ class InboundingController {
         $images_payload['image_directory'] = $img_directory;
         $images_payload['images'] = array(); // Initialize as empty ARRAY, not string
 
-        if (!empty($d['img']) || !empty($d['product_photo']) || !empty($d['var_rows'])) {
+        if (!empty($d['img'])) {
             $images_payload['image_directory'] = $d['image_directory'] ?? '';
             
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $httpHost = $_SERVER['HTTP_HOST'] ?? '';
             $siteImageBase = $protocol . '://' . $httpHost;
             $images_payload['images'] = $this->buildApiProductImageUrls($d, $siteImageBase);
+            if ($images_payload['images'] === []) {
+                inbound_profiler_finish($prof, 'missing_edited_images_on_disk');
+                $this->publishJsonError(
+                    'Publish blocked: edited photo files are missing from uploads/itm_img/. Re-upload via Item Photos.',
+                    ['inbound_id' => $id]
+                );
+            }
         }
 
         $API_data['images'] = $images_payload;
