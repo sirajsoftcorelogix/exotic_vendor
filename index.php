@@ -1099,6 +1099,9 @@ switch ($page) {
             case 'inbound_product_publish':
                 $controller->inbound_product_publish();
                 break;
+            case 'inbound_api_section_update':
+                $controller->inbound_api_section_update();
+                break;
             case 'inbound_product_preview_json':
                 $controller->inbound_product_preview_json();
                 break;

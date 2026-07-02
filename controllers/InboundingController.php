@@ -357,6 +357,11 @@ class InboundingController {
             'count' => count($data['book_languages'] ?? []),
         ]);
 
+        $data['is_inbound_published'] = $inboundingModel->isInboundPublished($id);
+        inbound_profiler_step($prof, 'isInboundPublished', [
+            'published' => $data['is_inbound_published'],
+        ]);
+
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
         inbound_profiler_finish($prof, 'ok');
     }
@@ -2825,6 +2830,105 @@ class InboundingController {
         echo json_encode([
             'status' => 'error',
             'message' => 'Preview did not return JSON. Ensure inbound_product_preview_json route is deployed.',
+        ]);
+        exit;
+    }
+
+    /**
+     * POST product/modify for one inbound section after first publish (flat fields only).
+     */
+    public function inbound_api_section_update(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+        global $inboundingModel;
+
+        $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
+        $section = trim((string) ($_GET['section'] ?? $_POST['section'] ?? ''));
+
+        if ($id <= 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid inbound id.']);
+            exit;
+        }
+        if (!$inboundingModel->isInboundPublished($id)) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Product must be published before updating sections on the API.',
+            ]);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/inbound_api_sections.php';
+        require_once __DIR__ . '/../helpers/exotic_india_api.php';
+
+        $payload = inbound_api_build_section_modify_payload($inboundingModel, $id, $section);
+        if ($payload === null) {
+            echo json_encode(['status' => 'error', 'message' => 'Unknown section or missing publish data.']);
+            exit;
+        }
+        if ($payload['fields'] === []) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'No fields to send for this section. Save the form and try again.',
+            ]);
+            exit;
+        }
+
+        $endpoint = 'product/modify'
+            . '?itemcode=' . rawurlencode($payload['itemcode'])
+            . '&size=' . rawurlencode($payload['size'])
+            . '&color=' . rawurlencode($payload['color']);
+
+        $api = exotic_india_api_post(
+            $endpoint,
+            http_build_query($payload['fields']),
+            ['Content-Type: application/x-www-form-urlencoded']
+        );
+
+        if (!$api['success']) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => trim((string) ($api['message'] ?? '')) !== ''
+                    ? (string) $api['message']
+                    : 'Vendor API modify failed.',
+                'http_code' => (int) ($api['http_code'] ?? 0),
+            ]);
+            exit;
+        }
+
+        $apiBody = is_array($api['data'] ?? null) ? $api['data'] : [];
+        $apiSuccess = !isset($apiBody['success']) || (bool) $apiBody['success'];
+        if (!$apiSuccess) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => trim((string) ($apiBody['message'] ?? '')) !== ''
+                    ? (string) $apiBody['message']
+                    : 'Vendor API modify rejected the update.',
+                'http_code' => (int) ($api['http_code'] ?? 0),
+            ]);
+            exit;
+        }
+
+        $ProductsController = new ProductsController();
+        $importResponse = $ProductsController->importApiCall(
+            [$payload['itemcode']],
+            ['sync_physical_stock' => false]
+        );
+
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        if ($userId > 0) {
+            $inboundingModel->stat_logs([
+                'userid_log' => $userId,
+                'i_id' => $id,
+                'stat' => 'API Update: ' . inbound_api_section_label($section),
+            ]);
+        }
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => inbound_api_section_label($section) . ' updated on catalog API.',
+            'section' => $section,
+            'import' => $importResponse,
         ]);
         exit;
     }
