@@ -7,13 +7,14 @@
 /** @return list<string> */
 function inbound_api_section_keys(): array
 {
-    return ['item_details'];
+    return ['item_details', 'book_details'];
 }
 
 function inbound_api_section_label(string $section): string
 {
     $labels = [
         'item_details' => 'Item details (dimensions, pricing & stock)',
+        'book_details' => 'Book details',
     ];
 
     return $labels[$section] ?? $section;
@@ -87,6 +88,67 @@ function inbound_api_build_item_details_modify_fields(array $d): array
 }
 
 /**
+ * @param array<string, mixed> $d Row from Inbounding::getpublishdata()['data']
+ * @return array<string, string|int|float>
+ */
+function inbound_api_build_book_details_modify_fields(array $d, Inbounding $model): array
+{
+    if (($d['groupname'] ?? '') !== 'book') {
+        return [];
+    }
+
+    $fields = [];
+    $append = static function (string $key, $value) use (&$fields): void {
+        if ($value === null) {
+            return;
+        }
+        if (is_string($value) && trim($value) === '') {
+            return;
+        }
+        $fields[$key] = $value;
+    };
+
+    $creator = $model->buildBookCreatorApiValue($d['author'] ?? '', $d['edited_by'] ?? '');
+    $append('creator', $creator);
+
+    $publisherId = (int) ($d['publisher'] ?? 0);
+    if ($publisherId > 0) {
+        $fields['publisher_vendor_id'] = $publisherId;
+    }
+
+    $append('language', $d['language'] ?? '');
+    $append('isbn', $d['isbn'] ?? '');
+
+    if (!empty($d['cover_type'])) {
+        $fields['cover_type'] = $d['cover_type'];
+    }
+    if (!empty($d['edition'])) {
+        $fields['edition'] = $d['edition'];
+    }
+
+    $pubDate = trim((string) ($d['publication_date'] ?? ''));
+    if ($pubDate !== '' && $pubDate !== '0000-00-00') {
+        $fields['publication_date'] = $pubDate;
+    }
+
+    if (isset($d['pages']) && $d['pages'] !== '' && $d['pages'] !== null) {
+        $fields['pages'] = (int) $d['pages'];
+    }
+
+    $sourcingFee = trim((string) ($d['sourcingfee'] ?? ''));
+    if ($sourcingFee !== '') {
+        $fields['sourcingfee'] = round((float) $sourcingFee, 2);
+    }
+
+    $shippingFee = $d['shippingfee'] ?? null;
+    if ($shippingFee !== null && $shippingFee !== '') {
+        $fields['shippingfee'] = round((float) $shippingFee, 2);
+    }
+
+    return $fields;
+}
+
+/**
  * @return array{itemcode:string,size:string,color:string,fields:array<string,mixed>,section:string}|null
  */
 function inbound_api_build_section_modify_payload(Inbounding $model, int $inboundId, string $section): ?array
@@ -105,6 +167,11 @@ function inbound_api_build_section_modify_payload(Inbounding $model, int $inboun
     $fields = [];
     if ($section === 'item_details') {
         $fields = inbound_api_build_item_details_modify_fields($d);
+    } elseif ($section === 'book_details') {
+        if (($d['groupname'] ?? '') !== 'book') {
+            return null;
+        }
+        $fields = inbound_api_build_book_details_modify_fields($d, $model);
     }
 
     return [
