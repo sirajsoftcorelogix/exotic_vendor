@@ -2343,19 +2343,17 @@ class InboundingController {
         }
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
-            $authorApiValue = implode(',', $inboundingModel->parseInboundAuthorIds($d['author'] ?? ''));
-            if ($authorApiValue !== '') {
-                $API_data['author'] = $authorApiValue;
-            }
-
-            $publisherId = (int) ($d['publisher'] ?? 0);
-            if ($publisherId > 0) {
-                $API_data['publisher'] = (string) $publisherId;
-            }
-
-            $creatorApiValue = $inboundingModel->buildBookCreatorApiValue('', $d['edited_by'] ?? '');
+            $creatorApiValue = $inboundingModel->buildBookCreatorApiValue(
+                $d['author'] ?? '',
+                $d['edited_by'] ?? ''
+            );
             if ($creatorApiValue !== '') {
                 $API_data['creator'] = $creatorApiValue;
+            }
+
+            $publisherVendorId = (int) ($d['publisher'] ?? 0);
+            if ($publisherVendorId > 0) {
+                $API_data['publisher_vendor_id'] = $publisherVendorId;
             }
 
             $API_data['language'] = $d['language'] ?? '';
