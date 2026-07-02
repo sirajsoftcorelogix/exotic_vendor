@@ -2348,15 +2348,16 @@ class InboundingController {
                 $API_data['author'] = $authorApiValue;
             }
 
-            $API_data['creator'] = $inboundingModel->buildBookCreatorApiValue(
-                $d['author'] ?? '',
-                $d['edited_by'] ?? ''
-            );
-            $publisherVendorId = (int) ($d['publisher'] ?? 0);
-            if ($publisherVendorId > 0) {
-                $API_data['publisher'] = (string) $publisherVendorId;
-                $API_data['publisher_vendor_id'] = $publisherVendorId;
+            $publisherId = (int) ($d['publisher'] ?? 0);
+            if ($publisherId > 0) {
+                $API_data['publisher'] = (string) $publisherId;
             }
+
+            $creatorApiValue = $inboundingModel->buildBookCreatorApiValue('', $d['edited_by'] ?? '');
+            if ($creatorApiValue !== '') {
+                $API_data['creator'] = $creatorApiValue;
+            }
+
             $API_data['language'] = $d['language'] ?? '';
             $API_data['pages'] = $d['pages'] ?? '';
             $API_data['isbn'] = $d['isbn'] ?? '';
