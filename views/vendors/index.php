@@ -39,6 +39,27 @@
 
     <div class="hidden text-sm font-bold mb-4" id="messageDiv" role="status"><?php echo $_SESSION["mapping_message"] ?? ""; unset($_SESSION["mapping_message"]); ?></div>
 
+    <!-- Vendor API debug modal (shown from sync error banner) -->
+    <div id="vendorApiDebugModal" class="fixed inset-0 flex items-center justify-center bg-black/50 hidden z-[60]" role="dialog" aria-modal="true" aria-labelledby="vendorApiDebugTitle">
+        <div class="bg-white rounded-xl shadow-xl w-[min(920px,95vw)] max-h-[90vh] flex flex-col p-6 m-4">
+            <h2 id="vendorApiDebugTitle" class="text-lg font-bold text-gray-900">Exotic India API details</h2>
+            <p id="vendorApiDebugMeta" class="text-sm text-gray-600 mt-1 mb-4"></p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-auto flex-1 min-h-0">
+                <div class="min-w-0">
+                    <h3 class="text-sm font-semibold text-gray-800 mb-2">Request JSON</h3>
+                    <pre id="vendorApiDebugRequest" class="text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-72 whitespace-pre-wrap break-words"></pre>
+                </div>
+                <div class="min-w-0">
+                    <h3 class="text-sm font-semibold text-gray-800 mb-2">Response</h3>
+                    <pre id="vendorApiDebugResponse" class="text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-72 whitespace-pre-wrap break-words"></pre>
+                </div>
+            </div>
+            <div class="mt-5 flex justify-end">
+                <button type="button" id="vendorApiDebugCloseBtn" class="px-4 py-2 rounded-lg bg-gray-800 text-white text-sm font-medium hover:bg-gray-900">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Filters -->
     <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
         <div class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 border-b border-amber-100/80">
@@ -857,21 +878,77 @@
         'rounded-lg', 'px-4', 'py-3', 'shadow-sm'
     ];
 
-    function persistVendorFlash(message, isSuccess, persistent) {
+    function persistVendorFlash(message, isSuccess, persistent, apiDebug) {
         try {
-            localStorage.setItem(VENDOR_FLASH_KEY, JSON.stringify({
+            const payload = {
                 message: String(message || ''),
                 isSuccess: !!isSuccess,
                 persistent: persistent !== undefined ? !!persistent : !isSuccess
-            }));
+            };
+            if (apiDebug) {
+                payload.apiDebug = apiDebug;
+            }
+            localStorage.setItem(VENDOR_FLASH_KEY, JSON.stringify(payload));
         } catch (e) {}
+    }
+
+    function formatVendorApiDebugJson(value) {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        if (typeof value === 'string') {
+            return value;
+        }
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch (e) {
+            return String(value);
+        }
+    }
+
+    function extractVendorApiDebug(apiData) {
+        if (!apiData || typeof apiData !== 'object') {
+            return null;
+        }
+        return {
+            action: apiData.api_action || '',
+            url: apiData.api_url || '',
+            http_code: apiData.http_code || 0,
+            request: apiData.request || null,
+            response: apiData.response !== undefined ? apiData.response : (apiData.raw || '')
+        };
+    }
+
+    function showVendorApiDebugModal(debug) {
+        const modal = document.getElementById('vendorApiDebugModal');
+        const meta = document.getElementById('vendorApiDebugMeta');
+        const reqEl = document.getElementById('vendorApiDebugRequest');
+        const resEl = document.getElementById('vendorApiDebugResponse');
+        if (!modal || !meta || !reqEl || !resEl || !debug) {
+            return;
+        }
+        const action = debug.action || 'vendor API';
+        const url = debug.url || '';
+        const httpCode = debug.http_code ? ('HTTP ' + debug.http_code) : '';
+        meta.textContent = [action, url, httpCode].filter(Boolean).join(' · ');
+        reqEl.textContent = formatVendorApiDebugJson(debug.request);
+        resEl.textContent = formatVendorApiDebugJson(debug.response);
+        modal.classList.remove('hidden');
+    }
+
+    function closeVendorApiDebugModal() {
+        const modal = document.getElementById('vendorApiDebugModal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
     }
 
     function parseVendorApiResponse(data) {
         let apiSuccess = true;
         let apiErrorMessage = '';
+        let apiDebug = null;
         if (!data || !data.api_response) {
-            return { apiSuccess, apiErrorMessage };
+            return { apiSuccess, apiErrorMessage, apiDebug };
         }
         try {
             const apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
@@ -879,13 +956,16 @@
             if (!apiSuccess && apiData && apiData.message) {
                 apiErrorMessage = String(apiData.message);
             }
+            if (!apiSuccess) {
+                apiDebug = extractVendorApiDebug(apiData);
+            }
         } catch (e) {
             apiSuccess = false;
         }
         if (!apiSuccess && !apiErrorMessage) {
             apiErrorMessage = 'Vendor API sync failed.';
         }
-        return { apiSuccess, apiErrorMessage };
+        return { apiSuccess, apiErrorMessage, apiDebug };
     }
 
     function showPersistedVendorFlashIfAny() {
@@ -896,7 +976,10 @@
             const payload = JSON.parse(raw);
             if (payload && payload.message) {
                 const persistent = payload.persistent !== undefined ? !!payload.persistent : !payload.isSuccess;
-                showVendorTopMessage(payload.message, !!payload.isSuccess, { persistent });
+                showVendorTopMessage(payload.message, !!payload.isSuccess, {
+                    persistent: persistent,
+                    apiDebug: payload.apiDebug || null
+                });
             }
         } catch (e) {}
     }
@@ -909,7 +992,20 @@
         myDiv.classList.add(isSuccess ? 'text-green-600' : 'text-red-600');
         myDiv.classList.add(isSuccess ? 'bg-green-50' : 'bg-red-50');
         myDiv.classList.add('border', isSuccess ? 'border-green-200' : 'border-red-200', 'rounded-lg', 'px-4', 'py-3', 'shadow-sm');
-        myDiv.textContent = message || '';
+        myDiv.innerHTML = '';
+        const textSpan = document.createElement('span');
+        textSpan.textContent = message || '';
+        myDiv.appendChild(textSpan);
+        if (!isSuccess && options.apiDebug) {
+            const link = document.createElement('button');
+            link.type = 'button';
+            link.className = 'ml-2 underline font-semibold text-red-800 hover:text-red-950 whitespace-nowrap';
+            link.textContent = 'View API request & response';
+            link.addEventListener('click', function () {
+                showVendorApiDebugModal(options.apiDebug);
+            });
+            myDiv.appendChild(link);
+        }
         myDiv.setAttribute('role', isSuccess ? 'status' : 'alert');
         if (persistent) {
             myDiv.dataset.persistent = '1';
@@ -919,8 +1015,8 @@
         myDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    function reloadVendorListWithFlash(message, isSuccess) {
-        persistVendorFlash(message, isSuccess, !isSuccess);
+    function reloadVendorListWithFlash(message, isSuccess, apiDebug) {
+        persistVendorFlash(message, isSuccess, !isSuccess, apiDebug);
         window.location.reload();
     }
 
@@ -930,9 +1026,22 @@
     }
 
     showPersistedVendorFlashIfAny();
-    if (myDiv && myDiv.textContent.trim() !== '') {
+    if (myDiv && myDiv.textContent.trim() !== '' && !localStorage.getItem(VENDOR_FLASH_KEY)) {
         const isError = myDiv.classList.contains('text-red-600');
         showVendorTopMessage(myDiv.textContent.trim(), !isError, { persistent: isError });
+    }
+
+    const vendorApiDebugCloseBtn = document.getElementById('vendorApiDebugCloseBtn');
+    if (vendorApiDebugCloseBtn) {
+        vendorApiDebugCloseBtn.addEventListener('click', closeVendorApiDebugModal);
+    }
+    const vendorApiDebugModal = document.getElementById('vendorApiDebugModal');
+    if (vendorApiDebugModal) {
+        vendorApiDebugModal.addEventListener('click', function (e) {
+            if (e.target === vendorApiDebugModal) {
+                closeVendorApiDebugModal();
+            }
+        });
     }
 
     const syncVendorsApiBtn = document.getElementById('sync-vendors-api-btn');
@@ -1481,9 +1590,14 @@
                 reloadVendorListWithFlash(data.message || 'Add vendor failed.', false);
                 return;
             }
-            const { apiSuccess, apiErrorMessage } = parseVendorApiResponse(data);
+            const { apiSuccess, apiErrorMessage, apiDebug } = parseVendorApiResponse(data);
             if (!apiSuccess && data.api_response) {
-                reloadVendorListWithFlash(apiErrorMessage, false);
+                const syncError = apiErrorMessage || 'Exotic India API did not return a Vendor ID.';
+                reloadVendorListWithFlash(
+                    data.success ? ('Vendor saved locally, but Exotic India sync failed: ' + syncError) : syncError,
+                    false,
+                    apiDebug
+                );
                 return;
             }
             if (msgBox) {
@@ -1717,9 +1831,14 @@
                 reloadVendorListWithFlash(data.message || 'Edit vendor failed.', false);
                 return;
             }
-            const { apiSuccess, apiErrorMessage } = parseVendorApiResponse(data);
+            const { apiSuccess, apiErrorMessage, apiDebug } = parseVendorApiResponse(data);
             if (!apiSuccess && data.api_response) {
-                reloadVendorListWithFlash(apiErrorMessage, false);
+                const syncError = apiErrorMessage || 'Exotic India API did not return a Vendor ID.';
+                reloadVendorListWithFlash(
+                    data.success ? ('Vendor saved locally, but Exotic India sync failed: ' + syncError) : syncError,
+                    false,
+                    apiDebug
+                );
                 return;
             }
             if (msgBox) {
