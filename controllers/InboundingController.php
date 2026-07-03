@@ -357,10 +357,11 @@ class InboundingController {
             'count' => count($data['book_languages'] ?? []),
         ]);
 
-        $data['is_inbound_published'] = $inboundingModel->isInboundPublished($id);
-        inbound_profiler_step($prof, 'isInboundPublished', [
-            'published' => $data['is_inbound_published'],
-        ]);
+        $publishState = $inboundingModel->getInboundPublishState($id);
+        $data['is_inbound_published'] = $publishState['has_any_publish'];
+        $data['is_inbound_live_published'] = $publishState['is_live'];
+        $data['inbound_publish_state'] = $publishState;
+        inbound_profiler_step($prof, 'getInboundPublishState', $publishState);
 
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
         inbound_profiler_finish($prof, 'ok');
@@ -2751,7 +2752,8 @@ class InboundingController {
                 $publishUserId = (int)($_POST['userid_log'] ?? 0);
             }
             if ($publishUserId > 0) {
-                $logData1 = ['userid_log' => $publishUserId, 'i_id' => $id, 'stat' => 'Published'];
+                $publishStat = ($publish_status_req === 1) ? 'Published (Live)' : 'Published (Local)';
+                $logData1 = ['userid_log' => $publishUserId, 'i_id' => $id, 'stat' => $publishStat];
                 $inboundingModel->stat_logs($logData1);
             }
 
@@ -2785,7 +2787,9 @@ class InboundingController {
             header('Content-Type: application/json');
             echo json_encode([
                 'status' => 'success', 
-                'message' => 'Product Upoaded Successfully!',
+                'message' => ($publish_status_req === 1)
+                    ? 'Product published on live website successfully!'
+                    : 'Product published locally successfully (not live on website).',
                 'log_file' => $logFileData['filename']
             ]);
             inbound_profiler_finish($prof, 'success', ['item_code' => $itemCode]);
