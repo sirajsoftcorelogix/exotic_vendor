@@ -4663,7 +4663,10 @@ class product
             'image' => 'image',
             'price' => 'price',
             'price_india' => 'price_india',
+            'shippingfee' => 'shippingfee',
+            'sourcingfee' => 'sourcingfee',
             'gst' => 'gst',
+            'hsn' => 'hsn',
             'category' => 'category',
             'itemtype' => 'itemtype',
             'snippet_description' => 'snippet_description',
@@ -4704,7 +4707,16 @@ class product
             'amazon_itemcode_alias' => 'amazon_itemcode_alias',
             'youtube_links' => 'youtube_links',
             'sketchfab_links' => 'sketchfab_links',
-            'dimensions' => 'dimensions'
+            'dimensions' => 'dimensions',
+            'product_weight' => 'product_weight',
+            'product_weight_unit' => 'product_weight_unit',
+            'prod_height' => 'prod_height',
+            'prod_width' => 'prod_width',
+            'prod_length' => 'prod_length',
+            'length_unit' => 'length_unit',
+            'size' => 'size',
+            'color' => 'color',
+            'updated_at' => 'updated_at',
         ];
 
         if (!$this->vpProductsHasColumn('price_india_suggested')) {
