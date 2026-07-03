@@ -7,7 +7,16 @@
 /** @return list<string> */
 function inbound_api_section_keys(): array
 {
-    return ['item_details', 'book_details', 'item_grouping'];
+    return [
+        'item_details',
+        'book_details',
+        'item_grouping',
+        'search_category',
+        'search_terms',
+        'item_identification',
+        'stock',
+        'item_linking',
+    ];
 }
 
 function inbound_api_section_label(string $section): string
@@ -16,6 +25,11 @@ function inbound_api_section_label(string $section): string
         'item_details' => 'Item details (dimensions, pricing & stock)',
         'book_details' => 'Book details',
         'item_grouping' => 'Item grouping (material, accounts group, categories)',
+        'search_category' => 'Search category (related items)',
+        'search_terms' => 'Search terms',
+        'item_identification' => 'Item identification',
+        'stock' => 'Stock',
+        'item_linking' => 'Item linking',
     ];
 
     return $labels[$section] ?? $section;
@@ -252,6 +266,116 @@ function inbound_api_build_item_grouping_modify_fields(array $d, Inbounding $mod
 }
 
 /**
+ * @param array<string, mixed> $d Row from Inbounding::getpublishdata()['data']
+ * @return array<string, string|int|float>
+ */
+function inbound_api_build_search_category_modify_fields(array $d): array
+{
+    $fields = [];
+    $raw = trim((string) ($d['search_category_string'] ?? ''));
+    if (trim($raw, '|') !== '') {
+        $fields['search_category'] = ltrim($raw, '|');
+    }
+    return $fields;
+}
+
+/**
+ * @param array<string, mixed> $d Row from Inbounding::getpublishdata()['data']
+ * @return array<string, string|int|float>
+ */
+function inbound_api_build_search_terms_modify_fields(array $d): array
+{
+    $fields = [];
+    $term = trim((string) ($d['search_term'] ?? ''));
+    if ($term !== '') {
+        $fields['search_term'] = $term;
+    }
+    return $fields;
+}
+
+/**
+ * @param array<string, mixed> $d Row from Inbounding::getpublishdata()['data']
+ * @return array<string, string|int|float>
+ */
+function inbound_api_build_item_identification_modify_fields(array $d): array
+{
+    $fields = [];
+    $append = static function (string $key, $value) use (&$fields): void {
+        if ($value === null) {
+            return;
+        }
+        if (is_string($value) && trim($value) === '') {
+            return;
+        }
+        $fields[$key] = $value;
+    };
+
+    $append('title', $d['product_title'] ?? '');
+    $append('keywords', $d['key_words'] ?? '');
+    $append('snippet_description', $d['snippet_description'] ?? '');
+    if (!empty($d['optionals'])) {
+        $fields['optionals'] = str_replace(',', '|', (string) $d['optionals']);
+    }
+    return $fields;
+}
+
+/**
+ * @param array<string, mixed> $d Row from Inbounding::getpublishdata()['data']
+ * @return array<string, string|int|float>
+ */
+function inbound_api_build_stock_modify_fields(array $d): array
+{
+    $fields = [];
+    $fields['permanently_available'] = ((int) ($d['permanently_available'] ?? 0) === 1) ? 1 : 0;
+    $fields['usblock'] = (($d['us_block'] ?? 'N') === 'Y') ? 1 : 0;
+    $fields['indiablock'] = (($d['india_block'] ?? 'N') === 'Y') ? 1 : 0;
+
+    if (array_key_exists('backorder_percent', $d) && $d['backorder_percent'] !== '' && $d['backorder_percent'] !== null) {
+        $fields['backorder_percent'] = (int) $d['backorder_percent'];
+    }
+    if (array_key_exists('backorder_day', $d) && $d['backorder_day'] !== '' && $d['backorder_day'] !== null) {
+        $fields['backorder_weeks'] = (int) $d['backorder_day'];
+    }
+    if (array_key_exists('lead_time_days', $d) && $d['lead_time_days'] !== '' && $d['lead_time_days'] !== null) {
+        $fields['leadtime'] = (int) $d['lead_time_days'];
+    }
+    if (array_key_exists('in_stock_leadtime_days', $d) && $d['in_stock_leadtime_days'] !== '' && $d['in_stock_leadtime_days'] !== null) {
+        $fields['instock_leadtime'] = (int) $d['in_stock_leadtime_days'];
+    }
+    if (array_key_exists('india_net_qty', $d) && $d['india_net_qty'] !== '' && $d['india_net_qty'] !== null) {
+        $fields['india_net_qty'] = (int) $d['india_net_qty'];
+    }
+
+    $marketplace = trim((string) ($d['Marketplace'] ?? ''));
+    if ($marketplace !== '') {
+        $fields['marketplace_vendor'] = $marketplace;
+    }
+
+    return $fields;
+}
+
+/**
+ * @param array<string, mixed> $d Row from Inbounding::getpublishdata()['data']
+ * @return array<string, string|int|float>
+ */
+function inbound_api_build_item_linking_modify_fields(array $d): array
+{
+    $fields = [];
+
+    $addedDate = trim((string) ($d['added_date'] ?? ''));
+    if ($addedDate !== '' && $addedDate !== '0000-00-00') {
+        $fields['date_added'] = $addedDate;
+    }
+
+    $stockAddedDate = trim((string) ($d['stock_added_date'] ?? ''));
+    if ($stockAddedDate !== '' && $stockAddedDate !== '0000-00-00') {
+        $fields['stock_date_added'] = $stockAddedDate;
+    }
+
+    return $fields;
+}
+
+/**
  * @return array{itemcode:string,size:string,color:string,fields:array<string,mixed>,section:string}|null
  */
 function inbound_api_build_section_modify_payload(Inbounding $model, int $inboundId, string $section): ?array
@@ -277,6 +401,16 @@ function inbound_api_build_section_modify_payload(Inbounding $model, int $inboun
         $fields = inbound_api_build_book_details_modify_fields($d, $model);
     } elseif ($section === 'item_grouping') {
         $fields = inbound_api_build_item_grouping_modify_fields($d, $model);
+    } elseif ($section === 'search_category') {
+        $fields = inbound_api_build_search_category_modify_fields($d);
+    } elseif ($section === 'search_terms') {
+        $fields = inbound_api_build_search_terms_modify_fields($d);
+    } elseif ($section === 'item_identification') {
+        $fields = inbound_api_build_item_identification_modify_fields($d);
+    } elseif ($section === 'stock') {
+        $fields = inbound_api_build_stock_modify_fields($d);
+    } elseif ($section === 'item_linking') {
+        $fields = inbound_api_build_item_linking_modify_fields($d);
     }
 
     return [

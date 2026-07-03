@@ -590,6 +590,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </div>
             <fieldset class="grow border border-[#ccc] rounded-[5px] px-3 md:px-5 pt-[15px] pb-5 bg-white md:ml-2.5 md:mr-5">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="item_linking"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-sm font-bold text-[#333] px-[5px]">Item Linking</legend>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 md:gap-[30px] mb-[15px] items-end">
                     <div class="flex flex-col">
@@ -1557,6 +1567,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         ?>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="search_category"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category (Related Items)</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
@@ -1621,6 +1641,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="search_terms"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Terms</legend>
                 <div>
                     <label class="block text-xs font-bold text-[#222] mb-1">Enter Search Terms:<?php echo $desktopform_req_star; ?></label>
@@ -1634,6 +1664,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="item_identification"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
                 
                 <div class="mb-[15px]">
@@ -1823,6 +1863,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="stock"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Stock:</legend>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start mb-[15px]">
                     <div class="flex-1">
@@ -3436,10 +3486,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const inboundSectionUpdateLabels = {
         item_details: 'Item details (dimensions, pricing & stock)',
         book_details: 'Book details (author, publisher, ISBN, language, fees)',
-        item_grouping: 'Item grouping (material, accounts group, categories)'
+        item_grouping: 'Item grouping (material, accounts group, categories)',
+        search_category: 'Search category (related items)',
+        search_terms: 'Search terms',
+        item_identification: 'Item identification',
+        stock: 'Stock',
+        item_linking: 'Item linking'
     };
     const inboundSectionUpdateNotes = {
-        item_grouping: 'The product group (Book, Sculpture, etc.) cannot be changed on the website after publish. Material, accounts group, and category selections will sync.'
+        item_grouping: 'The product group (Book, Sculpture, etc.) cannot be changed on the website after publish. Material, accounts group, and category selections will sync.',
+        stock: 'Warehouse and image-directory fields remain local only. The website sync covers stock-related settings like permanently available, backorder, lead times, marketplace vendor, blocks, and India net qty.',
+        item_linking: 'Variant type, SKU, parent item code, and remarks remain local only. The website sync for this section only updates the website date fields.'
     };
 
     function resetSectionUpdatePopup() {
