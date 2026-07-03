@@ -740,7 +740,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </div>
             <div class="bg-gray-50 p-5 rounded border border-gray-200 w-full" id="inbound-section-item-details">
-                <?php if ($is_inbound_published): ?>
+                <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
                     <button type="button"
                             data-section="item_details"
@@ -893,7 +893,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
                 <div id="book-meta-fields" class="hidden mt-6">
                     <div class="border border-[#ffd6b3] rounded-[5px] px-[15px] py-4" id="inbound-section-book-details">
-                        <?php if ($is_inbound_published && $is_book_initial): ?>
+                        <?php if ($is_inbound_live_published && $is_book_initial): ?>
                         <div class="flex justify-end mb-3">
                             <button type="button"
                                     data-section="book_details"
@@ -1428,7 +1428,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         ?>
         <div class="mt-[15px] md:mx-5" id="inbound-section-item-grouping">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
-                <?php if ($is_inbound_published): ?>
+                <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
                     <button type="button"
                             data-section="item_grouping"
