@@ -2866,10 +2866,10 @@ class InboundingController {
             echo json_encode(['status' => 'error', 'message' => 'Invalid inbound id.']);
             exit;
         }
-        if (!$inboundingModel->isInboundPublished($id)) {
+        if (!$inboundingModel->isInboundLivePublished($id)) {
             echo json_encode([
                 'status' => 'error',
-                'message' => 'Product must be published before updating sections on the website.',
+                'message' => 'Product must be live-published before updating sections on the website.',
             ]);
             exit;
         }
