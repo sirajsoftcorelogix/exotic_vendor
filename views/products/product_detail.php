@@ -210,6 +210,8 @@
     $discountGlobalFmt = number_format((float)($products['discount_global'] ?? 0), 2, '.', ',');
     $discountIndiaFmt = number_format((float)($products['discount_india'] ?? 0), 2, '.', ',');
     $cpFormatted = number_format((float)($products['cp'] ?? 0), 2, '.', ',');
+    $sourcingFeeFormatted = number_format((float)($products['sourcingfee'] ?? 0), 2, '.', ',');
+    $shippingFeeFormatted = number_format((float)($products['shippingfee'] ?? 0), 2, '.', ',');
     $lengthUnitRaw = trim((string)($products['length_unit'] ?? ''));
     $weightUnitRaw = trim((string)($products['product_weight_unit'] ?? ''));
     $linearNum = static function ($v): ?string {
@@ -629,7 +631,15 @@
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
           <span class="text-gray-700"><i class="fas fa-flag px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Discount India</span><span class="font-semibold text-gray-900"><?php echo htmlspecialchars($discountIndiaFmt, ENT_QUOTES, 'UTF-8'); ?>%</span>
         </div>
-        <?php if ($canAccessCp): ?>
+        <?php if ($isBookProduct): ?>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-hand-holding-usd px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Sourcing Fee</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($sourcingFeeFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-truck px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Shipping Fee</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($shippingFeeFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($canAccessCp && !$isBookProduct): ?>
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100 relative">
           <span class="text-gray-700"><i class="fas fa-coins px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>CP</span>
           <span id="cpDisplay" class="font-semibold text-gray-900" style="margin-right: 12px;">₹<?php echo htmlspecialchars($cpFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
