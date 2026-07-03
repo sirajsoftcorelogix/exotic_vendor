@@ -342,10 +342,6 @@ function inbound_api_build_stock_modify_fields(array $d): array
     if (array_key_exists('in_stock_leadtime_days', $d) && $d['in_stock_leadtime_days'] !== '' && $d['in_stock_leadtime_days'] !== null) {
         $fields['instock_leadtime'] = (int) $d['in_stock_leadtime_days'];
     }
-    if (array_key_exists('india_net_qty', $d) && $d['india_net_qty'] !== '' && $d['india_net_qty'] !== null) {
-        $fields['india_net_qty'] = (int) $d['india_net_qty'];
-    }
-
     $marketplace = trim((string) ($d['Marketplace'] ?? ''));
     if ($marketplace !== '') {
         $fields['marketplace_vendor'] = $marketplace;
