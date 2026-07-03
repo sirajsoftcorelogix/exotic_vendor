@@ -193,6 +193,9 @@
 <?php
 $record_id = $_GET['id'] ?? '';
 $is_inbound_published = !empty($data['is_inbound_published']);
+$is_inbound_live_published = !empty($data['is_inbound_live_published']);
+$inbound_publish_state = is_array($data['inbound_publish_state'] ?? null) ? $data['inbound_publish_state'] : [];
+$is_inbound_local_only = $is_inbound_published && !$is_inbound_live_published;
 $sizeOptions = [
     'XS'   => 'Extra Small (XS)(34)',
     'S'    => 'Small (S)(36)',
@@ -1967,9 +1970,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-4">
+        <div class="my-[25px] md:mx-5 mb-4">
+            <?php if ($is_inbound_local_only): ?>
+                <div class="mb-3 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    This item is marked as <strong>published locally only</strong>. It exists with <code class="text-[11px] bg-amber-100 px-1 rounded">status = 0</code> and is not live on the website yet. Use <strong>Publish Product</strong> to publish it on Live.
+                </div>
+            <?php endif; ?>
+        <div class="flex justify-end gap-4">
             <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
-                <?php if (!$is_inbound_published): ?>
+                <?php if (!$is_inbound_live_published): ?>
                 <button type="button" onclick="handlePublishClick()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                     Publish Product
@@ -1997,6 +2006,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                    Print Inbound Label
                 </a>
             <?php endif; ?>
+        </div>
         </div>
     </form>
 </div>

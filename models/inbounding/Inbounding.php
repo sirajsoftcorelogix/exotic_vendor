@@ -125,7 +125,12 @@ class Inbounding {
             $to   = $this->conn->real_escape_string($filters['published_to']);
             $from .= " 00:00:00";
             $to   .= " 23:59:59";
-            $where[] = "vi.id IN ( SELECT il.i_id FROM inbound_logs as il WHERE il.stat = 'published' AND il.created_at BETWEEN '$from' AND '$to')";
+            $where[] = "vi.id IN (
+                SELECT il.i_id
+                FROM inbound_logs AS il
+                WHERE LOWER(TRIM(il.stat)) IN ('published', 'published (live)', 'published (local)')
+                  AND il.created_at BETWEEN '$from' AND '$to'
+            )";
         }
         // 15. Assigned User Filter
         if (!empty($filters['assigned_user_id'])) {
@@ -144,6 +149,15 @@ class Inbounding {
                 continue;
             }
             $statEsc = $this->conn->real_escape_string($statValue);
+            if ($filterKey === 'log_published') {
+                $publishedWhere = "SELECT i_id FROM inbound_logs WHERE LOWER(TRIM(stat)) IN ('published', 'published (live)', 'published (local)')";
+                if ($filters[$filterKey] === 'yes') {
+                    $where[] = "vi.id IN ($publishedWhere)";
+                } else {
+                    $where[] = "vi.id NOT IN ($publishedWhere)";
+                }
+                continue;
+            }
             if ($filters[$filterKey] === 'yes') {
                 $where[] = "vi.id IN (SELECT i_id FROM inbound_logs WHERE stat = '$statEsc')";
             } else {
@@ -2115,24 +2129,144 @@ class Inbounding {
         return $blocked;
     }
 
-    public function isInboundPublished(int $id): bool
+    private function detectInboundPublishStateFromLogs(int $id): ?string
     {
+        static $cache = [];
+        if (isset($cache[$id])) {
+            return $cache[$id];
+        }
+
+        $dirs = [
+            dirname(__DIR__, 2) . '/log/publish_logs/',
+            rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'exotic_publish_logs' . DIRECTORY_SEPARATOR,
+        ];
+
+        foreach (array_unique($dirs) as $dir) {
+            if (!is_dir($dir)) {
+                continue;
+            }
+            $files = glob($dir . 'publish_*.json') ?: [];
+            if ($files === []) {
+                continue;
+            }
+
+            usort($files, static function (string $a, string $b): int {
+                return (@filemtime($b) ?: 0) <=> (@filemtime($a) ?: 0);
+            });
+
+            foreach ($files as $file) {
+                $raw = @file_get_contents($file);
+                if (!is_string($raw) || trim($raw) === '') {
+                    continue;
+                }
+                $entry = json_decode($raw, true);
+                if (!is_array($entry)) {
+                    continue;
+                }
+                if ((int) ($entry['inbound_id'] ?? 0) !== $id) {
+                    continue;
+                }
+                if (strtolower(trim((string) ($entry['status'] ?? ''))) !== 'success') {
+                    continue;
+                }
+
+                $requestData = is_array($entry['request_data'] ?? null) ? $entry['request_data'] : [];
+                $publishStatus = array_key_exists('status', $requestData)
+                    ? (int) $requestData['status']
+                    : null;
+
+                if ($publishStatus === 1) {
+                    return $cache[$id] = 'live';
+                }
+                if ($publishStatus === 0) {
+                    return $cache[$id] = 'local';
+                }
+
+                return $cache[$id] = 'live';
+            }
+        }
+
+        return $cache[$id] = null;
+    }
+
+    /**
+     * @return array{has_any_publish:bool,is_live:bool,is_local:bool,source:string,stat:string}
+     */
+    public function getInboundPublishState(int $id): array
+    {
+        $state = [
+            'has_any_publish' => false,
+            'is_live' => false,
+            'is_local' => false,
+            'source' => 'none',
+            'stat' => '',
+        ];
         if ($id <= 0) {
-            return false;
+            return $state;
         }
 
         $stmt = $this->conn->prepare(
-            "SELECT id FROM inbound_logs WHERE i_id = ? AND LOWER(TRIM(stat)) = 'published' LIMIT 1"
+            "SELECT stat
+             FROM inbound_logs
+             WHERE i_id = ?
+               AND LOWER(TRIM(stat)) IN ('published', 'published (live)', 'published (local)')
+             ORDER BY COALESCE(modified_at, created_at) DESC, id DESC
+             LIMIT 1"
         );
-        if (!$stmt) {
-            return false;
+        if ($stmt) {
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $row = $stmt->get_result()?->fetch_assoc();
+            $stmt->close();
+            if (!empty($row['stat'])) {
+                $state['has_any_publish'] = true;
+                $state['stat'] = (string) $row['stat'];
+                $normalized = strtolower(trim((string) $row['stat']));
+                if ($normalized === 'published (live)') {
+                    $state['is_live'] = true;
+                    $state['source'] = 'inbound_log';
+                } elseif ($normalized === 'published (local)') {
+                    $state['is_local'] = true;
+                    $state['source'] = 'inbound_log';
+                } elseif ($normalized === 'published') {
+                    $state['source'] = 'legacy_inbound_log';
+                }
+            }
         }
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $row = $stmt->get_result()?->fetch_assoc();
-        $stmt->close();
 
-        return !empty($row['id']);
+        $logState = $this->detectInboundPublishStateFromLogs($id);
+        if ($logState === 'live') {
+            $state['has_any_publish'] = true;
+            $state['is_live'] = true;
+            $state['is_local'] = false;
+            $state['source'] = 'publish_log_file';
+            return $state;
+        }
+        if ($logState === 'local') {
+            $state['has_any_publish'] = true;
+            $state['is_live'] = false;
+            $state['is_local'] = true;
+            $state['source'] = 'publish_log_file';
+            return $state;
+        }
+
+        // Legacy generic "Published" rows were historically used for both paths.
+        // If no detailed publish log survives, preserve old behavior and treat them as live.
+        if ($state['source'] === 'legacy_inbound_log') {
+            $state['is_live'] = true;
+        }
+
+        return $state;
+    }
+
+    public function isInboundPublished(int $id): bool
+    {
+        return !empty($this->getInboundPublishState($id)['has_any_publish']);
+    }
+
+    public function isInboundLivePublished(int $id): bool
+    {
+        return !empty($this->getInboundPublishState($id)['is_live']);
     }
 
     public function getProductBysku($sku) {
