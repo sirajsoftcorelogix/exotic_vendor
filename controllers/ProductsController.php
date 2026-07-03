@@ -4541,6 +4541,12 @@ class ProductsController
             if (strpos($groupLower, 'book') !== false && $itemCode !== '') {
                 require_once dirname(__DIR__) . '/models/inbounding/Inbounding.php';
                 $inboundingModel = new Inbounding($conn);
+                $order['book_detail_selected_author_options'] = [];
+                $order['book_detail_author_ids'] = [];
+                $order['book_detail_selected_edited_by_options'] = [];
+                $order['book_detail_edited_by_ids'] = [];
+                $order['book_detail_selected_publisher_id'] = '';
+                $order['book_detail_selected_publisher_name'] = '';
                 $order['book_details'] = $inboundingModel->getBookDetailsForProductDisplay(
                     $itemCode,
                     (string) ($order['size'] ?? ''),
@@ -4583,6 +4589,41 @@ class ProductsController
                 }
                 if ($order['book_details']['publisher'] === '') {
                     $order['book_details']['publisher'] = trim((string) ($order['publisher'] ?? ''));
+                }
+
+                $latestInboundBookRow = $this->getLatestInboundBookRowByVariant(
+                    $conn,
+                    $itemCode,
+                    (string) ($order['size'] ?? ''),
+                    (string) ($order['color'] ?? '')
+                );
+                if (is_array($latestInboundBookRow)) {
+                    foreach ($inboundingModel->parseInboundAuthorIds((string) ($latestInboundBookRow['author'] ?? '')) as $authorId) {
+                        $authorRow = $inboundingModel->getAuthorById($authorId);
+                        if (!empty($authorRow['id'])) {
+                            $order['book_detail_selected_author_options'][] = $authorRow;
+                        }
+                    }
+                    $order['book_detail_author_ids'] = array_map(static function ($row) {
+                        return (string) ($row['id'] ?? '');
+                    }, $order['book_detail_selected_author_options']);
+
+                    foreach ($inboundingModel->parseInboundAuthorIds((string) ($latestInboundBookRow['edited_by'] ?? '')) as $editorId) {
+                        $editorRow = $inboundingModel->getAuthorById($editorId);
+                        if (!empty($editorRow['id'])) {
+                            $order['book_detail_selected_edited_by_options'][] = $editorRow;
+                        }
+                    }
+                    $order['book_detail_edited_by_ids'] = array_map(static function ($row) {
+                        return (string) ($row['id'] ?? '');
+                    }, $order['book_detail_selected_edited_by_options']);
+
+                    $publisherId = (int) ($latestInboundBookRow['publisher'] ?? 0);
+                    if ($publisherId > 0) {
+                        $publisherRow = $inboundingModel->getPublisherById($publisherId);
+                        $order['book_detail_selected_publisher_id'] = (string) $publisherId;
+                        $order['book_detail_selected_publisher_name'] = (string) ($publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '');
+                    }
                 }
             }
 
