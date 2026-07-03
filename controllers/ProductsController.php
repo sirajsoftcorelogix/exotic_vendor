@@ -5258,6 +5258,580 @@ class ProductsController
         exit;
     }
 
+    private function prepareProductDetailJsonResponse(): void
+    {
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readJsonRequestBody(): array
+    {
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
+     * @param array<string, mixed> $product
+     * @param array<string, mixed> $postFields
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    private function syncProductFieldsToVendorFrontend(array $product, array $postFields): array
+    {
+        require_once __DIR__ . '/../helpers/exotic_india_api.php';
+
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
+        }
+
+        $size = trim((string) ($product['size'] ?? ''));
+        $color = trim((string) ($product['color'] ?? ''));
+        $endpoint = 'product/modify'
+            . '?itemcode=' . rawurlencode($itemCode)
+            . '&size=' . rawurlencode($size)
+            . '&color=' . rawurlencode($color);
+
+        $normalizedFields = [];
+        foreach ($postFields as $key => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $normalizedFields[$key] = is_string($value) ? trim($value) : $value;
+        }
+
+        if ($normalizedFields === []) {
+            return ['success' => true, 'message' => 'No vendor sync needed.'];
+        }
+
+        $api = exotic_india_api_post(
+            $endpoint,
+            http_build_query($normalizedFields),
+            ['Content-Type: application/x-www-form-urlencoded']
+        );
+
+        if (!$api['success']) {
+            return [
+                'success' => false,
+                'message' => trim((string) ($api['message'] ?? '')) !== ''
+                    ? (string) $api['message']
+                    : 'Vendor API modify failed.',
+                'http_code' => (int) ($api['http_code'] ?? 0),
+            ];
+        }
+
+        $apiBody = is_array($api['data'] ?? null) ? $api['data'] : [];
+        $apiSuccess = !isset($apiBody['success']) || (bool) $apiBody['success'];
+
+        return [
+            'success' => $apiSuccess,
+            'message' => trim((string) ($apiBody['message'] ?? '')) !== ''
+                ? (string) $apiBody['message']
+                : ($apiSuccess ? 'Vendor sync completed.' : 'Vendor API rejected the update.'),
+            'http_code' => (int) ($api['http_code'] ?? 0),
+            'response' => $apiBody,
+        ];
+    }
+
+    private function normalizeProfileDateInput(string $raw, string $label = 'Date'): string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return '';
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+            return $raw;
+        }
+        $ts = strtotime($raw);
+        if ($ts === false) {
+            throw new Exception($label . ' must be a valid date.');
+        }
+
+        return date('Y-m-d', $ts);
+    }
+
+    private function resolveExactInboundAuthorIdsCsv(\mysqli $conn, string $raw, string $label): string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return '';
+        }
+
+        $parts = preg_split('/\s*[,|]\s*/', $raw) ?: [];
+        $ids = [];
+        foreach ($parts as $part) {
+            $part = trim((string) $part);
+            if ($part === '') {
+                continue;
+            }
+
+            if (ctype_digit($part)) {
+                $authorId = (int) $part;
+                $stmt = $conn->prepare('SELECT author_id FROM vp_author WHERE author_id = ? LIMIT 1');
+                if (!$stmt) {
+                    throw new Exception('Could not validate ' . strtolower($label) . ' IDs.');
+                }
+                $stmt->bind_param('i', $authorId);
+            } else {
+                $stmt = $conn->prepare('SELECT author_id FROM vp_author WHERE LOWER(TRIM(author)) = LOWER(TRIM(?)) LIMIT 1');
+                if (!$stmt) {
+                    throw new Exception('Could not validate ' . strtolower($label) . ' names.');
+                }
+                $stmt->bind_param('s', $part);
+            }
+
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result ? $result->fetch_assoc() : null;
+            $stmt->close();
+
+            if (!$row || empty($row['author_id'])) {
+                throw new Exception($label . ' "' . $part . '" was not found. Use an exact name or ID from the master list.');
+            }
+            $ids[] = (int) $row['author_id'];
+        }
+
+        $ids = array_values(array_unique(array_filter($ids)));
+        return $ids === [] ? '' : implode(',', $ids);
+    }
+
+    private function resolveExactInboundPublisherId(\mysqli $conn, string $raw): int
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return 0;
+        }
+
+        if (ctype_digit($raw)) {
+            $publisherId = (int) $raw;
+            $stmt = $conn->prepare('SELECT publishers_id FROM vp_publishers WHERE publishers_id = ? LIMIT 1');
+            if (!$stmt) {
+                throw new Exception('Could not validate publisher ID.');
+            }
+            $stmt->bind_param('i', $publisherId);
+        } else {
+            $stmt = $conn->prepare('SELECT publishers_id FROM vp_publishers WHERE LOWER(TRIM(publishers)) = LOWER(TRIM(?)) LIMIT 1');
+            if (!$stmt) {
+                throw new Exception('Could not validate publisher name.');
+            }
+            $stmt->bind_param('s', $raw);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+
+        if (!$row || empty($row['publishers_id'])) {
+            throw new Exception('Publisher "' . $raw . '" was not found. Use an exact publisher name or ID from the master list.');
+        }
+
+        return (int) $row['publishers_id'];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function getLatestInboundBookRowByVariant(\mysqli $conn, string $itemCode, string $size = '', string $color = ''): ?array
+    {
+        $itemCode = trim($itemCode);
+        $size = trim($size);
+        $color = trim($color);
+        if ($itemCode === '') {
+            return null;
+        }
+
+        if ($size !== '' || $color !== '') {
+            $stmt = $conn->prepare(
+                "SELECT id, author, edited_by, publisher, isbn, cover_type, edition, publication_date, language, pages
+                 FROM vp_inbound
+                 WHERE Item_code = ? AND TRIM(COALESCE(size, '')) = ? AND TRIM(COALESCE(color, '')) = ?
+                 ORDER BY id DESC LIMIT 1"
+            );
+            if ($stmt) {
+                $stmt->bind_param('sss', $itemCode, $size, $color);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $row = $result ? $result->fetch_assoc() : null;
+                $stmt->close();
+                if ($row) {
+                    return $row;
+                }
+            }
+        }
+
+        $stmt = $conn->prepare(
+            "SELECT id, author, edited_by, publisher, isbn, cover_type, edition, publication_date, language, pages
+             FROM vp_inbound WHERE Item_code = ? ORDER BY id DESC LIMIT 1"
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $itemCode);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+
+        return $row ?: null;
+    }
+
+    public function updateProductTitle()
+    {
+        is_login();
+        global $productModel;
+        $this->prepareProductDetailJsonResponse();
+
+        try {
+            $data = $this->readJsonRequestBody();
+            $productId = (int) ($data['product_id'] ?? 0);
+            $title = trim((string) ($data['title'] ?? ''));
+
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+            if ($title === '') {
+                throw new Exception('Product title is required.');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+
+            if ($title === trim((string) ($product['title'] ?? ''))) {
+                echo json_encode(['success' => true, 'message' => 'No change.', 'title' => $title]);
+                exit;
+            }
+
+            $result = $productModel->modifyProduct($productId, [
+                'title' => $title,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+            if (empty($result['success'])) {
+                throw new Exception((string) ($result['message'] ?? 'Could not update title.'));
+            }
+
+            $vendorSync = $this->syncProductFieldsToVendorFrontend($product, [
+                'title' => $title,
+            ]);
+            $message = 'Product title updated.';
+            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+                $message .= ' ' . $vendorSync['message'];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'title' => $title,
+                'vendor_sync' => $vendorSync,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function updateProductPriceSection()
+    {
+        is_login();
+        global $productModel;
+        $this->prepareProductDetailJsonResponse();
+
+        try {
+            $data = $this->readJsonRequestBody();
+            $productId = (int) ($data['product_id'] ?? 0);
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+
+            $isBookProduct = stripos(trim((string) ($product['groupname'] ?? '')), 'book') !== false;
+            $canEditCp = function_exists('canAccessProductCp') && canAccessProductCp() && !$isBookProduct;
+
+            $newValues = [
+                'price_india' => round((float) ($data['price_india'] ?? 0), 2),
+                'price' => round((float) ($data['price'] ?? 0), 2),
+                'mrp_india' => round((float) ($data['mrp_india'] ?? 0), 2),
+                'gst' => (string) round((float) ($data['gst'] ?? 0), 2),
+                'hsn' => trim((string) ($data['hsn'] ?? '')),
+                'hscode' => trim((string) ($data['hsn'] ?? '')),
+                'permanent_discount' => round((float) ($data['permanent_discount'] ?? 0), 2),
+                'discount_global' => round((float) ($data['discount_global'] ?? 0), 2),
+                'discount_india' => round((float) ($data['discount_india'] ?? 0), 2),
+                'shippingfee' => round((float) ($data['shippingfee'] ?? 0), 2),
+                'sourcingfee' => round((float) ($data['sourcingfee'] ?? 0), 2),
+            ];
+            if ($canEditCp && array_key_exists('cp', $data)) {
+                $newValues['cp'] = round((float) $data['cp'], 2);
+            }
+
+            $numericKeys = ['price_india', 'price', 'mrp_india', 'permanent_discount', 'discount_global', 'discount_india', 'shippingfee', 'sourcingfee', 'cp'];
+            foreach ($numericKeys as $key) {
+                if (!array_key_exists($key, $newValues)) {
+                    continue;
+                }
+                if ((float) $newValues[$key] < 0) {
+                    throw new Exception(str_replace('_', ' ', $key) . ' cannot be negative.');
+                }
+            }
+            if ((float) $newValues['gst'] < 0) {
+                throw new Exception('GST cannot be negative.');
+            }
+
+            $updateData = [];
+            foreach ($newValues as $key => $value) {
+                $currentValue = (string) ($product[$key] ?? '');
+                $newValueString = is_string($value) ? $value : (string) $value;
+                if ($newValueString !== $currentValue) {
+                    $updateData[$key] = $value;
+                }
+            }
+
+            if ($updateData === []) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'No change.',
+                    'vendor_sync' => ['success' => true, 'message' => 'Skipped (already set).'],
+                ]);
+                exit;
+            }
+
+            $updateData['updated_at'] = date('Y-m-d H:i:s');
+            $result = $productModel->modifyProduct($productId, $updateData);
+            if (empty($result['success'])) {
+                throw new Exception((string) ($result['message'] ?? 'Could not update price section.'));
+            }
+
+            $fresh = $productModel->getProduct($productId);
+            if (!$fresh) {
+                throw new Exception('Updated locally but could not reload product.');
+            }
+
+            $apiFields = [
+                'price_india' => $newValues['price_india'],
+                'price' => $newValues['price'],
+                'mrp_india' => $newValues['mrp_india'],
+                'gst' => $newValues['gst'],
+                'hscode' => $newValues['hscode'],
+                'permanent_discount' => $newValues['permanent_discount'],
+                'discount_global' => $newValues['discount_global'],
+                'discount_india' => $newValues['discount_india'],
+            ];
+            if ($isBookProduct) {
+                $apiFields['shippingfee'] = $newValues['shippingfee'];
+                $apiFields['sourcingfee'] = $newValues['sourcingfee'];
+            }
+            if (isset($newValues['cp'])) {
+                $apiFields['cp'] = $newValues['cp'];
+            }
+
+            $vendorSync = $this->syncProductFieldsToVendorFrontend($fresh, $apiFields);
+            $message = 'Price section updated.';
+            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+                $message .= ' ' . $vendorSync['message'];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'vendor_sync' => $vendorSync,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function updateProductMeasurementsSection()
+    {
+        is_login();
+        global $productModel;
+        $this->prepareProductDetailJsonResponse();
+
+        try {
+            $data = $this->readJsonRequestBody();
+            $productId = (int) ($data['product_id'] ?? 0);
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+
+            $size = trim((string) ($data['size'] ?? ''));
+            $color = trim((string) ($data['color'] ?? ''));
+            $newValues = [
+                'size' => $size,
+                'color' => $color,
+                'prod_height' => round((float) ($data['prod_height'] ?? 0), 2),
+                'prod_width' => round((float) ($data['prod_width'] ?? 0), 2),
+                'prod_length' => round((float) ($data['prod_length'] ?? 0), 2),
+                'product_weight' => round((float) ($data['product_weight'] ?? 0), 2),
+                'product_weight_unit' => trim((string) ($data['product_weight_unit'] ?? '')),
+                'length_unit' => trim((string) ($data['length_unit'] ?? '')),
+                'dimensions' => trim((string) ($data['dimensions'] ?? '')),
+            ];
+
+            foreach (['prod_height', 'prod_width', 'prod_length', 'product_weight'] as $key) {
+                if ((float) $newValues[$key] < 0) {
+                    throw new Exception(str_replace('_', ' ', $key) . ' cannot be negative.');
+                }
+            }
+
+            $updateData = [];
+            foreach ($newValues as $key => $value) {
+                $currentValue = (string) ($product[$key] ?? '');
+                $newValueString = is_string($value) ? $value : (string) $value;
+                if ($newValueString !== $currentValue) {
+                    $updateData[$key] = $value;
+                }
+            }
+
+            if ($updateData === []) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'No change.',
+                    'vendor_sync' => ['success' => true, 'message' => 'Skipped (already set).'],
+                ]);
+                exit;
+            }
+
+            $updateData['updated_at'] = date('Y-m-d H:i:s');
+            $result = $productModel->modifyProduct($productId, $updateData);
+            if (empty($result['success'])) {
+                throw new Exception((string) ($result['message'] ?? 'Could not update measurements.'));
+            }
+
+            $vendorSync = $this->syncProductFieldsToVendorFrontend($product, [
+                'size' => $newValues['size'],
+                'color' => $newValues['color'],
+                'prod_height' => $newValues['prod_height'],
+                'prod_width' => $newValues['prod_width'],
+                'prod_length' => $newValues['prod_length'],
+                'product_weight' => $newValues['product_weight'],
+                'product_weight_unit' => $newValues['product_weight_unit'],
+                'length_unit' => $newValues['length_unit'],
+                'dimensions' => $newValues['dimensions'],
+            ]);
+
+            $message = 'Measurements updated.';
+            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+                $message .= ' ' . $vendorSync['message'];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'vendor_sync' => $vendorSync,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function updateProductBookDetailsSection()
+    {
+        is_login();
+        global $productModel;
+        global $conn;
+        $this->prepareProductDetailJsonResponse();
+
+        try {
+            $data = $this->readJsonRequestBody();
+            $productId = (int) ($data['product_id'] ?? 0);
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+            if (stripos(trim((string) ($product['groupname'] ?? '')), 'book') === false) {
+                throw new Exception('Book details can only be updated for book products.');
+            }
+
+            require_once dirname(__DIR__) . '/models/inbounding/Inbounding.php';
+            $inboundingModel = new Inbounding($conn);
+            $inboundRow = $this->getLatestInboundBookRowByVariant(
+                $conn,
+                (string) ($product['item_code'] ?? ''),
+                (string) ($product['size'] ?? ''),
+                (string) ($product['color'] ?? '')
+            );
+            if (!$inboundRow || empty($inboundRow['id'])) {
+                throw new Exception('No matching inbound row was found for this book product.');
+            }
+
+            $authorCsv = $this->resolveExactInboundAuthorIdsCsv($conn, (string) ($data['authors'] ?? ''), 'Author');
+            $editedByCsv = $this->resolveExactInboundAuthorIdsCsv($conn, (string) ($data['edited_by'] ?? ''), 'Edited By');
+            $publisherId = $this->resolveExactInboundPublisherId($conn, (string) ($data['publisher'] ?? ''));
+            $publicationDate = $this->normalizeProfileDateInput((string) ($data['publication_date'] ?? ''), 'Publication date');
+            $pagesRaw = trim((string) ($data['pages'] ?? ''));
+            if ($pagesRaw !== '' && (!ctype_digit($pagesRaw) || (int) $pagesRaw < 0)) {
+                throw new Exception('Pages must be a non-negative whole number.');
+            }
+            $pages = $pagesRaw === '' ? 0 : (int) $pagesRaw;
+
+            $updateData = [
+                'author' => $authorCsv,
+                'edited_by' => $editedByCsv,
+                'publisher' => $publisherId,
+                'isbn' => trim((string) ($data['isbn'] ?? '')),
+                'cover_type' => trim((string) ($data['cover_type'] ?? '')),
+                'edition' => trim((string) ($data['edition'] ?? '')),
+                'publication_date' => $publicationDate === '' ? null : $publicationDate,
+                'language' => trim((string) ($data['language'] ?? '')),
+                'pages' => $pages,
+            ];
+
+            $result = $inboundingModel->updatedesktopform((int) $inboundRow['id'], $updateData);
+            if (empty($result['success'])) {
+                throw new Exception((string) ($result['message'] ?? 'Could not update book details.'));
+            }
+
+            $vendorFields = [
+                'creator' => $inboundingModel->buildBookCreatorApiValue($authorCsv, $editedByCsv),
+                'publisher_vendor_id' => $publisherId > 0 ? $publisherId : '',
+                'isbn' => $updateData['isbn'],
+                'cover_type' => $updateData['cover_type'],
+                'edition' => $updateData['edition'],
+                'publication_date' => $publicationDate,
+                'language' => $updateData['language'],
+                'pages' => $pagesRaw === '' ? '' : $pages,
+            ];
+
+            $vendorSync = $this->syncProductFieldsToVendorFrontend($product, $vendorFields);
+            $message = 'Book details updated.';
+            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+                $message .= ' ' . $vendorSync['message'];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'vendor_sync' => $vendorSync,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     /**
      * Set permanently_available on frontend via vendor product/modify API.
      */
@@ -7444,6 +8018,32 @@ class ProductsController
     {
         is_login();
         global $productModel;
+
+        $contentType = strtolower((string) ($_SERVER['CONTENT_TYPE'] ?? ''));
+        if (strpos($contentType, 'application/json') !== false) {
+            $data = $this->readJsonRequestBody();
+            $scope = trim((string) ($data['update_scope'] ?? ''));
+            if ($scope !== '') {
+                switch ($scope) {
+                    case 'title':
+                        $this->updateProductTitle();
+                        return;
+                    case 'price_section':
+                        $this->updateProductPriceSection();
+                        return;
+                    case 'measurements_section':
+                        $this->updateProductMeasurementsSection();
+                        return;
+                    case 'book_details_section':
+                        $this->updateProductBookDetailsSection();
+                        return;
+                    default:
+                        $this->prepareProductDetailJsonResponse();
+                        echo json_encode(['success' => false, 'message' => 'Unknown product update scope.']);
+                        exit;
+                }
+            }
+        }
 
         header('Content-Type: application/json');
         //print_array($_POST);
