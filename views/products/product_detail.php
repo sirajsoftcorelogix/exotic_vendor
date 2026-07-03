@@ -1,3 +1,43 @@
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+  var OriginalTomSelect = window.TomSelect;
+  if (typeof OriginalTomSelect === 'function') {
+    function resolveTomSelectTarget(el) {
+      if (el == null) return null;
+      if (typeof el === 'string') return document.querySelector(el);
+      return el;
+    }
+    function TomSelectIdempotent(el, options) {
+      var target = resolveTomSelectTarget(el);
+      if (target && target.tomselect) return target.tomselect;
+      return new OriginalTomSelect(el, options);
+    }
+    TomSelectIdempotent.prototype = OriginalTomSelect.prototype;
+    for (var key in OriginalTomSelect) {
+      if (Object.prototype.hasOwnProperty.call(OriginalTomSelect, key)) {
+        TomSelectIdempotent[key] = OriginalTomSelect[key];
+      }
+    }
+    window.TomSelect = TomSelectIdempotent;
+  }
+  window.safeTomSelect = function (el, options) {
+    if (el == null) return null;
+    if (typeof el === 'string') el = document.querySelector(el);
+    if (!el) return null;
+    if (el.tomselect) return el.tomselect;
+    try {
+      return new window.TomSelect(el, options);
+    } catch (err) {
+      if (err && err.message && err.message.indexOf('already initialized') !== -1 && el.tomselect) {
+        return el.tomselect;
+      }
+      throw err;
+    }
+  };
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
 <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
@@ -1080,9 +1120,12 @@
 </div>
 <?php if ($isBookProduct): ?>
 <?php
-    $bookAuthorsCsv = implode(', ', array_values(array_filter(array_map('strval', $bookDetails['authors'] ?? []))));
-    $bookEditedByCsv = implode(', ', array_values(array_filter(array_map('strval', $bookDetails['edited_by_names'] ?? []))));
-    $bookPublisherCurrent = trim((string)($bookDetails['publisher'] ?? ''));
+    $selectedBookAuthorOptions = is_array($products['book_detail_selected_author_options'] ?? null) ? $products['book_detail_selected_author_options'] : [];
+    $selectedBookAuthorIds = is_array($products['book_detail_author_ids'] ?? null) ? $products['book_detail_author_ids'] : [];
+    $selectedBookEditedByOptions = is_array($products['book_detail_selected_edited_by_options'] ?? null) ? $products['book_detail_selected_edited_by_options'] : [];
+    $selectedBookEditedByIds = is_array($products['book_detail_edited_by_ids'] ?? null) ? $products['book_detail_edited_by_ids'] : [];
+    $selectedBookPublisherId = (string)($products['book_detail_selected_publisher_id'] ?? '');
+    $bookPublisherCurrent = trim((string)($products['book_detail_selected_publisher_name'] ?? ($bookDetails['publisher'] ?? '')));
     $bookPublicationDateCurrent = trim((string)($bookDetails['publication_date'] ?? ''));
     $bookPublicationDateInput = '';
     if ($bookPublicationDateCurrent !== '') {
@@ -1096,19 +1139,34 @@
     <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
         <button type="button" onclick="closeBookDetailsModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
         <h2 class="text-lg font-semibold text-gray-800 mb-2">Edit Book Details</h2>
-        <p class="text-xs text-gray-500 mb-4">For `Author`, `Edited By`, and `Publisher`, enter exact master names or IDs. Multiple authors can be comma-separated.</p>
+        <p class="text-xs text-gray-500 mb-4">Author, Edited By, and Publisher use the same autocomplete search as the inbound desktop form.</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-                <label for="input_book_authors" class="block text-sm font-medium text-gray-600 mb-1">Author</label>
-                <input type="text" id="input_book_authors" value="<?php echo htmlspecialchars($bookAuthorsCsv, ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                <label for="input_book_authors_select" class="block text-sm font-medium text-gray-600 mb-1">Author</label>
+                <input type="hidden" id="input_book_authors" value="<?php echo htmlspecialchars(implode(',', array_filter($selectedBookAuthorIds)), ENT_QUOTES, 'UTF-8'); ?>">
+                <select id="input_book_authors_select" class="w-full" multiple autocomplete="off">
+                    <?php foreach ($selectedBookAuthorOptions as $authorOpt): ?>
+                        <option value="<?php echo htmlspecialchars((string)($authorOpt['id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" selected><?php echo htmlspecialchars((string)($authorOpt['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div>
-                <label for="input_book_edited_by" class="block text-sm font-medium text-gray-600 mb-1">Edited By</label>
-                <input type="text" id="input_book_edited_by" value="<?php echo htmlspecialchars($bookEditedByCsv, ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                <label for="input_book_edited_by_select" class="block text-sm font-medium text-gray-600 mb-1">Edited By</label>
+                <input type="hidden" id="input_book_edited_by" value="<?php echo htmlspecialchars(implode(',', array_filter($selectedBookEditedByIds)), ENT_QUOTES, 'UTF-8'); ?>">
+                <select id="input_book_edited_by_select" class="w-full" multiple autocomplete="off">
+                    <?php foreach ($selectedBookEditedByOptions as $editorOpt): ?>
+                        <option value="<?php echo htmlspecialchars((string)($editorOpt['id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" selected><?php echo htmlspecialchars((string)($editorOpt['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div>
                 <label for="input_book_publisher" class="block text-sm font-medium text-gray-600 mb-1">Publisher</label>
-                <input type="text" id="input_book_publisher" value="<?php echo htmlspecialchars($bookPublisherCurrent, ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                <select id="input_book_publisher" class="w-full" autocomplete="off">
+                    <option value=""></option>
+                    <?php if ($selectedBookPublisherId !== '' && $bookPublisherCurrent !== ''): ?>
+                        <option value="<?php echo htmlspecialchars($selectedBookPublisherId, ENT_QUOTES, 'UTF-8'); ?>" selected><?php echo htmlspecialchars($bookPublisherCurrent, ENT_QUOTES, 'UTF-8'); ?></option>
+                    <?php endif; ?>
+                </select>
             </div>
             <div>
                 <label for="input_book_isbn" class="block text-sm font-medium text-gray-600 mb-1">ISBN</label>
@@ -2287,6 +2345,133 @@ function submitMeasurementsUpdate() {
         showProfileStatusModal('An error occurred while updating measurements.', 'error', false);
     });
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    var searchAuthorsUrl = <?php echo json_encode(base_url('?page=inbounding&action=searchAuthors&q='), JSON_UNESCAPED_SLASHES); ?>;
+    var searchPublishersUrl = <?php echo json_encode(base_url('?page=inbounding&action=searchPublishers&q='), JSON_UNESCAPED_SLASHES); ?>;
+
+    function mapAuthorOptions(rows) {
+        return (rows || []).map(function (item) {
+            return { id: String(item.id), name: item.name || '' };
+        });
+    }
+
+    function syncMultiSelectHidden(ts, hiddenInputId) {
+        var hidden = document.getElementById(hiddenInputId);
+        if (!hidden || !ts) return;
+        var vals = ts.getValue();
+        if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+        hidden.value = vals.filter(Boolean).join(',');
+    }
+
+    var authorHidden = document.getElementById('input_book_authors');
+    var authorSelectEl = document.getElementById('input_book_authors_select');
+    var initialAuthorOptions = <?php echo json_encode($selectedBookAuthorOptions ?? [], JSON_UNESCAPED_UNICODE); ?>;
+    var initialAuthorIds = <?php echo json_encode($selectedBookAuthorIds ?? [], JSON_UNESCAPED_UNICODE); ?>;
+    if (authorSelectEl && typeof window.safeTomSelect === 'function') {
+        authorSelectEl.setAttribute('multiple', 'multiple');
+        var authorTs = window.safeTomSelect(authorSelectEl, {
+            plugins: ['remove_button'],
+            valueField: 'id',
+            labelField: 'name',
+            searchField: ['name'],
+            placeholder: 'Search and select authors...',
+            maxItems: 100,
+            hideSelected: true,
+            closeAfterSelect: false,
+            create: false,
+            persist: true,
+            onChange: function () { syncMultiSelectHidden(this, 'input_book_authors'); },
+            onItemAdd: function () {
+                this.setTextboxValue('');
+                syncMultiSelectHidden(this, 'input_book_authors');
+            },
+            onItemRemove: function () { syncMultiSelectHidden(this, 'input_book_authors'); },
+            load: function (query, callback) {
+                if (!query || query.length < 2) return callback();
+                fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
+                    .then(function (r) { return r.ok ? r.json() : []; })
+                    .then(function (json) { callback(mapAuthorOptions(json)); })
+                    .catch(function () { callback(); });
+            }
+        });
+        if (authorTs) {
+            mapAuthorOptions(initialAuthorOptions).forEach(function (opt) {
+                authorTs.addOption(opt);
+            });
+            if (initialAuthorIds.length) {
+                authorTs.setValue(initialAuthorIds);
+            }
+            syncMultiSelectHidden(authorTs, 'input_book_authors');
+        } else if (authorHidden) {
+            authorHidden.value = initialAuthorIds.join(',');
+        }
+    }
+
+    var editedByHidden = document.getElementById('input_book_edited_by');
+    var editedBySelectEl = document.getElementById('input_book_edited_by_select');
+    var initialEditedByOptions = <?php echo json_encode($selectedBookEditedByOptions ?? [], JSON_UNESCAPED_UNICODE); ?>;
+    var initialEditedByIds = <?php echo json_encode($selectedBookEditedByIds ?? [], JSON_UNESCAPED_UNICODE); ?>;
+    if (editedBySelectEl && typeof window.safeTomSelect === 'function') {
+        editedBySelectEl.setAttribute('multiple', 'multiple');
+        var editedByTs = window.safeTomSelect(editedBySelectEl, {
+            plugins: ['remove_button'],
+            valueField: 'id',
+            labelField: 'name',
+            searchField: ['name'],
+            placeholder: 'Search and select editors...',
+            maxItems: 100,
+            hideSelected: true,
+            closeAfterSelect: false,
+            create: false,
+            persist: true,
+            onChange: function () { syncMultiSelectHidden(this, 'input_book_edited_by'); },
+            onItemAdd: function () {
+                this.setTextboxValue('');
+                syncMultiSelectHidden(this, 'input_book_edited_by');
+            },
+            onItemRemove: function () { syncMultiSelectHidden(this, 'input_book_edited_by'); },
+            load: function (query, callback) {
+                if (!query || query.length < 2) return callback();
+                fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
+                    .then(function (r) { return r.ok ? r.json() : []; })
+                    .then(function (json) { callback(mapAuthorOptions(json)); })
+                    .catch(function () { callback(); });
+            }
+        });
+        if (editedByTs) {
+            mapAuthorOptions(initialEditedByOptions).forEach(function (opt) {
+                editedByTs.addOption(opt);
+            });
+            if (initialEditedByIds.length) {
+                editedByTs.setValue(initialEditedByIds);
+            }
+            syncMultiSelectHidden(editedByTs, 'input_book_edited_by');
+        } else if (editedByHidden) {
+            editedByHidden.value = initialEditedByIds.join(',');
+        }
+    }
+
+    var publisherSelectEl = document.getElementById('input_book_publisher');
+    if (publisherSelectEl && typeof window.safeTomSelect === 'function') {
+        window.safeTomSelect(publisherSelectEl, {
+            valueField: 'id',
+            labelField: 'name',
+            searchField: ['name'],
+            placeholder: 'Search publisher...',
+            create: false,
+            preload: false,
+            allowEmptyOption: true,
+            load: function (query, callback) {
+                if (!query || query.length < 2) return callback();
+                fetch(searchPublishersUrl + encodeURIComponent(query), { credentials: 'include' })
+                    .then(function (r) { return r.ok ? r.json() : []; })
+                    .then(function (json) { callback(json || []); })
+                    .catch(function () { callback(); });
+            }
+        });
+    }
+});
 
 function openBookDetailsModal() {
     var modal = document.getElementById('bookDetailsModal');
