@@ -3495,7 +3495,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     const inboundSectionUpdateNotes = {
         item_grouping: 'The product group (Book, Sculpture, etc.) cannot be changed on the website after publish. Material, accounts group, and category selections will sync.',
-        stock: 'Warehouse and image-directory fields remain local only. The website sync covers stock-related settings like permanently available, backorder, lead times, marketplace vendor, blocks, and India net qty.',
+        stock: 'Warehouse, image-directory, and quantity fields remain local only. The website sync covers stock-related settings like permanently available, backorder, lead times, marketplace vendor, and block flags.',
         item_linking: 'Variant type, SKU, parent item code, and remarks remain local only. The website sync for this section only updates the website date fields.'
     };
 
