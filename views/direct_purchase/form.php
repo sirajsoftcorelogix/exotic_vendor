@@ -406,10 +406,12 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 class="inline-flex justify-center items-center px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 transition">
                 Cancel
             </a>
-            <button type="submit"
-                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
+            <button type="submit" id="dp-save-btn"
+                data-default-label="<?= htmlspecialchars($isEdit ? 'Update purchase' : 'Save purchase', ENT_QUOTES, 'UTF-8') ?>"
+                data-loading-label="<?= htmlspecialchars($isEdit ? 'Updating...' : 'Saving...', ENT_QUOTES, 'UTF-8') ?>"
+                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:from-[#d9822b] disabled:hover:to-[#c57526]">
                 <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
-                <?= $isEdit ? 'Update purchase' : 'Save purchase' ?>
+                <span class="dp-save-btn-label"><?= $isEdit ? 'Update purchase' : 'Save purchase' ?></span>
             </button>
         </div>
     </form>
@@ -1868,7 +1870,16 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
     recalcInvoiceTotals();
     var dpForm = document.getElementById('dp-form');
     if (dpForm) {
-        dpForm.addEventListener('submit', function () {
+        var dpSaveBtn = document.getElementById('dp-save-btn');
+        var dpSaveBtnLabel = dpSaveBtn ? dpSaveBtn.querySelector('.dp-save-btn-label') : null;
+        var dpSaveBtnIcon = dpSaveBtn ? dpSaveBtn.querySelector('i') : null;
+        var dpIsSubmitting = false;
+
+        dpForm.addEventListener('submit', function (e) {
+            if (dpIsSubmitting) {
+                e.preventDefault();
+                return false;
+            }
             document.querySelectorAll('#line-items-body tr.dp-line').forEach(function (tr) {
                 var qtyEl = tr.querySelector('.dp-qty');
                 var qty = qtyEl ? parseFloat(qtyEl.value) : 0;
@@ -1881,6 +1892,18 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                     }
                 });
             });
+
+            dpIsSubmitting = true;
+            if (dpSaveBtn) {
+                dpSaveBtn.disabled = true;
+                dpSaveBtn.setAttribute('aria-disabled', 'true');
+            }
+            if (dpSaveBtnLabel && dpSaveBtn) {
+                dpSaveBtnLabel.textContent = dpSaveBtn.getAttribute('data-loading-label') || 'Saving...';
+            }
+            if (dpSaveBtnIcon) {
+                dpSaveBtnIcon.className = 'fas fa-spinner fa-spin text-xs opacity-95';
+            }
         });
     }
     var dpCurSel = document.getElementById('dp_currency');
