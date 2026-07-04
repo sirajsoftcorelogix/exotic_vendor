@@ -339,6 +339,8 @@ final class StockRebuildService
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'failed_sql' => $e->getDetail()['failed_sql'] ?? null,
+                'failed_condition' => $e->getDetail()['failed_condition'] ?? ($e->getDetail()['comparison'] ?? null),
                 'error_detail' => $e->getDetail(),
                 'stats' => $stats,
                 'logs' => $logs,
@@ -1239,6 +1241,9 @@ final class StockRebuildService
         $connectionCollation = $this->connectionCollation();
         $isCollationError = stripos($mysqlError, 'collation') !== false || stripos($mysqlError, 'charset') !== false;
 
+        $normalizedSql = $this->normalizeSql($sql);
+        $failedCondition = $context['comparison'] ?? null;
+
         $detail = array_merge([
             'step' => $step,
             'phase' => $context['phase'] ?? null,
@@ -1248,8 +1253,10 @@ final class StockRebuildService
             'connection_collation' => $connectionCollation,
             'tables' => array_values((array) ($context['tables'] ?? [])),
             'columns' => array_values((array) ($context['columns'] ?? [])),
-            'comparison' => $context['comparison'] ?? null,
-            'sql_preview' => $this->compactSql($sql),
+            'comparison' => $failedCondition,
+            'failed_condition' => $failedCondition,
+            'failed_sql' => $normalizedSql,
+            'sql_preview' => $this->compactSql($normalizedSql),
             'diagnostic_sql' => $isCollationError ? $this->collationDiagnosticSql((array) ($context['tables'] ?? []), (array) ($context['columns'] ?? [])) : null,
         ], $context);
 
@@ -1257,8 +1264,11 @@ final class StockRebuildService
         if ($mysqlError !== '') {
             $message .= '. MySQL [' . $mysqlErrno . ']: ' . $mysqlError;
         }
-        if (!empty($detail['comparison'])) {
-            $message .= '. Comparison: ' . $detail['comparison'];
+        if (!empty($failedCondition)) {
+            $message .= '. Failed condition: ' . $failedCondition;
+        }
+        if ($normalizedSql !== '') {
+            $message .= '. Failed query: ' . $this->compactSql($normalizedSql, 2500);
         }
         if (!empty($detail['tables'])) {
             $message .= '. Tables: ' . implode(', ', $detail['tables']);
@@ -1303,14 +1313,19 @@ final class StockRebuildService
         return trim((string) ($row['collation_connection'] ?? ''));
     }
 
-    private function compactSql(string $sql): string
+    private function normalizeSql(string $sql): string
     {
-        $compact = preg_replace('/\s+/', ' ', trim($sql)) ?? trim($sql);
-        if (strlen($compact) <= 1200) {
+        return preg_replace('/\s+/', ' ', trim($sql)) ?? trim($sql);
+    }
+
+    private function compactSql(string $sql, int $maxLength = 1200): string
+    {
+        $compact = $this->normalizeSql($sql);
+        if (strlen($compact) <= $maxLength) {
             return $compact;
         }
 
-        return substr($compact, 0, 1200) . '...';
+        return substr($compact, 0, $maxLength) . '...';
     }
 
     /** @param list<string> $tables @param list<string> $columns */

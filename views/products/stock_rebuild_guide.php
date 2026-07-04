@@ -178,13 +178,23 @@ if ($defaultWarehouseName === '' && $defaultWarehouseId > 0) {
         }
 
         let html = '';
+        const failedSql = detail.failed_sql || detail.sql_preview || '';
+        const failedCondition = detail.failed_condition || detail.comparison || '';
+
+        if (failedCondition) {
+            html += '<div class="mt-3 rounded-lg border border-red-300 bg-white px-3 py-2">'
+                + '<p class="font-semibold text-red-900 mb-1">Failed condition</p>'
+                + '<pre class="text-xs text-red-800 overflow-x-auto whitespace-pre-wrap">' + esc(failedCondition) + '</pre>'
+                + '</div>';
+        }
+        if (failedSql) {
+            html += '<div class="mt-3 rounded-lg border border-red-300 bg-white px-3 py-2">'
+                + '<p class="font-semibold text-red-900 mb-1">Query that failed</p>'
+                + '<pre class="text-xs text-red-800 overflow-x-auto whitespace-pre-wrap">' + esc(failedSql) + '</pre>'
+                + '</div>';
+        }
         if (rows.length) {
             html += '<div class="mt-3"><p class="font-semibold mb-2">Error details</p>' + renderKeyValueTable(rows) + '</div>';
-        }
-        if (detail.sql_preview) {
-            html += '<div class="mt-3"><p class="font-semibold mb-2">SQL preview</p>'
-                + '<pre class="text-xs bg-gray-50 border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">'
-                + esc(detail.sql_preview) + '</pre></div>';
         }
         if (detail.diagnostic_sql) {
             html += '<div class="mt-3"><p class="font-semibold mb-2">Run in phpMyAdmin to inspect collation</p>'
@@ -201,9 +211,14 @@ if ($defaultWarehouseName === '' && $defaultWarehouseId > 0) {
         resultPanel.classList.add('hidden');
 
         if (!data.success) {
+            const failedSql = data.failed_sql || (data.error_detail && data.error_detail.failed_sql) || '';
             previewContent.innerHTML = '<div class="rounded-lg border border-red-200 bg-red-50 text-red-800 px-3 py-2">'
                 + esc(data.message || 'Preview failed.') + '</div>'
-                + renderErrorDetail(data.error_detail);
+                + renderErrorDetail(data.error_detail || {
+                    failed_sql: failedSql,
+                    failed_condition: data.failed_condition || null,
+                    mysql_error: data.message || null
+                });
             refreshExecuteState();
             return;
         }
