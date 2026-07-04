@@ -180,6 +180,7 @@
                         <a href="javascript:void(0)" id="importProductsBtn" title="Import products" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Import Products</a>
                         <a href="?page=products&action=group_api_import" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Import Missing from API (All Groups)</a>
                         <a href="?page=products&action=bulk_import" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Bulk Import (Excel)</a>
+                        <a href="?page=products&action=stock_rebuild_guide" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Stock Rebuild</a>
                         <a href="javascript:void(0)" id="bulkUpdateBtn" title="Update stock" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Products</a>
                         <a href="javascript:void(0)" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
                         <a href="javascript:void(0)" id="action-transfer-stock" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Transfer Stock</a>

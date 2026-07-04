@@ -625,6 +625,15 @@ switch ($page) {
             case 'bulk_label_print':
                 $controller->bulkLabelPrintUi();
                 break;
+            case 'stock_rebuild_guide':
+                $controller->stockRebuildGuide();
+                break;
+            case 'stock_rebuild_preview':
+                $controller->stockRebuildPreview();
+                break;
+            case 'stock_rebuild_execute':
+                $controller->stockRebuildExecute();
+                break;
             case 'bulk_label_print_generate':
                 $controller->bulkLabelPrintGenerate();
                 break;
