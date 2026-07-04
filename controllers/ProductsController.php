@@ -1411,28 +1411,50 @@ class ProductsController
         ], 'Warehouse Stock Rebuild');
     }
 
+    /**
+     * Extend PHP/MySQL limits for stock rebuild preview only.
+     * Note: nginx fastcgi_read_timeout is separate from PHP-FPM request_terminate_timeout.
+     */
+    private function configureStockRebuildPreviewRuntime(): void
+    {
+        $seconds = 900;
+
+        @ignore_user_abort(true);
+        @ini_set('max_execution_time', (string) $seconds);
+        @set_time_limit($seconds);
+        @ini_set('memory_limit', '1024M');
+        @ini_set('default_socket_timeout', (string) $seconds);
+
+        global $conn;
+        if (isset($conn) && $conn instanceof mysqli) {
+            $sqlSeconds = (int) $seconds;
+            @$conn->query('SET SESSION wait_timeout = ' . $sqlSeconds);
+            @$conn->query('SET SESSION interactive_timeout = ' . $sqlSeconds);
+            @$conn->query('SET SESSION net_read_timeout = ' . $sqlSeconds);
+            @$conn->query('SET SESSION net_write_timeout = ' . $sqlSeconds);
+        }
+    }
+
     public function stockRebuildPreview(): void
     {
         is_login();
         global $conn;
 
-        if (ob_get_length()) {
-            ob_clean();
-        }
-        header('Content-Type: application/json; charset=utf-8');
+        $this->configureStockRebuildPreviewRuntime();
+
+        require_once __DIR__ . '/../models/product/StockRebuildService.php';
 
         try {
-            require_once __DIR__ . '/../models/product/StockRebuildService.php';
             $payload = json_decode((string) file_get_contents('php://input'), true);
             if (!is_array($payload)) {
                 throw new Exception('Invalid request payload.');
             }
             $selectedWarehouseId = (int) ($payload['warehouse_id'] ?? 0);
             $service = new StockRebuildService($conn);
-            echo json_encode($service->preview($selectedWarehouseId));
+            vendorJsonResponse($service->preview($selectedWarehouseId));
         } catch (StockRebuildSqlException $e) {
             $detail = $e->getDetail();
-            echo json_encode([
+            vendorJsonResponse([
                 'success' => false,
                 'message' => $e->getMessage(),
                 'failed_sql' => $detail['failed_sql'] ?? null,
@@ -1440,12 +1462,15 @@ class ProductsController
                 'error_detail' => $detail,
             ]);
         } catch (Throwable $e) {
-            echo json_encode([
+            vendorJsonResponse([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'error_detail' => [
+                    'step' => 'controller.stock_rebuild_preview',
+                    'mysql_error' => $e->getMessage(),
+                ],
             ]);
         }
-        exit;
     }
 
     public function stockRebuildExecute(): void
@@ -1453,14 +1478,10 @@ class ProductsController
         is_login();
         global $conn;
 
-        if (ob_get_length()) {
-            ob_clean();
-        }
-        header('Content-Type: application/json; charset=utf-8');
+        require_once __DIR__ . '/../models/product/StockRebuildService.php';
         @set_time_limit(0);
 
         try {
-            require_once __DIR__ . '/../models/product/StockRebuildService.php';
             $payload = json_decode((string) file_get_contents('php://input'), true);
             if (!is_array($payload)) {
                 throw new Exception('Invalid request payload.');
@@ -1472,10 +1493,10 @@ class ProductsController
             }
             $service = new StockRebuildService($conn);
             $userId = (int) ($_SESSION['user']['id'] ?? 0);
-            echo json_encode($service->execute($selectedWarehouseId, $userId));
+            vendorJsonResponse($service->execute($selectedWarehouseId, $userId));
         } catch (StockRebuildSqlException $e) {
             $detail = $e->getDetail();
-            echo json_encode([
+            vendorJsonResponse([
                 'success' => false,
                 'message' => $e->getMessage(),
                 'failed_sql' => $detail['failed_sql'] ?? null,
@@ -1483,12 +1504,15 @@ class ProductsController
                 'error_detail' => $detail,
             ]);
         } catch (Throwable $e) {
-            echo json_encode([
+            vendorJsonResponse([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'error_detail' => [
+                    'step' => 'controller.stock_rebuild_execute',
+                    'mysql_error' => $e->getMessage(),
+                ],
             ]);
         }
-        exit;
     }
 
     /** Generate printable HTML for bulk label queue (JSON in, HTML out via JSON). */

@@ -123,6 +123,41 @@ if ($defaultWarehouseName === '' && $defaultWarehouseId > 0) {
         return div.innerHTML;
     }
 
+    const jsonFetchHeaders = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+    };
+
+    async function readJsonResponse(res) {
+        const text = await res.text();
+        const trimmed = text.trim();
+        if (!trimmed) {
+            throw new Error('Empty response from server (HTTP ' + res.status + ').');
+        }
+        if (trimmed.charAt(0) === '<') {
+            const snippet = trimmed.replace(/\s+/g, ' ').slice(0, 500);
+            throw new Error('Server returned HTML instead of JSON (HTTP ' + res.status + '): ' + snippet);
+        }
+        try {
+            return JSON.parse(trimmed);
+        } catch (parseErr) {
+            throw new Error('Invalid JSON (HTTP ' + res.status + '): ' + trimmed.slice(0, 500));
+        }
+    }
+
+    function renderFetchFailure(err, step) {
+        const message = err && err.message ? err.message : 'Request failed.';
+        renderPreview({
+            success: false,
+            message: message,
+            error_detail: {
+                step: step || 'client.fetch',
+                mysql_error: message
+            }
+        });
+    }
+
     function setBusy(isBusy, label) {
         previewBtn.disabled = isBusy;
         executeBtn.disabled = isBusy || !canExecuteNow();
@@ -264,6 +299,7 @@ if ($defaultWarehouseName === '' && $defaultWarehouseId > 0) {
         html += '<div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 space-y-1">'
             + '<p>' + esc(warnings.local_stock_baseline || '') + '</p>'
             + '<p>' + esc(warnings.global_delete || '') + '</p>'
+            + (warnings.preview_mode ? '<p>' + esc(warnings.preview_mode) + '</p>' : '')
             + '</div>';
 
         if (otherWh.length) {
@@ -337,14 +373,14 @@ if ($defaultWarehouseName === '' && $defaultWarehouseId > 0) {
         try {
             const res = await fetch('?page=products&action=stock_rebuild_preview', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: jsonFetchHeaders,
                 body: JSON.stringify({ warehouse_id: warehouseId })
             });
-            const data = await res.json();
+            const data = await readJsonResponse(res);
             renderPreview(data);
             statusEl.textContent = data.success ? 'Preview ready.' : 'Preview failed.';
         } catch (err) {
-            renderPreview({ success: false, message: err && err.message ? err.message : 'Preview request failed.' });
+            renderFetchFailure(err, 'client.stock_rebuild_preview');
             statusEl.textContent = 'Preview request failed.';
         } finally {
             setBusy(false, statusEl.textContent);
@@ -368,19 +404,23 @@ if ($defaultWarehouseName === '' && $defaultWarehouseId > 0) {
         try {
             const res = await fetch('?page=products&action=stock_rebuild_execute', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: jsonFetchHeaders,
                 body: JSON.stringify({
                     warehouse_id: warehouseId,
                     confirm_text: String(confirmEl.value || '').trim().toUpperCase()
                 })
             });
-            const data = await res.json();
+            const data = await readJsonResponse(res);
             renderResult(data);
             statusEl.textContent = data.success ? 'Rebuild completed.' : 'Rebuild failed.';
         } catch (err) {
             renderResult({
                 success: false,
                 message: err && err.message ? err.message : 'Execute request failed.',
+                error_detail: {
+                    step: 'client.stock_rebuild_execute',
+                    mysql_error: err && err.message ? err.message : 'Execute request failed.'
+                },
                 stats: {},
                 logs: []
             });
