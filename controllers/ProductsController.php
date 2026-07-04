@@ -1376,6 +1376,103 @@ class ProductsController
         ], 'Bulk Label Print');
     }
 
+    public function stockRebuildGuide(): void
+    {
+        is_login();
+        global $productModel, $conn;
+
+        require_once __DIR__ . '/../models/product/StockRebuildService.php';
+
+        $isAdminUser = isset($_SESSION['user']['role_id']) && (int) $_SESSION['user']['role_id'] === 1;
+        $loginWarehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
+        if ($loginWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $loginWarehouseId = (int) $_SESSION['user']['warehouse_id'];
+        }
+
+        $allWarehouses = $productModel->getAllWarehouses();
+        $warehouses = [];
+        foreach ((array) $allWarehouses as $wh) {
+            $wid = (int) ($wh['id'] ?? 0);
+            if ($wid <= 0) {
+                continue;
+            }
+            if (!$isAdminUser && $loginWarehouseId > 0 && $wid !== $loginWarehouseId) {
+                continue;
+            }
+            $warehouses[] = $wh;
+        }
+
+        $service = new StockRebuildService($conn);
+
+        renderTemplate('views/products/stock_rebuild_guide.php', [
+            'warehouses' => $warehouses,
+            'selectedWarehouseId' => $loginWarehouseId,
+            'defaultWarehouse' => $service->getDefaultWarehouse(),
+        ], 'Warehouse Stock Rebuild');
+    }
+
+    public function stockRebuildPreview(): void
+    {
+        is_login();
+        global $conn;
+
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+
+        try {
+            require_once __DIR__ . '/../models/product/StockRebuildService.php';
+            $payload = json_decode((string) file_get_contents('php://input'), true);
+            if (!is_array($payload)) {
+                throw new Exception('Invalid request payload.');
+            }
+            $selectedWarehouseId = (int) ($payload['warehouse_id'] ?? 0);
+            $service = new StockRebuildService($conn);
+            echo json_encode($service->preview($selectedWarehouseId));
+        } catch (Throwable $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+        exit;
+    }
+
+    public function stockRebuildExecute(): void
+    {
+        is_login();
+        global $conn;
+
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        @set_time_limit(0);
+
+        try {
+            require_once __DIR__ . '/../models/product/StockRebuildService.php';
+            $payload = json_decode((string) file_get_contents('php://input'), true);
+            if (!is_array($payload)) {
+                throw new Exception('Invalid request payload.');
+            }
+            $selectedWarehouseId = (int) ($payload['warehouse_id'] ?? 0);
+            $confirmText = strtoupper(trim((string) ($payload['confirm_text'] ?? '')));
+            if ($confirmText !== 'REBUILD') {
+                throw new Exception('Type REBUILD to confirm execution.');
+            }
+            $service = new StockRebuildService($conn);
+            $userId = (int) ($_SESSION['user']['id'] ?? 0);
+            echo json_encode($service->execute($selectedWarehouseId, $userId));
+        } catch (Throwable $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+        exit;
+    }
+
     /** Generate printable HTML for bulk label queue (JSON in, HTML out via JSON). */
     public function bulkLabelPrintGenerate()
     {
