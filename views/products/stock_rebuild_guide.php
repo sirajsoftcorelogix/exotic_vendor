@@ -211,10 +211,16 @@ if ($defaultWarehouseName === '' && $defaultWarehouseId > 0) {
         resultPanel.classList.add('hidden');
 
         if (!data.success) {
-            const failedSql = data.failed_sql || (data.error_detail && data.error_detail.failed_sql) || '';
+            const detail = data.error_detail || {};
+            const failedSql = data.failed_sql || detail.failed_sql || '';
+            const stepLine = detail.step
+                ? '<p class="mt-2 text-sm font-medium"><span class="opacity-80">Failed step:</span> ' + esc(detail.step) + '</p>'
+                : '';
             previewContent.innerHTML = '<div class="rounded-lg border border-red-200 bg-red-50 text-red-800 px-3 py-2">'
-                + esc(data.message || 'Preview failed.') + '</div>'
-                + renderErrorDetail(data.error_detail || {
+                + esc(data.message || 'Preview failed.')
+                + stepLine
+                + '</div>'
+                + renderErrorDetail(Object.keys(detail).length ? detail : {
                     failed_sql: failedSql,
                     failed_condition: data.failed_condition || null,
                     mysql_error: data.message || null
