@@ -86,7 +86,7 @@ final class StockRebuildService
             return ['success' => false, 'message' => 'Default warehouse could not be resolved.'];
         }
 
-        $scopeRows = $this->collectScopeProducts($selectedWarehouseId);
+        $scopeRows = $this->collectScopeProducts($selectedWarehouseId, false);
         if ($scopeRows === []) {
             return [
                 'success' => false,
@@ -101,19 +101,19 @@ final class StockRebuildService
 
         $scopeSkus = array_keys($scopeRows);
         $scopeProductIds = $this->extractScopeProductIds($scopeRows);
-        $scopeProductIdSet = array_fill_keys($scopeProductIds, true);
 
-        $purchaseBatches = $this->collectPurchaseBatches((int) $defaultWarehouse['id'], $scopeRows);
-        $returnBatches = $this->collectReturnBatches((int) $defaultWarehouse['id'], $scopeRows);
-        $transferIns = $this->collectTransferInRows($selectedWarehouseId, $scopeRows);
-        $transferOuts = $this->collectTransferOutRows($selectedWarehouseId, $scopeRows);
-        $invoiceReplay = $this->collectInvoiceReplayData($selectedWarehouseId, $scopeProductIdSet);
         $deleteCounts = $this->collectDeleteCounts($scopeSkus, $scopeProductIds);
         $otherWarehouseUsage = $this->collectOtherWarehouseUsage(
             $scopeSkus,
             $scopeProductIds,
             (int) $defaultWarehouse['id'],
             $selectedWarehouseId
+        );
+        $phaseCounts = $this->countPreviewPhaseStats(
+            (int) $defaultWarehouse['id'],
+            $selectedWarehouseId,
+            $scopeSkus,
+            $scopeProductIds
         );
 
         $openingCandidates = 0;
@@ -122,31 +122,7 @@ final class StockRebuildService
                 $openingCandidates++;
             }
         }
-
-        $purchaseLineCount = 0;
-        foreach ($purchaseBatches as $batch) {
-            $purchaseLineCount += count((array) ($batch['lines'] ?? []));
-        }
-
-        $returnLineCount = 0;
-        foreach ($returnBatches as $batch) {
-            $returnLineCount += count((array) ($batch['lines'] ?? []));
-        }
-
-        $invoiceLineCount = 0;
-        $invoiceHeaderCount = 0;
-        $cancelHeaderCount = 0;
-        foreach ((array) ($invoiceReplay['invoices'] ?? []) as $invoice) {
-            $lines = (array) ($invoice['lines'] ?? []);
-            if ($lines === []) {
-                continue;
-            }
-            $invoiceHeaderCount++;
-            $invoiceLineCount += count($lines);
-            if (strtolower((string) ($invoice['status'] ?? '')) === 'cancelled') {
-                $cancelHeaderCount++;
-            }
-        }
+        $phaseCounts['opening_candidates'] = $openingCandidates;
 
         $blockingWarnings = [];
         if ($otherWarehouseUsage !== []) {
@@ -173,21 +149,11 @@ final class StockRebuildService
                 'sample' => array_slice(array_values($scopeRows), 0, 25),
             ],
             'delete_counts' => $deleteCounts,
-            'phase_counts' => [
-                'opening_candidates' => $openingCandidates,
-                'purchase_headers' => count($purchaseBatches),
-                'purchase_lines' => $purchaseLineCount,
-                'return_headers' => count($returnBatches),
-                'return_lines' => $returnLineCount,
-                'transfer_in_lines' => count($transferIns),
-                'transfer_out_lines' => count($transferOuts),
-                'invoice_headers' => $invoiceHeaderCount,
-                'invoice_lines' => $invoiceLineCount,
-                'cancel_invoice_headers' => $cancelHeaderCount,
-            ],
+            'phase_counts' => $phaseCounts,
             'warnings' => [
                 'local_stock_baseline' => 'This execution path preserves current vp_products.local_stock and uses it as the opening-stock baseline in the default warehouse.',
                 'global_delete' => 'Step 4 fully deletes vp_stock_movements and vp_stock rows for the scoped SKUs before replay.',
+                'preview_mode' => 'Preview uses fast SQL counts. Execute performs full line resolution (including invoice lines without product_id).',
                 'other_warehouse_usage' => $otherWarehouseUsage,
             ],
             'blocking_warnings' => $blockingWarnings,
@@ -387,7 +353,7 @@ final class StockRebuildService
         }
     }
 
-    private function collectScopeProducts(int $selectedWarehouseId): array
+    private function collectScopeProducts(int $selectedWarehouseId, bool $resolveMissingInvoiceProducts = true): array
     {
         $selectedWarehouseId = (int) $selectedWarehouseId;
         $scope = [];
@@ -459,18 +425,18 @@ final class StockRebuildService
             $res->free();
         }
 
-        $invoiceSql = "SELECT i.id AS invoice_id, i.status, ii.product_id, ii.order_number, ii.item_code
-            FROM vp_invoices i
-            INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
-            WHERE i.warehouse_id = {$selectedWarehouseId}
-              AND i.status IN ('final', 'cancelled')";
-        $invoiceRes = $this->queryOrFail($invoiceSql, 'preview.collect_scope.invoices', [
-            'phase' => 'preview',
-            'tables' => ['vp_invoices', 'vp_invoice_items'],
-            'columns' => ['vp_invoice_items.invoice_id', 'vp_invoices.id'],
-            'comparison' => 'vp_invoice_items.invoice_id = vp_invoices.id',
-        ]);
-        if ($invoiceRes) {
+        if ($resolveMissingInvoiceProducts) {
+            $invoiceSql = "SELECT i.id AS invoice_id, i.status, ii.product_id, ii.order_number, ii.item_code
+                FROM vp_invoices i
+                INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+                WHERE i.warehouse_id = {$selectedWarehouseId}
+                  AND i.status IN ('final', 'cancelled')";
+            $invoiceRes = $this->queryOrFail($invoiceSql, 'preview.collect_scope.invoices', [
+                'phase' => 'preview',
+                'tables' => ['vp_invoices', 'vp_invoice_items'],
+                'columns' => ['vp_invoice_items.invoice_id', 'vp_invoices.id'],
+                'comparison' => 'vp_invoice_items.invoice_id = vp_invoices.id',
+            ]);
             while ($row = $invoiceRes->fetch_assoc()) {
                 $productId = (int) ($row['product_id'] ?? 0);
                 if ($productId <= 0) {
@@ -498,11 +464,149 @@ final class StockRebuildService
                 ]);
             }
             $invoiceRes->free();
+        } else {
+            $invoiceScopeSql = "SELECT DISTINCT p.id AS product_id, p.sku, p.item_code, IFNULL(p.size, '') AS size, IFNULL(p.color, '') AS color,
+                    p.title, IFNULL(p.local_stock, 0) AS local_stock
+                FROM vp_invoices i
+                INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+                INNER JOIN vp_products p ON p.id = ii.product_id
+                WHERE i.warehouse_id = {$selectedWarehouseId}
+                  AND i.status IN ('final', 'cancelled')
+                  AND ii.product_id > 0";
+            $invoiceScopeRes = $this->queryOrFail($invoiceScopeSql, 'preview.collect_scope.invoices_fast', [
+                'phase' => 'preview',
+                'tables' => ['vp_invoices', 'vp_invoice_items', 'vp_products'],
+                'columns' => ['vp_invoice_items.product_id', 'vp_products.id'],
+                'comparison' => 'vp_products.id = vp_invoice_items.product_id',
+            ]);
+            while ($row = $invoiceScopeRes->fetch_assoc()) {
+                $this->addScopeRow($scope, $row);
+            }
+            $invoiceScopeRes->free();
         }
 
         ksort($scope);
 
         return $scope;
+    }
+
+    /** @param list<string> $scopeSkus @param list<int> $scopeProductIds */
+    private function countPreviewPhaseStats(
+        int $defaultWarehouseId,
+        int $selectedWarehouseId,
+        array $scopeSkus,
+        array $scopeProductIds
+    ): array {
+        if ($scopeSkus === []) {
+            return [
+                'opening_candidates' => 0,
+                'purchase_headers' => 0,
+                'purchase_lines' => 0,
+                'return_headers' => 0,
+                'return_lines' => 0,
+                'transfer_in_lines' => 0,
+                'transfer_out_lines' => 0,
+                'invoice_headers' => 0,
+                'invoice_lines' => 0,
+                'cancel_invoice_headers' => 0,
+            ];
+        }
+
+        $skuIn = $this->quoteStringsForIn($scopeSkus);
+        $productIdIn = $scopeProductIds !== [] ? $this->quoteIntsForIn($scopeProductIds) : '0';
+
+        $purchaseSql = "SELECT COUNT(DISTINCT p.id) AS headers, COUNT(*) AS lines
+            FROM vp_direct_purchases p
+            INNER JOIN vp_direct_purchase_items i ON i.direct_purchase_id = p.id
+            WHERE p.warehouse_id = " . (int) $defaultWarehouseId . "
+              AND i.sku IN ({$skuIn})";
+        $purchaseRes = $this->queryOrFail($purchaseSql, 'preview.count_purchases', [
+            'phase' => 'preview',
+            'tables' => ['vp_direct_purchases', 'vp_direct_purchase_items'],
+            'columns' => ['vp_direct_purchase_items.sku'],
+            'comparison' => 'vp_direct_purchase_items.sku IN (scoped SKU list)',
+        ]);
+        $purchaseRow = $purchaseRes->fetch_assoc() ?: [];
+        $purchaseRes->free();
+
+        $returnSql = "SELECT COUNT(DISTINCT r.id) AS headers, COUNT(*) AS lines
+            FROM vp_direct_purchase_returns r
+            INNER JOIN vp_direct_purchase_return_items ri ON ri.direct_purchase_return_id = r.id
+            INNER JOIN vp_direct_purchase_items dpi ON dpi.id = ri.direct_purchase_item_id
+            WHERE r.warehouse_id = " . (int) $defaultWarehouseId . "
+              AND dpi.sku IN ({$skuIn})";
+        $returnRes = $this->queryOrFail($returnSql, 'preview.count_returns', [
+            'phase' => 'preview',
+            'tables' => ['vp_direct_purchase_returns', 'vp_direct_purchase_return_items', 'vp_direct_purchase_items'],
+            'columns' => ['vp_direct_purchase_items.sku'],
+            'comparison' => 'vp_direct_purchase_items.sku IN (scoped SKU list)',
+        ]);
+        $returnRow = $returnRes->fetch_assoc() ?: [];
+        $returnRes->free();
+
+        $transferInSql = "SELECT COUNT(*) AS lines
+            FROM vp_stock_transfer st
+            INNER JOIN vp_stock_transfer_grns grn ON grn.transfer_id = st.id
+            WHERE COALESCE(NULLIF(grn.location, 0), st.to_warehouse) = " . (int) $selectedWarehouseId . "
+              AND grn.qty_received > 0
+              AND TRIM(COALESCE(grn.sku, '')) <> ''
+              AND grn.sku IN ({$skuIn})";
+        $transferInRes = $this->queryOrFail($transferInSql, 'preview.count_transfer_in', [
+            'phase' => 'preview',
+            'tables' => ['vp_stock_transfer', 'vp_stock_transfer_grns'],
+            'columns' => ['vp_stock_transfer_grns.sku'],
+            'comparison' => 'vp_stock_transfer_grns.sku IN (scoped SKU list)',
+        ]);
+        $transferInRow = $transferInRes->fetch_assoc() ?: [];
+        $transferInRes->free();
+
+        $transferOutSql = "SELECT COUNT(*) AS lines
+            FROM vp_stock_transfer st
+            INNER JOIN vp_item_stock_transfer ist ON ist.transfer_order_no = st.transfer_order_no
+            WHERE st.from_warehouse = " . (int) $selectedWarehouseId . "
+              AND ist.transfer_qty > 0
+              AND TRIM(COALESCE(ist.sku, '')) <> ''
+              AND ist.sku IN ({$skuIn})";
+        $transferOutRes = $this->queryOrFail($transferOutSql, 'preview.count_transfer_out', [
+            'phase' => 'preview',
+            'tables' => ['vp_stock_transfer', 'vp_item_stock_transfer'],
+            'columns' => ['vp_item_stock_transfer.transfer_order_no', 'vp_stock_transfer.transfer_order_no', 'vp_item_stock_transfer.sku'],
+            'comparison' => 'vp_item_stock_transfer.sku IN (scoped SKU list)',
+        ]);
+        $transferOutRow = $transferOutRes->fetch_assoc() ?: [];
+        $transferOutRes->free();
+
+        $invoiceSql = "SELECT
+                COUNT(DISTINCT i.id) AS headers,
+                COUNT(*) AS lines,
+                COUNT(DISTINCT CASE WHEN LOWER(i.status) = 'cancelled' THEN i.id END) AS cancel_headers
+            FROM vp_invoices i
+            INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+            WHERE i.warehouse_id = " . (int) $selectedWarehouseId . "
+              AND i.status IN ('final', 'cancelled')
+              AND ii.quantity > 0
+              AND ii.product_id IN ({$productIdIn})";
+        $invoiceRes = $this->queryOrFail($invoiceSql, 'preview.count_invoices', [
+            'phase' => 'preview',
+            'tables' => ['vp_invoices', 'vp_invoice_items'],
+            'columns' => ['vp_invoice_items.product_id'],
+            'comparison' => 'vp_invoice_items.product_id IN (scoped product ids)',
+        ]);
+        $invoiceRow = $invoiceRes->fetch_assoc() ?: [];
+        $invoiceRes->free();
+
+        return [
+            'opening_candidates' => 0,
+            'purchase_headers' => (int) ($purchaseRow['headers'] ?? 0),
+            'purchase_lines' => (int) ($purchaseRow['lines'] ?? 0),
+            'return_headers' => (int) ($returnRow['headers'] ?? 0),
+            'return_lines' => (int) ($returnRow['lines'] ?? 0),
+            'transfer_in_lines' => (int) ($transferInRow['lines'] ?? 0),
+            'transfer_out_lines' => (int) ($transferOutRow['lines'] ?? 0),
+            'invoice_headers' => (int) ($invoiceRow['headers'] ?? 0),
+            'invoice_lines' => (int) ($invoiceRow['lines'] ?? 0),
+            'cancel_invoice_headers' => (int) ($invoiceRow['cancel_headers'] ?? 0),
+        ];
     }
 
     private function addScopeRow(array &$scope, array $row): void
