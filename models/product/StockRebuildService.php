@@ -31,6 +31,15 @@ final class StockRebuildService
     /** @var product */
     private $productModel;
 
+    /** @var string */
+    private $debugSqlStep = '';
+
+    /** @var string */
+    private $debugSql = '';
+
+    /** @var array<string, mixed> */
+    private $debugSqlContext = [];
+
     public function __construct(mysqli $conn)
     {
         $this->conn = $conn;
@@ -48,6 +57,24 @@ final class StockRebuildService
     }
 
     public function preview(int $selectedWarehouseId): array
+    {
+        try {
+            return $this->buildPreview($selectedWarehouseId);
+        } catch (StockRebuildSqlException $e) {
+            return $this->formatSqlErrorResponse($e);
+        } catch (Throwable $e) {
+            return $this->formatSqlErrorResponse(
+                $this->sqlException(
+                    $this->debugSqlStep !== '' ? $this->debugSqlStep : 'preview.unknown',
+                    $this->debugSql !== '' ? $this->debugSql : ('[no SQL captured] ' . get_class($e)),
+                    $this->debugSqlContext,
+                    $e
+                )
+            );
+        }
+    }
+
+    private function buildPreview(int $selectedWarehouseId): array
     {
         $selectedWarehouseId = (int) $selectedWarehouseId;
         if ($selectedWarehouseId <= 0) {
@@ -447,7 +474,8 @@ final class StockRebuildService
             while ($row = $invoiceRes->fetch_assoc()) {
                 $productId = (int) ($row['product_id'] ?? 0);
                 if ($productId <= 0) {
-                    $productId = $this->productModel->getProductIdForInvoiceLine(
+                    $productId = $this->resolveProductIdForInvoiceLine(
+                        'preview.collect_scope.invoice_product_lookup',
                         (string) ($row['order_number'] ?? ''),
                         (string) ($row['item_code'] ?? '')
                     );
@@ -632,10 +660,12 @@ final class StockRebuildService
             INNER JOIN vp_direct_purchase_items i ON i.direct_purchase_id = p.id
             WHERE p.warehouse_id = " . (int) $warehouseId . "
             ORDER BY p.id ASC, i.id ASC";
-        $res = $this->conn->query($sql);
-        if (!$res) {
-            return [];
-        }
+        $res = $this->queryOrFail($sql, 'preview.collect_purchases', [
+            'phase' => 'preview',
+            'tables' => ['vp_direct_purchases', 'vp_direct_purchase_items'],
+            'columns' => ['vp_direct_purchase_items.direct_purchase_id', 'vp_direct_purchases.id'],
+            'comparison' => 'vp_direct_purchase_items.direct_purchase_id = vp_direct_purchases.id',
+        ]);
 
         $grouped = [];
         while ($row = $res->fetch_assoc()) {
@@ -682,10 +712,12 @@ final class StockRebuildService
             INNER JOIN vp_direct_purchase_items dpi ON dpi.id = ri.direct_purchase_item_id
             WHERE r.warehouse_id = " . (int) $warehouseId . "
             ORDER BY r.id ASC, ri.id ASC";
-        $res = $this->conn->query($sql);
-        if (!$res) {
-            return [];
-        }
+        $res = $this->queryOrFail($sql, 'preview.collect_returns', [
+            'phase' => 'preview',
+            'tables' => ['vp_direct_purchase_returns', 'vp_direct_purchase_return_items', 'vp_direct_purchase_items'],
+            'columns' => ['vp_direct_purchase_return_items.direct_purchase_item_id', 'vp_direct_purchase_items.id'],
+            'comparison' => 'vp_direct_purchase_return_items.direct_purchase_item_id = vp_direct_purchase_items.id',
+        ]);
 
         $grouped = [];
         while ($row = $res->fetch_assoc()) {
@@ -732,10 +764,12 @@ final class StockRebuildService
             INNER JOIN vp_stock_transfer_grns grn ON grn.transfer_id = st.id
             WHERE COALESCE(NULLIF(grn.location, 0), st.to_warehouse) = " . (int) $selectedWarehouseId . "
             ORDER BY st.id ASC, grn.id ASC";
-        $res = $this->conn->query($sql);
-        if (!$res) {
-            return [];
-        }
+        $res = $this->queryOrFail($sql, 'preview.collect_transfer_in', [
+            'phase' => 'preview',
+            'tables' => ['vp_stock_transfer', 'vp_stock_transfer_grns'],
+            'columns' => ['vp_stock_transfer_grns.transfer_id', 'vp_stock_transfer.id'],
+            'comparison' => 'vp_stock_transfer_grns.transfer_id = vp_stock_transfer.id',
+        ]);
 
         $rows = [];
         while ($row = $res->fetch_assoc()) {
@@ -778,15 +812,18 @@ final class StockRebuildService
         }
 
         $scopeSkuSet = array_fill_keys(array_keys($scopeRows), true);
+        $transferOrderEquals = 'ist.transfer_order_no = st.transfer_order_no';
         $sql = "SELECT st.transfer_order_no, st.created_by, ist.product_id, ist.item_code, ist.sku, ist.transfer_qty
             FROM vp_stock_transfer st
-            INNER JOIN vp_item_stock_transfer ist ON ist.transfer_order_no = st.transfer_order_no
+            INNER JOIN vp_item_stock_transfer ist ON {$transferOrderEquals}
             WHERE st.from_warehouse = " . (int) $selectedWarehouseId . "
             ORDER BY st.id ASC, ist.id ASC";
-        $res = $this->conn->query($sql);
-        if (!$res) {
-            return [];
-        }
+        $res = $this->queryOrFail($sql, 'preview.collect_transfer_out', [
+            'phase' => 'preview',
+            'tables' => ['vp_stock_transfer', 'vp_item_stock_transfer'],
+            'columns' => ['vp_item_stock_transfer.transfer_order_no', 'vp_stock_transfer.transfer_order_no'],
+            'comparison' => 'vp_item_stock_transfer.transfer_order_no = vp_stock_transfer.transfer_order_no',
+        ]);
 
         $rows = [];
         while ($row = $res->fetch_assoc()) {
@@ -834,26 +871,29 @@ final class StockRebuildService
             WHERE warehouse_id = " . (int) $selectedWarehouseId . "
               AND status IN ('final', 'cancelled')
             ORDER BY id ASC";
-        $res = $this->conn->query($sql);
-        if ($res) {
-            while ($row = $res->fetch_assoc()) {
-                $invoiceId = (int) ($row['id'] ?? 0);
-                if ($invoiceId <= 0) {
-                    continue;
-                }
-                $lines = $this->fetchResolvedInvoiceLines($invoiceId, $scopeProductIdSet);
-                if ($lines === []) {
-                    continue;
-                }
-                $headers[] = [
-                    'invoice_id' => $invoiceId,
-                    'status' => (string) ($row['status'] ?? ''),
-                    'warehouse_id' => (int) ($row['warehouse_id'] ?? 0),
-                    'lines' => $lines,
-                ];
+        $res = $this->queryOrFail($sql, 'preview.collect_invoices', [
+            'phase' => 'preview',
+            'tables' => ['vp_invoices'],
+            'columns' => ['vp_invoices.warehouse_id'],
+            'comparison' => 'vp_invoices.warehouse_id = selected warehouse',
+        ]);
+        while ($row = $res->fetch_assoc()) {
+            $invoiceId = (int) ($row['id'] ?? 0);
+            if ($invoiceId <= 0) {
+                continue;
             }
-            $res->free();
+            $lines = $this->fetchResolvedInvoiceLines($invoiceId, $scopeProductIdSet);
+            if ($lines === []) {
+                continue;
+            }
+            $headers[] = [
+                'invoice_id' => $invoiceId,
+                'status' => (string) ($row['status'] ?? ''),
+                'warehouse_id' => (int) ($row['warehouse_id'] ?? 0),
+                'lines' => $lines,
+            ];
         }
+        $res->free();
 
         return ['invoices' => $headers];
     }
@@ -867,12 +907,20 @@ final class StockRebuildService
 
         $rows = [];
         $sql = 'SELECT id, product_id, quantity, order_number, item_code FROM vp_invoice_items WHERE invoice_id = ?';
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) {
-            return [];
-        }
+        $stmt = $this->prepareOrFail($sql, 'preview.invoice_replay.invoice_items', [
+            'phase' => 'preview',
+            'tables' => ['vp_invoice_items'],
+            'columns' => ['vp_invoice_items.invoice_id'],
+            'comparison' => 'vp_invoice_items.invoice_id = ?',
+        ]);
+        $boundSql = $this->debugSqlWithParams($sql, [$invoiceId]);
         $stmt->bind_param('i', $invoiceId);
-        $stmt->execute();
+        $this->executeOrFail($stmt, 'preview.invoice_replay.invoice_items', $boundSql, [
+            'phase' => 'preview',
+            'tables' => ['vp_invoice_items'],
+            'columns' => ['vp_invoice_items.invoice_id'],
+            'comparison' => 'vp_invoice_items.invoice_id = ' . $invoiceId,
+        ]);
         $res = $stmt->get_result();
         $invoiceItems = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
         $stmt->close();
@@ -904,7 +952,16 @@ final class StockRebuildService
 
             if ($orderByInvoiceStmt && $orderNumber !== '' && $itemCode !== '') {
                 $orderByInvoiceStmt->bind_param('iss', $invoiceId, $orderNumber, $itemCode);
-                $orderByInvoiceStmt->execute();
+                $boundOrderSql = $this->debugSqlWithParams(
+                    $orderByInvoiceSql,
+                    [$invoiceId, $orderNumber, $itemCode]
+                );
+                $this->executeOrFail($orderByInvoiceStmt, 'preview.invoice_replay.vp_orders_by_invoice', $boundOrderSql, [
+                    'phase' => 'preview',
+                    'tables' => ['vp_orders', 'vp_invoice_items'],
+                    'columns' => ['vp_orders.order_number', 'vp_orders.item_code', 'vp_invoice_items.order_number', 'vp_invoice_items.item_code'],
+                    'comparison' => 'vp_orders.order_number = ' . $orderNumber . ' AND vp_orders.item_code = ' . $itemCode,
+                ]);
                 $orderRow = $orderByInvoiceStmt->get_result()->fetch_assoc();
                 if ($orderRow) {
                     $size = trim((string) ($orderRow['size'] ?? ''));
@@ -913,7 +970,16 @@ final class StockRebuildService
             }
             if ($size === '' && $color === '' && $orderByNumberStmt && $orderNumber !== '' && $itemCode !== '') {
                 $orderByNumberStmt->bind_param('ss', $orderNumber, $itemCode);
-                $orderByNumberStmt->execute();
+                $boundOrderSql = $this->debugSqlWithParams(
+                    $orderByNumberSql,
+                    [$orderNumber, $itemCode]
+                );
+                $this->executeOrFail($orderByNumberStmt, 'preview.invoice_replay.vp_orders_by_number', $boundOrderSql, [
+                    'phase' => 'preview',
+                    'tables' => ['vp_orders', 'vp_invoice_items'],
+                    'columns' => ['vp_orders.order_number', 'vp_orders.item_code'],
+                    'comparison' => 'vp_orders.order_number = ' . $orderNumber . ' AND vp_orders.item_code = ' . $itemCode,
+                ]);
                 $orderRow = $orderByNumberStmt->get_result()->fetch_assoc();
                 if ($orderRow) {
                     $size = trim((string) ($orderRow['size'] ?? ''));
@@ -923,7 +989,13 @@ final class StockRebuildService
 
             $productId = (int) ($item['product_id'] ?? 0);
             if ($productId <= 0 && $itemCode !== '') {
-                $productId = $this->productModel->getProductIdForInvoiceLine($orderNumber, $itemCode, $size, $color);
+                $productId = $this->resolveProductIdForInvoiceLine(
+                    'preview.invoice_replay.product_lookup',
+                    $orderNumber,
+                    $itemCode,
+                    $size,
+                    $color
+                );
             }
             if ($productId <= 0 || !isset($scopeProductIdSet[$productId])) {
                 continue;
@@ -1213,30 +1285,125 @@ final class StockRebuildService
     /** @return mysqli_result */
     private function queryOrFail(string $sql, string $step, array $context = []): mysqli_result
     {
-        $res = $this->conn->query($sql);
-        if ($res instanceof mysqli_result) {
-            return $res;
-        }
+        $this->rememberSqlDebug($step, $sql, $context);
+        try {
+            $res = $this->conn->query($sql);
+            if ($res instanceof mysqli_result) {
+                return $res;
+            }
 
-        throw $this->sqlException($step, $sql, $context);
+            throw $this->sqlException($step, $sql, $context);
+        } catch (StockRebuildSqlException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw $this->sqlException($step, $sql, $context, $e);
+        }
     }
 
     /** @param array<string, mixed> $context */
     private function prepareOrFail(string $sql, string $step, array $context = []): mysqli_stmt
     {
-        $stmt = $this->conn->prepare($sql);
-        if ($stmt instanceof mysqli_stmt) {
-            return $stmt;
-        }
+        $this->rememberSqlDebug($step, $sql, $context);
+        try {
+            $stmt = $this->conn->prepare($sql);
+            if ($stmt instanceof mysqli_stmt) {
+                return $stmt;
+            }
 
-        throw $this->sqlException($step, $sql, $context);
+            throw $this->sqlException($step, $sql, $context);
+        } catch (StockRebuildSqlException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw $this->sqlException($step, $sql, $context, $e);
+        }
     }
 
     /** @param array<string, mixed> $context */
-    private function sqlException(string $step, string $sql, array $context = []): StockRebuildSqlException
+    private function executeOrFail(mysqli_stmt $stmt, string $step, string $sql, array $context = []): void
+    {
+        $this->rememberSqlDebug($step, $sql, $context);
+        try {
+            if ($stmt->execute()) {
+                return;
+            }
+
+            throw $this->sqlException($step, $sql, $context);
+        } catch (StockRebuildSqlException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw $this->sqlException($step, $sql, $context, $e);
+        }
+    }
+
+    private function resolveProductIdForInvoiceLine(
+        string $step,
+        string $orderNumber,
+        string $itemCode,
+        ?string $size = null,
+        ?string $color = null
+    ): int {
+        $lookupSql = 'SELECT item_code, sku, size, color FROM vp_orders WHERE order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1';
+        $this->rememberSqlDebug($step, $this->debugSqlWithParams($lookupSql, [$orderNumber, $itemCode]), [
+            'phase' => 'preview',
+            'tables' => ['vp_orders', 'vp_products'],
+            'columns' => ['vp_orders.order_number', 'vp_orders.item_code'],
+            'comparison' => 'vp_orders.order_number = ? AND vp_orders.item_code = ? (via Products::getProductIdForInvoiceLine)',
+        ]);
+
+        try {
+            return $this->productModel->getProductIdForInvoiceLine($orderNumber, $itemCode, $size, $color);
+        } catch (Throwable $e) {
+            throw $this->sqlException($step, $this->debugSql, $this->debugSqlContext, $e);
+        }
+    }
+
+    /** @param array<string, mixed> $context */
+    private function rememberSqlDebug(string $step, string $sql, array $context = []): void
+    {
+        $this->debugSqlStep = $step;
+        $this->debugSql = $this->normalizeSql($sql);
+        $this->debugSqlContext = $context;
+    }
+
+    /** @param array<string, mixed> $detail */
+    private function formatSqlErrorResponse(StockRebuildSqlException $e): array
+    {
+        $detail = $e->getDetail();
+
+        return [
+            'success' => false,
+            'message' => $e->getMessage(),
+            'failed_sql' => $detail['failed_sql'] ?? null,
+            'failed_condition' => $detail['failed_condition'] ?? ($detail['comparison'] ?? null),
+            'error_detail' => $detail,
+        ];
+    }
+
+    /** @param list<mixed> $params */
+    private function debugSqlWithParams(string $sql, array $params): string
+    {
+        $out = $sql;
+        foreach ($params as $param) {
+            if (is_int($param) || is_float($param)) {
+                $quoted = (string) $param;
+            } else {
+                $quoted = "'" . str_replace("'", "''", (string) $param) . "'";
+            }
+            $out = preg_replace('/\?/', $quoted, $out, 1) ?? $out;
+        }
+
+        return $out;
+    }
+
+    /** @param array<string, mixed> $context */
+    private function sqlException(string $step, string $sql, array $context = [], ?Throwable $previous = null): StockRebuildSqlException
     {
         $mysqlError = (string) ($this->conn->error ?? '');
         $mysqlErrno = (int) ($this->conn->errno ?? 0);
+        if ($mysqlError === '' && $previous !== null) {
+            $mysqlError = $previous->getMessage();
+            $mysqlErrno = (int) $previous->getCode();
+        }
         $database = $this->currentDatabase();
         $connectionCollation = $this->connectionCollation();
         $isCollationError = stripos($mysqlError, 'collation') !== false || stripos($mysqlError, 'charset') !== false;
@@ -1286,7 +1453,7 @@ final class StockRebuildService
             $message .= '. Hint: compare CHARACTER SET / COLLATION on the listed columns using SHOW FULL COLUMNS or information_schema.COLUMNS.';
         }
 
-        return new StockRebuildSqlException($message, $detail);
+        return new StockRebuildSqlException($message, $detail, $previous);
     }
 
     private function currentDatabase(): string
