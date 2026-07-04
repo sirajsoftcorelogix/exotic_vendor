@@ -1430,6 +1430,12 @@ class ProductsController
             $selectedWarehouseId = (int) ($payload['warehouse_id'] ?? 0);
             $service = new StockRebuildService($conn);
             echo json_encode($service->preview($selectedWarehouseId));
+        } catch (StockRebuildSqlException $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_detail' => $e->getDetail(),
+            ]);
         } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,
@@ -1464,6 +1470,12 @@ class ProductsController
             $service = new StockRebuildService($conn);
             $userId = (int) ($_SESSION['user']['id'] ?? 0);
             echo json_encode($service->execute($selectedWarehouseId, $userId));
+        } catch (StockRebuildSqlException $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_detail' => $e->getDetail(),
+            ]);
         } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,

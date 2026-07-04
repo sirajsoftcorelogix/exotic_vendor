@@ -1,5 +1,24 @@
 <?php
 
+final class StockRebuildSqlException extends RuntimeException
+{
+    /** @var array<string, mixed> */
+    private array $detail;
+
+    /** @param array<string, mixed> $detail */
+    public function __construct(string $message, array $detail = [], ?Throwable $previous = null)
+    {
+        parent::__construct($message, 0, $previous);
+        $this->detail = $detail;
+    }
+
+    /** @return array<string, mixed> */
+    public function getDetail(): array
+    {
+        return $this->detail;
+    }
+}
+
 require_once __DIR__ . '/StockMovement.php';
 require_once __DIR__ . '/product.php';
 require_once __DIR__ . '/../direct_purchase/DirectPurchaseStock.php';
@@ -313,6 +332,18 @@ final class StockRebuildService
                 'logs' => $logs,
                 'preview' => $preview,
             ];
+        } catch (StockRebuildSqlException $e) {
+            $this->conn->rollback();
+            $logs[] = 'Execution failed: ' . $e->getMessage();
+
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_detail' => $e->getDetail(),
+                'stats' => $stats,
+                'logs' => $logs,
+                'preview' => $preview,
+            ];
         } catch (Throwable $e) {
             $this->conn->rollback();
             $logs[] = 'Execution failed: ' . $e->getMessage();
@@ -332,30 +363,43 @@ final class StockRebuildService
         $selectedWarehouseId = (int) $selectedWarehouseId;
         $scope = [];
 
-        $queries = [
-            "SELECT DISTINCT p.id AS product_id, p.sku, p.item_code, IFNULL(p.size, '') AS size, IFNULL(p.color, '') AS color,
+        $scopeQueries = [
+            'preview.collect_scope.vp_stock_sku_join' => [
+                'sql' => "SELECT DISTINCT p.id AS product_id, p.sku, p.item_code, IFNULL(p.size, '') AS size, IFNULL(p.color, '') AS color,
                     p.title, IFNULL(p.local_stock, 0) AS local_stock
              FROM vp_stock s
              INNER JOIN vp_products p ON p.sku = s.sku
              WHERE s.warehouse_id = {$selectedWarehouseId}
                AND TRIM(COALESCE(s.sku, '')) <> ''",
-
-            "SELECT DISTINCT p.id AS product_id, COALESCE(NULLIF(TRIM(sm.sku), ''), p.sku) AS sku, p.item_code,
+                'tables' => ['vp_stock', 'vp_products'],
+                'columns' => ['vp_stock.sku', 'vp_products.sku'],
+                'comparison' => 'vp_products.sku = vp_stock.sku',
+            ],
+            'preview.collect_scope.vp_stock_movements' => [
+                'sql' => "SELECT DISTINCT p.id AS product_id, COALESCE(NULLIF(TRIM(sm.sku), ''), p.sku) AS sku, p.item_code,
                     IFNULL(p.size, '') AS size, IFNULL(p.color, '') AS color, p.title, IFNULL(p.local_stock, 0) AS local_stock
              FROM vp_stock_movements sm
              INNER JOIN vp_products p ON p.id = sm.product_id
              WHERE sm.warehouse_id = {$selectedWarehouseId}
                AND TRIM(COALESCE(sm.sku, '')) <> ''",
-
-            "SELECT DISTINCT p.id AS product_id, COALESCE(NULLIF(TRIM(ist.sku), ''), p.sku) AS sku, p.item_code,
+                'tables' => ['vp_stock_movements', 'vp_products'],
+                'columns' => ['vp_stock_movements.sku', 'vp_products.sku', 'vp_stock_movements.product_id', 'vp_products.id'],
+                'comparison' => 'vp_products.id = vp_stock_movements.product_id',
+            ],
+            'preview.collect_scope.transfer_out_lines' => [
+                'sql' => "SELECT DISTINCT p.id AS product_id, COALESCE(NULLIF(TRIM(ist.sku), ''), p.sku) AS sku, p.item_code,
                     IFNULL(p.size, '') AS size, IFNULL(p.color, '') AS color, p.title, IFNULL(p.local_stock, 0) AS local_stock
              FROM vp_stock_transfer st
              INNER JOIN vp_item_stock_transfer ist ON ist.transfer_order_no = st.transfer_order_no
              INNER JOIN vp_products p ON p.id = ist.product_id
              WHERE st.from_warehouse = {$selectedWarehouseId}
                AND TRIM(COALESCE(ist.sku, '')) <> ''",
-
-            "SELECT DISTINCT p.id AS product_id, COALESCE(NULLIF(TRIM(grn.sku), ''), p.sku) AS sku, p.item_code,
+                'tables' => ['vp_stock_transfer', 'vp_item_stock_transfer', 'vp_products'],
+                'columns' => ['vp_item_stock_transfer.transfer_order_no', 'vp_stock_transfer.transfer_order_no'],
+                'comparison' => 'vp_item_stock_transfer.transfer_order_no = vp_stock_transfer.transfer_order_no',
+            ],
+            'preview.collect_scope.transfer_grn_lines' => [
+                'sql' => "SELECT DISTINCT p.id AS product_id, COALESCE(NULLIF(TRIM(grn.sku), ''), p.sku) AS sku, p.item_code,
                     IFNULL(p.size, '') AS size, IFNULL(p.color, '') AS color, p.title, IFNULL(p.local_stock, 0) AS local_stock
              FROM vp_stock_transfer st
              INNER JOIN vp_stock_transfer_grns grn ON grn.transfer_id = st.id
@@ -367,13 +411,19 @@ final class StockRebuildService
                     TRIM(COALESCE(grn.sku, '')) <> ''
                     OR TRIM(COALESCE(grn.item_code, '')) <> ''
                )",
+                'tables' => ['vp_stock_transfer', 'vp_stock_transfer_grns', 'vp_products'],
+                'columns' => ['vp_products.sku', 'vp_stock_transfer_grns.sku', 'vp_products.item_code', 'vp_stock_transfer_grns.item_code'],
+                'comparison' => 'vp_products.sku = vp_stock_transfer_grns.sku OR vp_products.item_code = vp_stock_transfer_grns.item_code',
+            ],
         ];
 
-        foreach ($queries as $sql) {
-            $res = $this->conn->query($sql);
-            if (!$res) {
-                continue;
-            }
+        foreach ($scopeQueries as $step => $queryMeta) {
+            $res = $this->queryOrFail((string) $queryMeta['sql'], $step, [
+                'phase' => 'preview',
+                'tables' => $queryMeta['tables'] ?? [],
+                'columns' => $queryMeta['columns'] ?? [],
+                'comparison' => $queryMeta['comparison'] ?? null,
+            ]);
             while ($row = $res->fetch_assoc()) {
                 $this->addScopeRow($scope, $row);
             }
@@ -385,7 +435,12 @@ final class StockRebuildService
             INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
             WHERE i.warehouse_id = {$selectedWarehouseId}
               AND i.status IN ('final', 'cancelled')";
-        $invoiceRes = $this->conn->query($invoiceSql);
+        $invoiceRes = $this->queryOrFail($invoiceSql, 'preview.collect_scope.invoices', [
+            'phase' => 'preview',
+            'tables' => ['vp_invoices', 'vp_invoice_items'],
+            'columns' => ['vp_invoice_items.invoice_id', 'vp_invoices.id'],
+            'comparison' => 'vp_invoice_items.invoice_id = vp_invoices.id',
+        ]);
         if ($invoiceRes) {
             while ($row = $invoiceRes->fetch_assoc()) {
                 $productId = (int) ($row['product_id'] ?? 0);
@@ -477,12 +532,12 @@ final class StockRebuildService
     private function collectDeleteCounts(array $scopeSkus, array $scopeProductIds): array
     {
         return [
-            'vp_stock_movements' => $this->countScopedRows('vp_stock_movements', $scopeSkus, $scopeProductIds, true),
-            'vp_stock' => $this->countScopedRows('vp_stock', $scopeSkus, [], false),
+            'vp_stock_movements' => $this->countScopedRows('vp_stock_movements', $scopeSkus, $scopeProductIds, true, 'preview.count_delete_targets.vp_stock_movements'),
+            'vp_stock' => $this->countScopedRows('vp_stock', $scopeSkus, [], false, 'preview.count_delete_targets.vp_stock'),
         ];
     }
 
-    private function countScopedRows(string $table, array $scopeSkus, array $scopeProductIds, bool $hasProductId): int
+    private function countScopedRows(string $table, array $scopeSkus, array $scopeProductIds, bool $hasProductId, string $step): int
     {
         $clauses = [];
         if ($scopeSkus !== []) {
@@ -496,10 +551,12 @@ final class StockRebuildService
         }
 
         $sql = "SELECT COUNT(*) AS c FROM {$table} WHERE " . implode(' OR ', $clauses);
-        $res = $this->conn->query($sql);
-        if (!$res) {
-            return 0;
-        }
+        $res = $this->queryOrFail($sql, $step, [
+            'phase' => 'preview',
+            'tables' => [$table],
+            'columns' => $scopeSkus !== [] ? ["{$table}.sku"] : ["{$table}.product_id"],
+            'comparison' => $scopeSkus !== [] ? "{$table}.sku IN (scoped SKU list)" : "{$table}.product_id IN (scoped product ids)",
+        ]);
         $row = $res->fetch_assoc();
         $res->free();
 
@@ -518,21 +575,29 @@ final class StockRebuildService
 
         if ($scopeSkus !== []) {
             $skuList = $this->quoteStringsForIn($scopeSkus);
-            $queries = [
-                "SELECT 'vp_stock' AS source_table, warehouse_id, COUNT(*) AS row_count
+            $otherWarehouseQueries = [
+                'preview.other_warehouse_usage.vp_stock' => [
+                    'sql' => "SELECT 'vp_stock' AS source_table, warehouse_id, COUNT(*) AS row_count
                  FROM vp_stock
                  WHERE sku IN ({$skuList}) AND warehouse_id NOT IN ({$allowedList})
                  GROUP BY warehouse_id",
-                "SELECT 'vp_stock_movements' AS source_table, warehouse_id, COUNT(*) AS row_count
+                    'table' => 'vp_stock',
+                ],
+                'preview.other_warehouse_usage.vp_stock_movements' => [
+                    'sql' => "SELECT 'vp_stock_movements' AS source_table, warehouse_id, COUNT(*) AS row_count
                  FROM vp_stock_movements
                  WHERE sku IN ({$skuList}) AND warehouse_id NOT IN ({$allowedList})
                  GROUP BY warehouse_id",
+                    'table' => 'vp_stock_movements',
+                ],
             ];
-            foreach ($queries as $sql) {
-                $res = $this->conn->query($sql);
-                if (!$res) {
-                    continue;
-                }
+            foreach ($otherWarehouseQueries as $step => $queryMeta) {
+                $res = $this->queryOrFail((string) $queryMeta['sql'], $step, [
+                    'phase' => 'preview',
+                    'tables' => [(string) $queryMeta['table']],
+                    'columns' => [(string) $queryMeta['table'] . '.sku'],
+                    'comparison' => (string) $queryMeta['table'] . '.sku IN (scoped SKU list)',
+                ]);
                 while ($row = $res->fetch_assoc()) {
                     $warehouseId = (int) ($row['warehouse_id'] ?? 0);
                     if ($warehouseId <= 0) {
@@ -810,12 +875,20 @@ final class StockRebuildService
         $invoiceItems = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
         $stmt->close();
 
-        $orderByInvoiceStmt = $this->conn->prepare(
-            'SELECT size, color FROM vp_orders WHERE invoice_id = ? AND order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1'
-        );
-        $orderByNumberStmt = $this->conn->prepare(
-            'SELECT size, color FROM vp_orders WHERE order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1'
-        );
+        $orderByInvoiceSql = 'SELECT size, color FROM vp_orders WHERE invoice_id = ? AND order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1';
+        $orderByNumberSql = 'SELECT size, color FROM vp_orders WHERE order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1';
+        $orderByInvoiceStmt = $this->prepareOrFail($orderByInvoiceSql, 'preview.invoice_replay.vp_orders_by_invoice', [
+            'phase' => 'preview',
+            'tables' => ['vp_orders', 'vp_invoice_items'],
+            'columns' => ['vp_orders.order_number', 'vp_orders.item_code', 'vp_invoice_items.order_number', 'vp_invoice_items.item_code'],
+            'comparison' => 'vp_orders.order_number / item_code matched to invoice line values',
+        ]);
+        $orderByNumberStmt = $this->prepareOrFail($orderByNumberSql, 'preview.invoice_replay.vp_orders_by_number', [
+            'phase' => 'preview',
+            'tables' => ['vp_orders', 'vp_invoice_items'],
+            'columns' => ['vp_orders.order_number', 'vp_orders.item_code', 'vp_invoice_items.order_number', 'vp_invoice_items.item_code'],
+            'comparison' => 'vp_orders.order_number / item_code matched to invoice line values',
+        ]);
 
         foreach ($invoiceItems as $item) {
             $qty = (int) round((float) ($item['quantity'] ?? 0));
@@ -943,7 +1016,12 @@ final class StockRebuildService
         }
 
         $sql = "DELETE FROM vp_stock_movements WHERE " . implode(' OR ', $clauses);
-        $this->conn->query($sql);
+        $this->queryOrFail($sql, 'execute.delete_scoped_movements', [
+            'phase' => 'execute',
+            'tables' => ['vp_stock_movements'],
+            'columns' => ['vp_stock_movements.sku', 'vp_stock_movements.product_id'],
+            'comparison' => 'vp_stock_movements.sku IN (scoped SKU list) OR product_id IN (scoped product ids)',
+        ]);
 
         return (int) $this->conn->affected_rows;
     }
@@ -955,7 +1033,12 @@ final class StockRebuildService
         }
 
         $sql = "DELETE FROM vp_stock WHERE sku IN (" . $this->quoteStringsForIn($scopeSkus) . ")";
-        $this->conn->query($sql);
+        $this->queryOrFail($sql, 'execute.delete_scoped_vp_stock', [
+            'phase' => 'execute',
+            'tables' => ['vp_stock'],
+            'columns' => ['vp_stock.sku'],
+            'comparison' => 'vp_stock.sku IN (scoped SKU list)',
+        ]);
 
         return (int) $this->conn->affected_rows;
     }
@@ -989,10 +1072,12 @@ final class StockRebuildService
                   AND sku IN ({$skuList})
                 GROUP BY sku, warehouse_id
             ) latest ON latest.max_id = sm.id";
-        $res = $this->conn->query($sql);
-        if (!$res) {
-            return 0;
-        }
+        $res = $this->queryOrFail($sql, 'execute.rebuild_vp_stock_from_movements', [
+            'phase' => 'execute',
+            'tables' => ['vp_stock_movements'],
+            'columns' => ['vp_stock_movements.sku'],
+            'comparison' => 'vp_stock_movements.sku IN (scoped SKU list)',
+        ]);
 
         $select = $this->conn->prepare('SELECT id FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1');
         $update = $this->conn->prepare('UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?');
@@ -1121,6 +1206,162 @@ final class StockRebuildService
             $res->free();
         }
         @$this->conn->query('ALTER TABLE vp_products ADD COLUMN physical_stock INT NOT NULL DEFAULT 0 AFTER local_stock');
+    }
+
+    /** @return mysqli_result */
+    private function queryOrFail(string $sql, string $step, array $context = []): mysqli_result
+    {
+        $res = $this->conn->query($sql);
+        if ($res instanceof mysqli_result) {
+            return $res;
+        }
+
+        throw $this->sqlException($step, $sql, $context);
+    }
+
+    /** @param array<string, mixed> $context */
+    private function prepareOrFail(string $sql, string $step, array $context = []): mysqli_stmt
+    {
+        $stmt = $this->conn->prepare($sql);
+        if ($stmt instanceof mysqli_stmt) {
+            return $stmt;
+        }
+
+        throw $this->sqlException($step, $sql, $context);
+    }
+
+    /** @param array<string, mixed> $context */
+    private function sqlException(string $step, string $sql, array $context = []): StockRebuildSqlException
+    {
+        $mysqlError = (string) ($this->conn->error ?? '');
+        $mysqlErrno = (int) ($this->conn->errno ?? 0);
+        $database = $this->currentDatabase();
+        $connectionCollation = $this->connectionCollation();
+        $isCollationError = stripos($mysqlError, 'collation') !== false || stripos($mysqlError, 'charset') !== false;
+
+        $detail = array_merge([
+            'step' => $step,
+            'phase' => $context['phase'] ?? null,
+            'mysql_error' => $mysqlError,
+            'mysql_errno' => $mysqlErrno,
+            'database' => $database,
+            'connection_collation' => $connectionCollation,
+            'tables' => array_values((array) ($context['tables'] ?? [])),
+            'columns' => array_values((array) ($context['columns'] ?? [])),
+            'comparison' => $context['comparison'] ?? null,
+            'sql_preview' => $this->compactSql($sql),
+            'diagnostic_sql' => $isCollationError ? $this->collationDiagnosticSql((array) ($context['tables'] ?? []), (array) ($context['columns'] ?? [])) : null,
+        ], $context);
+
+        $message = 'Stock rebuild failed at step "' . $step . '"';
+        if ($mysqlError !== '') {
+            $message .= '. MySQL [' . $mysqlErrno . ']: ' . $mysqlError;
+        }
+        if (!empty($detail['comparison'])) {
+            $message .= '. Comparison: ' . $detail['comparison'];
+        }
+        if (!empty($detail['tables'])) {
+            $message .= '. Tables: ' . implode(', ', $detail['tables']);
+        }
+        if (!empty($detail['columns'])) {
+            $message .= '. Columns: ' . implode(', ', $detail['columns']);
+        }
+        if ($database !== '') {
+            $message .= '. Database: ' . $database;
+        }
+        if ($connectionCollation !== '') {
+            $message .= '. Connection collation: ' . $connectionCollation;
+        }
+        if ($isCollationError) {
+            $message .= '. Hint: compare CHARACTER SET / COLLATION on the listed columns using SHOW FULL COLUMNS or information_schema.COLUMNS.';
+        }
+
+        return new StockRebuildSqlException($message, $detail);
+    }
+
+    private function currentDatabase(): string
+    {
+        $res = $this->conn->query('SELECT DATABASE() AS db');
+        if (!$res) {
+            return '';
+        }
+        $row = $res->fetch_assoc();
+        $res->free();
+
+        return trim((string) ($row['db'] ?? ''));
+    }
+
+    private function connectionCollation(): string
+    {
+        $res = $this->conn->query('SELECT @@collation_connection AS collation_connection');
+        if (!$res) {
+            return '';
+        }
+        $row = $res->fetch_assoc();
+        $res->free();
+
+        return trim((string) ($row['collation_connection'] ?? ''));
+    }
+
+    private function compactSql(string $sql): string
+    {
+        $compact = preg_replace('/\s+/', ' ', trim($sql)) ?? trim($sql);
+        if (strlen($compact) <= 1200) {
+            return $compact;
+        }
+
+        return substr($compact, 0, 1200) . '...';
+    }
+
+    /** @param list<string> $tables @param list<string> $columns */
+    private function collationDiagnosticSql(array $tables, array $columns): ?string
+    {
+        $tableNames = [];
+        foreach ($tables as $table) {
+            $table = trim((string) $table);
+            if ($table !== '') {
+                $tableNames[$table] = true;
+            }
+        }
+
+        $columnNames = [];
+        foreach ($columns as $column) {
+            $column = trim((string) $column);
+            if ($column === '') {
+                continue;
+            }
+            if (strpos($column, '.') !== false) {
+                $parts = explode('.', $column, 2);
+                $tableNames[trim($parts[0])] = true;
+                $columnNames[trim($parts[1])] = true;
+            } else {
+                $columnNames[$column] = true;
+            }
+        }
+
+        if ($tableNames === [] && $columnNames === []) {
+            return null;
+        }
+
+        $tableList = implode(', ', array_map(static function (string $table): string {
+            return "'" . str_replace("'", "''", $table) . "'";
+        }, array_keys($tableNames)));
+
+        $sql = "SELECT TABLE_NAME, COLUMN_NAME, CHARACTER_SET_NAME, COLLATION_NAME
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()";
+
+        if ($tableList !== '') {
+            $sql .= ' AND TABLE_NAME IN (' . $tableList . ')';
+        }
+        if ($columnNames !== []) {
+            $columnList = implode(', ', array_map(static function (string $column): string {
+                return "'" . str_replace("'", "''", $column) . "'";
+            }, array_keys($columnNames)));
+            $sql .= ' AND COLUMN_NAME IN (' . $columnList . ')';
+        }
+
+        return $sql . ' ORDER BY COLUMN_NAME, TABLE_NAME;';
     }
 
     private function quoteStringsForIn(array $values): string

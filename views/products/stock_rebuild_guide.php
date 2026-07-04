@@ -155,6 +155,46 @@ if ($defaultWarehouseName === '' && $defaultWarehouseId > 0) {
             + '</tbody></table>';
     }
 
+    function renderErrorDetail(detail) {
+        if (!detail || typeof detail !== 'object') {
+            return '';
+        }
+
+        const rows = [];
+        if (detail.step) rows.push(['Step', esc(detail.step)]);
+        if (detail.phase) rows.push(['Phase', esc(detail.phase)]);
+        if (detail.mysql_errno !== undefined && detail.mysql_errno !== null) {
+            rows.push(['MySQL errno', esc(detail.mysql_errno)]);
+        }
+        if (detail.mysql_error) rows.push(['MySQL error', esc(detail.mysql_error)]);
+        if (detail.database) rows.push(['Database', esc(detail.database)]);
+        if (detail.connection_collation) rows.push(['Connection collation', esc(detail.connection_collation)]);
+        if (detail.comparison) rows.push(['Comparison', esc(detail.comparison)]);
+        if (Array.isArray(detail.tables) && detail.tables.length) {
+            rows.push(['Tables', esc(detail.tables.join(', '))]);
+        }
+        if (Array.isArray(detail.columns) && detail.columns.length) {
+            rows.push(['Columns', esc(detail.columns.join(', '))]);
+        }
+
+        let html = '';
+        if (rows.length) {
+            html += '<div class="mt-3"><p class="font-semibold mb-2">Error details</p>' + renderKeyValueTable(rows) + '</div>';
+        }
+        if (detail.sql_preview) {
+            html += '<div class="mt-3"><p class="font-semibold mb-2">SQL preview</p>'
+                + '<pre class="text-xs bg-gray-50 border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">'
+                + esc(detail.sql_preview) + '</pre></div>';
+        }
+        if (detail.diagnostic_sql) {
+            html += '<div class="mt-3"><p class="font-semibold mb-2">Run in phpMyAdmin to inspect collation</p>'
+                + '<pre class="text-xs bg-gray-50 border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">'
+                + esc(detail.diagnostic_sql) + '</pre></div>';
+        }
+
+        return html;
+    }
+
     function renderPreview(data) {
         lastPreview = data;
         previewPanel.classList.remove('hidden');
@@ -162,7 +202,8 @@ if ($defaultWarehouseName === '' && $defaultWarehouseId > 0) {
 
         if (!data.success) {
             previewContent.innerHTML = '<div class="rounded-lg border border-red-200 bg-red-50 text-red-800 px-3 py-2">'
-                + esc(data.message || 'Preview failed.') + '</div>';
+                + esc(data.message || 'Preview failed.') + '</div>'
+                + renderErrorDetail(data.error_detail);
             refreshExecuteState();
             return;
         }
@@ -249,7 +290,8 @@ if ($defaultWarehouseName === '' && $defaultWarehouseId > 0) {
         let html = '<div class="rounded-lg border px-3 py-2 '
             + (ok ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800') + '">'
             + esc(data.message || (ok ? 'Completed.' : 'Failed.'))
-            + '</div>';
+            + '</div>'
+            + renderErrorDetail(data.error_detail);
 
         html += renderKeyValueTable(Object.keys(stats).map(function (key) {
             return [key.replace(/_/g, ' '), esc(stats[key])];
