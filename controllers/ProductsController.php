@@ -1431,10 +1431,13 @@ class ProductsController
             $service = new StockRebuildService($conn);
             echo json_encode($service->preview($selectedWarehouseId));
         } catch (StockRebuildSqlException $e) {
+            $detail = $e->getDetail();
             echo json_encode([
                 'success' => false,
                 'message' => $e->getMessage(),
-                'error_detail' => $e->getDetail(),
+                'failed_sql' => $detail['failed_sql'] ?? null,
+                'failed_condition' => $detail['failed_condition'] ?? ($detail['comparison'] ?? null),
+                'error_detail' => $detail,
             ]);
         } catch (Throwable $e) {
             echo json_encode([
@@ -1471,10 +1474,13 @@ class ProductsController
             $userId = (int) ($_SESSION['user']['id'] ?? 0);
             echo json_encode($service->execute($selectedWarehouseId, $userId));
         } catch (StockRebuildSqlException $e) {
+            $detail = $e->getDetail();
             echo json_encode([
                 'success' => false,
                 'message' => $e->getMessage(),
-                'error_detail' => $e->getDetail(),
+                'failed_sql' => $detail['failed_sql'] ?? null,
+                'failed_condition' => $detail['failed_condition'] ?? ($detail['comparison'] ?? null),
+                'error_detail' => $detail,
             ]);
         } catch (Throwable $e) {
             echo json_encode([
