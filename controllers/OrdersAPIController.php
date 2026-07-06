@@ -810,7 +810,7 @@ class OrdersAPIController
                         'GSTIN'               => $firmDetail['gstin'] ?? '',
                         'Material Centre'     => $invoice['address_title'] ?? 'Main Location',
                         'Narration'           => '',
-                        'Is International'    => isset($invoice['currency']) && $invoice['currency'] !== 'INR' ? true : false,
+                        'is_international'    => isset($invoice['currency']) && $invoice['currency'] !== 'INR' ? true : false,
                         'Currency'            => $invoice['currency'] ?? 'INR',
                         'Shipping Details'    => $shippingDetails,
                         'Item Details'        => $itemDetails,
