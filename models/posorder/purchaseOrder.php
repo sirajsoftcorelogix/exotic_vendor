@@ -44,9 +44,8 @@ class PurchaseOrder {
             $poDateTo = $this->db->real_escape_string($filters['po_to']);
             $sql .= " AND purchase_orders.po_date >= '$poDateFrom' AND purchase_orders.po_date < '$poDateTo'";
         }
-        // item_category filter left join with vp_order
-        // item_category/item_sub_category/item_code filter -> search records in vp_order linked by po_id
-        if (!empty($filters['item_category']) || !empty($filters['item_sub_category']) || !empty($filters['item_code'])) {
+        // item_category/item_sub_category filter -> search records in vp_orders linked by po_id
+        if (!empty($filters['item_category']) || !empty($filters['item_sub_category'])) {
             $conditions = [];
             if (!empty($filters['item_category'])) {
             $itemCategory = $this->db->real_escape_string($filters['item_category']);
@@ -56,14 +55,14 @@ class PurchaseOrder {
             $itemSubCategory = $this->db->real_escape_string($filters['item_sub_category']);
             $conditions[] = "vo.subcategories LIKE '%$itemSubCategory%'";
             }
-            if (!empty($filters['item_code'])) {
-            $itemCode = $this->db->real_escape_string($filters['item_code']);
-            $conditions[] = "vo.item_code LIKE '%$itemCode%'";
-            }
             if (!empty($conditions)) {
-            // Use EXISTS to search vp_order (alias vo) linked by po_id to avoid breaking the original FROM/WHERE order
             $sql .= " AND EXISTS (SELECT 1 FROM vp_orders vo WHERE vo.po_id = purchase_orders.id AND " . implode(' AND ', $conditions) . ")";
             }
+        }
+        // item_code filter -> search vp_po_items (used by custom/stock POs)
+        if (!empty($filters['item_code'])) {
+            $itemCode = $this->db->real_escape_string($filters['item_code']);
+            $sql .= " AND EXISTS (SELECT 1 FROM vp_po_items poi WHERE poi.purchase_orders_id = purchase_orders.id AND poi.item_code LIKE '%$itemCode%')";
         }
         // po_type filter
         if (!empty($filters['po_type'])) {
