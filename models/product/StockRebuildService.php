@@ -22,6 +22,7 @@ final class StockRebuildSqlException extends RuntimeException
 require_once __DIR__ . '/StockMovement.php';
 require_once __DIR__ . '/product.php';
 require_once __DIR__ . '/../direct_purchase/DirectPurchaseStock.php';
+require_once __DIR__ . '/../pos/pos.php';
 
 final class StockRebuildService
 {
@@ -30,6 +31,9 @@ final class StockRebuildService
 
     /** @var product */
     private $productModel;
+
+    /** @var pos|null */
+    private $posModel = null;
 
     /** @var string */
     private $debugSqlStep = '';
@@ -56,10 +60,12 @@ final class StockRebuildService
         ];
     }
 
-    public function preview(int $selectedWarehouseId): array
+    public function preview(array $request): array
     {
         try {
-            return $this->buildPreview($selectedWarehouseId);
+            $filters = $this->parseStockReportFilters($request);
+
+            return $this->buildPreview($filters);
         } catch (StockRebuildSqlException $e) {
             return $this->formatSqlErrorResponse($e);
         } catch (Throwable $e) {
@@ -74,9 +80,134 @@ final class StockRebuildService
         }
     }
 
-    private function buildPreview(int $selectedWarehouseId): array
+    private function posModel(): pos
     {
-        $selectedWarehouseId = (int) $selectedWarehouseId;
+        if ($this->posModel === null) {
+            $this->posModel = new pos($this->conn);
+        }
+
+        return $this->posModel;
+    }
+
+    /** @param array<string, mixed> $request */
+    public function parseStockReportFilters(array $request): array
+    {
+        $limit = (int) ($request['limit'] ?? 200);
+        if ($limit < 50) {
+            $limit = 50;
+        }
+        if ($limit > 500) {
+            $limit = 500;
+        }
+
+        return [
+            'warehouse_id' => (int) ($request['warehouse_id'] ?? 0),
+            'search' => trim((string) ($request['search'] ?? '')),
+            'category' => trim((string) ($request['category'] ?? 'allProducts')),
+            'stock_status' => trim((string) ($request['stock_status'] ?? 'all')),
+            'limit' => $limit,
+            'page_no' => max(1, (int) ($request['page_no'] ?? 1)),
+        ];
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function stockReportPaginationMeta(array $filters): array
+    {
+        $limit = max(1, (int) ($filters['limit'] ?? 200));
+        $pageNo = max(1, (int) ($filters['page_no'] ?? 1));
+        $totalRows = $this->posModel()->getStockReportCount($filters);
+        $totalPages = $limit > 0 ? (int) ceil($totalRows / $limit) : 1;
+        if ($totalPages < 1) {
+            $totalPages = 1;
+        }
+        if ($pageNo > $totalPages) {
+            $pageNo = $totalPages;
+        }
+
+        return [
+            'page_no' => $pageNo,
+            'limit' => $limit,
+            'total_rows' => $totalRows,
+            'total_pages' => $totalPages,
+            'row_from' => $totalRows > 0 ? (($pageNo - 1) * $limit + 1) : 0,
+            'row_to' => $totalRows > 0 ? min($pageNo * $limit, $totalRows) : 0,
+            'baseline' => 'pos_stock_report',
+            'baseline_url' => '?page=pos_register&action=stock-report',
+        ];
+    }
+
+    /** @param array<string, mixed> $filters @return array<string, array<string, mixed>> */
+    private function collectScopeFromStockReportBaseline(array $filters): array
+    {
+        $pageFilters = $filters;
+        $pagination = $this->stockReportPaginationMeta($filters);
+        $pageFilters['page_no'] = $pagination['page_no'];
+
+        $rows = $this->posModel()->getStockReport($pageFilters);
+        if ($rows === []) {
+            return [];
+        }
+
+        $productIds = [];
+        foreach ($rows as $row) {
+            $productId = (int) ($row['id'] ?? 0);
+            if ($productId > 0) {
+                $productIds[$productId] = true;
+            }
+        }
+        $localStockById = $this->fetchLocalStockForProductIds(array_map('intval', array_keys($productIds)));
+
+        $scope = [];
+        foreach ($rows as $row) {
+            $productId = (int) ($row['id'] ?? 0);
+            $sku = trim((string) ($row['sku'] ?? ''));
+            if ($productId <= 0 || $sku === '') {
+                continue;
+            }
+            $this->addScopeRow($scope, [
+                'product_id' => $productId,
+                'sku' => $sku,
+                'item_code' => trim((string) ($row['item_code'] ?? '')),
+                'size' => trim((string) ($row['size'] ?? '')),
+                'color' => trim((string) ($row['color'] ?? '')),
+                'title' => trim((string) ($row['title'] ?? '')),
+                'local_stock' => (int) ($localStockById[$productId] ?? 0),
+                'warehouse_stock' => (int) ($row['stock_qty'] ?? 0),
+            ]);
+        }
+
+        return $scope;
+    }
+
+    /** @param list<int> $productIds @return array<int, int> */
+    private function fetchLocalStockForProductIds(array $productIds): array
+    {
+        $productIds = array_values(array_filter(array_map('intval', $productIds), static function (int $id): bool {
+            return $id > 0;
+        }));
+        if ($productIds === []) {
+            return [];
+        }
+
+        $sql = 'SELECT id, IFNULL(local_stock, 0) AS local_stock FROM vp_products WHERE id IN ('
+            . $this->quoteIntsForIn($productIds) . ')';
+        $res = $this->conn->query($sql);
+        if (!$res) {
+            return [];
+        }
+
+        $map = [];
+        while ($row = $res->fetch_assoc()) {
+            $map[(int) ($row['id'] ?? 0)] = (int) ($row['local_stock'] ?? 0);
+        }
+        $res->free();
+
+        return $map;
+    }
+
+    private function buildPreview(array $filters): array
+    {
+        $selectedWarehouseId = (int) ($filters['warehouse_id'] ?? 0);
         if ($selectedWarehouseId <= 0) {
             return ['success' => false, 'message' => 'Please select a warehouse.'];
         }
@@ -86,16 +217,21 @@ final class StockRebuildService
             return ['success' => false, 'message' => 'Default warehouse could not be resolved.'];
         }
 
-        $scopeRows = $this->collectScopeProducts($selectedWarehouseId, false);
+        $pagination = $this->stockReportPaginationMeta($filters);
+        $filters['page_no'] = $pagination['page_no'];
+
+        $scopeRows = $this->collectScopeFromStockReportBaseline($filters);
         if ($scopeRows === []) {
             return [
                 'success' => false,
-                'message' => 'No scoped SKUs were found for the selected warehouse.',
+                'message' => 'No products matched the POS stock report baseline for this page.',
                 'selected_warehouse' => [
                     'id' => $selectedWarehouseId,
                     'name' => $this->warehouseLocationLabel($selectedWarehouseId),
                 ],
                 'default_warehouse' => $defaultWarehouse,
+                'pagination' => $pagination,
+                'filters' => $filters,
             ];
         }
 
@@ -148,13 +284,16 @@ final class StockRebuildService
                 'sku_count' => count($scopeSkus),
                 'product_count' => count($scopeProductIds),
                 'sample' => array_slice(array_values($scopeRows), 0, 25),
+                'page_products' => array_values($scopeRows),
             ],
+            'pagination' => $pagination,
+            'filters' => $filters,
             'delete_counts' => $deleteCounts,
             'phase_counts' => $phaseCounts,
             'warnings' => [
                 'local_stock_baseline' => 'This execution path preserves current vp_products.local_stock and uses it as the opening-stock baseline in the default warehouse.',
                 'global_delete' => 'Step 4 fully deletes vp_stock_movements and vp_stock rows for the scoped SKUs before replay.',
-                'preview_mode' => 'Preview uses indexed JOINs against a temporary scope table (not giant IN lists). Scoped SKU count can exceed current warehouse stock rows because history from movements, transfers, and invoices is included.',
+                'preview_mode' => 'Preview and execute run per page using the same product list as POS Register → Stock report (latest movement balance per product in the selected warehouse). Rebuild each page separately.',
                 'other_warehouse_usage' => $otherWarehouseUsage,
             ],
             'blocking_warnings' => $blockingWarnings,
@@ -162,15 +301,16 @@ final class StockRebuildService
         ];
     }
 
-    public function execute(int $selectedWarehouseId, int $userId): array
+    public function execute(array $request, int $userId): array
     {
-        $selectedWarehouseId = (int) $selectedWarehouseId;
+        $filters = $this->parseStockReportFilters($request);
+        $selectedWarehouseId = (int) ($filters['warehouse_id'] ?? 0);
         $userId = (int) $userId;
         if ($selectedWarehouseId <= 0) {
             return ['success' => false, 'message' => 'Please select a warehouse.'];
         }
 
-        $preview = $this->preview($selectedWarehouseId);
+        $preview = $this->preview($request);
         if (empty($preview['success'])) {
             return $preview;
         }
@@ -184,7 +324,7 @@ final class StockRebuildService
 
         $defaultWarehouseId = (int) (($preview['default_warehouse']['id'] ?? 0));
         $defaultWarehouseName = (string) (($preview['default_warehouse']['name'] ?? ''));
-        $scopeRows = $this->collectScopeProducts($selectedWarehouseId);
+        $scopeRows = $this->collectScopeFromStockReportBaseline($filters);
         $scopeSkus = array_keys($scopeRows);
         $scopeProductIds = $this->extractScopeProductIds($scopeRows);
         $scopeProductIdSet = array_fill_keys($scopeProductIds, true);
