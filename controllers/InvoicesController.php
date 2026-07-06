@@ -879,8 +879,12 @@ class InvoicesController
                             'VehNo' => "kb123456",
                             'VehType' => "R"                                
                         ];
+                        echo "*Alankit EWB: Sending EWB generation request for invoice #$invoiceId\n";
+                        print_r($ewbData);
+                        echo "<br><br>";
                         $ewbResponse = $alankitClient->generateEwb($ewbData, $accessToken, $decryptedSek);
                         print_r($ewbResponse);
+                        echo "<br><br>*Alankit EWB\n";
                         if ($ewbResponse && isset($ewbResponse['Status']) && $ewbResponse['Status'] === 'ACT') {
                             $updateData['ewb_number'] = $ewbResponse['EwbNo'] ?? null;
                             $updateData['ewb_date'] = isset($ewbResponse['EwbDt']) ? date('Y-m-d H:i:s', strtotime($ewbResponse['EwbDt'])) : null;

@@ -357,11 +357,10 @@ class InboundingController {
             'count' => count($data['book_languages'] ?? []),
         ]);
 
-        $publishState = $inboundingModel->getInboundPublishState($id);
-        $data['is_inbound_published'] = $publishState['has_any_publish'];
-        $data['is_inbound_live_published'] = $publishState['is_live'];
-        $data['inbound_publish_state'] = $publishState;
-        inbound_profiler_step($prof, 'getInboundPublishState', $publishState);
+        $data['is_inbound_live_published'] = $inboundingModel->isInboundLivePublished($id);
+        inbound_profiler_step($prof, 'isInboundLivePublished', [
+            'is_live' => $data['is_inbound_live_published'],
+        ]);
 
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
         inbound_profiler_finish($prof, 'ok');

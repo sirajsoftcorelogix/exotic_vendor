@@ -1033,6 +1033,181 @@ class product
         return false;
     }
 
+    /** @return list<string> */
+    public static function bookDetailDbColumns(): array
+    {
+        return [
+            'edited_by',
+            'isbn',
+            'cover_type',
+            'edition',
+            'publication_date',
+            'language',
+            'pages',
+        ];
+    }
+
+    private function vpProductsHasAnyBookDetailColumn(): bool
+    {
+        foreach (self::bookDetailDbColumns() as $col) {
+            if ($this->vpProductsHasColumn($col)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Map vendor product/fetch row to vp_products book columns.
+     *
+     * @param array<string, mixed> $apiRow
+     * @return array<string, mixed>
+     */
+    public function extractVendorApiBookDbFields(array $apiRow): array
+    {
+        if (!self::isBookProduct($apiRow)) {
+            return [];
+        }
+
+        require_once __DIR__ . '/../inbounding/Inbounding.php';
+        $inboundingModel = new Inbounding($this->db);
+        $creatorParts = $inboundingModel->parseBookCreatorApiValue(
+            $this->apiFormString($apiRow['creator'] ?? '')
+        );
+
+        $pagesRaw = trim((string) ($apiRow['pages'] ?? ''));
+        $pages = null;
+        if ($pagesRaw !== '' && ctype_digit($pagesRaw)) {
+            $pages = (int) $pagesRaw;
+        }
+
+        $pubDate = $this->normalizeApiDateValue($apiRow['publication_date'] ?? '');
+
+        return [
+            'edited_by' => $creatorParts['edited_by'],
+            'isbn' => $this->apiFormString($apiRow['isbn'] ?? ''),
+            'cover_type' => $this->apiFormString($apiRow['cover_type'] ?? ''),
+            'edition' => $this->apiFormString($apiRow['edition'] ?? ''),
+            'publication_date' => $pubDate,
+            'language' => $this->apiFormString($apiRow['language'] ?? ''),
+            'pages' => $pages,
+        ];
+    }
+
+    /**
+     * Persist book metadata from vendor API onto vp_products (Refresh from API).
+     *
+     * @param array<string, mixed> $apiRow
+     */
+    public function syncBookFieldsFromVendorApiRow(string $itemCode, string $size, string $color, array $apiRow): void
+    {
+        if (!$this->vpProductsHasAnyBookDetailColumn() || !self::isBookProduct($apiRow)) {
+            return;
+        }
+
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return;
+        }
+
+        $fields = $this->extractVendorApiBookDbFields($apiRow);
+        $setParts = [];
+        $types = '';
+        $values = [];
+
+        foreach (self::bookDetailDbColumns() as $col) {
+            if (!$this->vpProductsHasColumn($col) || !array_key_exists($col, $fields)) {
+                continue;
+            }
+            $val = $fields[$col];
+            if ($col === 'pages') {
+                if ($val === null || $val === '' || (int) $val <= 0) {
+                    $setParts[] = "$col = NULL";
+                } else {
+                    $setParts[] = "$col = ?";
+                    $types .= 'i';
+                    $values[] = (int) $val;
+                }
+                continue;
+            }
+            if ($col === 'publication_date' && ($val === null || $val === '')) {
+                $setParts[] = "$col = NULL";
+                continue;
+            }
+            $setParts[] = "$col = ?";
+            $types .= 's';
+            $values[] = (string) $val;
+        }
+
+        if ($setParts === []) {
+            return;
+        }
+
+        $types .= 'sss';
+        $values[] = $itemCode;
+        $values[] = $size;
+        $values[] = $color;
+
+        $sql = 'UPDATE vp_products SET ' . implode(', ', $setParts)
+            . " WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')"
+            . " AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+
+        $stmt->bind_param($types, ...$values);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    /**
+     * Book details for product detail UI — reads vp_products columns (fields 1–7).
+     *
+     * @param array<string, mixed> $productRow
+     */
+    public function buildBookDetailsDisplayFromProduct(array $productRow, $inboundingModel = null): array
+    {
+        $resolveEditedByNames = static function ($stored) use ($inboundingModel): array {
+            if ($inboundingModel instanceof Inbounding) {
+                return $inboundingModel->resolveInboundAuthorNameList($stored);
+            }
+            $names = [];
+            foreach (preg_split('/\s*[,|]\s*/', trim((string) $stored)) ?: [] as $part) {
+                $part = trim((string) $part);
+                if ($part !== '' && !ctype_digit($part)) {
+                    $names[] = $part;
+                }
+            }
+
+            return array_values(array_unique($names));
+        };
+
+        $pubDate = trim((string) ($productRow['publication_date'] ?? ''));
+        if ($pubDate !== '' && $pubDate !== '0000-00-00') {
+            $ts = strtotime($pubDate);
+            $pubDateDisplay = $ts !== false ? date('d M Y', $ts) : $pubDate;
+        } else {
+            $pubDateDisplay = '';
+        }
+
+        $pages = (int) ($productRow['pages'] ?? 0);
+
+        return [
+            'authors' => [],
+            'edited_by_names' => $resolveEditedByNames($productRow['edited_by'] ?? ''),
+            'publisher' => trim((string) ($productRow['publisher'] ?? '')),
+            'isbn' => trim((string) ($productRow['isbn'] ?? '')),
+            'cover_type' => trim((string) ($productRow['cover_type'] ?? '')),
+            'edition' => trim((string) ($productRow['edition'] ?? '')),
+            'publication_date' => $pubDateDisplay,
+            'language' => trim((string) ($productRow['language'] ?? '')),
+            'pages' => $pages > 0 ? (string) $pages : '',
+        ];
+    }
+
     /**
      * Suggested cost for a direct-purchase line from vp_products.
      *
@@ -1338,6 +1513,12 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
+                        $this->syncBookFieldsFromVendorApiRow(
+                            (string) $product['itemcode'],
+                            (string) $size,
+                            (string) $color,
+                            $product
+                        );
                         $this->syncPriceIndiaSuggestedFromApiRow(
                             (string) $product['itemcode'],
                             (string) $size,
@@ -1443,6 +1624,12 @@ class product
                             ]);
                             if ($insertId) {
                                 $updatedCount++;
+                                $this->syncBookFieldsFromVendorApiRow(
+                                    (string) $product['itemcode'],
+                                    (string) $size,
+                                    (string) $color,
+                                    $product
+                                );
                                 $this->syncPriceIndiaSuggestedFromApiRow(
                                     (string) $product['itemcode'],
                                     (string) $size,
@@ -1608,6 +1795,12 @@ class product
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
+                                $this->syncBookFieldsFromVendorApiRow(
+                                    (string) $product['itemcode'],
+                                    (string) $size,
+                                    (string) $color,
+                                    $product
+                                );
                                 $this->syncPriceIndiaSuggestedFromApiRow(
                                     (string) $product['itemcode'],
                                     (string) $size,
@@ -1713,6 +1906,12 @@ class product
                                     ]);
                                     if ($insertId) {
                                         $updatedCount++;
+                                        $this->syncBookFieldsFromVendorApiRow(
+                                            (string) $product['itemcode'],
+                                            (string) $size,
+                                            (string) $color,
+                                            $product
+                                        );
                                         $this->syncPriceIndiaSuggestedFromApiRow(
                                             (string) $product['itemcode'],
                                             (string) $size,
@@ -4708,6 +4907,13 @@ class product
             'youtube_links' => 'youtube_links',
             'sketchfab_links' => 'sketchfab_links',
             'dimensions' => 'dimensions',
+            'edited_by' => 'edited_by',
+            'isbn' => 'isbn',
+            'cover_type' => 'cover_type',
+            'edition' => 'edition',
+            'publication_date' => 'publication_date',
+            'language' => 'language',
+            'pages' => 'pages',
             'product_weight' => 'product_weight',
             'product_weight_unit' => 'product_weight_unit',
             'prod_height' => 'prod_height',
@@ -4722,13 +4928,23 @@ class product
         if (!$this->vpProductsHasColumn('price_india_suggested')) {
             unset($columnMap['price_india_suggested']);
         }
+        foreach (self::bookDetailDbColumns() as $bookCol) {
+            if (!$this->vpProductsHasColumn($bookCol)) {
+                unset($columnMap[$bookCol]);
+            }
+        }
 
         foreach ($columnMap as $dataKey => $dbColumn) {
-            if (isset($data[$dataKey])) {
-                $setClauses[] = "{$dbColumn} = ?";
-                $paramTypes .= 's'; // All are treated as strings for binding
-                $params[] = $data[$dataKey];
+            if (!array_key_exists($dataKey, $data)) {
+                continue;
             }
+            if ($data[$dataKey] === null) {
+                $setClauses[] = "{$dbColumn} = NULL";
+                continue;
+            }
+            $setClauses[] = "{$dbColumn} = ?";
+            $paramTypes .= 's';
+            $params[] = $data[$dataKey];
         }
 
         if (empty($setClauses)) {

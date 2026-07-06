@@ -4686,24 +4686,30 @@ class ProductsController
                 $order['book_detail_edited_by_ids'] = [];
                 $order['book_detail_selected_publisher_id'] = '';
                 $order['book_detail_selected_publisher_name'] = '';
-                $order['book_details'] = $inboundingModel->getBookDetailsForProductDisplay(
+                $order['book_details'] = $productModel->buildBookDetailsDisplayFromProduct($order, $inboundingModel);
+
+                $inboundBookDetails = $inboundingModel->getBookDetailsForProductDisplay(
                     $itemCode,
                     (string) ($order['size'] ?? ''),
                     (string) ($order['color'] ?? '')
                 );
-                if ($order['book_details'] === []) {
-                    $order['book_details'] = [
-                        'authors' => [],
-                        'edited_by_names' => [],
-                        'publisher' => trim((string) ($order['publisher'] ?? '')),
-                        'isbn' => '',
-                        'cover_type' => '',
-                        'edition' => '',
-                        'publication_date' => '',
-                        'language' => '',
-                        'pages' => '',
-                    ];
+                if ($inboundBookDetails !== []) {
+                    if (empty($order['book_details']['authors']) && !empty($inboundBookDetails['authors'])) {
+                        $order['book_details']['authors'] = $inboundBookDetails['authors'];
+                    }
+                    if (empty($order['book_details']['edited_by_names']) && !empty($inboundBookDetails['edited_by_names'])) {
+                        $order['book_details']['edited_by_names'] = $inboundBookDetails['edited_by_names'];
+                    }
+                    if (($order['book_details']['publisher'] ?? '') === '' && ($inboundBookDetails['publisher'] ?? '') !== '') {
+                        $order['book_details']['publisher'] = $inboundBookDetails['publisher'];
+                    }
+                    foreach (['isbn', 'cover_type', 'edition', 'publication_date', 'language', 'pages'] as $bookField) {
+                        if (($order['book_details'][$bookField] ?? '') === '' && ($inboundBookDetails[$bookField] ?? '') !== '') {
+                            $order['book_details'][$bookField] = $inboundBookDetails[$bookField];
+                        }
+                    }
                 }
+
                 $splitBookNames = static function (string $raw): array {
                     $raw = trim($raw);
                     if ($raw === '') {
@@ -4726,7 +4732,7 @@ class ProductsController
                 if (empty($order['book_details']['edited_by_names'])) {
                     $order['book_details']['edited_by_names'] = [];
                 }
-                if ($order['book_details']['publisher'] === '') {
+                if (($order['book_details']['publisher'] ?? '') === '') {
                     $order['book_details']['publisher'] = trim((string) ($order['publisher'] ?? ''));
                 }
 
@@ -4746,17 +4752,23 @@ class ProductsController
                     $order['book_detail_author_ids'] = array_map(static function ($row) {
                         return (string) ($row['id'] ?? '');
                     }, $order['book_detail_selected_author_options']);
+                }
 
-                    foreach ($inboundingModel->parseInboundAuthorIds((string) ($latestInboundBookRow['edited_by'] ?? '')) as $editorId) {
-                        $editorRow = $inboundingModel->getAuthorById($editorId);
-                        if (!empty($editorRow['id'])) {
-                            $order['book_detail_selected_edited_by_options'][] = $editorRow;
-                        }
+                $editedByStored = trim((string) ($order['edited_by'] ?? ''));
+                if ($editedByStored === '' && is_array($latestInboundBookRow)) {
+                    $editedByStored = trim((string) ($latestInboundBookRow['edited_by'] ?? ''));
+                }
+                foreach ($inboundingModel->parseInboundAuthorIds($editedByStored) as $editorId) {
+                    $editorRow = $inboundingModel->getAuthorById($editorId);
+                    if (!empty($editorRow['id'])) {
+                        $order['book_detail_selected_edited_by_options'][] = $editorRow;
                     }
-                    $order['book_detail_edited_by_ids'] = array_map(static function ($row) {
-                        return (string) ($row['id'] ?? '');
-                    }, $order['book_detail_selected_edited_by_options']);
+                }
+                $order['book_detail_edited_by_ids'] = array_map(static function ($row) {
+                    return (string) ($row['id'] ?? '');
+                }, $order['book_detail_selected_edited_by_options']);
 
+                if (is_array($latestInboundBookRow)) {
                     $publisherId = (int) ($latestInboundBookRow['publisher'] ?? 0);
                     if ($publisherId > 0) {
                         $publisherRow = $inboundingModel->getPublisherById($publisherId);
@@ -5982,6 +5994,21 @@ class ProductsController
             $result = $inboundingModel->updatedesktopform((int) $inboundRow['id'], $updateData);
             if (empty($result['success'])) {
                 throw new Exception((string) ($result['message'] ?? 'Could not update book details.'));
+            }
+
+            $productBookUpdate = [
+                'edited_by' => $editedByCsv,
+                'isbn' => $updateData['isbn'],
+                'cover_type' => $updateData['cover_type'],
+                'edition' => $updateData['edition'],
+                'publication_date' => $publicationDate === '' ? null : $publicationDate,
+                'language' => $updateData['language'],
+                'pages' => $pagesRaw === '' ? null : (string) $pages,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+            $productSave = $productModel->modifyProduct($productId, $productBookUpdate);
+            if (empty($productSave['success'])) {
+                throw new Exception((string) ($productSave['message'] ?? 'Could not save book details on product.'));
             }
 
             $vendorFields = [
