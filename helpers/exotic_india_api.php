@@ -255,3 +255,34 @@ function exotic_india_api_get(string $endpoint, array $extraHeaders = [], bool $
         'request_headers' => $headers,
     ];
 }
+
+/**
+ * GET vendor-api/product/group-fetch — paginated item codes (or product rows) for a catalog group.
+ *
+ * @return array{success:bool,message:string,http_code:int,data:array,raw:string,request_url:string,request_headers:list<string>,curl_error?:string}
+ */
+function exotic_india_api_group_fetch(string $groupname, int $page = 1, int $itemsPerPage = 1000): array
+{
+    $groupname = trim($groupname);
+    if ($groupname === '') {
+        return [
+            'success' => false,
+            'message' => 'groupname is required.',
+            'http_code' => 0,
+            'data' => [],
+            'raw' => '',
+            'request_url' => '',
+            'request_headers' => [],
+        ];
+    }
+
+    $page = max(1, $page);
+    $itemsPerPage = max(1, min(1000, $itemsPerPage));
+    $query = http_build_query([
+        'groupname' => $groupname,
+        'page' => $page,
+        'items_per_page' => $itemsPerPage,
+    ]);
+
+    return exotic_india_api_get('/product/group-fetch?' . $query);
+}

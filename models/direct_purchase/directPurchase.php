@@ -51,10 +51,25 @@ class DirectPurchase
             $types .= 's';
             $params[] = $filters['invoice_date_to'];
         }
+        if (!empty($filters['added_date_from'])) {
+            $where[] = 'DATE(p.created_at) >= ?';
+            $types .= 's';
+            $params[] = $filters['added_date_from'];
+        }
+        if (!empty($filters['added_date_to'])) {
+            $where[] = 'DATE(p.created_at) <= ?';
+            $types .= 's';
+            $params[] = $filters['added_date_to'];
+        }
         if (!empty($filters['vendor_id'])) {
             $where[] = 'p.vendor_id = ?';
             $types .= 'i';
             $params[] = (int) $filters['vendor_id'];
+        }
+        if (!empty($filters['created_by'])) {
+            $where[] = 'p.created_by = ?';
+            $types .= 'i';
+            $params[] = (int) $filters['created_by'];
         }
 
         $joinItems = '';
@@ -77,9 +92,12 @@ class DirectPurchase
         $total = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
         $stmt->close();
 
-        $listSql = "SELECT DISTINCT p.*, v.vendor_name, v.contact_name, v.vendor_id AS exotic_vendor_id
+        $listSql = "SELECT DISTINCT p.*, v.vendor_name, v.contact_name, v.vendor_id AS exotic_vendor_id,
+                cu.name AS created_by_name,
+                (SELECT COUNT(*) FROM vp_direct_purchase_returns dr WHERE dr.direct_purchase_id = p.id) AS return_count
             FROM vp_direct_purchases p
             JOIN vp_vendors v ON v.id = p.vendor_id
+            LEFT JOIN vp_users cu ON cu.id = p.created_by AND cu.is_deleted = 0
             $joinItems
             WHERE $whereSql
             ORDER BY p.invoice_date DESC, p.id DESC
@@ -106,9 +124,10 @@ class DirectPurchase
 
     public function getById(int $id): ?array
     {
-        $sql = 'SELECT p.*, v.vendor_name, v.contact_name
+        $sql = 'SELECT p.*, v.vendor_name, v.contact_name, pu.name AS purchase_created_by_name
             FROM vp_direct_purchases p
             JOIN vp_vendors v ON v.id = p.vendor_id
+            LEFT JOIN vp_users pu ON pu.id = p.created_by AND pu.is_deleted = 0
             WHERE p.id = ?';
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $id);
@@ -276,11 +295,11 @@ class DirectPurchase
     public function delete(int $id): bool
     {
         $this->ensureSchema();
+        if ($this->countReturns($id) > 0) {
+            throw new \RuntimeException('Cannot delete purchase with linked purchase returns.');
+        }
         $this->conn->begin_transaction();
         try {
-            foreach ($this->getReturnIdsForPurchase($id) as $rid) {
-                DirectPurchaseStock::reverseMovementsForRef($this->conn, DirectPurchaseStock::REF_RETURN, $rid);
-            }
             DirectPurchaseStock::reverseMovementsForRef($this->conn, DirectPurchaseStock::REF_PURCHASE, $id);
             $stmt = $this->conn->prepare('DELETE FROM vp_direct_purchases WHERE id = ?');
             $stmt->bind_param('i', $id);
@@ -356,6 +375,32 @@ class DirectPurchase
     public function updatePurchase(int $id, array $header, array $items): void
     {
         $this->ensureSchema();
+        require_once __DIR__ . '/directPurchaseReturn.php';
+        $returnModel = new directPurchaseReturn($this->conn);
+        $returnedQtyByItem = $returnModel->sumReturnedQtyByItem($id, 0);
+
+        $existingById = [];
+        foreach ($this->getItems($id) as $existingRow) {
+            $existingById[(int) ($existingRow['id'] ?? 0)] = $existingRow;
+        }
+
+        $postedExistingIds = [];
+        foreach ($items as $row) {
+            $itemId = (int) ($row['id'] ?? 0);
+            if ($itemId > 0) {
+                $postedExistingIds[$itemId] = true;
+                if (!isset($existingById[$itemId])) {
+                    throw new \RuntimeException('Invalid purchase line in save request.');
+                }
+            }
+        }
+
+        foreach ($returnedQtyByItem as $itemId => $returnedQty) {
+            if ($returnedQty > 0 && empty($postedExistingIds[$itemId])) {
+                throw new \RuntimeException('Cannot remove a line item that has linked purchase returns.');
+            }
+        }
+
         $this->conn->begin_transaction();
         try {
             DirectPurchaseStock::reverseMovementsForRef($this->conn, DirectPurchaseStock::REF_PURCHASE, $id);
@@ -386,12 +431,27 @@ class DirectPurchase
             $stmt->execute();
             $stmt->close();
 
-            $del = $this->conn->prepare('DELETE FROM vp_direct_purchase_items WHERE direct_purchase_id = ?');
-            $del->bind_param('i', $id);
-            $del->execute();
-            $del->close();
+            $sortOrder = 0;
+            foreach ($items as $row) {
+                $itemId = (int) ($row['id'] ?? 0);
+                if ($itemId > 0 && isset($existingById[$itemId])) {
+                    $this->updateItemRow($itemId, $row, $sortOrder);
+                } else {
+                    $this->insertItemRow($id, $row, $sortOrder);
+                }
+                $sortOrder++;
+            }
 
-            $this->insertItemRows($id, $items);
+            foreach ($existingById as $itemId => $existingRow) {
+                if (!empty($postedExistingIds[$itemId])) {
+                    continue;
+                }
+                if (($returnedQtyByItem[$itemId] ?? 0) > 0) {
+                    throw new \RuntimeException('Cannot remove a line item that has linked purchase returns.');
+                }
+                $this->deleteItemRow($itemId);
+            }
+
             $fresh = $this->getItems($id);
             $stockLines = DirectPurchaseStock::buildStockLinesFromDbItems($this->conn, $fresh);
             DirectPurchaseStock::applyPurchaseIn(
@@ -406,6 +466,100 @@ class DirectPurchase
             $this->conn->rollback();
             throw $e;
         }
+    }
+
+    private function updateItemRow(int $itemId, array $row, int $sortOrder): void
+    {
+        $sql = 'UPDATE vp_direct_purchase_items SET
+            item_code = ?, sku = ?, color = ?, size = ?, cost_per_item = ?, qty = ?, hsn = ?, gst_rate = ?, unit = ?,
+            gst_amount = ?, line_total = ?, sort_order = ?
+            WHERE id = ?';
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            throw new \RuntimeException('Failed to prepare purchase line update.');
+        }
+
+        $itemCode = (string) ($row['item_code'] ?? '');
+        $sku = (string) ($row['sku'] ?? '');
+        $color = (string) ($row['color'] ?? '');
+        $size = (string) ($row['size'] ?? '');
+        $costPer = (float) ($row['cost_per_item'] ?? 0);
+        $qty = (float) ($row['qty'] ?? 0);
+        $hsn = (string) ($row['hsn'] ?? '');
+        $gstRate = (float) ($row['gst_rate'] ?? 0);
+        $unit = (string) ($row['unit'] ?? '');
+        $gstAmt = (float) ($row['gst_amount'] ?? 0);
+        $lineTot = (float) ($row['line_total'] ?? 0);
+        $stmt->bind_param(
+            'ssssddsdsddii',
+            $itemCode,
+            $sku,
+            $color,
+            $size,
+            $costPer,
+            $qty,
+            $hsn,
+            $gstRate,
+            $unit,
+            $gstAmt,
+            $lineTot,
+            $sortOrder,
+            $itemId
+        );
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    private function insertItemRow(int $purchaseId, array $row, int $sortOrder): void
+    {
+        $sql = 'INSERT INTO vp_direct_purchase_items (
+            direct_purchase_id, item_code, sku, color, size, cost_per_item, qty, hsn, gst_rate, unit, gst_amount, line_total, sort_order, vendor_qty_synced, vendor_qty_synced_qty
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,NULL)';
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            throw new \RuntimeException('Failed to prepare purchase line insert.');
+        }
+
+        $itemCode = (string) ($row['item_code'] ?? '');
+        $sku = (string) ($row['sku'] ?? '');
+        $color = (string) ($row['color'] ?? '');
+        $size = (string) ($row['size'] ?? '');
+        $costPer = (float) ($row['cost_per_item'] ?? 0);
+        $qty = (float) ($row['qty'] ?? 0);
+        $hsn = (string) ($row['hsn'] ?? '');
+        $gstRate = (float) ($row['gst_rate'] ?? 0);
+        $unit = (string) ($row['unit'] ?? '');
+        $gstAmt = (float) ($row['gst_amount'] ?? 0);
+        $lineTot = (float) ($row['line_total'] ?? 0);
+        $stmt->bind_param(
+            'issssddsdsddi',
+            $purchaseId,
+            $itemCode,
+            $sku,
+            $color,
+            $size,
+            $costPer,
+            $qty,
+            $hsn,
+            $gstRate,
+            $unit,
+            $gstAmt,
+            $lineTot,
+            $sortOrder
+        );
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    private function deleteItemRow(int $itemId): void
+    {
+        $stmt = $this->conn->prepare('DELETE FROM vp_direct_purchase_items WHERE id = ?');
+        if (!$stmt) {
+            throw new \RuntimeException('Failed to prepare purchase line delete.');
+        }
+        $stmt->bind_param('i', $itemId);
+        $stmt->execute();
+        $stmt->close();
     }
 
     /**

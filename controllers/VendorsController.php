@@ -35,8 +35,8 @@ class VendorsController {
         $countryList = $countryModel->getAllCountries();
         $stateList = $stateModel->getAllStates(105); // India ID = 105
         $teamList = $teamModel->getAllTeams();
-        $groupnameList = getCategoryFromTable();
-        
+        $groupnameList = vendor_external_api_allowed_groupnames();
+
         $data = [
             'vendors' => $vendors_data["vendors"],
             'page_no' => $page_no,
@@ -65,6 +65,12 @@ class VendorsController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = $_POST;
             $id = isset($data['id']) ? (int)$data['id'] : 0;
+            $isEdit = $id > 0;
+            $apiFieldError = $this->validateVendorApiFormData($data, $isEdit);
+            if ($apiFieldError !== null) {
+                echo json_encode($apiFieldError);
+                exit;
+            }
             if ($id > 0) {
                 $result = $vendorsModel->updateVendor($id, $data);
                 if (isset($result['success']) && $result['success'] === true) {
@@ -89,37 +95,46 @@ class VendorsController {
     }
 
     /**
-     * True when vp_vendors.vendor_id holds a valid Exotic remote id (not null/0/empty).
+     * Exotic India vendor_id from vp_vendors.vendor_id (never the local vp_vendors.id).
      */
-    private function vendorHasRemoteId(?array $vendor): bool
+    private function getRemoteVendorId(?array $vendor): string
     {
         if (!$vendor) {
-            return false;
+            return '';
         }
         $remote = trim((string) ($vendor['vendor_id'] ?? ''));
         if ($remote === '' || $remote === '0') {
-            return false;
+            return '';
         }
         $remoteInt = (int) preg_replace('/\D/', '', $remote);
 
-        return $remoteInt > 0;
+        return $remoteInt > 0 ? (string) $remoteInt : '';
     }
 
     private function normalizeVendorGroupsCsv($raw): string
     {
-        if (is_array($raw)) {
-            $groups = array_values(array_unique(array_filter(array_map('trim', $raw), static function ($v) {
-                return $v !== '';
-            })));
-
-            return implode(',', $groups);
-        }
-
-        return trim((string) $raw);
+        return vendor_external_api_normalize_groupnames_csv($raw);
     }
 
     /**
-     * After local save: vendormodify when remote id exists, otherwise vendorcreate + store vendor_id.
+     * @return array{success:false,message:string}|null
+     */
+    private function validateVendorApiFormData(array $data, bool $isEdit): ?array
+    {
+        $name = $isEdit
+            ? trim((string) ($data['editVendorName'] ?? ''))
+            : trim((string) ($data['addVendorName'] ?? ''));
+
+        $groupsRaw = $isEdit ? ($data['editGroupname'] ?? '') : ($data['groupname'] ?? '');
+        $groups = $this->normalizeVendorGroupsCsv($groupsRaw);
+
+        return vendor_external_api_validate_vendor_fields($name, $groups);
+    }
+
+    /**
+     * After local save, sync to Exotic India:
+     * - vendorcreate when vp_vendors.vendor_id is empty (add or edit)
+     * - vendormodify only when vp_vendors.vendor_id exists (edit with linked vendor)
      */
     private function syncVendorToExternalApi(int $localVendorId, array $data, bool $isEdit): string
     {
@@ -147,8 +162,10 @@ class VendorsController {
             'webpage' => (isset($data[$webpageKey]) && (string) $data[$webpageKey] === '1') ? '1' : '0',
         ];
 
-        if ($this->vendorHasRemoteId($vendor)) {
-            $postData['vendor_id'] = trim((string) $vendor['vendor_id']);
+        $remoteVendorId = $this->getRemoteVendorId($vendor);
+
+        if ($remoteVendorId !== '') {
+            $postData['vendor_id'] = $remoteVendorId;
             $api = vendor_external_api_modify($postData);
 
             return json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);

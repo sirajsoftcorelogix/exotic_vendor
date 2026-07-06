@@ -10,7 +10,7 @@ if (empty($items)) {
     $items = [[
         'item_code' => '', 'sku' => '', 'color' => '', 'size' => '',
         'cost_per_item' => '', 'qty' => '1', 'hsn' => '', 'gst_rate' => '',
-        'unit' => '', 'gst_amount' => '', 'line_total' => '',
+        'gst_amount' => '', 'line_total' => '',
     ]];
 }
 $flash = $_SESSION['direct_purchase_flash'] ?? null;
@@ -28,8 +28,15 @@ $dpCurrencySym = dp_currency_symbol($dpCurrencyVal);
 $dpDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
 $dpThumbPlaceholder = 'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
 $warehouses = $data['warehouses'] ?? [];
-$dpLocked = !empty($data['purchase_locked']);
 $dpPurchaseId = (int) ($pData['id'] ?? 0);
+$dpHasReturnedLines = false;
+foreach ($items as $dpIt) {
+    if ((float) ($dpIt['already_returned_qty'] ?? 0) > 0) {
+        $dpHasReturnedLines = true;
+        break;
+    }
+}
+$dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Header band (stock transfer style) -->
@@ -87,15 +94,15 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
         </div>
     <?php endif; ?>
 
-    <?php if ($dpLocked && $purchase): ?>
+    <?php if ($dpHasReturnedLines && $purchase): ?>
         <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 shadow-sm" role="status">
-            This purchase has returns and cannot be edited. Delete all returns for this purchase first, then you can change lines again.
+            Lines with linked purchase returns are read-only. Other lines and invoice details can still be edited.
             <a href="?page=direct_purchase&action=return_list&amp;dp_id=<?= (int) $purchase['id'] ?>"
                 class="ml-2 font-semibold text-amber-900 underline underline-offset-2 decoration-amber-700/40 hover:text-amber-950">View returns</a>
         </div>
     <?php endif; ?>
 
-    <form method="post" action="?page=direct_purchase&action=save" enctype="multipart/form-data" id="dp-form" class="space-y-6" <?= $dpLocked ? 'onsubmit="return false;"' : '' ?>>
+    <form method="post" action="?page=direct_purchase&action=save" enctype="multipart/form-data" id="dp-form" class="space-y-6">
         <?php if ($isEdit && $purchase): ?>
             <input type="hidden" name="id" value="<?= (int) $purchase['id'] ?>">
         <?php endif; ?>
@@ -126,7 +133,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Warehouse (stock) <span class="text-red-500">*</span></label>
-                    <select name="warehouse_id" id="warehouse_id" class="<?= $inp ?> bg-white" <?= $dpLocked ? 'disabled' : 'required' ?>>
+                    <select name="warehouse_id" id="warehouse_id" class="<?= $inp ?> bg-white" required>
                         <option value="">Select warehouse</option>
                         <?php foreach ($warehouses as $wh): ?>
                             <?php
@@ -141,9 +148,6 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <?php if ($dpLocked && $purchase): ?>
-                        <input type="hidden" name="warehouse_id" value="<?= (int) ($purchase['warehouse_id'] ?? 0) ?>">
-                    <?php endif; ?>
                     <p class="mt-1 text-xs text-gray-500">Goods receipt stock is posted to this warehouse (same pattern as GRN).</p>
                 </div>
                 <div>
@@ -193,20 +197,18 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                         <col class="dp-col-qty">
                         <col class="dp-col-hsn">
                         <col class="dp-col-gst">
-                        <col class="dp-col-unit">
                         <col class="dp-col-total">
                         <col class="dp-col-actions">
                     </colgroup>
                     <thead>
                         <tr class="bg-gray-100">
                             <th class="px-1 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 dp-col-img">Image</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-sku">SKU</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-cost">Cost / item</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-qty">Qty</th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-sku">SKU <span class="text-red-600" aria-hidden="true">*</span></th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-cost">Cost / item <span class="text-red-600" aria-hidden="true">*</span></th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-qty">Qty <span class="text-red-600" aria-hidden="true">*</span></th>
                             <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-hsn">HSN</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-gst">GST %</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-unit">Unit</th>
-                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-total">Line total</th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-gst">GST % <span class="text-red-600" aria-hidden="true">*</span></th>
+                            <th class="px-1 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 dp-col-total">Line total <span class="text-red-600" aria-hidden="true">*</span></th>
                             <th class="px-1 py-3 text-center font-semibold text-gray-700 border-b border-gray-200 dp-col-actions"></th>
                         </tr>
                     </thead>
@@ -220,9 +222,14 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                             $dpVendorQtySyncedQty = isset($it['vendor_qty_synced_qty']) && $it['vendor_qty_synced_qty'] !== null
                                 ? (string) $it['vendor_qty_synced_qty']
                                 : '';
+                            $dpProductId = (int) ($it['product_id'] ?? 0);
+                            $dpLineLocked = (float) ($it['already_returned_qty'] ?? 0) > 0;
+                            $dpLineReadonly = $dpLineLocked ? 'readonly tabindex="-1"' : '';
+                            $dpLineReadonlyClass = $dpLineLocked ? $dpReadonlyInp : '';
                             ?>
-                            <tr class="dp-line hover:bg-amber-50/30 transition-colors"
+                            <tr class="dp-line hover:bg-amber-50/30 transition-colors <?= $dpLineLocked ? 'dp-line-return-locked bg-amber-50/40' : '' ?>"
                                 data-dp-item-id="<?= $dpLineItemId ?>"
+                                data-dp-line-locked="<?= $dpLineLocked ? '1' : '0' ?>"
                                 data-vendor-qty-synced="<?= $dpVendorQtySynced ? '1' : '0' ?>"
                                 data-vendor-qty-synced-qty="<?= htmlspecialchars($dpVendorQtySyncedQty, ENT_QUOTES, 'UTF-8') ?>">
                                 <td class="px-1 py-2 align-top text-center dp-col-img">
@@ -237,57 +244,75 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                                 <td class="px-1 py-2 align-top dp-col-sku">
                                     <div class="flex items-start gap-0.5">
                                         <div class="relative dp-sku-cell flex-1 min-w-0">
+                                            <input type="hidden" name="dp_line_id[]" class="dp-h-line-id" value="<?= $dpLineItemId ?>">
                                             <input type="hidden" name="item_code[]" class="dp-h-item-code" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
                                             <input type="hidden" name="color[]" class="dp-h-color" value="<?= htmlspecialchars($it['color'] ?? '') ?>">
                                             <input type="hidden" name="size[]" class="dp-h-size" value="<?= htmlspecialchars($it['size'] ?? '') ?>">
+                                            <input type="hidden" class="dp-h-product-id" value="<?= $dpProductId ?>">
                                             <input type="hidden" name="gst_amount[]" class="dp-gst" value="<?= htmlspecialchars((string) ($it['gst_amount'] ?? '')) ?>">
-                                            <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
-                                                class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?>"
-                                                value="<?= htmlspecialchars($it['sku'] ?? '') ?>">
+                                            <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…" required
+                                                class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?> <?= $dpLineReadonlyClass ?>"
+                                                value="<?= htmlspecialchars($it['sku'] ?? '') ?>" <?= $dpLineReadonly ?>>
                                             <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                                         </div>
+                                        <a href="<?= $dpProductId > 0 ? ('?page=products&amp;action=detail&amp;id=' . $dpProductId) : '#' ?>"
+                                            class="dp-product-profile-link dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-amber-800 hover:bg-amber-50 hover:border-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 <?= $dpProductId > 0 ? '' : 'hidden' ?>"
+                                            target="_blank" rel="noopener noreferrer"
+                                            title="View product profile" aria-label="View product profile">
+                                            <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
+                                        </a>
                                         <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU" <?= $dpLocked ? 'disabled' : '' ?>>
+                                            title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU" <?= $dpLineLocked ? 'disabled' : '' ?>>
                                             <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
                                         </button>
                                     </div>
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-cost dp-col-numeric">
-                                    <div class="dp-cell-with-actions">
-                                        <input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>">
-                                        <div class="dp-cost-actions shrink-0">
-                                            <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API" <?= $dpLocked ? 'disabled' : '' ?>>
-                                                <i class="fas fa-arrow-down" aria-hidden="true"></i>
-                                            </button>
-                                            <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com" <?= $dpLocked ? 'disabled' : '' ?>>
-                                                <i class="fas fa-clipboard-check" aria-hidden="true"></i>
-                                            </button>
+                                    <div class="dp-cost-wrap min-w-0">
+                                        <div class="dp-cell-with-actions">
+                                            <input type="number" step="0.0001" min="0.0001" name="cost_per_item[]" required class="dp-cost dp-inp-cell <?= $inpSm ?> <?= $dpLineReadonlyClass ?>" value="<?= htmlspecialchars((string) ($it['cost_per_item'] ?? '')) ?>" <?= $dpLineReadonly ?>>
+                                            <div class="dp-cost-actions shrink-0">
+                                                <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API" <?= $dpLineLocked ? 'disabled' : '' ?>>
+                                                    <i class="fas fa-arrow-down" aria-hidden="true"></i>
+                                                </button>
+                                                <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com" <?= $dpLineLocked ? 'disabled' : '' ?>>
+                                                    <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
                                         </div>
+                                        <p class="dp-cost-hint">Price India</p>
                                     </div>
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-qty dp-col-numeric">
                                     <div class="dp-cell-with-actions">
-                                        <input type="number" step="0.001" name="qty[]" class="dp-qty dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>">
+                                        <input type="number" step="0.001" min="0" name="qty[]" required class="dp-qty dp-inp-cell <?= $inpSm ?> <?= $dpLineReadonlyClass ?>" value="<?= htmlspecialchars((string) ($it['qty'] ?? '')) ?>" <?= $dpLineReadonly ?>>
                                         <div class="dp-cell-actions-slot">
                                         <button type="button" class="dp-sync-vendor-qty dp-line-mini-btn inline-flex items-center justify-center rounded-md border disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 <?= $dpVendorQtySynced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100' ?>"
                                             title="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : ($dpLineItemId > 0 ? 'Push qty to vendor API' : 'Save purchase first to sync qty') ?>"
                                             aria-label="<?= $dpVendorQtySynced ? 'Qty synced to vendor API' : 'Push qty to vendor API' ?>"
-                                            <?= ($dpLocked || ($dpLineItemId <= 0 && !$dpVendorQtySynced)) ? 'disabled' : '' ?>>
+                                            <?= ($dpLineLocked || ($dpLineItemId <= 0 && !$dpVendorQtySynced)) ? 'disabled' : '' ?>>
                                             <i class="fas <?= $dpVendorQtySynced ? 'fa-check' : 'fa-cloud-upload-alt' ?>" aria-hidden="true"></i>
                                         </button>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>"></td>
-                                <td class="px-1 py-2 align-top dp-col-gst dp-col-numeric"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>"></td>
-                                <td class="px-1 py-2 align-top dp-col-unit dp-col-numeric"><input name="unit[]" class="dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars($it['unit'] ?? '') ?>"></td>
-                                <td class="px-1 py-2 align-top dp-col-total dp-col-numeric"><input type="number" step="0.01" name="line_total[]" class="dp-line-total dp-inp-cell <?= $inpSm ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>"></td>
+                                <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell <?= $inpSm ?> <?= $dpLineReadonlyClass ?>" value="<?= htmlspecialchars($it['hsn'] ?? '') ?>" <?= $dpLineReadonly ?>></td>
+                                <td class="px-1 py-2 align-top dp-col-gst dp-col-numeric"><input type="number" step="0.01" min="0" name="gst_rate[]" required class="dp-rate dp-inp-cell <?= $inpSm ?> <?= $dpLineReadonlyClass ?>" value="<?= htmlspecialchars((string) ($it['gst_rate'] ?? '')) ?>" <?= $dpLineReadonly ?>></td>
+                                <td class="px-1 py-2 align-top dp-col-total dp-col-numeric"><input type="number" step="0.01" min="0.01" name="line_total[]" required class="dp-line-total dp-inp-cell <?= $inpSm ?> <?= $dpLineReadonlyClass ?>" value="<?= htmlspecialchars((string) ($it['line_total'] ?? '')) ?>" <?= $dpLineReadonly ?>></td>
                                 <td class="px-1 py-2 text-center align-top dp-col-actions">
+                                    <?php if ($dpLineLocked): ?>
+                                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700"
+                                            title="Linked purchase return — line cannot be edited or removed"
+                                            aria-label="Line locked due to purchase return">
+                                            <i class="fas fa-lock text-[10px]" aria-hidden="true"></i>
+                                        </span>
+                                    <?php else: ?>
                                     <button type="button" class="dp-remove dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
                                         <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
                                     </button>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -302,7 +327,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 </button>
             </div>
             <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                Type at least 2 characters to search products by SKU only. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest cost from the product API (updates <code class="text-[11px] bg-gray-100 px-1 rounded">vp_products</code>). Use <i class="fas fa-clipboard-check text-[10px]" aria-hidden="true"></i> to verify CP and local stock on exoticindia.com against this line and <code class="text-[11px] bg-gray-100 px-1 rounded">vp_products</code>. Line amounts recalc from cost, qty, and GST %.
+                Type at least 2 characters to search products by SKU only. Fields marked <span class="text-red-600">*</span> are required (HSN is optional). For <strong>books</strong>, Cost / item uses Price India (without GST); for other products it uses CP. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest value from the product API.
             </p>
 
             <div class="mt-6 pt-5 border-t border-gray-200">
@@ -381,10 +406,12 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 class="inline-flex justify-center items-center px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 transition">
                 Cancel
             </a>
-            <button type="submit" <?= $dpLocked ? 'disabled' : '' ?>
-                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition <?= $dpLocked ? 'opacity-50 cursor-not-allowed pointer-events-none' : '' ?>">
+            <button type="submit" id="dp-save-btn"
+                data-default-label="<?= htmlspecialchars($isEdit ? 'Update purchase' : 'Save purchase', ENT_QUOTES, 'UTF-8') ?>"
+                data-loading-label="<?= htmlspecialchars($isEdit ? 'Updating...' : 'Saving...', ENT_QUOTES, 'UTF-8') ?>"
+                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:from-[#d9822b] disabled:hover:to-[#c57526]">
                 <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
-                <?= $isEdit ? 'Update purchase' : 'Save purchase' ?>
+                <span class="dp-save-btn-label"><?= $isEdit ? 'Update purchase' : 'Save purchase' ?></span>
             </button>
         </div>
     </form>
@@ -425,7 +452,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                     <i id="dp-verify-vendor-icon" class="fas fa-clipboard-check" aria-hidden="true"></i>
                 </div>
                 <div class="min-w-0 flex-1">
-                    <h3 id="dp-verify-vendor-title" class="text-lg font-bold tracking-tight text-gray-900">Vendor verification</h3>
+                    <h3 id="dp-verify-vendor-title" class="text-lg font-bold tracking-tight text-gray-900">Price Verification</h3>
                     <p id="dp-verify-vendor-subtitle" class="mt-1 text-sm text-gray-600"></p>
                     <p id="dp-verify-vendor-message" class="mt-2 text-sm text-gray-700"></p>
                 </div>
@@ -440,7 +467,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                     <tr class="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <th class="pb-2 pr-3">Field</th>
                         <th class="pb-2 pr-3 text-right">Expected</th>
-                        <th class="pb-2 pr-3 text-right">Vendor</th>
+                        <th class="pb-2 pr-3 text-right">Admin</th>
                         <th class="pb-2 text-center">Status</th>
                     </tr>
                 </thead>
@@ -508,9 +535,8 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
 #line-items-table col.dp-col-cost { width: 12.96%; }
 #line-items-table col.dp-col-qty { width: 14%; }
 #line-items-table col.dp-col-hsn { width: 10%; }
-#line-items-table col.dp-col-gst { width: 6%; }
-#line-items-table col.dp-col-unit { width: 8%; }
-#line-items-table col.dp-col-total { width: 12%; }
+#line-items-table col.dp-col-gst { width: 8%; }
+#line-items-table col.dp-col-total { width: 14%; }
 #line-items-table col.dp-col-actions { width: 36px; }
 #line-items-table th.dp-col-img,
 #line-items-table td.dp-col-img {
@@ -568,6 +594,16 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     min-width: 1.75rem;
     flex-shrink: 0;
 }
+#line-items-table .dp-cost-hint {
+    display: none;
+    margin-top: 0.125rem;
+    font-size: 10px;
+    line-height: 1.25;
+    color: #b45309;
+}
+#line-items-table tr[data-dp-is-book="1"] .dp-cost-hint {
+    display: block;
+}
 #line-items-table .dp-col-sku .dp-sku-cell {
     min-width: 0;
     flex: 1 1 0;
@@ -595,7 +631,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
 
 <table class="hidden">
     <tbody id="line-item-template">
-        <tr class="dp-line hover:bg-amber-50/30 transition-colors" data-dp-item-id="0" data-vendor-qty-synced="0" data-vendor-qty-synced-qty="">
+        <tr class="dp-line hover:bg-amber-50/30 transition-colors" data-dp-item-id="0" data-dp-is-book="0" data-vendor-qty-synced="0" data-vendor-qty-synced-qty="">
             <td class="px-1 py-2 align-top text-center dp-col-img">
                 <button type="button" class="dp-thumb-trigger mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0 opacity-60 cursor-not-allowed shadow-sm"
                     data-full-src="" title="" aria-label="No product image">
@@ -606,14 +642,22 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
             <td class="px-1 py-2 align-top dp-col-sku">
                 <div class="flex items-start gap-0.5">
                     <div class="relative dp-sku-cell flex-1 min-w-0">
+                        <input type="hidden" name="dp_line_id[]" class="dp-h-line-id" value="0">
                         <input type="hidden" name="item_code[]" class="dp-h-item-code" value="">
                         <input type="hidden" name="color[]" class="dp-h-color" value="">
                         <input type="hidden" name="size[]" class="dp-h-size" value="">
+                        <input type="hidden" class="dp-h-product-id" value="">
                         <input type="hidden" name="gst_amount[]" class="dp-gst" value="">
-                        <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…"
+                        <input type="text" name="sku[]" autocomplete="off" placeholder="Search by SKU…" required
                             class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?>" value="">
                         <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                     </div>
+                    <a href="#"
+                        class="dp-product-profile-link dp-line-action-btn shrink-0 hidden inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-amber-800 hover:bg-amber-50 hover:border-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                        target="_blank" rel="noopener noreferrer"
+                        title="View product profile" aria-label="View product profile">
+                        <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
+                    </a>
                     <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU">
                         <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
@@ -621,23 +665,26 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 </div>
             </td>
             <td class="px-1 py-2 align-top dp-col-cost dp-col-numeric">
-                <div class="dp-cell-with-actions">
-                    <input type="number" step="0.0001" name="cost_per_item[]" class="dp-cost dp-inp-cell <?= $inpSm ?>" value="">
-                    <div class="dp-cost-actions shrink-0">
-                        <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API">
-                            <i class="fas fa-arrow-down" aria-hidden="true"></i>
-                        </button>
-                        <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com">
-                            <i class="fas fa-clipboard-check" aria-hidden="true"></i>
-                        </button>
+                <div class="dp-cost-wrap min-w-0">
+                    <div class="dp-cell-with-actions">
+                        <input type="number" step="0.0001" min="0.0001" name="cost_per_item[]" required class="dp-cost dp-inp-cell <?= $inpSm ?>" value="">
+                        <div class="dp-cost-actions shrink-0">
+                            <button type="button" class="dp-fetch-price dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Fetch latest cost from product API" aria-label="Fetch latest cost from product API">
+                                <i class="fas fa-arrow-down" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" class="dp-verify-vendor dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Verify CP and stock on exoticindia.com" aria-label="Verify CP and stock on exoticindia.com">
+                                <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
+                    <p class="dp-cost-hint">Price India</p>
                 </div>
             </td>
             <td class="px-1 py-2 align-top dp-col-qty dp-col-numeric">
                 <div class="dp-cell-with-actions">
-                    <input type="number" step="0.001" name="qty[]" class="dp-qty dp-inp-cell <?= $inpSm ?>" value="1">
+                    <input type="number" step="0.001" min="0" name="qty[]" required class="dp-qty dp-inp-cell <?= $inpSm ?>" value="">
                     <div class="dp-cell-actions-slot">
                     <button type="button" class="dp-sync-vendor-qty dp-line-mini-btn inline-flex items-center justify-center rounded-md border border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Save purchase first to sync qty" aria-label="Push qty to vendor API" disabled>
@@ -647,9 +694,8 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 </div>
             </td>
             <td class="px-1 py-2 align-top dp-col-hsn"><input name="hsn[]" class="dp-inp-cell <?= $inpSm ?>" value=""></td>
-            <td class="px-1 py-2 align-top dp-col-gst dp-col-numeric"><input type="number" step="0.01" name="gst_rate[]" class="dp-rate dp-inp-cell <?= $inpSm ?>" value=""></td>
-            <td class="px-1 py-2 align-top dp-col-unit dp-col-numeric"><input name="unit[]" class="dp-inp-cell <?= $inpSm ?>" value=""></td>
-            <td class="px-1 py-2 align-top dp-col-total dp-col-numeric"><input type="number" step="0.01" name="line_total[]" class="dp-line-total dp-inp-cell <?= $inpSm ?>" value=""></td>
+            <td class="px-1 py-2 align-top dp-col-gst dp-col-numeric"><input type="number" step="0.01" min="0" name="gst_rate[]" required class="dp-rate dp-inp-cell <?= $inpSm ?>" value=""></td>
+            <td class="px-1 py-2 align-top dp-col-total dp-col-numeric"><input type="number" step="0.01" min="0.01" name="line_total[]" required class="dp-line-total dp-inp-cell <?= $inpSm ?>" value=""></td>
             <td class="px-1 py-2 text-center align-top dp-col-actions">
                 <button type="button" class="dp-remove dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Remove row" aria-label="Remove row">
                     <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
@@ -680,6 +726,29 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
         u.searchParams.set('action', 'product_search');
         u.searchParams.set('q', q);
         return u.toString();
+    }
+
+    function dpProductDetailUrl(productId) {
+        var id = parseInt(productId, 10);
+        if (!id || id <= 0) return '#';
+        return '?page=products&action=detail&id=' + encodeURIComponent(String(id));
+    }
+
+    function dpSetRowProductId(tr, productId) {
+        if (!tr) return;
+        var hid = tr.querySelector('.dp-h-product-id');
+        var id = parseInt(productId, 10);
+        if (hid) hid.value = id > 0 ? String(id) : '';
+        if (id <= 0) tr.dataset.dpIsBook = '0';
+        var link = tr.querySelector('.dp-product-profile-link');
+        if (!link) return;
+        if (id > 0) {
+            link.href = dpProductDetailUrl(id);
+            link.classList.remove('hidden');
+        } else {
+            link.href = '#';
+            link.classList.add('hidden');
+        }
     }
 
     function fetchLinePriceUrl(itemCode, sku, color, size) {
@@ -805,6 +874,11 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                 var cost = tr.querySelector('.dp-cost');
                 if (cost && data.cost_price != null && data.cost_price !== '') {
                     cost.value = data.cost_price;
+                }
+                if (data.is_book) {
+                    tr.dataset.dpIsBook = '1';
+                } else {
+                    tr.dataset.dpIsBook = '0';
                 }
                 if (data.hsn) {
                     var hsn = tr.querySelector('input[name="hsn[]"]');
@@ -1555,8 +1629,17 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
         if (col) col.value = item.color != null ? String(item.color) : '';
         if (sz) sz.value = item.size != null ? String(item.size) : '';
         if (skuEl) skuEl.value = item.sku != null ? String(item.sku) : '';
+        dpSetRowProductId(tr, item.id != null ? parseInt(item.id, 10) : 0);
+        tr.dataset.dpIsBook = item.is_book ? '1' : '0';
         var cost = tr.querySelector('.dp-cost');
-        if (cost && item.cost_price != null && item.cost_price !== '') cost.value = item.cost_price;
+        if (cost) {
+            var suggested = item.cost_price != null && item.cost_price !== ''
+                ? item.cost_price
+                : (item.is_book && item.price_india != null ? item.price_india : '');
+            if (suggested !== '' && suggested != null) {
+                cost.value = suggested;
+            }
+        }
         var hsn = tr.querySelector('input[name="hsn[]"]');
         if (hsn && item.hsn != null) hsn.value = String(item.hsn);
         var rate = tr.querySelector('.dp-rate');
@@ -1613,6 +1696,7 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
                     fetchAbort = null;
                 }
                 clearBox();
+                dpSetRowProductId(tr, 0);
                 return;
             }
             debounce = setTimeout(function () {
@@ -1666,36 +1750,40 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     }
 
     function bindRow(tr) {
-        ['.dp-cost', '.dp-qty', '.dp-rate'].forEach(function (sel) {
-            var el = tr.querySelector(sel);
-            if (!el) return;
-            var fn = function () {
-                recalcRow(tr);
-                if (sel === '.dp-qty') dpMarkVendorQtyUnsynced(tr);
-            };
-            el.addEventListener('input', fn);
-            el.addEventListener('change', fn);
-        });
+        var lineLocked = tr.getAttribute('data-dp-line-locked') === '1';
+        if (!lineLocked) {
+            ['.dp-cost', '.dp-qty', '.dp-rate'].forEach(function (sel) {
+                var el = tr.querySelector(sel);
+                if (!el) return;
+                var fn = function () {
+                    recalcRow(tr);
+                    if (sel === '.dp-qty') dpMarkVendorQtyUnsynced(tr);
+                };
+                el.addEventListener('input', fn);
+                el.addEventListener('change', fn);
+            });
+            var sku = tr.querySelector('.dp-sku');
+            if (sku) initSkuSearch(sku);
+        }
         var lineTot = tr.querySelector('.dp-line-total');
-        if (lineTot) lineTot.addEventListener('input', recalcInvoiceTotals);
+        if (lineTot && !lineLocked) lineTot.addEventListener('input', recalcInvoiceTotals);
         var rm = tr.querySelector('.dp-remove');
         if (rm) rm.addEventListener('click', function () {
+            if (tr.getAttribute('data-dp-line-locked') === '1') return;
             var body = document.getElementById('line-items-body');
             if (body.querySelectorAll('.dp-line').length > 1) {
                 tr.remove();
                 recalcInvoiceTotals();
             }
         });
-        var sku = tr.querySelector('.dp-sku');
-        if (sku) initSkuSearch(sku);
         var fetchBtn = tr.querySelector('.dp-fetch-price');
-        if (fetchBtn) {
+        if (fetchBtn && !lineLocked) {
             fetchBtn.addEventListener('click', function () {
                 dpFetchLatestPrice(tr, fetchBtn);
             });
         }
         var pendingBtn = tr.querySelector('.dp-fetch-pending-orders');
-        if (pendingBtn) {
+        if (pendingBtn && !lineLocked) {
             pendingBtn.addEventListener('click', function () {
                 dpFetchPendingOrders(tr, pendingBtn);
             });
@@ -1713,6 +1801,12 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
             });
         }
         dpUpdateVendorQtySyncButton(tr);
+        dpUpdateProductProfileLink(tr);
+    }
+
+    function dpUpdateProductProfileLink(tr) {
+        var hid = tr ? tr.querySelector('.dp-h-product-id') : null;
+        dpSetRowProductId(tr, hid ? parseInt(hid.value, 10) : 0);
     }
 
     function initDpImageLightbox() {
@@ -1774,6 +1868,44 @@ $dpPurchaseId = (int) ($pData['id'] ?? 0);
     if (fDisc) fDisc.addEventListener('input', recalcInvoiceTotals);
     if (fRo) fRo.addEventListener('input', recalcInvoiceTotals);
     recalcInvoiceTotals();
+    var dpForm = document.getElementById('dp-form');
+    if (dpForm) {
+        var dpSaveBtn = document.getElementById('dp-save-btn');
+        var dpSaveBtnLabel = dpSaveBtn ? dpSaveBtn.querySelector('.dp-save-btn-label') : null;
+        var dpSaveBtnIcon = dpSaveBtn ? dpSaveBtn.querySelector('i') : null;
+        var dpIsSubmitting = false;
+
+        dpForm.addEventListener('submit', function (e) {
+            if (dpIsSubmitting) {
+                e.preventDefault();
+                return false;
+            }
+            document.querySelectorAll('#line-items-body tr.dp-line').forEach(function (tr) {
+                var qtyEl = tr.querySelector('.dp-qty');
+                var qty = qtyEl ? parseFloat(qtyEl.value) : 0;
+                var requireLine = !isNaN(qty) && qty > 0;
+                tr.querySelectorAll('input[name="sku[]"], input[name="cost_per_item[]"], input[name="qty[]"], input[name="gst_rate[]"], input[name="line_total[]"]').forEach(function (inp) {
+                    if (requireLine) {
+                        inp.setAttribute('required', 'required');
+                    } else {
+                        inp.removeAttribute('required');
+                    }
+                });
+            });
+
+            dpIsSubmitting = true;
+            if (dpSaveBtn) {
+                dpSaveBtn.disabled = true;
+                dpSaveBtn.setAttribute('aria-disabled', 'true');
+            }
+            if (dpSaveBtnLabel && dpSaveBtn) {
+                dpSaveBtnLabel.textContent = dpSaveBtn.getAttribute('data-loading-label') || 'Saving...';
+            }
+            if (dpSaveBtnIcon) {
+                dpSaveBtnIcon.className = 'fas fa-spinner fa-spin text-xs opacity-95';
+            }
+        });
+    }
     var dpCurSel = document.getElementById('dp_currency');
     if (dpCurSel) {
         dpCurSel.addEventListener('change', syncSummaryCurrencySymbols);

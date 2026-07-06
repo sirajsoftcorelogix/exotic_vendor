@@ -1,8 +1,11 @@
 <?php
 $purchase = $data['purchase'] ?? [];
 $lines = $data['lines'] ?? [];
-$warehouses = $data['warehouses'] ?? [];
-$defWh = (int) ($data['default_warehouse_id'] ?? 0);
+$warehouseId = (int) ($data['warehouse_id'] ?? ($purchase['warehouse_id'] ?? 0));
+$warehouseName = trim((string) ($data['warehouse_name'] ?? ''));
+if ($warehouseName === '' && $warehouseId > 0) {
+    $warehouseName = 'Warehouse #' . $warehouseId;
+}
 $flash = $_SESSION['direct_purchase_flash'] ?? null;
 if ($flash) {
     unset($_SESSION['direct_purchase_flash']);
@@ -36,6 +39,12 @@ $inp = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-9
         </div>
     <?php endif; ?>
 
+    <?php if ($warehouseId <= 0): ?>
+        <div class="mb-6 rounded-xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm font-medium text-amber-900 shadow-sm" role="status">
+            This purchase has no warehouse set. Edit the direct purchase and assign a warehouse before creating a return.
+        </div>
+    <?php endif; ?>
+
     <form method="post" action="?page=direct_purchase&action=return_save" class="space-y-6">
         <input type="hidden" name="direct_purchase_id" value="<?= $dpId ?>">
 
@@ -47,16 +56,11 @@ $inp = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-9
                         value="<?= htmlspecialchars($dpDateMax) ?>">
                 </div>
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Warehouse (stock OUT) <span class="text-red-500">*</span></label>
-                    <select name="warehouse_id" required class="<?= $inp ?> bg-white">
-                        <option value="">Select warehouse</option>
-                        <?php foreach ($warehouses as $wh): ?>
-                            <option value="<?= (int) ($wh['id'] ?? 0) ?>"
-                                <?= $defWh === (int) ($wh['id'] ?? 0) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($wh['address_title'] ?? ('#' . (int) ($wh['id'] ?? 0))) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Warehouse (stock OUT)</label>
+                    <div class="<?= $inp ?> bg-gray-50 text-gray-800">
+                        <?= htmlspecialchars($warehouseName) ?>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">Uses the warehouse from the original direct purchase. Stock is reduced from this location.</p>
                 </div>
                 <div class="md:col-span-2">
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Remarks</label>
@@ -106,8 +110,8 @@ $inp = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-9
         <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
             <a href="?page=direct_purchase&action=return_list&amp;dp_id=<?= $dpId ?>"
                 class="inline-flex justify-center items-center px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50">Cancel</a>
-            <button type="submit"
-                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 shadow-sm">
+            <button type="submit" <?= $warehouseId <= 0 ? 'disabled' : '' ?>
+                class="inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                 <i class="fas fa-save text-xs" aria-hidden="true"></i>
                 Save return
             </button>

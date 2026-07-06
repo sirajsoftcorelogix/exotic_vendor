@@ -1,3 +1,43 @@
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+  var OriginalTomSelect = window.TomSelect;
+  if (typeof OriginalTomSelect === 'function') {
+    function resolveTomSelectTarget(el) {
+      if (el == null) return null;
+      if (typeof el === 'string') return document.querySelector(el);
+      return el;
+    }
+    function TomSelectIdempotent(el, options) {
+      var target = resolveTomSelectTarget(el);
+      if (target && target.tomselect) return target.tomselect;
+      return new OriginalTomSelect(el, options);
+    }
+    TomSelectIdempotent.prototype = OriginalTomSelect.prototype;
+    for (var key in OriginalTomSelect) {
+      if (Object.prototype.hasOwnProperty.call(OriginalTomSelect, key)) {
+        TomSelectIdempotent[key] = OriginalTomSelect[key];
+      }
+    }
+    window.TomSelect = TomSelectIdempotent;
+  }
+  window.safeTomSelect = function (el, options) {
+    if (el == null) return null;
+    if (typeof el === 'string') el = document.querySelector(el);
+    if (!el) return null;
+    if (el.tomselect) return el.tomselect;
+    try {
+      return new window.TomSelect(el, options);
+    } catch (err) {
+      if (err && err.message && err.message.indexOf('already initialized') !== -1 && el.tomselect) {
+        return el.tomselect;
+      }
+      throw err;
+    }
+  };
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
 <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
@@ -210,6 +250,8 @@
     $discountGlobalFmt = number_format((float)($products['discount_global'] ?? 0), 2, '.', ',');
     $discountIndiaFmt = number_format((float)($products['discount_india'] ?? 0), 2, '.', ',');
     $cpFormatted = number_format((float)($products['cp'] ?? 0), 2, '.', ',');
+    $sourcingFeeFormatted = number_format((float)($products['sourcingfee'] ?? 0), 2, '.', ',');
+    $shippingFeeFormatted = number_format((float)($products['shippingfee'] ?? 0), 2, '.', ',');
     $lengthUnitRaw = trim((string)($products['length_unit'] ?? ''));
     $weightUnitRaw = trim((string)($products['product_weight_unit'] ?? ''));
     $linearNum = static function ($v): ?string {
@@ -321,9 +363,19 @@
           <?php endif; ?>
         </div>
         
-        <h2 class="font-semibold mt-2 text-lg">
-          <?php echo htmlspecialchars($products['title'] ?? 'Product Title'); ?>
-        </h2>
+        <div class="mt-2 flex items-start gap-2">
+          <h2 id="productTitleDisplay" class="font-semibold text-lg flex-1 min-w-0">
+            <?php echo htmlspecialchars($products['title'] ?? 'Product Title'); ?>
+          </h2>
+          <button
+            type="button"
+            class="shrink-0 mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-emerald-700 hover:border-emerald-300"
+            onclick="openProductTitleModal()"
+            title="Edit product title"
+            aria-label="Edit product title">
+            <i class="fas fa-pencil-alt text-[11px]"></i>
+          </button>
+        </div>
         <div class="mt-1 flex flex-wrap items-center gap-2">
           <p class="text-sm text-gray-500">SKU: <?php echo htmlspecialchars($products['sku'] ?? ''); ?></p>
           <button
@@ -365,9 +417,19 @@
     </div>
     <!-- Measures -->
     <div class="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-4">
-      <h3 class="font-semibold mb-3 text-gray-800 flex items-center gap-2">
-        <i class="fas fa-ruler-combined text-orange-600"></i>Measurements
-      </h3>
+      <div class="mb-3 flex items-center justify-between gap-3">
+        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+          <i class="fas fa-ruler-combined text-orange-600"></i>Measurements
+        </h3>
+        <button
+          type="button"
+          class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-orange-200 bg-white text-orange-600 hover:bg-orange-50"
+          onclick="openMeasurementsModal()"
+          title="Edit measurements"
+          aria-label="Edit measurements">
+          <i class="fas fa-pencil-alt text-[11px]"></i>
+        </button>
+      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
         <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($sizeDisplayOut, ENT_QUOTES, 'UTF-8'); ?></span></div>
         <div class="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 flex items-center justify-between gap-3"><span class="text-gray-500 whitespace-nowrap"><i class="fas fa-palette mr-1 text-orange-600"></i>Color</span><span class="font-semibold text-gray-800 text-right"><?php echo htmlspecialchars($colorDisplay, ENT_QUOTES, 'UTF-8'); ?></span></div>
@@ -601,7 +663,17 @@
 
   <!-- Price -->
     <div class="bg-white border border-gray-200 rounded-xl p-3 sm:p-4 shadow-sm lg:col-span-1 min-w-0">
-      <h3 class="font-semibold mb-3 flex items-center gap-2 text-gray-800"><i class="fas fa-receipt text-emerald-600"></i>Price</h3>
+      <div class="mb-3 flex items-center justify-between gap-3">
+        <h3 class="font-semibold flex items-center gap-2 text-gray-800"><i class="fas fa-receipt text-emerald-600"></i>Price</h3>
+        <button
+          type="button"
+          class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-emerald-200 bg-white text-emerald-600 hover:bg-emerald-50"
+          onclick="openPriceSectionModal()"
+          title="Edit price section"
+          aria-label="Edit price section">
+          <i class="fas fa-pencil-alt text-[11px]"></i>
+        </button>
+      </div>
       <div class="space-y-2.5 text-sm">
         <div class="flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100 relative">
           <span class="text-gray-700"><i class="fas fa-tag mr-1 px-2 py-1 rounded text-xs text-green-600 bg-green-100"></i>Price India</span>
@@ -629,7 +701,15 @@
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
           <span class="text-gray-700"><i class="fas fa-flag px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Discount India</span><span class="font-semibold text-gray-900"><?php echo htmlspecialchars($discountIndiaFmt, ENT_QUOTES, 'UTF-8'); ?>%</span>
         </div>
-        <?php if ($canAccessCp): ?>
+        <?php if ($isBookProduct): ?>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-hand-holding-usd px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Sourcing Fee</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($sourcingFeeFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100">
+          <span class="text-gray-700"><i class="fas fa-truck px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Shipping Fee</span><span class="font-semibold text-gray-900">₹<?php echo htmlspecialchars($shippingFeeFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($canAccessCp && !$isBookProduct): ?>
         <div class="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 p-2.5 rounded-lg border border-green-100 relative">
           <span class="text-gray-700"><i class="fas fa-coins px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>CP</span>
           <span id="cpDisplay" class="font-semibold text-gray-900" style="margin-right: 12px;">₹<?php echo htmlspecialchars($cpFormatted, ENT_QUOTES, 'UTF-8'); ?></span>
@@ -677,9 +757,19 @@
       $bookFieldBoxClass = 'rounded-lg border border-amber-100 bg-amber-50/60 p-3';
     ?>
     <div class="bg-white rounded-lg p-4 mb-4">
-      <h3 class="font-semibold mb-3 text-gray-800 flex items-center gap-2">
-        <i class="fas fa-book text-amber-600"></i>Book Details
-      </h3>
+      <div class="mb-3 flex items-center justify-between gap-3">
+        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+          <i class="fas fa-book text-amber-600"></i>Book Details
+        </h3>
+        <button
+          type="button"
+          class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-white text-amber-600 hover:bg-amber-50"
+          onclick="openBookDetailsModal()"
+          title="Edit book details"
+          aria-label="Edit book details">
+          <i class="fas fa-pencil-alt text-[11px]"></i>
+        </button>
+      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
         <div class="<?php echo $bookFieldBoxClass; ?>">
           <span class="text-gray-500 block text-xs mb-0.5">Author</span>
@@ -900,6 +990,216 @@
     <button onclick="document.getElementById('imagePopup').classList.add('hidden')" class="mt-2 px-4 py-2 bg-red-600 text-white rounded">Close</button>
   </div>
 </div> -->
+<div id="productTitleModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="closeProductTitleModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Edit Product Title</h2>
+        <div>
+            <label for="input_product_title" class="block text-sm font-medium text-gray-600 mb-1">Title</label>
+            <input
+                type="text"
+                id="input_product_title"
+                value="<?php echo htmlspecialchars((string)($products['title'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closeProductTitleModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitProductTitleUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
+        </div>
+    </div>
+</div>
+<div id="priceSectionModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+        <button type="button" onclick="closePriceSectionModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Edit Price Section</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label for="input_price_section_price_india" class="block text-sm font-medium text-gray-600 mb-1">Price India</label>
+                <input type="number" id="input_price_section_price_india" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['price_india'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+                <label for="input_price_section_price_usd" class="block text-sm font-medium text-gray-600 mb-1">USD Price</label>
+                <input type="number" id="input_price_section_price_usd" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['price'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+                <label for="input_price_section_mrp_india" class="block text-sm font-medium text-gray-600 mb-1">MRP India</label>
+                <input type="number" id="input_price_section_mrp_india" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['mrp_india'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+                <label for="input_price_section_gst" class="block text-sm font-medium text-gray-600 mb-1">GST %</label>
+                <input type="number" id="input_price_section_gst" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['gst'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+                <label for="input_price_section_hsn" class="block text-sm font-medium text-gray-600 mb-1">HSN</label>
+                <input type="text" id="input_price_section_hsn" value="<?php echo htmlspecialchars((string)($products['hsn'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+                <label for="input_price_section_permanent_discount" class="block text-sm font-medium text-gray-600 mb-1">Permanent Discount %</label>
+                <input type="number" id="input_price_section_permanent_discount" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['permanent_discount'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+                <label for="input_price_section_discount_global" class="block text-sm font-medium text-gray-600 mb-1">Discount Global %</label>
+                <input type="number" id="input_price_section_discount_global" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['discount_global'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+                <label for="input_price_section_discount_india" class="block text-sm font-medium text-gray-600 mb-1">Discount India %</label>
+                <input type="number" id="input_price_section_discount_india" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['discount_india'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <?php if ($isBookProduct): ?>
+            <div>
+                <label for="input_price_section_sourcingfee" class="block text-sm font-medium text-gray-600 mb-1">Sourcing Fee</label>
+                <input type="number" id="input_price_section_sourcingfee" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['sourcingfee'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+                <label for="input_price_section_shippingfee" class="block text-sm font-medium text-gray-600 mb-1">Shipping Fee</label>
+                <input type="number" id="input_price_section_shippingfee" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['shippingfee'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <?php endif; ?>
+            <?php if ($canAccessCp && !$isBookProduct): ?>
+            <div>
+                <label for="input_price_section_cp" class="block text-sm font-medium text-gray-600 mb-1">CP</label>
+                <input type="number" id="input_price_section_cp" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['cp'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <?php endif; ?>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closePriceSectionModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitPriceSectionUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
+        </div>
+    </div>
+</div>
+<div id="measurementsModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+        <button type="button" onclick="closeMeasurementsModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-2">Edit Measurements</h2>
+        <p class="text-xs text-gray-500 mb-4">If you change `Size` or `Color`, the portal saves them locally and keeps other measurement fields synced with the current storefront variant.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label for="input_measurement_size" class="block text-sm font-medium text-gray-600 mb-1">Size</label>
+                <input type="text" id="input_measurement_size" value="<?php echo htmlspecialchars((string)($products['size'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+            <div>
+                <label for="input_measurement_color" class="block text-sm font-medium text-gray-600 mb-1">Color</label>
+                <input type="text" id="input_measurement_color" value="<?php echo htmlspecialchars((string)($products['color'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+            <div>
+                <label for="input_measurement_height" class="block text-sm font-medium text-gray-600 mb-1">Height / Length</label>
+                <input type="number" id="input_measurement_height" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['prod_height'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+            <div>
+                <label for="input_measurement_width" class="block text-sm font-medium text-gray-600 mb-1">Width / Breadth</label>
+                <input type="number" id="input_measurement_width" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['prod_width'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+            <div>
+                <label for="input_measurement_depth" class="block text-sm font-medium text-gray-600 mb-1">Depth</label>
+                <input type="number" id="input_measurement_depth" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['prod_length'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+            <div>
+                <label for="input_measurement_weight" class="block text-sm font-medium text-gray-600 mb-1">Weight</label>
+                <input type="number" id="input_measurement_weight" min="0" step="0.01" value="<?php echo htmlspecialchars(number_format((float)($products['product_weight'] ?? 0), 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+            <div>
+                <label for="input_measurement_length_unit" class="block text-sm font-medium text-gray-600 mb-1">Length Unit</label>
+                <input type="text" id="input_measurement_length_unit" value="<?php echo htmlspecialchars((string)($products['length_unit'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+            <div>
+                <label for="input_measurement_weight_unit" class="block text-sm font-medium text-gray-600 mb-1">Weight Unit</label>
+                <input type="text" id="input_measurement_weight_unit" value="<?php echo htmlspecialchars((string)($products['product_weight_unit'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+            <div class="sm:col-span-2">
+                <label for="input_measurement_dimensions" class="block text-sm font-medium text-gray-600 mb-1">Dimensions</label>
+                <textarea id="input_measurement_dimensions" rows="4" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none"><?php echo htmlspecialchars((string)($products['dimensions'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea>
+            </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closeMeasurementsModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitMeasurementsUpdate()" class="px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600">Save</button>
+        </div>
+    </div>
+</div>
+<?php if ($isBookProduct): ?>
+<?php
+    $selectedBookAuthorOptions = is_array($products['book_detail_selected_author_options'] ?? null) ? $products['book_detail_selected_author_options'] : [];
+    $selectedBookAuthorIds = is_array($products['book_detail_author_ids'] ?? null) ? $products['book_detail_author_ids'] : [];
+    $selectedBookEditedByOptions = is_array($products['book_detail_selected_edited_by_options'] ?? null) ? $products['book_detail_selected_edited_by_options'] : [];
+    $selectedBookEditedByIds = is_array($products['book_detail_edited_by_ids'] ?? null) ? $products['book_detail_edited_by_ids'] : [];
+    $selectedBookPublisherId = (string)($products['book_detail_selected_publisher_id'] ?? '');
+    $bookPublisherCurrent = trim((string)($products['book_detail_selected_publisher_name'] ?? ($bookDetails['publisher'] ?? '')));
+    $bookPublicationDateCurrent = trim((string)($bookDetails['publication_date'] ?? ''));
+    $bookPublicationDateInput = '';
+    if ($bookPublicationDateCurrent !== '') {
+        $bookPublicationTs = strtotime($bookPublicationDateCurrent);
+        if ($bookPublicationTs !== false) {
+            $bookPublicationDateInput = date('Y-m-d', $bookPublicationTs);
+        }
+    }
+?>
+<div id="bookDetailsModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+        <button type="button" onclick="closeBookDetailsModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-2">Edit Book Details</h2>
+        <p class="text-xs text-gray-500 mb-4">Author, Edited By, and Publisher use the same autocomplete search as the inbound desktop form.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label for="input_book_authors_select" class="block text-sm font-medium text-gray-600 mb-1">Author</label>
+                <input type="hidden" id="input_book_authors" value="<?php echo htmlspecialchars(implode(',', array_filter($selectedBookAuthorIds)), ENT_QUOTES, 'UTF-8'); ?>">
+                <select id="input_book_authors_select" class="w-full" multiple autocomplete="off">
+                    <?php foreach ($selectedBookAuthorOptions as $authorOpt): ?>
+                        <option value="<?php echo htmlspecialchars((string)($authorOpt['id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" selected><?php echo htmlspecialchars((string)($authorOpt['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label for="input_book_edited_by_select" class="block text-sm font-medium text-gray-600 mb-1">Edited By</label>
+                <input type="hidden" id="input_book_edited_by" value="<?php echo htmlspecialchars(implode(',', array_filter($selectedBookEditedByIds)), ENT_QUOTES, 'UTF-8'); ?>">
+                <select id="input_book_edited_by_select" class="w-full" multiple autocomplete="off">
+                    <?php foreach ($selectedBookEditedByOptions as $editorOpt): ?>
+                        <option value="<?php echo htmlspecialchars((string)($editorOpt['id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" selected><?php echo htmlspecialchars((string)($editorOpt['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label for="input_book_publisher" class="block text-sm font-medium text-gray-600 mb-1">Publisher</label>
+                <select id="input_book_publisher" class="w-full" autocomplete="off">
+                    <option value=""></option>
+                    <?php if ($selectedBookPublisherId !== '' && $bookPublisherCurrent !== ''): ?>
+                        <option value="<?php echo htmlspecialchars($selectedBookPublisherId, ENT_QUOTES, 'UTF-8'); ?>" selected><?php echo htmlspecialchars($bookPublisherCurrent, ENT_QUOTES, 'UTF-8'); ?></option>
+                    <?php endif; ?>
+                </select>
+            </div>
+            <div>
+                <label for="input_book_isbn" class="block text-sm font-medium text-gray-600 mb-1">ISBN</label>
+                <input type="text" id="input_book_isbn" value="<?php echo htmlspecialchars((string)($bookDetails['isbn'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+            </div>
+            <div>
+                <label for="input_book_cover_type" class="block text-sm font-medium text-gray-600 mb-1">Cover Type</label>
+                <input type="text" id="input_book_cover_type" value="<?php echo htmlspecialchars((string)($bookDetails['cover_type'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+            </div>
+            <div>
+                <label for="input_book_edition" class="block text-sm font-medium text-gray-600 mb-1">Edition</label>
+                <input type="text" id="input_book_edition" value="<?php echo htmlspecialchars((string)($bookDetails['edition'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+            </div>
+            <div>
+                <label for="input_book_publication_date" class="block text-sm font-medium text-gray-600 mb-1">Publication Date</label>
+                <input type="date" id="input_book_publication_date" value="<?php echo htmlspecialchars($bookPublicationDateInput, ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+            </div>
+            <div>
+                <label for="input_book_language" class="block text-sm font-medium text-gray-600 mb-1">Language</label>
+                <input type="text" id="input_book_language" value="<?php echo htmlspecialchars((string)($bookDetails['language'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+            </div>
+            <div>
+                <label for="input_book_pages" class="block text-sm font-medium text-gray-600 mb-1">Pages</label>
+                <input type="number" id="input_book_pages" min="0" step="1" value="<?php echo htmlspecialchars((string)($bookDetails['pages'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+            </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closeBookDetailsModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitBookDetailsUpdate()" class="px-4 py-2 text-sm bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700">Save</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 <div id="minMaxModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
     <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
         <button onclick="closeMinMaxModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
@@ -1053,7 +1353,7 @@
     <div class="mb-6">
       <h2 class="text-xl font-semibold text-gray-800">Stock Adjustment</h2>
       <p class="text-sm text-gray-500 mt-1">
-        Adjust warehouse physical stock for the selected warehouse and location
+        Adjust warehouse physical stock. Storefront stock is synced via API after save.
       </p>
     </div>
 
@@ -1755,10 +2055,7 @@ function closeImagePopup() {
     })
     .then(data => {
         if (data.success) {
-            // Success Popup
-            alert('✅ Success: Stock has been updated!'); 
-            
-            // Close the modal
+            alert('✅ Success: Stock has been updated!');
             closeStockModal();
             
             // Refresh the history table immediately
@@ -1917,6 +2214,300 @@ function closeCpModal() {
     if (modal) {
         modal.classList.add('hidden');
     }
+}
+
+function postProductDetailSection(scope, payload) {
+    payload = payload || {};
+    payload.update_scope = scope;
+    return fetch('index.php?page=products&action=update_product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(function (r) {
+        return r.json();
+    });
+}
+
+function openProductTitleModal() {
+    var modal = document.getElementById('productTitleModal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeProductTitleModal() {
+    var modal = document.getElementById('productTitleModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function submitProductTitleUpdate() {
+    var input = document.getElementById('input_product_title');
+    var title = input ? String(input.value || '').trim() : '';
+    if (!title) {
+        showProfileStatusModal('Please enter a product title.', 'error', false);
+        return;
+    }
+
+    postProductDetailSection('title', {
+        product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+        title: title
+    }).then(function (res) {
+        if (res && res.success) {
+            closeProductTitleModal();
+            showProfileStatusModal(res.message || 'Product title updated.', 'success', true);
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Could not update product title.', 'error', false);
+        }
+    }).catch(function () {
+        showProfileStatusModal('An error occurred while updating the product title.', 'error', false);
+    });
+}
+
+function openPriceSectionModal() {
+    var modal = document.getElementById('priceSectionModal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closePriceSectionModal() {
+    var modal = document.getElementById('priceSectionModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function submitPriceSectionUpdate() {
+    var payload = {
+        product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+        price_india: parseFloat(document.getElementById('input_price_section_price_india').value || '0'),
+        price: parseFloat(document.getElementById('input_price_section_price_usd').value || '0'),
+        mrp_india: parseFloat(document.getElementById('input_price_section_mrp_india').value || '0'),
+        gst: parseFloat(document.getElementById('input_price_section_gst').value || '0'),
+        hsn: String(document.getElementById('input_price_section_hsn').value || '').trim(),
+        permanent_discount: parseFloat(document.getElementById('input_price_section_permanent_discount').value || '0'),
+        discount_global: parseFloat(document.getElementById('input_price_section_discount_global').value || '0'),
+        discount_india: parseFloat(document.getElementById('input_price_section_discount_india').value || '0')
+    };
+    var cpInput = document.getElementById('input_price_section_cp');
+    var sourcingInput = document.getElementById('input_price_section_sourcingfee');
+    var shippingInput = document.getElementById('input_price_section_shippingfee');
+    if (cpInput) {
+        payload.cp = parseFloat(cpInput.value || '0');
+    }
+    if (sourcingInput) {
+        payload.sourcingfee = parseFloat(sourcingInput.value || '0');
+    }
+    if (shippingInput) {
+        payload.shippingfee = parseFloat(shippingInput.value || '0');
+    }
+
+    postProductDetailSection('price_section', payload).then(function (res) {
+        if (res && res.success) {
+            closePriceSectionModal();
+            var type = (res.vendor_sync && res.vendor_sync.success === false) ? 'notice' : 'success';
+            showProfileStatusModal(res.message || 'Price section updated.', type, true);
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Could not update the price section.', 'error', false);
+        }
+    }).catch(function () {
+        showProfileStatusModal('An error occurred while updating the price section.', 'error', false);
+    });
+}
+
+function openMeasurementsModal() {
+    var modal = document.getElementById('measurementsModal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeMeasurementsModal() {
+    var modal = document.getElementById('measurementsModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function submitMeasurementsUpdate() {
+    var payload = {
+        product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+        size: String(document.getElementById('input_measurement_size').value || '').trim(),
+        color: String(document.getElementById('input_measurement_color').value || '').trim(),
+        prod_height: parseFloat(document.getElementById('input_measurement_height').value || '0'),
+        prod_width: parseFloat(document.getElementById('input_measurement_width').value || '0'),
+        prod_length: parseFloat(document.getElementById('input_measurement_depth').value || '0'),
+        product_weight: parseFloat(document.getElementById('input_measurement_weight').value || '0'),
+        length_unit: String(document.getElementById('input_measurement_length_unit').value || '').trim(),
+        product_weight_unit: String(document.getElementById('input_measurement_weight_unit').value || '').trim(),
+        dimensions: String(document.getElementById('input_measurement_dimensions').value || '').trim()
+    };
+
+    postProductDetailSection('measurements_section', payload).then(function (res) {
+        if (res && res.success) {
+            closeMeasurementsModal();
+            var type = (res.vendor_sync && res.vendor_sync.success === false) ? 'notice' : 'success';
+            showProfileStatusModal(res.message || 'Measurements updated.', type, true);
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Could not update measurements.', 'error', false);
+        }
+    }).catch(function () {
+        showProfileStatusModal('An error occurred while updating measurements.', 'error', false);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var searchAuthorsUrl = <?php echo json_encode(base_url('?page=inbounding&action=searchAuthors&q='), JSON_UNESCAPED_SLASHES); ?>;
+    var searchPublishersUrl = <?php echo json_encode(base_url('?page=inbounding&action=searchPublishers&q='), JSON_UNESCAPED_SLASHES); ?>;
+
+    function mapAuthorOptions(rows) {
+        return (rows || []).map(function (item) {
+            return { id: String(item.id), name: item.name || '' };
+        });
+    }
+
+    function syncMultiSelectHidden(ts, hiddenInputId) {
+        var hidden = document.getElementById(hiddenInputId);
+        if (!hidden || !ts) return;
+        var vals = ts.getValue();
+        if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+        hidden.value = vals.filter(Boolean).join(',');
+    }
+
+    var authorHidden = document.getElementById('input_book_authors');
+    var authorSelectEl = document.getElementById('input_book_authors_select');
+    var initialAuthorOptions = <?php echo json_encode($selectedBookAuthorOptions ?? [], JSON_UNESCAPED_UNICODE); ?>;
+    var initialAuthorIds = <?php echo json_encode($selectedBookAuthorIds ?? [], JSON_UNESCAPED_UNICODE); ?>;
+    if (authorSelectEl && typeof window.safeTomSelect === 'function') {
+        authorSelectEl.setAttribute('multiple', 'multiple');
+        var authorTs = window.safeTomSelect(authorSelectEl, {
+            plugins: ['remove_button'],
+            valueField: 'id',
+            labelField: 'name',
+            searchField: ['name'],
+            placeholder: 'Search and select authors...',
+            maxItems: 100,
+            hideSelected: true,
+            closeAfterSelect: false,
+            create: false,
+            persist: true,
+            onChange: function () { syncMultiSelectHidden(this, 'input_book_authors'); },
+            onItemAdd: function () {
+                this.setTextboxValue('');
+                syncMultiSelectHidden(this, 'input_book_authors');
+            },
+            onItemRemove: function () { syncMultiSelectHidden(this, 'input_book_authors'); },
+            load: function (query, callback) {
+                if (!query || query.length < 2) return callback();
+                fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
+                    .then(function (r) { return r.ok ? r.json() : []; })
+                    .then(function (json) { callback(mapAuthorOptions(json)); })
+                    .catch(function () { callback(); });
+            }
+        });
+        if (authorTs) {
+            mapAuthorOptions(initialAuthorOptions).forEach(function (opt) {
+                authorTs.addOption(opt);
+            });
+            if (initialAuthorIds.length) {
+                authorTs.setValue(initialAuthorIds);
+            }
+            syncMultiSelectHidden(authorTs, 'input_book_authors');
+        } else if (authorHidden) {
+            authorHidden.value = initialAuthorIds.join(',');
+        }
+    }
+
+    var editedByHidden = document.getElementById('input_book_edited_by');
+    var editedBySelectEl = document.getElementById('input_book_edited_by_select');
+    var initialEditedByOptions = <?php echo json_encode($selectedBookEditedByOptions ?? [], JSON_UNESCAPED_UNICODE); ?>;
+    var initialEditedByIds = <?php echo json_encode($selectedBookEditedByIds ?? [], JSON_UNESCAPED_UNICODE); ?>;
+    if (editedBySelectEl && typeof window.safeTomSelect === 'function') {
+        editedBySelectEl.setAttribute('multiple', 'multiple');
+        var editedByTs = window.safeTomSelect(editedBySelectEl, {
+            plugins: ['remove_button'],
+            valueField: 'id',
+            labelField: 'name',
+            searchField: ['name'],
+            placeholder: 'Search and select editors...',
+            maxItems: 100,
+            hideSelected: true,
+            closeAfterSelect: false,
+            create: false,
+            persist: true,
+            onChange: function () { syncMultiSelectHidden(this, 'input_book_edited_by'); },
+            onItemAdd: function () {
+                this.setTextboxValue('');
+                syncMultiSelectHidden(this, 'input_book_edited_by');
+            },
+            onItemRemove: function () { syncMultiSelectHidden(this, 'input_book_edited_by'); },
+            load: function (query, callback) {
+                if (!query || query.length < 2) return callback();
+                fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
+                    .then(function (r) { return r.ok ? r.json() : []; })
+                    .then(function (json) { callback(mapAuthorOptions(json)); })
+                    .catch(function () { callback(); });
+            }
+        });
+        if (editedByTs) {
+            mapAuthorOptions(initialEditedByOptions).forEach(function (opt) {
+                editedByTs.addOption(opt);
+            });
+            if (initialEditedByIds.length) {
+                editedByTs.setValue(initialEditedByIds);
+            }
+            syncMultiSelectHidden(editedByTs, 'input_book_edited_by');
+        } else if (editedByHidden) {
+            editedByHidden.value = initialEditedByIds.join(',');
+        }
+    }
+
+    var publisherSelectEl = document.getElementById('input_book_publisher');
+    if (publisherSelectEl && typeof window.safeTomSelect === 'function') {
+        window.safeTomSelect(publisherSelectEl, {
+            valueField: 'id',
+            labelField: 'name',
+            searchField: ['name'],
+            placeholder: 'Search publisher...',
+            create: false,
+            preload: false,
+            allowEmptyOption: true,
+            load: function (query, callback) {
+                if (!query || query.length < 2) return callback();
+                fetch(searchPublishersUrl + encodeURIComponent(query), { credentials: 'include' })
+                    .then(function (r) { return r.ok ? r.json() : []; })
+                    .then(function (json) { callback(json || []); })
+                    .catch(function () { callback(); });
+            }
+        });
+    }
+});
+
+function openBookDetailsModal() {
+    var modal = document.getElementById('bookDetailsModal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeBookDetailsModal() {
+    var modal = document.getElementById('bookDetailsModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function submitBookDetailsUpdate() {
+    var payload = {
+        product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+        authors: String((document.getElementById('input_book_authors') || {}).value || '').trim(),
+        edited_by: String((document.getElementById('input_book_edited_by') || {}).value || '').trim(),
+        publisher: String((document.getElementById('input_book_publisher') || {}).value || '').trim(),
+        isbn: String((document.getElementById('input_book_isbn') || {}).value || '').trim(),
+        cover_type: String((document.getElementById('input_book_cover_type') || {}).value || '').trim(),
+        edition: String((document.getElementById('input_book_edition') || {}).value || '').trim(),
+        publication_date: String((document.getElementById('input_book_publication_date') || {}).value || '').trim(),
+        language: String((document.getElementById('input_book_language') || {}).value || '').trim(),
+        pages: String((document.getElementById('input_book_pages') || {}).value || '').trim()
+    };
+
+    postProductDetailSection('book_details_section', payload).then(function (res) {
+        if (res && res.success) {
+            closeBookDetailsModal();
+            var type = (res.vendor_sync && res.vendor_sync.success === false) ? 'notice' : 'success';
+            showProfileStatusModal(res.message || 'Book details updated.', type, true);
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Could not update book details.', 'error', false);
+        }
+    }).catch(function () {
+        showProfileStatusModal('An error occurred while updating book details.', 'error', false);
+    });
 }
 
 function submitCpUpdate() {

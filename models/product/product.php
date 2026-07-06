@@ -111,6 +111,41 @@ class product
         return $row;
     }
 
+    /**
+     * Vendor product/fetch may return price_india_suggested; persist only when the column exists.
+     */
+    public function syncPriceIndiaSuggestedFromApiRow(
+        string $itemCode,
+        string $size,
+        string $color,
+        array $apiRow
+    ): void {
+        if (!$this->vpProductsHasColumn('price_india_suggested')) {
+            return;
+        }
+        if (!array_key_exists('price_india_suggested', $apiRow)) {
+            return;
+        }
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return;
+        }
+        $val = $this->apiFormFloat($apiRow['price_india_suggested']);
+        $sql = "UPDATE vp_products SET price_india_suggested = ?
+                WHERE item_code = ?
+                  AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')
+                  AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+        $size = (string) $size;
+        $color = (string) $color;
+        $stmt->bind_param('dsss', $val, $itemCode, $size, $color);
+        $stmt->execute();
+        $stmt->close();
+    }
+
     /** @var string|null Cached vp_products TABLE_COLLATION (e.g. utf8mb4_unicode_ci). */
     private $vpProductsTableCollation = null;
 
@@ -329,6 +364,78 @@ class product
         }
 
         return $rows;
+    }
+
+    /**
+     * Flatten parent rows with nested variations[] into per-variant rows for matching.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    public static function expandVendorProductFetchVariants(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $variations = $row['variations'] ?? null;
+            if (!is_array($variations) || $variations === []) {
+                $clean = $row;
+                unset($clean['variations']);
+                $out[] = $clean;
+                continue;
+            }
+            $itemCode = trim((string) ($row['itemcode'] ?? $row['item_code'] ?? ''));
+            foreach ($variations as $variation) {
+                if (!is_array($variation)) {
+                    continue;
+                }
+                $merged = array_merge($row, $variation);
+                if ($itemCode !== '') {
+                    $merged['itemcode'] = $itemCode;
+                }
+                unset($merged['variations']);
+                $out[] = $merged;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private static function vendorFetchRowMatchesVariant(array $row, string $size, string $color): bool
+    {
+        $rowSize = trim((string) ($row['size'] ?? ''));
+        $rowColor = trim((string) ($row['color'] ?? ''));
+        if ($size !== '' && $rowSize !== '' && strcasecmp($rowSize, $size) !== 0) {
+            return false;
+        }
+        if ($color !== '' && $rowColor !== '' && strcasecmp($rowColor, $color) !== 0) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private static function vendorFetchRowVariantScore(array $row, string $size, string $color): int
+    {
+        $rowSize = trim((string) ($row['size'] ?? ''));
+        $rowColor = trim((string) ($row['color'] ?? ''));
+        $score = 0;
+        if ($size !== '' && $rowSize !== '' && strcasecmp($rowSize, $size) === 0) {
+            $score += 2;
+        }
+        if ($color !== '' && $rowColor !== '' && strcasecmp($rowColor, $color) === 0) {
+            $score += 2;
+        }
+
+        return $score;
     }
 
     /**
@@ -613,7 +720,7 @@ class product
         }
         $searchTerm = '%' . $search . '%';
         $limit = max(1, min(100, (int) $limit));
-        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, gst, hsn, image FROM vp_products
+        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, cp, price_india, gst, hsn, image, groupname, itemtype, category FROM vp_products
             WHERE sku LIKE ?
             LIMIT ?';
         $stmt = $this->db->prepare($sql);
@@ -626,6 +733,7 @@ class product
         $orderItems = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
+                $isBook = self::isBookProduct($row);
                 $orderItems[] = [
                     'id' => $row['id'],
                     'sku' => $row['sku'],
@@ -633,7 +741,9 @@ class product
                     'title' => $row['title'],
                     'color' => $row['color'],
                     'size' => $row['size'],
-                    'cost_price' => $row['cost_price'],
+                    'cost_price' => $this->directPurchaseSuggestedCost($row),
+                    'price_india' => (float) ($row['price_india'] ?? 0),
+                    'is_book' => $isBook,
                     'gst' => $row['gst'],
                     'hsn' => $row['hsn'],
                     'image' => $row['image'] ?? '',
@@ -760,6 +870,15 @@ class product
             return ['success' => false, 'message' => 'Product row not found after API sync.'];
         }
 
+        if (self::isBookProduct($row)) {
+            $priceIndia = (float) ($row['price_india'] ?? 0);
+            if ($priceIndia <= 0) {
+                return ['success' => false, 'message' => 'API returned no Price India (without GST) for this book.'];
+            }
+
+            return $this->directPurchaseFetchCostResponse($row, $priceIndia, true, 0.0, $priceIndia);
+        }
+
         $cp = (float) ($row['cp'] ?? 0);
         $productId = (int) $row['id'];
         if ($cp > 0) {
@@ -780,14 +899,156 @@ class product
             return ['success' => false, 'message' => 'API returned no cost price (cp) for this product.'];
         }
 
+        return $this->directPurchaseFetchCostResponse($row, $cost, false, $cp);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function findProductRowByVariant(string $itemCode, string $size = '', string $color = ''): ?array
+    {
+        $row = $this->findByItemCodeSizeColor($itemCode, trim($size), trim($color));
+        if ($row) {
+            return $row;
+        }
+
+        return $this->findByItemCodeSizeColor($itemCode, '', '') ?: null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function resolveProductForVendorSync(string $itemCode, string $size = '', string $color = ''): array
+    {
+        $row = $this->findProductRowByVariant($itemCode, $size, $color);
+        if (is_array($row) && !empty($row['id'])) {
+            $fresh = $this->getProduct((int) $row['id']);
+            if (is_array($fresh)) {
+                return $fresh;
+            }
+        }
+
         return [
+            'item_code' => $itemCode,
+            'size' => trim($size),
+            'color' => trim($color),
+        ];
+    }
+
+    /**
+     * Persist direct-purchase cost and push one vendor product/modify call (pricing + optional stock delta).
+     *
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    public function applyDirectPurchaseLinePricingToVendor(
+        string $itemCode,
+        string $size,
+        string $color,
+        float $cost,
+        ?float $localStockDelta = null
+    ): array {
+        $row = $this->findProductRowByVariant($itemCode, $size, $color);
+        if (!$row || empty($row['id'])) {
+            return ['success' => false, 'message' => 'Product not found for vendor sync.'];
+        }
+
+        $productId = (int) $row['id'];
+        $isBook = self::isBookProduct($row);
+
+        if ($cost > 0) {
+            if ($isBook) {
+                $this->setProductPriceIndia($productId, $cost);
+            } else {
+                $this->setProductCp($productId, $cost);
+            }
+        }
+
+        $hasStockDelta = $localStockDelta !== null && abs($localStockDelta) > 0.0001;
+        if ($cost <= 0 && !$hasStockDelta) {
+            return ['success' => false, 'message' => 'Nothing to sync to vendor API.'];
+        }
+
+        $fresh = $this->getProduct($productId);
+        $product = is_array($fresh) ? $fresh : $row;
+        $isBook = self::isBookProduct($product);
+
+        return $this->syncCpToVendorFrontend(
+            $product,
+            $isBook ? 0.0 : $cost,
+            $hasStockDelta ? $localStockDelta : null,
+            $isBook && $cost > 0 ? $cost : null
+        );
+    }
+
+    /**
+     * @return array{success:bool,message:string,cost_price:float,is_book:bool,gst:float,hsn:string,cp?:float,price_india?:float}
+     */
+    private function directPurchaseFetchCostResponse(
+        array $row,
+        float $costPrice,
+        bool $isBook,
+        float $cp = 0.0,
+        ?float $priceIndia = null
+    ): array {
+        $response = [
             'success' => true,
-            'message' => 'Latest cost price fetched from API.',
-            'cost_price' => $cost,
-            'cp' => $cp,
+            'message' => $isBook
+                ? 'Latest Price India (without GST) fetched from API.'
+                : 'Latest cost price fetched from API.',
+            'cost_price' => $costPrice,
+            'is_book' => $isBook,
             'gst' => (float) ($row['gst'] ?? 0),
             'hsn' => trim((string) ($row['hsn'] ?? '')),
         ];
+        if ($isBook && $priceIndia !== null) {
+            $response['price_india'] = $priceIndia;
+        } elseif (!$isBook) {
+            $response['cp'] = $cp;
+        }
+
+        return $response;
+    }
+
+    /**
+     * Books use Price India (ex-GST) as direct-purchase cost; other items use CP / cost_price.
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function isBookProduct(array $row): bool
+    {
+        $itemtype = strtolower(trim((string) ($row['itemtype'] ?? '')));
+        if ($itemtype === 'book') {
+            return true;
+        }
+        foreach (['groupname', 'category'] as $field) {
+            $value = strtolower(trim((string) ($row[$field] ?? '')));
+            if ($value === '' || $value === '0') {
+                continue;
+            }
+            if ($value === 'book' || $value === '-8' || strpos($value, 'book') !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Suggested cost for a direct-purchase line from vp_products.
+     *
+     * @param array<string, mixed> $row
+     */
+    public function directPurchaseSuggestedCost(array $row): float
+    {
+        if (self::isBookProduct($row)) {
+            return (float) ($row['price_india'] ?? 0);
+        }
+        $cost = (float) ($row['cost_price'] ?? 0);
+        if ($cost > 0) {
+            return $cost;
+        }
+
+        return (float) ($row['cp'] ?? 0);
     }
 
     /**
@@ -869,10 +1130,7 @@ class product
     }
 
     /**
-     * Push local_stock_delta to vendor product/modify only (does not change vp_products.local_stock).
-     * Does not create stock movements or change physical_stock.
-     *
-     * @return array{success:bool,message?:string,vendor_sync?:array,http_code?:int,response?:array}
+     * Push local_stock_delta to product/modify, then refresh local_stock from product/fetch.
      */
     public function applyLocalStockDeltaAndRefreshFromVendorApi(
         string $itemCode,
@@ -881,39 +1139,22 @@ class product
         string $color = ''
     ): array {
         $itemCode = trim($itemCode);
-        if ($itemCode === '') {
-            return ['success' => false, 'message' => 'Item code is required.'];
+        $localStockDelta = (int) $localStockDelta;
+        if ($itemCode === '' || $localStockDelta === 0) {
+            return ['success' => true, 'message' => 'Nothing to sync.'];
         }
 
         $size = trim($size);
         $color = trim($color);
-        $localStockDelta = (int) $localStockDelta;
-        if ($localStockDelta === 0) {
-            return ['success' => true, 'message' => 'No local_stock_delta to apply.'];
-        }
-
-        $product = [
-            'item_code' => $itemCode,
-            'size' => $size,
-            'color' => $color,
-        ];
         $row = $this->findByItemCodeSizeColor($itemCode, $size, $color);
-        if (is_array($row)) {
-            $product = $row;
-        }
+        $product = is_array($row) ? $row : ['item_code' => $itemCode, 'size' => $size, 'color' => $color];
 
         $vendorSync = $this->syncCpToVendorFrontend($product, 0.0, (float) $localStockDelta);
         if (empty($vendorSync['success'])) {
-            return [
-                'success' => false,
-                'message' => (string) ($vendorSync['message'] ?? 'Vendor local_stock_delta sync failed.'),
-                'vendor_sync' => $vendorSync,
-            ];
+            return $vendorSync;
         }
 
-        $vendorSync['vendor_sync'] = $vendorSync;
-
-        return $vendorSync;
+        return $this->refreshLocalStockFromVendorApi($itemCode);
     }
 
     /** Set accounts_group on all rows for an item code from the vendor product/fetch master row. */
@@ -957,7 +1198,7 @@ class product
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($product['size'] ?? ''), (string)($product['color'] ?? ''));
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
+                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
                     $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
@@ -990,7 +1231,6 @@ class product
                     $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
                     $price = self::vendorApiUsdPrice($product);
                     $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
-                    $price_india_suggested = isset($product['price_india_suggested']) ? (float)$product['price_india_suggested'] : 0.0;
                     $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
                     $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                     $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
@@ -1030,7 +1270,7 @@ class product
                     $youtube_links = isset($product['youtube_links']) ? $product['youtube_links'] : '';
                     $sketchfab_links = isset($product['sketchfab_links']) ? $product['sketchfab_links'] : '';
                     $dimensions = isset($product['dimensions']) ? $product['dimensions'] : '';
-                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
+                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
                     $stmt->bind_param(
                         $bt,
                         $asin,
@@ -1051,7 +1291,6 @@ class product
                         $sourcingfee,
                         $price,
                         $price_india,
-                        $price_india_suggested,
                         $mrp_india,
                         $permanent_discount,
                         $discount_global,
@@ -1099,6 +1338,12 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
+                        $this->syncPriceIndiaSuggestedFromApiRow(
+                            (string) $product['itemcode'],
+                            (string) $size,
+                            (string) $color,
+                            $product
+                        );
                         if (!$preserveLocalStock && $syncPhysicalStock) {
                             $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
                                 $existingBase,
@@ -1151,7 +1396,6 @@ class product
                                 'sourcingfee' => (float)$sourcingfee,
                                 'price' => (float)$price,
                                 'price_india' => (float)$price_india,
-                                'price_india_suggested' => (float)$price_india_suggested,
                                 'mrp_india' => (float)$mrp_india,
                                 'permanent_discount' => (float)$permanent_discount,
                                 'discount_global' => (float)$discount_global,
@@ -1199,6 +1443,12 @@ class product
                             ]);
                             if ($insertId) {
                                 $updatedCount++;
+                                $this->syncPriceIndiaSuggestedFromApiRow(
+                                    (string) $product['itemcode'],
+                                    (string) $size,
+                                    (string) $color,
+                                    $product
+                                );
                             }
                         }
                     }
@@ -1212,7 +1462,7 @@ class product
                         $variation = $this->castApiProductLikeForm($variation);
                         //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
                         $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($variation['size'] ?? ''), (string)($variation['color'] ?? ''));
-                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
+                        $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
                         if ($stmt) {
                             // $title = isset($product['title']) ? $product['title'] : '';
                             $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
@@ -1245,7 +1495,6 @@ class product
                             $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
                             $price = self::vendorApiUsdPrice(array_merge($product, $variation));
                             $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
-                            $price_india_suggested = isset($product['price_india_suggested']) ? (float)$product['price_india_suggested'] : 0.0;
                             $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
                             $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                             $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
@@ -1292,7 +1541,7 @@ class product
                             $youtube_links = isset($variation['youtube_links']) ? $variation['youtube_links'] : (isset($product['youtube_links']) ? $product['youtube_links'] : '');
                             $sketchfab_links = isset($variation['sketchfab_links']) ? $variation['sketchfab_links'] : (isset($product['sketchfab_links']) ? $product['sketchfab_links'] : '');
                             $dimensions = isset($variation['dimensions']) ? $variation['dimensions'] : (isset($product['dimensions']) ? $product['dimensions'] : '');
-                            $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 9) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
+                            $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
                             $stmt->bind_param(
                                 $bt,
                                 $asin,
@@ -1313,7 +1562,6 @@ class product
                                 $sourcingfee,
                                 $price,
                                 $price_india,
-                                $price_india_suggested,
                                 $mrp_india,
                                 $permanent_discount,
                                 $discount_global,
@@ -1360,6 +1608,12 @@ class product
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
+                                $this->syncPriceIndiaSuggestedFromApiRow(
+                                    (string) $product['itemcode'],
+                                    (string) $size,
+                                    (string) $color,
+                                    array_merge($product, $variation)
+                                );
                                 if (!$preserveLocalStock && $syncPhysicalStock) {
                                     $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
                                         $existingBase,
@@ -1412,7 +1666,6 @@ class product
                                         'sourcingfee' => (float)$sourcingfee,
                                         'price' => (float)$price,
                                         'price_india' => (float)($variation['price_india'] ?? ($product['price_india'] ?? 0)),
-                                        'price_india_suggested' => (float)($variation['price_india_suggested'] ?? ($product['price_india_suggested'] ?? 0)),
                                         'mrp_india' => (float)($variation['mrp_india'] ?? ($product['mrp_india'] ?? 0)),
                                         'permanent_discount' => (float)($variation['permanent_discount'] ?? ($product['permanent_discount'] ?? 0)),
                                         'discount_global' => (float)($variation['discount_global'] ?? ($product['discount_global'] ?? 0)),
@@ -1460,6 +1713,12 @@ class product
                                     ]);
                                     if ($insertId) {
                                         $updatedCount++;
+                                        $this->syncPriceIndiaSuggestedFromApiRow(
+                                            (string) $product['itemcode'],
+                                            (string) $size,
+                                            (string) $color,
+                                            array_merge($product, $variation)
+                                        );
                                     }
                                 }
                             }
@@ -2098,11 +2357,11 @@ class product
         if (($data['date_first_added'] ?? '') === '') {
             $data['date_first_added'] = null;
         }
-        $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at, category, itemtype, snippet_description, india_net_qty, keywords, usblock, indiablock, hscode, date_first_added, search_term, search_category, long_description, long_description_india, aplus_content_ids, item_level, marketplace_vendor, colormap, flex_status, vendor_us, today_global, today_india, topurchase, backorder_percent, backorder_weeks, cp, usd, amazon_sold, amazon_leadtime, amazon_itemcode_alias, youtube_links, sketchfab_links, dimensions)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at, category, itemtype, snippet_description, india_net_qty, keywords, usblock, indiablock, hscode, date_first_added, search_term, search_category, long_description, long_description_india, aplus_content_ids, item_level, marketplace_vendor, colormap, flex_status, vendor_us, today_global, today_india, topurchase, backorder_percent, backorder_weeks, cp, usd, amazon_sold, amazon_leadtime, amazon_itemcode_alias, youtube_links, sketchfab_links, dimensions)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param(
-            'ssssssdddsssisssssssssssssisddddddddddsiiissssssisiissssssssssssssiiiddiissss',
+            'ssssssdddsssisssssssssssssisdddddddddsiiissssssisiissssssssssssssiiiddiissss',
             $data['item_code'],
             $data['sku'],
             $data['size'],
@@ -2135,7 +2394,6 @@ class product
             $data['sourcingfee'],
             $data['price'],
             $data['price_india'],
-            $data['price_india_suggested'],
             $data['mrp_india'],
             $data['permanent_discount'],
             $data['discount_global'],
@@ -2190,10 +2448,10 @@ class product
     {
         $data['leadtime'] = $this->normalizeIntValue($data['leadtime'] ?? null, 0);
         $data['instock_leadtime'] = $this->normalizeIntValue($data['instock_leadtime'] ?? null, 0);
-        $sql = "UPDATE vp_products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?,  groupname=?, material=?, cost_price=?, gst=?, hsn=?, description=?, asin=?, upc=?, location=?, fba_in=?, fba_us=?, leadtime=?, instock_leadtime=?, permanently_available=?, numsold=?, numsold_india=?, numsold_global=?, lastsold=?, vendor=?, shippingfee=?, sourcingfee=?, price=?, price_india=?, price_india_suggested=?, mrp_india=?, permanent_discount=?, discount_global=?, discount_india=?, product_weight=?, product_weight_unit=?, prod_height=?, prod_width=?, prod_length=?, length_unit=?, updated_at=? WHERE id = ?";
+        $sql = "UPDATE vp_products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?,  groupname=?, material=?, cost_price=?, gst=?, hsn=?, description=?, asin=?, upc=?, location=?, fba_in=?, fba_us=?, leadtime=?, instock_leadtime=?, permanently_available=?, numsold=?, numsold_india=?, numsold_global=?, lastsold=?, vendor=?, shippingfee=?, sourcingfee=?, price=?, price_india=?, mrp_india=?, permanent_discount=?, discount_global=?, discount_india=?, product_weight=?, product_weight_unit=?, prod_height=?, prod_width=?, prod_length=?, length_unit=?, updated_at=? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param(
-            'ssiddssddsssssiissiiiiisddddddddddsdddssi',
+            'ssiddssddsssssiissiiiiisdddddddddsdddssi',
             $data['title'],
             $data['image'],
             $data['local_stock'],
@@ -2222,7 +2480,6 @@ class product
             $data['sourcingfee'],
             $data['price'],
             $data['price_india'],
-            $data['price_india_suggested'],
             $data['mrp_india'],
             $data['permanent_discount'],
             $data['discount_global'],
@@ -3641,6 +3898,13 @@ class product
                 'text_color_class' => 'text-green-600',
             ];
         }
+        if ($mt === 'IN' && $rt === 'INBOUND') {
+            return [
+                'ledger_type' => 'Inbound',
+                'icon' => 'fa-arrow-up',
+                'text_color_class' => 'text-green-600',
+            ];
+        }
         if ($mt === 'OUT' && $rt === 'DIRECT_PURCHASE_RETURN') {
             return [
                 'ledger_type' => 'Purchase return',
@@ -3735,7 +3999,29 @@ class product
             StockMovement::insert($this->db, $data);
 
             $this->db->commit();
-            return ['success' => true, 'message' => 'Stock updated and history recorded.'];
+
+            $result = ['success' => true, 'message' => 'Stock updated and history recorded.'];
+
+            if (strtoupper(trim((string) ($data['ref_type'] ?? 'MANUAL'))) === 'MANUAL') {
+                $movementType = strtoupper(trim((string) ($data['movement_type'] ?? 'OUT')));
+                $qty = (int) ($data['quantity'] ?? 0);
+                $delta = in_array($movementType, ['IN', 'TRANSFER_IN', 'OPENING_STOCK'], true) ? $qty : -$qty;
+                $itemCode = trim((string) ($data['item_code'] ?? ''));
+
+                if ($delta !== 0 && $itemCode !== '') {
+                    $apiSync = $this->applyLocalStockDeltaAndRefreshFromVendorApi(
+                        $itemCode,
+                        $delta,
+                        (string) ($data['size'] ?? ''),
+                        (string) ($data['color'] ?? '')
+                    );
+                    if (empty($apiSync['success'])) {
+                        $result['message'] .= ' Warning: ' . trim((string) ($apiSync['message'] ?? 'Storefront stock sync failed.'));
+                    }
+                }
+            }
+
+            return $result;
         } catch (Exception $e) {
             $this->db->rollback();
             return ['success' => false, 'message' => $e->getMessage()];
@@ -4100,13 +4386,17 @@ class product
     }
 
     /**
-     * Push CP and/or local_stock_delta to exoticindia.com via vendor product/modify.
+     * Push CP, price_india, and/or local_stock_delta to exoticindia.com via vendor product/modify.
      *
      * @param array<string, mixed> $product
      * @return array{success:bool,message:string,http_code?:int,response?:array}
      */
-    public function syncCpToVendorFrontend(array $product, float $cp, ?float $localStockDelta = null): array
-    {
+    public function syncCpToVendorFrontend(
+        array $product,
+        float $cp = 0.0,
+        ?float $localStockDelta = null,
+        ?float $priceIndia = null
+    ): array {
         if (!function_exists('exotic_india_api_post')) {
             require_once __DIR__ . '/../../helpers/exotic_india_api.php';
         }
@@ -4120,6 +4410,9 @@ class product
         if ($cp > 0) {
             $postFields['cp'] = $cp;
         }
+        if ($priceIndia !== null && $priceIndia > 0) {
+            $postFields['price_india'] = (int) round($priceIndia);
+        }
         if ($localStockDelta !== null && abs($localStockDelta) > 0.0001) {
             $postFields['local_stock_delta'] = (int) round($localStockDelta);
         }
@@ -4127,6 +4420,17 @@ class product
             return ['success' => false, 'message' => 'Nothing to sync to vendor API.'];
         }
 
+        return $this->postProductModifyToVendor($product, $postFields, 'Vendor product sync failed.');
+    }
+
+    /**
+     * @param array<string, mixed> $product
+     * @param array<string, int|float|string> $postFields
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    private function postProductModifyToVendor(array $product, array $postFields, string $failureLabel): array
+    {
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
         $size = trim((string) ($product['size'] ?? ''));
         $color = trim((string) ($product['color'] ?? ''));
         $endpoint = 'product/modify'
@@ -4145,7 +4449,7 @@ class product
                 'success' => false,
                 'message' => trim((string) ($api['message'] ?? '')) !== ''
                     ? (string) $api['message']
-                    : 'Vendor product sync failed.',
+                    : $failureLabel,
                 'http_code' => (int) ($api['http_code'] ?? 0),
             ];
         }
@@ -4157,16 +4461,27 @@ class product
             'success' => $apiSuccess,
             'message' => trim((string) ($data['message'] ?? '')) !== ''
                 ? (string) $data['message']
-                : ($apiSuccess ? 'Vendor product sync completed.' : 'Vendor product sync failed.'),
+                : ($apiSuccess ? 'Vendor product sync completed.' : $failureLabel),
             'http_code' => (int) ($api['http_code'] ?? 0),
             'response' => $data,
         ];
     }
 
     /**
+     * Push price_india to exoticindia.com via vendor product/modify.
+     *
+     * @param array<string, mixed> $product
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    public function syncPriceIndiaToVendorFrontend(array $product, float $priceIndia): array
+    {
+        return $this->syncCpToVendorFrontend($product, 0.0, null, $priceIndia);
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
-    public function getVendorApiVariantRow(string $itemCode, string $size = '', string $color = ''): ?array
+    public function getVendorApiVariantRow(string $itemCode, string $size = '', string $color = '', string $sku = ''): ?array
     {
         $itemCode = trim($itemCode);
         if ($itemCode === '') {
@@ -4178,38 +4493,38 @@ class product
             return null;
         }
 
-        $rows = self::normalizeVendorProductFetchItems($decoded);
+        $rows = self::expandVendorProductFetchVariants(self::normalizeVendorProductFetchItems($decoded));
         if ($rows === []) {
             return null;
         }
 
         $size = trim($size);
         $color = trim($color);
-        $fallback = null;
+        $sku = trim($sku);
 
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
+        if ($sku !== '') {
+            foreach ($rows as $row) {
+                $rowSku = trim((string) ($row['sku'] ?? ''));
+                if ($rowSku !== '' && strcasecmp($rowSku, $sku) === 0) {
+                    return $row;
+                }
             }
-            $rowSize = trim((string) ($row['size'] ?? ''));
-            $rowColor = trim((string) ($row['color'] ?? ''));
-            if ($size !== '' && strcasecmp($rowSize, $size) !== 0) {
-                continue;
-            }
-            if ($color !== '' && strcasecmp($rowColor, $color) !== 0) {
-                continue;
-            }
-            if ($size === '' && $color === '' && $fallback === null) {
-                $fallback = $row;
-                continue;
-            }
-            if ($size !== '' || $color !== '') {
-                return $row;
-            }
-            $fallback = $row;
         }
 
-        return $fallback;
+        $best = null;
+        $bestScore = -1;
+        foreach ($rows as $row) {
+            if (!self::vendorFetchRowMatchesVariant($row, $size, $color)) {
+                continue;
+            }
+            $score = self::vendorFetchRowVariantScore($row, $size, $color);
+            if ($score > $bestScore) {
+                $best = $row;
+                $bestScore = $score;
+            }
+        }
+
+        return $best ?? $rows[0];
     }
 
     /**
@@ -4222,14 +4537,15 @@ class product
         string $size,
         string $color,
         float $expectedCp,
-        ?float $expectedLocalStock = null
+        ?float $expectedLocalStock = null,
+        string $sku = ''
     ): array {
         $itemCode = trim($itemCode);
         if ($itemCode === '') {
             return ['success' => false, 'message' => 'Item code is required to verify vendor data.'];
         }
 
-        $vendorRow = $this->getVendorApiVariantRow($itemCode, $size, $color);
+        $vendorRow = $this->getVendorApiVariantRow($itemCode, $size, $color, $sku);
         if ($vendorRow === null) {
             return [
                 'success' => false,
@@ -4239,18 +4555,26 @@ class product
         }
 
         $vendorCp = (float) ($vendorRow['cp'] ?? 0);
+        $vendorPriceIndia = (float) ($vendorRow['price_india'] ?? 0);
         $vendorStock = (float) ($vendorRow['local_stock'] ?? 0);
+
+        $localRow = $this->findProductRowByVariant($itemCode, $size, $color);
+        $isBook = (is_array($localRow) && self::isBookProduct($localRow))
+            || self::isBookProduct($vendorRow);
+        $priceLabel = $isBook ? 'Price India' : 'CP (cost price)';
+        $vendorPrice = $isBook ? $vendorPriceIndia : $vendorCp;
+
         $checks = [];
         $allMatch = true;
         $anyChecked = false;
 
         if ($expectedCp > 0) {
-            $cpMatch = abs($vendorCp - $expectedCp) < 0.01;
+            $cpMatch = abs($vendorPrice - $expectedCp) < 0.01;
             $checks['cp'] = [
-                'label' => 'CP (cost price)',
+                'label' => $priceLabel,
                 'checked' => true,
                 'expected' => $expectedCp,
-                'vendor' => $vendorCp,
+                'vendor' => $vendorPrice,
                 'match' => $cpMatch,
             ];
             $anyChecked = true;
@@ -4259,12 +4583,12 @@ class product
             }
         } else {
             $checks['cp'] = [
-                'label' => 'CP (cost price)',
+                'label' => $priceLabel,
                 'checked' => false,
                 'expected' => 0.0,
-                'vendor' => $vendorCp,
+                'vendor' => $vendorPrice,
                 'match' => null,
-                'note' => 'No cost on this line to verify.',
+                'note' => $isBook ? 'No Price India on this line to verify.' : 'No cost on this line to verify.',
             ];
         }
 
@@ -4304,8 +4628,12 @@ class product
         }
 
         $message = $allMatch
-            ? 'Vendor CP and stock match expected values on exoticindia.com.'
-            : 'Vendor values on exoticindia.com do not fully match expected CP/stock.';
+            ? ($isBook
+                ? 'Vendor Price India and stock match expected values on exoticindia.com.'
+                : 'Vendor CP and stock match expected values on exoticindia.com.')
+            : ($isBook
+                ? 'Vendor values on exoticindia.com do not fully match expected Price India/stock.'
+                : 'Vendor values on exoticindia.com do not fully match expected CP/stock.');
 
         return [
             'success' => $allMatch,
@@ -4313,6 +4641,7 @@ class product
             'item_code' => $itemCode,
             'size' => trim($size),
             'color' => trim($color),
+            'is_book' => $isBook,
             'checks' => $checks,
         ];
     }
@@ -4334,7 +4663,10 @@ class product
             'image' => 'image',
             'price' => 'price',
             'price_india' => 'price_india',
+            'shippingfee' => 'shippingfee',
+            'sourcingfee' => 'sourcingfee',
             'gst' => 'gst',
+            'hsn' => 'hsn',
             'category' => 'category',
             'itemtype' => 'itemtype',
             'snippet_description' => 'snippet_description',
@@ -4375,8 +4707,21 @@ class product
             'amazon_itemcode_alias' => 'amazon_itemcode_alias',
             'youtube_links' => 'youtube_links',
             'sketchfab_links' => 'sketchfab_links',
-            'dimensions' => 'dimensions'
+            'dimensions' => 'dimensions',
+            'product_weight' => 'product_weight',
+            'product_weight_unit' => 'product_weight_unit',
+            'prod_height' => 'prod_height',
+            'prod_width' => 'prod_width',
+            'prod_length' => 'prod_length',
+            'length_unit' => 'length_unit',
+            'size' => 'size',
+            'color' => 'color',
+            'updated_at' => 'updated_at',
         ];
+
+        if (!$this->vpProductsHasColumn('price_india_suggested')) {
+            unset($columnMap['price_india_suggested']);
+        }
 
         foreach ($columnMap as $dataKey => $dbColumn) {
             if (isset($data[$dataKey])) {

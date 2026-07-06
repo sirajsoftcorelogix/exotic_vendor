@@ -101,12 +101,14 @@ final class StockMovement
         $sql = '
             SELECT COALESCE(SUM(GREATEST(0, ist.transfer_qty - COALESCE(gr.received_qty, 0))), 0) AS in_transit
             FROM vp_item_stock_transfer ist
-            INNER JOIN vp_stock_transfer st ON st.transfer_order_no = ist.transfer_order_no
+            INNER JOIN vp_stock_transfer st
+                ON st.transfer_order_no COLLATE utf8mb4_unicode_ci = ist.transfer_order_no COLLATE utf8mb4_unicode_ci
             LEFT JOIN (
                 SELECT transfer_id, sku, SUM(qty_received) AS received_qty
                 FROM vp_stock_transfer_grns
                 GROUP BY transfer_id, sku
-            ) gr ON gr.transfer_id = st.id AND gr.sku = ist.sku
+            ) gr ON gr.transfer_id = st.id
+                AND gr.sku COLLATE utf8mb4_unicode_ci = ist.sku COLLATE utf8mb4_unicode_ci
             WHERE ist.product_id = ?
               AND ist.transfer_qty > COALESCE(gr.received_qty, 0)';
         $stmt = $conn->prepare($sql);

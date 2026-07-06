@@ -125,7 +125,12 @@ class Inbounding {
             $to   = $this->conn->real_escape_string($filters['published_to']);
             $from .= " 00:00:00";
             $to   .= " 23:59:59";
-            $where[] = "vi.id IN ( SELECT il.i_id FROM inbound_logs as il WHERE il.stat = 'published' AND il.created_at BETWEEN '$from' AND '$to')";
+            $where[] = "vi.id IN (
+                SELECT il.i_id
+                FROM inbound_logs AS il
+                WHERE LOWER(TRIM(il.stat)) IN ('published', 'published (live)', 'published (local)')
+                  AND il.created_at BETWEEN '$from' AND '$to'
+            )";
         }
         // 15. Assigned User Filter
         if (!empty($filters['assigned_user_id'])) {
@@ -144,6 +149,15 @@ class Inbounding {
                 continue;
             }
             $statEsc = $this->conn->real_escape_string($statValue);
+            if ($filterKey === 'log_published') {
+                $publishedWhere = "SELECT i_id FROM inbound_logs WHERE LOWER(TRIM(stat)) IN ('published', 'published (live)', 'published (local)')";
+                if ($filters[$filterKey] === 'yes') {
+                    $where[] = "vi.id IN ($publishedWhere)";
+                } else {
+                    $where[] = "vi.id NOT IN ($publishedWhere)";
+                }
+                continue;
+            }
             if ($filters[$filterKey] === 'yes') {
                 $where[] = "vi.id IN (SELECT i_id FROM inbound_logs WHERE stat = '$statEsc')";
             } else {
@@ -445,6 +459,7 @@ class Inbounding {
 
     // 3. Insert new image record (KEPT EXISTING)
     public function add_image($item_id, $filename, $caption = '', $order = 0, $variation_id = -1) {
+        $filename = strtolower(basename((string) $filename));
         // Added variation_id to query
         $sql = "INSERT INTO `item_images` (item_id, file_name, display_order, image_caption, variation_id) VALUES (?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
@@ -1959,7 +1974,12 @@ class Inbounding {
         if (isset($var_rows) && !empty($var_rows)) {
             $inbounding['var_rows'] = $var_rows;
         }
-        $images_sql = $this->conn->query("SELECT file_name FROM `item_images` WHERE item_id = $id");
+        $images_sql = $this->conn->query(
+            "SELECT id, file_name, display_order, variation_id
+             FROM `item_images`
+             WHERE item_id = $id
+             ORDER BY variation_id ASC, display_order ASC, id ASC"
+        );
         $img_result = $images_sql->fetch_all(MYSQLI_ASSOC);
         if ($img_result) {
             $inbounding['img'] = $img_result;
@@ -1976,7 +1996,90 @@ class Inbounding {
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
 
+    /**
+     * Inbound row + variations + gallery images (grouped) for rename/publish refresh.
+     *
+     * @return array{inbound: array, variations: list<array>, images_by_variation: array<int, list<array>>}
+     */
+    public function getImageRenameBundle(int $id): array
+    {
+        $id = (int) $id;
+        $empty = ['inbound' => [], 'variations' => [], 'images_by_variation' => []];
+        if ($id <= 0) {
+            return $empty;
+        }
+
+        $inbound = null;
+        $stmt = $this->conn->prepare(
+            'SELECT id, group_name, product_photo, is_variant, Item_code, color, size
+             FROM vp_inbound WHERE id = ? LIMIT 1'
+        );
+        if ($stmt) {
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $inbound = $stmt->get_result()->fetch_assoc() ?: null;
+            $stmt->close();
+        }
+
+        $variations = $this->getVariations($id);
+        $imagesByVariation = [];
+        $imgStmt = $this->conn->prepare(
+            'SELECT id, file_name, display_order, variation_id
+             FROM item_images WHERE item_id = ?
+             ORDER BY variation_id ASC, display_order ASC, id ASC'
+        );
+        if ($imgStmt) {
+            $imgStmt->bind_param('i', $id);
+            $imgStmt->execute();
+            foreach ($imgStmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+                $varId = (int) ($row['variation_id'] ?? -1);
+                if ($varId === 0) {
+                    $varId = -1;
+                }
+                $imagesByVariation[$varId][] = $row;
+            }
+            $imgStmt->close();
+        }
+
+        return [
+            'inbound' => $inbound ?: [],
+            'variations' => $variations,
+            'images_by_variation' => $imagesByVariation,
+        ];
+    }
+
+    /** Refresh image paths on publish payload after rename (no second full getpublishdata). */
+    public function refreshPublishImageFields(int $id, array $publishPayload, ?array $bundle = null): array
+    {
+        if (!isset($publishPayload['data']) || !is_array($publishPayload['data'])) {
+            return $publishPayload;
+        }
+
+        $bundle = $bundle ?? $this->getImageRenameBundle($id);
+        $publishPayload['data']['product_photo'] = $bundle['inbound']['product_photo'] ?? '';
+        if ($bundle['variations'] !== []) {
+            $publishPayload['data']['var_rows'] = $bundle['variations'];
+        } else {
+            unset($publishPayload['data']['var_rows']);
+        }
+
+        $flatImages = [];
+        foreach ($bundle['images_by_variation'] as $rows) {
+            foreach ($rows as $row) {
+                $flatImages[] = $row;
+            }
+        }
+        if ($flatImages !== []) {
+            $publishPayload['data']['img'] = $flatImages;
+        } else {
+            unset($publishPayload['data']['img']);
+        }
+
+        return $publishPayload;
+    }
+
     public function update_image_filename_direct($img_id, $new_name) {
+        $new_name = strtolower(basename((string) $new_name));
         $sql = "UPDATE item_images SET file_name = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("si", $new_name, $img_id);
@@ -2026,24 +2129,144 @@ class Inbounding {
         return $blocked;
     }
 
-    public function isInboundPublished(int $id): bool
+    private function detectInboundPublishStateFromLogs(int $id): ?string
     {
+        static $cache = [];
+        if (isset($cache[$id])) {
+            return $cache[$id];
+        }
+
+        $dirs = [
+            dirname(__DIR__, 2) . '/log/publish_logs/',
+            rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'exotic_publish_logs' . DIRECTORY_SEPARATOR,
+        ];
+
+        foreach (array_unique($dirs) as $dir) {
+            if (!is_dir($dir)) {
+                continue;
+            }
+            $files = glob($dir . 'publish_*.json') ?: [];
+            if ($files === []) {
+                continue;
+            }
+
+            usort($files, static function (string $a, string $b): int {
+                return (@filemtime($b) ?: 0) <=> (@filemtime($a) ?: 0);
+            });
+
+            foreach ($files as $file) {
+                $raw = @file_get_contents($file);
+                if (!is_string($raw) || trim($raw) === '') {
+                    continue;
+                }
+                $entry = json_decode($raw, true);
+                if (!is_array($entry)) {
+                    continue;
+                }
+                if ((int) ($entry['inbound_id'] ?? 0) !== $id) {
+                    continue;
+                }
+                if (strtolower(trim((string) ($entry['status'] ?? ''))) !== 'success') {
+                    continue;
+                }
+
+                $requestData = is_array($entry['request_data'] ?? null) ? $entry['request_data'] : [];
+                $publishStatus = array_key_exists('status', $requestData)
+                    ? (int) $requestData['status']
+                    : null;
+
+                if ($publishStatus === 1) {
+                    return $cache[$id] = 'live';
+                }
+                if ($publishStatus === 0) {
+                    return $cache[$id] = 'local';
+                }
+
+                return $cache[$id] = 'live';
+            }
+        }
+
+        return $cache[$id] = null;
+    }
+
+    /**
+     * @return array{has_any_publish:bool,is_live:bool,is_local:bool,source:string,stat:string}
+     */
+    public function getInboundPublishState(int $id): array
+    {
+        $state = [
+            'has_any_publish' => false,
+            'is_live' => false,
+            'is_local' => false,
+            'source' => 'none',
+            'stat' => '',
+        ];
         if ($id <= 0) {
-            return false;
+            return $state;
         }
 
         $stmt = $this->conn->prepare(
-            "SELECT id FROM inbound_logs WHERE i_id = ? AND LOWER(TRIM(stat)) = 'published' LIMIT 1"
+            "SELECT stat
+             FROM inbound_logs
+             WHERE i_id = ?
+               AND LOWER(TRIM(stat)) IN ('published', 'published (live)', 'published (local)')
+             ORDER BY COALESCE(modified_at, created_at) DESC, id DESC
+             LIMIT 1"
         );
-        if (!$stmt) {
-            return false;
+        if ($stmt) {
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $row = $stmt->get_result()?->fetch_assoc();
+            $stmt->close();
+            if (!empty($row['stat'])) {
+                $state['has_any_publish'] = true;
+                $state['stat'] = (string) $row['stat'];
+                $normalized = strtolower(trim((string) $row['stat']));
+                if ($normalized === 'published (live)') {
+                    $state['is_live'] = true;
+                    $state['source'] = 'inbound_log';
+                } elseif ($normalized === 'published (local)') {
+                    $state['is_local'] = true;
+                    $state['source'] = 'inbound_log';
+                } elseif ($normalized === 'published') {
+                    $state['source'] = 'legacy_inbound_log';
+                }
+            }
         }
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $row = $stmt->get_result()?->fetch_assoc();
-        $stmt->close();
 
-        return !empty($row['id']);
+        $logState = $this->detectInboundPublishStateFromLogs($id);
+        if ($logState === 'live') {
+            $state['has_any_publish'] = true;
+            $state['is_live'] = true;
+            $state['is_local'] = false;
+            $state['source'] = 'publish_log_file';
+            return $state;
+        }
+        if ($logState === 'local') {
+            $state['has_any_publish'] = true;
+            $state['is_live'] = false;
+            $state['is_local'] = true;
+            $state['source'] = 'publish_log_file';
+            return $state;
+        }
+
+        // Legacy generic "Published" rows were historically used for both paths.
+        // If no detailed publish log survives, preserve old behavior and treat them as live.
+        if ($state['source'] === 'legacy_inbound_log') {
+            $state['is_live'] = true;
+        }
+
+        return $state;
+    }
+
+    public function isInboundPublished(int $id): bool
+    {
+        return !empty($this->getInboundPublishState($id)['has_any_publish']);
+    }
+
+    public function isInboundLivePublished(int $id): bool
+    {
+        return !empty($this->getInboundPublishState($id)['is_live']);
     }
 
     public function getProductBysku($sku) {
@@ -2130,6 +2353,7 @@ class Inbounding {
     }
 
     public function stock_data($id) {
+        $id = (int) $id;
         // 1. Fetch the main record using a prepared statement
         $sql = "SELECT Item_code, sku, quantity_received, color, size, ware_house_code, store_location FROM vp_inbound WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
@@ -2145,6 +2369,7 @@ class Inbounding {
         // mysqli may return Item_code or item_code depending on driver / server — normalize for downstream use
         foreach ($main_inbound as &$normRow) {
             $normRow['Item_code'] = trim((string)(($normRow['Item_code'] ?? $normRow['item_code'] ?? '')));
+            $normRow['inbound_id'] = $id;
         }
         unset($normRow);
 
@@ -2181,41 +2406,62 @@ class Inbounding {
                     'ware_house_code' => !empty($parent_wh_code) ? $parent_wh_code : 1,
                     'store_location'  => $var_store,
                     'product_id'        => $variation_product_id,
+                    'inbound_id'        => $id,
                 ];
             }
         }
 
         return $main_inbound;
     }
-    public function insert_stock_data($data = []) {
+    private function inboundStockMovementExists(int $inboundId, int $productId, int $warehouseId): bool
+    {
+        if ($inboundId <= 0 || $productId <= 0) {
+            return false;
+        }
+
+        $refId = (string) $inboundId;
+        $stmt = $this->conn->prepare(
+            "SELECT id FROM vp_stock_movements
+             WHERE ref_type = 'INBOUND' AND ref_id = ? AND product_id = ? AND warehouse_id = ?
+               AND movement_type = 'IN'
+             LIMIT 1"
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('sii', $refId, $productId, $warehouseId);
+        $stmt->execute();
+        $exists = (bool) $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $exists;
+    }
+
+    public function insert_stock_data($data = [], int $inboundId = 0)
+    {
         if (empty($data) || !is_array($data)) {
             return false;
         }
-        $itemCodeColumn = $this->resolveVpStockMovementsItemCodeColumn();
-        $itemCodeColumnSql = '`' . str_replace('`', '``', $itemCodeColumn) . '`';
-        $sql = "INSERT INTO vp_stock_movements (
-                    product_id, 
-                    sku, 
-                    {$itemCodeColumnSql}, 
-                    size, 
-                    color, 
-                    warehouse_id, 
-                    location,
-                    movement_type, 
-                    quantity, 
-                    running_stock, 
-                    ref_type, 
-                    ref_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-        $stmt = $this->conn->prepare($sql);
+        require_once __DIR__ . '/../product/StockMovement.php';
 
-        // 2. Define static defaults
-        $movement_type = 'IN';
-        $ref_type      = 'INBOUND';
-        $ref_id        = '0';
-        // Warehouse from inbound form (first row = parent record): use for default location label
-        $inboundWarehouseId = isset($data[0]['ware_house_code']) ? (int)$data[0]['ware_house_code'] : 0;
+        $inboundId = (int) $inboundId;
+        if ($inboundId <= 0) {
+            $inboundId = (int) ($data[0]['inbound_id'] ?? 0);
+        }
+        if ($inboundId <= 0) {
+            error_log('insert_stock_data: inbound id is required for stock movement ref_id');
+            return false;
+        }
+
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
+        }
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        $refId = (string) $inboundId;
+        $reason = 'Inbound publish stock receipt #' . $inboundId;
+
+        $inboundWarehouseId = isset($data[0]['ware_house_code']) ? (int) $data[0]['ware_house_code'] : 0;
         if ($inboundWarehouseId <= 0) {
             $inboundWarehouseId = 1;
         }
@@ -2225,7 +2471,7 @@ class Inbounding {
             $addrStmt0->bind_param('i', $inboundWarehouseId);
             if ($addrStmt0->execute()) {
                 $ar0 = $addrStmt0->get_result()->fetch_assoc();
-                $t0 = trim((string)($ar0['address_title'] ?? ''));
+                $t0 = trim((string) ($ar0['address_title'] ?? ''));
                 if ($t0 !== '') {
                     $defaultLocationLabel = $t0;
                 }
@@ -2233,69 +2479,66 @@ class Inbounding {
             $addrStmt0->close();
         }
 
-        // Bind types for INSERT (same every row): i, s×4, i, s×2, i×2, s, s — ref_id is varchar in vp_stock_movements
-        $movementBindTypes = 'i' . str_repeat('s', 4) . 'i' . str_repeat('s', 2) . str_repeat('i', 2) . 's' . 's';
-
-        // 3. Loop through your data array
         foreach ($data as $row) {
-            // Mapping array keys to variables
-            $product_id   = isset($row['product_id']) ? (int)$row['product_id'] : 0;
-            $sku          = $row['sku'] ?? '';
-            $size         = $row['size'] ?? '';
-            $color        = $row['color'] ?? '';
-            $warehouse_id = isset($row['ware_house_code']) ? (int)$row['ware_house_code'] : 0;
-            if ($warehouse_id <= 0) {
-                $warehouse_id = $inboundWarehouseId;
+            $productId = isset($row['product_id']) ? (int) $row['product_id'] : 0;
+            $sku = trim((string) ($row['sku'] ?? ''));
+            $size = trim((string) ($row['size'] ?? ''));
+            $color = trim((string) ($row['color'] ?? ''));
+            $warehouseId = isset($row['ware_house_code']) ? (int) $row['ware_house_code'] : 0;
+            if ($warehouseId <= 0) {
+                $warehouseId = $inboundWarehouseId;
             }
-            $quantity     = isset($row['quantity_received']) ? (int)$row['quantity_received'] : 0;
-            $running      = $quantity; // Per your requirement
-
-            $item_code = trim((string)(($row['Item_code'] ?? $row['item_code'] ?? '')));
-
-            // Recover missing product_id using SKU/item code.
-            if ($product_id <= 0 && $sku !== '') {
-                $product_id = (int)$this->getProductBysku($sku);
-            }
-            if ($product_id <= 0 && $item_code !== '') {
-                $product_id = (int)$this->getProductByItemcode($item_code);
-            }
-            if ($product_id <= 0) {
-                error_log("Skipping stock movement row: missing product_id for sku={$sku}, item_code={$item_code}");
+            $quantity = isset($row['quantity_received']) ? (int) $row['quantity_received'] : 0;
+            if ($quantity <= 0) {
                 continue;
             }
 
-            if ($item_code === '') {
-                $item_code = $this->getItemCodeByProductId($product_id);
-            }
-            // vp_stock_movements.item_code is nullable — still insert when missing
+            $itemCode = trim((string) (($row['Item_code'] ?? $row['item_code'] ?? '')));
 
-            // Prefer store location from inbound (same as form); fallback to warehouse address title
-            $storeLoc = trim((string)($row['store_location'] ?? ''));
+            if ($productId <= 0 && $sku !== '') {
+                $productId = (int) $this->getProductBysku($sku);
+            }
+            if ($productId <= 0 && $itemCode !== '') {
+                $productId = (int) $this->getProductByItemcode($itemCode);
+            }
+            if ($productId <= 0) {
+                error_log("Skipping stock movement row: missing product_id for sku={$sku}, item_code={$itemCode}");
+                continue;
+            }
+
+            if ($this->inboundStockMovementExists($inboundId, $productId, $warehouseId)) {
+                continue;
+            }
+
+            if ($itemCode === '') {
+                $itemCode = $this->getItemCodeByProductId($productId);
+            }
+
+            $storeLoc = trim((string) ($row['store_location'] ?? ''));
             $location = $storeLoc !== '' ? $storeLoc : $defaultLocationLabel;
 
-            // 4. Bind parameters
-            $stmt->bind_param(
-                $movementBindTypes,
-                $product_id,
-                $sku,
-                $item_code,
-                $size,
-                $color,
-                $warehouse_id,
-                $location,
-                $movement_type,
-                $quantity,
-                $running,
-                $ref_type,
-                $ref_id
-            );
-
-            // 5. Execute for each row
-            if (!$stmt->execute()) {
-                error_log("Failed to insert stock movement: " . $stmt->error);
+            try {
+                StockMovement::insert($this->conn, [
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'warehouse_id' => $warehouseId,
+                    'location' => $location,
+                    'movement_type' => 'IN',
+                    'quantity' => $quantity,
+                    'ref_type' => 'INBOUND',
+                    'ref_id' => $refId,
+                    'reason' => $reason,
+                    'update_by_user' => $userId,
+                    'strict_stock_check' => false,
+                ]);
+            } catch (\Throwable $e) {
+                error_log('insert_stock_data: ' . $e->getMessage());
             }
         }
-        $stmt->close();
+
         return true;
     }
 }

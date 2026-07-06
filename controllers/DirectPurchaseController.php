@@ -16,6 +16,7 @@ class DirectPurchaseController
     public function index()
     {
         is_login();
+        global $conn;
         global $directPurchaseModel;
 
         $pageNo = isset($_GET['page_no']) ? (int) $_GET['page_no'] : 1;
@@ -26,7 +27,10 @@ class DirectPurchaseController
             'search_text' => isset($_GET['search_text']) ? trim((string) $_GET['search_text']) : '',
             'invoice_date_from' => isset($_GET['invoice_date_from']) ? trim((string) $_GET['invoice_date_from']) : '',
             'invoice_date_to' => isset($_GET['invoice_date_to']) ? trim((string) $_GET['invoice_date_to']) : '',
+            'added_date_from' => isset($_GET['added_date_from']) ? trim((string) $_GET['added_date_from']) : '',
+            'added_date_to' => isset($_GET['added_date_to']) ? trim((string) $_GET['added_date_to']) : '',
             'vendor_id' => isset($_GET['vendor_id']) ? (int) $_GET['vendor_id'] : 0,
+            'created_by' => isset($_GET['created_by']) ? (int) $_GET['created_by'] : 0,
         ];
 
         $filters = $this->sanitizeDirectPurchaseListDateFilters($filters);
@@ -37,6 +41,20 @@ class DirectPurchaseController
         global $directPurchaseVendorModel;
         $vendors = $directPurchaseVendorModel->getAllVendors();
 
+        $users = [];
+        $res = $conn->query(
+            'SELECT DISTINCT p.created_by AS id, cu.name
+             FROM vp_direct_purchases p
+             LEFT JOIN vp_users cu ON cu.id = p.created_by AND cu.is_deleted = 0
+             WHERE p.created_by > 0
+             ORDER BY cu.name'
+        );
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $users[(int) $row['id']] = $row['name'] ?: ('User #' . (int) $row['id']);
+            }
+        }
+
         renderTemplate('views/direct_purchase/index.php', [
             'purchases' => $result['rows'],
             'total_records' => $result['total'],
@@ -45,6 +63,7 @@ class DirectPurchaseController
             'limit' => $limit,
             'filters' => $filters,
             'vendors' => $vendors,
+            'users' => $users,
         ], 'Direct purchases');
     }
 
@@ -555,8 +574,9 @@ class DirectPurchaseController
             header('Location: ?page=direct_purchase&action=list');
             exit;
         }
-        $items = $directPurchaseModel->getItems($id);
+        $items = $directPurchaseModel->getItemsWithReturnable($id);
         $productModel = new product($conn);
+        require_once 'models/direct_purchase/DirectPurchaseStock.php';
         foreach ($items as &$it) {
             $img = $productModel->getImageForPurchaseLine(
                 (string) ($it['item_code'] ?? ''),
@@ -565,12 +585,18 @@ class DirectPurchaseController
                 (string) ($it['size'] ?? '')
             );
             $it['product_image'] = $img ?? '';
+            $it['product_id'] = DirectPurchaseStock::resolveProductId(
+                $conn,
+                (string) ($it['sku'] ?? ''),
+                (string) ($it['item_code'] ?? ''),
+                (string) ($it['color'] ?? ''),
+                (string) ($it['size'] ?? '')
+            );
         }
         unset($it);
         $vendors = $directPurchaseVendorModel->getAllVendors();
         $commanModel = new Tables($conn);
         $warehouses = $commanModel->get_exotic_address();
-        $purchaseLocked = $directPurchaseModel->countReturns($id) > 0;
 
         renderTemplate('views/direct_purchase/form.php', [
             'purchase' => $purchase,
@@ -578,7 +604,6 @@ class DirectPurchaseController
             'vendors' => $vendors,
             'warehouses' => $warehouses,
             'is_edit' => true,
-            'purchase_locked' => $purchaseLocked,
         ], 'Edit direct purchase');
     }
 
@@ -586,6 +611,7 @@ class DirectPurchaseController
     {
         is_login();
         global $directPurchaseModel;
+        global $directPurchaseReturnModel;
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             header('Location: ?page=direct_purchase&action=list');
@@ -593,11 +619,6 @@ class DirectPurchaseController
         }
 
         $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
-        if ($id > 0 && $directPurchaseModel->countReturns($id) > 0) {
-            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'This purchase has returns. Delete all purchase returns before editing.'];
-            header('Location: ?page=direct_purchase&action=edit&id=' . $id);
-            exit;
-        }
 
         $vendorId = isset($_POST['vendor_id']) ? (int) $_POST['vendor_id'] : 0;
         $warehouseId = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
@@ -619,12 +640,30 @@ class DirectPurchaseController
             exit;
         }
 
+        global $conn;
+        $lineFieldsError = $this->validateDirectPurchaseLinesFromPost($conn);
+        if ($lineFieldsError !== null) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $lineFieldsError];
+            $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
+            header('Location: ' . $redir);
+            exit;
+        }
+
         $items = $this->collectLineItemsFromPost();
         if (empty($items)) {
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Add at least one line item.'];
             $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
             header('Location: ' . $redir);
             exit;
+        }
+
+        if ($id > 0) {
+            $returnedLineError = $this->validateDirectPurchaseReturnedLines($id, $items, $directPurchaseReturnModel);
+            if ($returnedLineError !== null) {
+                $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $returnedLineError];
+                header('Location: ?page=direct_purchase&action=edit&id=' . $id);
+                exit;
+            }
         }
 
         if ($warehouseId <= 0) {
@@ -669,6 +708,14 @@ class DirectPurchaseController
             $currency = 'INR';
         }
 
+        $grandTotal = (float) ($_POST['grand_total'] ?? 0);
+        if ($grandTotal <= 0) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Grand total must be greater than zero.'];
+            $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
+            header('Location: ' . $redir);
+            exit;
+        }
+
         $header = [
             'vendor_id' => $vendorId,
             'warehouse_id' => $warehouseId,
@@ -682,7 +729,7 @@ class DirectPurchaseController
             'sgst_total' => (float) ($_POST['sgst_total'] ?? 0),
             'cgst_total' => (float) ($_POST['cgst_total'] ?? 0),
             'round_off' => (float) ($_POST['round_off'] ?? 0),
-            'grand_total' => (float) ($_POST['grand_total'] ?? 0),
+            'grand_total' => $grandTotal,
             'created_by' => (int) ($_SESSION['user']['id'] ?? 0),
         ];
 
@@ -771,22 +818,11 @@ class DirectPurchaseController
             exit;
         }
 
-        $row = $productModel->findByItemCodeSizeColor($variant['item_code'], $variant['size'], $variant['color']);
-        if (!$row) {
-            $row = $productModel->findByItemCodeSizeColor($variant['item_code'], '', '');
-        }
-
-        $product = [
-            'item_code' => $variant['item_code'],
-            'size' => $variant['size'],
-            'color' => $variant['color'],
-        ];
-        if (is_array($row) && !empty($row['id'])) {
-            $fresh = $productModel->getProduct((int) $row['id']);
-            if (is_array($fresh)) {
-                $product = $fresh;
-            }
-        }
+        $product = $productModel->resolveProductForVendorSync(
+            $variant['item_code'],
+            $variant['size'],
+            $variant['color']
+        );
 
         $sync = $productModel->syncCpToVendorFrontend($product, 0.0, $stockDelta);
         if (empty($sync['success'])) {
@@ -838,8 +874,30 @@ class DirectPurchaseController
         }
 
         $productModel = new product($conn);
-        $variant = $this->resolveDirectPurchaseVariant($line, $productModel);
-        if ($variant === null) {
+        $itemCode = trim((string) ($line['item_code'] ?? ''));
+        $sku = trim((string) ($line['sku'] ?? ''));
+        $size = trim((string) ($line['size'] ?? ''));
+        $color = trim((string) ($line['color'] ?? ''));
+
+        if ($itemCode === '' && $sku !== '') {
+            $bySku = $productModel->getProductByskuExact($sku);
+            if (is_array($bySku)) {
+                if ($itemCode === '') {
+                    $itemCode = trim((string) ($bySku['item_code'] ?? ''));
+                }
+                if ($size === '') {
+                    $size = trim((string) ($bySku['size'] ?? ''));
+                }
+                if ($color === '') {
+                    $color = trim((string) ($bySku['color'] ?? ''));
+                }
+            }
+        }
+
+        if ($itemCode === '' && $sku !== '') {
+            $itemCode = $sku;
+        }
+        if ($itemCode === '') {
             echo json_encode(['success' => false, 'message' => 'Select a product or enter a SKU with a linked item code first.']);
             exit;
         }
@@ -847,27 +905,22 @@ class DirectPurchaseController
         $expectedCp = $formCost > 0 ? $formCost : (float) ($line['cost_per_item'] ?? 0);
 
         $expectedLocalStock = null;
-        $row = $productModel->findByItemCodeSizeColor($variant['item_code'], $variant['size'], $variant['color']);
-        if (!$row) {
-            $row = $productModel->findByItemCodeSizeColor($variant['item_code'], '', '');
-        }
-        if (is_array($row) && !empty($row['id'])) {
-            $fresh = $productModel->getProduct((int) $row['id']);
-            if (is_array($fresh) && array_key_exists('local_stock', $fresh)) {
-                $expectedLocalStock = (float) $fresh['local_stock'];
-            }
+        $product = $productModel->resolveProductForVendorSync($itemCode, $size, $color);
+        if (array_key_exists('local_stock', $product)) {
+            $expectedLocalStock = (float) $product['local_stock'];
         }
 
         $result = $productModel->verifyVendorCpAndStockAgainstExpected(
-            $variant['item_code'],
-            $variant['size'],
-            $variant['color'],
+            $itemCode,
+            $size,
+            $color,
             $expectedCp,
-            $expectedLocalStock
+            $expectedLocalStock,
+            $sku
         );
 
         if (is_array($result)) {
-            $result['sku'] = trim((string) ($line['sku'] ?? $variant['sku'] ?? ''));
+            $result['sku'] = $sku;
         }
 
         echo json_encode($result, JSON_UNESCAPED_UNICODE);
@@ -884,9 +937,23 @@ class DirectPurchaseController
             header('Location: ?page=direct_purchase&action=list');
             exit;
         }
+        if ($directPurchaseModel->countReturns($id) > 0) {
+            $_SESSION['direct_purchase_flash'] = [
+                'type' => 'error',
+                'text' => 'This purchase has linked purchase returns. Delete all returns for this purchase first.',
+            ];
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
         try {
+            $items = $directPurchaseModel->getItems($id);
             $directPurchaseModel->delete($id);
-            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Purchase deleted.'];
+            $vendorNote = $this->syncDirectPurchaseCpToVendor([], $items, true, 0);
+            $flashText = 'Purchase deleted.';
+            if ($vendorNote !== '') {
+                $flashText .= ' ' . $vendorNote;
+            }
+            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => $flashText];
         } catch (Throwable $e) {
             error_log('DirectPurchase delete: ' . $e->getMessage());
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not delete purchase.'];
@@ -924,7 +991,7 @@ class DirectPurchaseController
     {
         $todayStr = $this->directPurchaseTodayYmd();
 
-        foreach (['invoice_date_from', 'invoice_date_to'] as $key) {
+        foreach (['invoice_date_from', 'invoice_date_to', 'added_date_from', 'added_date_to', 'return_date_from', 'return_date_to'] as $key) {
             $v = isset($filters[$key]) ? trim((string) $filters[$key]) : '';
             if ($v === '') {
                 $filters[$key] = '';
@@ -959,6 +1026,59 @@ class DirectPurchaseController
         return null;
     }
 
+    private function resolveDirectPurchaseWarehouseLabel(\mysqli $conn, int $warehouseId): string
+    {
+        if ($warehouseId <= 0) {
+            return '—';
+        }
+
+        $stmt = $conn->prepare('SELECT address_title FROM exotic_address WHERE id = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('i', $warehouseId);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $title = trim((string) ($row['address_title'] ?? ''));
+            if ($title !== '') {
+                return $title;
+            }
+        }
+
+        return 'Warehouse #' . $warehouseId;
+    }
+
+    public function returns()
+    {
+        is_login();
+        global $directPurchaseReturnModel;
+        global $directPurchaseVendorModel;
+
+        $pageNo = isset($_GET['page_no']) ? (int) $_GET['page_no'] : 1;
+        $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20;
+
+        $filters = [
+            'search_text' => isset($_GET['search_text']) ? trim((string) $_GET['search_text']) : '',
+            'return_date_from' => isset($_GET['return_date_from']) ? trim((string) $_GET['return_date_from']) : '',
+            'return_date_to' => isset($_GET['return_date_to']) ? trim((string) $_GET['return_date_to']) : '',
+            'vendor_id' => isset($_GET['vendor_id']) ? (int) $_GET['vendor_id'] : 0,
+        ];
+        $filters = $this->sanitizeDirectPurchaseListDateFilters($filters);
+
+        $result = $directPurchaseReturnModel->searchReturns($filters, $pageNo, $limit);
+        $totalPages = $limit > 0 ? (int) ceil($result['total'] / $limit) : 1;
+
+        renderTemplate('views/direct_purchase/returns_index.php', [
+            'returns' => $result['rows'],
+            'total_records' => $result['total'],
+            'page_no' => $pageNo,
+            'total_pages' => max(1, $totalPages),
+            'limit' => $limit,
+            'filters' => $filters,
+            'vendors' => $directPurchaseVendorModel->getAllVendors(),
+        ], 'Purchase returns');
+    }
+
     public function returnList()
     {
         is_login();
@@ -977,10 +1097,15 @@ class DirectPurchaseController
             exit;
         }
         $returns = $directPurchaseReturnModel->listForPurchase($dpId);
+        $returnIds = array_map(static function (array $row): int {
+            return (int) ($row['id'] ?? 0);
+        }, $returns);
+        $returnItems = $directPurchaseReturnModel->getItemsGroupedByReturnIds($returnIds);
 
         renderTemplate('views/direct_purchase/return_list.php', [
             'purchase' => $purchase,
             'returns' => $returns,
+            'return_items' => $returnItems,
         ], 'Purchase returns');
     }
 
@@ -1002,15 +1127,14 @@ class DirectPurchaseController
             exit;
         }
         $lines = $directPurchaseModel->getItemsWithReturnable($dpId);
-        $commanModel = new Tables($conn);
-        $warehouses = $commanModel->get_exotic_address();
-        $defaultWh = (int) ($purchase['warehouse_id'] ?? ($_SESSION['warehouse_id'] ?? ($_SESSION['user']['warehouse_id'] ?? 0)));
+        $warehouseId = (int) ($purchase['warehouse_id'] ?? 0);
+        $warehouseName = $this->resolveDirectPurchaseWarehouseLabel($conn, $warehouseId);
 
         renderTemplate('views/direct_purchase/return_form.php', [
             'purchase' => $purchase,
             'lines' => $lines,
-            'warehouses' => $warehouses,
-            'default_warehouse_id' => $defaultWh,
+            'warehouse_id' => $warehouseId,
+            'warehouse_name' => $warehouseName,
         ], 'New purchase return');
     }
 
@@ -1027,11 +1151,10 @@ class DirectPurchaseController
 
         $dpId = isset($_POST['direct_purchase_id']) ? (int) $_POST['direct_purchase_id'] : 0;
         $returnDate = trim((string) ($_POST['return_date'] ?? ''));
-        $warehouseId = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
         $remarks = trim((string) ($_POST['remarks'] ?? ''));
 
-        if ($dpId <= 0 || $returnDate === '' || $warehouseId <= 0) {
-            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Purchase, return date, and warehouse are required.'];
+        if ($dpId <= 0 || $returnDate === '') {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Purchase and return date are required.'];
             header('Location: ?page=direct_purchase&action=return_add&dp_id=' . max(1, $dpId));
             exit;
         }
@@ -1047,6 +1170,16 @@ class DirectPurchaseController
         if (!$purchase) {
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Purchase not found.'];
             header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+
+        $warehouseId = (int) ($purchase['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $_SESSION['direct_purchase_flash'] = [
+                'type' => 'error',
+                'text' => 'This purchase has no warehouse. Set the warehouse on the purchase before creating a return.',
+            ];
+            header('Location: ?page=direct_purchase&action=return_add&dp_id=' . $dpId);
             exit;
         }
 
@@ -1106,6 +1239,30 @@ class DirectPurchaseController
             exit;
         }
 
+        global $conn;
+        require_once 'models/direct_purchase/DirectPurchaseStock.php';
+        $stockCheckLines = [];
+        foreach ($returnLines as $returnLine) {
+            $itemId = (int) ($returnLine['direct_purchase_item_id'] ?? 0);
+            if ($itemId <= 0 || !isset($itemsById[$itemId])) {
+                continue;
+            }
+            $sku = trim((string) ($itemsById[$itemId]['sku'] ?? ''));
+            if ($sku === '') {
+                continue;
+            }
+            $stockCheckLines[] = [
+                'sku' => $sku,
+                'return_qty' => (float) ($returnLine['return_qty'] ?? 0),
+            ];
+        }
+        $stockError = DirectPurchaseStock::validateWarehouseStockForReturn($conn, $warehouseId, $stockCheckLines);
+        if ($stockError !== null) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $stockError];
+            header('Location: ?page=direct_purchase&action=return_add&dp_id=' . $dpId);
+            exit;
+        }
+
         $currency = strtoupper(trim((string) ($purchase['currency'] ?? 'INR')));
         $subtotal = max(0.0, round($sumLineTotal - $sumGst, 2));
         $pSub = (float) ($purchase['subtotal'] ?? 0);
@@ -1146,7 +1303,13 @@ class DirectPurchaseController
             $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => $flashText];
         } catch (Throwable $e) {
             error_log('DirectPurchase returnSave: ' . $e->getMessage());
-            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not save return. ' . $e->getMessage()];
+            $errorText = $e->getMessage();
+            if (stripos($errorText, 'Insufficient stock') !== false) {
+                $errorText = 'Insufficient warehouse stock. Reduce return quantity or check stock in the purchase warehouse.';
+            } else {
+                $errorText = 'Could not save return. ' . $errorText;
+            }
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $errorText];
         }
 
         header('Location: ?page=direct_purchase&action=return_list&dp_id=' . $dpId);
@@ -1156,6 +1319,8 @@ class DirectPurchaseController
     public function returnDelete()
     {
         is_login();
+        global $conn;
+        global $directPurchaseModel;
         global $directPurchaseReturnModel;
 
         $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
@@ -1170,9 +1335,40 @@ class DirectPurchaseController
         }
         $dpId = (int) ($row['direct_purchase_id'] ?? 0);
 
+        $returnLines = [];
+        foreach ($directPurchaseReturnModel->getItems($id) as $returnItem) {
+            $itemId = (int) ($returnItem['direct_purchase_item_id'] ?? 0);
+            $returnQty = (float) ($returnItem['return_qty'] ?? 0);
+            if ($itemId <= 0 || $returnQty <= 0) {
+                continue;
+            }
+            $returnLines[] = [
+                'direct_purchase_item_id' => $itemId,
+                'return_qty' => $returnQty,
+            ];
+        }
+
+        $itemsById = [];
+        if ($dpId > 0) {
+            foreach ($directPurchaseModel->getItems($dpId) as $purchaseItem) {
+                $itemsById[(int) $purchaseItem['id']] = $purchaseItem;
+            }
+        }
+
         try {
             $directPurchaseReturnModel->deleteReturn($id);
-            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => 'Return deleted and stock restored.'];
+            $productModel = new product($conn);
+            $vendorNote = $this->syncDirectPurchaseReturnLocalStockToVendor(
+                $returnLines,
+                $itemsById,
+                $productModel,
+                1
+            );
+            $flashText = 'Return deleted and stock restored.';
+            if ($vendorNote !== '') {
+                $flashText .= ' ' . $vendorNote;
+            }
+            $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => $flashText];
         } catch (Throwable $e) {
             error_log('DirectPurchase returnDelete: ' . $e->getMessage());
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Could not delete return.'];
@@ -1180,6 +1376,88 @@ class DirectPurchaseController
 
         header('Location: ?page=direct_purchase&action=return_list&dp_id=' . $dpId);
         exit;
+    }
+
+    /**
+     * Each line with qty &gt; 0 must have SKU (existing in vp_products), cost, qty, GST %, and line total. HSN is optional.
+     */
+    private function validateDirectPurchaseLinesFromPost(\mysqli $conn): ?string
+    {
+        $skus = $_POST['sku'] ?? [];
+        if (!is_array($skus)) {
+            return 'Add at least one line item.';
+        }
+
+        $costs = $_POST['cost_per_item'] ?? [];
+        $qtys = $_POST['qty'] ?? [];
+        $rates = $_POST['gst_rate'] ?? [];
+        $lineTots = $_POST['line_total'] ?? [];
+
+        $productModel = new product($conn);
+        $errors = [];
+        $invalidSkus = [];
+        $n = max(count($skus), is_array($qtys) ? count($qtys) : 0);
+        $activeLines = 0;
+
+        for ($i = 0; $i < $n; $i++) {
+            $qty = isset($qtys[$i]) ? (float) $qtys[$i] : 0;
+            if ($qty <= 0) {
+                continue;
+            }
+            $activeLines++;
+            $label = 'Line ' . ($i + 1);
+
+            $sku = isset($skus[$i]) ? trim((string) $skus[$i]) : '';
+            if ($sku === '') {
+                $errors[] = $label . ': SKU is required';
+            } else {
+                $row = $productModel->getProductByskuExact($sku);
+                if (!is_array($row) || empty($row['id'])) {
+                    $invalidSkus[] = $sku;
+                }
+            }
+
+            $costRaw = isset($costs[$i]) ? trim((string) $costs[$i]) : '';
+            if ($costRaw === '') {
+                $errors[] = $label . ': cost per item is required';
+            } elseif ((float) $costRaw <= 0) {
+                $errors[] = $label . ': cost per item must be greater than zero';
+            }
+
+            $gstRaw = isset($rates[$i]) ? trim((string) $rates[$i]) : '';
+            if ($gstRaw === '') {
+                $errors[] = $label . ': GST % is required';
+            } elseif ((float) $gstRaw < 0) {
+                $errors[] = $label . ': GST % cannot be negative';
+            }
+
+            $lineTotalRaw = isset($lineTots[$i]) ? trim((string) $lineTots[$i]) : '';
+            if ($lineTotalRaw === '') {
+                $errors[] = $label . ': line total is required';
+            } elseif ((float) $lineTotalRaw <= 0) {
+                $errors[] = $label . ': line total must be greater than zero';
+            }
+        }
+
+        if ($activeLines === 0) {
+            return 'Add at least one line item with qty greater than zero.';
+        }
+
+        if ($invalidSkus !== []) {
+            $unique = array_values(array_unique($invalidSkus));
+            $shown = array_slice($unique, 0, 5);
+            $suffix = count($unique) > 5 ? ' (and ' . (count($unique) - 5) . ' more)' : '';
+            $errors[] = 'invalid SKU(s): ' . implode(', ', $shown) . $suffix;
+        }
+
+        if ($errors === []) {
+            return null;
+        }
+
+        $shown = array_slice($errors, 0, 5);
+        $suffix = count($errors) > 5 ? ' (and ' . (count($errors) - 5) . ' more)' : '';
+
+        return 'Complete all required line fields (HSN is optional). ' . implode('; ', $shown) . $suffix . '.';
     }
 
     /**
@@ -1198,9 +1476,9 @@ class DirectPurchaseController
         $qtys = $_POST['qty'] ?? [];
         $hsns = $_POST['hsn'] ?? [];
         $rates = $_POST['gst_rate'] ?? [];
-        $units = $_POST['unit'] ?? [];
         $gstAmts = $_POST['gst_amount'] ?? [];
         $lineTots = $_POST['line_total'] ?? [];
+        $lineIds = $_POST['dp_line_id'] ?? [];
 
         $out = [];
         $n = max(count($skus), is_array($qtys) ? count($qtys) : 0);
@@ -1210,6 +1488,7 @@ class DirectPurchaseController
                 continue;
             }
             $out[] = [
+                'id' => isset($lineIds[$i]) ? (int) $lineIds[$i] : 0,
                 'item_code' => isset($codes[$i]) ? trim((string) $codes[$i]) : '',
                 'sku' => isset($skus[$i]) ? trim((string) $skus[$i]) : '',
                 'color' => isset($colors[$i]) ? trim((string) $colors[$i]) : '',
@@ -1218,12 +1497,81 @@ class DirectPurchaseController
                 'qty' => $qty,
                 'hsn' => isset($hsns[$i]) ? trim((string) $hsns[$i]) : '',
                 'gst_rate' => isset($rates[$i]) ? (float) $rates[$i] : 0,
-                'unit' => isset($units[$i]) ? trim((string) $units[$i]) : '',
                 'gst_amount' => isset($gstAmts[$i]) ? (float) $gstAmts[$i] : 0,
                 'line_total' => isset($lineTots[$i]) ? (float) $lineTots[$i] : 0,
             ];
         }
         return $out;
+    }
+
+    /**
+     * Lines with linked purchase returns must remain on the purchase and stay unchanged.
+     *
+     * @param list<array<string, mixed>> $postedItems
+     */
+    private function validateDirectPurchaseReturnedLines(
+        int $purchaseId,
+        array $postedItems,
+        directPurchaseReturn $returnModel
+    ): ?string {
+        global $directPurchaseModel;
+
+        $returnedByItem = $returnModel->sumReturnedQtyByItem($purchaseId, 0);
+        if ($returnedByItem === []) {
+            return null;
+        }
+
+        $postedById = [];
+        foreach ($postedItems as $row) {
+            $itemId = (int) ($row['id'] ?? 0);
+            if ($itemId > 0) {
+                $postedById[$itemId] = $row;
+            }
+        }
+
+        foreach ($returnedByItem as $itemId => $returnedQty) {
+            if ($returnedQty <= 0) {
+                continue;
+            }
+            if (!isset($postedById[$itemId])) {
+                return 'Cannot remove a line item that has linked purchase returns.';
+            }
+
+            $dbLine = $directPurchaseModel->getItemById($itemId);
+            if (!$dbLine || (int) ($dbLine['direct_purchase_id'] ?? 0) !== $purchaseId) {
+                return 'Invalid purchase line for return validation.';
+            }
+
+            if (!$this->directPurchaseLineFieldsMatch($dbLine, $postedById[$itemId])) {
+                $sku = trim((string) ($dbLine['sku'] ?? ''));
+                $label = $sku !== '' ? $sku : ('line #' . $itemId);
+
+                return 'Line item ' . $label . ' has linked purchase returns and cannot be edited.';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $dbLine
+     * @param array<string, mixed> $postedLine
+     */
+    private function directPurchaseLineFieldsMatch(array $dbLine, array $postedLine): bool
+    {
+        foreach (['item_code', 'sku', 'color', 'size', 'hsn'] as $field) {
+            if (trim((string) ($dbLine[$field] ?? '')) !== trim((string) ($postedLine[$field] ?? ''))) {
+                return false;
+            }
+        }
+
+        foreach (['cost_per_item', 'qty', 'gst_rate', 'gst_amount', 'line_total'] as $field) {
+            if (abs((float) ($dbLine[$field] ?? 0) - (float) ($postedLine[$field] ?? 0)) > 0.0001) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -1274,10 +1622,13 @@ class DirectPurchaseController
     }
 
     /**
-     * After a successful purchase save, push cost_per_item (CP) and qty (local_stock_delta) to vendor product/modify.
+     * After a successful purchase save, push pricing and qty to vendor product/modify.
+     * Books: price_india (ex-GST) in DB + vendor API. Other items: cp in DB + vendor API.
+     * Both: local_stock_delta when qty changes.
      *
      * New purchase: local_stock_delta = line qty (positive).
      * Edit purchase: local_stock_delta = new qty − previous qty (positive or negative).
+     * Full delete: pass empty $items and saved lines as $previousItems — negative delta per removed line.
      *
      * @param list<array<string, mixed>> $items
      * @param list<array<string, mixed>> $previousItems Saved lines before update (edit only)
@@ -1336,28 +1687,19 @@ class DirectPurchaseController
             $size = $line['size'];
             $color = $line['color'];
 
-            $row = $productModel->findByItemCodeSizeColor($itemCode, $size, $color);
-            if (!$row) {
-                $row = $productModel->findByItemCodeSizeColor($itemCode, '', '');
-            }
-
-            $product = [
-                'item_code' => $itemCode,
-                'size' => $size,
-                'color' => $color,
-            ];
-            if (is_array($row) && !empty($row['id'])) {
-                if ($cost > 0) {
-                    $productModel->setProductCp((int) $row['id'], $cost);
-                }
-                $fresh = $productModel->getProduct((int) $row['id']);
-                if (is_array($fresh)) {
-                    $product = $fresh;
-                }
-            }
-
             $stockDeltaArg = abs($stockDelta) > 0.0001 ? $stockDelta : null;
-            $sync = $productModel->syncCpToVendorFrontend($product, $cost, $stockDeltaArg);
+            if ($cost <= 0 && $stockDeltaArg !== null) {
+                $product = $productModel->resolveProductForVendorSync($itemCode, $size, $color);
+                $sync = $productModel->syncCpToVendorFrontend($product, 0.0, $stockDeltaArg);
+            } else {
+                $sync = $productModel->applyDirectPurchaseLinePricingToVendor(
+                    $itemCode,
+                    $size,
+                    $color,
+                    $cost,
+                    $stockDeltaArg
+                );
+            }
             if (empty($sync['success'])) {
                 $failures[] = $itemCode . ' — ' . trim((string) ($sync['message'] ?? 'vendor product sync failed'));
                 continue;
@@ -1494,16 +1836,23 @@ class DirectPurchaseController
     }
 
     /**
-     * Push negative local_stock_delta to vendor API for purchase return lines.
+     * Push local_stock_delta to vendor product/modify for purchase return lines.
+     * Save uses negative delta (stock out); delete uses positive delta (stock restored).
+     * Does not send absolute local_stock — only the delta field expected by the vendor API.
      *
      * @param list<array<string, mixed>> $returnLines
      * @param array<int, array<string, mixed>> $itemsById
+     * @param int $deltaSign -1 on return save, +1 on return delete
      */
     private function syncDirectPurchaseReturnLocalStockToVendor(
         array $returnLines,
         array $itemsById,
-        product $productModel
+        product $productModel,
+        int $deltaSign = -1
     ): string {
+        if ($deltaSign !== -1 && $deltaSign !== 1) {
+            $deltaSign = -1;
+        }
         $byVariant = [];
         foreach ($returnLines as $returnLine) {
             $itemId = (int) ($returnLine['direct_purchase_item_id'] ?? 0);
@@ -1523,20 +1872,44 @@ class DirectPurchaseController
             $byVariant[$key]['return_qty'] += $returnQty;
         }
 
-        $failures = [];
+        $deltasByVariant = [];
         foreach ($byVariant as $variant) {
-            $delta = -(int) round((float) ($variant['return_qty'] ?? 0));
-            if ($delta === 0) {
+            $localStockDelta = $deltaSign * (int) round((float) ($variant['return_qty'] ?? 0));
+            if ($localStockDelta === 0) {
                 continue;
             }
-            $result = $productModel->applyLocalStockDeltaAndRefreshFromVendorApi(
+            $deltasByVariant[] = [
+                'item_code' => $variant['item_code'],
+                'size' => $variant['size'],
+                'color' => $variant['color'],
+                'local_stock_delta' => (float) $localStockDelta,
+            ];
+        }
+
+        return $this->pushDirectPurchaseLocalStockDeltasToVendor($productModel, $deltasByVariant);
+    }
+
+    /**
+     * @param list<array{item_code:string,size:string,color:string,local_stock_delta:float}> $deltasByVariant
+     */
+    private function pushDirectPurchaseLocalStockDeltasToVendor(product $productModel, array $deltasByVariant): string
+    {
+        $failures = [];
+        foreach ($deltasByVariant as $variant) {
+            $localStockDelta = (float) ($variant['local_stock_delta'] ?? 0);
+            if (abs($localStockDelta) < 0.0001) {
+                continue;
+            }
+
+            $product = $productModel->resolveProductForVendorSync(
                 $variant['item_code'],
-                $delta,
                 $variant['size'],
                 $variant['color']
             );
-            if (empty($result['success'])) {
-                $failures[] = $variant['item_code'] . ' — ' . trim((string) ($result['message'] ?? 'vendor local stock sync failed'));
+
+            $sync = $productModel->syncCpToVendorFrontend($product, 0.0, $localStockDelta);
+            if (empty($sync['success'])) {
+                $failures[] = $variant['item_code'] . ' — ' . trim((string) ($sync['message'] ?? 'vendor local_stock_delta sync failed'));
             }
         }
 

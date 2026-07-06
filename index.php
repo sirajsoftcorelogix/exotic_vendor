@@ -476,6 +476,9 @@ switch ($page) {
             case 'return_list':
                 $controller->returnList();
                 break;
+            case 'returns':
+                $controller->returns();
+                break;
             case 'return_add':
                 $controller->returnAdd();
                 break;
@@ -610,11 +613,26 @@ switch ($page) {
             case 'import_api_call':
                 $controller->importApiCall();
                 break;
+            case 'group_api_import':
+                $controller->groupApiImport();
+                break;
+            case 'group_api_import_batch':
+                $controller->groupApiImportBatch();
+                break;
             case 'bulk_import':
                 $controller->bulkImportScreen();
                 break;
             case 'bulk_label_print':
                 $controller->bulkLabelPrintUi();
+                break;
+            case 'stock_rebuild_guide':
+                $controller->stockRebuildGuide();
+                break;
+            case 'stock_rebuild_preview':
+                $controller->stockRebuildPreview();
+                break;
+            case 'stock_rebuild_execute':
+                $controller->stockRebuildExecute();
                 break;
             case 'bulk_label_print_generate':
                 $controller->bulkLabelPrintGenerate();
@@ -1089,6 +1107,9 @@ switch ($page) {
                 break;
             case 'inbound_product_publish':
                 $controller->inbound_product_publish();
+                break;
+            case 'inbound_api_section_update':
+                $controller->inbound_api_section_update();
                 break;
             case 'inbound_product_preview_json':
                 $controller->inbound_product_preview_json();

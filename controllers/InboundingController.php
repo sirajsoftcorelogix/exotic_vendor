@@ -357,6 +357,12 @@ class InboundingController {
             'count' => count($data['book_languages'] ?? []),
         ]);
 
+        $publishState = $inboundingModel->getInboundPublishState($id);
+        $data['is_inbound_published'] = $publishState['has_any_publish'];
+        $data['is_inbound_live_published'] = $publishState['is_live'];
+        $data['inbound_publish_state'] = $publishState;
+        inbound_profiler_step($prof, 'getInboundPublishState', $publishState);
+
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
         inbound_profiler_finish($prof, 'ok');
     }
@@ -722,8 +728,8 @@ class InboundingController {
                     if (isset($_FILES['new_photos']['error'][$key]) && $_FILES['new_photos']['error'][$key] === 0) {
                         
                         $tmpName = $_FILES['new_photos']['tmp_name'][$key];
-                        $ext = pathinfo($name, PATHINFO_EXTENSION);
-                        $newName = 'img_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
+                        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+                        $newName = strtolower('img_' . $id . '_' . time() . '_' . rand(100, 999) . '.' . $ext);
                         
                         // In your JS, new_image_variation_id[] and new_captions[] are 
                         // appended to the DOM, so they will follow the same index order as new_photos[]
@@ -919,92 +925,58 @@ class InboundingController {
             exit;
         }
     }
-    private function renameImagesToItemCode($itemId, $itemCode, $currentData) {
+    private function renameImagesToItemCode($itemId, $itemCode, $currentData, ?array $bundle = null) {
         global $inboundingModel;
         $itemCode = strtolower($itemCode);
-        // 1. Setup Directories
-        $mainPhotoDir = __DIR__ . '/../uploads/products/';
         $altPhotoDir  = __DIR__ . '/../uploads/itm_img/';
 
-        $itemData = $inboundingModel->getform1data($itemId);
-        $isBook = (string) ($itemData['form1']['group_name'] ?? '') === '-8';
-
-        // 2. Fetch Variations from DB
-        $variations = $inboundingModel->getVariations($itemId);
-        $hasVariations = !empty($variations);
-
-        // 3. Determine Case & Suffix Logic
-        $isVariant = ($currentData['is_variant'] === 'Y'); 
-
-        // Generate Base Name Logic
-        if (!$isVariant && !$hasVariations) {
-            // CASE 1: Simple Product -> abc1234
-            $baseName = $itemCode; 
-        } elseif (!$isVariant && $hasVariations) {
-            // CASE 2: Complex Product (Base with variations) -> abc1234-blue (use color/size from parent)
-            $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
-            $baseName = $itemCode . ($suffix ? '-' . $suffix : '');
-        } else {
-            // CASE 3 & 4: Variation -> abc1234-color
-            $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
-            $baseName = $itemCode . ($suffix ? '-' . $suffix : '');
+        $bundle = $bundle ?? $inboundingModel->getImageRenameBundle($itemId);
+        $inboundCtx = $bundle['inbound'];
+        if ($inboundCtx === []) {
+            return;
         }
 
-        // =================================================================
-        // EXECUTION A: Rename Base Images (Variation ID -1 or 0)
-        // =================================================================
-        
-        // 1. Main product photo: book uses plain itemcode (…jpg); letters a,b,c… apply to gallery only.
-        $mainPhotoPath = $itemData['form1']['product_photo'] ?? ($itemData['form2']['product_photo'] ?? '');
-        
-        if (!empty($mainPhotoPath)) {
-            $this->processRename($mainPhotoPath, $mainPhotoDir, $baseName, $itemId, 'main', $inboundingModel, $isBook);
+        $isBook = (string) ($inboundCtx['group_name'] ?? '') === '-8';
+        $variations = $bundle['variations'];
+        $hasVariations = $variations !== [];
+        $useVariationNaming = $hasVariations && !$isBook;
+        $imagesByVariation = $bundle['images_by_variation'];
+
+        // Only edited item_images in uploads/itm_img/ — never product_photo / variation_image from uploads/products/.
+        if (!$useVariationNaming) {
+            $baseImages = $imagesByVariation[-1] ?? [];
+            if ($baseImages !== []) {
+                $this->renameGalleryImagesByDisplayOrder(
+                    $baseImages,
+                    $altPhotoDir,
+                    $itemCode,
+                    $inboundingModel,
+                    $isBook,
+                    false
+                );
+            }
+            return;
         }
 
-        // 2. Rename Gallery Images (book: first gallery is always …a.jpg)
-        $baseImages = $inboundingModel->get_item_images_by_variation($itemId, -1);
-        if (empty($baseImages)) {
-            $baseImages = $inboundingModel->get_item_images_by_variation($itemId, 0);
-        }
+        foreach ($variations as $var) {
+            $varId = (int) ($var['id'] ?? 0);
+            if ($varId <= 0) {
+                continue;
+            }
 
-        if (!empty($baseImages)) {
-            $this->renameGalleryImagesByDisplayOrder(
-                $baseImages,
-                $altPhotoDir,
-                $baseName,
-                $inboundingModel,
-                $isBook,
-                0
-            );
-        }
+            $varSuffix = $this->getNamingSuffix($var['color'], $var['size']);
+            $varBaseName = $itemCode . ($varSuffix ? '-' . $varSuffix : '');
 
-        // =================================================================
-        // EXECUTION B: Rename Variations
-        // =================================================================
-        if ($hasVariations) {
-            foreach ($variations as $var) {
-                
-                // Generate Suffix: abc1234-blue
-                $varSuffix = $this->getNamingSuffix($var['color'], $var['size']);
-                $varBaseName = $itemCode . ($varSuffix ? '-' . $varSuffix : '');
-
-                // 1. Variation main: book uses plain varBaseName; gallery gets …a, …b
-                if (!empty($var['variation_image'])) {
-                    $this->processRename($var['variation_image'], $mainPhotoDir, $varBaseName, $var['id'], 'variation_main', $inboundingModel, $isBook);
-                }
-
-                // 2. Rename Variation Gallery Images
-                $varImages = $inboundingModel->get_item_images_by_variation($itemId, $var['id']);
-                if (!empty($varImages)) {
-                    $this->renameGalleryImagesByDisplayOrder(
-                        $varImages,
-                        $altPhotoDir,
-                        $varBaseName,
-                        $inboundingModel,
-                        $isBook,
-                        0
-                    );
-                }
+            $varImages = $imagesByVariation[$varId] ?? [];
+            if ($varImages !== []) {
+                $this->renameGalleryImagesByDisplayOrder(
+                    $varImages,
+                    $altPhotoDir,
+                    $varBaseName,
+                    $inboundingModel,
+                    $isBook,
+                    false
+                );
             }
         }
     }
@@ -1024,22 +996,19 @@ class InboundingController {
         return $suffix;
     }
 
-    /**
-     * Rename gallery files by display_order with collision-safe two-pass renaming.
-     */
     private function renameGalleryImagesByDisplayOrder(
         array $images,
         string $directory,
         string $baseName,
         $model,
         bool $bookMode = false,
-        int $bookStartIndex = 0
+        bool $hasSeparatePrimary = false
     ): void {
-        if (empty($images)) {
+        if ($images === []) {
             return;
         }
 
-        usort($images, function ($a, $b) {
+        usort($images, static function ($a, $b) {
             $oa = (int)($a['display_order'] ?? 0);
             $ob = (int)($b['display_order'] ?? 0);
             if ($oa === $ob) {
@@ -1050,6 +1019,7 @@ class InboundingController {
 
         $plans = [];
         $usedTargets = [];
+        $needsWork = false;
 
         foreach ($images as $idx => $img) {
             $imgId = (int)($img['id'] ?? 0);
@@ -1058,88 +1028,70 @@ class InboundingController {
                 continue;
             }
 
-            $fullOldPath = $directory . $oldFileName;
-            if (!file_exists($fullOldPath)) {
-                continue;
-            }
-
-            $origExt = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
-
-            // Book: gallery only — itemcode + a, b, c, … (main photo uses plain itemcode, no letter). Output .jpg.
             if ($bookMode) {
-                $letterOrdinal = $bookStartIndex + $idx;
-                $candidateBase = $baseName . $this->bookImageAlphabetSuffix($letterOrdinal);
-                $targetExt = 'jpg';
+                $candidateBase = ($idx === 0)
+                    ? $baseName
+                    : $baseName . $this->bookImageAlphabetSuffix($idx - 1);
+            } elseif ($hasSeparatePrimary) {
+                $candidateBase = $baseName . '_a' . str_pad((string) ($idx + 1), 2, '0', STR_PAD_LEFT);
             } elseif ($idx === 0) {
-                // Non-book: first gallery file matches base name; rest use _a01, _a02, …
                 $candidateBase = $baseName;
-                $targetExt = $origExt;
             } else {
-                $candidateBase = $baseName . '_a' . str_pad((string)$idx, 2, '0', STR_PAD_LEFT);
-                $targetExt = $origExt;
+                $candidateBase = $baseName . '_a' . str_pad((string) $idx, 2, '0', STR_PAD_LEFT);
             }
 
-            $candidate = $candidateBase . '.' . $targetExt;
+            $candidate = strtolower($candidateBase . '.jpg');
             $dedupe = 1;
-            while (isset($usedTargets[strtolower($candidate)])) {
-                $candidate = $candidateBase . '_d' . $dedupe . '.' . $targetExt;
+            while (isset($usedTargets[$candidate])) {
+                $candidate = strtolower($candidateBase . '_d' . $dedupe . '.jpg');
                 $dedupe++;
             }
-            $usedTargets[strtolower($candidate)] = true;
+            $usedTargets[$candidate] = true;
 
-            $plans[] = [
-                'id' => $imgId,
-                'old' => $oldFileName,
-                'oldPath' => $fullOldPath,
-                'target' => $candidate,
-                'targetPath' => $directory . $candidate,
-                'tmp' => '__tmp__' . $imgId . '_' . time() . '_' . mt_rand(1000, 9999) . '.' . $origExt,
-            ];
+            if ($oldFileName !== $candidate) {
+                $needsWork = true;
+            }
+
+            $plans[] = ['id' => $imgId, 'old' => $oldFileName, 'target' => $candidate];
         }
 
+        if (!$needsWork) {
+            return;
+        }
+
+        // Two-pass rename: move all targets to temp first so swapped names (reorder) cannot collide.
         foreach ($plans as &$plan) {
             if ($plan['old'] === $plan['target']) {
-                $plan['skipSecondPass'] = true;
                 continue;
             }
-            $tmpPath = $directory . $plan['tmp'];
-            if (@rename($plan['oldPath'], $tmpPath)) {
-                $plan['tmpPath'] = $tmpPath;
-            } else {
+            $plan['oldPath'] = $directory . $plan['old'];
+            if (!file_exists($plan['oldPath'])) {
+                $plan['failed'] = true;
+                continue;
+            }
+            $plan['targetPath'] = $directory . $plan['target'];
+            $plan['tmpPath'] = $directory . '__tmp__' . $plan['id'] . '_' . mt_rand(1000, 9999)
+                . '.' . strtolower(pathinfo($plan['old'], PATHINFO_EXTENSION));
+            if (!@rename($plan['oldPath'], $plan['tmpPath'])) {
                 $plan['failed'] = true;
             }
         }
         unset($plan);
 
         foreach ($plans as $plan) {
-            if (!empty($plan['failed'])) {
+            if (!empty($plan['failed']) || empty($plan['tmpPath'])) {
                 continue;
             }
-            if (!empty($plan['skipSecondPass'])) {
-                continue;
-            }
-            if (empty($plan['tmpPath']) || !file_exists($plan['tmpPath'])) {
-                continue;
-            }
-
-            $movedOk = false;
-            if ($bookMode) {
-                if (@rename($plan['tmpPath'], $plan['targetPath'])) {
-                    $movedOk = true;
-                } else {
-                    $movedOk = $this->writeImageFileAsJpeg($plan['tmpPath'], $plan['targetPath']);
-                }
-            } else {
-                $movedOk = (bool) @rename($plan['tmpPath'], $plan['targetPath']);
-            }
-
+            $movedOk = $this->renameImageFile($directory, basename($plan['tmpPath']), $plan['target']);
             if ($movedOk) {
-                // Force fresh mtime so ?v= cache-busting URL always changes after rename swaps.
                 @touch($plan['targetPath']);
                 $model->update_image_filename_direct($plan['id'], $plan['target']);
-                // Ensure thumb cache cannot show previous content under reused filename.
                 $this->deleteThumbnailForImagePath($plan['targetPath']);
                 $this->deleteThumbnailForImagePath($plan['oldPath']);
+                $tmpFull = $directory . basename($plan['tmpPath']);
+                if (file_exists($tmpFull)) {
+                    @unlink($tmpFull);
+                }
             } else {
                 @rename($plan['tmpPath'], $plan['oldPath']);
             }
@@ -1147,47 +1099,62 @@ class InboundingController {
     }
 
     /**
-     * Write a raster image as JPEG (book renames). Removes $sourcePath on success when different from dest.
+     * Rename image file on disk (handles case-only renames on Windows via temp hop).
      */
+    private function renameImageFile(string $directory, string $oldName, string $newName): bool
+    {
+        $oldName = basename($oldName);
+        $newName = strtolower(basename($newName));
+        if ($oldName === $newName) {
+            return is_file($directory . $newName);
+        }
+
+        $from = $directory . $oldName;
+        $to = $directory . $newName;
+        if (!is_file($from)) {
+            return is_file($to);
+        }
+        if (@rename($from, $to)) {
+            return true;
+        }
+
+        $tmp = $directory . '__tmp__' . mt_rand(10000, 99999) . '.jpg';
+        if (@rename($from, $tmp) && @rename($tmp, $to)) {
+            return true;
+        }
+
+        if ($this->writeImageFileAsJpeg($from, $to)) {
+            if (is_file($from) && $from !== $to) {
+                @unlink($from);
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    /** Write/copy as JPEG; GD only when format conversion is required. */
     private function writeImageFileAsJpeg(string $sourcePath, string $destJpgPath): bool {
         if (!is_readable($sourcePath)) {
             return false;
         }
+        $destDir = dirname($destJpgPath);
+        $destJpgPath = $destDir . DIRECTORY_SEPARATOR . strtolower(basename($destJpgPath));
         $ext = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
         if (in_array($ext, ['jpg', 'jpeg', 'jfif', 'jpe'], true)) {
-            if (@rename($sourcePath, $destJpgPath)) {
-                return true;
-            }
-            if (@copy($sourcePath, $destJpgPath)) {
-                if (realpath($sourcePath) !== realpath($destJpgPath)) {
-                    @unlink($sourcePath);
-                }
+            if (@rename($sourcePath, $destJpgPath) || @copy($sourcePath, $destJpgPath)) {
                 return true;
             }
         }
         if (!extension_loaded('gd')) {
             return false;
         }
-        $img = false;
-        switch ($ext) {
-            case 'png':
-                $img = @imagecreatefrompng($sourcePath);
-                break;
-            case 'gif':
-                $img = @imagecreatefromgif($sourcePath);
-                break;
-            case 'webp':
-                $img = function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourcePath) : false;
-                break;
-            default:
-                $img = @imagecreatefromjpeg($sourcePath);
-                if ($img === false) {
-                    $blob = @file_get_contents($sourcePath);
-                    if ($blob !== false) {
-                        $img = @imagecreatefromstring($blob);
-                    }
-                }
-        }
+        $img = match ($ext) {
+            'png' => @imagecreatefrompng($sourcePath),
+            'gif' => @imagecreatefromgif($sourcePath),
+            'webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourcePath) : false,
+            default => @imagecreatefromjpeg($sourcePath) ?: @imagecreatefromstring((string) @file_get_contents($sourcePath)),
+        };
         if ($img === false) {
             return false;
         }
@@ -1196,13 +1163,10 @@ class InboundingController {
         }
         $ok = @imagejpeg($img, $destJpgPath, 92);
         imagedestroy($img);
-        if ($ok && realpath($sourcePath) !== realpath($destJpgPath)) {
-            @unlink($sourcePath);
-        }
         return (bool) $ok;
     }
 
-    // --- HELPER 1: Suffix Logic (Color > Size) ---
+    // --- HELPER 1: Suffix Logic for non-book color/size variations (Color > Size) ---
     private function getNamingSuffix($color, $size) {
         // Priority 1: Color
         if (!empty($color)) {
@@ -1217,30 +1181,36 @@ class InboundingController {
     }
 
     // --- HELPER 2: File Renaming & DB Update ---
-    private function processRename($oldPathOrName, $directory, $newBaseName, $dbId, $type, $model, bool $bookOutputJpeg = false) {
+    private function processRename(
+        $oldPathOrName,
+        string $directory,
+        string $newBaseName,
+        $dbId,
+        string $type,
+        $model,
+        string $gallerySyncDir = ''
+    ) {
         
         // Handle input: oldPathOrName might be "uploads/products/img.jpg" or just "img.jpg"
         $oldFileName = basename($oldPathOrName);
         $fullOldPath = $directory . $oldFileName;
 
-        $ext = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
-        $finalExt = $bookOutputJpeg ? 'jpg' : $ext;
-        $finalName = $newBaseName . '.' . $finalExt;
+        $finalName = strtolower($newBaseName) . '.jpg';
         $fullNewPath = $directory . $finalName;
 
-        // If old name is already correct and file exists, nothing to do.
         if ($oldFileName === $finalName && file_exists($fullOldPath)) {
+            if ($gallerySyncDir !== '' && in_array($type, ['main', 'variation_main'], true)) {
+                $this->syncPrimaryImageToGalleryDir($fullOldPath, $gallerySyncDir, $finalName);
+            }
             return;
         }
 
-        // Collision-safe target for variation main images.
-        // Cloned variations can share same color/size so base target may already exist.
-        if ($type === 'variation_main' && file_exists($fullNewPath) && $oldFileName !== $finalName) {
-            $finalName = $newBaseName . '_v' . (int) $dbId . '.' . $finalExt;
+        if ($type === 'variation_main' && file_exists($fullNewPath) && strcasecmp($oldFileName, $finalName) !== 0) {
+            $finalName = strtolower($newBaseName) . '_v' . (int) $dbId . '.jpg';
             $fullNewPath = $directory . $finalName;
             $bump = 1;
             while (file_exists($fullNewPath) && $bump <= 10) {
-                $finalName = $newBaseName . '_v' . (int) $dbId . '_d' . $bump . '.' . $finalExt;
+                $finalName = strtolower($newBaseName) . '_v' . (int) $dbId . '_d' . $bump . '.jpg';
                 $fullNewPath = $directory . $finalName;
                 $bump++;
             }
@@ -1248,21 +1218,9 @@ class InboundingController {
 
         $renamed = false;
         if (file_exists($fullOldPath)) {
-            if ($bookOutputJpeg && $finalExt === 'jpg') {
-                if (@rename($fullOldPath, $fullNewPath)) {
-                    $renamed = true;
-                } else {
-                    $renamed = $this->writeImageFileAsJpeg($fullOldPath, $fullNewPath);
-                }
-            } else {
-                $renamed = @rename($fullOldPath, $fullNewPath);
-            }
-        } else {
-            // Shared-source fallback: if another variation already moved this file,
-            // point this record to an existing target so image doesn't break.
-            if (file_exists($fullNewPath)) {
-                $renamed = true;
-            }
+            $renamed = $this->renameImageFile($directory, $oldFileName, $finalName);
+        } elseif (file_exists($fullNewPath)) {
+            $renamed = true;
         }
 
         if ($renamed) {
@@ -1279,12 +1237,203 @@ class InboundingController {
                 $dbPath = "uploads/products/" . $finalName;
                 $model->update_variation_photo($dbId, $dbPath);
             } elseif ($type === 'gallery') {
-                // Gallery stores just filename usually, or check your logic
-                // Your current code stores just filename in item_images? 
-                // Based on "uploads/itm_img/filename" in your view, it likely stores just filename.
                 $model->update_image_filename_direct($dbId, $finalName);
             }
+
+            if ($gallerySyncDir !== '' && in_array($type, ['main', 'variation_main'], true)) {
+                $this->syncPrimaryImageToGalleryDir($fullNewPath, $gallerySyncDir, $finalName);
+            }
         }
+    }
+
+    /**
+     * Copy primary image into uploads/itm_img so vendor API image URLs share one folder.
+     */
+    private function syncPrimaryImageToGalleryDir(string $sourcePath, string $galleryDir, string $fileName): void
+    {
+        if (!is_file($sourcePath) || $fileName === '') {
+            return;
+        }
+        if (!is_dir($galleryDir) && !@mkdir($galleryDir, 0755, true)) {
+            return;
+        }
+        $destPath = rtrim($galleryDir, '/\\') . DIRECTORY_SEPARATOR . strtolower($fileName);
+        if (is_file($destPath)) {
+            $srcMtime = @filemtime($sourcePath);
+            $dstMtime = @filemtime($destPath);
+            if ($srcMtime !== false && $dstMtime !== false && $dstMtime >= $srcMtime) {
+                return;
+            }
+        }
+        if (!@copy($sourcePath, $destPath)) {
+            $this->writeImageFileAsJpeg($sourcePath, $destPath);
+        }
+    }
+
+    /**
+     * Build vendor API images[] URLs from edited item_images only (uploads/itm_img/).
+     *
+     * @return list<string>
+     */
+    private function buildApiProductImageUrls(array $d, string $siteImageBase): array
+    {
+        $galleryRows = $d['img'] ?? [];
+        if (!is_array($galleryRows) || $galleryRows === []) {
+            return [];
+        }
+
+        $varRows = $d['var_rows'] ?? [];
+        $hasVariations = is_array($varRows) && $varRows !== [];
+        $isVariant = strtoupper(trim((string) ($d['is_variant'] ?? 'N'))) === 'Y';
+        $isBook = strtolower(trim((string) ($d['groupname'] ?? ''))) === 'book';
+        $skipParentGallery = $hasVariations && !$isVariant && !$isBook;
+
+        $imgBase = rtrim($siteImageBase, '/') . '/uploads/itm_img/';
+        $orderedFiles = [];
+
+        usort($galleryRows, static function ($a, $b) {
+            $va = (int) ($a['variation_id'] ?? -1);
+            $vb = (int) ($b['variation_id'] ?? -1);
+            if ($va === 0) {
+                $va = -1;
+            }
+            if ($vb === 0) {
+                $vb = -1;
+            }
+            if ($va !== $vb) {
+                return $va <=> $vb;
+            }
+            $oa = (int) ($a['display_order'] ?? 0);
+            $ob = (int) ($b['display_order'] ?? 0);
+            if ($oa !== $ob) {
+                return $oa <=> $ob;
+            }
+            return (int) ($a['id'] ?? 0) <=> (int) ($b['id'] ?? 0);
+        });
+
+        foreach ($galleryRows as $row) {
+            $varId = (int) ($row['variation_id'] ?? -1);
+            if ($varId === 0) {
+                $varId = -1;
+            }
+            if ($skipParentGallery && $varId === -1) {
+                continue;
+            }
+
+            $fn = strtolower(basename((string) ($row['file_name'] ?? '')));
+            if ($fn === '' || in_array($fn, $orderedFiles, true)) {
+                continue;
+            }
+            if (!$this->editedImageExistsOnDisk($fn)) {
+                continue;
+            }
+            $orderedFiles[] = $fn;
+        }
+
+        return array_map(static function ($filename) use ($imgBase) {
+            return $imgBase . $filename;
+        }, $orderedFiles);
+    }
+
+    private function editedImageExistsOnDisk(string $fileName): bool
+    {
+        $fileName = strtolower(basename(trim($fileName)));
+        if ($fileName === '') {
+            return false;
+        }
+
+        return is_file(__DIR__ . '/../uploads/itm_img/' . $fileName);
+    }
+
+    /**
+     * @return array{ok:bool,message:string,missing:list<string>}
+     */
+    private function validateEditedImagesForPublish(array $bundle, array $publishRow): array
+    {
+        $imagesByVariation = $bundle['images_by_variation'] ?? [];
+        $variations = $bundle['variations'] ?? [];
+        $isBook = (string) ($bundle['inbound']['group_name'] ?? '') === '-8'
+            || strtolower(trim((string) ($publishRow['groupname'] ?? ''))) === 'book';
+        $isVariant = strtoupper(trim((string) ($publishRow['is_variant'] ?? 'N'))) === 'Y';
+        $hasVariations = is_array($variations) && $variations !== [];
+        $useVariationNaming = $hasVariations && !$isBook && !$isVariant;
+
+        $missing = [];
+
+        if ($useVariationNaming) {
+            foreach ($variations as $var) {
+                $varId = (int) ($var['id'] ?? 0);
+                if ($varId <= 0) {
+                    continue;
+                }
+                $hasFile = false;
+                foreach ($imagesByVariation[$varId] ?? [] as $row) {
+                    if ($this->editedImageExistsOnDisk((string) ($row['file_name'] ?? ''))) {
+                        $hasFile = true;
+                        break;
+                    }
+                }
+                if (!$hasFile) {
+                    $color = trim((string) ($var['color'] ?? ''));
+                    $size = trim((string) ($var['size'] ?? ''));
+                    $label = trim($color . ($color !== '' && $size !== '' ? ' / ' : '') . $size);
+                    $missing[] = $label !== '' ? $label : ('variation #' . $varId);
+                }
+            }
+        } elseif ($isVariant) {
+            if (!$this->itemHasAnyEditedImageOnDisk($imagesByVariation)) {
+                $missing[] = 'this variation';
+            }
+        } else {
+            $hasFile = false;
+            foreach ($imagesByVariation[-1] ?? [] as $row) {
+                if ($this->editedImageExistsOnDisk((string) ($row['file_name'] ?? ''))) {
+                    $hasFile = true;
+                    break;
+                }
+            }
+            if (!$hasFile) {
+                $missing[] = 'main product';
+            }
+        }
+
+        if ($missing !== []) {
+            return [
+                'ok' => false,
+                'message' => 'Publish blocked: upload edited photos via Item Photos for: '
+                    . implode(', ', $missing) . '.',
+                'missing' => $missing,
+            ];
+        }
+
+        return ['ok' => true, 'message' => '', 'missing' => []];
+    }
+
+    /** @param array<int, list<array>> $imagesByVariation */
+    private function itemHasAnyEditedImageOnDisk(array $imagesByVariation): bool
+    {
+        foreach ($imagesByVariation as $rows) {
+            foreach ($rows as $row) {
+                if ($this->editedImageExistsOnDisk((string) ($row['file_name'] ?? ''))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function publishJsonError(string $message, array $extra = []): void
+    {
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array_merge([
+            'status' => 'error',
+            'message' => $message,
+        ], $extra), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     private function deleteThumbnailForImagePath(string $absoluteImagePath): void {
@@ -1372,7 +1521,7 @@ class InboundingController {
         $size  = trim($_POST['size'] ?? '');
         $color = trim($_POST['color'] ?? '');
 
-        // Always rename on every save so gallery filenames stay in sync with display_order.
+        // Rename when item_code is set; gallery/primary fast-path skips work if names already match.
         if (!empty($item_code)) {
             $shouldRename = true;
         }
@@ -1410,7 +1559,7 @@ class InboundingController {
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
                 $uploadDir = __DIR__ . '/../uploads/products/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                $newFileName = "MAIN_" . $id . "_" . time() . "_" . rand(100,999) . "." . $ext;
+                $newFileName = strtolower("MAIN_" . $id . "_" . time() . "_" . rand(100, 999) . "." . $ext);
                 if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
                     $mainProductPhoto = "uploads/products/" . $newFileName;
                 }
@@ -1539,7 +1688,7 @@ class InboundingController {
                  if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
                      $uploadDir = __DIR__ . '/../uploads/products/';
                      if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                     $newFileName = "VAR_" . $id . "_" . $key . "_" . time() . "_" . rand(100,999) . "." . $ext;
+                     $newFileName = strtolower("VAR_" . $id . "_" . $key . "_" . time() . "_" . rand(100, 999) . "." . $ext);
                      if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
                          $variant['photo'] = "uploads/products/" . $newFileName;
                      }
@@ -1651,6 +1800,18 @@ class InboundingController {
             $inboundingModel->stat_logs($logData);
 
             if ($action_clicked === 'draft') {
+                $wantsJson = (
+                    (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string) $_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+                    || (isset($_SERVER['HTTP_ACCEPT']) && stripos((string) $_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+                );
+                if ($wantsJson) {
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode(['status' => 'success', 'id' => $id, 'message' => 'Draft saved.']);
+                    exit;
+                }
                 header("location: " . base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved'));
             } else {
                 header("location: " . base_url('?page=inbounding&action=list'));
@@ -1720,7 +1881,7 @@ class InboundingController {
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
               $uploadDir = __DIR__ . '/../uploads/products/';
               if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-              $newFileName = "VAR_" . $record_id . "_" . $index . "_" . time() . "." . $ext;
+              $newFileName = strtolower("VAR_" . $record_id . "_" . $index . "_" . time() . "." . $ext);
               if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
                 $variant['photo'] = "uploads/products/" . $newFileName;
               }
@@ -2018,15 +2179,12 @@ class InboundingController {
         
         if (empty($item_code)) return;
 
-        // Prepare the naming context
         $currentDataForRename = [
-            'is_variant' => $is_variant,
+            'is_variant' => strtoupper(trim((string) $is_variant)) === 'Y' ? 'Y' : 'N',
             'color'      => $color,
             'size'       => $size
         ];
 
-        // Call your existing renaming logic
-        // This ensures that even if renaming was skipped before, it happens now
         $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
     }
 
@@ -2135,16 +2293,20 @@ class InboundingController {
             inbound_profiler_finish($prof, 'error_incomplete_data');
             exit;
         }
-        $this->ensureImagesAreRenamed(
-            $id, 
-            $data1['data']['Item_code'], 
-            $data1['data']['is_variant'], 
-            $data1['data']['color'] ?? '', 
-            $data1['data']['size'] ?? ''
+        $imageBundle = $inboundingModel->getImageRenameBundle($id);
+        $this->renameImagesToItemCode(
+            $id,
+            $data1['data']['Item_code'],
+            [
+                'is_variant' => strtoupper(trim((string) ($data1['data']['is_variant'] ?? 'N'))) === 'Y' ? 'Y' : 'N',
+                'color' => $data1['data']['color'] ?? '',
+                'size' => $data1['data']['size'] ?? '',
+            ],
+            $imageBundle
         );
         inbound_profiler_step($prof, 'ensureImagesAreRenamed');
-        $data = $inboundingModel->getpublishdata($id);
-        inbound_profiler_step($prof, 'getpublishdata_after_rename');
+        $data = $inboundingModel->refreshPublishImageFields($id, $data1, $imageBundle);
+        inbound_profiler_step($prof, 'refreshPublishImageFields');
         if (!is_array($data) || !isset($data['data']) || !is_array($data['data'])) {
             if (ob_get_length()) { ob_clean(); }
             header('Content-Type: application/json');
@@ -2159,6 +2321,26 @@ class InboundingController {
         // --- HELPER: Get Current Date in Y-m-d format ---
         $current_date_formatted = date("Y-m-d");
         $d = $data['data'];
+
+        $editedImageCheck = $this->validateEditedImagesForPublish($imageBundle, $d);
+        if (!$editedImageCheck['ok']) {
+            $logFileData = $this->logPublishProcess([
+                'item_code' => $d['Item_code'] ?? '',
+                'inbound_id' => $id,
+                'status' => 'failed',
+                'error_type' => 'missing_edited_images',
+                'error_message' => $editedImageCheck['message'],
+                'request_data' => ['missing' => $editedImageCheck['missing']],
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown',
+            ]);
+            inbound_profiler_finish($prof, 'missing_edited_images');
+            $this->publishJsonError($editedImageCheck['message'], [
+                'inbound_id' => $id,
+                'missing_edited_images' => $editedImageCheck['missing'],
+                'log_file' => $logFileData['filename'] ?? null,
+            ]);
+        }
+
         // 1. Add all other fields FIRST (use safe defaults to prevent warnings)
         $API_data['itemcode'] = $d['Item_code'] ?? '';
         $API_data['groupname'] = $d['groupname'] ?? '';
@@ -2179,15 +2361,19 @@ class InboundingController {
         }
         $API_data['status'] = $publish_status_req;
         if ($d['groupname'] == 'book') {
-
-            $API_data['creator'] = $inboundingModel->buildBookCreatorApiValue(
+            $creatorApiValue = $inboundingModel->buildBookCreatorApiValue(
                 $d['author'] ?? '',
                 $d['edited_by'] ?? ''
             );
+            if ($creatorApiValue !== '') {
+                $API_data['creator'] = $creatorApiValue;
+            }
+
             $publisherVendorId = (int) ($d['publisher'] ?? 0);
             if ($publisherVendorId > 0) {
                 $API_data['publisher_vendor_id'] = $publisherVendorId;
             }
+
             $API_data['language'] = $d['language'] ?? '';
             $API_data['pages'] = $d['pages'] ?? '';
             $API_data['isbn'] = $d['isbn'] ?? '';
@@ -2201,15 +2387,6 @@ class InboundingController {
             if ($pubDate !== '' && $pubDate !== '0000-00-00') {
                 $API_data['publication_date'] = $pubDate;
             }
-            $sourcingFee = trim((string) ($d['sourcingfee'] ?? ''));
-            if ($sourcingFee !== '') {
-                $API_data['sourcingfee'] = round((float) $sourcingFee, 2);
-            }
-            $shippingFee = $d['shippingfee'] ?? null;
-            if ($shippingFee === null || $shippingFee === '') {
-                $shippingFee = Inbounding::calculateBookShippingFee($d['weight'] ?? 0);
-            }
-            $API_data['shippingfee'] = round((float) $shippingFee, 2);
         }
         $API_data['snippet_description'] = $d['snippet_description'] ?? '';
         // $API_data['creator'] = $data['data']['received_by_user_id'];
@@ -2245,8 +2422,10 @@ class InboundingController {
             $API_data['accounts_group'] = $accountGroupName;
         }
         $vendorApiId = (int) preg_replace('/\D/', '', (string) ($d['vendor_code'] ?? ''));
-        $API_data['discrete_vendors'][0]['vendor'] = $vendorApiId;
-        $API_data['discrete_vendors'][0]['priority'] = 1;
+        if ($vendorApiId > 0) {
+            $API_data['discrete_vendors'][0]['vendor'] = $vendorApiId;
+            $API_data['discrete_vendors'][0]['priority'] = 1;
+        }
         $stock_price_temp = array();
         if (($d['is_variant'] ?? 'N') == 'N') {
             
@@ -2291,7 +2470,9 @@ class InboundingController {
         $stock_price_temp[0]['vendor_us'] = '0';
         $stock_price_temp[0]['price'] = (int)($d['usd_price'] ?? 0);
         $stock_price_temp[0]['price_india'] = (int)($d['price_india'] ?? 0);
-        $stock_price_temp[0]['price_india_suggested'] = (int)($d['price_india'] ?? 0);
+        if (array_key_exists('price_india_suggested', $d)) {
+            $stock_price_temp[0]['price_india_suggested'] = (int)$d['price_india_suggested'];
+        }
         $stock_price_temp[0]['mrp_india'] = (int)($d['price_india_mrp'] ?? 0);
         $stock_price_temp[0]['gst'] = $d['gst_rate'] ?? '';
         $stock_price_temp[0]['permanent_discount'] = (string) ((int) ($d['permanent_discount'] ?? 0));
@@ -2344,7 +2525,11 @@ class InboundingController {
                 $stock_price_temp[$i]['vendor_us'] = '0';
                 $stock_price_temp[$i]['price'] = (int)($value['usd_price'] ?? 0);
                 $stock_price_temp[$i]['price_india'] = (int)($value['price_india'] ?? 0);
-                $stock_price_temp[$i]['price_india_suggested'] = (int)($d['price_india'] ?? 0);
+                if (array_key_exists('price_india_suggested', $value)) {
+                    $stock_price_temp[$i]['price_india_suggested'] = (int)$value['price_india_suggested'];
+                } elseif (array_key_exists('price_india_suggested', $d)) {
+                    $stock_price_temp[$i]['price_india_suggested'] = (int)$d['price_india_suggested'];
+                }
                 $stock_price_temp[$i]['mrp_india'] = (int)($value['price_india_mrp'] ?? 0);
                 $stock_price_temp[$i]['gst'] = $value['gst_rate'] ?? '';
                 $stock_price_temp[$i]['permanent_discount'] = (string) ((int) ($d['permanent_discount'] ?? 0));
@@ -2385,6 +2570,26 @@ class InboundingController {
             }
         }
 
+        $bookSourcingFee = null;
+        $bookShippingFee = null;
+        if (($d['groupname'] ?? '') === 'book') {
+            $sourcingFeeRaw = trim((string) ($d['sourcingfee'] ?? ''));
+            if ($sourcingFeeRaw !== '') {
+                $bookSourcingFee = round((float) $sourcingFeeRaw, 2);
+            }
+            $shippingFeeRaw = $d['shippingfee'] ?? null;
+            if ($shippingFeeRaw === null || $shippingFeeRaw === '') {
+                $shippingFeeRaw = Inbounding::calculateBookShippingFee($d['weight'] ?? 0);
+            }
+            $bookShippingFee = round((float) $shippingFeeRaw, 2);
+            foreach ($stock_price_temp as $idx => $row) {
+                if ($bookSourcingFee !== null) {
+                    $stock_price_temp[$idx]['sourcingfee'] = $bookSourcingFee;
+                }
+                $stock_price_temp[$idx]['shippingfee'] = $bookShippingFee;
+            }
+        }
+
         // 3. Assign item_stock_price to main array
         // array_values ensures JSON encodes this as a list [...] and not an object {"0":..}
         $API_data['item_stock_price'] = array_values($stock_price_temp);
@@ -2402,19 +2607,17 @@ class InboundingController {
         if (!empty($d['img'])) {
             $images_payload['image_directory'] = $d['image_directory'] ?? '';
             
-            // WARNING: __DIR__ creates a server file path (e.g., /var/www/html/...). 
-            // If you need a clickable URL for a browser, change this to your website URL.
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $httpHost = $_SERVER['HTTP_HOST'] ?? '';
             $siteImageBase = $protocol . '://' . $httpHost;
-            $imgDir = $siteImageBase . '/uploads/itm_img/'; 
-            // 1. Get the list of filenames
-            $raw_images = array_column($d['img'], 'file_name');
-
-            // 2. Concatenate $imgDir to each filename
-            $images_payload['images'] = array_map(function($filename) use ($imgDir) {
-                return $imgDir . $filename;
-            }, $raw_images);
+            $images_payload['images'] = $this->buildApiProductImageUrls($d, $siteImageBase);
+            if ($images_payload['images'] === []) {
+                inbound_profiler_finish($prof, 'missing_edited_images_on_disk');
+                $this->publishJsonError(
+                    'Publish blocked: edited photo files are missing from uploads/itm_img/. Re-upload via Item Photos.',
+                    ['inbound_id' => $id]
+                );
+            }
         }
 
         $API_data['images'] = $images_payload;
@@ -2549,18 +2752,23 @@ class InboundingController {
                 $publishUserId = (int)($_POST['userid_log'] ?? 0);
             }
             if ($publishUserId > 0) {
-                $logData1 = ['userid_log' => $publishUserId, 'i_id' => $id, 'stat' => 'Published'];
+                $publishStat = ($publish_status_req === 1) ? 'Published (Live)' : 'Published (Local)';
+                $logData1 = ['userid_log' => $publishUserId, 'i_id' => $id, 'stat' => $publishStat];
                 $inboundingModel->stat_logs($logData1);
             }
 
-            // import API
             $itemCode = $data['data']['Item_code'];
-            $import_response = $ProductsController->importApiCall([$itemCode]);
+
+            // Inbound publish records stock via insert_stock_data(); skip API opening-stock seed here.
+            $import_response = $ProductsController->importApiCall(
+                [$itemCode],
+                ['sync_physical_stock' => false]
+            );
             inbound_profiler_step($prof, 'importApiCall');
             
             // insert stock moment
             $stoc_data = $inboundingModel->stock_data($id);
-            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
+            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data, (int) $id);
             inbound_profiler_step($prof, 'insert_stock_data');
             
             // === LOG SUCCESS ===
@@ -2579,7 +2787,9 @@ class InboundingController {
             header('Content-Type: application/json');
             echo json_encode([
                 'status' => 'success', 
-                'message' => 'Product Upoaded Successfully!',
+                'message' => ($publish_status_req === 1)
+                    ? 'Product published on live website successfully!'
+                    : 'Product published locally successfully (not live on website).',
                 'log_file' => $logFileData['filename']
             ]);
             inbound_profiler_finish($prof, 'success', ['item_code' => $itemCode]);
@@ -2636,6 +2846,110 @@ class InboundingController {
         echo json_encode([
             'status' => 'error',
             'message' => 'Preview did not return JSON. Ensure inbound_product_preview_json route is deployed.',
+        ]);
+        exit;
+    }
+
+    /**
+     * POST product/modify for one inbound section after first publish (flat fields only).
+     */
+    public function inbound_api_section_update(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+        global $inboundingModel;
+
+        $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
+        $section = trim((string) ($_GET['section'] ?? $_POST['section'] ?? ''));
+
+        if ($id <= 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid inbound id.']);
+            exit;
+        }
+        if (!$inboundingModel->isInboundLivePublished($id)) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Product must be live-published before updating sections on the website.',
+            ]);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/inbound_api_sections.php';
+        require_once __DIR__ . '/../helpers/exotic_india_api.php';
+
+        $payload = inbound_api_build_section_modify_payload($inboundingModel, $id, $section);
+        if ($payload === null) {
+            $message = ($section === 'book_details')
+                ? 'Book details update is only available for book products.'
+                : 'Unknown section or missing publish data.';
+            echo json_encode(['status' => 'error', 'message' => $message]);
+            exit;
+        }
+        if ($payload['fields'] === []) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'No fields to send for this section. Save the form and try again.',
+                'section' => $section,
+            ]);
+            exit;
+        }
+
+        $endpoint = 'product/modify'
+            . '?itemcode=' . rawurlencode($payload['itemcode'])
+            . '&size=' . rawurlencode($payload['size'])
+            . '&color=' . rawurlencode($payload['color']);
+
+        $api = exotic_india_api_post(
+            $endpoint,
+            http_build_query($payload['fields']),
+            ['Content-Type: application/x-www-form-urlencoded']
+        );
+
+        if (!$api['success']) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => trim((string) ($api['message'] ?? '')) !== ''
+                    ? (string) $api['message']
+                    : 'Vendor API modify failed.',
+                'http_code' => (int) ($api['http_code'] ?? 0),
+            ]);
+            exit;
+        }
+
+        $apiBody = is_array($api['data'] ?? null) ? $api['data'] : [];
+        $apiSuccess = !isset($apiBody['success']) || (bool) $apiBody['success'];
+        if (!$apiSuccess) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => trim((string) ($apiBody['message'] ?? '')) !== ''
+                    ? (string) $apiBody['message']
+                    : 'Vendor API modify rejected the update.',
+                'http_code' => (int) ($api['http_code'] ?? 0),
+            ]);
+            exit;
+        }
+
+        $ProductsController = new ProductsController();
+        $importResponse = $ProductsController->importApiCall(
+            [$payload['itemcode']],
+            ['sync_physical_stock' => false]
+        );
+
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        if ($userId > 0) {
+            $inboundingModel->stat_logs([
+                'userid_log' => $userId,
+                'i_id' => $id,
+                'stat' => 'Website Update: ' . inbound_api_section_label($section),
+            ]);
+        }
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => inbound_api_section_label($section) . ' updated on the website.',
+            'section' => $section,
+            'fields_sent' => array_keys($payload['fields']),
+            'import' => $importResponse,
         ]);
         exit;
     }

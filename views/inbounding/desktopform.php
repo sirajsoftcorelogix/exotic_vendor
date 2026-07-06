@@ -136,6 +136,10 @@
         z-index: 80 !important;
         background: rgba(0, 0, 0, 0.5) !important;
     }
+    #sectionUpdateConfirmPopup.is-open {
+        z-index: 82 !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+    }
     #printJsonPopup.is-open {
         z-index: 85 !important;
         background: rgba(0, 0, 0, 0.5) !important;
@@ -188,6 +192,9 @@
 </style>
 <?php
 $record_id = $_GET['id'] ?? '';
+$is_inbound_published = !empty($data['is_inbound_published']);
+$is_inbound_live_published = !empty($data['is_inbound_live_published']);
+$inbound_publish_state = is_array($data['inbound_publish_state'] ?? null) ? $data['inbound_publish_state'] : [];
 $sizeOptions = [
     'XS'   => 'Extra Small (XS)(34)',
     'S'    => 'Small (S)(36)',
@@ -583,6 +590,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </div>
             <fieldset class="grow border border-[#ccc] rounded-[5px] px-3 md:px-5 pt-[15px] pb-5 bg-white md:ml-2.5 md:mr-5">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="item_linking"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-sm font-bold text-[#333] px-[5px]">Item Linking</legend>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 md:gap-[30px] mb-[15px] items-end">
                     <div class="flex flex-col">
@@ -732,7 +749,17 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     ?>
                 </div>
             </div>
-            <div class="bg-gray-50 p-5 rounded border border-gray-200 w-full">
+            <div class="bg-gray-50 p-5 rounded border border-gray-200 w-full" id="inbound-section-item-details">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="item_details"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <div id="main-item-details-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                     
                     <div class="w-full min-w-0">
@@ -875,7 +902,17 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     
                 </div>
                 <div id="book-meta-fields" class="hidden mt-6">
-                    <div class="border border-[#ffd6b3] rounded-[5px] px-[15px] py-4 ">
+                    <div class="border border-[#ffd6b3] rounded-[5px] px-[15px] py-4" id="inbound-section-book-details">
+                        <?php if ($is_inbound_live_published && $is_book_initial): ?>
+                        <div class="flex justify-end mb-3">
+                            <button type="button"
+                                    data-section="book_details"
+                                    class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                Update on website
+                            </button>
+                        </div>
+                        <?php endif; ?>
                         <div class="text-[13px] font-bold text-[#333] mb-3">Book Details</div>
                         <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <div>
@@ -1399,8 +1436,18 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 }
             }
         ?>
-        <div class="mt-[15px] md:mx-5">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-item-grouping">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="item_grouping"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Grouping</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
@@ -1520,6 +1567,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         ?>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="search_category"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category (Related Items)</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
@@ -1584,6 +1641,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="search_terms"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Terms</legend>
                 <div>
                     <label class="block text-xs font-bold text-[#222] mb-1">Enter Search Terms:<?php echo $desktopform_req_star; ?></label>
@@ -1597,6 +1664,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="item_identification"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
                 
                 <div class="mb-[15px]">
@@ -1786,6 +1863,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
+                <?php if ($is_inbound_live_published): ?>
+                <div class="flex justify-end mb-3">
+                    <button type="button"
+                            data-section="stock"
+                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Update on website
+                    </button>
+                </div>
+                <?php endif; ?>
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Stock:</legend>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start mb-[15px]">
                     <div class="flex-1">
@@ -1932,12 +2019,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-4">
+        <div class="my-[25px] md:mx-5 mb-4">
+        <div class="flex justify-end gap-4">
             <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
+                <?php if (!$is_inbound_live_published): ?>
                 <button type="button" onclick="handlePublishClick()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                     Publish Product
                 </button>
+                <?php endif; ?>
                 <button type="button" onclick="handlePrintJsonClick()" class="bg-[#17a2b8] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#138496] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
                     Print JSON
@@ -1960,6 +2050,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                    Print Inbound Label
                 </a>
             <?php endif; ?>
+        </div>
         </div>
     </form>
 </div>
@@ -1984,6 +2075,30 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             </svg>
             <p class="text-sm font-semibold text-gray-800">Saving &amp; publishing…</p>
             <p class="text-xs text-gray-600 leading-relaxed px-1">Talking to the remote catalog and refreshing local stock. Do not close this page until you see a success or error message.</p>
+        </div>
+    </div>
+</div>
+<div id="sectionUpdateConfirmPopup" class="desktop-form-modal" hidden aria-hidden="true">
+    <div class="bg-white p-6 rounded-md w-[90%] max-w-[420px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
+        <div id="sectionUpdateConfirmIdle">
+            <h3 class="text-lg font-bold mb-2 text-gray-800">Update on website</h3>
+            <p id="sectionUpdateConfirmText" class="text-sm text-gray-600 mb-3">Push saved item details (dimensions, pricing, location, etc.) to the website.</p>
+            <p id="sectionUpdateConfirmNote" class="text-xs text-gray-500 mb-4 hidden"></p>
+            <p id="sectionUpdateConfirmDefaultNote" class="text-xs text-gray-500 mb-4">The form is saved first, then only this section is sent to the website. Quantity is not synced here yet.</p>
+            <div class="flex flex-col gap-2 mb-4">
+                <button type="button" id="sectionUpdateConfirmBtn" onclick="triggerSectionApiUpdate()" class="w-full bg-[#6f42c1] text-white px-4 py-2.5 rounded text-sm font-semibold hover:bg-[#5a32a3] transition shadow-md">Confirm update</button>
+            </div>
+            <div class="flex justify-center">
+                <button type="button" id="sectionUpdateCancelBtn" onclick="closeSectionUpdatePopup()" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
+            </div>
+        </div>
+        <div id="sectionUpdateConfirmBusy" class="hidden flex-col items-center gap-3 py-2">
+            <svg class="animate-spin h-10 w-10 text-[#6f42c1]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-sm font-semibold text-gray-800">Saving &amp; updating…</p>
+            <p class="text-xs text-gray-600 leading-relaxed px-1">Sending this section to the remote catalog. Keep this tab open.</p>
         </div>
     </div>
 </div>
@@ -2555,16 +2670,26 @@ document.addEventListener('DOMContentLoaded', function() {
         bookLanguageFieldKeys.forEach(initBookLanguageSelect);
         updateFormattedBookLanguageDisplay();
 
-        const desktopInboundForm = document.getElementById('inboundForm') || document.querySelector('form[method="post"]');
+        const desktopInboundForm = document.getElementById('product_form');
+        window.syncInboundDesktopFormBeforeSave = function () {
+            if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
+            if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
+            bookLanguageFieldKeys.forEach(function (fieldKey) {
+                const ts = bookLanguageTomSelects[fieldKey];
+                if (ts) syncBookLanguageHiddenValue(ts, fieldKey);
+            });
+            updateFormattedBookLanguageDisplay();
+            if (desktopInboundForm) {
+                desktopInboundForm.querySelectorAll('select').forEach(function (el) {
+                    if (el.tomselect) {
+                        el.value = el.tomselect.getValue();
+                    }
+                });
+            }
+        };
         if (desktopInboundForm) {
             desktopInboundForm.addEventListener('submit', function () {
-                if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
-                if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
-                bookLanguageFieldKeys.forEach(function (fieldKey) {
-                    const ts = bookLanguageTomSelects[fieldKey];
-                    if (ts) syncBookLanguageHiddenValue(ts, fieldKey);
-                });
-                updateFormattedBookLanguageDisplay();
+                window.syncInboundDesktopFormBeforeSave();
             });
         }
 
@@ -3356,6 +3481,182 @@ document.addEventListener('DOMContentLoaded', function() {
             openPublishPopup();
         }
     }
+
+    let pendingSectionUpdateKey = null;
+    const inboundSectionUpdateLabels = {
+        item_details: 'Item details (dimensions, pricing & stock)',
+        book_details: 'Book details (author, publisher, ISBN, language, fees)',
+        item_grouping: 'Item grouping (material, accounts group, categories)',
+        search_category: 'Search category (related items)',
+        search_terms: 'Search terms',
+        item_identification: 'Item identification',
+        stock: 'Stock',
+        item_linking: 'Item linking'
+    };
+    const inboundSectionUpdateNotes = {
+        item_grouping: 'The product group (Book, Sculpture, etc.) cannot be changed on the website after publish. Material, accounts group, and category selections will sync.',
+        stock: 'Warehouse, image-directory, and quantity fields remain local only. The website sync covers stock-related settings like permanently available, backorder, lead times, marketplace vendor, and block flags.',
+        item_linking: 'Variant type, SKU, parent item code, and remarks remain local only. The website sync for this section only updates the website date fields.'
+    };
+
+    function resetSectionUpdatePopup() {
+        const idle = document.getElementById('sectionUpdateConfirmIdle');
+        const busy = document.getElementById('sectionUpdateConfirmBusy');
+        const confirmBtn = document.getElementById('sectionUpdateConfirmBtn');
+        const cancelBtn = document.getElementById('sectionUpdateCancelBtn');
+        if (idle) idle.classList.remove('hidden');
+        if (busy) {
+            busy.classList.add('hidden');
+            busy.classList.remove('flex');
+        }
+        if (confirmBtn) confirmBtn.disabled = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+    }
+
+    function openSectionUpdatePopup() {
+        resetSectionUpdatePopup();
+        const label = inboundSectionUpdateLabels[pendingSectionUpdateKey] || 'This section';
+        const textEl = document.getElementById('sectionUpdateConfirmText');
+        const noteEl = document.getElementById('sectionUpdateConfirmNote');
+        const defaultNoteEl = document.getElementById('sectionUpdateConfirmDefaultNote');
+        if (textEl) {
+            textEl.textContent = 'Push saved changes for ' + label + ' to the website?';
+        }
+        const sectionNote = inboundSectionUpdateNotes[pendingSectionUpdateKey] || '';
+        if (noteEl) {
+            if (sectionNote) {
+                noteEl.textContent = sectionNote;
+                noteEl.classList.remove('hidden');
+            } else {
+                noteEl.textContent = '';
+                noteEl.classList.add('hidden');
+            }
+        }
+        if (defaultNoteEl) {
+            defaultNoteEl.classList.toggle('hidden', !!sectionNote);
+        }
+        showDesktopOverlay(document.getElementById('sectionUpdateConfirmPopup'));
+    }
+
+    function closeSectionUpdatePopup() {
+        hideDesktopOverlay(document.getElementById('sectionUpdateConfirmPopup'));
+        resetSectionUpdatePopup();
+        pendingSectionUpdateKey = null;
+    }
+
+    function handleSectionApiUpdateClick(sectionKey) {
+        pendingSectionUpdateKey = sectionKey;
+        openSectionUpdatePopup();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.inbound-section-update-btn[data-section]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const sectionKey = btn.getAttribute('data-section');
+                if (sectionKey) {
+                    handleSectionApiUpdateClick(sectionKey);
+                }
+            });
+        });
+    });
+
+    function triggerSectionApiUpdate() {
+        const sectionKey = pendingSectionUpdateKey;
+        if (!sectionKey) {
+            return;
+        }
+
+        const form = document.getElementById('product_form');
+        if (sectionKey === 'book_details' && typeof window.updateBookShippingFeeFromWeight === 'function') {
+            window.updateBookShippingFeeFromWeight();
+        }
+        if (typeof window.syncInboundDesktopFormBeforeSave === 'function') {
+            window.syncInboundDesktopFormBeforeSave();
+        } else {
+            syncFormTomSelectValues(form);
+        }
+        const formData = new FormData(form);
+        formData.set('save_action', 'draft');
+        const recordId = new URLSearchParams(window.location.search).get('id');
+
+        const idle = document.getElementById('sectionUpdateConfirmIdle');
+        const busy = document.getElementById('sectionUpdateConfirmBusy');
+        const confirmBtn = document.getElementById('sectionUpdateConfirmBtn');
+        const cancelBtn = document.getElementById('sectionUpdateCancelBtn');
+        if (idle) idle.classList.add('hidden');
+        if (busy) {
+            busy.classList.remove('hidden');
+            busy.classList.add('flex');
+        }
+        if (confirmBtn) confirmBtn.disabled = true;
+        if (cancelBtn) cancelBtn.disabled = true;
+
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            redirect: 'manual',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(function (saveResponse) {
+            return saveResponse.text().then(function (saveText) {
+                if (saveResponse.type === 'opaqueredirect' || (saveResponse.status >= 300 && saveResponse.status < 400)) {
+                    return;
+                }
+                if (!saveResponse.ok) {
+                    throw new Error('Form save failed (HTTP ' + saveResponse.status + ').');
+                }
+                if (saveText && saveText.trim().charAt(0) === '{') {
+                    const saveData = JSON.parse(saveText.trim());
+                    if (saveData && saveData.status && saveData.status !== 'success') {
+                        throw new Error(saveData.message || 'Form save failed.');
+                    }
+                }
+            });
+        })
+        .then(function () {
+            return fetch('index.php?page=inbounding&action=inbound_api_section_update&id=' + encodeURIComponent(recordId) + '&section=' + encodeURIComponent(sectionKey), {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            });
+        })
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+            closeSectionUpdatePopup();
+            const isSuccess = (data.status === 'success' || data.success === true) && !data.error;
+            if (isSuccess) {
+                Swal.fire({
+                    title: 'Updated',
+                    text: data.message || 'Section updated on the website.',
+                    icon: 'success'
+                }).then(function () { window.location.reload(); });
+            } else {
+                Swal.fire({
+                    title: 'Update failed',
+                    text: data.message || 'Could not update this section on the website.',
+                    icon: 'error',
+                    confirmButtonColor: '#d97824'
+                });
+            }
+        })
+        .catch(function (err) {
+            closeSectionUpdatePopup();
+            Swal.fire({
+                title: 'Update failed',
+                text: err && err.message ? err.message : 'An unexpected error occurred.',
+                icon: 'error',
+                confirmButtonColor: '#d97824'
+            });
+        });
+    }
+
+    window.handleSectionApiUpdateClick = handleSectionApiUpdateClick;
+    window.openSectionUpdatePopup = openSectionUpdatePopup;
+    window.closeSectionUpdatePopup = closeSectionUpdatePopup;
+    window.triggerSectionApiUpdate = triggerSectionApiUpdate;
 
     function resetPrintJsonPopup() {
         const choose = document.getElementById('printJsonChoose');

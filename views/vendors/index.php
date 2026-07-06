@@ -37,6 +37,29 @@
         </div>
     </div>
 
+    <div class="hidden text-sm font-bold mb-4" id="messageDiv" role="status"><?php echo $_SESSION["mapping_message"] ?? ""; unset($_SESSION["mapping_message"]); ?></div>
+
+    <!-- Vendor API debug modal (shown from sync error banner) -->
+    <div id="vendorApiDebugModal" class="fixed inset-0 flex items-center justify-center bg-black/50 hidden z-[60]" role="dialog" aria-modal="true" aria-labelledby="vendorApiDebugTitle">
+        <div class="bg-white rounded-xl shadow-xl w-[min(920px,95vw)] max-h-[90vh] flex flex-col p-6 m-4">
+            <h2 id="vendorApiDebugTitle" class="text-lg font-bold text-gray-900">Exotic India API details</h2>
+            <p id="vendorApiDebugMeta" class="text-sm text-gray-600 mt-1 mb-4"></p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-auto flex-1 min-h-0">
+                <div class="min-w-0">
+                    <h3 class="text-sm font-semibold text-gray-800 mb-2">Request JSON</h3>
+                    <pre id="vendorApiDebugRequest" class="text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-72 whitespace-pre-wrap break-words"></pre>
+                </div>
+                <div class="min-w-0">
+                    <h3 class="text-sm font-semibold text-gray-800 mb-2">Response</h3>
+                    <pre id="vendorApiDebugResponse" class="text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto max-h-72 whitespace-pre-wrap break-words"></pre>
+                </div>
+            </div>
+            <div class="mt-5 flex justify-end">
+                <button type="button" id="vendorApiDebugCloseBtn" class="px-4 py-2 rounded-lg bg-gray-800 text-white text-sm font-medium hover:bg-gray-900">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Filters -->
     <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
         <div class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 border-b border-amber-100/80">
@@ -140,7 +163,6 @@
                     </div>
                 </div>
             </div>
-            <div class="text-sm font-bold text-green-600 mb-4" id="messageDiv"><?php echo $_SESSION["mapping_message"] ?? ""; unset($_SESSION["mapping_message"]); ?></div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-left">
                     <thead>
@@ -421,16 +443,18 @@
                             <div class="mt-2">
                                 <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
                                 <div id="groupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
-                                    <?php foreach($groupnameList as $key => $value): ?>
+                                    <?php foreach($groupnameList as $groupSlug): ?>
                                         <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="groupname[]" value="<?php echo htmlspecialchars($value); ?>">
-                                            <span><?php echo htmlspecialchars(ucfirst($value)); ?></span>
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="groupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
+                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
                                         </label>
                                     <?php endforeach; ?>
                                 </div>
+                                <span id="addGroupnameMsg" class="text-sm text-red-500"></span>
+                                <p class="mt-1 text-xs text-gray-500">Required for Exotic India API sync. Select at least one group.</p>
                             </div>
                             <div class="mt-2">
-                                <label for="addWebpage" class="text-sm font-medium text-gray-700">Webpage</label>
+                                <label for="addWebpage" class="text-sm font-medium text-gray-700">Webpage <span class="text-red-500">*</span></label>
                                 <div class="mt-1 flex items-center gap-2">
                                     <input type="hidden" name="addWebpage" value="0">
                                     <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="addWebpage" id="addWebpage" value="1" checked>
@@ -650,16 +674,18 @@
                             <div class="mt-2">
                                 <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
                                 <div id="editGroupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
-                                    <?php foreach($groupnameList as $key => $value): ?>
+                                    <?php foreach($groupnameList as $groupSlug): ?>
                                         <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editGroupname[]" value="<?php echo htmlspecialchars($value); ?>">
-                                            <span><?php echo htmlspecialchars(ucfirst($value)); ?></span>
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="editGroupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
+                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
                                         </label>
                                     <?php endforeach; ?>
                                 </div>
+                                <span id="editGroupnameMsg" class="text-sm text-red-500"></span>
+                                <p class="mt-1 text-xs text-gray-500">Required for Exotic India API sync. Select at least one group.</p>
                             </div>
                             <div class="mt-2">
-                                <label for="editWebpage" class="text-sm font-medium text-gray-700">Webpage</label>
+                                <label for="editWebpage" class="text-sm font-medium text-gray-700">Webpage <span class="text-red-500">*</span></label>
                                 <div class="mt-1 flex items-center gap-2">
                                     <input type="hidden" name="editWebpage" value="0">
                                     <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editWebpage" id="editWebpage" value="1" checked>
@@ -845,14 +871,103 @@
 <script>
     const myDiv = document.getElementById('messageDiv');
     const VENDOR_FLASH_KEY = 'vendor_list_flash_message';
-    function persistVendorFlash(message, isSuccess) {
+    const VENDOR_FLASH_BANNER_CLASSES = [
+        'text-green-600', 'text-red-600',
+        'bg-green-50', 'bg-red-50',
+        'border', 'border-green-200', 'border-red-200',
+        'rounded-lg', 'px-4', 'py-3', 'shadow-sm'
+    ];
+
+    function persistVendorFlash(message, isSuccess, persistent, apiDebug) {
         try {
-            localStorage.setItem(VENDOR_FLASH_KEY, JSON.stringify({
+            const payload = {
                 message: String(message || ''),
-                isSuccess: !!isSuccess
-            }));
+                isSuccess: !!isSuccess,
+                persistent: persistent !== undefined ? !!persistent : !isSuccess
+            };
+            if (apiDebug) {
+                payload.apiDebug = apiDebug;
+            }
+            localStorage.setItem(VENDOR_FLASH_KEY, JSON.stringify(payload));
         } catch (e) {}
     }
+
+    function formatVendorApiDebugJson(value) {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        if (typeof value === 'string') {
+            return value;
+        }
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch (e) {
+            return String(value);
+        }
+    }
+
+    function extractVendorApiDebug(apiData) {
+        if (!apiData || typeof apiData !== 'object') {
+            return null;
+        }
+        return {
+            action: apiData.api_action || '',
+            url: apiData.api_url || '',
+            http_code: apiData.http_code || 0,
+            request: apiData.request || null,
+            response: apiData.response !== undefined ? apiData.response : (apiData.raw || '')
+        };
+    }
+
+    function showVendorApiDebugModal(debug) {
+        const modal = document.getElementById('vendorApiDebugModal');
+        const meta = document.getElementById('vendorApiDebugMeta');
+        const reqEl = document.getElementById('vendorApiDebugRequest');
+        const resEl = document.getElementById('vendorApiDebugResponse');
+        if (!modal || !meta || !reqEl || !resEl || !debug) {
+            return;
+        }
+        const action = debug.action || 'vendor API';
+        const url = debug.url || '';
+        const httpCode = debug.http_code ? ('HTTP ' + debug.http_code) : '';
+        meta.textContent = [action, url, httpCode].filter(Boolean).join(' · ');
+        reqEl.textContent = formatVendorApiDebugJson(debug.request);
+        resEl.textContent = formatVendorApiDebugJson(debug.response);
+        modal.classList.remove('hidden');
+    }
+
+    function closeVendorApiDebugModal() {
+        const modal = document.getElementById('vendorApiDebugModal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    }
+
+    function parseVendorApiResponse(data) {
+        let apiSuccess = true;
+        let apiErrorMessage = '';
+        let apiDebug = null;
+        if (!data || !data.api_response) {
+            return { apiSuccess, apiErrorMessage, apiDebug };
+        }
+        try {
+            const apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
+            apiSuccess = !!(apiData && apiData.success === true);
+            if (!apiSuccess && apiData && apiData.message) {
+                apiErrorMessage = String(apiData.message);
+            }
+            if (!apiSuccess) {
+                apiDebug = extractVendorApiDebug(apiData);
+            }
+        } catch (e) {
+            apiSuccess = false;
+        }
+        if (!apiSuccess && !apiErrorMessage) {
+            apiErrorMessage = 'Vendor API sync failed.';
+        }
+        return { apiSuccess, apiErrorMessage, apiDebug };
+    }
+
     function showPersistedVendorFlashIfAny() {
         try {
             const raw = localStorage.getItem(VENDOR_FLASH_KEY);
@@ -860,21 +975,74 @@
             localStorage.removeItem(VENDOR_FLASH_KEY);
             const payload = JSON.parse(raw);
             if (payload && payload.message) {
-                showVendorTopMessage(payload.message, !!payload.isSuccess);
+                const persistent = payload.persistent !== undefined ? !!payload.persistent : !payload.isSuccess;
+                showVendorTopMessage(payload.message, !!payload.isSuccess, {
+                    persistent: persistent,
+                    apiDebug: payload.apiDebug || null
+                });
             }
         } catch (e) {}
     }
-    function showVendorTopMessage(message, isSuccess) {
+
+    function showVendorTopMessage(message, isSuccess, options) {
         if (!myDiv) return;
-        myDiv.classList.remove('text-green-600', 'text-red-600');
+        options = options || {};
+        const persistent = options.persistent !== undefined ? !!options.persistent : !isSuccess;
+        myDiv.classList.remove('hidden', ...VENDOR_FLASH_BANNER_CLASSES);
         myDiv.classList.add(isSuccess ? 'text-green-600' : 'text-red-600');
-        myDiv.textContent = message || '';
+        myDiv.classList.add(isSuccess ? 'bg-green-50' : 'bg-red-50');
+        myDiv.classList.add('border', isSuccess ? 'border-green-200' : 'border-red-200', 'rounded-lg', 'px-4', 'py-3', 'shadow-sm');
+        myDiv.innerHTML = '';
+        const textSpan = document.createElement('span');
+        textSpan.textContent = message || '';
+        myDiv.appendChild(textSpan);
+        if (!isSuccess && options.apiDebug) {
+            const link = document.createElement('button');
+            link.type = 'button';
+            link.className = 'ml-2 underline font-semibold text-red-800 hover:text-red-950 whitespace-nowrap';
+            link.textContent = 'View API request & response';
+            link.addEventListener('click', function () {
+                showVendorApiDebugModal(options.apiDebug);
+            });
+            myDiv.appendChild(link);
+        }
+        myDiv.setAttribute('role', isSuccess ? 'status' : 'alert');
+        if (persistent) {
+            myDiv.dataset.persistent = '1';
+        } else {
+            delete myDiv.dataset.persistent;
+        }
+        myDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+
+    function reloadVendorListWithFlash(message, isSuccess, apiDebug) {
+        persistVendorFlash(message, isSuccess, !isSuccess, apiDebug);
+        window.location.reload();
+    }
+
     function redirectToVendorListWithFlash(message, isSuccess) {
-        persistVendorFlash(message, isSuccess);
+        persistVendorFlash(message, isSuccess, !isSuccess);
         window.location.href = '?page=vendors&action=list';
     }
+
     showPersistedVendorFlashIfAny();
+    if (myDiv && myDiv.textContent.trim() !== '' && !localStorage.getItem(VENDOR_FLASH_KEY)) {
+        const isError = myDiv.classList.contains('text-red-600');
+        showVendorTopMessage(myDiv.textContent.trim(), !isError, { persistent: isError });
+    }
+
+    const vendorApiDebugCloseBtn = document.getElementById('vendorApiDebugCloseBtn');
+    if (vendorApiDebugCloseBtn) {
+        vendorApiDebugCloseBtn.addEventListener('click', closeVendorApiDebugModal);
+    }
+    const vendorApiDebugModal = document.getElementById('vendorApiDebugModal');
+    if (vendorApiDebugModal) {
+        vendorApiDebugModal.addEventListener('click', function (e) {
+            if (e.target === vendorApiDebugModal) {
+                closeVendorApiDebugModal();
+            }
+        });
+    }
 
     const syncVendorsApiBtn = document.getElementById('sync-vendors-api-btn');
     if (syncVendorsApiBtn) {
@@ -904,13 +1072,11 @@
                     return;
                 }
                 const errMsg = (data && data.message) ? data.message : 'Vendor sync failed.';
-                showVendorTopMessage(errMsg, false);
-                redirectToVendorListWithFlash(errMsg, false);
+                reloadVendorListWithFlash(errMsg, false);
             })
             .catch(function () {
                 const errMsg = 'Vendor sync request failed. Please try again.';
-                showVendorTopMessage(errMsg, false);
-                redirectToVendorListWithFlash(errMsg, false);
+                reloadVendorListWithFlash(errMsg, false);
             })
             .finally(function () {
                 syncVendorsApiBtn.dataset.loading = '0';
@@ -920,13 +1086,17 @@
         });
     }
 
-    // Clear the div after 5000 milliseconds (5 seconds)
+    // Auto-clear only transient success banners (errors stay until page reload/navigation)
     if (myDiv) {
         setTimeout(() => {
-            if (myDiv.innerHTML.trim() !== '') {
-                myDiv.innerHTML = '';
+            if (myDiv.dataset.persistent === '1') return;
+            if (myDiv.textContent.trim() !== '') {
+                myDiv.textContent = '';
+                myDiv.classList.add('hidden');
+                myDiv.classList.remove(...VENDOR_FLASH_BANNER_CLASSES);
+                delete myDiv.dataset.persistent;
             }
-        }, 3000);
+        }, 8000);
     }
 
     // Function to limit input to six digits
@@ -1055,8 +1225,71 @@
         return vendorNameExists || phoneExists || emailExists;
     }
 
+    const VENDOR_API_ALLOWED_GROUPS = <?php echo json_encode(array_values($groupnameList), JSON_UNESCAPED_UNICODE); ?>;
+
+    function getSelectedVendorGroups(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return [];
+        return Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
+            .map(function (cb) { return String(cb.value || '').trim(); })
+            .filter(Boolean);
+    }
+
+    function validateVendorApiFormFields(isEdit) {
+        const nameInput = document.getElementById(isEdit ? 'editVendorName' : 'addVendorName');
+        const nameMsg = document.getElementById(isEdit ? 'editVendorNameMsg' : 'addVendorNameMsg');
+        const groupMsg = document.getElementById(isEdit ? 'editGroupnameMsg' : 'addGroupnameMsg');
+        const groupContainerId = isEdit ? 'editGroupname' : 'groupname';
+        let ok = true;
+
+        const name = nameInput ? nameInput.value.trim() : '';
+        if (!name) {
+            if (nameMsg) nameMsg.textContent = 'Vendor name is required.';
+            ok = false;
+        } else if (nameMsg && !vendorDuplicateBlocked(isEdit)) {
+            nameMsg.textContent = '';
+        }
+
+        const groups = getSelectedVendorGroups(groupContainerId);
+        if (groups.length === 0) {
+            if (groupMsg) groupMsg.textContent = 'Select at least one group name.';
+            ok = false;
+        } else {
+            const allowed = new Set(VENDOR_API_ALLOWED_GROUPS.map(function (g) { return String(g).toLowerCase(); }));
+            const invalid = groups.filter(function (g) { return !allowed.has(g.toLowerCase()); });
+            if (invalid.length > 0) {
+                if (groupMsg) groupMsg.textContent = 'Invalid group: ' + invalid.join(', ') + '.';
+                ok = false;
+            } else if (groupMsg) {
+                groupMsg.textContent = '';
+            }
+        }
+
+        return ok;
+    }
+
+    function bindVendorGroupCheckboxValidation(containerId, msgId) {
+        const container = document.getElementById(containerId);
+        const msgEl = document.getElementById(msgId);
+        if (!container) return;
+        container.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                if (getSelectedVendorGroups(containerId).length > 0 && msgEl) {
+                    msgEl.textContent = '';
+                }
+            });
+        });
+    }
+
+    bindVendorGroupCheckboxValidation('groupname', 'addGroupnameMsg');
+    bindVendorGroupCheckboxValidation('editGroupname', 'editGroupnameMsg');
+
     const addForm = document.getElementById('addVendorForm');
     addForm.addEventListener('submit', (e) => {
+        if (!validateVendorApiFormFields(false)) {
+            e.preventDefault();
+            return;
+        }
         if (vendorDuplicateBlocked(false)) {
             e.preventDefault();
             alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
@@ -1335,6 +1568,9 @@
 
     document.getElementById('addVendorForm').onsubmit = function(e) {
         e.preventDefault();
+        if (!validateVendorApiFormFields(false)) {
+            return;
+        }
         if (vendorDuplicateBlocked(false)) {
             alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
             return;
@@ -1349,41 +1585,31 @@
         .then(r => r.json())
         .then(data => {
             const msgBox = document.getElementById("addVendorMsg");
-            msgBox.innerHTML = '';
-            if (data.success) {
+            if (msgBox) msgBox.innerHTML = '';
+            if (!data.success) {
+                reloadVendorListWithFlash(data.message || 'Add vendor failed.', false);
+                return;
+            }
+            const { apiSuccess, apiErrorMessage, apiDebug } = parseVendorApiResponse(data);
+            if (!apiSuccess && data.api_response) {
+                const syncError = apiErrorMessage || 'Exotic India API did not return a Vendor ID.';
+                reloadVendorListWithFlash(
+                    data.success ? ('Vendor saved locally, but Exotic India sync failed: ' + syncError) : syncError,
+                    false,
+                    apiDebug
+                );
+                return;
+            }
+            if (msgBox) {
                 msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
                     ✅ ${data.message}
                 </div>`;
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                
-                // Parse API response if it exists
-                let apiSuccess = false;
-                if (data.api_response) {
-                    try {
-                        let apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
-                        apiSuccess = apiData.success === true;
-                    } catch (e) {
-                        apiSuccess = false;
-                    }
-                }
-                
-                if (!apiSuccess && data.api_response) {
-                    let apiErrorMessage = 'Vendor API sync failed after add.';
-                    try {
-                        const parsed = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
-                        apiErrorMessage = (parsed && parsed.message) ? parsed.message : apiErrorMessage;
-                    } catch (e) {}
-                    redirectToVendorListWithFlash(apiErrorMessage, false);
-                    return;
-                }
-                
-                setTimeout(() => {
-                    location.reload();
-                }, 1500); // refresh after 1 sec
-            } else {
-                redirectToVendorListWithFlash(data.message || 'Add vendor failed.', false);
             }
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
         });
     };
 
@@ -1457,6 +1683,13 @@
                 alert(vendor.message);
                 return;
             }
+            editVendorNameExists = false;
+            editEmailExists = false;
+            editPhoneExists = false;
+            ['editVendorNameMsg', 'editEmailMsg', 'editPhoneMsg'].forEach(function (msgId) {
+                const el = document.getElementById(msgId);
+                if (el) el.textContent = '';
+            });
             // Populate form fields with vendor data
             document.getElementById("editVendorId").value   = vendor.id;
             document.getElementById("editVendorName").value = vendor.vendor_name;
@@ -1583,6 +1816,9 @@
 
     document.getElementById('editUserForm').onsubmit = function(e) {
         e.preventDefault();
+        if (!validateVendorApiFormFields(true)) {
+            return;
+        }
         if (vendorDuplicateBlocked(true)) {
             alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
             return;
@@ -1597,41 +1833,31 @@
         .then(r => r.json())
         .then(data => {
             var msgBox = document.getElementById('editVendorMsg');
-            msgBox.innerHTML = '';
-            if (data.success) {
+            if (msgBox) msgBox.innerHTML = '';
+            if (!data.success) {
+                reloadVendorListWithFlash(data.message || 'Edit vendor failed.', false);
+                return;
+            }
+            const { apiSuccess, apiErrorMessage, apiDebug } = parseVendorApiResponse(data);
+            if (!apiSuccess && data.api_response) {
+                const syncError = apiErrorMessage || 'Exotic India API did not return a Vendor ID.';
+                reloadVendorListWithFlash(
+                    data.success ? ('Vendor saved locally, but Exotic India sync failed: ' + syncError) : syncError,
+                    false,
+                    apiDebug
+                );
+                return;
+            }
+            if (msgBox) {
                 msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
                                     ✅ ${data.message}
                 </div>`;
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                
-                // Parse API response if it exists
-                let apiSuccess = false;
-                if (data.api_response) {
-                    try {
-                        let apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
-                        apiSuccess = apiData.success === true;
-                    } catch (e) {
-                        apiSuccess = false;
-                    }
-                }
-                
-                if (!apiSuccess && data.api_response) {
-                    let apiErrorMessage = 'Vendor API sync failed after edit.';
-                    try {
-                        const parsed = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
-                        apiErrorMessage = (parsed && parsed.message) ? parsed.message : apiErrorMessage;
-                    } catch (e) {}
-                    redirectToVendorListWithFlash(apiErrorMessage, false);
-                    return;
-                }
-                
-                setTimeout(() => {
-                    window.location.href = '?page=vendors&action=list';
-                }, 1000); // redirect after 1 sec
-            } else {
-                redirectToVendorListWithFlash(data.message || 'Edit vendor failed.', false);
             }
+            setTimeout(() => {
+                window.location.href = '?page=vendors&action=list';
+            }, 1000);
         });
     };
 

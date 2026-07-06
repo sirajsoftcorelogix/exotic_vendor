@@ -235,6 +235,7 @@ class AccountGroup
                )
              ORDER BY ag.account_group_name ASC'
         );
+       
         if (!$stmt) {
             return [];
         }
