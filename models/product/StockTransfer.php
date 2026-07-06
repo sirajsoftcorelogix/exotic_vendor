@@ -665,7 +665,7 @@ class StockTransfer
               INDEX (`transfer_id`),
               INDEX (`transfer_order_no`),
               INDEX (`sku`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
 
             "CREATE TABLE IF NOT EXISTS `vp_stock_transfer_grns_file` (
               `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -1201,10 +1201,11 @@ class StockTransfer
         $total = (int)($totalRow['c'] ?? 0);
 
         // GRN aggregates per transfer line (same SKU/item_code matching as qty_received)
-        $grnLineMatch = '( (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NOT NULL AND g.sku = i.sku)
+        $grnLineMatch = '( (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NOT NULL
+                AND g.sku COLLATE utf8mb4_unicode_ci = i.sku COLLATE utf8mb4_unicode_ci)
             OR (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NULL
                 AND NULLIF(TRIM(IFNULL(i.item_code, \'\')), \'\') IS NOT NULL
-                AND g.item_code = i.item_code) )';
+                AND g.item_code COLLATE utf8mb4_unicode_ci = i.item_code COLLATE utf8mb4_unicode_ci) )';
         $sql = "SELECT i.id, i.product_id, i.sku, i.item_code, i.transfer_qty, i.item_notes,
                 COALESCE((
                     SELECT SUM(g.qty_received)
@@ -1421,15 +1422,17 @@ class StockTransfer
         }
         $orderNo = $hrow['transfer_order_no'];
 
-        $grnLineMatchI = '( (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NOT NULL AND g.sku = i.sku)
+        $grnLineMatchI = '( (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NOT NULL
+                AND g.sku COLLATE utf8mb4_unicode_ci = i.sku COLLATE utf8mb4_unicode_ci)
             OR (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NULL
                 AND NULLIF(TRIM(IFNULL(i.item_code, \'\')), \'\') IS NOT NULL
-                AND g.item_code = i.item_code) )';
+                AND g.item_code COLLATE utf8mb4_unicode_ci = i.item_code COLLATE utf8mb4_unicode_ci) )';
 
-        $grnLineMatchI2 = '( (NULLIF(TRIM(IFNULL(i2.sku, \'\')), \'\') IS NOT NULL AND g2.sku = i2.sku)
+        $grnLineMatchI2 = '( (NULLIF(TRIM(IFNULL(i2.sku, \'\')), \'\') IS NOT NULL
+                AND g2.sku COLLATE utf8mb4_unicode_ci = i2.sku COLLATE utf8mb4_unicode_ci)
             OR (NULLIF(TRIM(IFNULL(i2.sku, \'\')), \'\') IS NULL
                 AND NULLIF(TRIM(IFNULL(i2.item_code, \'\')), \'\') IS NOT NULL
-                AND g2.item_code = i2.item_code) )';
+                AND g2.item_code COLLATE utf8mb4_unicode_ci = i2.item_code COLLATE utf8mb4_unicode_ci) )';
 
         $sql = "SELECT
                     (SELECT COUNT(*) FROM vp_item_stock_transfer i0 WHERE i0.transfer_order_no = ?) AS total_lines,
@@ -3270,11 +3273,12 @@ class StockTransfer
             FROM vp_stock_transfer_grns g
             WHERE g.transfer_id = {$transferId}
               AND (
-                  (NULLIF(TRIM(IFNULL({$sku}, '')), '') IS NOT NULL AND g.sku = {$sku})
+                  (NULLIF(TRIM(IFNULL({$sku}, '')), '') IS NOT NULL
+                      AND g.sku COLLATE utf8mb4_unicode_ci = {$sku} COLLATE utf8mb4_unicode_ci)
                   OR (
                       NULLIF(TRIM(IFNULL({$sku}, '')), '') IS NULL
                       AND NULLIF(TRIM(IFNULL({$itemCode}, '')), '') IS NOT NULL
-                      AND g.item_code = {$itemCode}
+                      AND g.item_code COLLATE utf8mb4_unicode_ci = {$itemCode} COLLATE utf8mb4_unicode_ci
                   )
               )
         ), 0)";
