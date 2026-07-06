@@ -1403,11 +1403,13 @@ class ProductsController
         }
 
         $service = new StockRebuildService($conn);
+        $categories = ['allProducts' => 'All Products'] + getCategories();
 
         renderTemplate('views/products/stock_rebuild_guide.php', [
             'warehouses' => $warehouses,
             'selectedWarehouseId' => $loginWarehouseId,
             'defaultWarehouse' => $service->getDefaultWarehouse(),
+            'categories' => $categories,
         ], 'Warehouse Stock Rebuild');
     }
 
@@ -1449,9 +1451,8 @@ class ProductsController
             if (!is_array($payload)) {
                 throw new Exception('Invalid request payload.');
             }
-            $selectedWarehouseId = (int) ($payload['warehouse_id'] ?? 0);
             $service = new StockRebuildService($conn);
-            vendorJsonResponse($service->preview($selectedWarehouseId));
+            vendorJsonResponse($service->preview($payload));
         } catch (StockRebuildSqlException $e) {
             $detail = $e->getDetail();
             vendorJsonResponse([
@@ -1486,14 +1487,13 @@ class ProductsController
             if (!is_array($payload)) {
                 throw new Exception('Invalid request payload.');
             }
-            $selectedWarehouseId = (int) ($payload['warehouse_id'] ?? 0);
             $confirmText = strtoupper(trim((string) ($payload['confirm_text'] ?? '')));
             if ($confirmText !== 'REBUILD') {
                 throw new Exception('Type REBUILD to confirm execution.');
             }
             $service = new StockRebuildService($conn);
             $userId = (int) ($_SESSION['user']['id'] ?? 0);
-            vendorJsonResponse($service->execute($selectedWarehouseId, $userId));
+            vendorJsonResponse($service->execute($payload, $userId));
         } catch (StockRebuildSqlException $e) {
             $detail = $e->getDetail();
             vendorJsonResponse([
