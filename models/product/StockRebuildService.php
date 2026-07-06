@@ -26,6 +26,8 @@ require_once __DIR__ . '/../pos/pos.php';
 
 final class StockRebuildService
 {
+    private const SCOPE_TABLE = '_stock_rebuild_scope';
+
     /** @var mysqli */
     private $conn;
 
@@ -637,22 +639,8 @@ final class StockRebuildService
     /** @param array<string, array<string, mixed>> $scopeRows */
     private function createScopeTempTable(array $scopeRows): void
     {
-        $this->dropScopeTempTable();
-        $this->queryOrFail(
-            'CREATE TEMPORARY TABLE _stock_rebuild_scope (
-                sku VARCHAR(191) NOT NULL,
-                product_id INT UNSIGNED NOT NULL DEFAULT 0,
-                PRIMARY KEY (sku),
-                KEY idx_product_id (product_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-            'preview.scope_temp_table.create',
-            [
-                'phase' => 'preview',
-                'tables' => ['_stock_rebuild_scope'],
-                'columns' => ['sku', 'product_id'],
-                'comparison' => 'temporary scope table for preview JOINs',
-            ]
-        );
+        $this->ensureScopeTableExists();
+        $this->clearScopeTable();
 
         if ($scopeRows === []) {
             return;
@@ -676,14 +664,43 @@ final class StockRebuildService
         }
     }
 
+    private function ensureScopeTableExists(): void
+    {
+        $table = self::SCOPE_TABLE;
+        $this->queryOrFail(
+            "CREATE TABLE IF NOT EXISTS {$table} (
+                sku VARCHAR(191) NOT NULL,
+                product_id INT UNSIGNED NOT NULL DEFAULT 0,
+                PRIMARY KEY (sku),
+                KEY idx_product_id (product_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            'preview.scope_table.ensure',
+            [
+                'phase' => 'preview',
+                'tables' => [$table],
+                'columns' => ['sku', 'product_id'],
+                'comparison' => 'permanent scope table for preview JOINs',
+            ]
+        );
+    }
+
+    private function clearScopeTable(): void
+    {
+        $table = self::SCOPE_TABLE;
+        if (@$this->conn->query("TRUNCATE TABLE {$table}") === false) {
+            @$this->conn->query("DELETE FROM {$table}");
+        }
+    }
+
     /** @param list<string> $valueRows */
     private function insertScopeTempBatch(array $valueRows): void
     {
-        $sql = 'INSERT INTO _stock_rebuild_scope (sku, product_id) VALUES ' . implode(',', $valueRows)
+        $table = self::SCOPE_TABLE;
+        $sql = "INSERT INTO {$table} (sku, product_id) VALUES " . implode(',', $valueRows)
             . ' ON DUPLICATE KEY UPDATE product_id = GREATEST(product_id, VALUES(product_id))';
-        $this->queryOrFail($sql, 'preview.scope_temp_table.insert', [
+        $this->queryOrFail($sql, 'preview.scope_table.insert', [
             'phase' => 'preview',
-            'tables' => ['_stock_rebuild_scope'],
+            'tables' => [$table],
             'columns' => ['sku', 'product_id'],
             'comparison' => 'batch insert scoped SKUs',
         ]);
@@ -691,7 +708,7 @@ final class StockRebuildService
 
     private function dropScopeTempTable(): void
     {
-        @$this->conn->query('DROP TEMPORARY TABLE IF EXISTS _stock_rebuild_scope');
+        $this->clearScopeTable();
     }
 
     private function collectDeleteCountsViaScopeTable(): array
