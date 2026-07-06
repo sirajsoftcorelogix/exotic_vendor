@@ -5544,6 +5544,9 @@ class ProductsController
             if ($value === null) {
                 continue;
             }
+            if (is_string($value) && trim($value) === '') {
+                continue;
+            }
             $normalizedFields[$key] = is_string($value) ? trim($value) : $value;
         }
 
@@ -5994,6 +5997,7 @@ class ProductsController
             }
 
             require_once dirname(__DIR__) . '/models/inbounding/Inbounding.php';
+            require_once dirname(__DIR__) . '/helpers/inbound_api_sections.php';
             $inboundingModel = new Inbounding($conn);
             $inboundRow = $this->getLatestInboundBookRowByVariant(
                 $conn,
@@ -6001,9 +6005,6 @@ class ProductsController
                 (string) ($product['size'] ?? ''),
                 (string) ($product['color'] ?? '')
             );
-            if (!$inboundRow || empty($inboundRow['id'])) {
-                throw new Exception('No matching inbound row was found for this book product.');
-            }
 
             $authorCsv = $this->resolveExactInboundAuthorIdsCsv($conn, (string) ($data['authors'] ?? ''), 'Author');
             $editedByCsv = $this->resolveExactInboundAuthorIdsCsv($conn, (string) ($data['edited_by'] ?? ''), 'Edited By');
@@ -6013,12 +6014,12 @@ class ProductsController
             if ($pagesRaw !== '' && (!ctype_digit($pagesRaw) || (int) $pagesRaw < 0)) {
                 throw new Exception('Pages must be a non-negative whole number.');
             }
-            $pages = $pagesRaw === '' ? 0 : (int) $pagesRaw;
+            $pages = $pagesRaw === '' ? null : (int) $pagesRaw;
 
             $updateData = [
                 'author' => $authorCsv,
                 'edited_by' => $editedByCsv,
-                'publisher' => $publisherId,
+                'publisher' => $publisherId > 0 ? $publisherId : null,
                 'isbn' => trim((string) ($data['isbn'] ?? '')),
                 'cover_type' => trim((string) ($data['cover_type'] ?? '')),
                 'edition' => trim((string) ($data['edition'] ?? '')),
@@ -6027,9 +6028,11 @@ class ProductsController
                 'pages' => $pages,
             ];
 
-            $result = $inboundingModel->updatedesktopform((int) $inboundRow['id'], $updateData);
-            if (empty($result['success'])) {
-                throw new Exception((string) ($result['message'] ?? 'Could not update book details.'));
+            if ($inboundRow && !empty($inboundRow['id'])) {
+                $result = $inboundingModel->updatedesktopform((int) $inboundRow['id'], $updateData);
+                if (empty($result['success'])) {
+                    throw new Exception((string) ($result['message'] ?? 'Could not update book details.'));
+                }
             }
 
             $productBookUpdate = [
@@ -6047,18 +6050,26 @@ class ProductsController
                 throw new Exception((string) ($productSave['message'] ?? 'Could not save book details on product.'));
             }
 
-            $vendorFields = [
-                'creator' => $inboundingModel->buildBookCreatorApiValue($authorCsv, $editedByCsv),
-                'publisher_vendor_id' => $publisherId > 0 ? $publisherId : '',
-                'isbn' => $updateData['isbn'],
-                'cover_type' => $updateData['cover_type'],
-                'edition' => $updateData['edition'],
-                'publication_date' => $publicationDate,
-                'language' => $updateData['language'],
-                'pages' => $pagesRaw === '' ? '' : $pages,
-            ];
+            if ($inboundRow && !empty($inboundRow['id'])) {
+                $publishRow = $inboundingModel->getpublishdata((int) $inboundRow['id']);
+                $bookSource = is_array($publishRow['data'] ?? null) ? $publishRow['data'] : [];
+            } else {
+                $bookSource = array_merge(['groupname' => $product['groupname'] ?? 'book'], $updateData);
+            }
+
+            $vendorFields = inbound_api_build_book_details_modify_fields($bookSource, $inboundingModel);
+            if ($vendorFields === []) {
+                throw new Exception('No book fields to send to the website. Check author, publisher, or other book details.');
+            }
 
             $vendorSync = $this->syncProductFieldsToVendorFrontend($product, $vendorFields);
+            if (!empty($vendorSync['success'])) {
+                $itemCode = trim((string) ($product['item_code'] ?? ''));
+                if ($itemCode !== '') {
+                    $this->importApiCall([$itemCode], ['sync_physical_stock' => false]);
+                }
+            }
+
             $message = 'Book details updated.';
             if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
                 $message .= ' ' . $vendorSync['message'];
