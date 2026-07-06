@@ -666,30 +666,64 @@ final class StockRebuildService
 
     private function ensureScopeTableExists(): void
     {
+        if ($this->scopeTableIsUsable()) {
+            return;
+        }
+
         $table = self::SCOPE_TABLE;
-        $this->queryOrFail(
-            "CREATE TABLE IF NOT EXISTS {$table} (
+        $ddl = "CREATE TABLE IF NOT EXISTS {$table} (
                 sku VARCHAR(191) NOT NULL,
                 product_id INT UNSIGNED NOT NULL DEFAULT 0,
                 PRIMARY KEY (sku),
                 KEY idx_product_id (product_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+        @$this->conn->query($ddl);
+
+        if ($this->scopeTableIsUsable()) {
+            return;
+        }
+
+        throw $this->sqlException(
             'preview.scope_table.ensure',
+            $ddl,
             [
                 'phase' => 'preview',
                 'tables' => [$table],
                 'columns' => ['sku', 'product_id'],
-                'comparison' => 'permanent scope table for preview JOINs',
+                'comparison' => 'Scope table is missing or not readable. Create it manually (DBA) if auto-create is not permitted, then retry preview.',
+                'manual_ddl' => $ddl,
             ]
         );
+    }
+
+    private function scopeTableIsUsable(): bool
+    {
+        $table = self::SCOPE_TABLE;
+        $res = @$this->conn->query("SELECT 1 FROM {$table} LIMIT 0");
+
+        return $res instanceof mysqli_result;
     }
 
     private function clearScopeTable(): void
     {
         $table = self::SCOPE_TABLE;
-        if (@$this->conn->query("TRUNCATE TABLE {$table}") === false) {
-            @$this->conn->query("DELETE FROM {$table}");
+        if (@$this->conn->query("TRUNCATE TABLE {$table}") === true) {
+            return;
         }
+        if (@$this->conn->query("DELETE FROM {$table}") === true) {
+            return;
+        }
+
+        throw $this->sqlException(
+            'preview.scope_table.clear',
+            "TRUNCATE TABLE {$table}",
+            [
+                'phase' => 'preview',
+                'tables' => [$table],
+                'comparison' => 'Could not clear scope table rows before preview (TRUNCATE/DELETE denied).',
+            ]
+        );
     }
 
     /** @param list<string> $valueRows */

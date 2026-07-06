@@ -192,9 +192,7 @@
 </style>
 <?php
 $record_id = $_GET['id'] ?? '';
-$is_inbound_published = !empty($data['is_inbound_published']);
 $is_inbound_live_published = !empty($data['is_inbound_live_published']);
-$inbound_publish_state = is_array($data['inbound_publish_state'] ?? null) ? $data['inbound_publish_state'] : [];
 $sizeOptions = [
     'XS'   => 'Extra Small (XS)(34)',
     'S'    => 'Small (S)(36)',
@@ -3448,20 +3446,27 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
     const printJsonPreviewUrl = <?php echo json_encode(base_url('?page=inbounding&action=inbound_product_preview_json')); ?>;
 
-    function resetPublishPopup() {
-        const idle = document.getElementById('publishConfirmIdle');
-        const busy = document.getElementById('publishConfirmBusy');
-        const liveBtn = document.getElementById('publishLiveBtn');
-        const localBtn = document.getElementById('publishLocalBtn');
-        const cancelBtn = document.getElementById('publishCancelBtn');
-        if (idle) idle.classList.remove('hidden');
-        if (busy) {
-            busy.classList.add('hidden');
-            busy.classList.remove('flex');
+    function setInboundModalPhase(idleId, busyId, buttonIds, busy) {
+        const idle = document.getElementById(idleId);
+        const busyEl = document.getElementById(busyId);
+        if (idle) idle.classList.toggle('hidden', busy);
+        if (busyEl) {
+            busyEl.classList.toggle('hidden', !busy);
+            busyEl.classList.toggle('flex', busy);
         }
-        if (liveBtn) liveBtn.disabled = false;
-        if (localBtn) localBtn.disabled = false;
-        if (cancelBtn) cancelBtn.disabled = false;
+        buttonIds.forEach(function (btnId) {
+            const btn = document.getElementById(btnId);
+            if (btn) btn.disabled = busy;
+        });
+    }
+
+    function resetPublishPopup() {
+        setInboundModalPhase(
+            'publishConfirmIdle',
+            'publishConfirmBusy',
+            ['publishLiveBtn', 'publishLocalBtn', 'publishCancelBtn'],
+            false
+        );
     }
     function openPublishPopup() {
         resetPublishPopup();
@@ -3500,17 +3505,12 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function resetSectionUpdatePopup() {
-        const idle = document.getElementById('sectionUpdateConfirmIdle');
-        const busy = document.getElementById('sectionUpdateConfirmBusy');
-        const confirmBtn = document.getElementById('sectionUpdateConfirmBtn');
-        const cancelBtn = document.getElementById('sectionUpdateCancelBtn');
-        if (idle) idle.classList.remove('hidden');
-        if (busy) {
-            busy.classList.add('hidden');
-            busy.classList.remove('flex');
-        }
-        if (confirmBtn) confirmBtn.disabled = false;
-        if (cancelBtn) cancelBtn.disabled = false;
+        setInboundModalPhase(
+            'sectionUpdateConfirmIdle',
+            'sectionUpdateConfirmBusy',
+            ['sectionUpdateConfirmBtn', 'sectionUpdateCancelBtn'],
+            false
+        );
     }
 
     function openSectionUpdatePopup() {
@@ -3579,17 +3579,12 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.set('save_action', 'draft');
         const recordId = new URLSearchParams(window.location.search).get('id');
 
-        const idle = document.getElementById('sectionUpdateConfirmIdle');
-        const busy = document.getElementById('sectionUpdateConfirmBusy');
-        const confirmBtn = document.getElementById('sectionUpdateConfirmBtn');
-        const cancelBtn = document.getElementById('sectionUpdateCancelBtn');
-        if (idle) idle.classList.add('hidden');
-        if (busy) {
-            busy.classList.remove('hidden');
-            busy.classList.add('flex');
-        }
-        if (confirmBtn) confirmBtn.disabled = true;
-        if (cancelBtn) cancelBtn.disabled = true;
+        setInboundModalPhase(
+            'sectionUpdateConfirmIdle',
+            'sectionUpdateConfirmBusy',
+            ['sectionUpdateConfirmBtn', 'sectionUpdateCancelBtn'],
+            true
+        );
 
         fetch(form.action, {
             method: 'POST',
@@ -4099,19 +4094,12 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.set('save_action', 'generate');
         const recordId = new URLSearchParams(window.location.search).get('id');
 
-        const idle = document.getElementById('publishConfirmIdle');
-        const busy = document.getElementById('publishConfirmBusy');
-        const liveBtn = document.getElementById('publishLiveBtn');
-        const localBtn = document.getElementById('publishLocalBtn');
-        const cancelBtn = document.getElementById('publishCancelBtn');
-        if (idle) idle.classList.add('hidden');
-        if (busy) {
-            busy.classList.remove('hidden');
-            busy.classList.add('flex');
-        }
-        if (liveBtn) liveBtn.disabled = true;
-        if (localBtn) localBtn.disabled = true;
-        if (cancelBtn) cancelBtn.disabled = true;
+        setInboundModalPhase(
+            'publishConfirmIdle',
+            'publishConfirmBusy',
+            ['publishLiveBtn', 'publishLocalBtn', 'publishCancelBtn'],
+            true
+        );
 
         // First: Save the current form data so changes aren't lost
         fetch(form.action, {
