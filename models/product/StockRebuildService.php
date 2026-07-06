@@ -102,19 +102,20 @@ final class StockRebuildService
         $scopeSkus = array_keys($scopeRows);
         $scopeProductIds = $this->extractScopeProductIds($scopeRows);
 
-        $deleteCounts = $this->collectDeleteCounts($scopeSkus, $scopeProductIds);
-        $otherWarehouseUsage = $this->collectOtherWarehouseUsage(
-            $scopeSkus,
-            $scopeProductIds,
-            (int) $defaultWarehouse['id'],
-            $selectedWarehouseId
-        );
-        $phaseCounts = $this->countPreviewPhaseStats(
-            (int) $defaultWarehouse['id'],
-            $selectedWarehouseId,
-            $scopeSkus,
-            $scopeProductIds
-        );
+        $this->createScopeTempTable($scopeRows);
+        try {
+            $deleteCounts = $this->collectDeleteCountsViaScopeTable();
+            $otherWarehouseUsage = $this->collectOtherWarehouseUsageViaScopeTable(
+                (int) $defaultWarehouse['id'],
+                $selectedWarehouseId
+            );
+            $phaseCounts = $this->countPreviewPhaseStatsViaScopeTable(
+                (int) $defaultWarehouse['id'],
+                $selectedWarehouseId
+            );
+        } finally {
+            $this->dropScopeTempTable();
+        }
 
         $openingCandidates = 0;
         foreach ($scopeRows as $row) {
@@ -153,7 +154,7 @@ final class StockRebuildService
             'warnings' => [
                 'local_stock_baseline' => 'This execution path preserves current vp_products.local_stock and uses it as the opening-stock baseline in the default warehouse.',
                 'global_delete' => 'Step 4 fully deletes vp_stock_movements and vp_stock rows for the scoped SKUs before replay.',
-                'preview_mode' => 'Preview uses fast SQL counts. Execute performs full line resolution (including invoice lines without product_id).',
+                'preview_mode' => 'Preview uses indexed JOINs against a temporary scope table (not giant IN lists). Scoped SKU count can exceed current warehouse stock rows because history from movements, transfers, and invoices is included.',
                 'other_warehouse_usage' => $otherWarehouseUsage,
             ],
             'blocking_warnings' => $blockingWarnings,
@@ -371,12 +372,15 @@ final class StockRebuildService
                 'comparison' => 'vp_products.sku = vp_stock.sku',
             ],
             'preview.collect_scope.vp_stock_movements' => [
-                'sql' => "SELECT DISTINCT p.id AS product_id, COALESCE(NULLIF(TRIM(sm.sku), ''), p.sku) AS sku, p.item_code,
-                    IFNULL(p.size, '') AS size, IFNULL(p.color, '') AS color, p.title, IFNULL(p.local_stock, 0) AS local_stock
-             FROM vp_stock_movements sm
-             INNER JOIN vp_products p ON p.id = sm.product_id
-             WHERE sm.warehouse_id = {$selectedWarehouseId}
-               AND TRIM(COALESCE(sm.sku, '')) <> ''",
+                'sql' => "SELECT p.id AS product_id, p.sku, p.item_code, IFNULL(p.size, '') AS size, IFNULL(p.color, '') AS color,
+                    p.title, IFNULL(p.local_stock, 0) AS local_stock
+             FROM (
+                SELECT DISTINCT sm.product_id
+                FROM vp_stock_movements sm
+                WHERE sm.warehouse_id = {$selectedWarehouseId}
+                  AND sm.product_id > 0
+             ) sm_ids
+             INNER JOIN vp_products p ON p.id = sm_ids.product_id",
                 'tables' => ['vp_stock_movements', 'vp_products'],
                 'columns' => ['vp_stock_movements.sku', 'vp_products.sku', 'vp_stock_movements.product_id', 'vp_products.id'],
                 'comparison' => 'vp_products.id = vp_stock_movements.product_id',
@@ -488,6 +492,257 @@ final class StockRebuildService
         ksort($scope);
 
         return $scope;
+    }
+
+    /** @param array<string, array<string, mixed>> $scopeRows */
+    private function createScopeTempTable(array $scopeRows): void
+    {
+        $this->dropScopeTempTable();
+        $this->queryOrFail(
+            'CREATE TEMPORARY TABLE _stock_rebuild_scope (
+                sku VARCHAR(191) NOT NULL,
+                product_id INT UNSIGNED NOT NULL DEFAULT 0,
+                PRIMARY KEY (sku),
+                KEY idx_product_id (product_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+            'preview.scope_temp_table.create',
+            [
+                'phase' => 'preview',
+                'tables' => ['_stock_rebuild_scope'],
+                'columns' => ['sku', 'product_id'],
+                'comparison' => 'temporary scope table for preview JOINs',
+            ]
+        );
+
+        if ($scopeRows === []) {
+            return;
+        }
+
+        $batch = [];
+        foreach ($scopeRows as $row) {
+            $sku = trim((string) ($row['sku'] ?? ''));
+            $productId = (int) ($row['product_id'] ?? 0);
+            if ($sku === '') {
+                continue;
+            }
+            $batch[] = "('" . $this->conn->real_escape_string($sku) . "', " . max(0, $productId) . ')';
+            if (count($batch) >= 500) {
+                $this->insertScopeTempBatch($batch);
+                $batch = [];
+            }
+        }
+        if ($batch !== []) {
+            $this->insertScopeTempBatch($batch);
+        }
+    }
+
+    /** @param list<string> $valueRows */
+    private function insertScopeTempBatch(array $valueRows): void
+    {
+        $sql = 'INSERT INTO _stock_rebuild_scope (sku, product_id) VALUES ' . implode(',', $valueRows)
+            . ' ON DUPLICATE KEY UPDATE product_id = GREATEST(product_id, VALUES(product_id))';
+        $this->queryOrFail($sql, 'preview.scope_temp_table.insert', [
+            'phase' => 'preview',
+            'tables' => ['_stock_rebuild_scope'],
+            'columns' => ['sku', 'product_id'],
+            'comparison' => 'batch insert scoped SKUs',
+        ]);
+    }
+
+    private function dropScopeTempTable(): void
+    {
+        @$this->conn->query('DROP TEMPORARY TABLE IF EXISTS _stock_rebuild_scope');
+    }
+
+    private function collectDeleteCountsViaScopeTable(): array
+    {
+        return [
+            'vp_stock_movements' => $this->countMovementRowsViaScopeTable(),
+            'vp_stock' => $this->countRowsViaScopeJoin('vp_stock', 's', 's.sku = sc.sku', 'preview.count_delete_targets.vp_stock'),
+        ];
+    }
+
+    private function countMovementRowsViaScopeTable(): int
+    {
+        $sql = 'SELECT COUNT(*) AS c
+            FROM vp_stock_movements sm
+            WHERE EXISTS (
+                SELECT 1 FROM _stock_rebuild_scope sc
+                WHERE sc.sku = sm.sku OR (sc.product_id > 0 AND sc.product_id = sm.product_id)
+            )';
+        $res = $this->queryOrFail($sql, 'preview.count_delete_targets.vp_stock_movements', [
+            'phase' => 'preview',
+            'tables' => ['vp_stock_movements', '_stock_rebuild_scope'],
+            'columns' => ['vp_stock_movements.sku', 'vp_stock_movements.product_id'],
+            'comparison' => 'EXISTS match on _stock_rebuild_scope sku or product_id',
+        ]);
+        $row = $res->fetch_assoc();
+        $res->free();
+
+        return (int) ($row['c'] ?? 0);
+    }
+
+    private function countRowsViaScopeJoin(string $table, string $alias, string $joinOn, string $step): int
+    {
+        $sql = "SELECT COUNT(*) AS c
+            FROM {$table} {$alias}
+            INNER JOIN _stock_rebuild_scope sc ON {$joinOn}";
+        $res = $this->queryOrFail($sql, $step, [
+            'phase' => 'preview',
+            'tables' => [$table, '_stock_rebuild_scope'],
+            'columns' => ["{$table}.sku"],
+            'comparison' => "JOIN _stock_rebuild_scope ON {$joinOn}",
+        ]);
+        $row = $res->fetch_assoc();
+        $res->free();
+
+        return (int) ($row['c'] ?? 0);
+    }
+
+    private function collectOtherWarehouseUsageViaScopeTable(int $defaultWarehouseId, int $selectedWarehouseId): array
+    {
+        $allowedWarehouseIds = array_unique(array_filter([(int) $defaultWarehouseId, (int) $selectedWarehouseId]));
+        $allowedList = $allowedWarehouseIds === [] ? '0' : implode(',', array_map('intval', $allowedWarehouseIds));
+        $rows = [];
+
+        $queries = [
+            'preview.other_warehouse_usage.vp_stock' => [
+                'sql' => "SELECT 'vp_stock' AS source_table, s.warehouse_id, COUNT(*) AS row_count
+                    FROM vp_stock s
+                    INNER JOIN _stock_rebuild_scope sc ON sc.sku = s.sku
+                    WHERE s.warehouse_id NOT IN ({$allowedList})
+                    GROUP BY s.warehouse_id",
+                'table' => 'vp_stock',
+            ],
+            'preview.other_warehouse_usage.vp_stock_movements' => [
+                'sql' => "SELECT 'vp_stock_movements' AS source_table, sm.warehouse_id, COUNT(*) AS row_count
+                    FROM vp_stock_movements sm
+                    INNER JOIN _stock_rebuild_scope sc ON sc.sku = sm.sku
+                    WHERE sm.warehouse_id NOT IN ({$allowedList})
+                    GROUP BY sm.warehouse_id",
+                'table' => 'vp_stock_movements',
+            ],
+        ];
+
+        foreach ($queries as $step => $queryMeta) {
+            $res = $this->queryOrFail((string) $queryMeta['sql'], $step, [
+                'phase' => 'preview',
+                'tables' => [(string) $queryMeta['table'], '_stock_rebuild_scope'],
+                'columns' => [(string) $queryMeta['table'] . '.sku'],
+                'comparison' => 'JOIN _stock_rebuild_scope on sku',
+            ]);
+            while ($row = $res->fetch_assoc()) {
+                $warehouseId = (int) ($row['warehouse_id'] ?? 0);
+                if ($warehouseId <= 0) {
+                    continue;
+                }
+                $key = ($row['source_table'] ?? '') . ':' . $warehouseId;
+                $rows[$key] = [
+                    'source_table' => (string) ($row['source_table'] ?? ''),
+                    'warehouse_id' => $warehouseId,
+                    'warehouse_name' => $this->warehouseLocationLabel($warehouseId),
+                    'row_count' => (int) ($row['row_count'] ?? 0),
+                ];
+            }
+            $res->free();
+        }
+
+        return array_values($rows);
+    }
+
+    private function countPreviewPhaseStatsViaScopeTable(int $defaultWarehouseId, int $selectedWarehouseId): array
+    {
+        $purchaseSql = 'SELECT COUNT(DISTINCT p.id) AS headers, COUNT(*) AS lines
+            FROM vp_direct_purchases p
+            INNER JOIN vp_direct_purchase_items i ON i.direct_purchase_id = p.id
+            INNER JOIN _stock_rebuild_scope sc ON sc.sku = i.sku
+            WHERE p.warehouse_id = ' . (int) $defaultWarehouseId;
+        $purchaseRes = $this->queryOrFail($purchaseSql, 'preview.count_purchases', [
+            'phase' => 'preview',
+            'tables' => ['vp_direct_purchases', 'vp_direct_purchase_items', '_stock_rebuild_scope'],
+            'columns' => ['vp_direct_purchase_items.sku'],
+            'comparison' => 'JOIN _stock_rebuild_scope on sku',
+        ]);
+        $purchaseRow = $purchaseRes->fetch_assoc() ?: [];
+        $purchaseRes->free();
+
+        $returnSql = 'SELECT COUNT(DISTINCT r.id) AS headers, COUNT(*) AS lines
+            FROM vp_direct_purchase_returns r
+            INNER JOIN vp_direct_purchase_return_items ri ON ri.direct_purchase_return_id = r.id
+            INNER JOIN vp_direct_purchase_items dpi ON dpi.id = ri.direct_purchase_item_id
+            INNER JOIN _stock_rebuild_scope sc ON sc.sku = dpi.sku
+            WHERE r.warehouse_id = ' . (int) $defaultWarehouseId;
+        $returnRes = $this->queryOrFail($returnSql, 'preview.count_returns', [
+            'phase' => 'preview',
+            'tables' => ['vp_direct_purchase_returns', 'vp_direct_purchase_items', '_stock_rebuild_scope'],
+            'columns' => ['vp_direct_purchase_items.sku'],
+            'comparison' => 'JOIN _stock_rebuild_scope on sku',
+        ]);
+        $returnRow = $returnRes->fetch_assoc() ?: [];
+        $returnRes->free();
+
+        $transferInSql = 'SELECT COUNT(*) AS lines
+            FROM vp_stock_transfer st
+            INNER JOIN vp_stock_transfer_grns grn ON grn.transfer_id = st.id
+            INNER JOIN _stock_rebuild_scope sc ON sc.sku = grn.sku
+            WHERE COALESCE(NULLIF(grn.location, 0), st.to_warehouse) = ' . (int) $selectedWarehouseId . '
+              AND grn.qty_received > 0';
+        $transferInRes = $this->queryOrFail($transferInSql, 'preview.count_transfer_in', [
+            'phase' => 'preview',
+            'tables' => ['vp_stock_transfer', 'vp_stock_transfer_grns', '_stock_rebuild_scope'],
+            'columns' => ['vp_stock_transfer_grns.sku'],
+            'comparison' => 'JOIN _stock_rebuild_scope on sku',
+        ]);
+        $transferInRow = $transferInRes->fetch_assoc() ?: [];
+        $transferInRes->free();
+
+        $transferOutSql = 'SELECT COUNT(*) AS lines
+            FROM vp_stock_transfer st
+            INNER JOIN vp_item_stock_transfer ist ON ist.transfer_order_no = st.transfer_order_no
+            INNER JOIN _stock_rebuild_scope sc ON sc.sku = ist.sku
+            WHERE st.from_warehouse = ' . (int) $selectedWarehouseId . '
+              AND ist.transfer_qty > 0';
+        $transferOutRes = $this->queryOrFail($transferOutSql, 'preview.count_transfer_out', [
+            'phase' => 'preview',
+            'tables' => ['vp_stock_transfer', 'vp_item_stock_transfer', '_stock_rebuild_scope'],
+            'columns' => ['vp_item_stock_transfer.sku'],
+            'comparison' => 'JOIN _stock_rebuild_scope on sku',
+        ]);
+        $transferOutRow = $transferOutRes->fetch_assoc() ?: [];
+        $transferOutRes->free();
+
+        $invoiceSql = 'SELECT
+                COUNT(DISTINCT i.id) AS headers,
+                COUNT(*) AS lines,
+                COUNT(DISTINCT CASE WHEN LOWER(i.status) = \'cancelled\' THEN i.id END) AS cancel_headers
+            FROM vp_invoices i
+            INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+            INNER JOIN _stock_rebuild_scope sc ON sc.product_id = ii.product_id
+            WHERE i.warehouse_id = ' . (int) $selectedWarehouseId . "
+              AND i.status IN ('final', 'cancelled')
+              AND ii.quantity > 0
+              AND ii.product_id > 0";
+        $invoiceRes = $this->queryOrFail($invoiceSql, 'preview.count_invoices', [
+            'phase' => 'preview',
+            'tables' => ['vp_invoices', 'vp_invoice_items', '_stock_rebuild_scope'],
+            'columns' => ['vp_invoice_items.product_id'],
+            'comparison' => 'JOIN _stock_rebuild_scope on product_id',
+        ]);
+        $invoiceRow = $invoiceRes->fetch_assoc() ?: [];
+        $invoiceRes->free();
+
+        return [
+            'opening_candidates' => 0,
+            'purchase_headers' => (int) ($purchaseRow['headers'] ?? 0),
+            'purchase_lines' => (int) ($purchaseRow['lines'] ?? 0),
+            'return_headers' => (int) ($returnRow['headers'] ?? 0),
+            'return_lines' => (int) ($returnRow['lines'] ?? 0),
+            'transfer_in_lines' => (int) ($transferInRow['lines'] ?? 0),
+            'transfer_out_lines' => (int) ($transferOutRow['lines'] ?? 0),
+            'invoice_headers' => (int) ($invoiceRow['headers'] ?? 0),
+            'invoice_lines' => (int) ($invoiceRow['lines'] ?? 0),
+            'cancel_invoice_headers' => (int) ($invoiceRow['cancel_headers'] ?? 0),
+        ];
     }
 
     /** @param list<string> $scopeSkus @param list<int> $scopeProductIds */
