@@ -710,7 +710,7 @@ class OrdersAPIController
             if (!$stmt) {
                 // If the column doesn't exist, we fallback to a safer query
                 $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.customer_id, i.total_amount, 
-                               i.subtotal, i.tax_amount, i.discount_amount, i.status, 
+                               i.subtotal, i.tax_amount, i.discount_amount, i.status, i.currency,
                                c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, c.city, c.zipcode, c.state, c.country, c.gstin
                         FROM vp_invoices i
                         LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id
@@ -722,7 +722,7 @@ class OrdersAPIController
                     throw new Exception('Database error: Unable to prepare statement');
                 }
             }
-
+          
             if (!empty($startDate) && !empty($endDate)) {
                 $stmt->bind_param('ssii', $startDate, $endDate, $limit, $offset);
             } elseif (!empty($startDate)) {
@@ -812,7 +812,9 @@ class OrdersAPIController
                         'Narration'           => '',
                         'Shipping Details'    => $shippingDetails,
                         'Item Details'        => $itemDetails,
-                        'Bill Sundry Details' => $billSundryDetails
+                        'Bill Sundry Details' => $billSundryDetails,
+                        'Is International'    => $invoice['currency'] !== 'INR' ? true : false,
+                        'Currency'            => $invoice['currency'] ?? 'INR'
                     ];
 
                     $vouchers[] = $voucher;
