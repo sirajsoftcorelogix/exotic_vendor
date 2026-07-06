@@ -810,11 +810,12 @@ class OrdersAPIController
                         'GSTIN'               => $firmDetail['gstin'] ?? '',
                         'Material Centre'     => $invoice['address_title'] ?? 'Main Location',
                         'Narration'           => '',
+                        'Is International'    => isset($invoice['currency']) && $invoice['currency'] !== 'INR' ? true : false,
+                        'Currency'            => $invoice['currency'] ?? 'INR',
                         'Shipping Details'    => $shippingDetails,
                         'Item Details'        => $itemDetails,
-                        'Bill Sundry Details' => $billSundryDetails,
-                        'Is International'    => $invoice['currency'] !== 'INR' ? true : false,
-                        'Currency'            => $invoice['currency'] ?? 'INR'
+                        'Bill Sundry Details' => $billSundryDetails
+                        
                     ];
 
                     $vouchers[] = $voucher;
