@@ -343,19 +343,13 @@
                 onclick="openPublishedStatusModal()">
                 <span id="publishedStatusDisplay"><?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?></span>
               </button>
-              <div class="shrink-0 flex items-center gap-1.5">
-                <span id="productAddedOnDisplay" class="text-[11px] text-gray-500 whitespace-nowrap">
-                  Added On: <?php echo htmlspecialchars($addedOnDisplay !== '' ? $addedOnDisplay : '—', ENT_QUOTES, 'UTF-8'); ?>
-                </span>
-                <button
-                  type="button"
-                  class="inline-flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-emerald-700 hover:border-emerald-300"
-                  onclick="toggleProductDetailModal('addedOnModal', true)"
-                  title="Edit added on date"
-                  aria-label="Edit added on date">
-                  <i class="fas fa-pencil-alt text-[10px]"></i>
-                </button>
-              </div>
+              <button type="button"
+                id="productAddedOnDisplay"
+                class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 hover:opacity-85 whitespace-nowrap"
+                onclick="toggleProductDetailModal('addedOnModal', true)"
+                title="Edit added on date">
+                Added On: <?php echo htmlspecialchars($addedOnDisplay !== '' ? $addedOnDisplay : '—', ENT_QUOTES, 'UTF-8'); ?>
+              </button>
             </div>
           <?php else: ?>
             <div class="shrink-0 flex items-center gap-2">
@@ -363,7 +357,9 @@
                 <?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?>
               </span>
               <?php if ($addedOnDisplay !== ''): ?>
-                <span class="text-[11px] text-gray-500 whitespace-nowrap">Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
+                <span class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
+                  Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?>
+                </span>
               <?php endif; ?>
             </div>
           <?php endif; ?>
