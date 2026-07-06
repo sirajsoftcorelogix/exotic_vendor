@@ -229,16 +229,12 @@
     $publishedVal = (int)($products['published'] ?? 0);
     $publishedText = $publishedVal === 1 ? 'Published' : 'Unpublished';
     $addedOnRaw = trim((string)($products['date_first_added'] ?? ''));
-    if ($addedOnRaw === '' || $addedOnRaw === '0000-00-00') {
+    if ($addedOnRaw === '' || strpos($addedOnRaw, '0000-00-00') === 0) {
         $addedOnRaw = trim((string)($products['created_on'] ?? ''));
     }
-    $addedOnDisplay = '';
-    if ($addedOnRaw !== '' && $addedOnRaw !== '0000-00-00 00:00:00') {
-        $addedOnTs = strtotime($addedOnRaw);
-        if ($addedOnTs !== false) {
-            $addedOnDisplay = date('d M Y', $addedOnTs);
-        }
-    }
+    $addedOnTs = ($addedOnRaw !== '' && strpos($addedOnRaw, '0000-00-00') !== 0) ? strtotime($addedOnRaw) : false;
+    $addedOnDisplay = $addedOnTs ? date('d M Y', $addedOnTs) : '';
+    $addedOnInput = $addedOnTs ? date('Y-m-d', $addedOnTs) : '';
     $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
     $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
     $priceIndiaBase = (float)($products['price_india'] ?? 0);
@@ -347,9 +343,19 @@
                 onclick="openPublishedStatusModal()">
                 <span id="publishedStatusDisplay"><?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?></span>
               </button>
-              <?php if ($addedOnDisplay !== ''): ?>
-                <span class="text-[11px] text-gray-500 whitespace-nowrap">Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
-              <?php endif; ?>
+              <div class="shrink-0 flex items-center gap-1.5">
+                <span id="productAddedOnDisplay" class="text-[11px] text-gray-500 whitespace-nowrap">
+                  Added On: <?php echo htmlspecialchars($addedOnDisplay !== '' ? $addedOnDisplay : '—', ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+                <button
+                  type="button"
+                  class="inline-flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-emerald-700 hover:border-emerald-300"
+                  onclick="toggleProductDetailModal('addedOnModal', true)"
+                  title="Edit added on date"
+                  aria-label="Edit added on date">
+                  <i class="fas fa-pencil-alt text-[10px]"></i>
+                </button>
+              </div>
             </div>
           <?php else: ?>
             <div class="shrink-0 flex items-center gap-2">
@@ -1006,6 +1012,18 @@
         <div class="flex justify-end gap-3 mt-6">
             <button type="button" onclick="closeProductTitleModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
             <button type="button" onclick="submitProductTitleUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
+        </div>
+    </div>
+</div>
+<div id="addedOnModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="toggleProductDetailModal('addedOnModal', false)" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Edit Added On Date</h2>
+        <label for="input_product_added_on" class="block text-sm font-medium text-gray-600 mb-1">Added On</label>
+        <input type="date" id="input_product_added_on" value="<?php echo htmlspecialchars($addedOnInput, ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="toggleProductDetailModal('addedOnModal', false)" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitAddedOnUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
         </div>
     </div>
 </div>
@@ -2258,6 +2276,36 @@ function submitProductTitleUpdate() {
         }
     }).catch(function () {
         showProfileStatusModal('An error occurred while updating the product title.', 'error', false);
+    });
+}
+
+function toggleProductDetailModal(id, show) {
+    var modal = document.getElementById(id);
+    if (modal) modal.classList.toggle('hidden', !show);
+}
+
+function submitAddedOnUpdate() {
+    var dateValue = String((document.getElementById('input_product_added_on') || {}).value || '').trim();
+    if (!dateValue) {
+        showProfileStatusModal('Please select an added on date.', 'error', false);
+        return;
+    }
+    postProductDetailSection('added_on_section', {
+        product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+        date_first_added: dateValue
+    }).then(function (res) {
+        if (!res || !res.success) {
+            showProfileStatusModal((res && res.message) || 'Could not update added on date.', 'error', false);
+            return;
+        }
+        toggleProductDetailModal('addedOnModal', false);
+        var displayEl = document.getElementById('productAddedOnDisplay');
+        if (displayEl && res.added_on_display) {
+            displayEl.textContent = 'Added On: ' + res.added_on_display;
+        }
+        showProfileStatusModal(res.message || 'Added on date updated.', 'success', false);
+    }).catch(function () {
+        showProfileStatusModal('An error occurred while updating the added on date.', 'error', false);
     });
 }
 

@@ -5469,6 +5469,55 @@ class ProductsController
         return is_array($data) ? $data : [];
     }
 
+    /** @param callable(): array<string, mixed> $action */
+    private function runProductDetailJsonAction(callable $action): void
+    {
+        $this->prepareProductDetailJsonResponse();
+        try {
+            echo json_encode($action());
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * @param array<string, mixed> $dbFields
+     * @param array<string, mixed> $vendorFields
+     * @param array<string, mixed> $extra
+     * @return array<string, mixed>
+     */
+    private function persistProductFieldUpdate(int $productId, array $dbFields, array $vendorFields, string $message, array $extra = []): array
+    {
+        global $productModel;
+
+        if ($productId <= 0) {
+            throw new Exception('Invalid product id');
+        }
+
+        $product = $productModel->getProduct($productId);
+        if (!$product) {
+            throw new Exception('Product not found');
+        }
+
+        $dbFields['updated_at'] = date('Y-m-d H:i:s');
+        $result = $productModel->modifyProduct($productId, $dbFields);
+        if (empty($result['success'])) {
+            throw new Exception((string) ($result['message'] ?? 'Update failed.'));
+        }
+
+        $vendorSync = $this->syncProductFieldsToVendorFrontend($product, $vendorFields);
+        if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+            $message .= ' ' . $vendorSync['message'];
+        }
+
+        return array_merge([
+            'success' => true,
+            'message' => $message,
+            'vendor_sync' => $vendorSync,
+        ], $extra);
+    }
+
     /**
      * @param array<string, mixed> $product
      * @param array<string, mixed> $postFields
@@ -5677,57 +5726,44 @@ class ProductsController
     public function updateProductTitle()
     {
         is_login();
-        global $productModel;
-        $this->prepareProductDetailJsonResponse();
-
-        try {
+        $this->runProductDetailJsonAction(function () {
             $data = $this->readJsonRequestBody();
-            $productId = (int) ($data['product_id'] ?? 0);
             $title = trim((string) ($data['title'] ?? ''));
-
-            if ($productId <= 0) {
-                throw new Exception('Invalid product id');
-            }
             if ($title === '') {
                 throw new Exception('Product title is required.');
             }
 
-            $product = $productModel->getProduct($productId);
-            if (!$product) {
-                throw new Exception('Product not found');
+            return $this->persistProductFieldUpdate(
+                (int) ($data['product_id'] ?? 0),
+                ['title' => $title],
+                ['title' => $title],
+                'Product title updated.',
+                ['title' => $title]
+            );
+        });
+    }
+
+    public function updateProductAddedOnDate()
+    {
+        is_login();
+        $this->runProductDetailJsonAction(function () {
+            if ((int) ($_SESSION['user']['role_id'] ?? 0) !== 1) {
+                throw new Exception('Only administrators can change the added on date.');
+            }
+            $data = $this->readJsonRequestBody();
+            $date = $this->normalizeProfileDateInput((string) ($data['date_first_added'] ?? ''), 'Added on date');
+            if ($date === '') {
+                throw new Exception('Added on date is required.');
             }
 
-            if ($title === trim((string) ($product['title'] ?? ''))) {
-                echo json_encode(['success' => true, 'message' => 'No change.', 'title' => $title]);
-                exit;
-            }
-
-            $result = $productModel->modifyProduct($productId, [
-                'title' => $title,
-                'updated_at' => date('Y-m-d H:i:s'),
-            ]);
-            if (empty($result['success'])) {
-                throw new Exception((string) ($result['message'] ?? 'Could not update title.'));
-            }
-
-            $vendorSync = $this->syncProductFieldsToVendorFrontend($product, [
-                'title' => $title,
-            ]);
-            $message = 'Product title updated.';
-            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
-                $message .= ' ' . $vendorSync['message'];
-            }
-
-            echo json_encode([
-                'success' => true,
-                'message' => $message,
-                'title' => $title,
-                'vendor_sync' => $vendorSync,
-            ]);
-        } catch (Exception $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-        }
-        exit;
+            return $this->persistProductFieldUpdate(
+                (int) ($data['product_id'] ?? 0),
+                ['date_first_added' => $date],
+                ['date_first_added' => $date],
+                'Added on date updated.',
+                ['date_first_added' => $date, 'added_on_display' => date('d M Y', strtotime($date))]
+            );
+        });
     }
 
     public function updateProductPriceSection()
@@ -8234,6 +8270,9 @@ class ProductsController
                 switch ($scope) {
                     case 'title':
                         $this->updateProductTitle();
+                        return;
+                    case 'added_on_section':
+                        $this->updateProductAddedOnDate();
                         return;
                     case 'price_section':
                         $this->updateProductPriceSection();
