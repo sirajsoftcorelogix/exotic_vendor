@@ -1307,6 +1307,9 @@ switch ($page) {
             case 'stock-report-refresh':
                 $controller->stockReportRefreshItem();
                 break;
+            case 'stock-report-refresh-bulk':
+                $controller->stockReportRefreshBulk();
+                break;
 
             case 'add-customer':
                 $controller->add_customer();

@@ -144,10 +144,36 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   </details>
 
   <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+    <?php if (!empty($rows)): ?>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50/80 px-5 py-3">
+        <p class="text-sm text-gray-600">
+          <span id="stockReportSelectedCount" class="font-semibold text-gray-900 tabular-nums">0</span>
+          <span> selected on this page</span>
+        </p>
+        <button
+          type="button"
+          id="stockReportBulkRefreshBtn"
+          class="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 transition disabled:opacity-50 disabled:pointer-events-none"
+          disabled>
+          <i class="fas fa-sync-alt text-xs" aria-hidden="true"></i>
+          <span>Refresh selected</span>
+        </button>
+      </div>
+    <?php endif; ?>
     <div class="overflow-x-auto">
       <table class="min-w-full text-left">
         <thead class="sticky top-0 z-10">
           <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+            <th class="px-5 py-3.5 whitespace-nowrap w-12">
+              <?php if (!empty($rows)): ?>
+                <input
+                  type="checkbox"
+                  id="stockReportSelectAll"
+                  class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                  aria-label="Select all rows on this page"
+                  title="Select all on this page">
+              <?php endif; ?>
+            </th>
             <th class="px-5 py-3.5 whitespace-nowrap">Image</th>
             <th class="px-5 py-3.5 whitespace-nowrap">SKU</th>
             <th class="px-5 py-3.5 whitespace-nowrap">Category</th>
@@ -161,7 +187,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         <tbody class="divide-y divide-gray-100">
           <?php if (empty($rows)): ?>
             <tr>
-              <td colspan="8" class="px-5 py-16 text-center">
+              <td colspan="9" class="px-5 py-16 text-center">
                 <div class="mx-auto flex max-w-sm flex-col items-center">
                   <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                     <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -186,6 +212,14 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                 $skuLabel = trim((string)($r['sku'] ?? $r['item_code'] ?? ''));
               ?>
               <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors" data-product-id="<?= $productId ?>">
+                <td class="px-5 py-4 align-top">
+                  <input
+                    type="checkbox"
+                    class="stock-report-select-row h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                    value="<?= $productId ?>"
+                    data-sku-label="<?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>"
+                    aria-label="Select <?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>">
+                </td>
                 <td class="px-5 py-4 align-top">
                   <img
                     src="<?= htmlspecialchars($imgUrl) ?>"
@@ -299,6 +333,49 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
 </div>
 
 <script>
+  const STOCK_REPORT_REFRESH_CONFIRM =
+    'This will delete vp_stock_movements and vp_stock rows, reset physical_stock to 0, '
+    + 'fetch the latest local stock from the API, then reseed opening stock in the default warehouse.';
+
+  function getSelectedStockReportRows() {
+    return Array.from(document.querySelectorAll('.stock-report-select-row:checked'));
+  }
+
+  function updateStockReportSelectionUi() {
+    const selected = getSelectedStockReportRows();
+    const count = selected.length;
+    const countEl = document.getElementById('stockReportSelectedCount');
+    const bulkBtn = document.getElementById('stockReportBulkRefreshBtn');
+    const selectAll = document.getElementById('stockReportSelectAll');
+    const rowBoxes = document.querySelectorAll('.stock-report-select-row');
+
+    if (countEl) countEl.textContent = String(count);
+    if (bulkBtn) bulkBtn.disabled = count === 0;
+
+    if (selectAll && rowBoxes.length > 0) {
+      selectAll.checked = count > 0 && count === rowBoxes.length;
+      selectAll.indeterminate = count > 0 && count < rowBoxes.length;
+    }
+  }
+
+  async function refreshStockReportProduct(productId, skuLabel) {
+    const confirmed = window.confirm(
+      'Refresh stock for ' + skuLabel + '?\n\n' + STOCK_REPORT_REFRESH_CONFIRM
+    );
+    if (!confirmed) return { cancelled: true };
+
+    const res = await fetch('index.php?page=pos_register&action=stock-report-refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: productId }),
+    });
+    const data = await res.json();
+    if (!data || !data.success) {
+      throw new Error((data && data.message) ? data.message : 'Refresh failed.');
+    }
+    return data;
+  }
+
   function openStockReportImage(imgEl) {
     const modal = document.getElementById('stockReportImgModal');
     const modalImg = document.getElementById('stockReportImgModalImg');
@@ -328,18 +405,91 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       if (e.key === 'Escape') closeStockReportImage();
     });
 
+    const selectAll = document.getElementById('stockReportSelectAll');
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        const checked = selectAll.checked;
+        document.querySelectorAll('.stock-report-select-row').forEach((box) => {
+          box.checked = checked;
+        });
+        updateStockReportSelectionUi();
+      });
+    }
+
+    document.querySelectorAll('.stock-report-select-row').forEach((box) => {
+      box.addEventListener('change', updateStockReportSelectionUi);
+    });
+
+    const bulkBtn = document.getElementById('stockReportBulkRefreshBtn');
+    if (bulkBtn) {
+      bulkBtn.addEventListener('click', async () => {
+        const selected = getSelectedStockReportRows();
+        if (selected.length === 0) return;
+
+        const labels = selected
+          .map((box) => box.getAttribute('data-sku-label') || box.value)
+          .slice(0, 5);
+        let preview = labels.join(', ');
+        if (selected.length > 5) {
+          preview += ' … +' + (selected.length - 5) + ' more';
+        }
+
+        const confirmed = window.confirm(
+          'Refresh stock for ' + selected.length + ' selected item(s)?\n\n'
+          + preview + '\n\n' + STOCK_REPORT_REFRESH_CONFIRM
+        );
+        if (!confirmed) return;
+
+        const productIds = selected.map((box) => parseInt(box.value || '0', 10)).filter((id) => id > 0);
+        const btnLabel = bulkBtn.querySelector('span');
+        const btnIcon = bulkBtn.querySelector('i');
+        bulkBtn.disabled = true;
+        if (btnIcon) btnIcon.classList.add('fa-spin');
+        if (btnLabel) btnLabel.textContent = 'Refreshing ' + productIds.length + '…';
+
+        try {
+          const res = await fetch('index.php?page=pos_register&action=stock-report-refresh-bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_ids: productIds }),
+          });
+          const data = await res.json();
+          if (!data) {
+            throw new Error('Bulk refresh failed.');
+          }
+
+          if (data.failed > 0 && Array.isArray(data.results)) {
+            const failedLines = data.results
+              .filter((row) => row && !row.success)
+              .slice(0, 8)
+              .map((row) => (row.label || row.sku || ('#' + row.product_id)) + ': ' + (row.message || 'Failed'))
+              .join('\n');
+            const extra = data.failed > 8 ? '\n…and ' + (data.failed - 8) + ' more.' : '';
+            window.alert((data.message || 'Bulk refresh completed with errors.') + '\n\n' + failedLines + extra);
+          } else if (!data.success) {
+            throw new Error(data.message || 'Bulk refresh failed.');
+          } else {
+            window.alert(data.message || 'Bulk refresh completed.');
+          }
+
+          window.location.reload();
+        } catch (err) {
+          window.alert(err && err.message ? err.message : 'Bulk refresh failed.');
+          bulkBtn.disabled = false;
+          if (btnIcon) btnIcon.classList.remove('fa-spin');
+          if (btnLabel) btnLabel.textContent = 'Refresh selected';
+          updateStockReportSelectionUi();
+        }
+      });
+    }
+
+    updateStockReportSelectionUi();
+
     document.querySelectorAll('.stock-report-refresh-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const productId = parseInt(btn.getAttribute('data-product-id') || '0', 10);
         const skuLabel = btn.getAttribute('data-sku-label') || ('#' + productId);
         if (productId <= 0) return;
-
-        const confirmed = window.confirm(
-          'Refresh stock for ' + skuLabel + '?\n\n'
-          + 'This will delete vp_stock_movements and vp_stock rows, reset physical_stock to 0, '
-          + 'fetch the latest local stock from the API, then reseed opening stock in the default warehouse.'
-        );
-        if (!confirmed) return;
 
         const icon = btn.querySelector('i');
         const label = btn.querySelector('span');
@@ -348,16 +498,13 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         if (label) label.textContent = 'Refreshing…';
 
         try {
-          const res = await fetch('index.php?page=pos_register&action=stock-report-refresh', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ product_id: productId }),
-          });
-          const data = await res.json();
-          if (!data || !data.success) {
-            throw new Error((data && data.message) ? data.message : 'Refresh failed.');
+          const result = await refreshStockReportProduct(productId, skuLabel);
+          if (result && result.cancelled) {
+            btn.disabled = false;
+            if (icon) icon.classList.remove('fa-spin');
+            if (label) label.textContent = 'Refresh';
+            return;
           }
-
           window.location.reload();
         } catch (err) {
           window.alert(err && err.message ? err.message : 'Refresh failed.');
