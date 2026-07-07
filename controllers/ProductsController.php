@@ -406,6 +406,41 @@ class ProductsController
         exit;
     }
 
+    public function stock_transfer_replay_grn(): void
+    {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json; charset=utf-8');
+        @set_time_limit(120);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $transferId = (int) ($payload['transfer_id'] ?? 0);
+        $offset = max(0, (int) ($payload['offset'] ?? 0));
+        $batchSize = max(1, min(10, (int) ($payload['batch_size'] ?? 5)));
+
+        if ($transferId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid transfer id.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+        $result = $stockTransferModel->replayTransferGrnStockBatch($transferId, $offset, $batchSize);
+
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     /**
      * Paginated line items for one transfer (Option A — list uses aggregates only).
      */

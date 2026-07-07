@@ -2162,6 +2162,300 @@ class StockTransfer
     }
 
     /**
+     * Replay GRN-linked TRANSFER_IN movements for a received transfer (one batch slice).
+     * Keeps vp_stock_transfer_grns rows; rebuilds stock movements and vp_stock cache.
+     *
+     * @return array<string, mixed>
+     */
+    public function replayTransferGrnStockBatch(int $transferId, int $offset = 0, int $limit = 5): array
+    {
+        $transferId = (int) $transferId;
+        $offset = max(0, $offset);
+        $limit = max(1, min(10, $limit));
+
+        $transfer = $this->getTransferById($transferId);
+        if (!$transfer) {
+            return ['success' => false, 'message' => 'Stock transfer not found.'];
+        }
+
+        $status = strtolower(trim((string) ($transfer['status'] ?? '')));
+        if (!in_array($status, ['received', 'completed', 'complete'], true)) {
+            return ['success' => false, 'message' => 'Only received transfers can replay GRN stock.'];
+        }
+
+        $grnIds = $this->listTransferGrnIdsOrdered($transferId);
+        $totalGrns = count($grnIds);
+        if ($totalGrns <= 0) {
+            return ['success' => false, 'message' => 'No GRN rows found for this transfer.'];
+        }
+
+        $batchIds = array_slice($grnIds, $offset, $limit);
+        if ($batchIds === []) {
+            return [
+                'success' => true,
+                'message' => 'GRN replay already complete.',
+                'transfer_id' => $transferId,
+                'transfer_order_no' => (string) ($transfer['transfer_order_no'] ?? ''),
+                'total_grns' => $totalGrns,
+                'batch_processed' => 0,
+                'processed_grns' => min($offset, $totalGrns),
+                'replayed' => 0,
+                'failed' => 0,
+                'is_complete' => true,
+                'next_offset' => null,
+            ];
+        }
+
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
+        }
+        $sessionUserId = (int) ($_SESSION['user']['id'] ?? 0);
+
+        $transferOrderNo = trim((string) ($transfer['transfer_order_no'] ?? ''));
+        $destinationWarehouse = (int) ($transfer['to_warehouse'] ?? 0);
+
+        $replayed = 0;
+        $failed = 0;
+        $errors = [];
+        $affectedSkus = [];
+        $affectedProductIds = [];
+
+        $this->db->begin_transaction();
+        try {
+            foreach ($batchIds as $grnId) {
+                $grnId = (int) $grnId;
+                $grn = $this->getTransferGrnById($grnId);
+                if (!$grn) {
+                    $failed++;
+                    $errors[] = 'GRN #' . $grnId . ' not found.';
+                    continue;
+                }
+
+                $sku = trim((string) ($grn['sku'] ?? ''));
+                $itemCode = trim((string) ($grn['item_code'] ?? ''));
+                if ($sku === '' && $itemCode !== '') {
+                    $sku = $itemCode;
+                }
+
+                $movementIds = $this->findStockMovementIdsForGrnRow($grnId, $transferOrderNo, $grn);
+                foreach (array_unique($movementIds) as $mid) {
+                    if ((int) $mid > 0) {
+                        $this->deleteMovementAndAdjustSubsequent((int) $mid);
+                    }
+                }
+
+                $qtyReceived = (int) ($grn['qty_received'] ?? 0);
+                $warehouseId = (int) ($grn['location'] ?? 0);
+                if ($warehouseId <= 0) {
+                    $warehouseId = $destinationWarehouse;
+                }
+
+                if ($qtyReceived > 0 && $sku !== '' && $warehouseId > 0) {
+                    $productId = $this->resolveProductIdForGrnSku($sku, $itemCode);
+                    $this->insertStockMovement(
+                        $productId,
+                        $sku,
+                        $itemCode,
+                        $warehouseId,
+                        '',
+                        trim((string) ($grn['size'] ?? '')),
+                        trim((string) ($grn['color'] ?? '')),
+                        'TRANSFER_IN',
+                        $qtyReceived,
+                        (int) ($grn['received_by'] ?? $sessionUserId),
+                        'GRN',
+                        'Received from stock transfer: ' . $transferOrderNo,
+                        $grnId
+                    );
+                    if ($productId > 0) {
+                        $affectedProductIds[$productId] = $productId;
+                    }
+                }
+
+                if ($sku !== '') {
+                    $affectedSkus[$sku] = $sku;
+                }
+                $replayed++;
+            }
+
+            if ($affectedSkus !== []) {
+                $this->rebuildVpStockCacheForSkus(array_values($affectedSkus));
+            }
+
+            $this->db->commit();
+        } catch (Throwable $e) {
+            $this->db->rollback();
+
+            return [
+                'success' => false,
+                'message' => 'GRN replay failed: ' . $e->getMessage(),
+                'transfer_id' => $transferId,
+                'total_grns' => $totalGrns,
+                'processed_grns' => $offset,
+                'errors' => $errors,
+            ];
+        }
+
+        $processedGrns = min($offset + count($batchIds), $totalGrns);
+        $isComplete = $processedGrns >= $totalGrns;
+
+        if ($isComplete) {
+            $this->finalizeTransferGrnReplay($transferId);
+        }
+
+        $message = 'Replayed ' . $replayed . ' GRN line(s) in this batch.';
+        if ($failed > 0) {
+            $message .= ' ' . $failed . ' failed.';
+        }
+        if ($isComplete) {
+            $message = 'GRN stock replay completed for transfer ' . ($transferOrderNo !== '' ? $transferOrderNo : ('#' . $transferId)) . '.';
+        }
+
+        return [
+            'success' => $failed === 0,
+            'message' => $message,
+            'transfer_id' => $transferId,
+            'transfer_order_no' => $transferOrderNo,
+            'total_grns' => $totalGrns,
+            'batch_processed' => count($batchIds),
+            'processed_grns' => $processedGrns,
+            'replayed' => $replayed,
+            'failed' => $failed,
+            'errors' => $errors,
+            'is_complete' => $isComplete,
+            'next_offset' => $isComplete ? null : $processedGrns,
+        ];
+    }
+
+    /** @return list<int> */
+    private function listTransferGrnIdsOrdered(int $transferId): array
+    {
+        $transferId = (int) $transferId;
+        if ($transferId <= 0) {
+            return [];
+        }
+
+        $stmt = $this->db->prepare('SELECT id FROM vp_stock_transfer_grns WHERE transfer_id = ? ORDER BY id ASC');
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $transferId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $ids = [];
+        while ($res && ($row = $res->fetch_assoc())) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+        $stmt->close();
+
+        return $ids;
+    }
+
+    /** @param list<string> $skus */
+    private function rebuildVpStockCacheForSkus(array $skus): void
+    {
+        $skus = array_values(array_unique(array_filter(array_map('trim', $skus), static function (string $sku): bool {
+            return $sku !== '';
+        })));
+        if ($skus === []) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($skus), '?'));
+        $types = str_repeat('s', count($skus));
+        $sql = "
+            SELECT sm.sku, sm.warehouse_id, sm.running_stock, sm.id AS movement_id
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT sku, warehouse_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE warehouse_id > 0 AND TRIM(COALESCE(sku, '')) <> ''
+                  AND sku IN ({$placeholders})
+                GROUP BY sku, warehouse_id
+            ) latest ON latest.max_id = sm.id";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new RuntimeException('Could not prepare vp_stock rebuild query.');
+        }
+
+        $bind = [$types];
+        foreach ($skus as $k => $sku) {
+            $bind[] = &$skus[$k];
+        }
+        call_user_func_array([$stmt, 'bind_param'], $bind);
+        $stmt->execute();
+        $res = $stmt->get_result();
+
+        $select = $this->db->prepare('SELECT id FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1');
+        $update = $this->db->prepare('UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?');
+        $insert = $this->db->prepare('INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)');
+        if (!$select || !$update || !$insert) {
+            $stmt->close();
+            throw new RuntimeException('Could not prepare vp_stock upsert statements.');
+        }
+
+        while ($res && ($row = $res->fetch_assoc())) {
+            $sku = (string) ($row['sku'] ?? '');
+            $warehouseId = (int) ($row['warehouse_id'] ?? 0);
+            $running = (float) ($row['running_stock'] ?? 0);
+            $movementId = (int) ($row['movement_id'] ?? 0);
+            if ($sku === '' || $warehouseId <= 0) {
+                continue;
+            }
+
+            $select->bind_param('si', $sku, $warehouseId);
+            $select->execute();
+            $existing = $select->get_result()->fetch_assoc();
+            if ($existing) {
+                $stockId = (int) $existing['id'];
+                $update->bind_param('dii', $running, $movementId, $stockId);
+                $update->execute();
+            } else {
+                $insert->bind_param('sidi', $sku, $warehouseId, $running, $movementId);
+                $insert->execute();
+            }
+        }
+
+        $stmt->close();
+        $select->close();
+        $update->close();
+        $insert->close();
+    }
+
+    private function finalizeTransferGrnReplay(int $transferId): void
+    {
+        require_once __DIR__ . '/StockMovement.php';
+
+        $transfer = $this->getTransferById($transferId);
+        if (!$transfer) {
+            return;
+        }
+
+        $productIds = [];
+        foreach ((array) ($transfer['items'] ?? []) as $item) {
+            $pid = (int) ($item['product_id'] ?? 0);
+            if ($pid > 0) {
+                $productIds[$pid] = $pid;
+            }
+        }
+
+        foreach ($productIds as $productId) {
+            StockMovement::syncProductPhysicalStock($this->db, (int) $productId);
+        }
+
+        $status = 'received';
+        $stmt = $this->db->prepare("UPDATE vp_stock_transfer SET status = ? WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param('si', $status, $transferId);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    /**
      * True if this transfer has any GRN row whose sku matches the line (or item_code when sku is empty),
      * consistent with how GRNs are recorded per SKU on a transfer.
      */
