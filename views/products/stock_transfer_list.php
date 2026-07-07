@@ -594,13 +594,14 @@ $formatStatusLabel = static function (string $status): string {
         }
     }
 
-    async function fetchReplayBatch(transferId, offset) {
+    async function fetchReplayBatch(transferId, offset, phase) {
         var res = await fetch('index.php?page=products&action=stock_transfer_replay_grn', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify({
                 transfer_id: transferId,
+                phase: phase || 'grn',
                 offset: offset,
                 batch_size: BATCH_SIZE,
             }),
@@ -629,8 +630,9 @@ $formatStatusLabel = static function (string $status): string {
 
         var confirmed = window.confirm(
             'Replay stock for transfer ' + orderNo + '?\n\n'
-            + 'This will rebuild TRANSFER_OUT at the source warehouse, then TRANSFER_IN '
-            + 'from the existing ' + grnCount + ' GRN line(s) at the destination. '
+            + 'Step 1: TRANSFER_OUT — deduct stock from the source warehouse.\n'
+            + 'Step 2: GRN — add stock at the destination from the existing '
+            + grnCount + ' GRN line(s).\n\n'
             + 'GRN records themselves are not deleted.'
         );
         if (!confirmed) return;
@@ -655,10 +657,44 @@ $formatStatusLabel = static function (string $status): string {
             batchNo: 0,
             batchTotal: batchTotal,
             done: false,
-            hint: 'Deducting source stock and replaying GRNs for ' + orderNo + '…',
+            hint: 'Step 1: Replaying TRANSFER_OUT at source for ' + orderNo + '…',
         });
 
         try {
+            updateReplayProgress({
+                total: totalGrns,
+                processed: 0,
+                replayed: 0,
+                failed: 0,
+                batchNo: 0,
+                batchTotal: batchTotal,
+                done: false,
+                hint: 'Step 1: Deducting stock from source warehouse…',
+            });
+
+            var outData = await fetchReplayBatch(transferId, 0, 'transfer_out');
+            if (!outData || !outData.success) {
+                throw new Error((outData && outData.message) ? outData.message : 'TRANSFER_OUT replay failed.');
+            }
+            transferOutReplayed = parseInt(outData.transfer_out_replayed || 0, 10);
+            if (typeof outData.total_grns === 'number' && outData.total_grns > 0) {
+                totalGrns = outData.total_grns;
+                batchTotal = Math.max(1, Math.ceil(totalGrns / BATCH_SIZE));
+            }
+            lastMessage = outData.message || lastMessage;
+
+            updateReplayProgress({
+                total: totalGrns,
+                processed: 0,
+                replayed: 0,
+                failed: 0,
+                transferOutReplayed: transferOutReplayed,
+                batchNo: 0,
+                batchTotal: batchTotal,
+                done: false,
+                hint: 'Step 1 complete. Step 2: Replaying GRN at destination…',
+            });
+
             while (offset < totalGrns) {
                 batchNo++;
                 updateReplayProgress({
@@ -666,13 +702,14 @@ $formatStatusLabel = static function (string $status): string {
                     processed: offset,
                     replayed: totalReplayed,
                     failed: totalFailed,
+                    transferOutReplayed: transferOutReplayed,
                     batchNo: batchNo,
                     batchTotal: batchTotal,
                     done: false,
-                    hint: 'Running batch ' + batchNo + ' of ' + batchTotal + '…',
+                    hint: 'Step 2: GRN batch ' + batchNo + ' of ' + batchTotal + '…',
                 });
 
-                var data = await fetchReplayBatch(transferId, offset);
+                var data = await fetchReplayBatch(transferId, offset, 'grn');
                 if (typeof data.total_grns === 'number' && data.total_grns > 0) {
                     totalGrns = data.total_grns;
                     batchTotal = Math.max(1, Math.ceil(totalGrns / BATCH_SIZE));
@@ -680,9 +717,6 @@ $formatStatusLabel = static function (string $status): string {
 
                 totalReplayed += parseInt(data.replayed || 0, 10);
                 totalFailed += parseInt(data.failed || 0, 10);
-                if (parseInt(data.transfer_out_replayed || 0, 10) > 0) {
-                    transferOutReplayed = parseInt(data.transfer_out_replayed, 10);
-                }
                 lastMessage = data.message || lastMessage;
 
                 var processed = parseInt(data.processed_grns || offset, 10);
