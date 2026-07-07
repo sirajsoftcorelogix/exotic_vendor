@@ -155,12 +155,13 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
             <th class="px-5 py-3.5 whitespace-nowrap">Stock</th>
             <th class="px-5 py-3.5 whitespace-nowrap text-right">Sell price</th>
             <th class="px-5 py-3.5 min-w-[15rem]">Title</th>
+            <th class="px-5 py-3.5 whitespace-nowrap text-right">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           <?php if (empty($rows)): ?>
             <tr>
-              <td colspan="7" class="px-5 py-16 text-center">
+              <td colspan="8" class="px-5 py-16 text-center">
                 <div class="mx-auto flex max-w-sm flex-col items-center">
                   <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                     <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -180,7 +181,11 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                 $fallbackCategory = ucwords(strtolower(str_replace(['_', '-'], ' ', $rawCategory)));
                 $categoryLabel = (string)($categories[$categoryKey] ?? $fallbackCategory);
               ?>
-              <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors">
+              <?php
+                $productId = (int)($r['id'] ?? 0);
+                $skuLabel = trim((string)($r['sku'] ?? $r['item_code'] ?? ''));
+              ?>
+              <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors" data-product-id="<?= $productId ?>">
                 <td class="px-5 py-4 align-top">
                   <img
                     src="<?= htmlspecialchars($imgUrl) ?>"
@@ -220,6 +225,17 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                 </td>
                 <td class="px-5 py-4 align-top text-sm text-right font-semibold text-gray-900 tabular-nums">₹<?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
                 <td class="px-5 py-4 align-top text-sm text-gray-800 max-w-[15rem] break-words leading-snug"><?= htmlspecialchars($r['title'] ?? '') ?></td>
+                <td class="px-5 py-4 align-top text-right">
+                  <button
+                    type="button"
+                    class="stock-report-refresh-btn inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition disabled:opacity-50 disabled:pointer-events-none"
+                    data-product-id="<?= $productId ?>"
+                    data-sku-label="<?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>"
+                    title="Clear ledger, reset physical stock, fetch local stock, and reseed default warehouse">
+                    <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i>
+                    <span>Refresh</span>
+                  </button>
+                </td>
               </tr>
             <?php endforeach; ?>
           <?php endif; ?>
@@ -302,15 +318,54 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
 
   document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('stockReportImgModal');
-    if (!modal) return;
-
-    modal.addEventListener('click', (e) => {
-      // Backdrop click closes (but clicks inside the image box should not)
-      if (e.target === modal) closeStockReportImage();
-    });
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeStockReportImage();
+      });
+    }
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeStockReportImage();
+    });
+
+    document.querySelectorAll('.stock-report-refresh-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const productId = parseInt(btn.getAttribute('data-product-id') || '0', 10);
+        const skuLabel = btn.getAttribute('data-sku-label') || ('#' + productId);
+        if (productId <= 0) return;
+
+        const confirmed = window.confirm(
+          'Refresh stock for ' + skuLabel + '?\n\n'
+          + 'This will delete vp_stock_movements and vp_stock rows, reset physical_stock to 0, '
+          + 'fetch the latest local stock from the API, then reseed opening stock in the default warehouse.'
+        );
+        if (!confirmed) return;
+
+        const icon = btn.querySelector('i');
+        const label = btn.querySelector('span');
+        btn.disabled = true;
+        if (icon) icon.classList.add('fa-spin');
+        if (label) label.textContent = 'Refreshing…';
+
+        try {
+          const res = await fetch('index.php?page=pos_register&action=stock-report-refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_id: productId }),
+          });
+          const data = await res.json();
+          if (!data || !data.success) {
+            throw new Error((data && data.message) ? data.message : 'Refresh failed.');
+          }
+
+          window.location.reload();
+        } catch (err) {
+          window.alert(err && err.message ? err.message : 'Refresh failed.');
+          btn.disabled = false;
+          if (icon) icon.classList.remove('fa-spin');
+          if (label) label.textContent = 'Refresh';
+        }
+      });
     });
   });
 </script>

@@ -1095,6 +1095,318 @@ class POSRegisterController
     }
 
     /**
+     * Stock report row refresh:
+     * 1) delete movements, 2) delete vp_stock, 3) reset physical_stock,
+     * 4) fetch local_stock from API, 5–7) reseed default warehouse ledger.
+     */
+    public function stockReportRefreshItem(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        global $conn;
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $productId = (int) ($payload['product_id'] ?? 0);
+        if ($productId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid product.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        require_once __DIR__ . '/../models/product/product.php';
+        require_once __DIR__ . '/../models/product/StockMovement.php';
+
+        $productModel = new product($conn);
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+
+        $product = $this->loadStockReportRefreshProduct($conn, $productId);
+        if (!$product) {
+            echo json_encode(['success' => false, 'message' => 'Product not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $sku = trim((string) ($product['sku'] ?? ''));
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
+        $label = $sku !== '' ? $sku : ($itemCode !== '' ? $itemCode : ('#' . $productId));
+
+        $defaultWarehouseId = $this->resolveDefaultWarehouseIdForStockRefresh($conn);
+        if ($defaultWarehouseId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'No active default warehouse found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+        $defaultWarehouseName = $this->resolveWarehouseLabelForStockRefresh($conn, $defaultWarehouseId);
+
+        $deletedMovements = 0;
+        $deletedVpStock = 0;
+        $openingQty = 0;
+        $movementId = 0;
+        $vpStockUpserted = false;
+
+        // Steps 1–3: clear ledger rows and reset physical_stock before API fetch.
+        $conn->begin_transaction();
+        try {
+            $this->ensureOpeningStockMovementEnum($conn);
+
+            if ($sku !== '') {
+                $delMov = $conn->prepare('DELETE FROM vp_stock_movements WHERE product_id = ? OR sku = ?');
+                if (!$delMov) {
+                    throw new RuntimeException('Could not prepare movement delete.');
+                }
+                $delMov->bind_param('is', $productId, $sku);
+            } else {
+                $delMov = $conn->prepare('DELETE FROM vp_stock_movements WHERE product_id = ?');
+                if (!$delMov) {
+                    throw new RuntimeException('Could not prepare movement delete.');
+                }
+                $delMov->bind_param('i', $productId);
+            }
+            $delMov->execute();
+            $deletedMovements = (int) $delMov->affected_rows;
+            $delMov->close();
+
+            if ($sku !== '') {
+                $delStock = $conn->prepare('DELETE FROM vp_stock WHERE sku = ?');
+                if (!$delStock) {
+                    throw new RuntimeException('Could not prepare vp_stock delete.');
+                }
+                $delStock->bind_param('s', $sku);
+                $delStock->execute();
+                $deletedVpStock = (int) $delStock->affected_rows;
+                $delStock->close();
+            }
+
+            $zeroPhysical = $conn->prepare('UPDATE vp_products SET physical_stock = 0 WHERE id = ?');
+            if (!$zeroPhysical) {
+                throw new RuntimeException('Could not prepare physical_stock reset.');
+            }
+            $zeroPhysical->bind_param('i', $productId);
+            $zeroPhysical->execute();
+            $zeroPhysical->close();
+
+            $conn->commit();
+        } catch (Throwable $e) {
+            $conn->rollback();
+            echo json_encode([
+                'success' => false,
+                'message' => 'Stock refresh failed while clearing ledger: ' . $e->getMessage(),
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        // Step 4: fetch latest local_stock from vendor API.
+        $apiFetched = false;
+        $apiMessage = '';
+        if ($itemCode !== '') {
+            $apiResult = $productModel->refreshLocalStockFromVendorApi($itemCode);
+            $apiFetched = !empty($apiResult['success']);
+            $apiMessage = trim((string) ($apiResult['message'] ?? ''));
+            if (!$apiFetched) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => $apiMessage !== '' ? $apiMessage : 'Failed to fetch latest local stock from API.',
+                    'deleted_movements' => $deletedMovements,
+                    'deleted_vp_stock' => $deletedVpStock,
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+            $product = $this->loadStockReportRefreshProduct($conn, $productId) ?: $product;
+        }
+
+        $localStock = max(0, (int) ($product['local_stock'] ?? 0));
+
+        // Steps 5–7: seed opening stock, upsert vp_stock, sync physical_stock.
+        $conn->begin_transaction();
+        try {
+            if ($localStock > 0 && $sku !== '') {
+                $inserted = StockMovement::insert($conn, [
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => trim((string) ($product['size'] ?? '')),
+                    'color' => trim((string) ($product['color'] ?? '')),
+                    'warehouse_id' => $defaultWarehouseId,
+                    'location' => $defaultWarehouseName,
+                    'movement_type' => 'OPENING_STOCK',
+                    'quantity' => $localStock,
+                    'ref_type' => 'STOCK_REPORT_REFRESH',
+                    'ref_id' => 'stock-report-refresh:' . $productId,
+                    'reason' => 'Opening stock from latest local_stock (stock report refresh)',
+                    'update_by_user' => $userId,
+                    'strict_stock_check' => false,
+                    'sync_physical_stock' => false,
+                ]);
+                $openingQty = $localStock;
+                $movementId = (int) ($inserted['movement_id'] ?? 0);
+                $runningStock = (float) ($inserted['running_stock'] ?? $localStock);
+                $vpStockUpserted = $this->upsertVpStockRow($conn, $sku, $defaultWarehouseId, $runningStock, $movementId);
+            }
+
+            StockMovement::syncProductPhysicalStock($conn, $productId);
+
+            $conn->commit();
+
+            $message = 'Stock refreshed for ' . $label . ' using local stock ' . $localStock
+                . ' in ' . $defaultWarehouseName . '.';
+            if ($apiFetched && $apiMessage !== '') {
+                $message .= ' ' . $apiMessage;
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'product_id' => $productId,
+                'sku' => $sku,
+                'local_stock' => $localStock,
+                'default_warehouse_id' => $defaultWarehouseId,
+                'default_warehouse_name' => $defaultWarehouseName,
+                'deleted_movements' => $deletedMovements,
+                'deleted_vp_stock' => $deletedVpStock,
+                'opening_qty' => $openingQty,
+                'movement_id' => $movementId,
+                'vp_stock_upserted' => $vpStockUpserted,
+                'api_fetched' => $apiFetched,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        } catch (Throwable $e) {
+            $conn->rollback();
+            echo json_encode([
+                'success' => false,
+                'message' => 'Stock refresh failed while reseeding stock: ' . $e->getMessage(),
+                'deleted_movements' => $deletedMovements,
+                'deleted_vp_stock' => $deletedVpStock,
+                'api_fetched' => $apiFetched,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+    }
+
+    /** @return array<string, mixed>|null */
+    private function loadStockReportRefreshProduct(mysqli $conn, int $productId): ?array
+    {
+        $stmt = $conn->prepare(
+            'SELECT id, sku, item_code, size, color, IFNULL(local_stock, 0) AS local_stock
+             FROM vp_products WHERE id = ? AND is_active = 1 LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $productId);
+        $stmt->execute();
+        $product = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return is_array($product) ? $product : null;
+    }
+
+    private function resolveDefaultWarehouseIdForStockRefresh(mysqli $conn): int
+    {
+        $res = $conn->query('SELECT id FROM exotic_address WHERE is_active = 1 ORDER BY id ASC LIMIT 1');
+        if ($res && ($row = $res->fetch_assoc())) {
+            $res->free();
+
+            return (int) ($row['id'] ?? 0);
+        }
+        if ($res) {
+            $res->free();
+        }
+
+        return 0;
+    }
+
+    private function resolveWarehouseLabelForStockRefresh(mysqli $conn, int $warehouseId): string
+    {
+        if ($warehouseId <= 0) {
+            return '-';
+        }
+        $stmt = $conn->prepare('SELECT address_title FROM exotic_address WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return 'Warehouse #' . $warehouseId;
+        }
+        $stmt->bind_param('i', $warehouseId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $label = trim((string) ($row['address_title'] ?? ''));
+
+        return $label !== '' ? $label : ('Warehouse #' . $warehouseId);
+    }
+
+    private function upsertVpStockRow(mysqli $conn, string $sku, int $warehouseId, float $currentStock, int $movementId): bool
+    {
+        if ($sku === '' || $warehouseId <= 0) {
+            return false;
+        }
+
+        $select = $conn->prepare('SELECT id FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1');
+        $update = $conn->prepare('UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?');
+        $insert = $conn->prepare('INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)');
+        if (!$select || !$update || !$insert) {
+            if ($select) {
+                $select->close();
+            }
+            if ($update) {
+                $update->close();
+            }
+            if ($insert) {
+                $insert->close();
+            }
+            throw new RuntimeException('Could not prepare vp_stock upsert.');
+        }
+
+        $select->bind_param('si', $sku, $warehouseId);
+        $select->execute();
+        $existing = $select->get_result()->fetch_assoc();
+        $select->close();
+
+        if ($existing) {
+            $stockId = (int) $existing['id'];
+            $update->bind_param('dii', $currentStock, $movementId, $stockId);
+            $update->execute();
+            $update->close();
+            $insert->close();
+
+            return true;
+        }
+
+        $insert->bind_param('sidi', $sku, $warehouseId, $currentStock, $movementId);
+        $insert->execute();
+        $insert->close();
+        $update->close();
+
+        return true;
+    }
+
+    private function ensureOpeningStockMovementEnum(mysqli $conn): void
+    {
+        $res = @$conn->query("SHOW COLUMNS FROM vp_stock_movements LIKE 'movement_type'");
+        if (!$res) {
+            return;
+        }
+        $row = $res->fetch_assoc();
+        $res->free();
+        if (!$row) {
+            return;
+        }
+        $type = strtolower((string) ($row['Type'] ?? ''));
+        if (strpos($type, 'opening_stock') !== false) {
+            return;
+        }
+        @$conn->query(
+            "ALTER TABLE vp_stock_movements MODIFY COLUMN movement_type ENUM('IN','OUT','TRANSFER_IN','TRANSFER_OUT','OPENING_STOCK') NOT NULL"
+        );
+    }
+
+    /**
      * DataTables AJAX endpoint for products list
      */
     public function productsAjax_bk()
