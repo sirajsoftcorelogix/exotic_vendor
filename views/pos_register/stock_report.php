@@ -310,6 +310,38 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   <?php endif; ?>
 </div>
 
+<!-- Bulk refresh progress modal -->
+<div
+  id="stockReportBulkProgressModal"
+  class="fixed inset-0 hidden z-[60] items-center justify-center bg-black/50 p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="stockReportBulkProgressTitle">
+  <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
+    <div class="flex items-start gap-3">
+      <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-700">
+        <i id="stockReportBulkProgressIcon" class="fas fa-sync-alt fa-spin text-sm" aria-hidden="true"></i>
+      </span>
+      <div class="min-w-0 flex-1">
+        <h3 id="stockReportBulkProgressTitle" class="text-base font-semibold text-gray-900">Refreshing selected stock</h3>
+        <p id="stockReportBulkProgressText" class="mt-1 text-sm text-gray-600">Preparing…</p>
+      </div>
+    </div>
+    <div class="mt-5">
+      <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+        <div id="stockReportBulkProgressBar" class="h-full rounded-full bg-orange-500 transition-all duration-300" style="width: 0%"></div>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+        <span id="stockReportBulkProgressBatch">Batch 0 of 0</span>
+        <span id="stockReportBulkProgressStats">Succeeded: 0 · Failed: 0</span>
+      </div>
+      <p id="stockReportBulkProgressHint" class="mt-3 text-xs text-gray-500">
+        Processing in small batches to avoid timeouts. Please keep this page open.
+      </p>
+    </div>
+  </div>
+</div>
+
 <!-- Image Expand Modal -->
 <div
   id="stockReportImgModal"
@@ -336,6 +368,183 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   const STOCK_REPORT_REFRESH_CONFIRM =
     'This will delete vp_stock_movements and vp_stock rows, reset physical_stock to 0, '
     + 'fetch the latest local stock from the API, then reseed opening stock in the default warehouse.';
+  const STOCK_REPORT_BATCH_SIZE = 5;
+
+  function chunkStockReportIds(ids, size) {
+    const chunks = [];
+    for (let i = 0; i < ids.length; i += size) {
+      chunks.push(ids.slice(i, i + size));
+    }
+    return chunks;
+  }
+
+  function setStockReportBulkUiLocked(locked) {
+    const bulkBtn = document.getElementById('stockReportBulkRefreshBtn');
+    const selectAll = document.getElementById('stockReportSelectAll');
+    document.querySelectorAll('.stock-report-select-row').forEach((box) => {
+      box.disabled = locked;
+    });
+    document.querySelectorAll('.stock-report-refresh-btn').forEach((btn) => {
+      btn.disabled = locked;
+    });
+    if (selectAll) selectAll.disabled = locked;
+    if (bulkBtn) bulkBtn.disabled = locked || getSelectedStockReportRows().length === 0;
+  }
+
+  function showStockReportBulkProgressModal() {
+    const modal = document.getElementById('stockReportBulkProgressModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function hideStockReportBulkProgressModal() {
+    const modal = document.getElementById('stockReportBulkProgressModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function updateStockReportBulkProgress(state) {
+    const total = Math.max(0, Number(state.total || 0));
+    const completed = Math.max(0, Number(state.completed || 0));
+    const succeeded = Math.max(0, Number(state.succeeded || 0));
+    const failed = Math.max(0, Number(state.failed || 0));
+    const batchNo = Math.max(0, Number(state.batchNo || 0));
+    const batchTotal = Math.max(0, Number(state.batchTotal || 0));
+    const percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+
+    const textEl = document.getElementById('stockReportBulkProgressText');
+    const barEl = document.getElementById('stockReportBulkProgressBar');
+    const batchEl = document.getElementById('stockReportBulkProgressBatch');
+    const statsEl = document.getElementById('stockReportBulkProgressStats');
+    const hintEl = document.getElementById('stockReportBulkProgressHint');
+    const iconEl = document.getElementById('stockReportBulkProgressIcon');
+
+    if (textEl) {
+      textEl.textContent = 'Processed ' + completed + ' of ' + total + ' selected item(s)';
+    }
+    if (barEl) barEl.style.width = percent + '%';
+    if (batchEl) {
+      batchEl.textContent = batchTotal > 0
+        ? ('Batch ' + batchNo + ' of ' + batchTotal + ' · ' + STOCK_REPORT_BATCH_SIZE + ' items per batch')
+        : 'Preparing batches…';
+    }
+    if (statsEl) statsEl.textContent = 'Succeeded: ' + succeeded + ' · Failed: ' + failed;
+    if (hintEl && state.hint) hintEl.textContent = state.hint;
+    if (iconEl) {
+      iconEl.classList.toggle('fa-spin', !!state.spinning);
+      iconEl.classList.toggle('fa-check', !state.spinning && state.done);
+      iconEl.classList.toggle('fa-sync-alt', !!state.spinning || !state.done);
+    }
+  }
+
+  async function fetchStockReportBulkBatch(productIds) {
+    const res = await fetch('index.php?page=pos_register&action=stock-report-refresh-bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ product_ids: productIds }),
+    });
+
+    let data = null;
+    const rawText = await res.text();
+    try {
+      data = rawText ? JSON.parse(rawText) : null;
+    } catch (parseErr) {
+      data = null;
+    }
+
+    if (!res.ok) {
+      throw new Error(
+        (data && data.message)
+          ? data.message
+          : ('Batch request failed with HTTP ' + res.status + (rawText ? ': ' + rawText.slice(0, 180) : ''))
+      );
+    }
+    if (!data) {
+      throw new Error('Invalid response from batch refresh.');
+    }
+    if (!Array.isArray(data.results)) {
+      throw new Error(data.message || 'Batch refresh failed.');
+    }
+
+    return data;
+  }
+
+  async function runStockReportBulkRefreshBatched(productIds) {
+    const total = productIds.length;
+    const batches = chunkStockReportIds(productIds, STOCK_REPORT_BATCH_SIZE);
+    const batchTotal = batches.length;
+    let completed = 0;
+    let succeeded = 0;
+    let failed = 0;
+    const allResults = [];
+
+    showStockReportBulkProgressModal();
+    setStockReportBulkUiLocked(true);
+    updateStockReportBulkProgress({
+      total,
+      completed,
+      succeeded,
+      failed,
+      batchNo: 0,
+      batchTotal,
+      spinning: true,
+      done: false,
+      hint: 'Processing in small batches to avoid timeouts. Please keep this page open.',
+    });
+
+    for (let i = 0; i < batches.length; i++) {
+      const batchIds = batches[i];
+      updateStockReportBulkProgress({
+        total,
+        completed,
+        succeeded,
+        failed,
+        batchNo: i + 1,
+        batchTotal,
+        spinning: true,
+        done: false,
+        hint: 'Running batch ' + (i + 1) + ' of ' + batchTotal + ' (' + batchIds.length + ' item(s))…',
+      });
+
+      const data = await fetchStockReportBulkBatch(batchIds);
+      const batchResults = Array.isArray(data.results) ? data.results : [];
+      allResults.push.apply(allResults, batchResults);
+
+      batchResults.forEach((row) => {
+        if (row && row.success) {
+          succeeded++;
+        } else {
+          failed++;
+        }
+      });
+      completed += batchIds.length;
+
+      updateStockReportBulkProgress({
+        total,
+        completed,
+        succeeded,
+        failed,
+        batchNo: i + 1,
+        batchTotal,
+        spinning: i < batches.length - 1,
+        done: i === batches.length - 1,
+        hint: i < batches.length - 1
+          ? 'Batch ' + (i + 1) + ' complete. Starting next batch…'
+          : 'All batches complete.',
+      });
+    }
+
+    return {
+      total,
+      succeeded,
+      failed,
+      results: allResults,
+      message: 'Refreshed ' + succeeded + ' of ' + total + ' selected item(s).'
+        + (failed > 0 ? (' ' + failed + ' failed.') : ''),
+    };
+  }
 
   function getSelectedStockReportRows() {
     return Array.from(document.querySelectorAll('.stock-report-select-row:checked'));
@@ -445,36 +654,38 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         const btnIcon = bulkBtn.querySelector('i');
         bulkBtn.disabled = true;
         if (btnIcon) btnIcon.classList.add('fa-spin');
-        if (btnLabel) btnLabel.textContent = 'Refreshing ' + productIds.length + '…';
+        if (btnLabel) btnLabel.textContent = 'Refreshing…';
 
         try {
-          const res = await fetch('index.php?page=pos_register&action=stock-report-refresh-bulk', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ product_ids: productIds }),
-          });
-          const data = await res.json();
-          if (!data) {
-            throw new Error('Bulk refresh failed.');
-          }
+          const summary = await runStockReportBulkRefreshBatched(productIds);
 
-          if (data.failed > 0 && Array.isArray(data.results)) {
-            const failedLines = data.results
+          updateStockReportBulkProgress({
+            total: summary.total,
+            completed: summary.total,
+            succeeded: summary.succeeded,
+            failed: summary.failed,
+            batchNo: Math.ceil(summary.total / STOCK_REPORT_BATCH_SIZE),
+            batchTotal: Math.ceil(summary.total / STOCK_REPORT_BATCH_SIZE),
+            spinning: false,
+            done: true,
+            hint: summary.failed > 0 ? 'Completed with some failures. Review details below.' : 'Completed successfully. Reloading…',
+          });
+
+          if (summary.failed > 0 && Array.isArray(summary.results)) {
+            const failedLines = summary.results
               .filter((row) => row && !row.success)
               .slice(0, 8)
               .map((row) => (row.label || row.sku || ('#' + row.product_id)) + ': ' + (row.message || 'Failed'))
               .join('\n');
-            const extra = data.failed > 8 ? '\n…and ' + (data.failed - 8) + ' more.' : '';
-            window.alert((data.message || 'Bulk refresh completed with errors.') + '\n\n' + failedLines + extra);
-          } else if (!data.success) {
-            throw new Error(data.message || 'Bulk refresh failed.');
-          } else {
-            window.alert(data.message || 'Bulk refresh completed.');
+            const extra = summary.failed > 8 ? '\n…and ' + (summary.failed - 8) + ' more.' : '';
+            window.alert((summary.message || 'Bulk refresh completed with errors.') + '\n\n' + failedLines + extra);
           }
 
-          window.location.reload();
+          window.setTimeout(() => window.location.reload(), summary.failed > 0 ? 1200 : 600);
         } catch (err) {
+          hideStockReportBulkProgressModal();
           window.alert(err && err.message ? err.message : 'Bulk refresh failed.');
+          setStockReportBulkUiLocked(false);
           bulkBtn.disabled = false;
           if (btnIcon) btnIcon.classList.remove('fa-spin');
           if (btnLabel) btnLabel.textContent = 'Refresh selected';
