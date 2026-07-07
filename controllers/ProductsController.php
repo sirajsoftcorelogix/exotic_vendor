@@ -427,6 +427,7 @@ class ProductsController
         $transferId = (int) ($payload['transfer_id'] ?? 0);
         $offset = max(0, (int) ($payload['offset'] ?? 0));
         $batchSize = max(1, min(10, (int) ($payload['batch_size'] ?? 5)));
+        $phase = strtolower(trim((string) ($payload['phase'] ?? 'grn')));
 
         if ($transferId <= 0) {
             echo json_encode(['success' => false, 'message' => 'Invalid transfer id.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -435,7 +436,11 @@ class ProductsController
 
         require_once 'models/product/StockTransfer.php';
         $stockTransferModel = new StockTransfer($conn);
-        $result = $stockTransferModel->replayTransferGrnStockBatch($transferId, $offset, $batchSize);
+        if ($phase === 'transfer_out') {
+            $result = $stockTransferModel->replayTransferOutPhase($transferId);
+        } else {
+            $result = $stockTransferModel->replayTransferGrnStockBatch($transferId, $offset, $batchSize);
+        }
 
         echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;

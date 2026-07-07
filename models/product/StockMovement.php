@@ -237,6 +237,10 @@ final class StockMovement
         $userId = isset($data['update_by_user'])
             ? (int) $data['update_by_user']
             : (isset($data['user_id']) ? (int) $data['user_id'] : 0);
+        $createdAt = trim((string) ($data['created_at'] ?? ''));
+        if ($createdAt !== '' && strtotime($createdAt) === false) {
+            $createdAt = '';
+        }
 
         $refTypeUpper = strtoupper(trim($refType));
         $movementTypeUpper = strtoupper(trim($movementType));
@@ -269,26 +273,48 @@ final class StockMovement
 
         $fullSql = "INSERT INTO vp_stock_movements
             (product_id, sku, {$safeItemCol}, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " . ($createdAt !== '' ? '?' : 'NOW()') . ", " . ($createdAt !== '' ? '?' : 'NOW()') . ")";
         $stmt = $conn->prepare($fullSql);
         if ($stmt) {
-            $stmt->bind_param(
-                'issssisssdsssi',
-                $pidBind,
-                $sku,
-                $itemCode,
-                $size,
-                $color,
-                $warehouseId,
-                $location,
-                $movementType,
-                $qtyBind,
-                $runningBind,
-                $refType,
-                $refId,
-                $reason,
-                $userId
-            );
+            if ($createdAt !== '') {
+                $stmt->bind_param(
+                    'issssisssdsssss',
+                    $pidBind,
+                    $sku,
+                    $itemCode,
+                    $size,
+                    $color,
+                    $warehouseId,
+                    $location,
+                    $movementType,
+                    $qtyBind,
+                    $runningBind,
+                    $refType,
+                    $refId,
+                    $reason,
+                    $userId,
+                    $createdAt,
+                    $createdAt
+                );
+            } else {
+                $stmt->bind_param(
+                    'issssisssdsssi',
+                    $pidBind,
+                    $sku,
+                    $itemCode,
+                    $size,
+                    $color,
+                    $warehouseId,
+                    $location,
+                    $movementType,
+                    $qtyBind,
+                    $runningBind,
+                    $refType,
+                    $refId,
+                    $reason,
+                    $userId
+                );
+            }
             if ($stmt->execute()) {
                 $movementId = (int) $conn->insert_id;
                 $stmt->close();
