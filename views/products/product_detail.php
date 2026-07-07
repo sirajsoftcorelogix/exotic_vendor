@@ -395,6 +395,19 @@
             <i class="fas fa-sync-alt text-[11px]" aria-hidden="true"></i>
             Refresh from API
           </button>
+          <?php if ($isAdminUser): ?>
+            <button
+              type="button"
+              id="refreshProductStockBtn"
+              data-product-id="<?php echo (int)($products['id'] ?? 0); ?>"
+              data-sku-label="<?php echo htmlspecialchars((string)($products['sku'] ?? $products['item_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-orange-200 bg-orange-50 text-orange-800 text-xs font-semibold hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none"
+              title="Clear ledger, reset physical stock, fetch local stock, and reseed default warehouse"
+              onclick="refreshProductStockLedger(this)">
+              <i class="fas fa-warehouse text-[11px]" aria-hidden="true"></i>
+              Refresh stock
+            </button>
+          <?php endif; ?>
           <button
             type="button"
             id="refreshProductApiDebugBtn"
@@ -1769,6 +1782,52 @@
       modal.classList.remove('hidden');
       setTimeout(function () { noBtn.focus(); }, 50);
     });
+  }
+
+  async function refreshProductStockLedger(btn) {
+    var productId = parseInt((btn && btn.dataset && btn.dataset.productId) ? btn.dataset.productId : '0', 10);
+    var skuLabel = (btn && btn.dataset && btn.dataset.skuLabel) ? String(btn.dataset.skuLabel).trim() : ('#' + productId);
+    if (productId <= 0) {
+      showProfileStatusModal('Product id is missing.', 'error', false);
+      return;
+    }
+
+    var confirmed = window.confirm(
+      'Refresh stock for ' + skuLabel + '?\n\n'
+      + 'This will delete vp_stock_movements and vp_stock rows, reset physical_stock to 0, '
+      + 'fetch the latest local stock from the API, then reseed opening stock in the default warehouse.'
+    );
+    if (!confirmed) return;
+
+    var oldHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('opacity-70', 'cursor-not-allowed');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin text-[11px]" aria-hidden="true"></i> Refreshing...';
+
+    try {
+      var res = await fetch('index.php?page=pos_register&action=stock-report-refresh', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ product_id: productId }),
+      });
+      var rawText = await res.text();
+      var data = null;
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch (parseErr) {
+        data = null;
+      }
+      if (!data || !data.success) {
+        throw new Error((data && data.message) ? data.message : 'Stock refresh failed.');
+      }
+      showProfileStatusModal(data.message || 'Stock refreshed successfully.', 'success', true);
+    } catch (e) {
+      showProfileStatusModal((e && e.message) ? e.message : 'Stock refresh failed.', 'error', false);
+      btn.disabled = false;
+      btn.classList.remove('opacity-70', 'cursor-not-allowed');
+      btn.innerHTML = oldHtml;
+    }
   }
 
   async function updateProductProfileFromApi(btn) {
