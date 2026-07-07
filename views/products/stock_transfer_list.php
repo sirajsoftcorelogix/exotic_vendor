@@ -352,8 +352,8 @@ $formatStatusLabel = static function (string $status): string {
                                         <?php if ($canReplayGrn): ?>
                                             <button type="button"
                                                 class="st-transfer-replay-grn-btn inline-flex h-7 w-7 items-center justify-center rounded border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none"
-                                                title="Replay GRN stock movements"
-                                                aria-label="Replay GRN stock movements"
+                                                title="Replay transfer stock (source OUT + destination GRN IN)"
+                                                aria-label="Replay transfer stock (source OUT and destination GRN IN)"
                                                 data-transfer-id="<?php echo (int)$transfer['id']; ?>"
                                                 data-order-no="<?php echo htmlspecialchars((string)($transfer['transfer_order_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                                 data-grn-count="<?php echo (int)($transfer['grn_count'] ?? 0); ?>">
@@ -412,7 +412,7 @@ $formatStatusLabel = static function (string $status): string {
         <i id="stTransferReplayProgressIcon" class="fas fa-redo fa-spin text-sm" aria-hidden="true"></i>
       </span>
       <div class="min-w-0 flex-1">
-        <h3 id="stTransferReplayProgressTitle" class="text-base font-semibold text-gray-900">Replaying GRN stock</h3>
+        <h3 id="stTransferReplayProgressTitle" class="text-base font-semibold text-gray-900">Replaying transfer stock</h3>
         <p id="stTransferReplayProgressText" class="mt-1 text-sm text-gray-600">Preparing…</p>
       </div>
     </div>
@@ -579,7 +579,13 @@ $formatStatusLabel = static function (string $status): string {
                 ? ('Batch ' + batchNo + ' of ' + batchTotal + ' · ' + BATCH_SIZE + ' lines per batch')
                 : 'Preparing batches…';
         }
-        if (statsEl) statsEl.textContent = 'Replayed: ' + replayed + ' · Failed: ' + failed;
+        if (statsEl) {
+            var stats = 'Replayed: ' + replayed + ' · Failed: ' + failed;
+            if (state.transferOutReplayed > 0) {
+                stats = 'Source OUT: ' + state.transferOutReplayed + ' · ' + stats;
+            }
+            statsEl.textContent = stats;
+        }
         if (hintEl && state.hint) hintEl.textContent = state.hint;
         if (iconEl) {
             iconEl.classList.toggle('fa-spin', !done);
@@ -622,9 +628,10 @@ $formatStatusLabel = static function (string $status): string {
         if (transferId <= 0 || grnCount <= 0) return;
 
         var confirmed = window.confirm(
-            'Replay GRN stock for transfer ' + orderNo + '?\n\n'
-            + 'This will rebuild TRANSFER_IN stock movements and vp_stock from the existing '
-            + grnCount + ' GRN line(s). GRN records themselves are not deleted.'
+            'Replay stock for transfer ' + orderNo + '?\n\n'
+            + 'This will rebuild TRANSFER_OUT at the source warehouse, then TRANSFER_IN '
+            + 'from the existing ' + grnCount + ' GRN line(s) at the destination. '
+            + 'GRN records themselves are not deleted.'
         );
         if (!confirmed) return;
 
@@ -635,6 +642,7 @@ $formatStatusLabel = static function (string $status): string {
         var totalGrns = grnCount;
         var totalReplayed = 0;
         var totalFailed = 0;
+        var transferOutReplayed = 0;
         var batchTotal = Math.max(1, Math.ceil(totalGrns / BATCH_SIZE));
         var batchNo = 0;
         var lastMessage = '';
@@ -647,7 +655,7 @@ $formatStatusLabel = static function (string $status): string {
             batchNo: 0,
             batchTotal: batchTotal,
             done: false,
-            hint: 'Starting GRN replay for ' + orderNo + '…',
+            hint: 'Deducting source stock and replaying GRNs for ' + orderNo + '…',
         });
 
         try {
@@ -672,6 +680,9 @@ $formatStatusLabel = static function (string $status): string {
 
                 totalReplayed += parseInt(data.replayed || 0, 10);
                 totalFailed += parseInt(data.failed || 0, 10);
+                if (parseInt(data.transfer_out_replayed || 0, 10) > 0) {
+                    transferOutReplayed = parseInt(data.transfer_out_replayed, 10);
+                }
                 lastMessage = data.message || lastMessage;
 
                 var processed = parseInt(data.processed_grns || offset, 10);
@@ -685,6 +696,7 @@ $formatStatusLabel = static function (string $status): string {
                     processed: processed,
                     replayed: totalReplayed,
                     failed: totalFailed,
+                    transferOutReplayed: transferOutReplayed,
                     batchNo: batchNo,
                     batchTotal: batchTotal,
                     done: !!data.is_complete,
@@ -695,18 +707,18 @@ $formatStatusLabel = static function (string $status): string {
                     break;
                 }
                 if (!data.success && totalFailed > 0) {
-                    throw new Error(data.message || 'GRN replay failed in batch ' + batchNo + '.');
+                    throw new Error(data.message || 'Transfer stock replay failed in batch ' + batchNo + '.');
                 }
             }
 
             if (totalFailed > 0) {
-                window.alert((lastMessage || 'GRN replay completed with errors.') + '\nFailed lines: ' + totalFailed);
+                window.alert((lastMessage || 'Transfer stock replay completed with errors.') + '\nFailed lines: ' + totalFailed);
             }
 
             window.setTimeout(function () { window.location.reload(); }, totalFailed > 0 ? 1200 : 600);
         } catch (err) {
             hideReplayModal();
-            window.alert(err && err.message ? err.message : 'GRN replay failed.');
+            window.alert(err && err.message ? err.message : 'Transfer stock replay failed.');
             btn.disabled = false;
         }
     }
