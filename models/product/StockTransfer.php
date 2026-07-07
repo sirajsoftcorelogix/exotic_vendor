@@ -371,9 +371,14 @@ class StockTransfer
      * @param string $reason
      * @return bool
      */
-    private function insertStockMovement($product_id, $sku, $item_code, $warehouse_id, $location, $size, $color, $movement_type, $quantity, $user_id, $ref_type, $reason, $ref_id = '')
+    private function insertStockMovement($product_id, $sku, $item_code, $warehouse_id, $location, $size, $color, $movement_type, $quantity, $user_id, $ref_type, $reason, $ref_id = '', ?bool $strictStockCheck = null)
     {
         require_once __DIR__ . '/StockMovement.php';
+
+        $movementTypeUpper = strtoupper(trim((string) $movement_type));
+        if ($strictStockCheck === null) {
+            $strictStockCheck = $movementTypeUpper === 'TRANSFER_OUT';
+        }
 
         StockMovement::insert($this->db, [
             'product_id' => (int) $product_id,
@@ -390,7 +395,7 @@ class StockTransfer
             'reason' => (string) $reason,
             'update_by_user' => (int) $user_id,
             'sync_physical_stock' => false,
-            'strict_stock_check' => strtoupper(trim((string) $movement_type)) === 'TRANSFER_OUT',
+            'strict_stock_check' => $strictStockCheck,
         ]);
 
         return true;
@@ -2162,8 +2167,7 @@ class StockTransfer
     }
 
     /**
-     * Replay GRN-linked TRANSFER_IN movements for a received transfer (one batch slice).
-     * Keeps vp_stock_transfer_grns rows; rebuilds stock movements and vp_stock cache.
+     * Replay a received transfer: TRANSFER_OUT at source, then GRN TRANSFER_IN at destination.
      *
      * @return array<string, mixed>
      */
@@ -2180,7 +2184,7 @@ class StockTransfer
 
         $status = strtolower(trim((string) ($transfer['status'] ?? '')));
         if (!in_array($status, ['received', 'completed', 'complete'], true)) {
-            return ['success' => false, 'message' => 'Only received transfers can replay GRN stock.'];
+            return ['success' => false, 'message' => 'Only received transfers can replay stock movements.'];
         }
 
         $grnIds = $this->listTransferGrnIdsOrdered($transferId);
@@ -2193,7 +2197,7 @@ class StockTransfer
         if ($batchIds === []) {
             return [
                 'success' => true,
-                'message' => 'GRN replay already complete.',
+                'message' => 'Transfer stock replay already complete.',
                 'transfer_id' => $transferId,
                 'transfer_order_no' => (string) ($transfer['transfer_order_no'] ?? ''),
                 'total_grns' => $totalGrns,
@@ -2201,6 +2205,7 @@ class StockTransfer
                 'processed_grns' => min($offset, $totalGrns),
                 'replayed' => 0,
                 'failed' => 0,
+                'transfer_out_replayed' => 0,
                 'is_complete' => true,
                 'next_offset' => null,
             ];
@@ -2213,15 +2218,22 @@ class StockTransfer
 
         $transferOrderNo = trim((string) ($transfer['transfer_order_no'] ?? ''));
         $destinationWarehouse = (int) ($transfer['to_warehouse'] ?? 0);
+        $sourceWarehouse = (int) ($transfer['from_warehouse'] ?? 0);
 
         $replayed = 0;
         $failed = 0;
         $errors = [];
         $affectedSkus = [];
         $affectedProductIds = [];
+        $transferOutReplayed = 0;
 
         $this->db->begin_transaction();
         try {
+            if ($offset === 0) {
+                $this->clearTransferStockMovementsForReplay($transferOrderNo, $sourceWarehouse, $grnIds);
+                $transferOutReplayed = $this->replayTransferOutMovements($transfer, $sessionUserId, $affectedSkus, $affectedProductIds);
+            }
+
             foreach ($batchIds as $grnId) {
                 $grnId = (int) $grnId;
                 $grn = $this->getTransferGrnById($grnId);
@@ -2237,10 +2249,12 @@ class StockTransfer
                     $sku = $itemCode;
                 }
 
-                $movementIds = $this->findStockMovementIdsForGrnRow($grnId, $transferOrderNo, $grn);
-                foreach (array_unique($movementIds) as $mid) {
-                    if ((int) $mid > 0) {
-                        $this->deleteMovementAndAdjustSubsequent((int) $mid);
+                if ($offset > 0) {
+                    $movementIds = $this->findStockMovementIdsForGrnRow($grnId, $transferOrderNo, $grn);
+                    foreach (array_unique($movementIds) as $mid) {
+                        if ((int) $mid > 0) {
+                            $this->deleteMovementAndAdjustSubsequent((int) $mid);
+                        }
                     }
                 }
 
@@ -2288,10 +2302,11 @@ class StockTransfer
 
             return [
                 'success' => false,
-                'message' => 'GRN replay failed: ' . $e->getMessage(),
+                'message' => 'Transfer stock replay failed: ' . $e->getMessage(),
                 'transfer_id' => $transferId,
                 'total_grns' => $totalGrns,
                 'processed_grns' => $offset,
+                'transfer_out_replayed' => $transferOutReplayed,
                 'errors' => $errors,
             ];
         }
@@ -2304,11 +2319,15 @@ class StockTransfer
         }
 
         $message = 'Replayed ' . $replayed . ' GRN line(s) in this batch.';
+        if ($offset === 0 && $transferOutReplayed > 0) {
+            $message = 'Replayed ' . $transferOutReplayed . ' TRANSFER_OUT line(s) at source, then ' . $replayed . ' GRN line(s).';
+        }
         if ($failed > 0) {
             $message .= ' ' . $failed . ' failed.';
         }
         if ($isComplete) {
-            $message = 'GRN stock replay completed for transfer ' . ($transferOrderNo !== '' ? $transferOrderNo : ('#' . $transferId)) . '.';
+            $message = 'Transfer stock replay completed for ' . ($transferOrderNo !== '' ? $transferOrderNo : ('#' . $transferId))
+                . ' (source OUT + destination GRN IN).';
         }
 
         return [
@@ -2321,10 +2340,167 @@ class StockTransfer
             'processed_grns' => $processedGrns,
             'replayed' => $replayed,
             'failed' => $failed,
+            'transfer_out_replayed' => $transferOutReplayed,
             'errors' => $errors,
             'is_complete' => $isComplete,
             'next_offset' => $isComplete ? null : $processedGrns,
         ];
+    }
+
+    /** @param list<int> $grnIds */
+    private function clearTransferStockMovementsForReplay(string $transferOrderNo, int $sourceWarehouse, array $grnIds): void
+    {
+        $transferOrderNo = trim($transferOrderNo);
+        if ($transferOrderNo !== '' && $sourceWarehouse > 0) {
+            $stmt = $this->db->prepare(
+                "SELECT id FROM vp_stock_movements
+                 WHERE ref_type = 'TRANSFER_ORDER' AND ref_id = ? AND movement_type = 'TRANSFER_OUT' AND warehouse_id = ?
+                 ORDER BY id DESC"
+            );
+            if ($stmt) {
+                $stmt->bind_param('si', $transferOrderNo, $sourceWarehouse);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                while ($res && ($row = $res->fetch_assoc())) {
+                    $mid = (int) ($row['id'] ?? 0);
+                    if ($mid > 0) {
+                        $this->deleteMovementAndAdjustSubsequent($mid);
+                    }
+                }
+                $stmt->close();
+            }
+        }
+
+        foreach ($grnIds as $grnId) {
+            $grnId = (int) $grnId;
+            if ($grnId <= 0) {
+                continue;
+            }
+            $grn = $this->getTransferGrnById($grnId);
+            if (!$grn) {
+                continue;
+            }
+            $movementIds = $this->findStockMovementIdsForGrnRow($grnId, $transferOrderNo, $grn);
+            foreach (array_unique($movementIds) as $mid) {
+                if ((int) $mid > 0) {
+                    $this->deleteMovementAndAdjustSubsequent((int) $mid);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $transfer
+     * @param array<string, string> $affectedSkus
+     * @param array<int, int> $affectedProductIds
+     */
+    private function replayTransferOutMovements(array $transfer, int $userId, array &$affectedSkus, array &$affectedProductIds): int
+    {
+        $transferOrderNo = trim((string) ($transfer['transfer_order_no'] ?? ''));
+        $fromWarehouse = (int) ($transfer['from_warehouse'] ?? 0);
+        $toWarehouse = (int) ($transfer['to_warehouse'] ?? 0);
+        if ($transferOrderNo === '' || $fromWarehouse <= 0) {
+            return 0;
+        }
+
+        $replayed = 0;
+        foreach ((array) ($transfer['items'] ?? []) as $item) {
+            $transferQty = (int) ($item['transfer_qty'] ?? 0);
+            if ($transferQty <= 0) {
+                continue;
+            }
+
+            $productId = (int) ($item['product_id'] ?? 0);
+            $sku = trim((string) ($item['sku'] ?? ''));
+            $itemCode = trim((string) ($item['item_code'] ?? ''));
+            if ($sku === '' && $itemCode !== '') {
+                $sku = $itemCode;
+            }
+            if ($sku === '') {
+                continue;
+            }
+
+            $productFields = $this->loadProductFieldsForTransferLine($productId, $sku, $itemCode);
+            if ($productId <= 0) {
+                $productId = (int) ($productFields['id'] ?? 0);
+            }
+
+            $this->insertStockMovement(
+                $productId,
+                $sku,
+                $itemCode !== '' ? $itemCode : (string) ($productFields['item_code'] ?? ''),
+                $fromWarehouse,
+                (string) ($productFields['location'] ?? ''),
+                (string) ($productFields['size'] ?? ''),
+                (string) ($productFields['color'] ?? ''),
+                'TRANSFER_OUT',
+                $transferQty,
+                $userId > 0 ? $userId : (int) ($transfer['dispatch_by'] ?? 0),
+                'TRANSFER_ORDER',
+                'Transfer out to warehouse: ' . $toWarehouse,
+                $transferOrderNo,
+                false
+            );
+
+            $affectedSkus[$sku] = $sku;
+            if ($productId > 0) {
+                $affectedProductIds[$productId] = $productId;
+            }
+            $replayed++;
+        }
+
+        return $replayed;
+    }
+
+    /** @return array<string, mixed> */
+    private function loadProductFieldsForTransferLine(int $productId, string $sku, string $itemCode): array
+    {
+        if ($productId > 0) {
+            $stmt = $this->db->prepare(
+                'SELECT id, sku, item_code, size, color, location FROM vp_products WHERE id = ? LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('i', $productId);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (is_array($row)) {
+                    return $row;
+                }
+            }
+        }
+
+        if ($sku !== '') {
+            $stmt = $this->db->prepare(
+                'SELECT id, sku, item_code, size, color, location FROM vp_products WHERE sku = ? LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('s', $sku);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (is_array($row)) {
+                    return $row;
+                }
+            }
+        }
+
+        if ($itemCode !== '') {
+            $stmt = $this->db->prepare(
+                'SELECT id, sku, item_code, size, color, location FROM vp_products WHERE item_code = ? LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('s', $itemCode);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (is_array($row)) {
+                    return $row;
+                }
+            }
+        }
+
+        return [];
     }
 
     /** @return list<int> */
