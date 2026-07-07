@@ -1168,8 +1168,8 @@ class POSRegisterController
             exit;
         }
 
-        if (count($productIds) > 500) {
-            echo json_encode(['success' => false, 'message' => 'You can refresh up to 500 products at a time.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if (count($productIds) > 10) {
+            echo json_encode(['success' => false, 'message' => 'Maximum 10 products per batch request.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
