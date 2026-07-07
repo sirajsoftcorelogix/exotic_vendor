@@ -348,11 +348,47 @@ class StockTransfer
         } catch (Exception $e) {
             // Rollback on error
             $this->db->rollback();
-            return [
-                'success' => false,
-                'message' => 'Error: ' . $e->getMessage()
-            ];
+            return $this->buildInsufficientStockFailureResponse($e->getMessage());
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildInsufficientStockFailureResponse(string $errorMessage): array
+    {
+        $payload = [
+            'success' => false,
+            'message' => 'Error: ' . $errorMessage,
+        ];
+
+        if (preg_match(
+            '/Insufficient stock(?: for SKU ([^:]+))?: available ([0-9.]+), requested ([0-9.]+)/i',
+            $errorMessage,
+            $matches
+        )) {
+            $sku = trim((string) ($matches[1] ?? ''));
+            if ($sku === '' || strcasecmp($sku, 'unknown SKU') === 0) {
+                $sku = 'Unknown';
+            }
+            $availableQty = (int) round((float) ($matches[2] ?? 0));
+            $requestedQty = (int) round((float) ($matches[3] ?? 0));
+            $payload['error_type'] = 'insufficient_stock';
+            $payload['insufficient_items'] = [[
+                'sku' => $sku,
+                'item_code' => '',
+                'requested_qty' => $requestedQty,
+                'available_qty' => $availableQty,
+            ]];
+            $payload['details'] = [
+                $sku . ' req:' . $requestedQty . ' avail:' . $availableQty,
+            ];
+            $payload['message'] = $requestedQty > 0 && $availableQty <= 0
+                ? ('SKU ' . $sku . ' has 0 available stock at the source warehouse (requested ' . $requestedQty . ').')
+                : ('SKU ' . $sku . ' does not have enough stock at the source warehouse (requested ' . $requestedQty . ', available ' . $availableQty . ').');
+        }
+
+        return $payload;
     }
     
     /**
@@ -878,37 +914,10 @@ class StockTransfer
      */
     public function validateItemStock($sku, $warehouse_id, $transfer_qty, $existingTransferQty = 0)
     {
-        $stockQuery = "SELECT running_stock FROM vp_stock_movements 
-                      WHERE sku = ? AND warehouse_id = ? 
-                      ORDER BY id DESC LIMIT 1";
-        
-        $stmt = $this->db->prepare($stockQuery);
-        if (!$stmt) {
-            return ['valid' => false, 'available' => 0, 'message' => 'Database error: ' . $this->db->error];
-        }
-        
-        $stmt->bind_param('si', $sku, $warehouse_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $stockRow = $result->fetch_assoc();
-        $stmt->close();
-        
-        // If we don't have any movement record yet, fall back to current product stock.
-        $availableStock = 0;
-        if ($stockRow && isset($stockRow['running_stock'])) {
-            $availableStock = (int)$stockRow['running_stock'];
-        } else {
-            // If no stock movement exists, use product local stock as initial baseline.
-            $prodStmt = $this->db->prepare("SELECT local_stock FROM vp_products WHERE sku = ? LIMIT 1");
-            if ($prodStmt) {
-                $prodStmt->bind_param('s', $sku);
-                $prodStmt->execute();
-                $prodResult = $prodStmt->get_result();
-                $prodRow = $prodResult->fetch_assoc();
-                $prodStmt->close();
-                $availableStock = $prodRow ? (int)$prodRow['local_stock'] : 0;
-            }
-        }
+        require_once __DIR__ . '/StockMovement.php';
+
+        // Match TRANSFER_OUT ledger checks: warehouse running stock only (no local_stock fallback).
+        $availableStock = (int) StockMovement::getLastRunningStock($this->db, (string) $sku, (int) $warehouse_id);
 
         // When editing an existing transfer, the current transfer qty may already be deducted from stock.
         // Add it back when validating the updated requested quantity.

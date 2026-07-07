@@ -193,8 +193,9 @@ final class StockMovement
 
         $strict = !array_key_exists('strict_stock_check', $options) || !empty($options['strict_stock_check']);
         if (!$isInbound && $strict && $qty > $lastRunning + 1e-9) {
+            $skuLabel = trim($sku) !== '' ? trim($sku) : 'unknown SKU';
             throw new \RuntimeException(
-                'Insufficient stock: available ' . $lastRunning . ', requested ' . $qty
+                'Insufficient stock for SKU ' . $skuLabel . ': available ' . $lastRunning . ', requested ' . $qty
             );
         }
 
