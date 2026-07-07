@@ -1110,8 +1110,6 @@ class POSRegisterController
             exit;
         }
 
-        global $conn;
-
         $payload = json_decode((string) file_get_contents('php://input'), true);
         if (!is_array($payload)) {
             $payload = $_POST;
@@ -1123,6 +1121,93 @@ class POSRegisterController
             exit;
         }
 
+        echo json_encode(
+            $this->performStockReportRefresh($productId),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        exit;
+    }
+
+    /**
+     * Bulk stock report refresh for selected product ids on the current page.
+     */
+    public function stockReportRefreshBulk(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        @set_time_limit(0);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $rawIds = $payload['product_ids'] ?? [];
+        if (!is_array($rawIds)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid product list.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $productIds = [];
+        foreach ($rawIds as $rawId) {
+            $id = (int) $rawId;
+            if ($id > 0) {
+                $productIds[$id] = $id;
+            }
+        }
+        $productIds = array_values($productIds);
+
+        if ($productIds === []) {
+            echo json_encode(['success' => false, 'message' => 'Select at least one product.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if (count($productIds) > 500) {
+            echo json_encode(['success' => false, 'message' => 'You can refresh up to 500 products at a time.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $results = [];
+        $succeeded = 0;
+        $failed = 0;
+        foreach ($productIds as $productId) {
+            $result = $this->performStockReportRefresh((int) $productId);
+            $results[] = $result;
+            if (!empty($result['success'])) {
+                $succeeded++;
+            } else {
+                $failed++;
+            }
+        }
+
+        $total = count($productIds);
+        $message = 'Refreshed ' . $succeeded . ' of ' . $total . ' selected item(s).';
+        if ($failed > 0) {
+            $message .= ' ' . $failed . ' failed.';
+        }
+
+        echo json_encode([
+            'success' => $failed === 0,
+            'message' => $message,
+            'total' => $total,
+            'succeeded' => $succeeded,
+            'failed' => $failed,
+            'results' => $results,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /** @return array<string, mixed> */
+    private function performStockReportRefresh(int $productId): array
+    {
+        global $conn;
+
         require_once __DIR__ . '/../models/product/product.php';
         require_once __DIR__ . '/../models/product/StockMovement.php';
 
@@ -1131,8 +1216,11 @@ class POSRegisterController
 
         $product = $this->loadStockReportRefreshProduct($conn, $productId);
         if (!$product) {
-            echo json_encode(['success' => false, 'message' => 'Product not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+            return [
+                'success' => false,
+                'message' => 'Product not found.',
+                'product_id' => $productId,
+            ];
         }
 
         $sku = trim((string) ($product['sku'] ?? ''));
@@ -1141,8 +1229,12 @@ class POSRegisterController
 
         $defaultWarehouseId = $this->resolveDefaultWarehouseIdForStockRefresh($conn);
         if ($defaultWarehouseId <= 0) {
-            echo json_encode(['success' => false, 'message' => 'No active default warehouse found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+            return [
+                'success' => false,
+                'message' => 'No active default warehouse found.',
+                'product_id' => $productId,
+                'sku' => $sku,
+            ];
         }
         $defaultWarehouseName = $this->resolveWarehouseLabelForStockRefresh($conn, $defaultWarehouseId);
 
@@ -1152,7 +1244,6 @@ class POSRegisterController
         $movementId = 0;
         $vpStockUpserted = false;
 
-        // Steps 1–3: clear ledger rows and reset physical_stock before API fetch.
         $conn->begin_transaction();
         try {
             $this->ensureOpeningStockMovementEnum($conn);
@@ -1196,14 +1287,16 @@ class POSRegisterController
             $conn->commit();
         } catch (Throwable $e) {
             $conn->rollback();
-            echo json_encode([
+
+            return [
                 'success' => false,
                 'message' => 'Stock refresh failed while clearing ledger: ' . $e->getMessage(),
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+                'product_id' => $productId,
+                'sku' => $sku,
+                'label' => $label,
+            ];
         }
 
-        // Step 4: fetch latest local_stock from vendor API.
         $apiFetched = false;
         $apiMessage = '';
         if ($itemCode !== '') {
@@ -1211,20 +1304,21 @@ class POSRegisterController
             $apiFetched = !empty($apiResult['success']);
             $apiMessage = trim((string) ($apiResult['message'] ?? ''));
             if (!$apiFetched) {
-                echo json_encode([
+                return [
                     'success' => false,
                     'message' => $apiMessage !== '' ? $apiMessage : 'Failed to fetch latest local stock from API.',
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'label' => $label,
                     'deleted_movements' => $deletedMovements,
                     'deleted_vp_stock' => $deletedVpStock,
-                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
+                ];
             }
             $product = $this->loadStockReportRefreshProduct($conn, $productId) ?: $product;
         }
 
         $localStock = max(0, (int) ($product['local_stock'] ?? 0));
 
-        // Steps 5–7: seed opening stock, upsert vp_stock, sync physical_stock.
         $conn->begin_transaction();
         try {
             if ($localStock > 0 && $sku !== '') {
@@ -1261,11 +1355,12 @@ class POSRegisterController
                 $message .= ' ' . $apiMessage;
             }
 
-            echo json_encode([
+            return [
                 'success' => true,
                 'message' => $message,
                 'product_id' => $productId,
                 'sku' => $sku,
+                'label' => $label,
                 'local_stock' => $localStock,
                 'default_warehouse_id' => $defaultWarehouseId,
                 'default_warehouse_name' => $defaultWarehouseName,
@@ -1275,18 +1370,20 @@ class POSRegisterController
                 'movement_id' => $movementId,
                 'vp_stock_upserted' => $vpStockUpserted,
                 'api_fetched' => $apiFetched,
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+            ];
         } catch (Throwable $e) {
             $conn->rollback();
-            echo json_encode([
+
+            return [
                 'success' => false,
                 'message' => 'Stock refresh failed while reseeding stock: ' . $e->getMessage(),
+                'product_id' => $productId,
+                'sku' => $sku,
+                'label' => $label,
                 'deleted_movements' => $deletedMovements,
                 'deleted_vp_stock' => $deletedVpStock,
                 'api_fetched' => $apiFetched,
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+            ];
         }
     }
 
