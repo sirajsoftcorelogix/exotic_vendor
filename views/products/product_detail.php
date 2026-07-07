@@ -395,19 +395,6 @@
             <i class="fas fa-sync-alt text-[11px]" aria-hidden="true"></i>
             Refresh from API
           </button>
-          <?php if ($isAdminUser): ?>
-            <button
-              type="button"
-              id="refreshProductStockBtn"
-              data-product-id="<?php echo (int)($products['id'] ?? 0); ?>"
-              data-sku-label="<?php echo htmlspecialchars((string)($products['sku'] ?? $products['item_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
-              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-orange-200 bg-orange-50 text-orange-800 text-xs font-semibold hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none"
-              title="Clear ledger, reset physical stock, fetch local stock, and reseed default warehouse"
-              onclick="refreshProductStockLedger(this)">
-              <i class="fas fa-warehouse text-[11px]" aria-hidden="true"></i>
-              Refresh stock
-            </button>
-          <?php endif; ?>
           <button
             type="button"
             id="refreshProductApiDebugBtn"
@@ -883,9 +870,26 @@
   </div>
   <!-- STOCK TRANSACTIONS -->
   <div class="bg-white rounded-lg p-4 overflow-x-auto">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center justify-between mb-4 gap-3">
           <h3 class="font-semibold">Stock Transactions</h3>
-          <a target="_blank" href="<?php echo base_url('?page=products&action=inventory_ledger&sku=' . htmlspecialchars($products['sku'] ?? '')); ?>"><i title="View stock movement history for this product" class="fas fa-exchange-alt text-orange-500"></i></a>
+          <div class="flex items-center gap-2 shrink-0">
+            <?php if ($isAdminUser): ?>
+              <button
+                type="button"
+                id="refreshProductStockBtn"
+                data-product-id="<?php echo (int)($products['id'] ?? 0); ?>"
+                data-sku-label="<?php echo htmlspecialchars((string)($products['sku'] ?? $products['item_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-orange-200 bg-orange-50 text-orange-800 text-xs font-semibold hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none"
+                title="Clear ledger, reset physical stock, fetch local stock, and reseed default warehouse"
+                onclick="refreshProductStockLedger(this)">
+                <i class="fas fa-warehouse text-[11px]" aria-hidden="true"></i>
+                Refresh stock
+              </button>
+            <?php endif; ?>
+            <a target="_blank" rel="noopener noreferrer" href="<?php echo base_url('?page=products&action=inventory_ledger&sku=' . htmlspecialchars($products['sku'] ?? '')); ?>" class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100" title="View stock movement history for this product" aria-label="View stock movement history for this product">
+              <i class="fas fa-exchange-alt text-sm"></i>
+            </a>
+          </div>
         </div>
     
     
