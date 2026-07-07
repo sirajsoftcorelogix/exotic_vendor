@@ -877,6 +877,9 @@ switch ($page) {
             case 'stock_transfer_delete_line':
                 $controller->stock_transfer_delete_line();
                 break;
+            case 'stock_transfer_replay_grn':
+                $controller->stock_transfer_replay_grn();
+                break;
             case 'stock_transfer_items':
                 $controller->stock_transfer_items();
                 break;
