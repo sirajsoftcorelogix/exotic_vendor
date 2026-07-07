@@ -7390,7 +7390,20 @@ class ProductsController
     {
         $count = count($insufficient);
         if ($count === 1) {
-            return '1 product does not have enough stock at the source warehouse.';
+            $row = $insufficient[0];
+            $sku = trim((string)($row['sku'] ?? ''));
+            $itemCode = trim((string)($row['item_code'] ?? ''));
+            $label = $sku !== '' ? $sku : 'Unknown SKU';
+            if ($itemCode !== '') {
+                $label .= ' (' . $itemCode . ')';
+            }
+            $requested = (int)($row['requested_qty'] ?? 0);
+            $available = (int)($row['available_qty'] ?? 0);
+            if ($available <= 0 && $requested > 0) {
+                return 'SKU ' . $label . ' has 0 available stock at the source warehouse (requested ' . $requested . ').';
+            }
+
+            return 'SKU ' . $label . ' does not have enough stock (requested ' . $requested . ', available ' . $available . ').';
         }
         if ($count > 1) {
             return $count . ' products do not have enough stock at the source warehouse.';
