@@ -792,7 +792,7 @@ class DirectPurchaseController
             'warehouse_name' => $warehouseName,
             'putaway_items' => $lists['putaway'],
             'fulfillment_items' => $lists['fulfillment'],
-        ], 'Stock putaway & fulfillment');
+        ], 'Stock putaway & order fulfillment');
     }
 
     public function syncVendorQtyForItem()
