@@ -1520,7 +1520,7 @@ class POSRegisterController
         try {
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($csvPath);
             $sheet = $spreadsheet->getActiveSheet();
-            foreach (range('A', 'H') as $col) {
+            foreach (range('A', 'D') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
 
@@ -1624,13 +1624,9 @@ class POSRegisterController
 
         fputcsv($handle, [
             'SKU',
-            'Item Code',
-            'Title',
             'Category',
             'Location',
             'Stock Qty',
-            'Stock Status',
-            'Sell Price (INR)',
         ]);
         fclose($handle);
 
@@ -1651,13 +1647,6 @@ class POSRegisterController
 
         foreach ($rows as $row) {
             $qty = (int) ($row['stock_qty'] ?? 0);
-            if ($qty <= 0) {
-                $status = 'Out of stock';
-            } elseif ($qty <= 5) {
-                $status = 'Low stock';
-            } else {
-                $status = 'In stock';
-            }
 
             $categoryKey = (string) ($row['groupname'] ?? '');
             $rawCategory = (string) ($row['category_display'] ?? $categoryKey);
@@ -1666,13 +1655,9 @@ class POSRegisterController
 
             fputcsv($handle, [
                 (string) ($row['sku'] ?? ''),
-                (string) ($row['item_code'] ?? ''),
-                (string) ($row['title'] ?? ''),
                 $categoryLabel,
                 (string) ($row['location'] ?? ''),
                 $qty,
-                $status,
-                number_format((float) ($row['sell_price'] ?? 0), 2, '.', ''),
             ]);
         }
 
