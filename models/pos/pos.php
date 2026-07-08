@@ -391,8 +391,10 @@ class pos
         }
 
         // Latest movement row per product in selected warehouse using MAX(id) subquery.
+        // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
+        $joinType = ($search !== '') ? 'LEFT' : 'INNER';
         $join = "
-            INNER JOIN (
+            {$joinType} JOIN (
                 SELECT sm1.product_id, sm1.running_stock, sm1.location
                 FROM vp_stock_movements sm1
                 INNER JOIN (
@@ -427,11 +429,11 @@ class pos
         }
 
         if ($stockStatus === 'out') {
-            $where .= ' AND sm.running_stock = 0 ';
+            $where .= ' AND COALESCE(sm.running_stock, 0) = 0 ';
         } elseif ($stockStatus === 'low') {
             $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
         } elseif ($stockStatus === 'in') {
-            $where .= ' AND sm.running_stock > 0 ';
+            $where .= ' AND COALESCE(sm.running_stock, 0) > 0 ';
         }
 
         $sql = "
@@ -447,13 +449,13 @@ class pos
                 p.image,
                 ({$this->sqlPosIndiaSellBaseExpr('p')} * (1 + IFNULL(p.gst, 0) / 100)) AS sell_price,
                 p.cost_price,
-                sm.running_stock AS stock_qty,
+                COALESCE(sm.running_stock, 0) AS stock_qty,
                 sm.location AS location
             FROM vp_products p
             $join
             LEFT JOIN `category` cat ON cat.category = p.groupname
             $where
-            ORDER BY sm.running_stock ASC, p.title ASC
+            ORDER BY COALESCE(sm.running_stock, 0) ASC, p.title ASC
             LIMIT {$limit} OFFSET {$offset}
         ";
 
@@ -481,8 +483,9 @@ class pos
             return 0;
         }
 
+        $joinType = ($search !== '') ? 'LEFT' : 'INNER';
         $join = "
-            INNER JOIN (
+            {$joinType} JOIN (
                 SELECT sm1.product_id, sm1.running_stock
                 FROM vp_stock_movements sm1
                 INNER JOIN (
@@ -515,11 +518,11 @@ class pos
             $types .= 'sss';
         }
         if ($stockStatus === 'out') {
-            $where .= ' AND sm.running_stock = 0 ';
+            $where .= ' AND COALESCE(sm.running_stock, 0) = 0 ';
         } elseif ($stockStatus === 'low') {
             $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
         } elseif ($stockStatus === 'in') {
-            $where .= ' AND sm.running_stock > 0 ';
+            $where .= ' AND COALESCE(sm.running_stock, 0) > 0 ';
         }
 
         $sql = "
