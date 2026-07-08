@@ -4,6 +4,7 @@
 $bookCoverTypeOptions = [
     'Paperback',
     'Hardcover',
+    'Hardcover/Paperback',
     'Dust Jacket Hardcover',
     'Spiral Bound',
     'Wire-O Binding',
