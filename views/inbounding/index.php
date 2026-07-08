@@ -821,6 +821,8 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                     }
                                 }
 
+                                $stepsData = Inbounding::applyLiveImpliesLocalPublishSteps($stepsData);
+
                                 $lastActiveIndex = 0;
                                 foreach ($stepKeys as $index => $key) {
                                     if ($stepsData[$key]['active']) {
