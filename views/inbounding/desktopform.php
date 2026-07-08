@@ -1697,6 +1697,17 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         class="w-full min-h-[80px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y" 
                         name="snippet_description"><?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?></textarea>
                 </div>
+                <div class="mb-[15px]">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Long Description:</label>
+                    <textarea
+                        id="long_description_input"
+                        name="long_description"
+                        class="w-full min-h-[120px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
+                    ><?php
+                        $saved_long_description = (string) ($data['form2']['long_description'] ?? '');
+                        echo str_replace('</textarea', '&lt;/textarea', $saved_long_description);
+                    ?></textarea>
+                </div>
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
                     <div class="border border-[#ccc] rounded-[4px] bg-white h-[200px] flex flex-col">
@@ -2670,6 +2681,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const desktopInboundForm = document.getElementById('product_form');
         window.syncInboundDesktopFormBeforeSave = function () {
+            if (window.CKEDITOR && CKEDITOR.instances.long_description) {
+                CKEDITOR.instances.long_description.updateElement();
+            }
             if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
             if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
             bookLanguageFieldKeys.forEach(function (fieldKey) {
@@ -2688,6 +2702,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (desktopInboundForm) {
             desktopInboundForm.addEventListener('submit', function () {
                 window.syncInboundDesktopFormBeforeSave();
+            });
+        }
+
+        if (window.CKEDITOR && document.getElementById('long_description_input')) {
+            CKEDITOR.replace('long_description_input', {
+                toolbar: [
+                    { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline'] },
+                    { name: 'paragraph', items: ['NumberedList', 'BulletedList'] },
+                    { name: 'clipboard', items: ['Undo', 'Redo'] }
+                ],
+                removePlugins: 'image,uploadimage,uploadfile,filebrowser,flash,iframe,forms',
+                versionCheck: false,
+                height: 200
             });
         }
 
@@ -5393,6 +5420,9 @@ document.addEventListener('DOMContentLoaded', function() {
 function validateAndSubmit(actionType) {
     let errors = [];
     const form = document.getElementById('product_form');
+    if (typeof window.syncInboundDesktopFormBeforeSave === 'function') {
+        window.syncInboundDesktopFormBeforeSave();
+    }
     syncFormTomSelectValues(form);
     
     // Helper to get value cleanly
