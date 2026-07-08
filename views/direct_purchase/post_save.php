@@ -38,8 +38,8 @@ $dpStatusLabel = static function (string $status, int $backorderStatus): string 
     return 'Unfulfilled';
 };
 ?>
-<div class="w-full px-4 sm:px-6 py-8">
-    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
+<div class="w-full px-4 sm:px-6 py-8 dp-post-save-page">
+    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6 dp-page-chrome">
         <div class="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" aria-hidden="true"></div>
         <div class="relative px-5 py-7 sm:px-8 sm:py-9 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
             <div class="min-w-0 flex-1">
@@ -49,7 +49,7 @@ $dpStatusLabel = static function (string $status, int $backorderStatus): string 
                     </span>
                     <span>Purchasing · Direct purchase</span>
                 </div>
-                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Stock putaway &amp; fulfillment</h1>
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Stock putaway &amp; order fulfillment</h1>
                 <p class="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm sm:text-base text-gray-600 leading-relaxed">
                     <span>Invoice <span class="font-mono font-semibold text-gray-900"><?= htmlspecialchars((string) ($purchase['invoice_number'] ?? '')) ?></span></span>
                     <span class="text-gray-400" aria-hidden="true">·</span>
@@ -82,16 +82,32 @@ $dpStatusLabel = static function (string $status, int $backorderStatus): string 
         <?php $ft = ($flash['type'] ?? '') === 'success' ? 'success' : 'error';
         $ring = $ft === 'success' ? 'border-emerald-200/80 bg-emerald-50/90 text-emerald-900' : 'border-red-200/80 bg-red-50/90 text-red-900';
         ?>
-        <div class="mb-6 rounded-xl border px-4 py-3 text-sm font-medium shadow-sm <?= $ring ?>" role="status">
+        <div class="mb-6 rounded-xl border px-4 py-3 text-sm font-medium shadow-sm <?= $ring ?> dp-page-chrome" role="status">
             <?= htmlspecialchars((string) $flash['text']) ?>
         </div>
     <?php endif; ?>
 
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <section class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
-            <div class="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-emerald-50/60 via-white to-white">
-                <h2 class="text-lg font-bold text-gray-900">Stock putaway</h2>
-                <p class="mt-1 text-sm text-gray-600">Remaining qty to shelve in <span class="font-medium text-gray-800"><?= htmlspecialchars($warehouseName !== '' ? $warehouseName : 'warehouse') ?></span> after order allocation.</p>
+        <section id="dp-putaway-section" class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
+            <div class="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-emerald-50/60 via-white to-white flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div class="min-w-0">
+                    <h2 class="text-lg font-bold text-gray-900">Stock putaway</h2>
+                    <p class="mt-1 text-sm text-gray-600">Remaining qty to shelve in <span class="font-medium text-gray-800"><?= htmlspecialchars($warehouseName !== '' ? $warehouseName : 'warehouse') ?></span> after order allocation.</p>
+                </div>
+                <button type="button"
+                    class="dp-print-btn shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shadow-sm"
+                    data-dp-print-target="dp-putaway-section"
+                    title="Print stock putaway list" aria-label="Print stock putaway list">
+                    <i class="fas fa-print text-xs" aria-hidden="true"></i>
+                    Print
+                </button>
+            </div>
+            <div class="dp-print-only px-5 pt-4 text-xs text-gray-700 border-b border-gray-100">
+                <strong>Stock putaway</strong>
+                · Invoice <?= htmlspecialchars((string) ($purchase['invoice_number'] ?? '')) ?>
+                · <?= htmlspecialchars((string) ($purchase['vendor_name'] ?? '')) ?>
+                · Warehouse <?= htmlspecialchars($warehouseName !== '' ? $warehouseName : '—') ?>
+                · <?= htmlspecialchars($dpFormatDate($purchase['invoice_date'] ?? '')) ?>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-left text-sm">
@@ -147,10 +163,26 @@ $dpStatusLabel = static function (string $status, int $backorderStatus): string 
             </div>
         </section>
 
-        <section class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
-            <div class="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-sky-50/60 via-white to-white">
-                <h2 class="text-lg font-bold text-gray-900">Stock fulfillment</h2>
-                <p class="mt-1 text-sm text-gray-600">Pending orders matched from this purchase (pending, unfulfilled, partially shipped, backordered).</p>
+        <section id="dp-fulfillment-section" class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
+            <div class="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-sky-50/60 via-white to-white flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div class="min-w-0">
+                    <h2 class="text-lg font-bold text-gray-900">Order fulfillment</h2>
+                    <p class="mt-1 text-sm text-gray-600">Pending orders matched from this purchase (pending, unfulfilled, partially shipped, backordered).</p>
+                </div>
+                <button type="button"
+                    class="dp-print-btn shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shadow-sm"
+                    data-dp-print-target="dp-fulfillment-section"
+                    title="Print order fulfillment list" aria-label="Print order fulfillment list">
+                    <i class="fas fa-print text-xs" aria-hidden="true"></i>
+                    Print
+                </button>
+            </div>
+            <div class="dp-print-only px-5 pt-4 text-xs text-gray-700 border-b border-gray-100">
+                <strong>Order fulfillment</strong>
+                · Invoice <?= htmlspecialchars((string) ($purchase['invoice_number'] ?? '')) ?>
+                · <?= htmlspecialchars((string) ($purchase['vendor_name'] ?? '')) ?>
+                · Warehouse <?= htmlspecialchars($warehouseName !== '' ? $warehouseName : '—') ?>
+                · <?= htmlspecialchars($dpFormatDate($purchase['invoice_date'] ?? '')) ?>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-left text-sm">
@@ -231,3 +263,96 @@ $dpStatusLabel = static function (string $status, int $backorderStatus): string 
         </section>
     </div>
 </div>
+
+<style>
+    .dp-print-only {
+        display: none;
+    }
+
+    @media print {
+        html, body {
+            height: auto !important;
+            overflow: visible !important;
+            background: #fff !important;
+        }
+
+        body > .flex,
+        main,
+        .dp-post-save-page {
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        #sidebar,
+        header,
+        footer,
+        .dp-page-chrome,
+        .dp-print-btn,
+        .no-print {
+            display: none !important;
+        }
+
+        body.dp-print-putaway #dp-fulfillment-section,
+        body.dp-print-fulfillment #dp-putaway-section {
+            display: none !important;
+        }
+
+        .dp-post-save-page .grid {
+            display: block !important;
+        }
+
+        #dp-putaway-section,
+        #dp-fulfillment-section {
+            break-inside: avoid;
+            box-shadow: none !important;
+            border: 1px solid #d1d5db !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+        }
+
+        .dp-print-only {
+            display: block !important;
+        }
+
+        #dp-putaway-section .bg-gradient-to-r,
+        #dp-fulfillment-section .bg-gradient-to-r {
+            background: #fff !important;
+        }
+
+        #dp-fulfillment-section a {
+            color: inherit !important;
+            text-decoration: none !important;
+        }
+
+        img {
+            max-width: 48px;
+            max-height: 48px;
+        }
+    }
+</style>
+
+<script>
+(function () {
+    function dpCleanupPrintMode() {
+        document.body.classList.remove('dp-print-putaway', 'dp-print-fulfillment');
+    }
+
+    window.addEventListener('afterprint', dpCleanupPrintMode);
+
+    document.querySelectorAll('[data-dp-print-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var target = btn.getAttribute('data-dp-print-target');
+            dpCleanupPrintMode();
+            if (target === 'dp-putaway-section') {
+                document.body.classList.add('dp-print-putaway');
+            } else if (target === 'dp-fulfillment-section') {
+                document.body.classList.add('dp-print-fulfillment');
+            }
+            window.print();
+        });
+    });
+})();
+</script>
