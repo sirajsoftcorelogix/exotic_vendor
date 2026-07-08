@@ -2073,7 +2073,7 @@ class DirectPurchaseController
         $t2 = $terminal[2];
         $t3 = $terminal[3];
         $stmt->bind_param(
-            'ssssssssss',
+            'sssssssssss',
             $sku,
             $itemCode,
             $itemCode,
