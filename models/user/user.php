@@ -253,6 +253,42 @@ class User
         $result = $stmt->get_result();
         return $result->num_rows > 0;
     }
+
+    /**
+     * Validate a one-time OTP for an already logged-in user action (10 minute window).
+     */
+    public function verifyActionOtp(int $userId, string $otp, bool $consumeToken = false): bool
+    {
+        $userId = (int) $userId;
+        $otp = trim($otp);
+        if ($userId <= 0 || $otp === '') {
+            return false;
+        }
+
+        $sql = "SELECT id FROM vp_users
+            WHERE id = ?
+              AND remember_token = ?
+              AND remember_token IS NOT NULL
+              AND remember_token != ''
+              AND is_deleted = 0
+              AND updated_at >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+            LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('is', $userId, $otp);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $valid = $result && $result->num_rows > 0;
+        $stmt->close();
+
+        if ($valid && $consumeToken) {
+            $this->saveResetToken($userId, null);
+        }
+
+        return $valid;
+    }
     public function insert($data)
     {
         $name = trim((string) ($data['name'] ?? ''));

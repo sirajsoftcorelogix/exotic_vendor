@@ -1313,6 +1313,21 @@ switch ($page) {
             case 'stock-report-refresh-bulk':
                 $controller->stockReportRefreshBulk();
                 break;
+            case 'stock-report-send-otp':
+                $controller->stockReportSendOtp();
+                break;
+            case 'stock-report-verify-otp':
+                $controller->stockReportVerifyOtp();
+                break;
+            case 'stock-report-export-init':
+                $controller->stockReportExportInit();
+                break;
+            case 'stock-report-export-batch':
+                $controller->stockReportExportBatch();
+                break;
+            case 'stock-report-export-finish':
+                $controller->stockReportExportFinish();
+                break;
 
             case 'add-customer':
                 $controller->add_customer();

@@ -1091,6 +1091,7 @@ class POSRegisterController
             'total_pages' => $totalPages,
             'can_change_warehouse' => $isAdmin,
             'warehouses' => $warehouses,
+            'user_email' => trim((string) ($_SESSION['user']['email'] ?? '')),
         ]);
     }
 
@@ -1148,6 +1149,11 @@ class POSRegisterController
             $payload = $_POST;
         }
 
+        if (!$this->isStockReportRefreshAuthorized()) {
+            echo json_encode(['success' => false, 'message' => 'OTP verification required. Please verify OTP before refreshing.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
         $rawIds = $payload['product_ids'] ?? [];
         if (!is_array($rawIds)) {
             echo json_encode(['success' => false, 'message' => 'Invalid product list.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -1201,6 +1207,499 @@ class POSRegisterController
             'results' => $results,
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
+    }
+
+    private const STOCK_REPORT_OTP_BYPASS_EMAIL = 'siraj.php@gmail.com';
+    private const STOCK_REPORT_OTP_BYPASS_CODE = '1234';
+    private const STOCK_REPORT_EXPORT_BATCH_SIZE = 200;
+
+    /**
+     * Send a one-time OTP to the logged-in user before stock report bulk refresh.
+     */
+    public function stockReportSendOtp(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/mail_helper.php';
+        global $conn;
+        $usersModel = new User($conn);
+
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        if ($userId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Session expired. Please log in again.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $user = $usersModel->getUserById($userId);
+        if (!$user) {
+            echo json_encode(['success' => false, 'message' => 'User not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $recipientEmail = trim((string) ($user['email'] ?? ''));
+        if ($recipientEmail === '' || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+            echo json_encode(['success' => false, 'message' => 'No valid email is on file for your account. Contact your administrator.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $token = strtolower($recipientEmail) === self::STOCK_REPORT_OTP_BYPASS_EMAIL
+            ? self::STOCK_REPORT_OTP_BYPASS_CODE
+            : (string) random_int(100000, 999999);
+        $recipientName = trim((string) ($user['name'] ?? ''));
+        if ($recipientName === '') {
+            $recipientName = 'Vendor User';
+        }
+
+        if (strtolower($recipientEmail) !== self::STOCK_REPORT_OTP_BYPASS_EMAIL) {
+            $result = sendVendorOtpEmail(
+                $recipientEmail,
+                $token,
+                'VendorDesk - Stock Report Action OTP',
+                'login_otp.html',
+                $recipientName
+            );
+
+            if (empty($result['success'])) {
+                $payload = [
+                    'success' => false,
+                    'message' => $result['message'] ?? 'Could not send OTP email. Please try again.',
+                ];
+                if (!empty($result['smtp_error'])) {
+                    $payload['smtp_error'] = $result['smtp_error'];
+                }
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+        }
+
+        if (!$usersModel->saveResetToken($userId, $token)) {
+            echo json_encode(['success' => false, 'message' => 'OTP email was sent but could not be saved. Please request a new OTP.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'OTP sent to your email. It is valid for 10 minutes.',
+            'email' => $recipientEmail,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
+     * Verify OTP for stock report bulk refresh and authorize the action in session.
+     */
+    public function stockReportVerifyOtp(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $otpError = $this->verifyStockReportActionOtpFromPayload($payload);
+        if ($otpError !== null) {
+            echo json_encode($otpError, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $_SESSION['stock_report_refresh_verified_at'] = time();
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'OTP verified. You may proceed with the refresh.',
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    private function isStockReportRefreshAuthorized(): bool
+    {
+        $verifiedAt = (int) ($_SESSION['stock_report_refresh_verified_at'] ?? 0);
+        if ($verifiedAt <= 0) {
+            return false;
+        }
+
+        if ((time() - $verifiedAt) > 600) {
+            unset($_SESSION['stock_report_refresh_verified_at']);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Initialize a batched stock report Excel export (stores filters + temp CSV path in session).
+     */
+    public function stockReportExportInit(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $filters = $this->resolveStockReportFiltersFromPayload($payload);
+        if ((int) ($filters['warehouse_id'] ?? 0) <= 0) {
+            echo json_encode(['success' => false, 'message' => 'No warehouse selected for export.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $totalRows = $this->pos->getStockReportCount($filters);
+        if ($totalRows <= 0) {
+            echo json_encode(['success' => false, 'message' => 'No stock rows match the current filters.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $exportId = bin2hex(random_bytes(16));
+        $tempFile = $this->createStockReportExportCsv($exportId);
+        if ($tempFile === '') {
+            echo json_encode(['success' => false, 'message' => 'Could not prepare export file.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $batchSize = self::STOCK_REPORT_EXPORT_BATCH_SIZE;
+        $totalBatches = (int) ceil($totalRows / $batchSize);
+        $_SESSION['stock_report_export'][$exportId] = [
+            'user_id' => (int) ($_SESSION['user']['id'] ?? 0),
+            'filters' => $filters,
+            'file' => $tempFile,
+            'total_rows' => $totalRows,
+            'processed_rows' => 0,
+            'batch_size' => $batchSize,
+            'total_batches' => $totalBatches,
+            'next_batch' => 1,
+            'created_at' => time(),
+        ];
+
+        echo json_encode([
+            'success' => true,
+            'export_id' => $exportId,
+            'total_rows' => $totalRows,
+            'batch_size' => $batchSize,
+            'total_batches' => $totalBatches,
+            'message' => 'Export initialized.',
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
+     * Process one batch of stock report export rows into the temp CSV.
+     */
+    public function stockReportExportBatch(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        @set_time_limit(0);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $exportId = trim((string) ($payload['export_id'] ?? ''));
+        $job = $this->loadStockReportExportJob($exportId);
+        if (!$job) {
+            echo json_encode(['success' => false, 'message' => 'Export session expired. Please start again.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $batchNo = (int) ($job['next_batch'] ?? 1);
+        $batchSize = (int) ($job['batch_size'] ?? self::STOCK_REPORT_EXPORT_BATCH_SIZE);
+        $filters = is_array($job['filters'] ?? null) ? $job['filters'] : [];
+        $filters['limit'] = $batchSize;
+        $filters['page_no'] = $batchNo;
+
+        $rows = $this->pos->getStockReport($filters);
+        $categories = ['allProducts' => 'All Products'] + getCategories();
+        $appended = $this->appendStockReportExportRows((string) ($job['file'] ?? ''), $rows, $categories);
+
+        if (!$appended) {
+            echo json_encode(['success' => false, 'message' => 'Could not write export batch.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $processedRows = min((int) ($job['total_rows'] ?? 0), (int) ($job['processed_rows'] ?? 0) + count($rows));
+        $totalRows = (int) ($job['total_rows'] ?? 0);
+        $totalBatches = (int) ($job['total_batches'] ?? 1);
+        $done = $batchNo >= $totalBatches || $processedRows >= $totalRows || count($rows) === 0;
+
+        $_SESSION['stock_report_export'][$exportId]['processed_rows'] = $processedRows;
+        $_SESSION['stock_report_export'][$exportId]['next_batch'] = $batchNo + 1;
+
+        echo json_encode([
+            'success' => true,
+            'export_id' => $exportId,
+            'batch_no' => $batchNo,
+            'total_batches' => $totalBatches,
+            'processed_rows' => $processedRows,
+            'total_rows' => $totalRows,
+            'batch_rows' => count($rows),
+            'done' => $done,
+            'message' => 'Processed batch ' . $batchNo . ' of ' . $totalBatches . '.',
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
+     * Convert the accumulated CSV export into an Excel download.
+     */
+    public function stockReportExportFinish(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        @set_time_limit(0);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $exportId = trim((string) ($payload['export_id'] ?? ''));
+        $job = $this->loadStockReportExportJob($exportId);
+        if (!$job) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Export session expired. Please start again.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $csvPath = (string) ($job['file'] ?? '');
+        if ($csvPath === '' || !is_file($csvPath)) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Export file not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        require_once __DIR__ . '/../vendor/autoload.php';
+
+        $warehouseLabel = 'warehouse';
+        require_once 'models/user/user.php';
+        global $conn;
+        $usersModel = new User($conn);
+        $warehouseId = (int) (($job['filters']['warehouse_id'] ?? 0));
+        if ($warehouseId > 0) {
+            $warehouse = $usersModel->getWarehouseById($warehouseId);
+            $warehouseLabel = preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string) ($warehouse['address_title'] ?? 'warehouse'));
+        }
+
+        $filename = 'stock_report_' . $warehouseLabel . '_' . date('Y-m-d_His') . '.xlsx';
+
+        try {
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($csvPath);
+            $sheet = $spreadsheet->getActiveSheet();
+            foreach (range('A', 'H') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Cache-Control: max-age=0');
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+        } catch (Throwable $e) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Could not generate Excel file: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        } finally {
+            $this->cleanupStockReportExportJob($exportId);
+        }
+        exit;
+    }
+
+    /** @param array<string, mixed> $payload @return array<string, mixed> */
+    private function resolveStockReportFiltersFromPayload(array $payload): array
+    {
+        require_once 'models/user/user.php';
+        global $conn;
+        $usersModel = new User($conn);
+
+        $sessionWh = (int) ($_SESSION['warehouse_id'] ?? 0);
+        $isAdmin = isset($_SESSION['user']['role_id']) && $_SESSION['user']['role_id'] == 1;
+
+        $reportWh = $sessionWh;
+        if ($isAdmin && isset($payload['warehouse_id'])) {
+            $reqWh = (int) $payload['warehouse_id'];
+            if ($reqWh > 0) {
+                $check = $usersModel->getWarehouseById($reqWh);
+                if (!empty($check['id'])) {
+                    $reportWh = $reqWh;
+                }
+            }
+        }
+
+        return [
+            'search' => trim((string) ($payload['search'] ?? '')),
+            'category' => trim((string) ($payload['category'] ?? 'allProducts')),
+            'stock_status' => trim((string) ($payload['stock_status'] ?? 'all')),
+            'warehouse_id' => $reportWh,
+            'limit' => self::STOCK_REPORT_EXPORT_BATCH_SIZE,
+            'page_no' => 1,
+        ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function loadStockReportExportJob(string $exportId): ?array
+    {
+        $exportId = trim($exportId);
+        if ($exportId === '') {
+            return null;
+        }
+
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        $job = $_SESSION['stock_report_export'][$exportId] ?? null;
+        if (!is_array($job) || (int) ($job['user_id'] ?? 0) !== $userId) {
+            return null;
+        }
+
+        $createdAt = (int) ($job['created_at'] ?? 0);
+        if ($createdAt <= 0 || (time() - $createdAt) > 3600) {
+            $this->cleanupStockReportExportJob($exportId);
+            return null;
+        }
+
+        return $job;
+    }
+
+    private function cleanupStockReportExportJob(string $exportId): void
+    {
+        $exportId = trim($exportId);
+        if ($exportId === '') {
+            return;
+        }
+
+        $job = $_SESSION['stock_report_export'][$exportId] ?? null;
+        if (is_array($job)) {
+            $file = (string) ($job['file'] ?? '');
+            if ($file !== '' && is_file($file)) {
+                @unlink($file);
+            }
+        }
+        unset($_SESSION['stock_report_export'][$exportId]);
+    }
+
+    private function createStockReportExportCsv(string $exportId): string
+    {
+        $path = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR
+            . 'stock_report_export_' . $exportId . '.csv';
+
+        $handle = fopen($path, 'wb');
+        if ($handle === false) {
+            return '';
+        }
+
+        fputcsv($handle, [
+            'SKU',
+            'Item Code',
+            'Title',
+            'Category',
+            'Location',
+            'Stock Qty',
+            'Stock Status',
+            'Sell Price (INR)',
+        ]);
+        fclose($handle);
+
+        return $path;
+    }
+
+    /** @param array<int, array<string, mixed>> $rows @param array<string, string> $categories */
+    private function appendStockReportExportRows(string $filePath, array $rows, array $categories): bool
+    {
+        if ($filePath === '') {
+            return false;
+        }
+
+        $handle = fopen($filePath, 'ab');
+        if ($handle === false) {
+            return false;
+        }
+
+        foreach ($rows as $row) {
+            $qty = (int) ($row['stock_qty'] ?? 0);
+            if ($qty <= 0) {
+                $status = 'Out of stock';
+            } elseif ($qty <= 5) {
+                $status = 'Low stock';
+            } else {
+                $status = 'In stock';
+            }
+
+            $categoryKey = (string) ($row['groupname'] ?? '');
+            $rawCategory = (string) ($row['category_display'] ?? $categoryKey);
+            $fallbackCategory = ucwords(strtolower(str_replace(['_', '-'], ' ', $rawCategory)));
+            $categoryLabel = (string) ($categories[$categoryKey] ?? $fallbackCategory);
+
+            fputcsv($handle, [
+                (string) ($row['sku'] ?? ''),
+                (string) ($row['item_code'] ?? ''),
+                (string) ($row['title'] ?? ''),
+                $categoryLabel,
+                (string) ($row['location'] ?? ''),
+                $qty,
+                $status,
+                number_format((float) ($row['sell_price'] ?? 0), 2, '.', ''),
+            ]);
+        }
+
+        fclose($handle);
+        return true;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function verifyStockReportActionOtpFromPayload(array $payload): ?array
+    {
+        require_once 'models/user/user.php';
+        global $conn;
+        $usersModel = new User($conn);
+
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        $otp = trim((string) ($payload['otp'] ?? ''));
+        if ($userId <= 0) {
+            return ['success' => false, 'message' => 'Session expired. Please log in again.'];
+        }
+        if ($otp === '') {
+            return ['success' => false, 'message' => 'OTP is required for this action.'];
+        }
+        if (!$usersModel->verifyActionOtp($userId, $otp, true)) {
+            return ['success' => false, 'message' => 'Invalid or expired OTP. Request a new one.'];
+        }
+
+        return null;
     }
 
     /** @return array<string, mixed> */

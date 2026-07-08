@@ -144,22 +144,36 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   </details>
 
   <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
-    <?php if (!empty($rows)): ?>
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50/80 px-5 py-3">
-        <p class="text-sm text-gray-600">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50/80 px-5 py-3">
+      <p class="text-sm text-gray-600">
+        <?php if (!empty($rows)): ?>
           <span id="stockReportSelectedCount" class="font-semibold text-gray-900 tabular-nums">0</span>
           <span> selected on this page</span>
-        </p>
+        <?php else: ?>
+          <span>Stock list</span>
+        <?php endif; ?>
+      </p>
+      <div class="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          id="stockReportBulkRefreshBtn"
-          class="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 transition disabled:opacity-50 disabled:pointer-events-none"
-          disabled>
-          <i class="fas fa-sync-alt text-xs" aria-hidden="true"></i>
-          <span>Refresh selected</span>
+          id="stockReportExportBtn"
+          class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 transition disabled:opacity-50 disabled:pointer-events-none"
+          <?= empty($totalRows) ? 'disabled' : '' ?>>
+          <i class="fas fa-file-excel text-xs" aria-hidden="true"></i>
+          <span>Export to Excel</span>
         </button>
+        <?php if (!empty($rows)): ?>
+          <button
+            type="button"
+            id="stockReportBulkRefreshBtn"
+            class="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 transition disabled:opacity-50 disabled:pointer-events-none"
+            disabled>
+            <i class="fas fa-sync-alt text-xs" aria-hidden="true"></i>
+            <span>Refresh selected</span>
+          </button>
+        <?php endif; ?>
       </div>
-    <?php endif; ?>
+    </div>
     <div class="overflow-x-auto">
       <table class="min-w-full text-left">
         <thead class="sticky top-0 z-10">
@@ -181,13 +195,12 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
             <th class="px-5 py-3.5 whitespace-nowrap">Stock</th>
             <th class="px-5 py-3.5 whitespace-nowrap text-right">Sell price</th>
             <th class="px-5 py-3.5 min-w-[15rem]">Title</th>
-            <th class="px-5 py-3.5 whitespace-nowrap text-right">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           <?php if (empty($rows)): ?>
             <tr>
-              <td colspan="9" class="px-5 py-16 text-center">
+              <td colspan="8" class="px-5 py-16 text-center">
                 <div class="mx-auto flex max-w-sm flex-col items-center">
                   <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                     <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -259,17 +272,6 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                 </td>
                 <td class="px-5 py-4 align-top text-sm text-right font-semibold text-gray-900 tabular-nums">₹<?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
                 <td class="px-5 py-4 align-top text-sm text-gray-800 max-w-[15rem] break-words leading-snug"><?= htmlspecialchars($r['title'] ?? '') ?></td>
-                <td class="px-5 py-4 align-top text-right">
-                  <button
-                    type="button"
-                    class="stock-report-refresh-btn inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition disabled:opacity-50 disabled:pointer-events-none"
-                    data-product-id="<?= $productId ?>"
-                    data-sku-label="<?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>"
-                    title="Clear ledger, reset physical stock, fetch local stock, and reseed default warehouse">
-                    <i class="fas fa-sync-alt text-[10px]" aria-hidden="true"></i>
-                    <span>Refresh</span>
-                  </button>
-                </td>
               </tr>
             <?php endforeach; ?>
           <?php endif; ?>
@@ -308,6 +310,101 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       </nav>
     </div>
   <?php endif; ?>
+</div>
+
+<!-- OTP verification modal (bulk refresh) -->
+<div
+  id="stockReportOtpModal"
+  class="fixed inset-0 hidden z-[70] items-center justify-center bg-black/50 p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="stockReportOtpTitle">
+  <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
+    <h3 id="stockReportOtpTitle" class="text-lg font-semibold text-gray-900">Verify OTP to refresh stock</h3>
+    <p class="mt-2 text-sm text-gray-600">
+      For security, confirm this action with a one-time password sent to your registered email.
+    </p>
+
+    <div id="stockReportOtpError" class="hidden mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></div>
+    <div id="stockReportOtpSuccess" class="hidden mt-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700"></div>
+
+    <div class="mt-5">
+      <label for="stockReportOtpEmail" class="block text-xs font-semibold text-gray-600 mb-1">Email</label>
+      <input
+        type="email"
+        id="stockReportOtpEmail"
+        value="<?= htmlspecialchars($user_email ?? '', ENT_QUOTES, 'UTF-8') ?>"
+        readonly
+        class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-700 bg-gray-50">
+    </div>
+
+    <div id="stockReportOtpInputWrap" class="mt-4 hidden">
+      <label for="stockReportOtpInput" class="block text-xs font-semibold text-gray-600 mb-1">Enter OTP</label>
+      <input
+        type="text"
+        id="stockReportOtpInput"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        placeholder="Enter OTP"
+        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400">
+      <p id="stockReportOtpTimerWrap" class="hidden mt-2 text-xs text-gray-500 text-center">
+        Resend OTP in <span id="stockReportOtpTimer">10:00</span>
+      </p>
+    </div>
+
+    <div class="mt-6 flex flex-wrap items-center justify-end gap-2">
+      <button
+        type="button"
+        id="stockReportOtpCancelBtn"
+        class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        Cancel
+      </button>
+      <button
+        type="button"
+        id="stockReportOtpSendBtn"
+        class="inline-flex items-center rounded-lg bg-[#D06706] px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
+        Send OTP
+      </button>
+      <button
+        type="button"
+        id="stockReportOtpConfirmBtn"
+        class="hidden inline-flex items-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
+        Confirm &amp; refresh
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Export progress modal -->
+<div
+  id="stockReportExportProgressModal"
+  class="fixed inset-0 hidden z-[60] items-center justify-center bg-black/50 p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="stockReportExportProgressTitle">
+  <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
+    <div class="flex items-start gap-3">
+      <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+        <i id="stockReportExportProgressIcon" class="fas fa-file-excel fa-spin text-sm" aria-hidden="true"></i>
+      </span>
+      <div class="min-w-0 flex-1">
+        <h3 id="stockReportExportProgressTitle" class="text-base font-semibold text-gray-900">Exporting stock report</h3>
+        <p id="stockReportExportProgressText" class="mt-1 text-sm text-gray-600">Preparing export…</p>
+      </div>
+    </div>
+    <div class="mt-5">
+      <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+        <div id="stockReportExportProgressBar" class="h-full rounded-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+        <span id="stockReportExportProgressBatch">Batch 0 of 0</span>
+        <span id="stockReportExportProgressStats">Rows: 0 / 0</span>
+      </div>
+      <p id="stockReportExportProgressHint" class="mt-3 text-xs text-gray-500">
+        Processing in small batches to avoid timeouts. Please keep this page open.
+      </p>
+    </div>
+  </div>
 </div>
 
 <!-- Bulk refresh progress modal -->
@@ -369,6 +466,17 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     'This will delete vp_stock_movements and vp_stock rows, reset physical_stock to 0, '
     + 'fetch the latest local stock from the API, then reseed opening stock in the default warehouse.';
   const STOCK_REPORT_BATCH_SIZE = 5;
+  const STOCK_REPORT_FILTERS = <?= json_encode([
+    'search' => $filters['search'] ?? '',
+    'category' => $filters['category'] ?? 'allProducts',
+    'stock_status' => $filters['stock_status'] ?? 'all',
+    'warehouse_id' => (int)($filters['warehouse_id'] ?? 0),
+  ], JSON_UNESCAPED_UNICODE) ?>;
+  const STOCK_REPORT_TOTAL_ROWS = <?= (int)($total_rows ?? 0) ?>;
+
+  let stockReportOtpTimer = null;
+  let stockReportOtpRemaining = 0;
+  let stockReportPendingRefreshIds = [];
 
   function chunkStockReportIds(ids, size) {
     const chunks = [];
@@ -380,15 +488,142 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
 
   function setStockReportBulkUiLocked(locked) {
     const bulkBtn = document.getElementById('stockReportBulkRefreshBtn');
+    const exportBtn = document.getElementById('stockReportExportBtn');
     const selectAll = document.getElementById('stockReportSelectAll');
     document.querySelectorAll('.stock-report-select-row').forEach((box) => {
       box.disabled = locked;
     });
-    document.querySelectorAll('.stock-report-refresh-btn').forEach((btn) => {
-      btn.disabled = locked;
-    });
     if (selectAll) selectAll.disabled = locked;
     if (bulkBtn) bulkBtn.disabled = locked || getSelectedStockReportRows().length === 0;
+    if (exportBtn) exportBtn.disabled = locked || STOCK_REPORT_TOTAL_ROWS <= 0;
+  }
+
+  function showStockReportOtpModal() {
+    const modal = document.getElementById('stockReportOtpModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function hideStockReportOtpModal() {
+    const modal = document.getElementById('stockReportOtpModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function resetStockReportOtpModal() {
+    const errorEl = document.getElementById('stockReportOtpError');
+    const successEl = document.getElementById('stockReportOtpSuccess');
+    const otpWrap = document.getElementById('stockReportOtpInputWrap');
+    const otpInput = document.getElementById('stockReportOtpInput');
+    const sendBtn = document.getElementById('stockReportOtpSendBtn');
+    const confirmBtn = document.getElementById('stockReportOtpConfirmBtn');
+    const timerWrap = document.getElementById('stockReportOtpTimerWrap');
+
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.classList.add('hidden');
+    }
+    if (successEl) {
+      successEl.textContent = '';
+      successEl.classList.add('hidden');
+    }
+    if (otpInput) otpInput.value = '';
+    if (otpWrap) otpWrap.classList.add('hidden');
+    if (sendBtn) {
+      sendBtn.classList.remove('hidden');
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send OTP';
+    }
+    if (confirmBtn) confirmBtn.classList.add('hidden');
+    if (timerWrap) timerWrap.classList.add('hidden');
+    if (stockReportOtpTimer) {
+      clearInterval(stockReportOtpTimer);
+      stockReportOtpTimer = null;
+    }
+  }
+
+  function showStockReportOtpMessage(type, message) {
+    const errorEl = document.getElementById('stockReportOtpError');
+    const successEl = document.getElementById('stockReportOtpSuccess');
+    if (type === 'success') {
+      if (successEl) {
+        successEl.textContent = message;
+        successEl.classList.remove('hidden');
+      }
+      if (errorEl) errorEl.classList.add('hidden');
+    } else {
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+      }
+      if (successEl) successEl.classList.add('hidden');
+    }
+  }
+
+  function startStockReportOtpTimer() {
+    stockReportOtpRemaining = 600;
+    const timerEl = document.getElementById('stockReportOtpTimer');
+    const timerWrap = document.getElementById('stockReportOtpTimerWrap');
+    const sendBtn = document.getElementById('stockReportOtpSendBtn');
+    const confirmBtn = document.getElementById('stockReportOtpConfirmBtn');
+    const otpWrap = document.getElementById('stockReportOtpInputWrap');
+
+    if (otpWrap) otpWrap.classList.remove('hidden');
+    if (confirmBtn) confirmBtn.classList.remove('hidden');
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.classList.add('hidden');
+    }
+    if (timerWrap) timerWrap.classList.remove('hidden');
+
+    stockReportOtpTimer = setInterval(() => {
+      stockReportOtpRemaining--;
+      const minutes = Math.floor(stockReportOtpRemaining / 60);
+      const seconds = stockReportOtpRemaining % 60;
+      if (timerEl) {
+        timerEl.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+      }
+      if (stockReportOtpRemaining <= 0) {
+        clearInterval(stockReportOtpTimer);
+        stockReportOtpTimer = null;
+        if (timerWrap) timerWrap.classList.add('hidden');
+        if (sendBtn) {
+          sendBtn.disabled = false;
+          sendBtn.classList.remove('hidden');
+          sendBtn.textContent = 'Resend OTP';
+        }
+      }
+    }, 1000);
+  }
+
+  async function sendStockReportActionOtp() {
+    const sendBtn = document.getElementById('stockReportOtpSendBtn');
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending…';
+    }
+
+    try {
+      const res = await fetch('index.php?page=pos_register&action=stock-report-send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+        body: '',
+      });
+      const data = await res.json();
+      if (!data || !data.success) {
+        throw new Error((data && (data.smtp_error || data.message)) ? (data.smtp_error || data.message) : 'Could not send OTP.');
+      }
+      showStockReportOtpMessage('success', data.message || 'OTP sent to your email.');
+      startStockReportOtpTimer();
+    } catch (err) {
+      showStockReportOtpMessage('error', err && err.message ? err.message : 'Failed to send OTP.');
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.textContent = sendBtn.textContent === 'Sending…' ? 'Send OTP' : sendBtn.textContent;
+      }
+    }
   }
 
   function showStockReportBulkProgressModal() {
@@ -567,22 +802,239 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     }
   }
 
-  async function refreshStockReportProduct(productId, skuLabel) {
-    const confirmed = window.confirm(
-      'Refresh stock for ' + skuLabel + '?\n\n' + STOCK_REPORT_REFRESH_CONFIRM
-    );
-    if (!confirmed) return { cancelled: true };
+  function showStockReportExportProgressModal() {
+    const modal = document.getElementById('stockReportExportProgressModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
 
-    const res = await fetch('index.php?page=pos_register&action=stock-report-refresh', {
+  function hideStockReportExportProgressModal() {
+    const modal = document.getElementById('stockReportExportProgressModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function updateStockReportExportProgress(state) {
+    const total = Math.max(0, Number(state.total || 0));
+    const processed = Math.max(0, Number(state.processed || 0));
+    const batchNo = Math.max(0, Number(state.batchNo || 0));
+    const batchTotal = Math.max(0, Number(state.batchTotal || 0));
+    const percent = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+
+    const textEl = document.getElementById('stockReportExportProgressText');
+    const barEl = document.getElementById('stockReportExportProgressBar');
+    const batchEl = document.getElementById('stockReportExportProgressBatch');
+    const statsEl = document.getElementById('stockReportExportProgressStats');
+    const hintEl = document.getElementById('stockReportExportProgressHint');
+    const iconEl = document.getElementById('stockReportExportProgressIcon');
+
+    if (textEl) {
+      textEl.textContent = state.done
+        ? 'Export complete. Download starting…'
+        : ('Prepared ' + processed + ' of ' + total + ' row(s)');
+    }
+    if (barEl) barEl.style.width = percent + '%';
+    if (batchEl) {
+      batchEl.textContent = batchTotal > 0
+        ? ('Batch ' + batchNo + ' of ' + batchTotal)
+        : 'Preparing export…';
+    }
+    if (statsEl) statsEl.textContent = 'Rows: ' + processed + ' / ' + total;
+    if (hintEl && state.hint) hintEl.textContent = state.hint;
+    if (iconEl) {
+      iconEl.classList.toggle('fa-spin', !!state.spinning);
+      iconEl.classList.toggle('fa-check', !state.spinning && state.done);
+      iconEl.classList.toggle('fa-file-excel', !!state.spinning || !state.done);
+    }
+  }
+
+  async function runStockReportExportBatched() {
+    showStockReportExportProgressModal();
+    setStockReportBulkUiLocked(true);
+
+    const exportBtn = document.getElementById('stockReportExportBtn');
+    const exportBtnLabel = exportBtn ? exportBtn.querySelector('span') : null;
+    if (exportBtnLabel) exportBtnLabel.textContent = 'Exporting…';
+
+    updateStockReportExportProgress({
+      total: STOCK_REPORT_TOTAL_ROWS,
+      processed: 0,
+      batchNo: 0,
+      batchTotal: 0,
+      spinning: true,
+      done: false,
+      hint: 'Initializing export with current filters…',
+    });
+
+    try {
+      const initRes = await fetch('index.php?page=pos_register&action=stock-report-export-init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(STOCK_REPORT_FILTERS),
+      });
+      const initData = await initRes.json();
+      if (!initData || !initData.success) {
+        throw new Error((initData && initData.message) ? initData.message : 'Could not start export.');
+      }
+
+      const exportId = initData.export_id;
+      const totalRows = Number(initData.total_rows || 0);
+      const totalBatches = Number(initData.total_batches || 0);
+      let processedRows = 0;
+      let batchNo = 0;
+      let done = false;
+
+      while (!done) {
+        batchNo++;
+        updateStockReportExportProgress({
+          total: totalRows,
+          processed: processedRows,
+          batchNo,
+          batchTotal: totalBatches,
+          spinning: true,
+          done: false,
+          hint: 'Fetching batch ' + batchNo + ' of ' + totalBatches + '…',
+        });
+
+        const batchRes = await fetch('index.php?page=pos_register&action=stock-report-export-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ export_id: exportId }),
+        });
+        const batchData = await batchRes.json();
+        if (!batchData || !batchData.success) {
+          throw new Error((batchData && batchData.message) ? batchData.message : 'Export batch failed.');
+        }
+
+        processedRows = Number(batchData.processed_rows || processedRows);
+        done = !!batchData.done;
+
+        updateStockReportExportProgress({
+          total: totalRows,
+          processed: processedRows,
+          batchNo: Number(batchData.batch_no || batchNo),
+          batchTotal: totalBatches,
+          spinning: !done,
+          done,
+          hint: done ? 'Building Excel file…' : ('Completed batch ' + batchNo + '. Starting next batch…'),
+        });
+      }
+
+      updateStockReportExportProgress({
+        total: totalRows,
+        processed: processedRows,
+        batchNo: totalBatches,
+        batchTotal: totalBatches,
+        spinning: false,
+        done: true,
+        hint: 'Download starting…',
+      });
+
+      const finishRes = await fetch('index.php?page=pos_register&action=stock-report-export-finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json' },
+        body: JSON.stringify({ export_id: exportId }),
+      });
+
+      const contentType = finishRes.headers.get('Content-Type') || '';
+      if (!finishRes.ok || contentType.indexOf('application/json') >= 0) {
+        let errMsg = 'Could not download Excel file.';
+        try {
+          const errData = await finishRes.json();
+          if (errData && errData.message) errMsg = errData.message;
+        } catch (parseErr) {
+          /* ignore */
+        }
+        throw new Error(errMsg);
+      }
+
+      const blob = await finishRes.blob();
+      const disposition = finishRes.headers.get('Content-Disposition') || '';
+      let filename = 'stock_report.xlsx';
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      if (match && match[1]) filename = match[1];
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      window.setTimeout(() => {
+        hideStockReportExportProgressModal();
+        setStockReportBulkUiLocked(false);
+        if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
+      }, 800);
+    } catch (err) {
+      hideStockReportExportProgressModal();
+      window.alert(err && err.message ? err.message : 'Export failed.');
+      setStockReportBulkUiLocked(false);
+      if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
+    }
+  }
+
+  async function verifyStockReportActionOtp(otp) {
+    const res = await fetch('index.php?page=pos_register&action=stock-report-verify-otp', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_id: productId }),
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ otp: otp }),
     });
     const data = await res.json();
     if (!data || !data.success) {
-      throw new Error((data && data.message) ? data.message : 'Refresh failed.');
+      throw new Error((data && data.message) ? data.message : 'Invalid or expired OTP.');
     }
     return data;
+  }
+
+  async function startStockReportBulkRefreshWithOtp(productIds) {
+    const bulkBtn = document.getElementById('stockReportBulkRefreshBtn');
+    const btnLabel = bulkBtn ? bulkBtn.querySelector('span') : null;
+    const btnIcon = bulkBtn ? bulkBtn.querySelector('i') : null;
+
+    if (bulkBtn) bulkBtn.disabled = true;
+    if (btnIcon) btnIcon.classList.add('fa-spin');
+    if (btnLabel) btnLabel.textContent = 'Refreshing…';
+
+    try {
+      const summary = await runStockReportBulkRefreshBatched(productIds);
+
+      updateStockReportBulkProgress({
+        total: summary.total,
+        completed: summary.total,
+        succeeded: summary.succeeded,
+        failed: summary.failed,
+        batchNo: Math.ceil(summary.total / STOCK_REPORT_BATCH_SIZE),
+        batchTotal: Math.ceil(summary.total / STOCK_REPORT_BATCH_SIZE),
+        spinning: false,
+        done: true,
+        hint: summary.failed > 0 ? 'Completed with some failures. Review details below.' : 'Completed successfully. Reloading…',
+      });
+
+      if (summary.failed > 0 && Array.isArray(summary.results)) {
+        const failedLines = summary.results
+          .filter((row) => row && !row.success)
+          .slice(0, 8)
+          .map((row) => (row.label || row.sku || ('#' + row.product_id)) + ': ' + (row.message || 'Failed'))
+          .join('\n');
+        const extra = summary.failed > 8 ? '\n…and ' + (summary.failed - 8) + ' more.' : '';
+        window.alert((summary.message || 'Bulk refresh completed with errors.') + '\n\n' + failedLines + extra);
+      }
+
+      window.setTimeout(() => window.location.reload(), summary.failed > 0 ? 1200 : 600);
+    } catch (err) {
+      hideStockReportBulkProgressModal();
+      window.alert(err && err.message ? err.message : 'Bulk refresh failed.');
+      setStockReportBulkUiLocked(false);
+      if (bulkBtn) bulkBtn.disabled = false;
+      if (btnIcon) btnIcon.classList.remove('fa-spin');
+      if (btnLabel) btnLabel.textContent = 'Refresh selected';
+      updateStockReportSelectionUi();
+    }
   }
 
   function openStockReportImage(imgEl) {
@@ -631,7 +1083,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
 
     const bulkBtn = document.getElementById('stockReportBulkRefreshBtn');
     if (bulkBtn) {
-      bulkBtn.addEventListener('click', async () => {
+      bulkBtn.addEventListener('click', () => {
         const selected = getSelectedStockReportRows();
         if (selected.length === 0) return;
 
@@ -649,81 +1101,72 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         );
         if (!confirmed) return;
 
-        const productIds = selected.map((box) => parseInt(box.value || '0', 10)).filter((id) => id > 0);
-        const btnLabel = bulkBtn.querySelector('span');
-        const btnIcon = bulkBtn.querySelector('i');
-        bulkBtn.disabled = true;
-        if (btnIcon) btnIcon.classList.add('fa-spin');
-        if (btnLabel) btnLabel.textContent = 'Refreshing…';
+        stockReportPendingRefreshIds = selected
+          .map((box) => parseInt(box.value || '0', 10))
+          .filter((id) => id > 0);
+
+        resetStockReportOtpModal();
+        showStockReportOtpModal();
+      });
+    }
+
+    const otpCancelBtn = document.getElementById('stockReportOtpCancelBtn');
+    if (otpCancelBtn) {
+      otpCancelBtn.addEventListener('click', () => {
+        stockReportPendingRefreshIds = [];
+        hideStockReportOtpModal();
+        resetStockReportOtpModal();
+      });
+    }
+
+    const otpSendBtn = document.getElementById('stockReportOtpSendBtn');
+    if (otpSendBtn) {
+      otpSendBtn.addEventListener('click', sendStockReportActionOtp);
+    }
+
+    const otpConfirmBtn = document.getElementById('stockReportOtpConfirmBtn');
+    if (otpConfirmBtn) {
+      otpConfirmBtn.addEventListener('click', async () => {
+        const otpInput = document.getElementById('stockReportOtpInput');
+        const otp = otpInput ? otpInput.value.trim() : '';
+        if (!otp) {
+          showStockReportOtpMessage('error', 'Please enter the OTP sent to your email.');
+          return;
+        }
+        if (stockReportPendingRefreshIds.length === 0) {
+          showStockReportOtpMessage('error', 'No items selected for refresh.');
+          return;
+        }
+
+        otpConfirmBtn.disabled = true;
+        otpConfirmBtn.textContent = 'Verifying…';
 
         try {
-          const summary = await runStockReportBulkRefreshBatched(productIds);
-
-          updateStockReportBulkProgress({
-            total: summary.total,
-            completed: summary.total,
-            succeeded: summary.succeeded,
-            failed: summary.failed,
-            batchNo: Math.ceil(summary.total / STOCK_REPORT_BATCH_SIZE),
-            batchTotal: Math.ceil(summary.total / STOCK_REPORT_BATCH_SIZE),
-            spinning: false,
-            done: true,
-            hint: summary.failed > 0 ? 'Completed with some failures. Review details below.' : 'Completed successfully. Reloading…',
-          });
-
-          if (summary.failed > 0 && Array.isArray(summary.results)) {
-            const failedLines = summary.results
-              .filter((row) => row && !row.success)
-              .slice(0, 8)
-              .map((row) => (row.label || row.sku || ('#' + row.product_id)) + ': ' + (row.message || 'Failed'))
-              .join('\n');
-            const extra = summary.failed > 8 ? '\n…and ' + (summary.failed - 8) + ' more.' : '';
-            window.alert((summary.message || 'Bulk refresh completed with errors.') + '\n\n' + failedLines + extra);
-          }
-
-          window.setTimeout(() => window.location.reload(), summary.failed > 0 ? 1200 : 600);
+          await verifyStockReportActionOtp(otp);
         } catch (err) {
-          hideStockReportBulkProgressModal();
-          window.alert(err && err.message ? err.message : 'Bulk refresh failed.');
-          setStockReportBulkUiLocked(false);
-          bulkBtn.disabled = false;
-          if (btnIcon) btnIcon.classList.remove('fa-spin');
-          if (btnLabel) btnLabel.textContent = 'Refresh selected';
-          updateStockReportSelectionUi();
+          showStockReportOtpMessage('error', err && err.message ? err.message : 'OTP verification failed.');
+          otpConfirmBtn.disabled = false;
+          otpConfirmBtn.textContent = 'Confirm & refresh';
+          return;
         }
+
+        hideStockReportOtpModal();
+        resetStockReportOtpModal();
+        await startStockReportBulkRefreshWithOtp(stockReportPendingRefreshIds);
+        stockReportPendingRefreshIds = [];
+        otpConfirmBtn.disabled = false;
+        otpConfirmBtn.textContent = 'Confirm & refresh';
+      });
+    }
+
+    const exportBtn = document.getElementById('stockReportExportBtn');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => {
+        if (STOCK_REPORT_TOTAL_ROWS <= 0) return;
+        runStockReportExportBatched();
       });
     }
 
     updateStockReportSelectionUi();
-
-    document.querySelectorAll('.stock-report-refresh-btn').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const productId = parseInt(btn.getAttribute('data-product-id') || '0', 10);
-        const skuLabel = btn.getAttribute('data-sku-label') || ('#' + productId);
-        if (productId <= 0) return;
-
-        const icon = btn.querySelector('i');
-        const label = btn.querySelector('span');
-        btn.disabled = true;
-        if (icon) icon.classList.add('fa-spin');
-        if (label) label.textContent = 'Refreshing…';
-
-        try {
-          const result = await refreshStockReportProduct(productId, skuLabel);
-          if (result && result.cancelled) {
-            btn.disabled = false;
-            if (icon) icon.classList.remove('fa-spin');
-            if (label) label.textContent = 'Refresh';
-            return;
-          }
-          window.location.reload();
-        } catch (err) {
-          window.alert(err && err.message ? err.message : 'Refresh failed.');
-          btn.disabled = false;
-          if (icon) icon.classList.remove('fa-spin');
-          if (label) label.textContent = 'Refresh';
-        }
-      });
-    });
   });
 </script>
