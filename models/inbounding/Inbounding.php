@@ -52,9 +52,8 @@ class Inbounding {
             $step = $this->conn->real_escape_string($filters['status_step']);
             
             if ($step === 'FinalPublished') {
-                // Show only items that HAVE BEEN published
-                // We look for items that EXIST in the logs with 'Published' status
-                $where[] = "vi.id IN (SELECT i_id FROM inbound_logs WHERE stat = 'Published')";
+                // Show only items that HAVE BEEN published (live or local)
+                $where[] = "vi.id IN (SELECT i_id FROM inbound_logs WHERE LOWER(TRIM(stat)) IN ('published', 'published (live)', 'published (local)'))";
             } else {
                 // Existing PENDING logic: Show items that have NOT reached this step yet
                 $where[] = "vi.id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$step')";
@@ -2160,7 +2159,7 @@ class Inbounding {
         if (empty($ids)) return [];
         $ids = array_map('intval', $ids);
         $idList = implode(',', $ids);
-        $sql = "SELECT DISTINCT i_id FROM inbound_logs WHERE i_id IN ($idList) AND stat = 'published'";
+        $sql = "SELECT DISTINCT i_id FROM inbound_logs WHERE i_id IN ($idList) AND LOWER(TRIM(stat)) IN ('published', 'published (live)', 'published (local)')";
         $result = $this->conn->query($sql);
         $blocked = [];
         if ($result) {
@@ -2274,6 +2273,72 @@ class Inbounding {
             'published (local)' => 'local',
             default => null,
         };
+    }
+
+    public static function isPublishedLogStat(string $stat): bool
+    {
+        return in_array(strtolower(trim($stat)), ['published', 'published (live)', 'published (local)'], true);
+    }
+
+    public static function isLivePublishedLogStat(string $stat): bool
+    {
+        $lower = strtolower(trim($stat));
+        return in_array($lower, ['published', 'published (live)'], true);
+    }
+
+    public static function isLocalPublishedLogStat(string $stat): bool
+    {
+        return strtolower(trim($stat)) === 'published (local)';
+    }
+
+    public static function publishedLogStatToStepKey(string $stat): string
+    {
+        $lower = strtolower(trim($stat));
+
+        return match ($lower) {
+            'published (live)', 'published' => 'Published (Live)',
+            'published (local)' => 'Published (Local)',
+            default => $stat,
+        };
+    }
+
+    /**
+     * Latest publish tier from stat log rows (live beats local when timestamps tie).
+     *
+     * @param array<int, array<string, mixed>> $logs
+     * @return 'live'|'local'|null
+     */
+    public static function resolveLatestPublishTierFromLogs(array $logs): ?string
+    {
+        $latestTs = null;
+        $tier = null;
+
+        foreach ($logs as $log) {
+            if (!is_array($log)) {
+                continue;
+            }
+
+            $stat = (string) ($log['stat'] ?? '');
+            $logTier = match (strtolower(trim($stat))) {
+                'published (live)', 'published' => 'live',
+                'published (local)' => 'local',
+                default => null,
+            };
+            if ($logTier === null) {
+                continue;
+            }
+
+            $tsRaw = $log['modified_at'] ?? $log['created_at'] ?? null;
+            $ts = is_string($tsRaw) && $tsRaw !== '' ? strtotime($tsRaw) : false;
+            $ts = ($ts !== false) ? (int) $ts : 0;
+
+            if ($latestTs === null || $ts > $latestTs || ($ts === $latestTs && $logTier === 'live')) {
+                $latestTs = $ts;
+                $tier = $logTier;
+            }
+        }
+
+        return $tier;
     }
 
     public function isInboundPublished(int $id): bool
