@@ -749,6 +749,8 @@ class DirectPurchaseController
                 $flashText .= ' ' . $cpSyncNote;
             }
             $_SESSION['direct_purchase_flash'] = ['type' => 'success', 'text' => $flashText];
+            header('Location: ?page=direct_purchase&action=post_save&id=' . $purchaseId);
+            exit;
         } catch (Throwable $e) {
             error_log('DirectPurchase save: ' . $e->getMessage());
             $detail = trim($e->getMessage());
@@ -760,6 +762,37 @@ class DirectPurchaseController
 
         header('Location: ?page=direct_purchase&action=list');
         exit;
+    }
+
+    public function postSave()
+    {
+        is_login();
+        global $conn;
+        global $directPurchaseModel;
+
+        $purchaseId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+        if ($purchaseId <= 0) {
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+
+        $purchase = $directPurchaseModel->getById($purchaseId);
+        if (!$purchase) {
+            header('Location: ?page=direct_purchase&action=list');
+            exit;
+        }
+
+        $items = $directPurchaseModel->getItems($purchaseId);
+        $warehouseId = (int) ($purchase['warehouse_id'] ?? 0);
+        $warehouseName = $this->resolveDirectPurchaseWarehouseLabel($conn, $warehouseId);
+        $lists = $this->buildPostSaveStockLists($conn, $items, $warehouseId, $warehouseName);
+
+        renderTemplate('views/direct_purchase/post_save.php', [
+            'purchase' => $purchase,
+            'warehouse_name' => $warehouseName,
+            'putaway_items' => $lists['putaway'],
+            'fulfillment_items' => $lists['fulfillment'],
+        ], 'Stock putaway & fulfillment');
     }
 
     public function syncVendorQtyForItem()
@@ -1921,5 +1954,219 @@ class DirectPurchaseController
         $suffix = count($failures) > 3 ? ' (and ' . (count($failures) - 3) . ' more)' : '';
 
         return 'Vendor local stock update issue: ' . implode('; ', $shown) . $suffix . '.';
+    }
+
+    /**
+     * @param list<array<string, mixed>> $items
+     * @return array{putaway: list<array<string, mixed>>, fulfillment: list<array<string, mixed>>}
+     */
+    private function buildPostSaveStockLists(
+        \mysqli $conn,
+        array $items,
+        int $warehouseId,
+        string $warehouseName
+    ): array {
+        require_once __DIR__ . '/../models/direct_purchase/DirectPurchaseStock.php';
+        $productModel = new product($conn);
+
+        $putaway = [];
+        $fulfillment = [];
+
+        foreach ($items as $item) {
+            $sku = trim((string) ($item['sku'] ?? ''));
+            $itemCode = trim((string) ($item['item_code'] ?? ''));
+            $color = trim((string) ($item['color'] ?? ''));
+            $size = trim((string) ($item['size'] ?? ''));
+            $purchaseQty = (float) ($item['qty'] ?? 0);
+            if ($sku === '' || $purchaseQty <= 0) {
+                continue;
+            }
+
+            $image = $productModel->getImageForPurchaseLine($itemCode, $sku, $color, $size) ?? '';
+            $productId = DirectPurchaseStock::resolveProductId($conn, $sku, $itemCode, $color, $size);
+            $location = $this->resolveWarehouseItemLocation($conn, $productId, $warehouseId, $warehouseName);
+
+            $pendingOrders = $this->fetchFulfillmentPendingOrdersForLine($conn, $sku, $itemCode, $size, $color);
+            $totalOrderQty = 0.0;
+            foreach ($pendingOrders as $orderRow) {
+                $totalOrderQty += (float) ($orderRow['quantity'] ?? 0);
+            }
+
+            $fulfillQty = min($purchaseQty, $totalOrderQty);
+            $putawayQty = max(0.0, $purchaseQty - $fulfillQty);
+            $remainingOrderQty = max(0.0, $totalOrderQty - $fulfillQty);
+
+            $lineBase = [
+                'sku' => $sku,
+                'item_code' => $itemCode,
+                'color' => $color,
+                'size' => $size,
+                'image' => $image,
+                'purchase_qty' => $purchaseQty,
+            ];
+
+            if ($putawayQty > 0) {
+                $putaway[] = array_merge($lineBase, [
+                    'qty' => $putawayQty,
+                    'location' => $location,
+                ]);
+            }
+
+            if ($fulfillQty > 0) {
+                $fulfillment[] = array_merge($lineBase, [
+                    'order_qty' => $totalOrderQty,
+                    'fulfill_qty' => $fulfillQty,
+                    'remaining_order_qty' => $remainingOrderQty,
+                    'orders' => $pendingOrders,
+                ]);
+            }
+        }
+
+        return [
+            'putaway' => $putaway,
+            'fulfillment' => $fulfillment,
+        ];
+    }
+
+    /**
+     * Pending / unfulfilled / partially shipped / backordered order lines for a purchase item (not warehouse-scoped).
+     *
+     * @return list<array{order_number:string,quantity:float,status:string,backorder_status:int}>
+     */
+    private function fetchFulfillmentPendingOrdersForLine(
+        \mysqli $conn,
+        string $sku,
+        string $itemCode,
+        string $size,
+        string $color
+    ): array {
+        $terminal = ['delivered', 'cancelled', 'returned', 'shipped'];
+        $inFlight = [
+            'ready_for_packing',
+            'po_pending',
+            'po_approved',
+            'po_inprogress',
+            'item_received',
+            'added_to_picklist',
+            'store_transfer',
+            'ready_for_qc',
+            'sent_for_repair',
+            'ready_for_dispatch',
+        ];
+
+        $sql = 'SELECT order_number, quantity, status, COALESCE(backorder_status, 0) AS backorder_status
+                FROM vp_orders
+                WHERE sku = ?
+                  AND (TRIM(COALESCE(item_code, "")) = ? OR ? = "")
+                  AND (TRIM(COALESCE(size, "")) = ? OR ? = "")
+                  AND (TRIM(COALESCE(color, "")) = ? OR ? = "")
+                  AND status NOT IN (?, ?, ?, ?)
+                ORDER BY order_date ASC, order_number ASC, id ASC';
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $t0 = $terminal[0];
+        $t1 = $terminal[1];
+        $t2 = $terminal[2];
+        $t3 = $terminal[3];
+        $stmt->bind_param(
+            'ssssssssss',
+            $sku,
+            $itemCode,
+            $itemCode,
+            $size,
+            $size,
+            $color,
+            $color,
+            $t0,
+            $t1,
+            $t2,
+            $t3
+        );
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $rows = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $status = strtolower(trim((string) ($row['status'] ?? '')));
+                $backorderStatus = (int) ($row['backorder_status'] ?? 0);
+                $eligible = $status === 'pending'
+                    || in_array($status, $inFlight, true)
+                    || $backorderStatus > 0;
+                if (!$eligible) {
+                    continue;
+                }
+                $qty = (float) ($row['quantity'] ?? 0);
+                if ($qty <= 0) {
+                    continue;
+                }
+                $rows[] = [
+                    'order_number' => trim((string) ($row['order_number'] ?? '')),
+                    'quantity' => $qty,
+                    'status' => $status,
+                    'backorder_status' => $backorderStatus,
+                ];
+            }
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
+    private function resolveWarehouseItemLocation(
+        \mysqli $conn,
+        int $productId,
+        int $warehouseId,
+        string $warehouseName
+    ): ?string {
+        if ($productId > 0) {
+            $stmt = $conn->prepare('SELECT TRIM(COALESCE(location, "")) AS location FROM vp_products WHERE id = ? LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $productId);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                $productLocation = trim((string) ($row['location'] ?? ''));
+                if ($productLocation !== '') {
+                    return $productLocation;
+                }
+            }
+        }
+
+        if ($productId <= 0 || $warehouseId <= 0) {
+            return null;
+        }
+
+        $stmt = $conn->prepare(
+            'SELECT TRIM(sm.location) AS location
+             FROM vp_stock_movements sm
+             INNER JOIN (
+                 SELECT MAX(id) AS max_id
+                 FROM vp_stock_movements
+                 WHERE product_id = ? AND warehouse_id = ?
+             ) latest ON latest.max_id = sm.id
+             WHERE sm.product_id = ? AND sm.warehouse_id = ?
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('iiii', $productId, $warehouseId, $productId, $warehouseId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        $movementLocation = trim((string) ($row['location'] ?? ''));
+        if ($movementLocation === '') {
+            return null;
+        }
+        if ($warehouseName !== '' && strcasecmp($movementLocation, $warehouseName) === 0) {
+            return null;
+        }
+
+        return $movementLocation;
     }
 }
