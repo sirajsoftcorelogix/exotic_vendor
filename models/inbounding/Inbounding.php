@@ -2341,6 +2341,33 @@ class Inbounding {
         return $tier;
     }
 
+    /**
+     * Live publish implies local publish is complete; local-only does not imply live.
+     *
+     * @param array<string, array{active: bool, date: string, user: string, ts: int}> $stepsData
+     * @return array<string, array{active: bool, date: string, user: string, ts: int}>
+     */
+    public static function applyLiveImpliesLocalPublishSteps(array $stepsData): array
+    {
+        if (!($stepsData['Published (Live)']['active'] ?? false)) {
+            return $stepsData;
+        }
+
+        if ($stepsData['Published (Local)']['active'] ?? false) {
+            return $stepsData;
+        }
+
+        $live = $stepsData['Published (Live)'];
+        $stepsData['Published (Local)'] = [
+            'active' => true,
+            'date' => $live['date'],
+            'user' => $live['user'],
+            'ts' => $live['ts'],
+        ];
+
+        return $stepsData;
+    }
+
     public function isInboundPublished(int $id): bool
     {
         return $this->resolveInboundPublishTier($id) !== null;
