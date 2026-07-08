@@ -452,6 +452,9 @@ switch ($page) {
             case 'save':
                 $controller->save();
                 break;
+            case 'post_save':
+                $controller->postSave();
+                break;
             case 'delete':
                 $controller->delete();
                 break;
