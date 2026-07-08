@@ -319,10 +319,15 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   role="dialog"
   aria-modal="true"
   aria-labelledby="stockReportOtpTitle">
-  <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
-    <h3 id="stockReportOtpTitle" class="text-lg font-semibold text-gray-900">Verify OTP to refresh stock</h3>
-    <p class="mt-2 text-sm text-gray-600">
-      For security, confirm this action with a one-time password sent to your registered email.
+  <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <h3 id="stockReportOtpTitle" class="text-lg font-semibold text-gray-900">Confirm refresh &amp; verify OTP</h3>
+
+    <div id="stockReportOtpConfirmSummary" class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+      <p class="font-semibold text-amber-900">Preparing refresh…</p>
+    </div>
+
+    <p class="mt-4 text-sm text-gray-600">
+      To proceed, request a one-time password sent to your registered email and enter it below.
     </p>
 
     <div id="stockReportOtpError" class="hidden mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></div>
@@ -510,6 +515,32 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     if (!modal) return;
     modal.classList.add('hidden');
     modal.classList.remove('flex');
+  }
+
+  function openStockReportRefreshOtpModal(selected) {
+    const labels = selected
+      .map((box) => box.getAttribute('data-sku-label') || box.value)
+      .slice(0, 5);
+    let preview = labels.join(', ');
+    if (selected.length > 5) {
+      preview += ' … +' + (selected.length - 5) + ' more';
+    }
+
+    const summaryEl = document.getElementById('stockReportOtpConfirmSummary');
+    if (summaryEl) {
+      summaryEl.innerHTML =
+        '<p class="font-semibold text-amber-900">Refresh stock for '
+        + selected.length + ' selected item(s)</p>'
+        + '<p class="mt-1.5 text-xs font-medium text-amber-900/90">' + preview + '</p>'
+        + '<p class="mt-2 text-xs leading-relaxed text-amber-900/80">' + STOCK_REPORT_REFRESH_CONFIRM + '</p>';
+    }
+
+    stockReportPendingRefreshIds = selected
+      .map((box) => parseInt(box.value || '0', 10))
+      .filter((id) => id > 0);
+
+    resetStockReportOtpModal();
+    showStockReportOtpModal();
   }
 
   function resetStockReportOtpModal() {
@@ -1086,27 +1117,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       bulkBtn.addEventListener('click', () => {
         const selected = getSelectedStockReportRows();
         if (selected.length === 0) return;
-
-        const labels = selected
-          .map((box) => box.getAttribute('data-sku-label') || box.value)
-          .slice(0, 5);
-        let preview = labels.join(', ');
-        if (selected.length > 5) {
-          preview += ' … +' + (selected.length - 5) + ' more';
-        }
-
-        const confirmed = window.confirm(
-          'Refresh stock for ' + selected.length + ' selected item(s)?\n\n'
-          + preview + '\n\n' + STOCK_REPORT_REFRESH_CONFIRM
-        );
-        if (!confirmed) return;
-
-        stockReportPendingRefreshIds = selected
-          .map((box) => parseInt(box.value || '0', 10))
-          .filter((id) => id > 0);
-
-        resetStockReportOtpModal();
-        showStockReportOtpModal();
+        openStockReportRefreshOtpModal(selected);
       });
     }
 
