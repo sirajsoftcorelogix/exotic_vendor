@@ -122,7 +122,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 </div>
             </div>
 
-            <div class="p-6 space-y-6">
+            <div class="p-6 space-y-6 dp-top-controls">
                 <div>
                     <span class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Purchase type</span>
                     <div class="dp-purchase-type-segment inline-flex flex-wrap rounded-xl border border-gray-200 bg-gray-50 p-1 shadow-inner" role="radiogroup" aria-label="Purchase type">
@@ -587,6 +587,45 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
     line-height: 1.35;
     color: #6b7280;
 }
+.dp-top-controls select,
+.dp-top-controls input[type="text"],
+.dp-top-controls input[type="date"] {
+    min-height: 2.625rem;
+    line-height: 1.25rem;
+}
+.dp-top-controls .select2-container {
+    width: 100% !important;
+}
+.dp-top-controls .select2-container--default .select2-selection--single {
+    min-height: 2.625rem;
+    height: 2.625rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.dp-top-controls .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 2.375rem;
+    padding-left: 0.75rem;
+    padding-right: 2rem;
+    font-size: 0.875rem;
+    color: #111827;
+}
+.dp-top-controls .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 2.5rem;
+    top: 0;
+    right: 0.375rem;
+}
+.dp-top-controls .select2-container--default.select2-container--focus .select2-selection--single,
+.dp-top-controls .select2-container--default.select2-container--open .select2-selection--single {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+}
+.dp-top-controls .dp-file-input {
+    min-height: 2.625rem;
+    display: flex;
+    align-items: center;
+}
 .dp-purchase-type-segment .dp-purchase-type-option {
     cursor: pointer;
 }
@@ -624,7 +663,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
 .dp-file-input {
     border: 1px dashed #d1d5db;
     border-radius: 0.5rem;
-    padding: 0.45rem 0.5rem;
+    padding: 0.375rem 0.5rem;
     background: #fff;
 }
 .dp-file-input:hover {
