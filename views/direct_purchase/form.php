@@ -1177,6 +1177,12 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         return '?page=purchase_orders&action=view&po_id=' + encodeURIComponent(String(id));
     }
 
+    function dpOrderListUrl(orderNumber) {
+        var no = String(orderNumber || '').trim();
+        if (!no) return '#';
+        return '?page=orders&action=list&order_number=' + encodeURIComponent(no);
+    }
+
     function syncVendorQtyUrl(itemId, purchaseId) {
         var u = new URL(window.location.href);
         u.searchParams.set('page', 'direct_purchase');
@@ -1490,11 +1496,14 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
             var orderNo = row.order_number || '';
             var lineSku = row.sku || defaultSku || '';
             var qtyText = row.qty != null && row.qty !== '' ? row.qty : '—';
+            var orderListUrl = dpOrderListUrl(orderNo);
 
             tr.innerHTML =
                 '<td class="py-2.5 pr-3">' +
                     '<div class="flex items-center gap-2">' +
-                        '<span class="font-medium text-gray-900 tabular-nums">' + dpEscHtml(orderNo) + '</span>' +
+                        (orderNo
+                            ? '<a href="' + dpEscHtml(orderListUrl) + '" target="_blank" rel="noopener noreferrer" class="font-medium text-violet-800 hover:text-violet-950 hover:underline underline-offset-2 tabular-nums">' + dpEscHtml(orderNo) + '</a>'
+                            : '<span class="font-medium text-gray-900 tabular-nums">—</span>') +
                         (orderNo ? (
                             '<button type="button" class="dp-co-copy-order inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="Copy order number" aria-label="Copy order number ' + dpEscHtml(orderNo) + '" data-order-number="' + dpEscHtml(orderNo) + '">' +
                                 '<i class="fas fa-copy text-xs" aria-hidden="true"></i>' +
