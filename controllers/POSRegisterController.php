@@ -272,7 +272,23 @@ class POSRegisterController
             $errors[] = 'Aadhaar must be 12 digits.';
         }
 
-        $cashWarningRequired = (strtolower($paymentMode) === 'cash' && $cashAmount >= $limit);
+        $cashWarningRequired = false;
+        $rawSplits = $payload['payment_splits'] ?? null;
+        if (is_array($rawSplits) && count($rawSplits) > 0) {
+            foreach ($rawSplits as $splitRow) {
+                if (!is_array($splitRow)) {
+                    continue;
+                }
+                $splitMode = strtolower(trim((string)($splitRow['mode'] ?? $splitRow['payment_mode'] ?? '')));
+                $splitAmt = round((float)($splitRow['amount'] ?? $splitRow['payment_amount'] ?? 0), 2);
+                if ($splitMode === 'cash' && $splitAmt >= $limit) {
+                    $cashWarningRequired = true;
+                    break;
+                }
+            }
+        } else {
+            $cashWarningRequired = (strtolower($paymentMode) === 'cash' && $cashAmount >= $limit);
+        }
         if ($cashWarningRequired && (string)($payload['sec269st_cash_warning_confirmed'] ?? '') !== '1') {
             $errors[] = 'Cash receipt warning under Section 269ST must be confirmed.';
         }
@@ -4304,35 +4320,25 @@ class POSRegisterController
             exit;
         }
 
-        $paymentAmount = round((float)($payload['payment_amount'] ?? 0), 2);
         $paymentStage = strtolower(trim((string)($payload['payment_stage'] ?? 'final')));
-        if ($paymentAmount <= 0) {
-            echo json_encode(['success' => false, 'message' => 'Payment amount must be greater than zero.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        $splitBundle = $this->resolvePosPaymentSplitsFromPayload($payload);
+        $splitErrors = $this->validatePosPaymentSplits($splitBundle, $orderTotal, $paymentStage);
+        if (!empty($splitErrors)) {
+            echo json_encode([
+                'success' => false,
+                'message' => implode(' ', $splitErrors),
+                'errors' => $splitErrors,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
-        if ($paymentStage === 'final') {
-            if ($paymentAmount + 0.02 < $orderTotal) {
-                echo json_encode(['success' => false, 'message' => 'Final payment must match order total ₹ ' . $orderTotal], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
-            }
-            if ($paymentAmount - 0.02 > $orderTotal) {
-                echo json_encode(['success' => false, 'message' => 'Over payment is not allowed for final settlement.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
-            }
-        } elseif ($paymentStage === 'partial' || $paymentStage === 'advance') {
-            if ($paymentAmount + 0.02 >= $orderTotal) {
-                echo json_encode(['success' => false, 'message' => 'Partial / advance must be less than order total ₹ ' . $orderTotal], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
-            }
-        }
-
-        $paymentMode = trim((string)($payload['payment_mode'] ?? 'cash'));
-        $txn = trim((string)($payload['transaction_id'] ?? ''));
-        if ($paymentMode === 'razorpay' && $txn === '') {
-            echo json_encode(['success' => false, 'message' => 'Razorpay requires a transaction ID.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
+        $paymentAmount = (float)$splitBundle['total'];
+        $paymentMode = (string)$splitBundle['primary_mode'];
+        $txn = (string)$splitBundle['primary_txn'];
+        $payload['payment_amount'] = $paymentAmount;
+        $payload['payment_mode'] = $paymentMode;
+        $payload['transaction_id'] = $txn;
+        $payload['payment_splits'] = $splitBundle['splits'];
 
         $addressErrors = $this->validatePosCheckoutAddressPayload($payload);
         if (!empty($addressErrors)) {
@@ -4511,32 +4517,39 @@ class POSRegisterController
 
         $note = $this->appendHighValueComplianceToNote(trim((string)($payload['payment_note'] ?? '')), $orderTotal, $paymentMode, $compliance);
         $note = $this->appendLocalStockWarningsToNote($note, $localStockWarnings);
+        if (count($splitBundle['splits']) > 1) {
+            $note = $this->appendPaymentSplitsToNote($note, $splitBundle['splits']);
+        }
         $userId = pos_payment_resolve_session_user_id();
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
 
-        $pay = pos_payment_insert_row(
-            $conn,
-            $orderNumber,
-            $receiptNo,
-            $customerId,
-            $paymentStage,
-            $paymentMode,
-            $paymentAmount,
-            $txn,
-            $note,
-            $userId,
-            $whId,
-            true,
-            $orderTotal
-        );
-
-        if (empty($pay['success'])) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Exotic order ' . $orderNumber . ' was created but local payment row failed: ' . (string)($pay['error'] ?? 'unknown'),
-                'order_number' => $orderNumber,
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+        $pay = null;
+        $paymentIds = [];
+        foreach ($splitBundle['splits'] as $split) {
+            $pay = pos_payment_insert_row(
+                $conn,
+                $orderNumber,
+                $receiptNo,
+                $customerId,
+                $paymentStage,
+                (string)$split['mode'],
+                (float)$split['amount'],
+                (string)$split['transaction_id'],
+                $note,
+                $userId,
+                $whId,
+                true,
+                $orderTotal
+            );
+            if (empty($pay['success'])) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Exotic order ' . $orderNumber . ' was created but local payment row failed: ' . (string)($pay['error'] ?? 'unknown'),
+                    'order_number' => $orderNumber,
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+            $paymentIds[] = (int)($pay['payment_id'] ?? 0);
         }
 
         require_once 'models/customer/Customer.php';
@@ -4566,7 +4579,16 @@ class POSRegisterController
         $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
         $shippedStatusMeta = $this->markPosCheckoutOrderShipped($conn, $orderNumber);
 
-        $modeLabel = $this->mapPosPaymentModeLabel($paymentMode);
+        $modeLabel = $this->formatPosPaymentSplitsLabel($splitBundle['splits']);
+        $receiptPaymentSplits = [];
+        foreach ($splitBundle['splits'] as $splitRow) {
+            $receiptPaymentSplits[] = [
+                'mode' => (string)$splitRow['mode'],
+                'mode_label' => $this->mapPosPaymentModeLabel((string)$splitRow['mode']),
+                'amount' => (float)$splitRow['amount'],
+                'transaction_id' => (string)$splitRow['transaction_id'],
+            ];
+        }
         $dt = new \DateTime('now', new \DateTimeZone('Asia/Kolkata'));
         $receiptSubtotalGoods = round((float)($payload['receipt_subtotal_goods'] ?? $orderTotal), 2);
         if ($receiptSubtotalGoods <= 0 && $orderTotal > 0) {
@@ -4584,6 +4606,8 @@ class POSRegisterController
             'order_id' => $orderNumber,
             'payment_stage' => $paymentStage,
             'payment_mode_label' => $modeLabel,
+            'payment_splits' => $receiptPaymentSplits,
+            'receipt_payment_splits' => $receiptPaymentSplits,
             'transaction_id' => $txn,
             'receipt_banner_text' => 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
             'receipt_billing_block' => $this->formatAddressLinesFromPayload($payload, 'billing'),
@@ -4641,6 +4665,7 @@ class POSRegisterController
             'order_number' => $orderNumber,
             'receipt_number' => $receiptNo,
             'payment_id' => (int)($pay['payment_id'] ?? 0),
+            'payment_ids' => $paymentIds,
             'local_stock_warnings' => $localStockWarnings,
             'shipped_status_sync' => $shippedStatusMeta,
             'redirect_url' => 'index.php?page=pos_register&action=checkout-receipt',
@@ -5238,6 +5263,171 @@ class POSRegisterController
         ];
 
         return $map[$m] ?? strtoupper($m);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function allowedPosPaymentModes(): array
+    {
+        return ['cash', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque'];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{splits:list<array{mode:string,amount:float,transaction_id:string}>,total:float,primary_mode:string,primary_txn:string}
+     */
+    private function resolvePosPaymentSplitsFromPayload(array $payload): array
+    {
+        $allowed = $this->allowedPosPaymentModes();
+        $splits = [];
+        $raw = $payload['payment_splits'] ?? null;
+        if (is_array($raw)) {
+            foreach ($raw as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $mode = strtolower(trim((string)($row['mode'] ?? $row['payment_mode'] ?? '')));
+                if (!in_array($mode, $allowed, true)) {
+                    continue;
+                }
+                $amount = round((float)($row['amount'] ?? $row['payment_amount'] ?? 0), 2);
+                if ($amount <= 0) {
+                    continue;
+                }
+                $splits[] = [
+                    'mode' => $mode,
+                    'amount' => $amount,
+                    'transaction_id' => trim((string)($row['transaction_id'] ?? '')),
+                ];
+            }
+        }
+
+        if ($splits === []) {
+            $mode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
+            $amount = round((float)($payload['payment_amount'] ?? 0), 2);
+            if ($amount > 0) {
+                $splits[] = [
+                    'mode' => in_array($mode, $allowed, true) ? $mode : 'cash',
+                    'amount' => $amount,
+                    'transaction_id' => trim((string)($payload['transaction_id'] ?? '')),
+                ];
+            }
+        }
+
+        $total = 0.0;
+        foreach ($splits as $split) {
+            $total += (float)$split['amount'];
+        }
+        $total = round($total, 2);
+
+        $primary = $splits[0] ?? ['mode' => 'cash', 'amount' => 0.0, 'transaction_id' => ''];
+        foreach ($splits as $split) {
+            if ((float)$split['amount'] > (float)$primary['amount']) {
+                $primary = $split;
+            }
+        }
+
+        return [
+            'splits' => $splits,
+            'total' => $total,
+            'primary_mode' => (string)($primary['mode'] ?? 'cash'),
+            'primary_txn' => (string)($primary['transaction_id'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array{splits:list<array{mode:string,amount:float,transaction_id:string}>,total:float,primary_mode:string,primary_txn:string} $splitBundle
+     * @return list<string>
+     */
+    private function validatePosPaymentSplits(array $splitBundle, float $orderTotal, string $paymentStage): array
+    {
+        $errors = [];
+        $splits = $splitBundle['splits'] ?? [];
+        if ($splits === []) {
+            $errors[] = 'Add at least one payment line with amount greater than zero.';
+
+            return $errors;
+        }
+
+        $paymentAmount = (float)($splitBundle['total'] ?? 0);
+        if ($paymentAmount <= 0) {
+            $errors[] = 'Payment amount must be greater than zero.';
+
+            return $errors;
+        }
+
+        if ($paymentStage === 'final') {
+            if ($paymentAmount + 0.02 < $orderTotal) {
+                $errors[] = 'Final payment must match order total ₹ ' . $orderTotal . '.';
+            } elseif ($paymentAmount - 0.02 > $orderTotal) {
+                $errors[] = 'Over payment is not allowed for final settlement.';
+            }
+        } elseif ($paymentStage === 'partial' || $paymentStage === 'advance') {
+            if ($paymentAmount + 0.02 >= $orderTotal) {
+                $errors[] = 'Partial / advance must be less than order total ₹ ' . $orderTotal . '.';
+            }
+        }
+
+        foreach ($splits as $idx => $split) {
+            $mode = (string)($split['mode'] ?? '');
+            $txn = trim((string)($split['transaction_id'] ?? ''));
+            $line = $idx + 1;
+            if ($mode === 'razorpay' && $txn === '') {
+                $errors[] = 'Razorpay requires a transaction ID (line ' . $line . ').';
+            }
+            if ($mode === 'cheque' && $txn === '') {
+                $errors[] = 'Cheque number is required (line ' . $line . ').';
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * @param list<array{mode:string,amount:float,transaction_id:string}> $splits
+     */
+    private function formatPosPaymentSplitsLabel(array $splits): string
+    {
+        if ($splits === []) {
+            return 'Cash';
+        }
+        if (count($splits) === 1) {
+            return $this->mapPosPaymentModeLabel((string)$splits[0]['mode']);
+        }
+
+        $parts = [];
+        foreach ($splits as $split) {
+            $parts[] = $this->mapPosPaymentModeLabel((string)$split['mode'])
+                . ' ₹' . number_format((float)$split['amount'], 2, '.', ',');
+        }
+
+        return implode(' + ', $parts);
+    }
+
+    /**
+     * @param list<array{mode:string,amount:float,transaction_id:string}> $splits
+     */
+    private function appendPaymentSplitsToNote(string $note, array $splits): string
+    {
+        if ($splits === []) {
+            return $note;
+        }
+
+        $lines = ['Payment split'];
+        foreach ($splits as $idx => $split) {
+            $line = ($idx + 1) . '. ' . $this->mapPosPaymentModeLabel((string)$split['mode'])
+                . ' ₹' . number_format((float)$split['amount'], 2, '.', '');
+            $txn = trim((string)($split['transaction_id'] ?? ''));
+            if ($txn !== '') {
+                $line .= ' (Ref: ' . $txn . ')';
+            }
+            $lines[] = $line;
+        }
+
+        $block = implode("\n", $lines);
+
+        return trim($note) !== '' ? trim($note) . "\n\n" . $block : $block;
     }
 
     /**

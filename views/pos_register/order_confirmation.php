@@ -177,8 +177,27 @@ if ($receipt_download_filename_base === '') {
                 <div class="pt-3 text-[10px] font-semibold text-neutral-700">Amount in words</div>
                 <div class="text-[10px] italic text-neutral-800"><?= $h($receipt_amount_in_words ?? '') ?></div>
                 <div class="flex justify-between pt-3 border-t border-neutral-300 text-[11px]"><span class="font-semibold">Amount Received</span><span class="font-bold">₹<?= $rfmt($receipt_amount_received ?? 0) ?></span></div>
+                <?php
+                $receiptSplits = is_array($receipt_payment_splits ?? null) ? $receipt_payment_splits : (is_array($payment_splits ?? null) ? $payment_splits : []);
+                if (count($receiptSplits) > 1):
+                ?>
+                  <div class="mt-2 space-y-1 border-t border-dotted border-neutral-300 pt-2 text-[10px] text-neutral-700">
+                    <div class="font-semibold text-neutral-800">Payment split</div>
+                    <?php foreach ($receiptSplits as $splitRow): ?>
+                      <?php
+                      $splitLabel = trim((string)($splitRow['mode_label'] ?? $splitRow['mode'] ?? ''));
+                      $splitAmt = (float)($splitRow['amount'] ?? 0);
+                      $splitTxn = trim((string)($splitRow['transaction_id'] ?? ''));
+                      ?>
+                      <div class="flex justify-between gap-3">
+                        <span><?= $h($splitLabel) ?><?= $splitTxn !== '' ? ' · ' . $h($splitTxn) : '' ?></span>
+                        <span class="font-semibold tabular-nums">₹<?= $rfmt($splitAmt) ?></span>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
                 <div class="flex justify-between text-[11px]"><span class="font-semibold">Pending Amount</span><span class="font-bold">₹<?= $rfmt($receipt_pending_amount ?? 0) ?></span></div>
-                <?php if (trim((string)($transaction_id ?? '')) !== ''): ?>
+                <?php if (trim((string)($transaction_id ?? '')) !== '' && count($receiptSplits) <= 1): ?>
                   <div class="pt-1 text-[10px] text-neutral-600"><span class="font-semibold">Transaction ID:</span> <?= $h((string)$transaction_id) ?></div>
                 <?php endif; ?>
               </div>
