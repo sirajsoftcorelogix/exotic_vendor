@@ -317,7 +317,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                                             <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
                                         </a>
                                         <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed <?= trim((string) ($it['sku'] ?? '')) === '' ? 'hidden' : '' ?>"
-                                            title="Find pending PO for this SKU" aria-label="Find pending PO for this SKU" <?= $dpLineLocked ? 'disabled' : '' ?>>
+                                            title="Find open purchase orders for this SKU" aria-label="Find open purchase orders for this SKU" <?= $dpLineLocked ? 'disabled' : '' ?>>
                                             <i class="fas fa-search text-xs" aria-hidden="true"></i>
                                         </button>
                                     </div>
@@ -382,7 +382,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 </button>
             </div>
             <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                Type at least 2 characters to search products by SKU only. After selecting a SKU, use the <i class="fas fa-search text-[10px]" aria-hidden="true"></i> icon beside it to find and list pending POs. Fields marked <span class="text-red-600">*</span> are required (HSN is optional). For <strong>books</strong>, Cost / item uses Price India (without GST); for other products it uses CP. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest value from the product API.
+                Type at least 2 characters to search products by SKU only. After selecting a SKU, use the <i class="fas fa-search text-[10px]" aria-hidden="true"></i> icon beside it to find open <strong>purchase orders</strong> (vendor POs) for that SKU. Fields marked <span class="text-red-600">*</span> are required (HSN is optional). For <strong>books</strong>, Cost / item uses Price India (without GST); for other products it uses CP. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest value from the product API.
             </p>
 
             <div class="mt-6 pt-5 border-t border-gray-200">
@@ -542,21 +542,21 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
     <button type="button" id="dp-pending-orders-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" aria-label="Close dialog"></button>
     <div class="relative flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-sky-200/40 bg-white shadow-2xl shadow-sky-900/10 ring-1 ring-black/5 animate-[dpModalIn_0.22s_ease-out]">
         <div class="border-b border-gray-100 bg-gradient-to-r from-sky-50/80 to-white px-6 py-4">
-            <h3 id="dp-pending-orders-title" class="text-lg font-bold tracking-tight text-gray-900">Pending PO for SKU</h3>
+            <h3 id="dp-pending-orders-title" class="text-lg font-bold tracking-tight text-gray-900">Pending purchase orders</h3>
             <p id="dp-pending-orders-subtitle" class="mt-1 text-sm text-gray-600"></p>
-            <p id="dp-pending-orders-import-status" class="mt-2 text-xs font-medium text-sky-700 hidden"></p>
         </div>
         <div class="flex-1 overflow-auto px-6 py-4">
             <div id="dp-pending-orders-loading" class="hidden py-10 text-center text-sm text-gray-500">
-                <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Fetching pending POs…
+                <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading purchase orders…
             </div>
-            <div id="dp-pending-orders-empty" class="hidden py-10 text-center text-sm text-gray-500">No pending PO found for this SKU in the last 90 days.</div>
+            <div id="dp-pending-orders-empty" class="hidden py-10 text-center text-sm text-gray-500">No open purchase orders found for this SKU.</div>
             <table id="dp-pending-orders-table" class="hidden w-full text-sm">
                 <thead>
                     <tr class="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <th class="pb-2 pr-3">PO #</th>
-                        <th class="pb-2 pr-3">SKU</th>
-                        <th class="pb-2 text-right">Qty</th>
+                        <th class="pb-2 pr-3">Vendor</th>
+                        <th class="pb-2 pr-3 text-right">Qty</th>
+                        <th class="pb-2">Status</th>
                     </tr>
                 </thead>
                 <tbody id="dp-pending-orders-tbody" class="divide-y divide-gray-100"></tbody>
@@ -812,7 +812,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                         <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
                     </a>
                     <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 hidden inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Find pending PO for this SKU" aria-label="Find pending PO for this SKU">
+                        title="Find open purchase orders for this SKU" aria-label="Find open purchase orders for this SKU">
                         <i class="fas fa-search text-xs" aria-hidden="true"></i>
                     </button>
                 </div>
@@ -1091,21 +1091,10 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         return u.toString();
     }
 
-    function importOrderUrl(orderNumber) {
-        var u = new URL(window.location.href);
-        u.searchParams.set('page', 'direct_purchase');
-        u.searchParams.set('action', 'import_order');
-        u.searchParams.set('orderid', orderNumber || '');
-        return u.toString();
-    }
-
-    function syncVendorQtyUrl(itemId, purchaseId) {
-        var u = new URL(window.location.href);
-        u.searchParams.set('page', 'direct_purchase');
-        u.searchParams.set('action', 'sync_vendor_qty');
-        u.searchParams.set('item_id', String(itemId || ''));
-        u.searchParams.set('purchase_id', String(purchaseId || ''));
-        return u.toString();
+    function purchaseOrderViewUrl(poId) {
+        var id = parseInt(poId, 10);
+        if (!id || id <= 0) return '#';
+        return '?page=purchase_orders&action=view&po_id=' + encodeURIComponent(String(id));
     }
 
     function syncVendorQtyUrl(itemId, purchaseId) {
@@ -1396,14 +1385,10 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         document.body.style.overflow = '';
     }
 
-    function dpFormatUnixRange(fromTs, toTs) {
-        function fmt(ts) {
-            if (!ts) return '';
-            var d = new Date(ts * 1000);
-            if (isNaN(d.getTime())) return '';
-            return d.toLocaleDateString();
-        }
-        return fmt(fromTs) + ' – ' + fmt(toTs);
+    function dpFormatPoStatus(status) {
+        var s = String(status || '').trim();
+        if (!s) return '—';
+        return s.charAt(0).toUpperCase() + s.slice(1);
     }
 
     function dpEscHtml(s) {
@@ -1458,15 +1443,11 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         document.body.removeChild(ta);
     }
 
-    function dpCopyOrderNumber(orderNumber, btn) {
-        dpCopyText(orderNumber, btn, 'Copy order number', 'Could not copy order number to clipboard.');
+    function dpCopyPoNumber(poNumber, btn) {
+        dpCopyText(poNumber, btn, 'Copy PO number', 'Could not copy PO number to clipboard.');
     }
 
-    function dpCopySku(sku, btn) {
-        dpCopyText(sku, btn, 'Copy SKU', 'Could not copy SKU to clipboard.');
-    }
-
-    function dpRenderPendingOrdersTable(orders, defaultSku) {
+    function dpRenderPendingOrdersTable(orders) {
         var tbody = document.getElementById('dp-pending-orders-tbody');
         var table = document.getElementById('dp-pending-orders-table');
         var empty = document.getElementById('dp-pending-orders-empty');
@@ -1482,94 +1463,33 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         empty.classList.add('hidden');
         table.classList.remove('hidden');
 
-        orders.forEach(function (row, idx) {
+        orders.forEach(function (row) {
             var tr = document.createElement('tr');
-            tr.className = row.needs_import ? 'bg-amber-50/60' : '';
-            tr.setAttribute('data-order-number', row.order_number || '');
-            tr.setAttribute('data-row-index', String(idx));
-
-            var orderNo = row.order_number || '';
-            var lineSku = row.sku || defaultSku || '';
+            var poId = parseInt(row.po_id, 10) || 0;
+            var poNumber = row.po_number || '';
+            var vendorName = row.vendor_name || '—';
             var qtyText = row.qty != null && row.qty !== '' ? row.qty : '—';
+            var statusText = dpFormatPoStatus(row.status);
+            var viewUrl = purchaseOrderViewUrl(poId);
 
             tr.innerHTML =
                 '<td class="py-2.5 pr-3">' +
                     '<div class="flex items-center gap-2">' +
-                        '<span class="font-medium text-gray-900 tabular-nums">' + dpEscHtml(orderNo) + '</span>' +
-                        '<button type="button" class="dp-po-copy-order inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500" title="Copy order number" aria-label="Copy order number ' + dpEscHtml(orderNo) + '" data-order-number="' + dpEscHtml(orderNo) + '">' +
-                            '<i class="fas fa-copy text-xs" aria-hidden="true"></i>' +
-                        '</button>' +
-                    '</div>' +
-                '</td>' +
-                '<td class="py-2.5 pr-3">' +
-                    '<div class="flex items-center gap-2">' +
-                        '<span class="font-medium text-gray-900 tabular-nums">' + dpEscHtml(lineSku) + '</span>' +
-                        (lineSku ? (
-                            '<button type="button" class="dp-po-copy-sku inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500" title="Copy SKU" aria-label="Copy SKU ' + dpEscHtml(lineSku) + '" data-sku="' + dpEscHtml(lineSku) + '">' +
+                        (poId > 0
+                            ? '<a href="' + dpEscHtml(viewUrl) + '" target="_blank" rel="noopener noreferrer" class="font-medium text-sky-800 hover:text-sky-950 hover:underline underline-offset-2 tabular-nums">' + dpEscHtml(poNumber || ('#' + poId)) + '</a>'
+                            : '<span class="font-medium text-gray-900 tabular-nums">' + dpEscHtml(poNumber || '—') + '</span>') +
+                        (poNumber ? (
+                            '<button type="button" class="dp-po-copy-number inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500" title="Copy PO number" aria-label="Copy PO number ' + dpEscHtml(poNumber) + '" data-po-number="' + dpEscHtml(poNumber) + '">' +
                                 '<i class="fas fa-copy text-xs" aria-hidden="true"></i>' +
                             '</button>'
                         ) : '') +
                     '</div>' +
                 '</td>' +
-                '<td class="py-2.5 text-right tabular-nums text-gray-900">' + dpEscHtml(qtyText) + '</td>';
+                '<td class="py-2.5 pr-3 text-gray-800">' + dpEscHtml(vendorName) + '</td>' +
+                '<td class="py-2.5 pr-3 text-right tabular-nums text-gray-900">' + dpEscHtml(qtyText) + '</td>' +
+                '<td class="py-2.5"><span class="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold capitalize text-sky-800">' + dpEscHtml(statusText) + '</span></td>';
 
             tbody.appendChild(tr);
-        });
-    }
-
-    function dpUpdatePendingOrderRow(tr, patch) {
-        if (!tr || !patch) return;
-        if (patch.match_status === 'matched') {
-            tr.classList.remove('bg-amber-50/60');
-        }
-    }
-
-    function dpImportPendingOrdersSequential(orders) {
-        var toImport = (orders || []).filter(function (row) { return row && row.needs_import; });
-        var statusEl = document.getElementById('dp-pending-orders-import-status');
-        if (!toImport.length) {
-            if (statusEl) {
-                statusEl.textContent = 'All listed orders are already in the system.';
-                statusEl.classList.remove('hidden');
-            }
-            return Promise.resolve();
-        }
-
-        if (statusEl) {
-            statusEl.textContent = 'Importing ' + toImport.length + ' order(s) in background…';
-            statusEl.classList.remove('hidden');
-        }
-
-        var chain = Promise.resolve();
-        toImport.forEach(function (row, i) {
-            chain = chain.then(function () {
-                var tbody = document.getElementById('dp-pending-orders-tbody');
-                var tr = tbody ? tbody.querySelector('tr[data-order-number="' + CSS.escape(row.order_number) + '"]') : null;
-                if (statusEl) {
-                    statusEl.textContent = 'Importing order ' + (i + 1) + ' of ' + toImport.length + '…';
-                }
-                return fetch(importOrderUrl(row.order_number), {
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        var ok = data && data.success;
-                        if (tr && ok) {
-                            dpUpdatePendingOrderRow(tr, { match_status: 'matched' });
-                        }
-                    })
-                    .catch(function () { /* keep row highlighted on failure */ });
-            });
-        });
-
-        return chain.then(function () {
-            if (statusEl) {
-                statusEl.textContent = 'Background import finished.';
-            }
         });
     }
 
@@ -1583,16 +1503,10 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         if (closeBtn) closeBtn.addEventListener('click', dpClosePendingOrdersModal);
         if (tbody) {
             tbody.addEventListener('click', function (e) {
-                var orderBtn = e.target.closest('.dp-po-copy-order');
-                if (orderBtn) {
+                var poBtn = e.target.closest('.dp-po-copy-number');
+                if (poBtn) {
                     e.preventDefault();
-                    dpCopyOrderNumber(orderBtn.getAttribute('data-order-number') || '', orderBtn);
-                    return;
-                }
-                var skuBtn = e.target.closest('.dp-po-copy-sku');
-                if (skuBtn) {
-                    e.preventDefault();
-                    dpCopySku(skuBtn.getAttribute('data-sku') || '', skuBtn);
+                    dpCopyPoNumber(poBtn.getAttribute('data-po-number') || '', poBtn);
                 }
             });
         }
@@ -1626,7 +1540,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         var color = cell && cell.querySelector('.dp-h-color') ? String(cell.querySelector('.dp-h-color').value || '').trim() : '';
         var size = cell && cell.querySelector('.dp-h-size') ? String(cell.querySelector('.dp-h-size').value || '').trim() : '';
         if (!itemCode && !sku) {
-            dpShowStatusModal('Select a product from SKU search or enter a SKU linked to an item code before fetching pending orders.', 'warning');
+            dpShowStatusModal('Select a product from SKU search or enter a SKU before looking up purchase orders.', 'warning');
             return;
         }
 
@@ -1635,7 +1549,6 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         var table = document.getElementById('dp-pending-orders-table');
         var empty = document.getElementById('dp-pending-orders-empty');
         var subtitle = document.getElementById('dp-pending-orders-subtitle');
-        var statusEl = document.getElementById('dp-pending-orders-import-status');
         var title = document.getElementById('dp-pending-orders-title');
 
         if (modal) {
@@ -1646,19 +1559,15 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         if (loading) loading.classList.remove('hidden');
         if (table) table.classList.add('hidden');
         if (empty) empty.classList.add('hidden');
-        if (statusEl) {
-            statusEl.textContent = '';
-            statusEl.classList.add('hidden');
-        }
         if (title) {
-            title.textContent = sku ? ('Pending PO — ' + sku) : 'Pending PO for SKU';
+            title.textContent = sku ? ('Purchase orders — ' + sku) : 'Pending purchase orders';
         }
         if (subtitle) {
-            subtitle.textContent = 'Loading…';
+            subtitle.textContent = 'Open vendor purchase orders (pending, ordered, or draft)';
         }
 
         var icon = btn.querySelector('i');
-        var prevIconClass = icon ? icon.className : 'fas fa-clipboard-list text-xs';
+        var prevIconClass = icon ? icon.className : 'fas fa-search text-xs';
         btn.disabled = true;
         if (icon) icon.className = 'fas fa-spinner fa-spin text-xs';
 
@@ -1674,24 +1583,21 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 if (loading) loading.classList.add('hidden');
                 if (!data || !data.success) {
                     dpClosePendingOrdersModal();
-                    dpShowStatusModal((data && data.message) ? data.message : 'Could not fetch pending orders.', 'error');
+                    dpShowStatusModal((data && data.message) ? data.message : 'Could not load purchase orders.', 'error');
                     return;
                 }
                 if (subtitle) {
-                    var range = dpFormatUnixRange(data.from_date, data.to_date);
                     var parts = [];
                     if (data.item_code) parts.push('Item ' + data.item_code);
-                    if (range) parts.push(range);
-                    if (data.total != null) parts.push(data.total + ' order(s)');
-                    subtitle.textContent = parts.join(' · ');
+                    if (data.total != null) parts.push(data.total + ' PO(s)');
+                    subtitle.textContent = parts.length ? parts.join(' · ') : 'Open vendor purchase orders';
                 }
-                dpRenderPendingOrdersTable(data.orders || [], data.sku || sku);
-                dpImportPendingOrdersSequential(data.orders || []);
+                dpRenderPendingOrdersTable(data.orders || []);
             })
             .catch(function () {
                 if (loading) loading.classList.add('hidden');
                 dpClosePendingOrdersModal();
-                dpShowStatusModal('The pending orders request failed. Check your connection and try again.', 'error', 'Request failed');
+                dpShowStatusModal('The purchase order lookup failed. Check your connection and try again.', 'error', 'Request failed');
             })
             .finally(function () {
                 btn.disabled = false;

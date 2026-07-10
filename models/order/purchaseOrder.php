@@ -237,4 +237,66 @@ class PurchaseOrder {
         }
         return false;
     }
+
+    /**
+     * Open vendor purchase orders containing a SKU (pending, ordered, or draft).
+     *
+     * @return list<array{po_id:int,po_number:string,vendor_name:string,qty:float,status:string,expected_delivery_date:?string,po_date:?string,sku:string}>
+     */
+    public function getOpenPurchaseOrdersForSku(
+        string $sku,
+        string $itemCode = '',
+        string $size = '',
+        string $color = ''
+    ): array {
+        $sql = 'SELECT po.id AS po_id, po.po_number, po.status, po.po_date, po.expected_delivery_date,
+                       COALESCE(v.vendor_name, \'\') AS vendor_name,
+                       poi.quantity AS qty, poi.sku, poi.item_code, poi.size, poi.color
+                FROM vp_po_items poi
+                INNER JOIN purchase_orders po ON po.id = poi.purchase_orders_id
+                LEFT JOIN vp_vendors v ON v.id = po.vendor_id
+                WHERE poi.sku = ?
+                  AND po.status IN (\'pending\', \'ordered\', \'draft\')
+                  AND (TRIM(COALESCE(poi.item_code, "")) = ? OR ? = "")
+                  AND (TRIM(COALESCE(poi.size, "")) = ? OR ? = "")
+                  AND (TRIM(COALESCE(poi.color, "")) = ? OR ? = "")
+                ORDER BY po.po_date DESC, po.id DESC, poi.id DESC';
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param(
+            'ssssssss',
+            $sku,
+            $itemCode,
+            $itemCode,
+            $size,
+            $size,
+            $color,
+            $color
+        );
+        $stmt->execute();
+        $res = $stmt->get_result();
+
+        $out = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $out[] = [
+                    'po_id' => (int) ($row['po_id'] ?? 0),
+                    'po_number' => trim((string) ($row['po_number'] ?? '')),
+                    'vendor_name' => trim((string) ($row['vendor_name'] ?? '')),
+                    'qty' => (float) ($row['qty'] ?? 0),
+                    'status' => trim((string) ($row['status'] ?? '')),
+                    'expected_delivery_date' => $row['expected_delivery_date'] ?? null,
+                    'po_date' => $row['po_date'] ?? null,
+                    'sku' => trim((string) ($row['sku'] ?? $sku)),
+                ];
+            }
+        }
+        $stmt->close();
+
+        return $out;
+    }
 }
