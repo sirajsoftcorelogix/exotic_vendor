@@ -718,21 +718,12 @@ class product
         if ($search === '') {
             return [];
         }
-        $searchTerm = '%' . $search . '%';
         $limit = max(1, min(100, (int) $limit));
-        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, cp, price_india, gst, hsn, image, groupname, itemtype, category FROM vp_products
-            WHERE sku LIKE ?
-            LIMIT ?';
-        $stmt = $this->db->prepare($sql);
-        if ($stmt === false) {
-            return [];
-        }
-        $stmt->bind_param('si', $searchTerm, $limit);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $orderItems = [];
-        if ($result && $result->num_rows > 0) {
-            while ($row = $result->fetch_assoc()) {
+        $cols = 'id, sku, item_code, title, color, size, cost_price, cp, price_india, gst, hsn, image, groupname, itemtype, category';
+
+        $mapRows = function (array $rows) {
+            $orderItems = [];
+            foreach ($rows as $row) {
                 $isBook = self::isBookProduct($row);
                 $orderItems[] = [
                     'id' => $row['id'],
@@ -749,10 +740,37 @@ class product
                     'image' => $row['image'] ?? '',
                 ];
             }
+            return $orderItems;
+        };
+
+        // Prefix first (index-friendly), then contains fallback.
+        $prefix = $search . '%';
+        $sql = "SELECT {$cols} FROM vp_products WHERE sku LIKE ? LIMIT ?";
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
         }
+        $stmt->bind_param('si', $prefix, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+        if ($rows !== []) {
+            return $mapRows($rows);
+        }
+
+        $contains = '%' . $search . '%';
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param('si', $contains, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
         $stmt->close();
 
-        return $orderItems;
+        return $mapRows($rows);
     }
 
     /**
@@ -2510,44 +2528,138 @@ class product
     }
 
     /**
-     * Autocomplete by SKU only (partial match).
+     * Drop parent catalogue rows from autocomplete results (keeps SQL index-friendly).
+     *
+     * @param list<array<string,mixed>> $rows
+     * @return list<array<string,mixed>>
+     */
+    private function filterOutParentProducts(array $rows, int $limit)
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            $level = strtolower(trim((string)($row['item_level'] ?? '')));
+            if ($level === 'parent') {
+                continue;
+            }
+            unset($row['item_level']);
+            $out[] = $row;
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Autocomplete by SKU only.
+     * Prefers prefix match (uses sku index); falls back to contains for mid-string hits.
      *
      * @return list<array<string,mixed>>
      */
     public function searchProductsBySkuLike($query)
     {
-        $q = '%' . $query . '%';
-        $sql = "SELECT id, sku, item_code, title, size, color, image, local_stock
-                FROM vp_products WHERE sku LIKE ?
-                  AND LOWER(TRIM(IFNULL(item_level, ''))) <> 'parent'
-                ORDER BY sku ASC LIMIT 25";
+        $query = trim((string)$query);
+        if ($query === '') {
+            return [];
+        }
+        $limit = 25;
+        $fetchLimit = 40;
+        $cols = 'id, sku, item_code, title, size, color, image, local_stock, item_level';
+
+        // Prefix first — can use INDEX(sku); leading-wildcard LIKE cannot.
+        $prefix = $query . '%';
+        $sql = "SELECT {$cols}
+                FROM vp_products
+                WHERE sku LIKE ?
+                ORDER BY sku ASC
+                LIMIT ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return [];
         }
-        $stmt->bind_param('s', $q);
+        $stmt->bind_param('si', $prefix, $fetchLimit);
         $stmt->execute();
         $result = $stmt->get_result();
         $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+        $filtered = $this->filterOutParentProducts($rows, $limit);
+        if ($filtered !== []) {
+            return $filtered;
+        }
 
-        return $rows;
-    }
-
-    public function searchProductsBySkuOrItemCode($query)
-    {
-        $q = '%' . $query . '%';
-        $sql = "SELECT * FROM vp_products WHERE (sku LIKE ? OR item_code LIKE ?)
-                  AND LOWER(TRIM(IFNULL(item_level, ''))) <> 'parent'
-                ORDER BY item_code ASC LIMIT 20";
+        // Contains fallback (slower; only when prefix finds nothing).
+        $contains = '%' . $query . '%';
+        $sql = "SELECT {$cols}
+                FROM vp_products
+                WHERE sku LIKE ?
+                ORDER BY sku ASC
+                LIMIT ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return [];
         }
-        $stmt->bind_param('ss', $q, $q);
+        $stmt->bind_param('si', $contains, $fetchLimit);
         $stmt->execute();
         $result = $stmt->get_result();
-        $rows = $result->fetch_all(MYSQLI_ASSOC);
-        return $rows;
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return $this->filterOutParentProducts($rows, $limit);
+    }
+
+    /**
+     * Autocomplete by SKU or item code (minimal columns).
+     * Prefers prefix match for index use; falls back to contains.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function searchProductsBySkuOrItemCode($query)
+    {
+        $query = trim((string)$query);
+        if ($query === '') {
+            return [];
+        }
+        $limit = 20;
+        $fetchLimit = 35;
+        $cols = 'id, sku, item_code, title, size, color, image, local_stock, item_level';
+
+        $prefix = $query . '%';
+        $sql = "SELECT {$cols}
+                FROM vp_products
+                WHERE sku LIKE ? OR item_code LIKE ?
+                ORDER BY item_code ASC
+                LIMIT ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ssi', $prefix, $prefix, $fetchLimit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+        $filtered = $this->filterOutParentProducts($rows, $limit);
+        if ($filtered !== []) {
+            return $filtered;
+        }
+
+        $contains = '%' . $query . '%';
+        $sql = "SELECT {$cols}
+                FROM vp_products
+                WHERE sku LIKE ? OR item_code LIKE ?
+                ORDER BY item_code ASC
+                LIMIT ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ssi', $contains, $contains, $fetchLimit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return $this->filterOutParentProducts($rows, $limit);
     }
 
     public function createProduct($data)
