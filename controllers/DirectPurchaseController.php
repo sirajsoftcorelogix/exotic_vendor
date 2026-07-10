@@ -6,6 +6,7 @@ require_once 'models/vendor/vendor.php';
 require_once 'models/product/product.php';
 require_once 'models/comman/tables.php';
 require_once 'helpers/exotic_india_api.php';
+require_once 'helpers/direct_purchase_supplier.php';
 
 $directPurchaseModel = new DirectPurchase($conn);
 $directPurchaseReturnModel = new DirectPurchaseReturn($conn);
@@ -545,12 +546,14 @@ class DirectPurchaseController
         global $conn;
         global $directPurchaseVendorModel;
         $vendors = $directPurchaseVendorModel->getActiveVendorsWithExoticVendorId();
+        $publishers = dp_supplier_active_publishers($conn);
         $commanModel = new Tables($conn);
         $warehouses = $commanModel->get_exotic_address();
         renderTemplate('views/direct_purchase/form.php', [
             'purchase' => null,
             'items' => [],
             'vendors' => $vendors,
+            'publishers' => $publishers,
             'warehouses' => $warehouses,
             'is_edit' => false,
             'purchase_locked' => false,
@@ -595,6 +598,7 @@ class DirectPurchaseController
         }
         unset($it);
         $vendors = $directPurchaseVendorModel->getAllVendors();
+        $publishers = dp_supplier_active_publishers($conn);
         $commanModel = new Tables($conn);
         $warehouses = $commanModel->get_exotic_address();
 
@@ -602,6 +606,7 @@ class DirectPurchaseController
             'purchase' => $purchase,
             'items' => $items,
             'vendors' => $vendors,
+            'publishers' => $publishers,
             'warehouses' => $warehouses,
             'is_edit' => true,
         ], 'Edit direct purchase');
@@ -619,14 +624,33 @@ class DirectPurchaseController
         }
 
         $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+        $isEdit = $id > 0;
+        $existingPurchase = null;
+        if ($isEdit) {
+            $existingPurchase = $directPurchaseModel->getById($id);
+            if (!$existingPurchase) {
+                $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Purchase not found.'];
+                header('Location: ?page=direct_purchase&action=list');
+                exit;
+            }
+        }
 
-        $vendorId = isset($_POST['vendor_id']) ? (int) $_POST['vendor_id'] : 0;
+        $supplier = dp_supplier_parse_post($_POST, $existingPurchase, $isEdit, $conn);
+        if (!empty($supplier['error'])) {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $supplier['error']];
+            $redir = $isEdit ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
+            header('Location: ' . $redir);
+            exit;
+        }
+
+        $vendorId = (int) ($supplier['vendor_id'] ?? 0);
+        $vendorType = (string) ($supplier['vendor_type'] ?? 'vendor');
         $warehouseId = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
         $invoiceNumber = trim((string) ($_POST['invoice_number'] ?? ''));
         $invoiceDate = trim((string) ($_POST['invoice_date'] ?? ''));
 
-        if ($vendorId <= 0 || $invoiceNumber === '' || $invoiceDate === '') {
-            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Vendor, invoice number and invoice date are required.'];
+        if ($invoiceNumber === '' || $invoiceDate === '') {
+            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Invoice number and invoice date are required.'];
             $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
             header('Location: ' . $redir);
             exit;
@@ -718,6 +742,7 @@ class DirectPurchaseController
 
         $header = [
             'vendor_id' => $vendorId,
+            'vendor_type' => $vendorType,
             'warehouse_id' => $warehouseId,
             'invoice_number' => $invoiceNumber,
             'invoice_date' => $invoiceDate,

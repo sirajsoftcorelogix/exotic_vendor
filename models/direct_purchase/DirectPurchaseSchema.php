@@ -25,6 +25,12 @@ final class DirectPurchaseSchema
             'currency',
             'ALTER TABLE `vp_direct_purchases` ADD COLUMN `currency` VARCHAR(10) NOT NULL DEFAULT \'INR\' AFTER `invoice_file`'
         );
+        self::ensureColumn(
+            $conn,
+            'vp_direct_purchases',
+            'vendor_type',
+            'ALTER TABLE `vp_direct_purchases` ADD COLUMN `vendor_type` VARCHAR(20) NOT NULL DEFAULT \'vendor\' AFTER `vendor_id`'
+        );
 
         self::ensureColumn(
             $conn,
