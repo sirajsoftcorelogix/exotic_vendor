@@ -6882,6 +6882,7 @@ class ProductsController
 
         $insufficient = [];
         $requestedQtyBySku = [];
+        $productIdBySku = [];
         $alreadyFlaggedSku = [];
         foreach ($normalizedItems as $idx => $item) {
             $transfer_qty = (int)($item['transfer_qty'] ?? 0);
@@ -6894,6 +6895,7 @@ class ProductsController
             }
             if (!isset($requestedQtyBySku[$sku])) {
                 $requestedQtyBySku[$sku] = 0;
+                $productIdBySku[$sku] = (int)($item['product_id'] ?? 0);
             }
             $requestedQtyBySku[$sku] += $transfer_qty;
 
@@ -6902,7 +6904,13 @@ class ProductsController
                 continue;
             }
             $existingQty = $existingQtyBySku[$sku] ?? 0;
-            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $requestedQtyBySku[$sku], $existingQty);
+            $validation = $stockTransferModel->validateItemStock(
+                $sku,
+                $from_warehouse,
+                $requestedQtyBySku[$sku],
+                $existingQty,
+                (int)($productIdBySku[$sku] ?? 0)
+            );
             if (!$validation['valid']) {
                 $alreadyFlaggedSku[$sku] = true;
                 $insufficient[] = [
@@ -7568,6 +7576,7 @@ class ProductsController
 
         $requestedQtyBySku = [];
         $firstItemCodeBySku = [];
+        $productIdBySku = [];
         $unresolvedItems = [];
         foreach ($items as $item) {
             $qty = (int)($item['transfer_qty'] ?? 0);
@@ -7594,6 +7603,7 @@ class ProductsController
             if (!isset($requestedQtyBySku[$sku])) {
                 $requestedQtyBySku[$sku] = 0;
                 $firstItemCodeBySku[$sku] = trim((string)($item['item_code'] ?? ''));
+                $productIdBySku[$sku] = (int)($item['product_id'] ?? 0);
             }
             $requestedQtyBySku[$sku] += $qty;
         }
@@ -7627,7 +7637,13 @@ class ProductsController
         $insufficient = [];
         foreach ($requestedQtyBySku as $sku => $requestedQty) {
             $existingQty = (int)($existingQtyBySku[$sku] ?? 0);
-            $validation = $stockTransferModel->validateItemStock($sku, $fromWarehouse, (int)$requestedQty, $existingQty);
+            $validation = $stockTransferModel->validateItemStock(
+                $sku,
+                $fromWarehouse,
+                (int)$requestedQty,
+                $existingQty,
+                (int)($productIdBySku[$sku] ?? 0)
+            );
             if (!($validation['valid'] ?? false)) {
                 $insufficient[] = [
                     'sku' => $sku,

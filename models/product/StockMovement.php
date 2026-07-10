@@ -57,6 +57,37 @@ final class StockMovement
     }
 
     /**
+     * Latest running_stock for one product at one warehouse (same basis as POS / product detail).
+     */
+    public static function getLastRunningStockByProductId(\mysqli $conn, int $productId, int $warehouseId): float
+    {
+        if ($productId <= 0 || $warehouseId <= 0) {
+            return 0.0;
+        }
+        $sql = '
+            SELECT sm.running_stock
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE warehouse_id = ?
+                GROUP BY product_id
+            ) latest ON latest.product_id = sm.product_id AND latest.max_id = sm.id
+            WHERE sm.warehouse_id = ? AND sm.product_id = ?
+            LIMIT 1';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return 0.0;
+        }
+        $stmt->bind_param('iii', $warehouseId, $warehouseId, $productId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (float) ($row['running_stock'] ?? 0);
+    }
+
+    /**
      * Sum of latest running_stock per warehouse for a product.
      */
     public static function getPhysicalStockTotalFromMovements(\mysqli $conn, int $productId): int
@@ -185,8 +216,12 @@ final class StockMovement
         $isInbound = self::isInbound($movementType);
         $lastRunning = 0.0;
 
-        if ($warehouseId > 0 && trim($sku) !== '') {
-            $lastRunning = self::getLastRunningStock($conn, $sku, $warehouseId);
+        if ($warehouseId > 0) {
+            if (!empty($options['product_id'])) {
+                $lastRunning = self::getLastRunningStockByProductId($conn, (int) $options['product_id'], $warehouseId);
+            } elseif (trim($sku) !== '') {
+                $lastRunning = self::getLastRunningStock($conn, $sku, $warehouseId);
+            }
         } elseif (!$isInbound && !empty($options['product_id'])) {
             $lastRunning = (float) self::getPhysicalStockTotalFromMovements($conn, (int) $options['product_id']);
         }
