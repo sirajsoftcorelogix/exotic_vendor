@@ -94,7 +94,7 @@ if ($receipt_download_filename_base === '') {
 
           <!-- Row 4: payment banner -->
           <div class="border-y border-neutral-900 bg-neutral-900 px-4 py-3.5 text-center text-[11px] font-semibold leading-snug text-white sm:text-sm sm:py-4">
-            <?= $h($receipt_banner_text ?? '') ?> <span class="font-normal text-neutral-300">Stage: <?= $h(ucfirst(trim((string)($payment_stage ?? 'final')))) ?> · <?= $h($payment_mode_label ?? '') ?></span>
+            <?= $h($receipt_banner_text ?? '') ?> <span class="font-normal text-neutral-300">Stage: <?= $h(ucfirst(trim((string)($payment_stage ?? 'final')))) ?> · <?= $h($payment_mode_label ?? '') ?><?php if (trim((string)($pos_delivery_status_label ?? '')) !== ''): ?> · <?= $h((string)$pos_delivery_status_label) ?><?php endif; ?></span>
           </div>
           </div>
 
