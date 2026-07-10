@@ -372,11 +372,35 @@ $(function () {
     return out;
   }
 
+  function readAddonCartEntry(el) {
+    if (!el) return '';
+    return String(el.getAttribute('data-entry') || el.getAttribute('data-cart-entry') || '').trim();
+  }
+
+  function parseAddonPriceRupee(val) {
+    if (val == null || val === '') return null;
+    const n = parseFloat(String(val).replace(/,/g, '').trim());
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function formatAddonPriceRupee(val) {
+    const n = parseAddonPriceRupee(val);
+    if (n == null) return '—';
+    try {
+      return new Intl.NumberFormat('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(n);
+    } catch (e) {
+      return n.toFixed(2);
+    }
+  }
+
   function applyPreselectedAddonsToModal(entries) {
     const wanted = normalizeAddonEntries(entries);
     const wantedLower = new Set(wanted.map(function (x) { return x.toLowerCase(); }));
     $('#productModal .addon-checkbox').each(function () {
-      const entry = String($(this).data('entry') || '').trim().toLowerCase();
+      const entry = readAddonCartEntry(this).toLowerCase();
       $(this).prop('checked', entry && wantedLower.has(entry));
     });
     $('#modal_options').val(wanted.join('|'));
@@ -403,9 +427,9 @@ $(function () {
     }
     const selectedEntries = [];
     $('#productModal .addon-checkbox:checked').each(function () {
-      const entry = $(this).data('entry');
+      const entry = readAddonCartEntry(this);
       if (entry) {
-        selectedEntries.push(String(entry));
+        selectedEntries.push(entry);
       }
     });
     $('#modal_options').val(selectedEntries.join('|'));
@@ -499,6 +523,8 @@ $(function () {
         let textColor = isExpress ? 'text-green-900' : 'text-gray-800';
         let priceColor = isExpress ? 'text-green-900' : 'text-gray-700';
 
+        const cartEntry = String(opt.cart_entry || '').trim();
+        const addonPriceLabel = formatAddonPriceRupee(opt.price_display != null ? opt.price_display : opt.price);
         addonsHtml += `
     <label class="flex items-center justify-between gap-2 rounded-lg ${bgClass} px-3 py-2 cursor-pointer">
 
@@ -506,7 +532,7 @@ $(function () {
 
         <input type="checkbox"
                class="addon-checkbox h-4 w-4 ${isExpress ? 'text-green-600' : 'text-gray-600'} border-gray-300 rounded"
-               data-entry="${opt.cart_entry}">
+               data-entry="${siblingHtmlEscape(cartEntry)}">
 
         <div>
           <div class="text-[10px] ${textColor} leading-tight">
@@ -517,7 +543,7 @@ $(function () {
       </div>
 
       <div class="text-[11px] font-semibold ${priceColor} whitespace-nowrap">
-        ₹ ${parseFloat(opt.price).toFixed(2)}
+        ₹ ${addonPriceLabel}
       </div>
 
     </label>
@@ -977,14 +1003,16 @@ data-code="${lookupCode}">
 
     if (p.addon_options) {
       p.addon_options.default_options.forEach(opt => {
+        const cartEntry = String(opt.cart_entry || '').trim();
+        const addonPriceLabel = formatAddonPriceRupee(opt.price_display != null ? opt.price_display : opt.price);
         addonsHtml += `
                 <label class="flex justify-between border px-3 py-2 rounded-lg">
                     <div>
                         <input type="checkbox" class="addon-checkbox"
-                               data-entry="${opt.cart_entry}">
+                               data-entry="${siblingHtmlEscape(cartEntry)}">
                         ${opt.title}
                     </div>
-                    <div>₹ ${opt.price}</div>
+                    <div>₹ ${addonPriceLabel}</div>
                 </label>
             `;
       });
@@ -1017,15 +1045,16 @@ data-code="${lookupCode}">
   //   //  SET HIDDEN INPUT
   //   $('#modal_options').val(optionsStr);
   // });
-  $(document).on('change', '.addon-checkbox', function () {
-    let selected = [];
-
-    $('.addon-checkbox:checked').each(function () {
-        selected.push($(this).data('entry'));
+  $(document).on('change', '#productModal .addon-checkbox', function () {
+    const selected = [];
+    $('#productModal .addon-checkbox:checked').each(function () {
+      const entry = readAddonCartEntry(this);
+      if (entry) {
+        selected.push(entry);
+      }
     });
-
     $('#modal_options').val(selected.join('|'));
-});
+  });
   let searchTimeout = null;
   const $searchName = $('#searchName');
   const $skuSuggest = $('#skuSuggest');

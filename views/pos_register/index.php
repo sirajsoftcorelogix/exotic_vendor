@@ -733,7 +733,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
         <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <div class="mb-2 font-semibold text-amber-950">High Value Transaction – Compliance Required</div>
-          <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. GSTIN B2B invoices derive PAN automatically.</p>
+          <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details may be collected for high value orders. PAN is optional; GSTIN B2B invoices derive PAN automatically when provided.</p>
           <label class="block font-medium">Customer residency <span class="field-req-star text-red-600">*</span>
             <select id="customer_residency_status" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm">
               <option value="INDIAN_RESIDENT">Indian Resident</option>
@@ -742,10 +742,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             </select>
           </label>
           <div id="panComplianceWrap" class="mt-3">
-            <label class="block font-medium">PAN <span id="panRequiredStar" class="field-req-star text-red-600">*</span>
-              <input id="customer_pan" maxlength="10" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="ABCDE1234F">
+            <label class="block font-medium">PAN <span class="text-[11px] font-normal text-amber-700">(optional)</span>
+              <input id="customer_pan" maxlength="10" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="ABCDE1234F (optional)">
             </label>
-            <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">PAN is required unless GSTIN is entered.</p>
+            <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">Optional. If GSTIN is entered, PAN can be derived for B2B invoice handling.</p>
           </div>
           <div class="mt-3">
             <label class="block font-medium">Aadhaar
@@ -1682,10 +1682,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var passportWrap = document.getElementById("passportComplianceWrap");
     var countryWrap = document.getElementById("countryResidenceWrap");
     var panHint = document.getElementById("panComplianceHint");
-    var panStar = document.getElementById("panRequiredStar");
     var passportStar = document.getElementById("passportRequiredStar");
     var countryStar = document.getElementById("countryRequiredStar");
-    var panVal = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").trim();
 
     if (banner) {
       banner.textContent = "High Value Transaction – Compliance Required (limit " + formatInrAmount(getHighValueLimit()) + ")";
@@ -1701,13 +1699,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (panWrap) panWrap.classList.toggle("hidden", residency === "FOREIGN_NATIONAL");
     if (passportWrap) passportWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
     if (countryWrap) countryWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
-    if (panStar) panStar.classList.toggle("hidden", hasGstin || residency === "FOREIGN_NATIONAL" || (residency === "NRI" && panVal !== ""));
-    if (passportStar) passportStar.classList.toggle("hidden", residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
-    if (countryStar) countryStar.classList.toggle("hidden", residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
+    if (passportStar) passportStar.classList.toggle("hidden", residency !== "FOREIGN_NATIONAL");
+    if (countryStar) countryStar.classList.toggle("hidden", residency !== "FOREIGN_NATIONAL");
     if (panHint) {
       panHint.textContent = hasGstin
         ? "GSTIN present. PAN will be derived automatically for B2B invoice handling."
-        : (residency === "NRI" ? "For NRI, enter PAN or Passport Number with Country of Residence." : "PAN is required unless GSTIN is entered.");
+        : "Optional. Enter PAN if available.";
     }
     updateConfirmAddressButtonState();
   }
@@ -1726,9 +1723,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var panOk = pan === "" || /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan);
     var passportOk = passport === "" || passport.length >= 6;
     if (!panOk || !passportOk) return false;
-    if (residency === "INDIAN_RESIDENT") return pan !== "";
-    if (residency === "NRI") return pan !== "" || (passport.length >= 6 && countryResidence !== "");
-    return passport.length >= 6 && countryResidence !== "";
+    if (residency === "FOREIGN_NATIONAL") {
+      return passport.length >= 6 && countryResidence !== "";
+    }
+    return true;
   }
 
   function updateConfirmAddressButtonState() {

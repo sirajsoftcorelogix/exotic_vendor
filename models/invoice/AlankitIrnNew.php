@@ -437,13 +437,31 @@ return base64_encode($encryptedData);
         return [
             'Irn' => $ewbData['irn'] ?? '',
             'Distance' => (int)($ewbData['distance'] ?? 100),
-            'TransMode' => (string)($ewbData['trans_mode'] ?? '1'),
-            'TransId' => (string)($ewbData['trans_id'] ?? ''),
+            //'TransMode' => (string)($ewbData['trans_mode'] ?? '1'),
+            'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
             'TransName' => (string)($ewbData['trans_name'] ?? 'trans name'),
-            'TrnDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
-            'TrnDocNo' => (string)($ewbData['trn_doc_no'] ?? ''),
-            'VehNo' => (string)($ewbData['veh_no'] ?? 'KA12ER1234'),
-            'VehType' => (string)($ewbData['veh_type'] ?? 'R')
+            'TrnDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),            
+            'DispDtls' => [
+                'Nm' => (string)($ewbData['Nm'] ?? 'ABC company pvt ltd'),
+                'Addr1' => (string)($ewbData['Addr1'] ?? ''),
+                'Addr2' => (string)($ewbData['Addr2'] ?? ''),
+                'Loc' => (string)($ewbData['Loc'] ?? ''),
+                'Pin' => (int)($ewbData['Pin'] ?? 0),
+                'Stcd' => (string)($ewbData['Stcd'] ?? '')
+            ],
+            'ExpShipDtls' => [
+                'Gstin' => (string)($ewbData['Gstin'] ?? ''),
+                'TrdNm' => (string)($ewbData['TrdNm'] ?? 'ABC company pvt ltd'),
+                'Addr1' => (string)($ewbData['Addr1'] ?? ''),
+                'Addr2' => (string)($ewbData['Addr2'] ?? ''),
+                'Loc' => (string)($ewbData['Loc'] ?? ''),
+                'Pin' => (int)($ewbData['Pin'] ?? 0),
+                'Stcd' => (string)($ewbData['Stcd'] ?? '')
+            ]
+            
+            //'TrnDocNo' => (string)($ewbData['trn_doc_no'] ?? ''),            
+            //'VehNo' => (string)($ewbData['veh_no'] ?? 'KA12ER1234'),
+            //'VehType' => (string)($ewbData['veh_type'] ?? 'R')
         ];
     }
 
@@ -458,11 +476,13 @@ return base64_encode($encryptedData);
         $url = $this->baseUrl . self::EWAYBILL_ENDPOINT;
         
         // Prepare EWB payload
-        $payload = $this->prepareEwbPayload($ewbData);
+        //$payload = $this->prepareEwbPayload($ewbData);
         
         // Encrypt payload
-        $payloadJson = json_encode($payload);
+        $payloadJson = json_encode($ewbData);
+        //echo "Alankit EWB: Payload JSON: " . $payloadJson . "\n";
         $payloadB64 = base64_encode($payloadJson);
+        //echo "Alankit EWB: Payload Base64: " . $payloadB64 . "\n";
         $encryptedPayload = $this->encryptBySymmetricKey($payloadB64, $decryptedSek);
         
         if (!$encryptedPayload) {
@@ -508,11 +528,11 @@ return base64_encode($encryptedData);
                 'http_code' => $httpCode
             ];
         }
-        echo "Alankit EWB API Request to $url returned HTTP $httpCode. Response:\n";
-        print_r($response);
-        echo "\n";
-        echo "Decrypted SEK used for EWB encryption/decryption: " . $decryptedSek . "\n";
-        echo "Encrypted EWB Payload sent to API: " . $encryptedPayload . "\n";
+        //echo "Alankit EWB API Request to $url returned HTTP $httpCode. Response:\n";
+        //print_r($response);
+        //echo "\n";
+        //echo "Decrypted SEK used for EWB encryption/decryption: " . $decryptedSek . "\n";
+        //echo "Encrypted EWB Payload sent to API: " . $encryptedPayload . "\n";
         $decoded = json_decode($response, true);
         
         if ($httpCode >= 400) {

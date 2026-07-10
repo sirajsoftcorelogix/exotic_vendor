@@ -76,12 +76,10 @@ class AramexShipmentBuilder
      */
     public static function consigneeFromAddress(array $address): array
     {
-        $first = trim((string) ($address['shipping_first_name'] ?? $address['first_name'] ?? ''));
-        $last = trim((string) ($address['shipping_last_name'] ?? $address['last_name'] ?? ''));
-        $person = trim($first . ' ' . $last);
-        $company = trim((string) ($address['shipping_company'] ?? $address['company'] ?? ''));
+        $person = self::extractPersonName($address);
+        $company = trim((string) ($address['shipping_company'] ?? $address['company'] ?? $address['company_name'] ?? ''));
         if ($company === '') {
-            $company = $person;
+            $company = $person !== '' ? $person : 'Customer';
         }
 
         return [
@@ -89,13 +87,13 @@ class AramexShipmentBuilder
             'Reference2' => '',
             'AccountNumber' => '',
             'PartyAddress' => [
-                'Line1' => (string) ($address['shipping_address_line1'] ?? $address['address_line1'] ?? ''),
-                'Line2' => (string) ($address['shipping_address_line2'] ?? $address['address_line2'] ?? ''),
+                'Line1' => (string) ($address['shipping_first_name'] ? $address['shipping_address_line1'] : $address['address_line1'] ?? ''),
+                'Line2' => (string) ($address['shipping_first_name'] ? $address['shipping_address_line2'] : $address['address_line2'] ?? ''),
                 'Line3' => '',
-                'City' => trim((string) ($address['shipping_city'] ?? $address['city'] ?? '')),
-                'StateOrProvinceCode' => (string) ($address['shipping_state'] ?? $address['state'] ?? ''),
-                'PostCode' => (string) ($address['shipping_zipcode'] ?? $address['zipcode'] ?? ''),
-                'CountryCode' => (string) ($address['shipping_country_code'] ?? $address['country_code'] ?? $address['shipping_country'] ?? ''),
+                'City' => trim((string) ($address['shipping_first_name'] ? $address['shipping_city'] : $address['city'] ?? '')),
+                'StateOrProvinceCode' => (string) ($address['shipping_first_name'] ? $address['shipping_state'] : $address['state'] ?? $address['state_iso'] ?? ''),
+                'PostCode' => (string) ($address['shipping_first_name'] ? $address['shipping_zipcode'] : $address['zipcode'] ?? ''),
+                'CountryCode' => (string) ($address['shipping_first_name'] ? $address['shipping_country'] : $address['country'] ?? ''),
                 'Longitude' => 0,
                 'Latitude' => 0,
                 'BuildingNumber' => '',
@@ -116,27 +114,50 @@ class AramexShipmentBuilder
                 'PhoneNumber2Ext' => '',
                 'FaxNumber' => '',
                 'CellPhone' => self::extractPhone($address),
-                'EmailAddress' => (string) ($address['shipping_email'] ?? $address['email'] ?? ''),
+                'EmailAddress' => (string) ($address['shipping_first_name'] ? $address['shipping_email'] : $address['email'] ?? ''),
                 'Type' => '',
             ],
         ];
     }
 
+    private static function extractPersonName(array $address): string
+    {
+        $candidates = [
+            $address['shipping_first_name'] ? trim((string) ($address['shipping_first_name'] . ' ' . ($address['shipping_last_name'] ?? ''))) : $address['first_name'] . ' ' . $address['last_name'],
+        ]; 
+        
+        foreach ($candidates as $candidate) {
+            if ($candidate !== '') {
+                return preg_replace('/\s+/', ' ', $candidate);
+            }
+        }
+
+        return '';
+    }
+
     private static function extractPhone(array $address): string
     {
-        // Try various phone field names in order of preference
-        $phone = 
-            $address['shipping_phone'] ?? 
-            $address['shipping_mobile'] ?? 
-            $address['shipping_cell'] ?? 
-            $address['shipping_telephone'] ?? 
-            $address['phone'] ?? 
-            $address['mobile'] ?? 
-            $address['cell'] ?? 
-            $address['telephone'] ?? 
-            '';
-        
-        return (string) $phone;
+        $candidates = [
+            $address['shipping_phone'] ?? '',
+            $address['shipping_mobile'] ?? '',
+            $address['shipping_cell'] ?? '',
+            $address['shipping_telephone'] ?? '',
+            $address['phone'] ?? '',
+            $address['mobile'] ?? '',
+            $address['cell'] ?? '',
+            $address['telephone'] ?? '',
+            $address['contact_phone'] ?? '',
+            $address['contact_mobile'] ?? '',
+        ];
+
+        foreach ($candidates as $candidate) {
+            $value = trim((string) $candidate);
+            if ($value !== '') {
+                return preg_replace('/\D/', '', $value);
+            }
+        }
+
+        return '';
     }
 
     private static function parseAndFormatDate($date, $format = 'm/d/Y'): string
