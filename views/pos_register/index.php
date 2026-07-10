@@ -622,9 +622,9 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     </div>
     <div class="overflow-y-auto p-5 space-y-4 text-sm">
       <div class="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-        Order total is taken from the live cart summary (incl. discounts). Select payment stage, then <strong>Place order</strong> to confirm addresses next.
+        Order total from the live cart (incl. discounts). Add one or more payment lines, then <strong>Place order</strong> to confirm addresses.
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="text-xs text-slate-500">Payment stage <span class="text-red-600">*</span></label>
           <select id="payment_stage" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" required>
@@ -634,32 +634,57 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           </select>
         </div>
         <div>
-          <label class="text-xs text-slate-500">Payment mode <span class="text-red-600">*</span></label>
-          <select id="payment_mode" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" required>
-            <option value="cash">Cash</option>
-            <option value="upi">UPI</option>
-            <option value="bank_transfer">Bank transfer</option>
-            <option value="pos_machine">POS machine</option>
-            <option value="razorpay">Razorpay</option>
-            <option value="cheque">Cheque</option>
-          </select>
-        </div>
-        <div>
           <label class="text-xs text-slate-500">Payment date <span class="text-red-600">*</span></label>
           <input type="date" id="payment_date" value="<?= htmlspecialchars(date('Y-m-d'), ENT_QUOTES, 'UTF-8') ?>" max="<?= htmlspecialchars(date('Y-m-d'), ENT_QUOTES, 'UTF-8') ?>" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" title="Today or earlier only" required>
         </div>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label class="text-xs text-slate-500">Amount (₹) <span class="text-red-600">*</span></label>
-          <input type="number" step="0.01" min="0" id="payment_amount" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 tabular-nums" placeholder="0.00" required>
+
+      <div class="rounded-xl border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 p-4">
+        <div class="grid grid-cols-3 gap-3 text-center sm:text-left">
+          <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Order total</div>
+            <div id="payment_summary_order" class="mt-0.5 text-lg font-bold text-slate-900 tabular-nums">₹ 0.00</div>
+          </div>
+          <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Collecting now</div>
+            <div id="payment_summary_paid" class="mt-0.5 text-lg font-bold text-orange-700 tabular-nums">₹ 0.00</div>
+          </div>
+          <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Balance</div>
+            <div id="payment_summary_balance" class="mt-0.5 text-lg font-bold text-emerald-700 tabular-nums">₹ 0.00</div>
+          </div>
         </div>
-        <div>
-          <label id="transaction_id_label" class="text-xs text-slate-500">Transaction ID</label>
-          <input type="text" id="transaction_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" placeholder="Required for Razorpay">
-          <p id="transaction_id_required_hint" class="hidden mt-1 text-[11px] text-amber-700">Razorpay requires a transaction ID.</p>
+        <p id="payment_summary_hint" class="mt-2 hidden text-[11px] text-slate-600"></p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 overflow-hidden">
+        <div class="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
+          <div>
+            <h3 class="text-sm font-semibold text-slate-800">Payment split</h3>
+            <p class="text-[11px] text-slate-500">Each row is saved as a separate payment entry (same receipt)</p>
+          </div>
+          <button type="button" id="payment_split_add_btn" class="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-50 shadow-sm">
+            <span class="text-base leading-none">+</span> Add mode
+          </button>
+        </div>
+        <div class="hidden sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_2.5rem] gap-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-white border-b border-slate-100">
+          <span>Mode</span>
+          <span>Amount (₹)</span>
+          <span>Transaction / ref</span>
+          <span></span>
+        </div>
+        <div id="payment_split_rows" class="divide-y divide-slate-100 bg-white"></div>
+        <div class="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs">
+          <span class="text-slate-600"><span id="payment_split_count">0</span> payment line(s)</span>
+          <span class="font-semibold text-slate-800">Split total: <span id="payment_split_total" class="text-orange-700 tabular-nums">₹ 0.00</span></span>
         </div>
       </div>
+      <div id="payment_split_validation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></div>
+
+      <!-- Legacy single-payment fields kept for scripts that read totals; updated by split UI -->
+      <input type="hidden" id="payment_amount" value="">
+      <input type="hidden" id="payment_mode" value="cash">
+      <input type="hidden" id="transaction_id" value="">
       <div id="customInvoiceNumberWrap" class="hidden rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
         <label class="text-xs font-medium text-emerald-900">Override invoice number (optional)</label>
         <input type="text" id="custom_invoice_number" maxlength="50" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm" placeholder="Auto-generated if left blank">
@@ -684,6 +709,34 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     </div>
   </div>
 </div>
+
+<template id="payment_split_row_template">
+  <div class="payment-split-row px-4 py-3 sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_2.5rem] sm:gap-2 sm:items-start space-y-2 sm:space-y-0">
+    <div>
+      <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Mode</label>
+      <select class="payment-split-mode mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+        <option value="cash">Cash</option>
+        <option value="upi">UPI</option>
+        <option value="bank_transfer">Bank transfer</option>
+        <option value="pos_machine">POS machine</option>
+        <option value="razorpay">Razorpay</option>
+        <option value="cheque">Cheque</option>
+      </select>
+    </div>
+    <div>
+      <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
+      <input type="number" step="0.01" min="0" class="payment-split-amount mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm tabular-nums" placeholder="0.00" />
+    </div>
+    <div>
+      <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Transaction / ref</label>
+      <input type="text" class="payment-split-txn mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Optional" />
+      <p class="payment-split-txn-hint hidden mt-1 text-[10px] text-amber-700">Required for Razorpay / Cheque</p>
+    </div>
+    <div class="flex sm:justify-center sm:pt-2">
+      <button type="button" class="payment-split-remove rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-red-600 hover:bg-red-100 text-sm" title="Remove line">✕</button>
+    </div>
+  </div>
+</template>
 
 <!-- ADDRESS CONFIRMATION MODAL -->
 <div id="addressConfirmModal" class="fixed inset-0 z-[10000] hidden">
@@ -733,7 +786,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
         <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <div class="mb-2 font-semibold text-amber-950">High Value Transaction – Compliance Required</div>
-          <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details may be collected for high value orders. PAN is optional; GSTIN B2B invoices derive PAN automatically when provided.</p>
+          <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. GSTIN B2B invoices derive PAN automatically.</p>
           <label class="block font-medium">Customer residency <span class="field-req-star text-red-600">*</span>
             <select id="customer_residency_status" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm">
               <option value="INDIAN_RESIDENT">Indian Resident</option>
@@ -742,10 +795,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             </select>
           </label>
           <div id="panComplianceWrap" class="mt-3">
-            <label class="block font-medium">PAN <span class="text-[11px] font-normal text-amber-700">(optional)</span>
-              <input id="customer_pan" maxlength="10" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="ABCDE1234F (optional)">
+            <label class="block font-medium">PAN <span id="panRequiredStar" class="field-req-star text-red-600">*</span>
+              <input id="customer_pan" maxlength="10" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="ABCDE1234F">
             </label>
-            <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">Optional. If GSTIN is entered, PAN can be derived for B2B invoice handling.</p>
+            <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">PAN is required unless GSTIN is entered.</p>
           </div>
           <div class="mt-3">
             <label class="block font-medium">Aadhaar
@@ -1081,6 +1134,271 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     }
   }
 
+  function syncPaymentDatePickerMax() {
+    var el = document.getElementById("payment_date");
+    if (!el || typeof posPaymentDateLocalYmd !== "function") {
+      return;
+    }
+    var t = posPaymentDateLocalYmd();
+    el.max = t;
+    if (el.value && el.value > t) {
+      el.value = t;
+    }
+  }
+
+  var POS_PAYMENT_MODE_OPTIONS = [
+    ["cash", "Cash"],
+    ["upi", "UPI"],
+    ["bank_transfer", "Bank transfer"],
+    ["pos_machine", "POS machine"],
+    ["razorpay", "Razorpay"],
+    ["cheque", "Cheque"]
+  ];
+
+  function formatPaymentInr(amount) {
+    var n = parseFloat(String(amount));
+    if (!isFinite(n)) {
+      n = 0;
+    }
+    try {
+      return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+    } catch (e) {
+      return "₹ " + n.toFixed(2);
+    }
+  }
+
+  function getPaymentSplitRowsContainer() {
+    return document.getElementById("payment_split_rows");
+  }
+
+  function syncPaymentSplitTxnHint(row) {
+    if (!row) return;
+    var mode = String(row.querySelector(".payment-split-mode")?.value || "").toLowerCase();
+    var hint = row.querySelector(".payment-split-txn-hint");
+    var txn = row.querySelector(".payment-split-txn");
+    var need = mode === "razorpay" || mode === "cheque";
+    if (hint) hint.classList.toggle("hidden", !need);
+    if (txn) txn.placeholder = need ? "Required" : "Optional";
+  }
+
+  function bindPaymentSplitRow(row) {
+    if (!row || row.dataset.bound === "1") return;
+    row.dataset.bound = "1";
+    row.querySelectorAll("input, select").forEach(function(el) {
+      el.addEventListener("input", recalcPaymentSplitUi);
+      el.addEventListener("change", recalcPaymentSplitUi);
+    });
+    var modeEl = row.querySelector(".payment-split-mode");
+    if (modeEl) {
+      modeEl.addEventListener("change", function() {
+        syncPaymentSplitTxnHint(row);
+      });
+    }
+    var removeBtn = row.querySelector(".payment-split-remove");
+    if (removeBtn) {
+      removeBtn.addEventListener("click", function() {
+        var container = getPaymentSplitRowsContainer();
+        if (!container || container.children.length <= 1) return;
+        row.remove();
+        recalcPaymentSplitUi();
+      });
+    }
+    syncPaymentSplitTxnHint(row);
+  }
+
+  function addPaymentSplitRow(mode, amount, txn) {
+    var tpl = document.getElementById("payment_split_row_template");
+    var container = getPaymentSplitRowsContainer();
+    if (!tpl || !container) return;
+    var node = tpl.content.cloneNode(true);
+    container.appendChild(node);
+    var row = container.lastElementChild;
+    if (!row) return;
+    var modeEl = row.querySelector(".payment-split-mode");
+    var amtEl = row.querySelector(".payment-split-amount");
+    var txnEl = row.querySelector(".payment-split-txn");
+    if (modeEl && mode) modeEl.value = mode;
+    if (amtEl != null && amount != null && amount !== "") amtEl.value = String(amount);
+    if (txnEl && txn) txnEl.value = txn;
+    bindPaymentSplitRow(row);
+    recalcPaymentSplitUi();
+  }
+
+  function resetPaymentSplitRows(grandTotal) {
+    var container = getPaymentSplitRowsContainer();
+    if (!container) return;
+    container.innerHTML = "";
+    var total = parseFloat(String(grandTotal));
+    addPaymentSplitRow("cash", isFinite(total) && total > 0 ? total : "", "");
+  }
+
+  function collectPaymentSplitsFromUi() {
+    var container = getPaymentSplitRowsContainer();
+    if (!container) return [];
+    var out = [];
+    container.querySelectorAll(".payment-split-row").forEach(function(row) {
+      var mode = String(row.querySelector(".payment-split-mode")?.value || "").trim().toLowerCase();
+      var amount = parseFloat(String(row.querySelector(".payment-split-amount")?.value || ""));
+      var txn = String(row.querySelector(".payment-split-txn")?.value || "").trim();
+      if (!mode || !isFinite(amount) || amount <= 0) return;
+      out.push({ mode: mode, amount: Math.round(amount * 100) / 100, transaction_id: txn });
+    });
+    return out;
+  }
+
+  function getPaymentSplitTotalFromUi() {
+    var total = 0;
+    collectPaymentSplitsFromUi().forEach(function(s) {
+      total += s.amount;
+    });
+    return Math.round(total * 100) / 100;
+  }
+
+  function syncLegacyPaymentHiddenFields(splits, total) {
+    var amountEl = document.getElementById("payment_amount");
+    var modeEl = document.getElementById("payment_mode");
+    var txnEl = document.getElementById("transaction_id");
+    if (amountEl) amountEl.value = String(total);
+    var primary = splits[0] || { mode: "cash", transaction_id: "" };
+    splits.forEach(function(s) {
+      if (s.amount > primary.amount) primary = s;
+    });
+    if (modeEl) modeEl.value = primary.mode || "cash";
+    if (txnEl) txnEl.value = primary.transaction_id || "";
+  }
+
+  function recalcPaymentSplitUi() {
+    var splits = collectPaymentSplitsFromUi();
+    var splitTotal = getPaymentSplitTotalFromUi();
+    var orderTotal = getCurrentCheckoutTotal();
+    var stage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
+    var target = stage === "final" ? orderTotal : orderTotal;
+    var balance = Math.round((target - splitTotal) * 100) / 100;
+
+    syncLegacyPaymentHiddenFields(splits, splitTotal);
+
+    var orderEl = document.getElementById("payment_summary_order");
+    var paidEl = document.getElementById("payment_summary_paid");
+    var balEl = document.getElementById("payment_summary_balance");
+    var hintEl = document.getElementById("payment_summary_hint");
+    var countEl = document.getElementById("payment_split_count");
+    var totalEl = document.getElementById("payment_split_total");
+
+    if (orderEl) orderEl.textContent = formatPaymentInr(target);
+    if (paidEl) paidEl.textContent = formatPaymentInr(splitTotal);
+    if (balEl) {
+      balEl.textContent = formatPaymentInr(balance);
+      if (stage === "final" && Math.abs(balance) < 0.02) {
+        balEl.className = "mt-0.5 text-lg font-bold text-emerald-700 tabular-nums";
+      } else if (balance > 0.01) {
+        balEl.className = "mt-0.5 text-lg font-bold text-amber-700 tabular-nums";
+      } else if (balance < -0.01) {
+        balEl.className = "mt-0.5 text-lg font-bold text-red-700 tabular-nums";
+      } else {
+        balEl.className = "mt-0.5 text-lg font-bold text-emerald-700 tabular-nums";
+      }
+    }
+    if (countEl) countEl.textContent = String(splits.length);
+    if (totalEl) totalEl.textContent = formatPaymentInr(splitTotal);
+    if (hintEl) {
+      if (stage === "final" && balance > 0.02) {
+        hintEl.textContent = "Add " + formatPaymentInr(balance) + " more to match order total.";
+        hintEl.classList.remove("hidden");
+      } else if (stage === "final" && balance < -0.02) {
+        hintEl.textContent = "Split total exceeds order total by " + formatPaymentInr(Math.abs(balance)) + ".";
+        hintEl.classList.remove("hidden");
+      } else if ((stage === "partial" || stage === "advance") && splitTotal + 0.02 >= orderTotal && orderTotal > 0) {
+        hintEl.textContent = "Partial / advance must be less than order total.";
+        hintEl.classList.remove("hidden");
+      } else {
+        hintEl.classList.add("hidden");
+      }
+    }
+    syncCustomInvoiceNumberField();
+  }
+
+  function validatePaymentSplitsForCheckout(grandTotal) {
+    var box = document.getElementById("payment_split_validation");
+    var hideErr = function() {
+      if (box) {
+        box.classList.add("hidden");
+        box.textContent = "";
+      }
+    };
+    var showErr = function(msg) {
+      if (box) {
+        box.textContent = msg;
+        box.classList.remove("hidden");
+      }
+      showToast("⚠ " + msg, "red");
+    };
+
+    var splits = collectPaymentSplitsFromUi();
+    if (!splits.length) {
+      showErr("Add at least one payment line with amount greater than zero.");
+      return null;
+    }
+
+    var paymentStage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
+    var paymentAmount = getPaymentSplitTotalFromUi();
+
+    if (paymentAmount <= 0) {
+      showErr("Payment amount must be greater than zero.");
+      return null;
+    }
+
+    if (paymentStage === "final") {
+      if (paymentAmount + 0.02 < grandTotal) {
+        showErr("Final payment must be FULL amount ₹ " + grandTotal);
+        return null;
+      }
+      if (paymentAmount - 0.02 > grandTotal) {
+        showErr("Over payment not allowed");
+        return null;
+      }
+    } else if (paymentStage === "partial" || paymentStage === "advance") {
+      if (paymentAmount + 0.02 >= grandTotal) {
+        showErr("Partial payment must be less than total ₹ " + grandTotal);
+        return null;
+      }
+    }
+
+    var container = getPaymentSplitRowsContainer();
+    for (var i = 0; i < splits.length; i++) {
+      var s = splits[i];
+      if ((s.mode === "razorpay" || s.mode === "cheque") && !s.transaction_id) {
+        showErr((s.mode === "cheque" ? "Cheque number" : "Transaction ID") + " is required for " + s.mode + " (line " + (i + 1) + ").");
+        var rows = container ? container.querySelectorAll(".payment-split-row") : [];
+        var row = rows[i];
+        var txnInput = row ? row.querySelector(".payment-split-txn") : null;
+        if (txnInput) txnInput.focus();
+        return null;
+      }
+    }
+
+    var highValueLimit = getHighValueLimit();
+    var cashLegNeeds269 = splits.some(function(s) {
+      return s.mode === "cash" && s.amount + 0.02 >= highValueLimit;
+    });
+    if (cashLegNeeds269) {
+      var okCash = window.confirm("Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?");
+      if (!okCash) {
+        showErr("Please switch to digital payment or acknowledge the cash warning.");
+        return null;
+      }
+    }
+
+    hideErr();
+    return {
+      payment_stage: paymentStage,
+      payment_amount: paymentAmount,
+      payment_splits: splits,
+      sec269st_cash_warning_confirmed: cashLegNeeds269 ? "1" : "0",
+      primary_mode: splits.reduce(function(best, s) { return s.amount > best.amount ? s : best; }, splits[0]).mode,
+      primary_txn: splits.reduce(function(best, s) { return s.amount > best.amount ? s : best; }, splits[0]).transaction_id
+    };
+  }
+
   function openPaymentModal() {
     if (typeof window.hasUnconfirmedLocalStockWarnings === "function" && window.hasUnconfirmedLocalStockWarnings()) {
       showToast("Please confirm local stock for cart items (Y or N) before checkout.", "violet");
@@ -1100,10 +1418,11 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     }
     syncPaymentDatePickerMax();
     var ct = typeof window.getPosCartTotalsForCheckout === "function" ? window.getPosCartTotalsForCheckout() : null;
-    var pa = document.getElementById("payment_amount");
-    if (pa && ct && ct.grandTotal != null && !isNaN(parseFloat(String(ct.grandTotal)))) {
-      pa.value = String(ct.grandTotal);
-    }
+    var grand = ct && ct.grandTotal != null && !isNaN(parseFloat(String(ct.grandTotal)))
+      ? parseFloat(String(ct.grandTotal))
+      : parseFloat("<?= (float)($cartData['grand_total'] ?? 0) ?>");
+    resetPaymentSplitRows(grand);
+    recalcPaymentSplitUi();
     syncCustomInvoiceNumberField();
     pm.classList.remove("hidden");
   }
@@ -1642,11 +1961,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
   function isFullFinalPaymentSelected() {
     var stageEl = document.getElementById("payment_stage");
-    var amountEl = document.getElementById("payment_amount");
     var stage = stageEl ? String(stageEl.value || "").toLowerCase() : "";
-    var amount = amountEl ? parseFloat(String(amountEl.value || "")) : NaN;
+    var amount = getPaymentSplitTotalFromUi();
     var total = getCurrentCheckoutTotal();
-    return stage === "final" && isFinite(amount) && total > 0 && Math.abs(amount - total) <= 0.02;
+    return stage === "final" && total > 0 && Math.abs(amount - total) <= 0.02;
   }
 
   function syncCustomInvoiceNumberField() {
@@ -1682,8 +2000,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var passportWrap = document.getElementById("passportComplianceWrap");
     var countryWrap = document.getElementById("countryResidenceWrap");
     var panHint = document.getElementById("panComplianceHint");
+    var panStar = document.getElementById("panRequiredStar");
     var passportStar = document.getElementById("passportRequiredStar");
     var countryStar = document.getElementById("countryRequiredStar");
+    var panVal = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").trim();
 
     if (banner) {
       banner.textContent = "High Value Transaction – Compliance Required (limit " + formatInrAmount(getHighValueLimit()) + ")";
@@ -1699,12 +2019,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (panWrap) panWrap.classList.toggle("hidden", residency === "FOREIGN_NATIONAL");
     if (passportWrap) passportWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
     if (countryWrap) countryWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
-    if (passportStar) passportStar.classList.toggle("hidden", residency !== "FOREIGN_NATIONAL");
-    if (countryStar) countryStar.classList.toggle("hidden", residency !== "FOREIGN_NATIONAL");
+    if (panStar) panStar.classList.toggle("hidden", hasGstin || residency === "FOREIGN_NATIONAL" || (residency === "NRI" && panVal !== ""));
+    if (passportStar) passportStar.classList.toggle("hidden", residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
+    if (countryStar) countryStar.classList.toggle("hidden", residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
     if (panHint) {
       panHint.textContent = hasGstin
         ? "GSTIN present. PAN will be derived automatically for B2B invoice handling."
-        : "Optional. Enter PAN if available.";
+        : (residency === "NRI" ? "For NRI, enter PAN or Passport Number with Country of Residence." : "PAN is required unless GSTIN is entered.");
     }
     updateConfirmAddressButtonState();
   }
@@ -1723,10 +2044,47 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var panOk = pan === "" || /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan);
     var passportOk = passport === "" || passport.length >= 6;
     if (!panOk || !passportOk) return false;
-    if (residency === "FOREIGN_NATIONAL") {
-      return passport.length >= 6 && countryResidence !== "";
+    if (residency === "INDIAN_RESIDENT") return pan !== "";
+    if (residency === "NRI") return pan !== "" || (passport.length >= 6 && countryResidence !== "");
+    return passport.length >= 6 && countryResidence !== "";
+  }
+
+  function validateHighValueCompliancePayload() {
+    if (!isHighValueTransaction()) {
+      return { ok: true, message: "" };
     }
-    return true;
+    if (isHighValueComplianceDataComplete()) {
+      return { ok: true, message: "" };
+    }
+    var gstin = (document.getElementById("confirm_gstin")?.value || "").trim().toUpperCase();
+    var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
+    var pan = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").toUpperCase();
+    var passport = (document.getElementById("passport_number")?.value || "").replace(/\s+/g, "").toUpperCase();
+    var countryResidence = (document.getElementById("country_of_residence")?.value || "").trim();
+    var message = "High value transaction compliance is incomplete.";
+    if (gstin !== "" && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+      message = "GSTIN format is invalid.";
+      setPosFieldInvalid("confirm_gstin", true);
+    } else if (pan !== "" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+      message = "PAN format is invalid.";
+      setPosFieldInvalid("customer_pan", true);
+    } else if (residency === "INDIAN_RESIDENT" && gstin === "" && pan === "") {
+      message = "PAN is required for Indian resident high value transactions.";
+      setPosFieldInvalid("customer_pan", true);
+    } else if (residency === "NRI" && gstin === "" && pan === "" && (passport.length < 6 || countryResidence === "")) {
+      message = "For NRI customers, enter PAN or Passport Number with Country of Residence.";
+      if (passport.length < 6) setPosFieldInvalid("passport_number", true);
+      if (countryResidence === "") setPosFieldInvalid("country_of_residence", true);
+    } else if (residency === "FOREIGN_NATIONAL" && gstin === "") {
+      if (passport.length < 6) {
+        message = "Passport Number is required for foreign national high value transactions.";
+        setPosFieldInvalid("passport_number", true);
+      } else if (countryResidence === "") {
+        message = "Country of Residence is required for foreign national high value transactions.";
+        setPosFieldInvalid("country_of_residence", true);
+      }
+    }
+    return { ok: false, message: message };
   }
 
   function updateConfirmAddressButtonState() {
@@ -1785,6 +2143,19 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       if (first) first.focus();
       return false;
     }
+
+    var complianceCheck = validateHighValueCompliancePayload();
+    if (!complianceCheck.ok) {
+      var complianceSummary = document.getElementById("addressConfirmValidationSummary");
+      if (complianceSummary) {
+        complianceSummary.textContent = complianceCheck.message;
+        complianceSummary.classList.remove("hidden");
+      }
+      syncHighValueComplianceUi();
+      showToast("⚠ " + complianceCheck.message, "red");
+      return false;
+    }
+
     return true;
   }
 
@@ -1902,36 +2273,15 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       });
     }
 
-    var paymentModeSelect = document.getElementById("payment_mode");
-    var txnRequiredHint = document.getElementById("transaction_id_required_hint");
-    var txnLabel = document.getElementById("transaction_id_label");
-    var txnInput = document.getElementById("transaction_id");
-    function syncRazorpayTxnHint() {
-      if (!paymentModeSelect || !txnRequiredHint) {
-        return;
-      }
-      var mode = String(paymentModeSelect.value || "").toLowerCase();
-      txnRequiredHint.classList.toggle("hidden", mode !== "razorpay");
-      if (txnLabel) {
-        txnLabel.innerHTML = (mode === "cheque" ? "Cheque Number" : "Transaction ID") + (mode === "razorpay" ? ' <span class="text-red-600">*</span>' : "");
-      }
-      if (txnInput) {
-        txnInput.placeholder = mode === "cheque" ? "Enter cheque number" : "Required for Razorpay";
-        txnInput.required = mode === "razorpay";
-      }
-    }
-    if (paymentModeSelect) {
-      paymentModeSelect.addEventListener("change", syncRazorpayTxnHint);
-      syncRazorpayTxnHint();
+    var paymentSplitAddBtn = document.getElementById("payment_split_add_btn");
+    if (paymentSplitAddBtn) {
+      paymentSplitAddBtn.addEventListener("click", function() {
+        addPaymentSplitRow("cash", "", "");
+      });
     }
     var paymentStageEl = document.getElementById("payment_stage");
-    var paymentAmountEl = document.getElementById("payment_amount");
     if (paymentStageEl) {
-      paymentStageEl.addEventListener("change", syncCustomInvoiceNumberField);
-    }
-    if (paymentAmountEl) {
-      paymentAmountEl.addEventListener("input", syncCustomInvoiceNumberField);
-      paymentAmountEl.addEventListener("change", syncCustomInvoiceNumberField);
+      paymentStageEl.addEventListener("change", recalcPaymentSplitUi);
     }
 
     var paymentDateInput = document.getElementById("payment_date");
@@ -1961,51 +2311,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           return;
         }
 
-        let paymentStage = document.getElementById("payment_stage").value;
-        let paymentAmount = parseFloat(document.getElementById("payment_amount").value);
         var liveT = typeof window.getPosCartTotalsForCheckout === "function" ? window.getPosCartTotalsForCheckout() : null;
         var grandTotal = liveT && liveT.grandTotal != null && !isNaN(parseFloat(String(liveT.grandTotal)))
           ? parseFloat(String(liveT.grandTotal))
           : parseFloat("<?= (float)($cartData['grand_total'] ?? 0) ?>");
 
-        if (!paymentAmount || paymentAmount <= 0) {
-          showToast("⚠ Payment amount must be greater than 0", "red");
-          return;
-        }
-
-        //  FINAL PAYMENT STRICT VALIDATION
-        if (paymentStage === "final") {
-
-          if (paymentAmount < grandTotal) {
-            showToast("⚠ Final payment must be FULL amount ₹ " + grandTotal, "red");
-            return;
-          }
-
-          if (paymentAmount > grandTotal) {
-            showToast("⚠ Over payment not allowed", "red");
-            return;
-          }
-
-        }
-
-        //  PARTIAL VALIDATION
-        if (paymentStage === "partial" || paymentStage === "advance") {
-
-          if (paymentAmount >= grandTotal) {
-            showToast("⚠ Partial payment must be less than total ₹ " + grandTotal, "red");
-            return;
-          }
-
-        }
-
-        var paymentModeVal = document.getElementById("payment_mode").value;
-        var txnVal = (document.getElementById("transaction_id").value || "").trim();
-        if (paymentModeVal === "razorpay" && txnVal === "") {
-          showToast("⚠ Razorpay requires a transaction ID", "red");
-          var txnEl = document.getElementById("transaction_id");
-          if (txnEl) {
-            txnEl.focus();
-          }
+        var payInfo = validatePaymentSplitsForCheckout(grandTotal);
+        if (!payInfo) {
           return;
         }
 
@@ -2095,9 +2407,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       return;
     }
     var payStage = document.getElementById("payment_stage").value;
-    var payMode = document.getElementById("payment_mode").value;
-    var payAmt = parseFloat(document.getElementById("payment_amount").value);
-    var txn = (document.getElementById("transaction_id").value || "").trim();
+    var paySplits = collectPaymentSplitsFromUi();
+    var payAmt = getPaymentSplitTotalFromUi();
+    var primarySplit = paySplits.reduce(function(best, s) {
+      return s.amount > best.amount ? s : best;
+    }, paySplits[0] || { mode: "cash", amount: 0, transaction_id: "" });
+    var payMode = primarySplit.mode || "cash";
+    var txn = primarySplit.transaction_id || "";
     var note = (document.getElementById("payment_note") && document.getElementById("payment_note").value) || "";
     var subTotalGoods = live && live.subtotal != null ? parseFloat(String(live.subtotal)) : NaN;
     var gstTotal = live && live.gstTotal != null ? parseFloat(String(live.gstTotal)) : NaN;
@@ -2118,6 +2434,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       payment_stage: payStage,
       payment_mode: payMode,
       payment_amount: payAmt,
+      payment_splits: paySplits,
       transaction_id: txn,
       payment_note: note,
       order_total: orderTotal,
@@ -2135,12 +2452,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (customInvoiceNumber !== "") {
       body.custom_invoice_number = customInvoiceNumber;
     }
-    if (String(payMode || "").toLowerCase() === "cash" && isFinite(payAmt) && payAmt >= getHighValueLimit()) {
-      var okCash = window.confirm("Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?");
-      if (!okCash) {
-        showToast("Please switch to digital payment or acknowledge the cash warning.", "red");
-        return;
-      }
+    var cashLeg269 = paySplits.some(function(s) {
+      return s.mode === "cash" && s.amount + 0.02 >= getHighValueLimit();
+    });
+    if (cashLeg269) {
       body.sec269st_cash_warning_confirmed = "1";
     }
     var stockWarnings =
