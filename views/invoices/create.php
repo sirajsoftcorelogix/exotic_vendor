@@ -1,11 +1,14 @@
 <div class="bg-white p-4 md:p-8">
     <form action="<?php echo base_url('?page=invoices&action=create_post'); ?>" id="create_invoice" method="post">
         <!--international section add fields  -->
-        <?php if ($data[0]['currency'] && $data[0]['currency'] != 'INR') {
-            $intl = $international_defaults ?? [];
-            $intlVal = static function (string $key) use ($intl): string {
-                if (!isset($intl[$key])) {
-                    return '';
+        <?php 
+            $is_international = false;
+            if ($data[0]['currency'] && $data[0]['currency'] != 'INR') {
+                $is_international = true;
+                $intl = $international_defaults ?? [];
+                $intlVal = static function (string $key) use ($intl): string {
+                    if (!isset($intl[$key])) {
+                        return '';
                 }
                 $value = $intl[$key];
                 if (is_float($value) || is_int($value)) {
@@ -371,7 +374,9 @@
             <button type="button" onclick="previewInvoice()" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Preview</button>
             <button type="submit" id="createInvoiceButton" class="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600">Create Invoice</button>
             <!-- Create and dispatch-->
-            <button type="button" id="createAndDispatchButton" onclick="createAndDispatch()" class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Create & Dispatch</button>
+            <?php if($is_international === false): ?>
+                <button type="button" id="createAndDispatchButton" onclick="createAndDispatch()" class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Create & Dispatch</button>
+            <?php endif; ?>
         </div>
     </form>
 </div>
@@ -937,6 +942,11 @@
                                 document.body.removeChild(link);
                                 window.URL.revokeObjectURL(url);
 
+                                //if international invoice, redirect to dispatch page
+                                if (data.is_international) {
+                                    window.location.href = '<?php echo base_url('?page=dispatch&action=create&invoice_id='); ?>' + data.invoice_id;
+                                    return;
+                                }
                                 // Redirect to invoice view
                                 setTimeout(() => {
                                     window.location.href = '<?php echo base_url('?page=orders&action=list'); ?>';
