@@ -862,6 +862,39 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     </div>
   </div>
 </div>
+
+<!-- DELIVERY STATUS MODAL (last step before order submit) -->
+<div id="deliveryStatusModal" class="fixed inset-0 z-[10001] hidden">
+  <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+  <div class="relative mx-auto mt-[12vh] w-[95%] max-w-lg rounded-2xl bg-white shadow-2xl">
+    <div class="border-b px-5 py-4">
+      <h2 class="text-base font-semibold text-slate-800">Delivery status</h2>
+      <p class="mt-1 text-xs text-slate-500">Confirm how this order will be fulfilled before submitting.</p>
+    </div>
+    <div class="space-y-3 p-5">
+      <label class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-orange-400 bg-orange-50/60 p-4 transition hover:bg-orange-50">
+        <input type="radio" name="pos_delivery_status" value="collected_from_showroom" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500" checked>
+        <span>
+          <span class="block text-sm font-semibold text-slate-800">Collected from showroom by Customer</span>
+          <span class="mt-0.5 block text-xs text-slate-500">Customer took goods from the store now · marks order <strong>Shipped</strong></span>
+        </span>
+      </label>
+      <label class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-transparent bg-slate-50 p-4 transition hover:border-slate-200 hover:bg-white">
+        <input type="radio" name="pos_delivery_status" value="deliver_later" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500">
+        <span>
+          <span class="block text-sm font-semibold text-slate-800">Deliver to customer Later</span>
+          <span class="mt-0.5 block text-xs text-slate-500">Goods will be dispatched later · keeps order <strong>Pending</strong></span>
+        </span>
+      </label>
+      <div id="deliveryStatusValidation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></div>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl">
+      <button type="button" id="deliveryStatusBackBtn" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Back</button>
+      <button type="button" id="deliveryStatusSubmitBtn" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Submit order</button>
+    </div>
+  </div>
+</div>
+
 <!-- DISCOUNT MODAL -->
 <div id="discountModal" class="fixed inset-0 z-[9999] hidden">
 
@@ -1442,6 +1475,49 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var pm = document.getElementById("paymentModal");
     if (pm) {
       pm.classList.add("hidden");
+    }
+  }
+
+  var pendingAddressPayloadForCheckout = null;
+
+  function syncDeliveryStatusOptionStyles() {
+    document.querySelectorAll("#deliveryStatusModal .delivery-status-option").forEach(function(label) {
+      var radio = label.querySelector('input[name="pos_delivery_status"]');
+      var on = radio && radio.checked;
+      label.classList.toggle("border-orange-400", !!on);
+      label.classList.toggle("bg-orange-50/60", !!on);
+      label.classList.toggle("border-transparent", !on);
+      label.classList.toggle("bg-slate-50", !on);
+    });
+  }
+
+  function getSelectedPosDeliveryStatus() {
+    var picked = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"]:checked');
+    return picked ? String(picked.value || "").trim() : "";
+  }
+
+  function openDeliveryStatusModal(addressPayload) {
+    pendingAddressPayloadForCheckout = addressPayload;
+    var modal = document.getElementById("deliveryStatusModal");
+    var err = document.getElementById("deliveryStatusValidation");
+    if (err) {
+      err.classList.add("hidden");
+      err.textContent = "";
+    }
+    var defaultRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="collected_from_showroom"]');
+    if (defaultRadio) {
+      defaultRadio.checked = true;
+    }
+    syncDeliveryStatusOptionStyles();
+    if (modal) {
+      modal.classList.remove("hidden");
+    }
+  }
+
+  function closeDeliveryStatusModal() {
+    var modal = document.getElementById("deliveryStatusModal");
+    if (modal) {
+      modal.classList.add("hidden");
     }
   }
 
@@ -2338,6 +2414,38 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
     initConfirmShippingSameAsBilling();
 
+    document.querySelectorAll('#deliveryStatusModal input[name="pos_delivery_status"]').forEach(function(el) {
+      el.addEventListener("change", syncDeliveryStatusOptionStyles);
+    });
+
+    var deliveryStatusBackBtn = document.getElementById("deliveryStatusBackBtn");
+    if (deliveryStatusBackBtn) {
+      deliveryStatusBackBtn.addEventListener("click", function() {
+        closeDeliveryStatusModal();
+      });
+    }
+
+    var deliveryStatusSubmitBtn = document.getElementById("deliveryStatusSubmitBtn");
+    if (deliveryStatusSubmitBtn) {
+      deliveryStatusSubmitBtn.addEventListener("click", function() {
+        var status = getSelectedPosDeliveryStatus();
+        var err = document.getElementById("deliveryStatusValidation");
+        if (!status) {
+          if (err) {
+            err.textContent = "Please select a delivery status.";
+            err.classList.remove("hidden");
+          }
+          return;
+        }
+        if (!pendingAddressPayloadForCheckout) {
+          showToast("Address details missing — go back and confirm billing/shipping.", "red");
+          return;
+        }
+        var payload = Object.assign({}, pendingAddressPayloadForCheckout, { pos_delivery_status: status });
+        createOrderNow(payload);
+      });
+    }
+
     var confirmAddressSubmitBtn = document.getElementById("confirmAddressSubmitBtn");
     if (confirmAddressSubmitBtn) {
       confirmAddressSubmitBtn.addEventListener("click", function() {
@@ -2350,7 +2458,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           return;
         }
         payload = applyPosCheckoutAddressDefaults(payload);
-        createOrderNow(payload);
+        openDeliveryStatusModal(payload);
       });
     }
 
@@ -2502,6 +2610,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             showPaymentModalOrderApiRecord(window.__posLastOrderCreateDebug);
           }
           if (data && data.requires_compliance) {
+            closeDeliveryStatusModal();
             syncHighValueComplianceUi();
             var summary = document.getElementById("addressConfirmValidationSummary");
             if (summary) {
@@ -2514,6 +2623,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         }
         window.__posLastOrderCreateDebug = null;
         showToast(data.message || "Order placed.", "green");
+        closeDeliveryStatusModal();
+        pendingAddressPayloadForCheckout = null;
         closeAddressConfirmModal();
         closePaymentModal();
         if (data.redirect_url) {

@@ -434,12 +434,11 @@ class POSRegisterController
     }
 
     /**
-     * POS counter sale is handed over immediately, so mark imported local rows as shipped
-     * and mirror the item-level status to Exotic vendor API (shipped admin code = 5).
+     * Sync local vp_orders status and Exotic item-level status after POS checkout.
      *
-     * @return array{local_rows:int,local_updated:bool,api_called:int,api_failed:int,message:string}
+     * @return array{local_rows:int,local_updated:bool,api_called:int,api_failed:int,message:string,local_status:string,exotic_status:int}
      */
-    private function markPosCheckoutOrderShipped(mysqli $conn, string $orderNumber): array
+    private function syncPosCheckoutOrderFulfillmentStatus(mysqli $conn, string $orderNumber, string $localStatus, int $exoticAdminCode): array
     {
         $result = [
             'local_rows' => 0,
@@ -447,17 +446,24 @@ class POSRegisterController
             'api_called' => 0,
             'api_failed' => 0,
             'message' => '',
+            'local_status' => $localStatus,
+            'exotic_status' => $exoticAdminCode,
         ];
 
         $orderNumber = trim($orderNumber);
+        $localStatus = strtolower(trim($localStatus));
         if ($orderNumber === '') {
-            $result['message'] = 'Order number missing for shipped status sync.';
+            $result['message'] = 'Order number missing for fulfillment status sync.';
+            return $result;
+        }
+        if (!in_array($localStatus, ['shipped', 'pending'], true)) {
+            $result['message'] = 'Invalid local fulfillment status.';
             return $result;
         }
 
         $stmt = $conn->prepare('SELECT id, item_code, size, color FROM vp_orders WHERE order_number = ? ORDER BY id ASC');
         if (!$stmt) {
-            $result['message'] = 'Could not prepare order item lookup for shipped status sync.';
+            $result['message'] = 'Could not prepare order item lookup for fulfillment status sync.';
             return $result;
         }
 
@@ -468,7 +474,7 @@ class POSRegisterController
 
         $result['local_rows'] = count($rows);
         if (empty($rows)) {
-            $result['message'] = 'Order was not found locally for shipped status sync.';
+            $result['message'] = 'Order was not found locally for fulfillment status sync.';
             return $result;
         }
 
@@ -476,7 +482,7 @@ class POSRegisterController
             $apiRes = $this->updateExoticVendorOrderItemStatus([
                 'orderid' => $orderNumber,
                 'level' => 'item',
-                'order_status' => 5,
+                'order_status' => $exoticAdminCode,
                 'itemcode' => trim((string)($row['item_code'] ?? '')),
                 'size' => trim((string)($row['size'] ?? '')),
                 'color' => trim((string)($row['color'] ?? '')),
@@ -484,28 +490,101 @@ class POSRegisterController
             ++$result['api_called'];
             if (empty($apiRes['success'])) {
                 ++$result['api_failed'];
-                error_log('[POS shipped status API] Order ' . $orderNumber . ' item ' . (string)($row['id'] ?? '') . ': ' . (string)($apiRes['error'] ?? 'failed'));
+                error_log('[POS fulfillment status API] Order ' . $orderNumber . ' item ' . (string)($row['id'] ?? '') . ': ' . (string)($apiRes['error'] ?? 'failed'));
             }
         }
 
-        $upd = $conn->prepare("UPDATE vp_orders SET status = 'shipped' WHERE order_number = ?");
+        $upd = $conn->prepare('UPDATE vp_orders SET status = ? WHERE order_number = ?');
         if (!$upd) {
-            $result['message'] = 'Could not prepare local shipped status update.';
+            $result['message'] = 'Could not prepare local fulfillment status update.';
             return $result;
         }
-        $upd->bind_param('s', $orderNumber);
+        $upd->bind_param('ss', $localStatus, $orderNumber);
         $result['local_updated'] = $upd->execute();
         $upd->close();
 
+        $statusLabel = $localStatus === 'shipped' ? 'shipped' : 'pending';
         if ($result['api_failed'] > 0) {
-            $result['message'] = 'Order marked shipped locally, but Exotic shipped status API failed for ' . $result['api_failed'] . ' item(s).';
+            $result['message'] = 'Order marked ' . $statusLabel . ' locally, but Exotic status API failed for ' . $result['api_failed'] . ' item(s).';
         } elseif (!$result['local_updated']) {
-            $result['message'] = 'Exotic shipped status API completed, but local shipped status update failed.';
+            $result['message'] = 'Exotic status API completed, but local ' . $statusLabel . ' update failed.';
         } else {
-            $result['message'] = 'Order marked shipped locally and on Exotic.';
+            $result['message'] = 'Order marked ' . $statusLabel . ' locally and on Exotic.';
         }
 
         return $result;
+    }
+
+    /**
+     * Exotic vendor API order_status uses vp_order_status.admin_id (e.g. pending=1, shipped=5).
+     */
+    private function resolveExoticAdminIdForStatusSlug(mysqli $conn, string $slug, int $fallback): int
+    {
+        require_once 'models/comman/tables.php';
+        $commanModel = new Tables($conn);
+        $row = $commanModel->getExoticIndiaOrderStatusCode($slug);
+        $adminId = (int)($row['admin_id'] ?? 0);
+
+        return $adminId > 0 ? $adminId : $fallback;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{ok:bool,local_status:string,exotic_status:int,label:string,error:string}
+     */
+    private function resolvePosDeliveryStatusFromPayload(array $payload, mysqli $conn): array
+    {
+        $raw = strtolower(trim((string)($payload['pos_delivery_status'] ?? '')));
+        $map = [
+            'collected_from_showroom' => [
+                'local_status' => 'shipped',
+                'exotic_slug' => 'shipped',
+                'exotic_fallback' => 5,
+                'label' => 'Collected from showroom by Customer',
+            ],
+            'deliver_later' => [
+                'local_status' => 'pending',
+                'exotic_slug' => 'pending',
+                'exotic_fallback' => 1,
+                'label' => 'Deliver to customer Later',
+            ],
+        ];
+
+        if (!isset($map[$raw])) {
+            return [
+                'ok' => false,
+                'local_status' => '',
+                'exotic_status' => 0,
+                'label' => '',
+                'error' => 'Select delivery status: collected from showroom or deliver later.',
+            ];
+        }
+
+        $chosen = $map[$raw];
+
+        return [
+            'ok' => true,
+            'local_status' => (string)$chosen['local_status'],
+            'exotic_status' => $this->resolveExoticAdminIdForStatusSlug(
+                $conn,
+                (string)$chosen['exotic_slug'],
+                (int)$chosen['exotic_fallback']
+            ),
+            'label' => (string)$chosen['label'],
+            'error' => '',
+        ];
+    }
+
+    private function appendPosDeliveryStatusToNote(string $note, string $label): string
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return $note;
+        }
+
+        $line = 'Delivery status: ' . $label;
+
+        return trim($note) !== '' ? trim($note) . "\n" . $line : $line;
     }
 
     /**
@@ -4340,6 +4419,15 @@ class POSRegisterController
         $payload['transaction_id'] = $txn;
         $payload['payment_splits'] = $splitBundle['splits'];
 
+        $deliveryStatus = $this->resolvePosDeliveryStatusFromPayload($payload, $conn);
+        if (!$deliveryStatus['ok']) {
+            echo json_encode([
+                'success' => false,
+                'message' => $deliveryStatus['error'],
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
         $addressErrors = $this->validatePosCheckoutAddressPayload($payload);
         if (!empty($addressErrors)) {
             echo json_encode([
@@ -4520,6 +4608,7 @@ class POSRegisterController
         if (count($splitBundle['splits']) > 1) {
             $note = $this->appendPaymentSplitsToNote($note, $splitBundle['splits']);
         }
+        $note = $this->appendPosDeliveryStatusToNote($note, (string)$deliveryStatus['label']);
         $userId = pos_payment_resolve_session_user_id();
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
 
@@ -4577,7 +4666,12 @@ class POSRegisterController
             'coupon_display_name' => trim((string)($payload['coupon_display_name'] ?? '')),
         ];
         $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
-        $shippedStatusMeta = $this->markPosCheckoutOrderShipped($conn, $orderNumber);
+        $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(
+            $conn,
+            $orderNumber,
+            (string)$deliveryStatus['local_status'],
+            (int)$deliveryStatus['exotic_status']
+        );
 
         $modeLabel = $this->formatPosPaymentSplitsLabel($splitBundle['splits']);
         $receiptPaymentSplits = [];
@@ -4606,6 +4700,8 @@ class POSRegisterController
             'order_id' => $orderNumber,
             'payment_stage' => $paymentStage,
             'payment_mode_label' => $modeLabel,
+            'pos_delivery_status_label' => (string)$deliveryStatus['label'],
+            'pos_delivery_local_status' => (string)$deliveryStatus['local_status'],
             'payment_splits' => $receiptPaymentSplits,
             'receipt_payment_splits' => $receiptPaymentSplits,
             'transaction_id' => $txn,
@@ -4655,8 +4751,8 @@ class POSRegisterController
         if (!empty($localStockWarnings)) {
             $successMessage .= ' Local stock warning: ' . count($localStockWarnings) . ' item(s) sold above local stock.';
         }
-        if (!empty($shippedStatusMeta['message']) && (empty($shippedStatusMeta['local_updated']) || !empty($shippedStatusMeta['api_failed']))) {
-            $successMessage .= ' ' . $shippedStatusMeta['message'];
+        if (!empty($fulfillmentStatusMeta['message']) && (empty($fulfillmentStatusMeta['local_updated']) || !empty($fulfillmentStatusMeta['api_failed']))) {
+            $successMessage .= ' ' . $fulfillmentStatusMeta['message'];
         }
 
         echo json_encode([
@@ -4667,7 +4763,8 @@ class POSRegisterController
             'payment_id' => (int)($pay['payment_id'] ?? 0),
             'payment_ids' => $paymentIds,
             'local_stock_warnings' => $localStockWarnings,
-            'shipped_status_sync' => $shippedStatusMeta,
+            'fulfillment_status_sync' => $fulfillmentStatusMeta,
+            'shipped_status_sync' => $fulfillmentStatusMeta,
             'redirect_url' => 'index.php?page=pos_register&action=checkout-receipt',
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
