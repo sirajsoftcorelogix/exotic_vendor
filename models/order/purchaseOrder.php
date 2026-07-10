@@ -268,7 +268,7 @@ class PurchaseOrder {
         }
 
         $stmt->bind_param(
-            'ssssssss',
+            'sssssss',
             $sku,
             $itemCode,
             $itemCode,
@@ -277,7 +277,10 @@ class PurchaseOrder {
             $color,
             $color
         );
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
         $res = $stmt->get_result();
 
         $out = [];
