@@ -285,20 +285,20 @@ class InvoicesController
             }
         }
 
-        require_once __DIR__ . '/../models/order/stock.php';
-        $stockModel = new Stock($conn);
-        $stockResult = $stockModel->applyInvoiceStockOnCreate((int)$invoiceId, (string)($invoiceData['status'] ?? 'final'));
-        if (empty($stockResult['success'])) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Invoice saved but stock update failed: ' . ($stockResult['message'] ?? 'Unknown error'),
-                'invoice_id' => $invoiceId,
-                'invoice_number' => $invoice_number,
-                'items_created' => $itemCreated,
-                'items_failed' => $itemsFailed,
-            ]);
-            exit;
-        }
+        // require_once __DIR__ . '/../models/order/stock.php';
+        // $stockModel = new Stock($conn);
+        // $stockResult = $stockModel->applyInvoiceStockOnCreate((int)$invoiceId, (string)($invoiceData['status'] ?? 'final'));
+        // if (empty($stockResult['success'])) {
+        //     echo json_encode([
+        //         'success' => false,
+        //         'message' => 'Invoice saved but stock update failed: ' . ($stockResult['message'] ?? 'Unknown error'),
+        //         'invoice_id' => $invoiceId,
+        //         'invoice_number' => $invoice_number,
+        //         'items_created' => $itemCreated,
+        //         'items_failed' => $itemsFailed,
+        //     ]);
+        //     exit;
+        // }
 
         //save international fields
         if ($isInternational) {
@@ -375,7 +375,8 @@ class InvoicesController
             'items_created' => $itemCreated,
             'items_failed' => $itemsFailed,
             'irn_generated' => $irn ?? false,
-            'irn_error_message' => $irnErrorMessage ?? ''
+            'irn_error_message' => $irnErrorMessage ?? '',
+            'is_international' =>  $isInternational ?? false
         ]);
         exit;
     }
@@ -825,9 +826,9 @@ class InvoicesController
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
             $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);
-            echo "Alankit IRN: IRN generation response of irn #$invoiceId\n";
-            print_r($irnResponse);
-            echo "Alankit IRN: End of IRN generation response for invoice #$invoiceId\n";
+            //echo "Alankit IRN: IRN generation response of irn #$invoiceId\n";
+            //print_r($irnResponse);
+            //echo "Alankit IRN: End of IRN generation response for invoice #$invoiceId\n";
             //decrypt response
             if ($irnResponse && isset($irnResponse['Data'])) {
                 $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
@@ -870,22 +871,38 @@ class InvoicesController
                         // ];
                         $ewbData = [
                             'irn' => $irnResponse['Irn'] ?? '',
-                            'Distance' => 100,
-                            'TransId' => "07ABCDE1234F1Z5",
-                            'TransName' => "XYZ EXPORTS",
-                            'Distance' => 100,
-                            'TransDocNo' => "INV01",
+                            'Distance' => 15,
+                            'TransId' => "07AAACE1288P2Z8",
+                            'TransName' => "XYZ EXPORTS",  
                             'TransDocDt' => date('d/m/Y'),
-                            'VehNo' => "kb123456",
-                            'VehType' => "R"                                
+                            //'VehNo' => "kb123456",
+                            //'VehType' => "R"   
+                            "DispDtls" => [ 
+                                "Nm" => "test",
+                                "Addr1" => "test",
+                                "Addr2" => "test",
+                                "Loc" => "test",
+                                "Pin" => 110034,
+                                "Stcd" => "07"
+                            ],                        
+                            "ExpShipDtls" => [
+                            "Gstin" => "07AAACE1288P2Z8",
+                            "TrdNm" => "test",
+                            "Addr1" => "test",
+                            "Addr2" => "test",
+                            "Loc" => "test",
+                            "Pin" => 110055,
+                            "Stcd" => "07"
+                            ]
+                             
                         ];
-                        echo "*Alankit EWB: Sending EWB generation request for invoice #$invoiceId\n";
-                        print_r($ewbData);
-                        echo "<br><br>";
+                        //echo "*Alankit EWB: Sending EWB generation request for invoice #$invoiceId\n";
+                        //print_r($ewbData);
+                        //echo "<br><br>";
                         $ewbResponse = $alankitClient->generateEwb($ewbData, $accessToken, $decryptedSek);
-                        print_r($ewbResponse);
-                        echo "<br><br>*Alankit EWB\n";
-                        if ($ewbResponse && isset($ewbResponse['Status']) && $ewbResponse['Status'] === 'ACT') {
+                        //print_r($ewbResponse);
+                        //echo "<br><br>*Alankit EWB\n";
+                        if ($ewbResponse && isset($ewbResponse['EwbNo'])) {
                             $updateData['ewb_number'] = $ewbResponse['EwbNo'] ?? null;
                             $updateData['ewb_date'] = isset($ewbResponse['EwbDt']) ? date('Y-m-d H:i:s', strtotime($ewbResponse['EwbDt'])) : null;
                             $updateData['ewb_valid_till'] = isset($ewbResponse['EwbValidTill']) ? date('Y-m-d H:i:s', strtotime($ewbResponse['EwbValidTill'])) : null;
