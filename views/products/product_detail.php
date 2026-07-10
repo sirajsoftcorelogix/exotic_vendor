@@ -1424,12 +1424,25 @@
           Warehouse
         </label>
         <select id="adj_warehouse" class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
-          <?php foreach ($products['warehouses'] as $value): 
-            $selected = ($value['id'] == ($products['stock_movements']['warehouse_id'] ?? '')) ? 'selected' : '';
-          ?> 
-            <option value="<?php echo $value['id']; ?>" <?php echo $selected; ?>><?php echo htmlspecialchars($value['name']); ?></option>
+          <?php
+            $whStockMap = [];
+            if (!empty($products['warehouse_location_stock']) && is_array($products['warehouse_location_stock'])) {
+                foreach ($products['warehouse_location_stock'] as $wsRow) {
+                    $wid = (int)($wsRow['warehouse_id'] ?? 0);
+                    if ($wid > 0) {
+                        $whStockMap[$wid] = (float)($wsRow['running_stock'] ?? 0);
+                    }
+                }
+            }
+            foreach ($products['warehouses'] as $value):
+              $wid = (int)($value['id'] ?? 0);
+              $avail = isset($whStockMap[$wid]) ? $whStockMap[$wid] : 0;
+              $selected = ($wid == ($products['stock_movements']['warehouse_id'] ?? '')) ? 'selected' : '';
+          ?>
+            <option value="<?php echo $wid; ?>" data-available="<?php echo htmlspecialchars((string)$avail, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $selected; ?>><?php echo htmlspecialchars($value['name']); ?></option>
           <?php endforeach; ?>
         </select>
+        <p id="adj_warehouse_available" class="mt-1 text-xs text-gray-500"></p>
       </div>
 
       <div>
@@ -1446,7 +1459,7 @@
           Quantity
         </label>
         <input type="number" id="adj_quantity" 
-               value="1"
+               value="1" min="1" step="1"
                class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
       </div>
     </div>
@@ -1923,12 +1936,47 @@
     }
   }
 
+  function getAdjWarehouseAvailableQty() {
+    var sel = document.getElementById('adj_warehouse');
+    if (!sel || !sel.options || sel.selectedIndex < 0) return 0;
+    var opt = sel.options[sel.selectedIndex];
+    var raw = opt ? opt.getAttribute('data-available') : null;
+    var n = parseFloat(raw);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function updateAdjWarehouseAvailableHint() {
+    var hint = document.getElementById('adj_warehouse_available');
+    var typeEl = document.getElementById('adj_type');
+    var whEl = document.getElementById('adj_warehouse');
+    if (!hint || !typeEl || !whEl) return;
+    var avail = getAdjWarehouseAvailableQty();
+    var whName = (whEl.options[whEl.selectedIndex] && whEl.options[whEl.selectedIndex].text) || 'selected warehouse';
+    if (typeEl.value === 'OUT') {
+      hint.textContent = 'Available at ' + whName + ': ' + avail;
+      hint.className = avail > 0
+        ? 'mt-1 text-xs text-gray-500'
+        : 'mt-1 text-xs text-red-600 font-medium';
+    } else {
+      hint.textContent = 'Available at ' + whName + ': ' + avail;
+      hint.className = 'mt-1 text-xs text-gray-500';
+    }
+  }
+
   function openStockModal() {
     document.getElementById('stockModal').classList.remove('hidden');
+    updateAdjWarehouseAvailableHint();
   }
   function closeStockModal() {
     document.getElementById('stockModal').classList.add('hidden');
   }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var adjType = document.getElementById('adj_type');
+    var adjWh = document.getElementById('adj_warehouse');
+    if (adjType) adjType.addEventListener('change', updateAdjWarehouseAvailableHint);
+    if (adjWh) adjWh.addEventListener('change', updateAdjWarehouseAvailableHint);
+  });
   function openStockLocationModal(btn) {
     if (!btn) return;
     const movementId = btn.getAttribute('data-movement-id') || '';
@@ -2118,21 +2166,43 @@ function closeImagePopup() {
 <script>
   function submitStockAdjustment() {
     // 1. Collect Data
+    const qty = parseFloat(document.getElementById('adj_quantity').value);
+    const adjType = document.getElementById('adj_type').value;
+    const warehouseId = document.getElementById('adj_warehouse').value;
+    const warehouseSel = document.getElementById('adj_warehouse');
+    const warehouseName = (warehouseSel.options[warehouseSel.selectedIndex] && warehouseSel.options[warehouseSel.selectedIndex].text) || 'selected warehouse';
     const adjustmentData = {
         product_id: <?php echo json_encode($products['id'] ?? 0); ?>,
         user_id: document.getElementById('current_user').value,
         sku: <?php echo json_encode($products['sku'] ?? ''); ?>,
-        type: document.getElementById('adj_type').value,
-        warehouse_id: document.getElementById('adj_warehouse').value,
+        type: adjType,
+        warehouse_id: warehouseId,
         location: document.getElementById('adj_location').value,
-        quantity: document.getElementById('adj_quantity').value,
+        quantity: qty,
         reason: document.getElementById('adj_reason').value
     };
 
-    // 2. Simple Validation
-    if (!adjustmentData.quantity || adjustmentData.quantity <= 0) {
-        alert("Please enter a valid quantity.");
+    // 2. Validation
+    if (!warehouseId) {
+        alert('Please select a warehouse.');
         return;
+    }
+    if (!qty || qty <= 0 || !Number.isFinite(qty)) {
+        alert('Please enter a valid quantity.');
+        return;
+    }
+    // Decrease: selected warehouse must have enough running stock
+    if (adjType === 'OUT') {
+        const available = getAdjWarehouseAvailableQty();
+        if (qty > available) {
+            alert(
+                'Insufficient stock at ' + warehouseName + '.\n' +
+                'Available: ' + available + '\n' +
+                'Requested decrease: ' + qty
+            );
+            updateAdjWarehouseAvailableHint();
+            return;
+        }
     }
 
     // 3. Send to Server

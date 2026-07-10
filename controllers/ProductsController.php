@@ -4941,6 +4941,19 @@ class ProductsController
             $product = $productModel->getProduct($data['product_id']);
             if (!$product) throw new Exception('Product not found');
 
+            $movementType = strtoupper(trim((string)($data['type'] ?? 'OUT')));
+            $quantity = (int)($data['quantity'] ?? 0);
+            $warehouseId = (int)($data['warehouse_id'] ?? 0);
+            if ($quantity <= 0) {
+                throw new Exception('Please enter a valid quantity.');
+            }
+            if ($warehouseId <= 0) {
+                throw new Exception('Please select a warehouse.');
+            }
+
+            // Decrease must not exceed available running stock at the selected warehouse.
+            $strictStockCheck = ($movementType === 'OUT');
+
             // Merge submitted data with product details
             $insertData = [
                 'product_id'    => (int)$product['id'],
@@ -4948,13 +4961,13 @@ class ProductsController
                 'item_code'     => $product['item_code'],
                 'size'          => $product['size'],
                 'color'         => $product['color'],
-                'quantity'      => (int)$data['quantity'],
+                'quantity'      => $quantity,
                 'reason'        => $data['reason'],
                 'update_by_user' => $sessionUserId,
-                'movement_type' => $data['type'],
-                'warehouse_id'  => $data['warehouse_id'],
+                'movement_type' => $movementType,
+                'warehouse_id'  => $warehouseId,
                 'location'      => $data['location'],
-                'strict_stock_check' => false,
+                'strict_stock_check' => $strictStockCheck,
             ];
 
             $result = $productModel->insertStockMovement($insertData);
